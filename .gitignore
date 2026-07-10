@@ -1,0 +1,14 @@
+# PCF / Node
+node_modules/
+out/
+obj/
+bin/
+.vs/
+**/generated/
+*.pcfproj.user
+Solution/bin/
+Solution/obj/
+
+# pcf-scripts writes a stray literal ~ dir on some setups
+~/
+.DS_Store

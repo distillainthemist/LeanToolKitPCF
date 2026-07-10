@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <ProjectGuid>b7c2d9e4-51f3-4a08-8d67-1c9e3b5a2f40</ProjectGuid>
+    <TargetFramework>net462</TargetFramework>
+    <RestoreProjectStyle>PackageReference</RestoreProjectStyle>
+    <!-- SolutionPackageType: Unmanaged (dev), Managed (prod), or Both -->
+    <SolutionPackageType>Both</SolutionPackageType>
+    <!-- Metadata (Solution.xml etc.) lives under src/ -->
+    <SolutionRootPath>src</SolutionRootPath>
+  </PropertyGroup>
+
+  <!-- Reference the PCF project so every control's bundle is packed into the solution. -->
+  <ItemGroup>
+    <ProjectReference Include="..\LeanToolKit.pcfproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.PowerApps.MSBuild.Solution" Version="1.*" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="src\Other\Solution.xml" />
+    <None Include="src\Other\Customizations.xml" />
+    <None Include="src\Other\Relationships.xml" />
+  </ItemGroup>
+
+</Project>

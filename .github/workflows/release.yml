@@ -1,0 +1,50 @@
+name: Release
+
+# Publishes a GitHub Release with the importable solution zips whenever a
+# version tag (v0.1.0) is pushed. Use ./release.sh to bump + tag in one step.
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write # needed to create the release
+
+jobs:
+  release:
+    # windows runner: most dependable for the PowerApps MSBuild (net462) targets
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build controls
+        run: npm run build
+
+      - name: Build solution package
+        run: dotnet build Solution -c Release
+
+      - name: Stage artifacts with version names
+        shell: bash
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          mkdir -p dist
+          cp "Solution/bin/Release/net462/Solution.zip"         "dist/LeanToolKit_${TAG}.zip"
+          cp "Solution/bin/Release/net462/Solution_managed.zip" "dist/LeanToolKit_${TAG}_managed.zip"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true

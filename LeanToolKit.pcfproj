@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Name>LeanToolKit</Name>
+    <ProjectGuid>3f8a1c2e-94d7-4b6a-9c31-7e5d20a4f6b8</ProjectGuid>
+    <TargetFramework>net462</TargetFramework>
+    <RestoreProjectStyle>PackageReference</RestoreProjectStyle>
+    <!-- Absolute path so the referencing .cdsproj can locate the built controls
+         (a relative path would be resolved against the Solution directory). -->
+    <OutputPath>$(MSBuildThisFileDirectory)out/controls</OutputPath>
+  </PropertyGroup>
+
+  <!-- Source files that make up the controls. node_modules / build output are excluded. -->
+  <ItemGroup>
+    <None Include="$(MSBuildThisFileDirectory)\**"
+          Exclude="$(MSBuildThisFileDirectory)\bin\**;
+                   $(MSBuildThisFileDirectory)\obj\**;
+                   $(MSBuildThisFileDirectory)\out\**;
+                   $(MSBuildThisFileDirectory)\node_modules\**;
+                   $(MSBuildThisFileDirectory)\**\generated\**;
+                   $(MSBuildThisFileDirectory)\Solution\**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.PowerApps.MSBuild.Pcf" Version="1.*" />
+  </ItemGroup>
+
+</Project>
