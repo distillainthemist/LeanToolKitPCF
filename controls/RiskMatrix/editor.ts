@@ -19,21 +19,26 @@ import {
   addActionSection,
   openActionDialog,
 } from "../../shared/ui/actionUi";
-import { parsePrompts, Prompts, renderGhost, renderTitleBar, hintFor } from "../../shared/ui/chrome";
+import { parsePrompts, Prompts, renderTitleBar, hintFor } from "../../shared/ui/chrome";
 import { renderKebab } from "../../shared/ui/menu";
 import { htmlToPng, SnapshotScheduler } from "../../shared/export/png";
 import { LtkAction, newAction } from "../../shared/schema/actions";
 import { newId, nowIso } from "../../shared/schema/id";
 import { Person } from "../../shared/schema/people";
-import { band, Risk, RiskMatrixEnvelope, SCHEMA_ID } from "./types";
+import {
+  band,
+  CLASS_ROMAN,
+  CONSEQUENCE_LABELS,
+  LIKELIHOOD_LABELS,
+  Risk,
+  riskClass,
+  riskLabel,
+  RiskMatrixEnvelope,
+  SCHEMA_ID,
+} from "./types";
 import { RISKMATRIX_CSS } from "./styles";
 
 const BAND_COLOURS = ["#107c10", "#f2c811", "#ca5010", "#d13438"];
-
-const DEFAULT_GHOST = [
-  "No risks captured yet",
-  "Rate each risk by likelihood and consequence — treatments become actions.",
-];
 
 export interface RiskMatrixEditorCallbacks {
   onChange: (env: RiskMatrixEnvelope, actions: LtkAction[]) => void;
@@ -149,20 +154,8 @@ export class RiskMatrixEditor {
     const body = el("div", "ltk-rm-body");
     this.root.appendChild(body);
 
-    if (this.env.data.risks.length === 0) {
-      const lines = this.prompts.general.length
-        ? this.prompts.general
-        : DEFAULT_GHOST;
-      const ghost = renderGhost(
-        body,
-        this.readOnly ? lines : [...lines, "Tap to add the first risk"]
-      );
-      if (!this.readOnly) {
-        ghost.addEventListener("click", () => this.editRisk(null, 3, 3));
-      }
-      return;
-    }
-
+    // the matrix is always shown (even with no risks) so a cell can be tapped
+    // to start an assessment
     body.appendChild(this.renderMatrix());
     body.appendChild(this.renderRegister());
   }
@@ -170,18 +163,26 @@ export class RiskMatrixEditor {
   private renderMatrix(): HTMLElement {
     const left = el("div", "ltk-rm-left");
     const grid = el("div", "ltk-rm-grid");
+    grid.style.gridTemplateColumns = `92px repeat(5, minmax(48px, 1fr))`;
 
     // rows: likelihood 5 (top) → 1 (bottom); cols: consequence 1 → 5
     for (let l = 5; l >= 1; l--) {
-      grid.appendChild(el("div", "ltk-rm-axis-cell", String(l)));
+      grid.appendChild(
+        el("div", "ltk-rm-axis-cell ltk-rm-axis-lik", LIKELIHOOD_LABELS[l - 1])
+      );
       for (let c = 1; c <= 5; c++) {
         const cell = el("div", "ltk-rm-cell");
         if (this.readOnly) cell.classList.add("ltk-readonly");
-        cell.style.background = tint(this.bandColour(l, c), 0.72);
+        cell.style.background = tint(this.bandColour(l, c), 0.62);
         if (!this.readOnly) {
-          cell.title = `Add a risk rated L${l} × C${c}`;
+          cell.title = `Add a risk here — ${LIKELIHOOD_LABELS[l - 1]} × ${CONSEQUENCE_LABELS[c - 1]} (Class ${CLASS_ROMAN[riskClass(l, c)]})`;
           cell.addEventListener("click", () => this.editRisk(null, l, c));
         }
+
+        // faint class watermark behind any chips
+        const wm = el("div", "ltk-rm-classwm", CLASS_ROMAN[riskClass(l, c)]);
+        wm.style.color = this.bandColour(l, c);
+        cell.appendChild(wm);
 
         // chips for risks sitting in this cell
         this.env.data.risks.forEach((risk, idx) => {
@@ -194,11 +195,11 @@ export class RiskMatrixEditor {
               chip.classList.add("ltk-rm-pre-ghost");
               chip.style.borderColor = this.theme.foreground;
               chip.style.color = this.theme.foreground;
-              chip.title = `${risk.text} (before controls)`;
+              chip.title = `${riskLabel(risk)} (before controls)`;
             } else {
               chip.style.background = this.theme.foreground;
               chip.style.color = textOn(this.theme.foreground);
-              chip.title = risk.text;
+              chip.title = riskLabel(risk);
             }
             if (!this.readOnly) {
               chip.addEventListener("click", (e) => {
@@ -214,19 +215,34 @@ export class RiskMatrixEditor {
         grid.appendChild(cell);
       }
     }
-    // consequence axis row
-    grid.appendChild(el("div", "ltk-rm-axis-cell", ""));
+    // consequence axis row: blank corner + severity labels
+    grid.appendChild(el("div"));
     for (let c = 1; c <= 5; c++) {
-      grid.appendChild(el("div", "ltk-rm-axis-cell", String(c)));
+      grid.appendChild(
+        el("div", "ltk-rm-axis-cell ltk-rm-axis-con", CONSEQUENCE_LABELS[c - 1])
+      );
     }
     left.appendChild(el("div", "ltk-rm-axis-title", "Likelihood ↑"));
     left.appendChild(grid);
-    left.appendChild(el("div", "ltk-rm-axis-title", "Consequence →"));
+    left.appendChild(
+      el("div", "ltk-rm-axis-title ltk-rm-axis-title-con", "Consequence / severity →")
+    );
     return left;
   }
 
   private renderRegister(): HTMLElement {
     const list = el("div", "ltk-rm-list");
+    if (this.env.data.risks.length === 0) {
+      list.appendChild(
+        el(
+          "div",
+          "ltk-rm-emptyhint",
+          this.readOnly
+            ? "No risks recorded."
+            : "No risks yet — tap a matrix cell, or ＋ Add risk."
+        )
+      );
+    }
     this.env.data.risks.forEach((risk, idx) => {
       const row = el("div", "ltk-rm-row");
       if (this.readOnly) row.classList.add("ltk-readonly");
@@ -234,18 +250,34 @@ export class RiskMatrixEditor {
       num.style.background = this.theme.foreground;
       num.style.color = textOn(this.theme.foreground);
       row.appendChild(num);
-      row.appendChild(el("div", "ltk-rm-row-text", risk.text));
 
-      const cur = this.currentRating(risk);
-      const score = el(
-        "div",
-        "ltk-rm-row-score",
-        risk.postLikelihood !== null
-          ? `${risk.likelihood * risk.consequence} → ${cur.l * cur.c}`
-          : String(cur.l * cur.c)
+      // main: the risk, then its controls, so both read on the card
+      const main = el("div", "ltk-rm-row-main");
+      main.appendChild(el("div", "ltk-rm-row-risk", riskLabel(risk)));
+      main.appendChild(
+        el(
+          "div",
+          "ltk-rm-row-controls",
+          risk.controls !== "" ? `Controls: ${risk.controls}` : "No controls recorded"
+        )
       );
-      score.style.color = this.bandColour(cur.l, cur.c);
-      row.appendChild(score);
+      row.appendChild(main);
+
+      // class transition: pre → post (roman), coloured by the current class
+      const cur = this.currentRating(risk);
+      const preClass = CLASS_ROMAN[riskClass(risk.likelihood, risk.consequence)];
+      const curClass = CLASS_ROMAN[riskClass(cur.l, cur.c)];
+      const hasPost =
+        risk.postLikelihood !== null && risk.postConsequence !== null;
+      const badge = el(
+        "div",
+        "ltk-rm-class",
+        hasPost ? `${preClass} → ${curClass}` : curClass
+      );
+      badge.style.background = this.bandColour(cur.l, cur.c);
+      badge.style.color = textOn(this.bandColour(cur.l, cur.c));
+      badge.title = `Risk class ${curClass}`;
+      row.appendChild(badge);
 
       const open = this.actions.filter(
         (a) =>
@@ -254,7 +286,7 @@ export class RiskMatrixEditor {
           a.status !== "done"
       ).length;
       if (open > 0) {
-        row.appendChild(el("div", "ltk-rm-badge", String(open)));
+        row.appendChild(el("div", "ltk-rm-badge", `${open} ▸`));
       }
       if (!this.readOnly) {
         row.addEventListener("click", () => this.editRisk(risk, null, null));
@@ -288,25 +320,58 @@ export class RiskMatrixEditor {
     this.png.schedule();
   }
 
-  private ratingSelect(value: number | null, allowNone: boolean): HTMLSelectElement {
+  private ratingSelect(
+    value: number | null,
+    allowNone: boolean,
+    labels: string[]
+  ): HTMLSelectElement {
     const options = [];
     if (allowNone) options.push({ value: "", label: "—" });
     for (let i = 1; i <= 5; i++) {
-      options.push({ value: String(i), label: String(i) });
+      options.push({ value: String(i), label: `${i} · ${labels[i - 1]}` });
     }
     return selectInput(value === null ? "" : String(value), options);
   }
 
   private editRisk(risk: Risk | null, prefillL: number | null, prefillC: number | null): void {
-    const ta = textArea(risk?.text ?? "", {
-      placeholder: hintFor(this.prompts, "risk", "What could go wrong?"),
+    const hazard = textArea(risk?.hazard ?? "", {
+      placeholder: hintFor(this.prompts, "hazard", "Source of harm (e.g. rotating capper)"),
+      rows: 1,
+    });
+    const riskField = textArea(risk?.risk ?? "", {
+      placeholder: hintFor(this.prompts, "risk", "What could happen?"),
       rows: 2,
     });
-    const lSel = this.ratingSelect(risk?.likelihood ?? prefillL ?? 3, false);
-    const cSel = this.ratingSelect(risk?.consequence ?? prefillC ?? 3, false);
-    const plSel = this.ratingSelect(risk?.postLikelihood ?? null, true);
-    const pcSel = this.ratingSelect(risk?.postConsequence ?? null, true);
+    const impact = textArea(risk?.impact ?? "", {
+      placeholder: hintFor(this.prompts, "impact", "Consequence if it happens"),
+      rows: 2,
+    });
+    const controls = textArea(risk?.controls ?? "", {
+      placeholder: hintFor(this.prompts, "controls", "Controls in place"),
+      rows: 2,
+    });
+    const lSel = this.ratingSelect(risk?.likelihood ?? prefillL ?? 3, false, LIKELIHOOD_LABELS);
+    const cSel = this.ratingSelect(risk?.consequence ?? prefillC ?? 3, false, CONSEQUENCE_LABELS);
+    const plSel = this.ratingSelect(risk?.postLikelihood ?? null, true, LIKELIHOOD_LABELS);
+    const pcSel = this.ratingSelect(risk?.postConsequence ?? null, true, CONSEQUENCE_LABELS);
     const inline = risk === null ? addActionSection(this.people, "Treatment action") : null;
+
+    // live class readouts under each rating pair
+    const preClassEl = el("div", "ltk-rm-classreadout");
+    const postClassEl = el("div", "ltk-rm-classreadout");
+    const refreshClasses = () => {
+      const pc = riskClass(Number(lSel.value), Number(cSel.value));
+      preClassEl.textContent = `Risk class ${CLASS_ROMAN[pc]}`;
+      preClassEl.style.color = this.bandColour(Number(lSel.value), Number(cSel.value));
+      if (plSel.value !== "" && pcSel.value !== "") {
+        const rc = riskClass(Number(plSel.value), Number(pcSel.value));
+        postClassEl.textContent = `Residual class ${CLASS_ROMAN[rc]}`;
+        postClassEl.style.color = this.bandColour(Number(plSel.value), Number(pcSel.value));
+      } else {
+        postClassEl.textContent = "";
+      }
+    };
+    [lSel, cSel, plSel, pcSel].forEach((s) => s.addEventListener("change", refreshClasses));
 
     const buttons = [];
     if (risk) {
@@ -334,12 +399,16 @@ export class RiskMatrixEditor {
       label: risk ? "Save" : "Add",
       kind: "primary" as const,
       onClick: () => {
-        const text = ta.value.trim();
-        if (text === "") return;
+        const riskText = riskField.value.trim();
+        const hazardText = hazard.value.trim();
+        if (riskText === "" && hazardText === "") return;
         const pl = plSel.value === "" ? null : Number(plSel.value);
         const pc = pcSel.value === "" ? null : Number(pcSel.value);
         if (risk) {
-          risk.text = text;
+          risk.hazard = hazardText;
+          risk.risk = riskText;
+          risk.impact = impact.value.trim();
+          risk.controls = controls.value.trim();
           risk.likelihood = Number(lSel.value);
           risk.consequence = Number(cSel.value);
           risk.postLikelihood = pl;
@@ -347,7 +416,10 @@ export class RiskMatrixEditor {
         } else {
           const created: Risk = {
             id: newId("r"),
-            text,
+            hazard: hazardText,
+            risk: riskText,
+            impact: impact.value.trim(),
+            controls: controls.value.trim(),
             likelihood: Number(lSel.value),
             consequence: Number(cSel.value),
             postLikelihood: pl,
@@ -355,7 +427,7 @@ export class RiskMatrixEditor {
           };
           this.env.data.risks.push(created);
           if (inline && inline.form.hasContent()) {
-            this.pushAction(created, text, inline.form.apply.bind(inline.form));
+            this.pushAction(created, riskLabel(created), inline.form.apply.bind(inline.form));
           }
         }
         dlg.close();
@@ -367,7 +439,13 @@ export class RiskMatrixEditor {
       title: risk ? "Edit risk" : "Add risk",
       buttons,
     });
-    dlg.body.appendChild(fieldRow("Risk", ta));
+    // assessment flow: hazard → risk → impact → rate the inherent risk →
+    // record controls → rate the residual risk after those controls
+    dlg.body.appendChild(fieldRow("Hazard", hazard));
+    dlg.body.appendChild(fieldRow("Risk", riskField));
+    dlg.body.appendChild(fieldRow("Impact", impact));
+
+    dlg.body.appendChild(sectionLabel("Rating before controls"));
     const pre = el("div");
     pre.style.display = "flex";
     pre.style.gap = "12px";
@@ -377,7 +455,11 @@ export class RiskMatrixEditor {
     cRow.classList.add("ltk-field-half");
     pre.append(lRow, cRow);
     dlg.body.appendChild(pre);
-    dlg.body.appendChild(sectionLabel("After controls (optional)"));
+    dlg.body.appendChild(preClassEl);
+
+    dlg.body.appendChild(fieldRow("Controls", controls));
+
+    dlg.body.appendChild(sectionLabel("Risk after controls (optional)"));
     const post = el("div");
     post.style.display = "flex";
     post.style.gap = "12px";
@@ -387,6 +469,8 @@ export class RiskMatrixEditor {
     pcRow.classList.add("ltk-field-half");
     post.append(plRow, pcRow);
     dlg.body.appendChild(post);
+    dlg.body.appendChild(postClassEl);
+    refreshClasses();
 
     if (inline) {
       dlg.body.appendChild(inline.el);
@@ -420,7 +504,7 @@ export class RiskMatrixEditor {
       raise.addEventListener("click", () => {
         dlg.close();
         const action = newAction({ source: "riskmatrix", sourceId: risk.id });
-        action.issue = risk.text;
+        action.issue = riskLabel(risk);
         openActionDialog({
           host: this.root,
           action,
@@ -434,7 +518,7 @@ export class RiskMatrixEditor {
       });
       dlg.body.appendChild(raise);
     }
-    ta.focus();
+    (risk ? riskField : hazard).focus();
   }
 
   private pushAction(
