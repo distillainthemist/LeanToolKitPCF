@@ -110,7 +110,7 @@ export const ACTIONBOARD_CSS = `
 }
 .ltk-ab-dragging { opacity: 0.35; }
 
-/* ---- gantt view ---- */
+/* ---- gantt view: fixed left columns + scrollable, zoomable plot ---- */
 .ltk-ab-gantt {
   flex: 1;
   display: flex;
@@ -118,15 +118,95 @@ export const ACTIONBOARD_CSS = `
   gap: 8px;
   min-height: 0;
 }
-.ltk-ab-g-scroll { overflow: auto; flex: 0 1 auto; }
-.ltk-ab-g-inner { position: relative; }
-.ltk-ab-g-header {
+.ltk-ab-g-zoom {
   display: flex;
+  justify-content: flex-end;
+  gap: 4px;
+}
+.ltk-ab-g-zbtn {
+  border: 1px solid var(--ltk-hairline);
+  background: var(--ltk-bg);
+  color: var(--ltk-fg);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1;
+  min-width: 30px;
+  min-height: 30px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.ltk-ab-g-zbtn:hover { border-color: var(--ltk-accent); color: var(--ltk-accent); }
+.ltk-ab-g-main {
+  display: flex;
+  align-items: flex-start;
+  min-height: 0;
+}
+.ltk-ab-g-left { flex: 0 0 auto; }
+.ltk-ab-g-lhead {
+  display: flex;
+  height: 28px;
+  align-items: center;
+  border-bottom: 1px solid var(--ltk-hairline);
+}
+.ltk-ab-g-hcell {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ltk-muted);
+}
+.ltk-ab-g-lrow {
+  display: flex;
+  align-items: center;
+  height: 40px;
+  border-bottom: 1px solid var(--ltk-hairline);
+  cursor: pointer;
+}
+.ltk-ab-g-lrow:hover { background: var(--ltk-hairline); }
+.ltk-ab-g-c1 {
+  flex: 0 0 180px;
+  min-width: 0;
+  padding-right: 10px;
+  overflow: hidden;
+  text-align: left;
+}
+.ltk-ab-g-c2 {
+  flex: 0 0 84px;
+  min-width: 0;
+  padding-right: 10px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+  font-size: 12px;
+  font-weight: 600;
+}
+.ltk-ab-g-c3 {
+  flex: 0 0 128px;
+  min-width: 0;
+  padding-right: 10px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+  font-size: 12px;
+  font-weight: 600;
+}
+.ltk-ab-g-desc {
+  font-size: 12px;
+  line-height: 1.25;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: left;
+}
+.ltk-ab-g-scroll { overflow-x: auto; flex: 1 1 auto; min-width: 0; }
+.ltk-ab-g-inner { position: relative; }
+.ltk-ab-g-scale {
+  position: relative;
   height: 28px;
   border-bottom: 1px solid var(--ltk-hairline);
 }
-.ltk-ab-g-corner { flex: 0 0 210px; }
-.ltk-ab-g-scale { position: relative; flex: 0 0 auto; }
 .ltk-ab-g-tick {
   position: absolute;
   top: 4px;
@@ -138,29 +218,12 @@ export const ACTIONBOARD_CSS = `
   padding-left: 4px;
   height: 20px;
 }
-.ltk-ab-g-rows { display: flex; flex-direction: column; }
-.ltk-ab-g-row {
-  display: flex;
-  align-items: center;
+.ltk-ab-g-plot {
+  position: relative;
   height: 40px;
   border-bottom: 1px solid var(--ltk-hairline);
   cursor: pointer;
 }
-.ltk-ab-g-row:hover { background: var(--ltk-hairline); }
-.ltk-ab-g-label {
-  flex: 0 0 210px;
-  min-width: 0;
-  padding: 3px 10px 3px 2px;
-  overflow: hidden;
-}
-.ltk-ab-g-desc {
-  font-size: 12px;
-  line-height: 1.25;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.ltk-ab-g-plot { position: relative; height: 100%; flex: 0 0 auto; }
 .ltk-ab-g-bar {
   position: absolute;
   top: 9px;
@@ -174,7 +237,6 @@ export const ACTIONBOARD_CSS = `
 .ltk-ab-g-bar-who {
   font-size: 11px;
   font-weight: 600;
-  color: #ffffff;
   white-space: nowrap;
 }
 .ltk-ab-g-today {

@@ -30,9 +30,10 @@ function dayLabel(day: number): string {
   })}`;
 }
 
-const GANTT_DAY_W = 24;
-const GANTT_LABEL_W = 210;
 const GANTT_ROW_H = 40;
+const GANTT_HEAD_H = 28;
+const GANTT_MIN_DAY_W = 8;
+const GANTT_MAX_DAY_W = 56;
 
 const STATUS_COLUMNS: { status: ActionStatus; label: string }[] = [
   { status: "open", label: "Open" },
@@ -62,6 +63,11 @@ export class ActionBoardEditor {
   private view: BoardView = "list";
   private groupBy: KanbanGroupBy = "status";
   private readonly png: SnapshotScheduler;
+
+  // gantt state (transient): zoom level and the scroll position to restore
+  // after a zoom re-render
+  private ganttDayW = 24;
+  private ganttScrollFrac: number | null = null;
 
   // drag state (kanban): ghost follows pointer, columns are drop zones
   private ghost: HTMLElement | null = null;
@@ -149,9 +155,15 @@ export class ActionBoardEditor {
     return this.actions.filter((a) => a.status !== "cancelled");
   }
 
-  /** Earliest due date first; undated actions last (then by start, issue). */
+  /**
+   * Completed actions drop below open ones; within each group, earliest due
+   * date first with undated actions last (then by start, issue).
+   */
   private sorted(list: LtkAction[]): LtkAction[] {
     return list.slice().sort((a, b) => {
+      const doneA = a.status === "done" ? 1 : 0;
+      const doneB = b.status === "done" ? 1 : 0;
+      if (doneA !== doneB) return doneA - doneB;
       const dueA = a.due === "" ? "9999" : a.due;
       const dueB = b.due === "" ? "9999" : b.due;
       if (dueA !== dueB) return dueA < dueB ? -1 : 1;
@@ -324,9 +336,10 @@ export class ActionBoardEditor {
   // ---- gantt ----
 
   /**
-   * Time-axis view: one row per dated action, bar from start to due (a
-   * single-day bar when only one date is set). Undated actions list beneath.
-   * Tap a row to edit — dates are changed in the dialog.
+   * Time-axis view. Fixed left columns (Issue/Action, Who, Dates) beside a
+   * horizontally scrollable, zoomable plot: bars run start→due (a single-day
+   * bar when only one date is set), coloured by state, with a today marker.
+   * Zoom via the −/＋ buttons or Ctrl/Cmd + wheel; tap a row to edit.
    */
   private renderGantt(visible: LtkAction[]): HTMLElement {
     const wrap = el("div", "ltk-ab-gantt");
@@ -342,6 +355,7 @@ export class ActionBoardEditor {
         )
       );
     } else {
+      const dayW = this.ganttDayW;
       const today = dayNum(new Date().toISOString().slice(0, 10));
       const startOf = (a: LtkAction) => dayNum(a.start !== "" ? a.start : a.due);
       const endOf = (a: LtkAction) => dayNum(a.due !== "" ? a.due : a.start);
@@ -350,52 +364,101 @@ export class ActionBoardEditor {
       minDay -= 2;
       maxDay += 2;
       const days = maxDay - minDay + 1;
-      const plotW = days * GANTT_DAY_W;
-
-      const scroller = el("div", "ltk-ab-g-scroll");
-      const inner = el("div", "ltk-ab-g-inner");
-      inner.style.width = `${GANTT_LABEL_W + plotW}px`;
-
-      // header: week tick labels (Mondays)
-      const header = el("div", "ltk-ab-g-header");
-      header.appendChild(el("div", "ltk-ab-g-corner"));
-      const scale = el("div", "ltk-ab-g-scale");
-      scale.style.width = `${plotW}px`;
-      for (let d = minDay; d <= maxDay; d++) {
-        if (new Date(d * 86400000).getUTCDay() === 1) {
-          const tick = el("div", "ltk-ab-g-tick", dayLabel(d));
-          tick.style.left = `${(d - minDay) * GANTT_DAY_W}px`;
-          scale.appendChild(tick);
-        }
-      }
-      header.appendChild(scale);
-      inner.appendChild(header);
-
-      const rows = el("div", "ltk-ab-g-rows");
+      const plotW = days * dayW;
       const sorted = dated
         .slice()
         .sort((a, b) => startOf(a) - startOf(b) || endOf(a) - endOf(b));
-      for (const a of sorted) {
-        const row = el("div", "ltk-ab-g-row");
-        const label = el("div", "ltk-ab-g-label");
-        if (a.issue.trim() !== "") {
-          label.appendChild(el("div", "ltk-ab-card-issue", a.issue));
-        }
-        const desc = el(
-          "div",
-          "ltk-ab-g-desc" + (a.status === "done" ? " ltk-ab-done" : ""),
-          a.description || a.issue
-        );
-        label.appendChild(desc);
-        row.appendChild(label);
 
+      const scroller = el("div", "ltk-ab-g-scroll");
+      const zoom = (mult: number, focusFrac?: number) => {
+        this.ganttScrollFrac =
+          focusFrac ??
+          (scroller.scrollLeft + scroller.clientWidth / 2) /
+            Math.max(1, scroller.scrollWidth);
+        this.ganttDayW = Math.max(
+          GANTT_MIN_DAY_W,
+          Math.min(GANTT_MAX_DAY_W, Math.round(this.ganttDayW * mult))
+        );
+        this.render();
+      };
+
+      // zoom controls
+      const zoomBar = el("div", "ltk-ab-g-zoom");
+      const zOut = el("button", "ltk-ab-g-zbtn", "−");
+      zOut.type = "button";
+      zOut.title = "Zoom out";
+      zOut.addEventListener("click", () => zoom(0.75));
+      const zIn = el("button", "ltk-ab-g-zbtn", "＋");
+      zIn.type = "button";
+      zIn.title = "Zoom in";
+      zIn.addEventListener("click", () => zoom(1.33));
+      zoomBar.append(zOut, zIn);
+      wrap.appendChild(zoomBar);
+
+      const main = el("div", "ltk-ab-g-main");
+
+      // fixed left pane: Issue/Action, Who, Dates
+      const left = el("div", "ltk-ab-g-left");
+      const lhead = el("div", "ltk-ab-g-lhead");
+      lhead.append(
+        el("div", "ltk-ab-g-hcell ltk-ab-g-c1", "Issue / Action"),
+        el("div", "ltk-ab-g-hcell ltk-ab-g-c2", "Who"),
+        el("div", "ltk-ab-g-hcell ltk-ab-g-c3", "Dates")
+      );
+      left.appendChild(lhead);
+      for (const a of sorted) {
+        const lrow = el("div", "ltk-ab-g-lrow");
+        const c1 = el("div", "ltk-ab-g-c1");
+        if (a.issue.trim() !== "") {
+          c1.appendChild(el("div", "ltk-ab-card-issue", a.issue));
+        }
+        c1.appendChild(
+          el(
+            "div",
+            "ltk-ab-g-desc" + (a.status === "done" ? " ltk-ab-done" : ""),
+            a.description || a.issue
+          )
+        );
+        const c2 = el("div", "ltk-ab-g-c2", a.assignees[0]?.who ?? "—");
+        const c3 = el("div", "ltk-ab-g-c3");
+        const range =
+          (a.start !== "" ? dayLabel(dayNum(a.start)) + " → " : "") +
+          (a.due !== "" ? dayLabel(dayNum(a.due)) : "");
+        const rangeEl = el("span", undefined, range);
+        if (a.due !== "" && isOverdue(a)) {
+          rangeEl.classList.add("ltk-action-overdue");
+        }
+        c3.appendChild(rangeEl);
+        if (a.escalated) c3.appendChild(el("span", "ltk-action-flag", " ⚑"));
+        lrow.append(c1, c2, c3);
+        if (!this.readOnly) {
+          lrow.addEventListener("click", () => this.editAction(a));
+        }
+        left.appendChild(lrow);
+      }
+      main.appendChild(left);
+
+      // scrollable, zoomable plot pane
+      const inner = el("div", "ltk-ab-g-inner");
+      inner.style.width = `${plotW}px`;
+
+      const scale = el("div", "ltk-ab-g-scale");
+      for (let d = minDay; d <= maxDay; d++) {
+        if (new Date(d * 86400000).getUTCDay() === 1) {
+          const tick = el("div", "ltk-ab-g-tick", dayLabel(d));
+          tick.style.left = `${(d - minDay) * dayW}px`;
+          scale.appendChild(tick);
+        }
+      }
+      inner.appendChild(scale);
+
+      for (const a of sorted) {
         const plot = el("div", "ltk-ab-g-plot");
-        plot.style.width = `${plotW}px`;
         const s = startOf(a);
         const e = endOf(a);
         const bar = el("div", "ltk-ab-g-bar");
-        bar.style.left = `${(s - minDay) * GANTT_DAY_W + 1}px`;
-        bar.style.width = `${(e - s + 1) * GANTT_DAY_W - 2}px`;
+        bar.style.left = `${(s - minDay) * dayW + 1}px`;
+        bar.style.width = `${(e - s + 1) * dayW - 2}px`;
         const colour =
           a.status === "done"
             ? this.doneColor()
@@ -406,30 +469,50 @@ export class ActionBoardEditor {
         const who = el(
           "span",
           "ltk-ab-g-bar-who",
-          `${a.escalated ? "⚑ " : ""}${a.assignees[0]?.who ?? ""}`
+          a.assignees[0]?.who ?? ""
         );
         who.style.color = textOn(colour);
         bar.appendChild(who);
         plot.appendChild(bar);
-        row.appendChild(plot);
-
         if (!this.readOnly) {
-          row.addEventListener("click", () => this.editAction(a));
+          plot.addEventListener("click", () => this.editAction(a));
         }
-        rows.appendChild(row);
+        inner.appendChild(plot);
       }
-      inner.appendChild(rows);
 
-      // today marker spanning header + rows
+      // today marker spanning scale + rows
       const marker = el("div", "ltk-ab-g-today");
-      marker.style.left = `${
-        GANTT_LABEL_W + (today - minDay) * GANTT_DAY_W + GANTT_DAY_W / 2
-      }px`;
-      marker.style.height = `${28 + sorted.length * GANTT_ROW_H}px`;
+      marker.style.left = `${(today - minDay) * dayW + dayW / 2}px`;
+      marker.style.height = `${GANTT_HEAD_H + sorted.length * GANTT_ROW_H}px`;
       inner.appendChild(marker);
 
       scroller.appendChild(inner);
-      wrap.appendChild(scroller);
+      // Ctrl/Cmd + wheel zooms about the pointer; plain wheel scrolls
+      scroller.addEventListener(
+        "wheel",
+        (e: WheelEvent) => {
+          if (!e.ctrlKey && !e.metaKey) return;
+          e.preventDefault();
+          const rect = scroller.getBoundingClientRect();
+          const frac =
+            (scroller.scrollLeft + (e.clientX - rect.left)) /
+            Math.max(1, scroller.scrollWidth);
+          zoom(e.deltaY < 0 ? 1.25 : 0.8, frac);
+        },
+        { passive: false }
+      );
+      main.appendChild(scroller);
+      wrap.appendChild(main);
+
+      // restore the scroll position after a zoom re-render
+      if (this.ganttScrollFrac !== null) {
+        const frac = this.ganttScrollFrac;
+        this.ganttScrollFrac = null;
+        requestAnimationFrame(() => {
+          scroller.scrollLeft =
+            frac * scroller.scrollWidth - scroller.clientWidth / 2;
+        });
+      }
     }
 
     if (undated.length > 0) {
