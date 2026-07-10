@@ -149,18 +149,15 @@ export class ActionBoardEditor {
     return this.actions.filter((a) => a.status !== "cancelled");
   }
 
-  /** Not-done first (overdue leading, then by due date), done last. */
+  /** Earliest due date first; undated actions last (then by start, issue). */
   private sorted(list: LtkAction[]): LtkAction[] {
     return list.slice().sort((a, b) => {
-      const doneA = a.status === "done" ? 1 : 0;
-      const doneB = b.status === "done" ? 1 : 0;
-      if (doneA !== doneB) return doneA - doneB;
-      const overA = isOverdue(a) ? 0 : 1;
-      const overB = isOverdue(b) ? 0 : 1;
-      if (overA !== overB) return overA - overB;
       const dueA = a.due === "" ? "9999" : a.due;
       const dueB = b.due === "" ? "9999" : b.due;
       if (dueA !== dueB) return dueA < dueB ? -1 : 1;
+      const startA = a.start === "" ? "9999" : a.start;
+      const startB = b.start === "" ? "9999" : b.start;
+      if (startA !== startB) return startA < startB ? -1 : 1;
       return a.issue < b.issue ? -1 : 1;
     });
   }
@@ -306,16 +303,17 @@ export class ActionBoardEditor {
     card.appendChild(desc);
 
     const meta = el("div", "ltk-ab-card-meta");
-    meta.appendChild(
-      el("span", undefined, `${a.assignees[0]?.who ?? "Unassigned"}${a.escalated ? " · ⚑" : ""}`)
-    );
+    const whoEl = el("span", undefined, a.assignees[0]?.who ?? "Unassigned");
+    meta.appendChild(whoEl);
     if (a.due !== "") {
       const dueEl = el("span", undefined, `Due ${a.due}`);
-      if (isOverdue(a)) {
-        dueEl.style.color = this.overdueColor();
-        dueEl.style.fontWeight = "600";
+      if (isOverdue(a)) dueEl.style.color = this.overdueColor();
+      if (a.escalated) {
+        dueEl.appendChild(el("span", "ltk-action-flag", " ⚑"));
       }
       meta.appendChild(dueEl);
+    } else if (a.escalated) {
+      whoEl.appendChild(el("span", "ltk-action-flag", " ⚑"));
     }
     card.appendChild(meta);
 

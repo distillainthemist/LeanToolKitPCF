@@ -185,7 +185,7 @@ export const LTK_BASE_CSS = `
   text-align: right;
 }
 .ltk-action-who { font-size: 13px; font-weight: 600; color: var(--ltk-fg); }
-.ltk-action-due { font-size: 12px; color: var(--ltk-muted); }
+.ltk-action-due { font-size: 12px; font-weight: 600; color: var(--ltk-fg); }
 .ltk-action-overdue { color: #d13438; font-weight: 600; }
 .ltk-action-flag { color: var(--ltk-accent); font-weight: 600; }
 .ltk-action-edit {

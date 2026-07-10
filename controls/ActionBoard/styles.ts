@@ -92,7 +92,8 @@ export const ACTIONBOARD_CSS = `
 .ltk-ab-card-desc.ltk-ab-done { text-decoration: line-through; }
 .ltk-ab-card-meta {
   font-size: 12px;
-  color: var(--ltk-muted);
+  font-weight: 600;
+  color: var(--ltk-fg);
   display: flex;
   justify-content: space-between;
   gap: 6px;

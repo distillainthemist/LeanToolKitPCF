@@ -187,22 +187,23 @@ export function actionRow(a: LtkAction, opts: ActionRowOptions): HTMLElement {
   }
   main.appendChild(descEl);
 
-  // right: who + date, prominent and right-aligned
+  // right: who + date, prominent and right-aligned; the escalation flag
+  // trails the date line
   const right = el("div", "ltk-action-right");
   const whoEl = el("div", "ltk-action-who");
-  if (a.escalated) {
-    whoEl.appendChild(el("span", "ltk-action-flag", "⚑ "));
-  }
   whoEl.appendChild(
     document.createTextNode(a.assignees[0]?.who ?? "Unassigned")
   );
   right.appendChild(whoEl);
-  if (a.due !== "") {
-    const dueEl = el("div", "ltk-action-due", `Due ${a.due}`);
-    if (isOverdue(a)) dueEl.classList.add("ltk-action-overdue");
+  const dateText =
+    a.due !== "" ? `Due ${a.due}` : a.start !== "" ? `From ${a.start}` : "";
+  if (dateText !== "") {
+    const dueEl = el("div", "ltk-action-due", dateText);
+    if (a.due !== "" && isOverdue(a)) dueEl.classList.add("ltk-action-overdue");
+    if (a.escalated) dueEl.appendChild(el("span", "ltk-action-flag", " ⚑"));
     right.appendChild(dueEl);
-  } else if (a.start !== "") {
-    right.appendChild(el("div", "ltk-action-due", `From ${a.start}`));
+  } else if (a.escalated) {
+    whoEl.appendChild(el("span", "ltk-action-flag", " ⚑"));
   }
 
   if (!opts.readOnly) {
