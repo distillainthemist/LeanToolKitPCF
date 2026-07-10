@@ -15,11 +15,11 @@ export const SVG_NS = "http://www.w3.org/2000/svg";
 
 export function svgEl<K extends keyof SVGElementTagNameMap>(
   tag: K,
-  attrs?: Record<string, string>
+  attrs?: Record<string, string | number>
 ): SVGElementTagNameMap[K] {
   const node = document.createElementNS(SVG_NS, tag);
   if (attrs) {
-    for (const k of Object.keys(attrs)) node.setAttribute(k, attrs[k]);
+    for (const k of Object.keys(attrs)) node.setAttribute(k, String(attrs[k]));
   }
   return node;
 }

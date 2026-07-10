@@ -1,0 +1,102 @@
+// StatusTile PCF lifecycle — document-only (no actions channel): a tile is
+// line-of-sight state, not an action register.
+
+import { IInputs, IOutputs } from "./generated/ManifestTypes";
+import { StatusTileEditor } from "./editor";
+import { parseStates, parseStatusTile, serializeStatusTile } from "./types";
+import { LoadGate, readTheme, str } from "../../shared/pcf/standard";
+
+const OUTPUT_DEBOUNCE_MS = 300;
+const ASPECT_RATIO = 1.77;
+const DEFAULT_WIDTH = 320;
+
+export class StatusTile implements ComponentFramework.StandardControl<IInputs, IOutputs> {
+  private container!: HTMLDivElement;
+  private editor!: StatusTileEditor;
+  private notifyOutputChanged!: () => void;
+  private readonly gate = new LoadGate();
+
+  private outputJson = "";
+  private pngDataUri = "";
+  private outputTimer: ReturnType<typeof setTimeout> | null = null;
+
+  public init(
+    context: ComponentFramework.Context<IInputs>,
+    notifyOutputChanged: () => void,
+    _state: ComponentFramework.Dictionary,
+    container: HTMLDivElement
+  ): void {
+    this.container = container;
+    this.notifyOutputChanged = notifyOutputChanged;
+
+    if (context.mode.trackContainerResize) {
+      context.mode.trackContainerResize(true);
+    }
+
+    this.editor = new StatusTileEditor(container, {
+      onChange: (env) => {
+        this.outputJson = serializeStatusTile(env);
+        this.gate.recordEmitted(this.outputJson, "");
+        if (this.outputTimer) clearTimeout(this.outputTimer);
+        this.outputTimer = setTimeout(
+          () => this.notifyOutputChanged(),
+          OUTPUT_DEBOUNCE_MS
+        );
+      },
+      onPngReady: (dataUri) => {
+        this.pngDataUri = dataUri;
+        this.notifyOutputChanged();
+      },
+    });
+
+    this.applyAll(context);
+  }
+
+  public updateView(context: ComponentFramework.Context<IInputs>): void {
+    this.applyAll(context);
+  }
+
+  public getOutputs(): IOutputs {
+    return { outputJSON: this.outputJson, pngExport: this.pngDataUri };
+  }
+
+  public destroy(): void {
+    if (this.outputTimer) clearTimeout(this.outputTimer);
+    if (this.editor) this.editor.destroy();
+  }
+
+  private applySize(context: ComponentFramework.Context<IInputs>): void {
+    const w = context.mode.allocatedWidth;
+    const h = context.mode.allocatedHeight;
+    if (w > 0) this.container.style.width = `${w}px`;
+    if (h > 0) {
+      this.container.style.height = `${h}px`;
+    } else {
+      const width = w > 0 ? w : this.container.clientWidth || DEFAULT_WIDTH;
+      this.container.style.height = `${Math.round(width / ASPECT_RATIO)}px`;
+    }
+  }
+
+  private applyAll(context: ComponentFramework.Context<IInputs>): void {
+    const p = context.parameters;
+
+    this.applySize(context);
+    this.editor.setTheme(readTheme(p));
+    this.editor.setStates(parseStates(p.states?.raw));
+    this.editor.setChrome(str(p.cardTitle), p.prompts?.raw ?? "");
+
+    const disabled = context.mode.isControlDisabled === true;
+    this.editor.setReadOnly(disabled || p.readOnly?.raw === true);
+
+    if (this.gate.shouldReload(p)) {
+      const { envelope } = parseStatusTile(p.inputJSON?.raw);
+      const doc = serializeStatusTile(envelope);
+      if (doc !== this.outputJson) {
+        this.outputJson = doc;
+        this.gate.recordEmitted(doc, "");
+        this.editor.setEnvelope(envelope);
+        this.notifyOutputChanged();
+      }
+    }
+  }
+}
