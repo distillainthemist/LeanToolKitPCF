@@ -8,8 +8,12 @@ export interface Theme {
   background: string;
   foreground: string;
   accent: string;
-  /** Semantic slots, meaning defined per control (status colours, lanes…). */
-  legend: string[];
+  /**
+   * Semantic slots, meaning defined per control (status colours, lanes…).
+   * Unparseable entries are undefined IN PLACE so slot positions hold and
+   * each consumer's `legend[i] ?? default` falls back per slot.
+   */
+  legend: (string | undefined)[];
   fontFamily: string;
 }
 
@@ -168,24 +172,29 @@ export function muted(theme: Theme): string {
 /**
  * Parse the legendColors input: JSON array preferred, CSV accepted
  * (forgiving for canvas makers, same contract as Fishbone's categories).
+ * Entries the colour engine cannot parse are DISCARDED (slot falls back to
+ * its default) — an unparseable colour would poison every derived tint and
+ * shade, rendering elements black.
  */
-export function parseLegend(raw: string | null | undefined): string[] {
+export function parseLegend(
+  raw: string | null | undefined
+): (string | undefined)[] {
   const t = (raw ?? "").trim();
   if (t === "") return [];
+  let items: string[];
   if (t.startsWith("[")) {
     try {
       const arr = JSON.parse(t) as unknown;
-      if (Array.isArray(arr)) {
-        return arr.map((v) => String(v).trim()).filter((v) => v !== "");
-      }
+      items = Array.isArray(arr) ? arr.map((v) => String(v).trim()) : [];
     } catch {
-      /* fall through to CSV */
+      items = t.split(",").map((v) => v.trim());
     }
+  } else {
+    items = t.split(",").map((v) => v.trim());
   }
-  return t
-    .split(",")
-    .map((v) => v.trim())
-    .filter((v) => v !== "");
+  return items.map((v) =>
+    v !== "" && parseColor(v) !== null ? v : undefined
+  );
 }
 
 /**

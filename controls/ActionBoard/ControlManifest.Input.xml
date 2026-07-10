@@ -1,0 +1,137 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<manifest>
+  <control namespace="BenOBrien"
+           constructor="ActionBoard"
+           version="0.1.0"
+           display-name-key="Action Board"
+           description-key="LeanToolKit action board — one canonical action list rendered as a list or kanban. Binds directly to the central actions table via Actions Input/Output."
+           control-type="standard">
+
+    <!-- The actions channel IS this control's data — no card document. -->
+    <property name="actionsInputJSON"
+              display-name-key="Actions Input (JSON)"
+              description-key="Canonical action array to display, e.g. JSON(Filter(Actions, InstanceId = ...)) or any wider query."
+              of-type="Multiple"
+              usage="input"
+              required="false" />
+
+    <property name="actionsOutputJSON"
+              display-name-key="Actions Output (JSON)"
+              description-key="The full current action set. Upsert by action id in OnChange. Actions are never hard-deleted — cancelling keeps them with status cancelled."
+              of-type="Multiple"
+              usage="output" />
+
+    <property name="instanceId"
+              display-name-key="Instance Id"
+              description-key="Optional. When set, stamped on every emitted action (single-card boards). Leave empty for multi-card boards so each action keeps its own instance id."
+              of-type="SingleLine.Text"
+              usage="input"
+              required="false" />
+
+    <property name="resetTrigger"
+              display-name-key="Reset Trigger"
+              description-key="Reloads the control from Actions Input whenever this value CHANGES (e.g. Set(varReset, Text(Now())))."
+              of-type="SingleLine.Text"
+              usage="input"
+              required="false" />
+
+    <property name="view"
+              display-name-key="View"
+              description-key="How actions are laid out."
+              of-type="Enum"
+              usage="input"
+              default-value="list">
+      <value name="list" display-name-key="List">list</value>
+      <value name="kanban" display-name-key="Kanban">kanban</value>
+    </property>
+
+    <property name="kanbanGroupBy"
+              display-name-key="Kanban Columns"
+              description-key="What the kanban columns represent: status (Open / In progress / Done) or issue."
+              of-type="Enum"
+              usage="input"
+              default-value="status">
+      <value name="status" display-name-key="Status">status</value>
+      <value name="issue" display-name-key="Issue">issue</value>
+    </property>
+
+    <property name="peopleJSON"
+              display-name-key="People (JSON)"
+              description-key="People available for action assignment: [{whoId, who}]."
+              of-type="Multiple"
+              usage="input"
+              required="false" />
+
+    <property name="cardTitle"
+              display-name-key="Card Title"
+              description-key="Optional title bar. Leave empty for no chrome at all."
+              of-type="SingleLine.Text"
+              usage="input"
+              required="false" />
+
+    <property name="prompts"
+              display-name-key="Prompts"
+              description-key="Optional coaching prompts: plain text, or JSON array of strings / {field, hint} objects."
+              of-type="Multiple"
+              usage="input"
+              required="false" />
+
+    <property name="backgroundColor"
+              display-name-key="Background Colour"
+              description-key="Background colour (any CSS colour or hex). Default white."
+              of-type="SingleLine.Text"
+              usage="input"
+              required="false"
+              default-value="#ffffff" />
+
+    <property name="foregroundColor"
+              display-name-key="Foreground Colour"
+              description-key="Text / line colour. Default rich black."
+              of-type="SingleLine.Text"
+              usage="input"
+              required="false"
+              default-value="#141414" />
+
+    <property name="accentColor"
+              display-name-key="Accent Colour"
+              description-key="Accent colour for buttons and highlights. Default rich black."
+              of-type="SingleLine.Text"
+              usage="input"
+              required="false"
+              default-value="#141414" />
+
+    <property name="legendColors"
+              display-name-key="Legend Colours"
+              description-key="JSON array or CSV of status colours [Open, Done, Overdue]. Defaults: amber, green, red."
+              of-type="SingleLine.Text"
+              usage="input"
+              required="false" />
+
+    <property name="fontFamily"
+              display-name-key="Font"
+              description-key="Font family (or comma-separated font stack) for all text."
+              of-type="SingleLine.Text"
+              usage="input"
+              required="false"
+              default-value="Segoe UI, system-ui, sans-serif" />
+
+    <property name="readOnly"
+              display-name-key="Read Only"
+              description-key="When true, disables all editing (display mode)."
+              of-type="TwoOptions"
+              usage="input"
+              required="false"
+              default-value="false" />
+
+    <property name="pngExport"
+              display-name-key="PNG Export (data URI)"
+              description-key="Read-only PNG snapshot as a data URI, for an Image control or Power Automate."
+              of-type="Multiple"
+              usage="output" />
+
+    <resources>
+      <code path="index.ts" order="1" />
+    </resources>
+
+  </control>
+</manifest>

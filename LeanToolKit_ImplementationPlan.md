@@ -386,11 +386,14 @@ PNG export, PCF base class. Prove it end-to-end with the **pilot control:
 FiveWhys** — small, new, and exercises causes *and* actions *and* the envelope.
 Exit test: FiveWhys built, imported into a canvas app, load/edit/reset/save round-trip.
 
-**Phase 1 — RCA suite + actions core.**
-Fishbone port (with migration), FaultTree, **ActionBoard (list + kanban)**.
-Actions come this early because nearly everything downstream raises them.
-Exit test: cause captured in Fishbone → action raised → appears in ActionBoard;
-Fishbone causes pasted into FaultTree.
+**Phase 1 — RCA suite + actions core.** ✅ *Done 2026-07-10.*
+Fishbone port (with legacy-blob migration), FaultTree, **ActionBoard (list +
+kanban)**, and the action UI (form / row / dialog) extracted to `shared/ui/`
+so every control's action interaction is one implementation.
+Exit test passed: action raised on a Fishbone cause flows through the actions
+channel ActionBoard binds to; a FiveWhys document loads straight into
+FaultTree (chains render as branches). Legend colours are now validated —
+unparseable entries fall back per slot instead of poisoning derived tints.
 
 **Phase 2 — Board cards + prioritisation.**
 CaptureCard, SqdpcCard, ConditionsCard, HeatmapCard, BenefitEffort, RiskMatrix,

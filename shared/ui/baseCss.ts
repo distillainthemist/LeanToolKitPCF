@@ -137,6 +137,61 @@ export const LTK_BASE_CSS = `
 .ltk-textarea { resize: vertical; }
 .ltk-char-counter { font-size: 12px; color: var(--ltk-muted); text-align: right; }
 
+/* ---- action rows (shared action UI; circle colours set inline) ---- */
+.ltk-action-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  border: 1px solid var(--ltk-hairline);
+  border-radius: 6px;
+  padding: 6px 8px 6px 10px;
+  background: var(--ltk-bg);
+}
+.ltk-action-circle {
+  width: 24px;
+  height: 24px;
+  flex: 0 0 auto;
+  border: 2px solid var(--ltk-hairline);
+  border-radius: 999px;
+  background: none;
+  color: transparent;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+  padding: 0;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: border-color 150ms ease, background 150ms ease;
+}
+.ltk-action-circle:hover { border-color: var(--ltk-muted); }
+.ltk-action-main { flex: 1; min-width: 0; cursor: pointer; text-align: left; }
+.ltk-action-issue {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ltk-muted);
+}
+.ltk-action-desc { font-size: 13px; line-height: 1.3; overflow-wrap: break-word; }
+.ltk-action-meta { color: var(--ltk-muted); font-size: 12px; }
+.ltk-action-overdue { color: #d13438; font-weight: 600; }
+.ltk-action-flag { color: var(--ltk-accent); font-weight: 600; }
+.ltk-action-edit {
+  border: none;
+  background: none;
+  color: var(--ltk-muted);
+  font-size: 14px;
+  min-width: 32px;
+  min-height: 32px;
+  border-radius: 6px;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+.ltk-action-edit:hover { background: var(--ltk-hairline); color: var(--ltk-fg); }
+
 /* ---- buttons ---- */
 .ltk-btn {
   font: inherit; font-size: 14px; font-weight: 600;
