@@ -5,19 +5,14 @@
 import { applyThemeVars, defaultTheme, Theme } from "../../shared/tokens";
 import { LTK_BASE_CSS } from "../../shared/ui/baseCss";
 import { clear, el, ensureStylesheet } from "../../shared/ui/dom";
-import { fieldRow, openDialog, textArea } from "../../shared/ui/dialog";
-import { parsePrompts, Prompts, renderGhost, renderTitleBar, hintFor } from "../../shared/ui/chrome";
+import { checkItem, fieldRow, openDialog, textArea } from "../../shared/ui/dialog";
+import { parsePrompts, Prompts, renderTitleBar, hintFor } from "../../shared/ui/chrome";
 import { renderKebab } from "../../shared/ui/menu";
 import { makeInteractive } from "../../shared/interact/drag";
 import { htmlToPng, SnapshotScheduler } from "../../shared/export/png";
 import { newId, nowIso } from "../../shared/schema/id";
 import { BenefitEffortEnvelope, BenefitEffortItem, SCHEMA_ID } from "./types";
 import { BENEFITEFFORT_CSS } from "./styles";
-
-const DEFAULT_GHOST = [
-  "Nothing to prioritise yet",
-  "Add the candidate solutions, then drag them by benefit and effort — quick wins rise to the top left.",
-];
 
 export interface BenefitEffortEditorCallbacks {
   onChange: (env: BenefitEffortEnvelope) => void;
@@ -36,6 +31,8 @@ export class BenefitEffortEditor {
 
   private canvas: HTMLElement | null = null;
   private ghost: HTMLElement | null = null;
+  // set while dragging a chip so the drop's trailing click doesn't add an item
+  private suppressCanvasClick = false;
 
   constructor(
     host: HTMLElement,
@@ -88,6 +85,20 @@ export class BenefitEffortEditor {
     this.root.remove();
   }
 
+  // quadrant priority colours (opacity applied in CSS)
+  private goodColor(): string {
+    return this.theme.legend[1] ?? "#107c10";
+  }
+  private warnColor(): string {
+    return this.theme.legend[0] ?? "#f2c811";
+  }
+  private badColor(): string {
+    return this.theme.legend[2] ?? "#d13438";
+  }
+  private infoColor(): string {
+    return this.theme.legend[3] ?? "#2b88d8";
+  }
+
   private render(): void {
     const overlays = Array.from(this.root.children).filter((c) =>
       c.classList.contains("ltk-dialog-overlay")
@@ -109,46 +120,72 @@ export class BenefitEffortEditor {
     const body = el("div", "ltk-be-body");
     this.root.appendChild(body);
 
-    if (this.env.data.items.length === 0) {
-      const lines = this.prompts.general.length
-        ? this.prompts.general
-        : DEFAULT_GHOST;
-      const ghost = renderGhost(
-        body,
-        this.readOnly ? lines : [...lines, "Tap to add the first item"]
-      );
-      if (!this.readOnly) {
-        ghost.addEventListener("click", () => this.editItem(null));
-      }
-      return;
-    }
+    // plot = a grid with a left gutter for the (rotated) Benefit label and a
+    // bottom gutter for the Effort label, so both axes read outside the canvas.
+    // The grid is always shown (even empty) so it can be tapped to place items.
+    const plot = el("div", "ltk-be-plot");
+    const yaxis = el("div", "ltk-be-yaxis");
+    yaxis.appendChild(el("span", undefined, "Benefit →"));
+    plot.appendChild(yaxis);
 
     const canvas = el("div", "ltk-be-canvas");
+    if (!this.readOnly) canvas.classList.add("ltk-be-canvas-live");
     this.canvas = canvas;
+
+    // quadrant priority shading (behind the grid lines and chips):
+    // quick wins green, major projects blue, fill-ins amber, thankless red
+    const shades: [Partial<CSSStyleDeclaration>, string][] = [
+      [{ top: "0", left: "0" }, this.goodColor()],
+      [{ top: "0", right: "0" }, this.infoColor()],
+      [{ bottom: "0", left: "0" }, this.warnColor()],
+      [{ bottom: "0", right: "0" }, this.badColor()],
+    ];
+    for (const [pos, colour] of shades) {
+      const s = el("div", "ltk-be-shade");
+      Object.assign(s.style, pos);
+      s.style.background = colour;
+      canvas.appendChild(s);
+    }
+
     canvas.append(el("div", "ltk-be-mid-h"), el("div", "ltk-be-mid-v"));
 
-    const quads: [string, string, Partial<CSSStyleDeclaration>][] = [
-      [hintFor(this.prompts, "quadTL", "Quick wins"), "ltk-be-quad", { top: "0", left: "0" }],
-      [hintFor(this.prompts, "quadTR", "Major projects"), "ltk-be-quad", { top: "0", right: "0" }],
-      [hintFor(this.prompts, "quadBL", "Fill-ins"), "ltk-be-quad", { bottom: "0", left: "0" }],
-      [hintFor(this.prompts, "quadBR", "Thankless"), "ltk-be-quad", { bottom: "0", right: "0" }],
+    const quads: [string, Partial<CSSStyleDeclaration>][] = [
+      [hintFor(this.prompts, "quadTL", "Quick wins"), { top: "0", left: "0" }],
+      [hintFor(this.prompts, "quadTR", "Major projects"), { top: "0", right: "0" }],
+      [hintFor(this.prompts, "quadBL", "Fill-ins"), { bottom: "0", left: "0" }],
+      [hintFor(this.prompts, "quadBR", "Thankless"), { bottom: "0", right: "0" }],
     ];
-    for (const [text, cls, pos] of quads) {
-      const q = el("div", cls, text);
+    for (const [text, pos] of quads) {
+      const q = el("div", "ltk-be-quad", text);
       Object.assign(q.style, pos);
       canvas.appendChild(q);
     }
-    const axisB = el("div", "ltk-be-axis", "▲ Benefit");
-    Object.assign(axisB.style, { left: "6px", top: "50%", transform: "translateY(-140%)" });
-    canvas.appendChild(axisB);
-    const axisE = el("div", "ltk-be-axis", "Effort ▶");
-    Object.assign(axisE.style, { left: "50%", bottom: "4px", transform: "translateX(8px)" });
-    canvas.appendChild(axisE);
+
+    // tap any blank spot on the grid to add an item positioned there
+    if (!this.readOnly) {
+      canvas.addEventListener("click", (e) => {
+        // ignore the click that trails a chip drop
+        if (this.suppressCanvasClick) return;
+        if ((e.target as HTMLElement).closest(".ltk-be-chip")) return;
+        const r = canvas.getBoundingClientRect();
+        if (r.width <= 0 || r.height <= 0) return;
+        const effort = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width));
+        const benefit = Math.max(0, Math.min(1, 1 - (e.clientY - r.top) / r.height));
+        this.editItem(null, { benefit, effort });
+      });
+      if (this.env.data.items.length === 0) {
+        canvas.appendChild(
+          el("div", "ltk-be-emptyhint", "Tap anywhere on the grid to add an item")
+        );
+      }
+    }
 
     for (const item of this.env.data.items) {
       canvas.appendChild(this.renderChip(item));
     }
-    body.appendChild(canvas);
+    plot.appendChild(canvas);
+    plot.appendChild(el("div", "ltk-be-xaxis", "Effort →"));
+    body.appendChild(plot);
 
     if (!this.readOnly) {
       const add = el("button", "ltk-be-add", "＋ Add item");
@@ -159,8 +196,16 @@ export class BenefitEffortEditor {
   }
 
   private renderChip(item: BenefitEffortItem): HTMLElement {
-    const chip = el("div", "ltk-be-chip", item.text);
-    chip.title = item.text;
+    const chip = el("div", "ltk-be-chip");
+    if (item.priority) {
+      chip.classList.add("ltk-be-priority");
+      chip.style.borderLeftColor = this.theme.accent;
+      const star = el("span", "ltk-be-star", "★");
+      star.style.color = this.theme.accent;
+      chip.appendChild(star);
+    }
+    chip.appendChild(document.createTextNode(item.text));
+    chip.title = item.priority ? `★ ${item.text}` : item.text;
     if (this.readOnly) chip.classList.add("ltk-readonly");
     chip.style.left = `${item.effort * 100}%`;
     chip.style.top = `${(1 - item.benefit) * 100}%`;
@@ -169,6 +214,7 @@ export class BenefitEffortEditor {
       makeInteractive(chip, {
         onTap: () => this.editItem(item),
         onStart: () => {
+          this.suppressCanvasClick = true;
           const ghost = chip.cloneNode(true) as HTMLElement;
           ghost.classList.add("ltk-be-ghost");
           this.root.appendChild(ghost);
@@ -190,6 +236,10 @@ export class BenefitEffortEditor {
           item.effort = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width));
           item.benefit = Math.max(0, Math.min(1, 1 - (e.clientY - r.top) / r.height));
           this.commit();
+          // release the click guard once the drop's trailing click has passed
+          setTimeout(() => {
+            this.suppressCanvasClick = false;
+          }, 250);
         },
       });
     }
@@ -203,11 +253,18 @@ export class BenefitEffortEditor {
     this.png.schedule();
   }
 
-  private editItem(item: BenefitEffortItem | null): void {
+  private editItem(
+    item: BenefitEffortItem | null,
+    at?: { benefit: number; effort: number }
+  ): void {
     const ta = textArea(item?.text ?? "", {
       placeholder: hintFor(this.prompts, "item", "Solution / idea"),
       rows: 2,
     });
+    const priorityChk = checkItem("Take forward (priority)");
+    priorityChk.box.checked = item?.priority ?? false;
+    priorityChk.wrap.classList.toggle("ltk-check-on", priorityChk.box.checked);
+
     const buttons = [];
     if (item) {
       buttons.push({
@@ -233,12 +290,14 @@ export class BenefitEffortEditor {
         if (text === "") return;
         if (item) {
           item.text = text;
+          item.priority = priorityChk.box.checked;
         } else {
           this.env.data.items.push({
             id: newId("b"),
             text,
-            benefit: 0.5,
-            effort: 0.5,
+            benefit: at?.benefit ?? 0.5,
+            effort: at?.effort ?? 0.5,
+            priority: priorityChk.box.checked,
           });
         }
         dlg.close();
@@ -251,6 +310,7 @@ export class BenefitEffortEditor {
       buttons,
     });
     dlg.body.appendChild(fieldRow("Item", ta));
+    dlg.body.appendChild(priorityChk.wrap);
     ta.focus();
   }
 

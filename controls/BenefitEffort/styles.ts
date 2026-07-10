@@ -9,13 +9,70 @@ export const BENEFITEFFORT_CSS = `
   padding: 8px 12px 12px;
   gap: 8px;
 }
-.ltk-be-canvas {
+/* plot: left gutter (rotated Benefit label) + canvas + bottom gutter (Effort) */
+.ltk-be-plot {
   flex: 1;
   min-height: 160px;
+  display: grid;
+  grid-template-columns: 28px 1fr;
+  grid-template-rows: 1fr 26px;
+}
+.ltk-be-yaxis {
+  grid-column: 1;
+  grid-row: 1;
+  position: relative;
+}
+.ltk-be-yaxis > span {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) rotate(-90deg);
+  transform-origin: center;
+  white-space: nowrap;
+  font-size: 15px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ltk-fg);
+}
+.ltk-be-xaxis {
+  grid-column: 2;
+  grid-row: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ltk-fg);
+}
+.ltk-be-canvas {
+  grid-column: 2;
+  grid-row: 1;
   position: relative;
   border: 1px solid var(--ltk-hairline);
   border-radius: 6px;
   overflow: hidden;
+}
+.ltk-be-canvas-live { cursor: crosshair; }
+.ltk-be-emptyhint {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 12px;
+  color: var(--ltk-muted);
+  text-align: center;
+  pointer-events: none;
+  padding: 0 12px;
+}
+.ltk-be-shade {
+  position: absolute;
+  width: 50%;
+  height: 50%;
+  opacity: 0.12;
+  pointer-events: none;
 }
 .ltk-be-mid-h, .ltk-be-mid-v {
   position: absolute;
@@ -34,20 +91,12 @@ export const BENEFITEFFORT_CSS = `
   pointer-events: none;
   padding: 6px 8px;
 }
-.ltk-be-axis {
-  position: absolute;
-  font-size: 10px;
-  font-weight: 600;
-  color: var(--ltk-muted);
-  pointer-events: none;
-}
 .ltk-be-chip {
   position: absolute;
   transform: translate(-50%, -50%);
   max-width: 150px;
   background: var(--ltk-bg);
   border: 1px solid var(--ltk-hairline);
-  border-left: 3px solid var(--ltk-accent);
   border-radius: 6px;
   padding: 5px 9px;
   font-size: 12px;
@@ -55,13 +104,24 @@ export const BENEFITEFFORT_CSS = `
   cursor: pointer;
   touch-action: none;
   box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+  /* allow up to two lines, then ellipsis */
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: break-word;
+  white-space: normal;
 }
 .ltk-be-chip:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.16); }
 .ltk-be-chip.ltk-readonly { cursor: default; }
 .ltk-be-chip.ltk-be-dragging { opacity: 0.45; }
+/* priority (idea to take forward): accent left border, star, bold, lifted */
+.ltk-be-chip.ltk-be-priority {
+  border-left-width: 3px;
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.18);
+}
+.ltk-be-star { margin-right: 4px; font-size: 11px; }
 .ltk-be-ghost {
   position: fixed;
   z-index: 10001;

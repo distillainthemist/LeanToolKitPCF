@@ -17,6 +17,7 @@ export interface BenefitEffortItem {
   text: string;
   benefit: number; // 0..1 (1 = high benefit)
   effort: number; // 0..1 (1 = high effort)
+  priority: boolean; // flagged as an idea to take forward
 }
 
 export interface BenefitEffortData {
@@ -36,7 +37,13 @@ function parseData(data: unknown): BenefitEffortData {
   if (Array.isArray(d.items)) {
     for (const raw of d.items) {
       if (!raw || typeof raw !== "object") continue;
-      const o = raw as { id?: unknown; text?: unknown; benefit?: unknown; effort?: unknown };
+      const o = raw as {
+        id?: unknown;
+        text?: unknown;
+        benefit?: unknown;
+        effort?: unknown;
+        priority?: unknown;
+      };
       const text = typeof o.text === "string" ? o.text.trim() : "";
       if (text === "") continue;
       const benefit = Number(o.benefit);
@@ -46,6 +53,7 @@ function parseData(data: unknown): BenefitEffortData {
         text,
         benefit: Number.isFinite(benefit) ? clamp01(benefit) : 0.5,
         effort: Number.isFinite(effort) ? clamp01(effort) : 0.5,
+        priority: o.priority === true,
       });
     }
   }
