@@ -6,7 +6,7 @@
 import { applyThemeVars, defaultTheme, Theme } from "../../shared/tokens";
 import { LTK_BASE_CSS } from "../../shared/ui/baseCss";
 import { clear, el, ensureStylesheet, svgEl } from "../../shared/ui/dom";
-import { checkItem, fieldRow, openDialog, textInput } from "../../shared/ui/dialog";
+import { checkItem, fieldRow, openDialog, sectionLabel, textInput } from "../../shared/ui/dialog";
 import { parsePrompts, Prompts, renderGhost, renderTitleBar } from "../../shared/ui/chrome";
 import { renderKebab } from "../../shared/ui/menu";
 import { htmlToPng, SnapshotScheduler } from "../../shared/export/png";
@@ -49,7 +49,7 @@ export class KpiTrendEditor {
     this.env = {
       schema: SCHEMA_ID,
       meta: { title: "", updated: "" },
-      data: { points: [], target: null, direction: "up", unit: "" },
+      data: { points: [], target: null, ucl: null, lcl: null, direction: "up", unit: "" },
     };
     this.png = new SnapshotScheduler(() => this.generatePng());
     this.render();
@@ -103,6 +103,12 @@ export class KpiTrendEditor {
     const t = this.env.data.target;
     if (t === null) return null;
     return this.env.data.direction === "up" ? value >= t : value <= t;
+  }
+
+  /** Does `value` fall outside a set control limit? */
+  private isBreach(value: number): boolean {
+    const { ucl, lcl } = this.env.data;
+    return (ucl !== null && value > ucl) || (lcl !== null && value < lcl);
   }
 
   // ---- rendering ----
@@ -184,12 +190,14 @@ export class KpiTrendEditor {
       viewBox: `0 0 ${VB_W} ${VB_H}`,
       preserveAspectRatio: "xMidYMid meet",
     });
-    const { points, target } = this.env.data;
+    const { points, target, ucl, lcl } = this.env.data;
     const plotW = VB_W - M.left - M.right;
     const plotH = VB_H - M.top - M.bottom;
 
     const values = points.map((pt) => pt.value);
     if (target !== null) values.push(target);
+    if (ucl !== null) values.push(ucl);
+    if (lcl !== null) values.push(lcl);
     let lo = Math.min(...values);
     let hi = Math.max(...values);
     if (lo === hi) {
@@ -203,6 +211,30 @@ export class KpiTrendEditor {
     const x = (i: number) =>
       M.left + (points.length === 1 ? plotW / 2 : (i / (points.length - 1)) * plotW);
     const y = (v: number) => M.top + plotH - ((v - lo) / (hi - lo)) * plotH;
+
+    // control-limit zones (drawn first, behind everything): the band between
+    // the limits reads as "in control" (faint good tint); beyond a limit is
+    // "out of control" (faint bad tint)
+    const topY = M.top;
+    const botY = M.top + plotH;
+    const clampY = (v: number) => Math.max(topY, Math.min(botY, v));
+    if (ucl !== null || lcl !== null) {
+      const zone = (y1: number, y2: number, colour: string, opacity: number) => {
+        if (y2 - y1 <= 0.5) return;
+        const rect = svgEl("rect", {
+          x: M.left, y: y1, width: plotW, height: y2 - y1,
+        });
+        const s = (rect as SVGElement & { style: CSSStyleDeclaration }).style;
+        s.fill = colour;
+        s.opacity = String(opacity);
+        svg.appendChild(rect);
+      };
+      const bandTop = ucl !== null ? clampY(y(ucl)) : topY;
+      const bandBot = lcl !== null ? clampY(y(lcl)) : botY;
+      zone(bandTop, bandBot, this.goodColor(), 0.08); // in-control band
+      if (ucl !== null) zone(topY, clampY(y(ucl)), this.badColor(), 0.1); // above UCL
+      if (lcl !== null) zone(clampY(y(lcl)), botY, this.badColor(), 0.1); // below LCL
+    }
 
     // axes + y ticks
     svg.appendChild(
@@ -244,6 +276,26 @@ export class KpiTrendEditor {
       svg.appendChild(tl);
     }
 
+    // control-limit lines + small right-hand labels
+    const limitLine = (value: number, label: string) => {
+      const ly = clampY(y(value));
+      const ln = svgEl("line", {
+        x1: M.left, y1: ly, x2: M.left + plotW, y2: ly,
+        "stroke-dasharray": "2 3", "stroke-width": 1.5,
+      });
+      const s = (ln as SVGElement & { style: CSSStyleDeclaration }).style;
+      s.stroke = this.badColor();
+      s.opacity = "0.8";
+      svg.appendChild(ln);
+      const t = svgEl("text", {
+        x: M.left + plotW, y: ly - 3, class: "ltk-kt-limit", "text-anchor": "end",
+      });
+      t.textContent = `${label} ${value}`;
+      svg.appendChild(t);
+    };
+    if (ucl !== null) limitLine(ucl, "UCL");
+    if (lcl !== null) limitLine(lcl, "LCL");
+
     // the line + dots
     const line = svgEl("polyline", {
       points: points.map((pt, i) => `${x(i)},${y(pt.value)}`).join(" "),
@@ -257,16 +309,25 @@ export class KpiTrendEditor {
     svg.appendChild(line);
 
     points.forEach((pt, i) => {
+      const breach = this.isBreach(pt.value);
       const ok = this.onTarget(pt.value);
+      // a control-limit breach is the strongest signal — flag it red and
+      // larger, whatever the target says
       const dot = svgEl("circle", {
-        cx: x(i), cy: y(pt.value), r: 5,
+        cx: x(i), cy: y(pt.value), r: breach ? 7 : 5,
         class: "ltk-kt-dot" + (this.readOnly ? " ltk-readonly" : ""),
       });
-      const colour =
-        ok === null ? this.theme.foreground : ok ? this.goodColor() : this.badColor();
+      const colour = breach
+        ? this.badColor()
+        : ok === null
+          ? this.theme.foreground
+          : ok
+            ? this.goodColor()
+            : this.badColor();
       (dot as SVGElement & { style: CSSStyleDeclaration }).style.fill = colour;
       const tip = svgEl("title", {});
-      tip.textContent = `${pt.date}: ${pt.value}`;
+      tip.textContent =
+        `${pt.date}: ${pt.value}` + (breach ? " — out of control" : "");
       dot.appendChild(tip);
       if (!this.readOnly) {
         dot.addEventListener("click", () => this.editPoint(pt));
@@ -343,28 +404,34 @@ export class KpiTrendEditor {
   }
 
   private editSettings(): void {
-    const target = textInput(
-      this.env.data.target === null ? "" : String(this.env.data.target),
-      { type: "number", placeholder: "No target" }
-    );
+    const numInput = (v: number | null, placeholder: string) =>
+      textInput(v === null ? "" : String(v), { type: "number", placeholder });
+    const target = numInput(this.env.data.target, "No target");
     const unit = textInput(this.env.data.unit, { placeholder: "e.g. %, units/hr" });
+    const ucl = numInput(this.env.data.ucl, "None");
+    const lcl = numInput(this.env.data.lcl, "None");
     const higher = checkItem("Higher is better");
     higher.box.checked = this.env.data.direction === "up";
     higher.wrap.classList.toggle("ltk-check-on", higher.box.checked);
 
+    const readNum = (input: HTMLInputElement): number | null => {
+      const n = Number(input.value);
+      return input.value.trim() !== "" && Number.isFinite(n) ? n : null;
+    };
+
     const dlg = openDialog({
       host: this.root,
-      title: "Target & direction",
+      title: "Target & limits",
       buttons: [
         { label: "Cancel", kind: "secondary", onClick: () => dlg.close() },
         {
           label: "Save",
           kind: "primary",
           onClick: () => {
-            const t = Number(target.value);
-            this.env.data.target =
-              target.value.trim() !== "" && Number.isFinite(t) ? t : null;
+            this.env.data.target = readNum(target);
             this.env.data.unit = unit.value.trim();
+            this.env.data.ucl = readNum(ucl);
+            this.env.data.lcl = readNum(lcl);
             this.env.data.direction = higher.box.checked ? "up" : "down";
             dlg.close();
             this.commit();
@@ -372,12 +439,20 @@ export class KpiTrendEditor {
         },
       ],
     });
-    const tRow = fieldRow("Target", target);
-    tRow.classList.add("ltk-field-half");
-    dlg.body.appendChild(tRow);
-    const uRow = fieldRow("Unit", unit);
-    uRow.classList.add("ltk-field-half");
-    dlg.body.appendChild(uRow);
+    const row = (a: HTMLElement, b: HTMLElement) => {
+      const r = el("div");
+      r.style.display = "flex";
+      r.style.gap = "12px";
+      a.classList.add("ltk-field-half");
+      b.classList.add("ltk-field-half");
+      r.append(a, b);
+      return r;
+    };
+    dlg.body.appendChild(row(fieldRow("Target", target), fieldRow("Unit", unit)));
+    dlg.body.appendChild(sectionLabel("Control limits (optional)"));
+    dlg.body.appendChild(
+      row(fieldRow("Upper (UCL)", ucl), fieldRow("Lower (LCL)", lcl))
+    );
     dlg.body.appendChild(higher.wrap);
     target.focus();
   }

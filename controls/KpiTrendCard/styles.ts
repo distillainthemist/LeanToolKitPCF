@@ -28,6 +28,7 @@ export const KPITREND_CSS = `
 .ltk-kt-svg { flex: 1; min-height: 0; width: 100%; }
 .ltk-kt-axis { stroke: var(--ltk-hairline); stroke-width: 1; }
 .ltk-kt-tick { font-size: 10px; fill: var(--ltk-muted); }
+.ltk-kt-limit { font-size: 9px; font-weight: 600; fill: var(--ltk-muted); }
 .ltk-kt-dot { cursor: pointer; }
 .ltk-kt-dot:hover { opacity: 0.8; }
 .ltk-kt-dot.ltk-readonly { cursor: default; }

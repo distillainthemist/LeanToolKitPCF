@@ -19,6 +19,8 @@ export interface KpiPoint {
 export interface KpiTrendData {
   points: KpiPoint[];
   target: number | null;
+  ucl: number | null; // upper control limit
+  lcl: number | null; // lower control limit
   direction: "up" | "down";
   unit: string;
 }
@@ -27,11 +29,13 @@ export type KpiTrendEnvelope = Envelope<KpiTrendData>;
 
 function parseData(data: unknown): KpiTrendData {
   if (!data || typeof data !== "object") {
-    return { points: [], target: null, direction: "up", unit: "" };
+    return { points: [], target: null, ucl: null, lcl: null, direction: "up", unit: "" };
   }
   const d = data as {
     points?: unknown;
     target?: unknown;
+    ucl?: unknown;
+    lcl?: unknown;
     direction?: unknown;
     unit?: unknown;
   };
@@ -47,10 +51,15 @@ function parseData(data: unknown): KpiTrendData {
     }
   }
   points.sort((a, b) => (a.date < b.date ? -1 : 1));
-  const target = Number(d.target);
+  const num = (v: unknown): number | null => {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  };
   return {
     points,
-    target: Number.isFinite(target) ? target : null,
+    target: num(d.target),
+    ucl: num(d.ucl),
+    lcl: num(d.lcl),
     direction: d.direction === "down" ? "down" : "up",
     unit: typeof d.unit === "string" ? d.unit : "",
   };
