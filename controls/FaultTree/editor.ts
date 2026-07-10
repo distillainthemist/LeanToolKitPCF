@@ -203,26 +203,58 @@ export class FaultTreeEditor {
       return;
     }
 
-    body.appendChild(this.renderProblem());
-
+    // the tree: top event as the root node, gated branches beneath
     const tree = el("div", "ltk-ft-tree");
-    const seen = new Set<string>();
-    childrenOf(this.env.data.causes, null).forEach((cause, i) => {
-      tree.appendChild(this.renderNode(cause, `${i + 1}`, seen));
-    });
-    body.appendChild(tree);
+    const root = el("div", "ltk-ft-node");
+    root.appendChild(this.renderProblem());
 
-    if (!this.readOnly) {
-      const add = el(
-        "button",
-        "ltk-ft-add-branch",
-        this.env.data.causes.length === 0 ? "＋ Add first cause" : "＋ Add branch"
-      );
+    const top = childrenOf(this.env.data.causes, null);
+    const seen = new Set<string>();
+    if (top.length > 0) {
+      root.appendChild(this.renderGate(null));
+      const row = el("div", "ltk-ft-kids");
+      top.forEach((cause, i) => {
+        const branch = el("div", "ltk-ft-branch");
+        branch.appendChild(this.renderNode(cause, `${i + 1}`, seen));
+        row.appendChild(branch);
+      });
+      root.appendChild(row);
+    } else if (!this.readOnly) {
+      const add = el("button", "ltk-ft-add-branch", "＋ Add first cause");
       add.type = "button";
+      add.style.marginTop = "14px";
       add.addEventListener("click", () => this.addCause(null));
-      body.appendChild(add);
-      this.dropZones.push({ el: add, causeId: null });
+      root.appendChild(add);
     }
+    tree.appendChild(root);
+    body.appendChild(tree);
+  }
+
+  /**
+   * The AND/OR gate pill on the connector beneath a parent (null = the top
+   * event). Tap to toggle; persisted on the node (or data.rootGate).
+   */
+  private renderGate(parent: CauseNode | null): HTMLElement {
+    const wrap = el("div", "ltk-ft-gatewrap");
+    wrap.appendChild(el("div", "ltk-ft-vline"));
+    const value = (parent ? parent.gate : this.env.data.rootGate) ?? "or";
+    const pill = el("button", "ltk-ft-gate", value.toUpperCase());
+    pill.type = "button";
+    if (this.readOnly) {
+      pill.classList.add("ltk-readonly");
+    } else {
+      pill.title = "Toggle AND / OR";
+      pill.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const next = value === "or" ? "and" : "or";
+        if (parent) parent.gate = next;
+        else this.env.data.rootGate = next;
+        this.commit();
+      });
+    }
+    wrap.appendChild(pill);
+    wrap.appendChild(el("div", "ltk-ft-vline"));
+    return wrap;
   }
 
   private renderProblem(): HTMLElement {
@@ -242,11 +274,19 @@ export class FaultTreeEditor {
     );
     if (!this.readOnly) {
       card.addEventListener("click", () => this.editProblem());
+      const add = el("button", "ltk-ft-mini ltk-ft-mini-invert", "＋");
+      add.type = "button";
+      add.title = "Add a cause beneath the top event";
+      add.addEventListener("click", (e) => {
+        e.stopPropagation();
+        this.addCause(null);
+      });
+      card.appendChild(add);
     }
     return card;
   }
 
-  /** One node: its card plus (when expanded) its children, recursively. */
+  /** One node: its card, then a gate + children row when expanded. */
   private renderNode(cause: CauseNode, path: string, seen: Set<string>): HTMLElement {
     const node = el("div", "ltk-ft-node");
     if (seen.has(cause.id)) return node; // malformed cycle — render nothing
@@ -256,11 +296,14 @@ export class FaultTreeEditor {
     node.appendChild(this.renderCard(cause, path, kids.length));
 
     if (kids.length > 0 && !this.collapsed.has(cause.id)) {
-      const children = el("div", "ltk-ft-children");
+      node.appendChild(this.renderGate(cause));
+      const row = el("div", "ltk-ft-kids");
       kids.forEach((kid, i) => {
-        children.appendChild(this.renderNode(kid, `${path}.${i + 1}`, seen));
+        const branch = el("div", "ltk-ft-branch");
+        branch.appendChild(this.renderNode(kid, `${path}.${i + 1}`, seen));
+        row.appendChild(branch);
       });
-      node.appendChild(children);
+      node.appendChild(row);
     }
     return node;
   }
@@ -381,9 +424,12 @@ export class FaultTreeEditor {
         this.root.appendChild(ghost);
         this.ghost = ghost;
         card.classList.add("ltk-ft-dragging");
-        // cards register as drop zones lazily, at drag start, so the list
-        // reflects the tree as currently rendered
-        this.dropZones = this.dropZones.filter((z) => z.causeId === null);
+        // drop zones register lazily, at drag start, so the list reflects
+        // the tree as currently rendered: the top-event card (→ top level)
+        // plus every card outside the dragged subtree
+        this.dropZones = [];
+        const problem = this.root.querySelector<HTMLElement>(".ltk-ft-problem");
+        if (problem) this.dropZones.push({ el: problem, causeId: null });
         const forbidden = new Set<string>([
           cause.id,
           ...descendantsOf(this.env.data.causes, cause.id).map((c) => c.id),

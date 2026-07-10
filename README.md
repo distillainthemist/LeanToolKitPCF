@@ -11,7 +11,7 @@ for the full architecture, component specs and roadmap.
 | --- | --- |
 | **FiveWhys** — problem → why-chains → root causes, drag reorder/re-chain, inline action capture | ✅ Phase 0 |
 | **Fishbone** — Ishikawa diagram (votes, statuses, drag between bones), action capture on causes | ✅ Phase 1 |
-| **FaultTree** — branching cause tree, drag to re-parent, collapse, root causes + actions | ✅ Phase 1 |
+| **FaultTree** — top-down gated tree (AND/OR pills on connectors), drag to re-parent, collapse, root causes + actions | ✅ Phase 1 |
 | **ActionBoard** — the central action register as a list, kanban (status/issue columns) or gantt (start→due bars) | ✅ Phase 1 |
 | CaptureCard, SqdpcCard, ConditionsCard, HeatmapCard, BenefitEffort, RiskMatrix, KpiTrendCard, ParetoCard, StatusTile | Phase 2 |
 | ProcessMap (+ swimlanes), Raci, SkillsMatrix, MeetingScheduler, EscalationViewer, BoardChrome | Phase 3 |

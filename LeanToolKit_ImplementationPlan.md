@@ -342,7 +342,7 @@ static ones). Codified in `shared/tokens.ts`, consumed by every control:
 | --- | --- | --- | --- | --- |
 | 1 | **Fishbone** | 1A | Port + restyle to tokens; add action capture on causes; new envelope with legacy migration | M |
 | 2 | **FiveWhys** | 1B | 1–n why-chains as connected cards; drag to reorder/re-chain; root-cause flag reveals inline action capture; single-assignee actions with tap-to-complete circle (open ↔ done; full status set stays in the schema for ActionBoard) | M |
-| 3 | **FaultTree** | 1C (1D deferred) | Free-form cause tree; add/indent/re-parent by drag; collapse branches; gate/probability fields reserved | M–L |
+| 3 | **FaultTree** | 1C (+1D gates) | Top-down gated tree diagram: top event → AND/OR gate pills on connectors → branches; add-below on every node; re-parent by drag (subtree moves); collapse; probability calcs remain the deferred 1D detailed mode | M–L |
 | 4 | **ProcessMap** | 2A–2D | Port ProcessMapPCF; restyle; **add Swimlane mode**; kaizen burst → action; envelope migration | L |
 | 5 | **ActionBoard** | 3A–3C | One control, `view: list/kanban/gantt` (all shipped); kanban split by status *or* issue with drag between columns; gantt plots start→due bars with today line, undated actions listed beneath | L |
 | 6 | **Raci** | 4A | People × deliverables grid; tap-cycle R/A/C/I; per-row single-A validation warning | M |

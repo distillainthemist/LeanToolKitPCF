@@ -2,7 +2,7 @@
 // kanban. The actions channel IS the data — no card document. Cancelled
 // actions are hidden but preserved. Plain DOM; full re-render per mutation.
 
-import { applyThemeVars, defaultTheme, textOn, Theme } from "../../shared/tokens";
+import { applyThemeVars, defaultTheme, Theme } from "../../shared/tokens";
 import { LTK_BASE_CSS } from "../../shared/ui/baseCss";
 import { clear, el, ensureStylesheet } from "../../shared/ui/dom";
 import { parsePrompts, Prompts, renderGhost, renderTitleBar } from "../../shared/ui/chrome";
@@ -466,13 +466,6 @@ export class ActionBoardEditor {
               ? this.overdueColor()
               : this.openColor();
         bar.style.background = colour;
-        const who = el(
-          "span",
-          "ltk-ab-g-bar-who",
-          a.assignees[0]?.who ?? ""
-        );
-        who.style.color = textOn(colour);
-        bar.appendChild(who);
         plot.appendChild(bar);
         if (!this.readOnly) {
           plot.addEventListener("click", () => this.editAction(a));

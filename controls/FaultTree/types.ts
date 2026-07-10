@@ -17,6 +17,8 @@ export const SCHEMA_ID = "ltk/faulttree@1";
 export interface FaultTreeData {
   problem: string;
   causes: CauseNode[];
+  /** How the top event's direct causes combine (per-cause gates live on the nodes). */
+  rootGate?: "and" | "or";
 }
 
 export type FaultTreeEnvelope = Envelope<FaultTreeData>;
@@ -25,10 +27,11 @@ function parseData(data: unknown): FaultTreeData {
   if (!data || typeof data !== "object") {
     return { problem: "", causes: [] };
   }
-  const d = data as { problem?: unknown; causes?: unknown };
+  const d = data as { problem?: unknown; causes?: unknown; rootGate?: unknown };
   return {
     problem: typeof d.problem === "string" ? d.problem : "",
     causes: parseCauses(d.causes),
+    rootGate: d.rootGate === "and" || d.rootGate === "or" ? d.rootGate : undefined,
   };
 }
 

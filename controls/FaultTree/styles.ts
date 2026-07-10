@@ -11,7 +11,7 @@ export const FAULTTREE_CSS = `
   gap: 12px;
 }
 
-/* ---- top event (problem) ---- */
+/* ---- top event (problem): the root card of the tree ---- */
 .ltk-ft-problem {
   display: flex;
   align-items: center;
@@ -20,6 +20,8 @@ export const FAULTTREE_CSS = `
   padding: 10px 14px;
   cursor: pointer;
   flex: 0 0 auto;
+  width: fit-content;
+  max-width: 460px;
 }
 .ltk-ft-problem.ltk-readonly { cursor: default; }
 .ltk-ft-problem-label {
@@ -33,30 +35,81 @@ export const FAULTTREE_CSS = `
 .ltk-ft-problem-text { font-size: 16px; font-weight: 600; line-height: 1.3; }
 .ltk-ft-problem-text.ltk-ft-placeholder { opacity: 0.7; font-weight: 400; }
 
-/* ---- tree ---- */
-.ltk-ft-tree { display: flex; flex-direction: column; gap: 8px; }
-.ltk-ft-children {
-  margin-left: 24px;
-  padding-left: 16px;
-  border-left: 2px solid var(--ltk-hairline);
+/* ---- top-down tree with connector rails and gate pills ----
+   Each node stacks: card, gate (on the connector), children row. Branch
+   wrappers draw the rail: a horizontal line across the top of the children
+   row plus a vertical drop to each child. */
+.ltk-ft-tree {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  align-items: center;
+  min-width: max-content;
+  margin: 0 auto;
+  padding: 2px 8px 12px;
 }
-.ltk-ft-node { position: relative; }
-.ltk-ft-children > .ltk-ft-node::before {
+.ltk-ft-node {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.ltk-ft-kids {
+  display: flex;
+  align-items: flex-start;
+}
+.ltk-ft-branch {
+  position: relative;
+  padding: 18px 8px 0;
+}
+.ltk-ft-branch::before {
   content: "";
   position: absolute;
-  left: -16px;
-  top: 22px;
-  width: 14px;
+  top: 0;
+  left: 50%;
+  margin-left: -1px;
+  width: 2px;
+  height: 18px;
+  background: var(--ltk-hairline);
+}
+.ltk-ft-branch::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
   height: 2px;
   background: var(--ltk-hairline);
 }
+.ltk-ft-branch:first-child::after { left: 50%; }
+.ltk-ft-branch:last-child::after { right: 50%; }
+.ltk-ft-branch:only-child::after { display: none; }
+
+/* gate pill on the connector between a parent and its children */
+.ltk-ft-gatewrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.ltk-ft-vline { width: 2px; height: 10px; background: var(--ltk-hairline); }
+.ltk-ft-gate {
+  border: 1px solid var(--ltk-hairline);
+  background: var(--ltk-bg);
+  color: var(--ltk-muted);
+  font: inherit;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  line-height: 1;
+  border-radius: 999px;
+  padding: 5px 11px;
+  cursor: pointer;
+  transition: border-color 150ms ease, color 150ms ease;
+}
+.ltk-ft-gate:hover { border-color: var(--ltk-accent); color: var(--ltk-accent); }
+.ltk-ft-gate.ltk-readonly { cursor: default; }
 
 /* ---- cause cards (mirrors the FiveWhys card language) ---- */
 .ltk-ft-card {
-  width: 260px;
+  width: 200px;
   max-width: 100%;
   background: var(--ltk-bg);
   border: 1px solid var(--ltk-hairline);
@@ -132,6 +185,8 @@ export const FAULTTREE_CSS = `
   padding: 0;
 }
 .ltk-ft-mini:hover { background: var(--ltk-hairline); color: var(--ltk-fg); }
+.ltk-ft-mini-invert { color: inherit; opacity: 0.85; }
+.ltk-ft-mini-invert:hover { background: rgba(255,255,255,0.22); color: inherit; opacity: 1; }
 
 /* ---- add top-level branch ---- */
 .ltk-ft-add-branch {

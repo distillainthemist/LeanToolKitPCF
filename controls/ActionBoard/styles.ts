@@ -234,11 +234,6 @@ export const ACTIONBOARD_CSS = `
   padding: 0 8px;
   overflow: hidden;
 }
-.ltk-ab-g-bar-who {
-  font-size: 11px;
-  font-weight: 600;
-  white-space: nowrap;
-}
 .ltk-ab-g-today {
   position: absolute;
   top: 0;
