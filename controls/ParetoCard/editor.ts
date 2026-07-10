@@ -14,7 +14,8 @@ import { PARETO_CSS } from "./styles";
 
 const VB_W = 640;
 const VB_H = 340;
-const M = { top: 16, right: 44, bottom: 58, left: 10 };
+const M = { top: 16, right: 44, bottom: 100, left: 10 };
+const LABEL_BAND = 54; // vertical room for the wrapped, auto-scaled label
 
 const DEFAULT_GHOST = [
   "No counts yet",
@@ -132,6 +133,53 @@ export class ParetoEditor {
     }
   }
 
+  /**
+   * Greedy word-wrap into lines no wider than `maxChars`; over-long single
+   * words are hard-broken so nothing overflows.
+   */
+  private wrapLabel(text: string, maxChars: number): string[] {
+    const lines: string[] = [];
+    let cur = "";
+    const flush = () => {
+      if (cur !== "") {
+        lines.push(cur);
+        cur = "";
+      }
+    };
+    for (let word of text.split(/\s+/).filter(Boolean)) {
+      while (word.length > maxChars) {
+        flush();
+        lines.push(word.slice(0, maxChars));
+        word = word.slice(maxChars);
+      }
+      if (cur === "") cur = word;
+      else if ((cur + " " + word).length <= maxChars) cur += " " + word;
+      else {
+        flush();
+        cur = word;
+      }
+    }
+    flush();
+    return lines.length ? lines : [text];
+  }
+
+  /**
+   * Pick the largest font (down to 8px) at which the wrapped label fits the
+   * available width × the label band. Never truncates — at the floor size it
+   * simply wraps to as many lines as it needs.
+   */
+  private fitLabel(text: string, widthPx: number): { lines: string[]; fontPx: number } {
+    let result = { lines: [text], fontPx: 8 };
+    for (let f = 12; f >= 8; f--) {
+      const charsPerLine = Math.max(3, Math.floor(widthPx / (f * 0.56)));
+      const lines = this.wrapLabel(text, charsPerLine);
+      const maxLines = Math.max(1, Math.floor(LABEL_BAND / Math.round(f * 1.2)));
+      result = { lines, fontPx: f };
+      if (lines.length <= maxLines) break;
+    }
+    return result;
+  }
+
   private renderChart(): SVGSVGElement {
     const svg = svgEl("svg", {
       class: "ltk-pa-svg",
@@ -192,22 +240,58 @@ export class ParetoEditor {
       value.textContent = String(item.count);
       svg.appendChild(value);
 
-      // label under the bar, trimmed
+      // label under the bar: wraps to multiple lines and scales its font
+      // down so the whole text shows without truncation (tap to edit)
+      const labelTop = M.top + plotH + 6;
+      const { lines, fontPx } = this.fitLabel(item.label, slot - 6);
       const label = svgEl("text", {
         x: cx,
-        y: M.top + plotH + 16,
-        class: "ltk-pa-label",
+        class: "ltk-pa-label" + (this.readOnly ? "" : " ltk-pa-labelclick"),
         "text-anchor": "middle",
       });
-      const maxChars = Math.max(4, Math.floor(slot / 6.2));
-      label.textContent =
-        item.label.length > maxChars
-          ? item.label.slice(0, maxChars - 1) + "…"
-          : item.label;
+      // inline style beats the class' font-size so the scaling actually applies
+      (label as SVGElement & { style: CSSStyleDeclaration }).style.fontSize =
+        `${fontPx}px`;
+      lines.forEach((ln, li) => {
+        const ts = svgEl("tspan", {
+          x: cx,
+          y: labelTop + fontPx + li * Math.round(fontPx * 1.2),
+        });
+        ts.textContent = ln;
+        label.appendChild(ts);
+      });
       const tip = svgEl("title", {});
       tip.textContent = `${item.label}: ${item.count}`;
       label.appendChild(tip);
+      if (!this.readOnly) {
+        label.addEventListener("click", () => this.editItem(item));
+      }
       svg.appendChild(label);
+
+      // quick-tally increment button beneath the label band — bump the
+      // count live from the chart (a Pareto often builds up during a huddle)
+      if (!this.readOnly) {
+        const by = M.top + plotH + LABEL_BAND + 20;
+        const inc = svgEl("g", { class: "ltk-pa-inc" });
+        inc.appendChild(svgEl("circle", { cx, cy: by, r: 11, class: "ltk-pa-inc-circle" }));
+        inc.appendChild(
+          svgEl("path", {
+            d: `M ${cx - 4} ${by} H ${cx + 4} M ${cx} ${by - 4} V ${by + 4}`,
+            class: "ltk-pa-inc-plus",
+          })
+        );
+        // transparent circle on top widens the tap target to ~30px
+        inc.appendChild(svgEl("circle", { cx, cy: by, r: 15, class: "ltk-pa-inc-hit" }));
+        const itip = svgEl("title", {});
+        itip.textContent = `Add one to "${item.label}"`;
+        inc.appendChild(itip);
+        inc.addEventListener("click", (e) => {
+          e.stopPropagation();
+          item.count += 1;
+          this.commit();
+        });
+        svg.appendChild(inc);
+      }
 
       cumulative += item.count;
       const py = M.top + plotH - (cumulative / total) * plotH;
