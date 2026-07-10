@@ -18,7 +18,7 @@ import {
 import {
   ActionForm,
   actionRow,
-  inlineActionSection,
+  addActionSection,
   openActionDialog,
 } from "../../shared/ui/actionUi";
 import { parsePrompts, Prompts, renderGhost, renderTitleBar, hintFor } from "../../shared/ui/chrome";
@@ -537,7 +537,7 @@ export class FaultTreeEditor {
       maxLength: MAX_CAUSE_CHARS,
     });
     const rootChk = checkItem("This is the root cause");
-    const inline = inlineActionSection(rootChk.box, this.people);
+    const inline = addActionSection(this.people);
     const dlg = openDialog({
       host: this.root,
       title: "Add cause",
@@ -555,7 +555,7 @@ export class FaultTreeEditor {
               isRoot: rootChk.box.checked,
             });
             this.env.data.causes.push(created);
-            if (rootChk.box.checked && inline.form.hasContent()) {
+            if (inline.form.hasContent()) {
               this.pushAction(created, text, inline.form);
             }
             dlg.close();
@@ -580,7 +580,6 @@ export class FaultTreeEditor {
     const rootChk = checkItem("This is the root cause");
     rootChk.box.checked = cause.isRoot;
     rootChk.wrap.classList.toggle("ltk-check-on", cause.isRoot);
-    const inline = inlineActionSection(rootChk.box, this.people);
 
     const dlg = openDialog({
       host: this.root,
@@ -603,9 +602,6 @@ export class FaultTreeEditor {
             cause.text = ta.value.trim().slice(0, MAX_CAUSE_CHARS);
             if (this.showStatus) cause.status = statusSel.value as CauseStatus;
             cause.isRoot = rootChk.box.checked;
-            if (cause.isRoot && inline.form.hasContent()) {
-              this.pushAction(cause, cause.text, inline.form);
-            }
             dlg.close();
             this.commit();
           },
@@ -616,7 +612,6 @@ export class FaultTreeEditor {
     dlg.body.appendChild(charCounter(ta, MAX_CAUSE_CHARS));
     if (this.showStatus) dlg.body.appendChild(fieldRow("Status", statusSel));
     dlg.body.appendChild(rootChk.wrap);
-    dlg.body.appendChild(inline.el);
 
     const existing = this.actions.filter(
       (a) => a.context.sourceId === cause.id && a.status !== "cancelled"

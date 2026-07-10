@@ -115,27 +115,36 @@ export function buildActionForm(
 }
 
 /**
- * A collapsed action-capture section revealed the moment a trigger checkbox
- * is ticked (e.g. "This is the root cause") — capture happens right there in
- * the same dialog.
+ * A collapsed "＋ Add action" affordance for add dialogs: tapping it reveals
+ * the action fields right there, so an action can be captured in the same
+ * breath as the entry it belongs to — but it is never auto-prompted.
  */
-export function inlineActionSection(
-  trigger: HTMLInputElement,
+export function addActionSection(
   people: Person[],
-  label = "Action on this root cause"
+  label = "Action"
 ): { el: HTMLElement; form: ActionForm } {
   const form = buildActionForm(people);
+  const wrap = el("div");
+  wrap.style.display = "flex";
+  wrap.style.flexDirection = "column";
+  wrap.style.gap = "12px";
+
+  const btn = el("button", "ltk-btn ltk-btn-secondary", "＋ Add action");
+  btn.type = "button";
   const section = el("div");
   section.style.display = "none";
   section.style.flexDirection = "column";
   section.style.gap = "12px";
   section.appendChild(sectionLabel(label));
   section.appendChild(form.el);
-  trigger.addEventListener("change", () => {
-    section.style.display = trigger.checked ? "flex" : "none";
-    if (trigger.checked) form.focus();
+  btn.addEventListener("click", () => {
+    btn.style.display = "none";
+    section.style.display = "flex";
+    form.focus();
   });
-  return { el: section, form };
+
+  wrap.append(btn, section);
+  return { el: wrap, form };
 }
 
 export interface ActionRowOptions {
