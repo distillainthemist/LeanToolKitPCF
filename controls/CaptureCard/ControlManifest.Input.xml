@@ -1,0 +1,122 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<manifest>
+  <control namespace="BenOBrien"
+           constructor="CaptureCard"
+           version="0.1.0"
+           display-name-key="Capture Card"
+           description-key="LeanToolKit capture card — a config-driven grid: typed columns (text, number, decimal, yes/no, list) with multi-select, option icons and two-layer dependent picklists; free or fixed rows. The simple card is the default single-column config."
+           control-type="standard">
+
+    <!-- Standard LeanToolKit data surface -->
+    <property name="inputJSON"
+              display-name-key="Input JSON"
+              description-key="Card document to preload: {schema, meta, data:{rows:[{id,rowKey,cells}]}}."
+              of-type="Multiple"
+              usage="input"
+              required="false" />
+
+    <property name="resetTrigger"
+              display-name-key="Reset Trigger"
+              description-key="Reloads the control from Input JSON + Actions Input whenever this value CHANGES (e.g. Set(varReset, Text(Now())))."
+              of-type="SingleLine.Text"
+              usage="input"
+              required="false" />
+
+    <property name="outputJSON"
+              display-name-key="Output JSON"
+              description-key="The edited card document (no actions — see Actions Output). Read in OnChange and Patch to Dataverse."
+              of-type="Multiple"
+              usage="output" />
+
+    <!-- Self-describing card chrome -->
+    <property name="columnsJSON"
+              display-name-key="Columns (JSON)"
+              description-key="Column config: [{key,label,type:text|number|decimal|yesno|list, multi, parent, options:[{value,label,icon,when}]}]. Dependent lists: set parent to another column key and filter options by when=parent value. Icons: emoji or data URI. Empty = one simple text column."
+              of-type="Multiple"
+              usage="input"
+              required="false" />
+
+    <property name="rowsJSON"
+              display-name-key="Rows (JSON)"
+              description-key="Optional fixed row headers: [{key,label}] or [label,...]. When set, rows are fixed (no add/delete)."
+              of-type="Multiple"
+              usage="input"
+              required="false" />
+
+    <property name="cardTitle"
+              display-name-key="Card Title"
+              description-key="Optional title bar. Leave empty for no chrome at all."
+              of-type="SingleLine.Text"
+              usage="input"
+              required="false" />
+
+    <property name="prompts"
+              display-name-key="Prompts"
+              description-key="Optional coaching prompts: plain text, or JSON array of strings / {field, hint} objects. Shown as empty-state text, an info popover, and field hints."
+              of-type="Multiple"
+              usage="input"
+              required="false" />
+
+    <!-- Standard styling surface -->
+    <property name="backgroundColor"
+              display-name-key="Background Colour"
+              description-key="Background colour (any CSS colour or hex). Default white."
+              of-type="SingleLine.Text"
+              usage="input"
+              required="false"
+              default-value="#ffffff" />
+
+    <property name="foregroundColor"
+              display-name-key="Foreground Colour"
+              description-key="Text / line colour. Default rich black."
+              of-type="SingleLine.Text"
+              usage="input"
+              required="false"
+              default-value="#141414" />
+
+    <property name="accentColor"
+              display-name-key="Accent Colour"
+              description-key="Accent colour for the problem card, buttons and highlights. Default rich black."
+              of-type="SingleLine.Text"
+              usage="input"
+              required="false"
+              default-value="#141414" />
+
+    <property name="legendColors"
+              display-name-key="Legend Colours"
+              description-key="JSON array or CSV of status colours [Hypothesis, Confirmed, Rejected]. Defaults: amber, green, red."
+              of-type="SingleLine.Text"
+              usage="input"
+              required="false" />
+
+    <property name="fontFamily"
+              display-name-key="Font"
+              description-key="Font family (or comma-separated font stack) for all text."
+              of-type="SingleLine.Text"
+              usage="input"
+              required="false"
+              default-value="Segoe UI, system-ui, sans-serif" />
+
+    <property name="readOnly"
+              display-name-key="Read Only"
+              description-key="When true, disables all editing (display mode)."
+              of-type="TwoOptions"
+              usage="input"
+              required="false"
+              default-value="false" />
+
+    <!-- PNG snapshot of the card as a data URI, refreshed after each change. -->
+    <property name="pngExport"
+              display-name-key="PNG Export (data URI)"
+              description-key="Read-only PNG snapshot as a data URI, for an Image control or Power Automate."
+              of-type="Multiple"
+              usage="output" />
+
+    <!-- CSS is bundled into the code (see styles.ts) because canvas apps
+         sometimes fail to load a separate css resource. -->
+    <resources>
+      <code path="index.ts" order="1" />
+    </resources>
+
+  </control>
+</manifest>

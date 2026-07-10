@@ -396,11 +396,14 @@ channel ActionBoard binds to; a FiveWhys document loads straight into
 FaultTree (chains render as branches). Legend colours are now validated —
 unparseable entries fall back per slot instead of poisoning derived tints.
 
-**Phase 2 — Board cards + prioritisation.**
-CaptureCard, SqdpcCard, ConditionsCard, HeatmapCard, BenefitEffort, RiskMatrix,
-KpiTrendCard, ParetoCard, StatusTile. Mostly grid/canvas renderers over shared
-kit — this phase goes fast and makes a complete daily-management board possible
-(including the attendance/recognition/idea-funnel presets of §5a).
+**Phase 2 — Board cards + prioritisation.** ✅ *Done 2026-07-11.*
+CaptureCard (typed columns, multi-select + two-layer dependent picklists with
+icons, fixed/free rows), SqdpcCard (day/weekday/two-shift, hold-to-raise-
+action), ConditionsCard (rolling week + forecast), HeatmapCard (image pins
+with severity + pin-time action capture), BenefitEffort, RiskMatrix (banded
+5×5, post-control movement, treatment actions), KpiTrendCard, ParetoCard
+(accepts cause/vote exports), StatusTile. All 13 controls pack into the one
+solution. Live harness verification pending browser-pane reconnect.
 
 **Phase 3 — Maps, cadence, cascade.**
 ProcessMap port + Swimlane mode, Raci, SkillsMatrix, MeetingScheduler,

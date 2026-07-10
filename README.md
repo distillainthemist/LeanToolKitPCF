@@ -13,7 +13,15 @@ for the full architecture, component specs and roadmap.
 | **Fishbone** — Ishikawa diagram (votes, statuses, drag between bones), action capture on causes | ✅ Phase 1 |
 | **FaultTree** — top-down gated tree (AND/OR pills on connectors), drag to re-parent, collapse, root causes + actions | ✅ Phase 1 |
 | **ActionBoard** — the central action register as a list, kanban (status/issue columns) or gantt (start→due bars) | ✅ Phase 1 |
-| CaptureCard, SqdpcCard, ConditionsCard, HeatmapCard, BenefitEffort, RiskMatrix, KpiTrendCard, ParetoCard, StatusTile | Phase 2 |
+| **StatusTile** — tap-to-cycle state tile with reason; the cascade's line-of-sight element | ✅ Phase 2 |
+| **ParetoCard** — descending bars + cumulative % line; accepts cause/vote exports directly | ✅ Phase 2 |
+| **KpiTrendCard** — run chart with target line and RAG readout of the latest value | ✅ Phase 2 |
+| **BenefitEffort** — 2×2 drag canvas (benefit ↑, effort →) for prioritising solutions | ✅ Phase 2 |
+| **RiskMatrix** — 5×5 likelihood × consequence, post-control movement, treatment actions | ✅ Phase 2 |
+| **SqdpcCard** — month grid of good/issue ratings per dimension, day/weekday/two-shift | ✅ Phase 2 |
+| **ConditionsCard** — rolling 7 days × conditions + next-shift forecast column | ✅ Phase 2 |
+| **CaptureCard** — config-driven grid: typed columns, multi-select and two-layer picklists with icons, free or fixed rows | ✅ Phase 2 |
+| **HeatmapCard** — pin issues onto a fixed image, severity-coloured, actions at pin time | ✅ Phase 2 |
 | ProcessMap (+ swimlanes), Raci, SkillsMatrix, MeetingScheduler, EscalationViewer, BoardChrome | Phase 3 |
 
 ## The standard surface
