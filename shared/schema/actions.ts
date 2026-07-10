@@ -40,6 +40,7 @@ export interface LtkAction {
   issue: string;
   description: string;
   assignees: Assignee[];
+  start: string; // yyyy-mm-dd, "" = no start date (optional; used by Gantt)
   due: string; // yyyy-mm-dd, "" = no due date
   status: ActionStatus;
   comments: ActionComment[];
@@ -54,6 +55,7 @@ export function newAction(context: ActionContext): LtkAction {
     issue: "",
     description: "",
     assignees: [],
+    start: "",
     due: "",
     status: "open",
     comments: [],
@@ -96,6 +98,7 @@ export function sanitizeAction(a: Partial<LtkAction>): LtkAction {
     issue: typeof a.issue === "string" ? a.issue : "",
     description: typeof a.description === "string" ? a.description : "",
     assignees,
+    start: typeof a.start === "string" ? a.start : "",
     due: typeof a.due === "string" ? a.due : "",
     status: isStatus(a.status) ? a.status : "open",
     comments,

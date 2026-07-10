@@ -42,6 +42,7 @@ export function buildActionForm(
     placeholder: "What will be done?",
     rows: 2,
   });
+  const start = textInput(initial?.start ?? "", { type: "date" });
   const due = textInput(initial?.due ?? "", { type: "date" });
   const currentWho = initial?.assignees[0];
 
@@ -80,9 +81,15 @@ export function buildActionForm(
   wrap.appendChild(fieldRow("Action", desc));
   wrap.appendChild(sectionLabel("Who"));
   wrap.appendChild(whoWrap);
+  const dates = el("div");
+  dates.style.display = "flex";
+  dates.style.gap = "12px";
+  const startRow = fieldRow("Start (optional)", start);
+  startRow.classList.add("ltk-field-half");
   const dueRow = fieldRow("Due", due);
   dueRow.classList.add("ltk-field-half");
-  wrap.appendChild(dueRow);
+  dates.append(startRow, dueRow);
+  wrap.appendChild(dates);
 
   return {
     el: wrap,
@@ -90,6 +97,7 @@ export function buildActionForm(
     hasContent: () => desc.value.trim() !== "",
     apply: (action) => {
       action.description = desc.value.trim();
+      action.start = start.value;
       action.due = due.value;
       const done = action.status === "done";
       const picked = checks.find((c) => c.box.checked);
@@ -172,34 +180,42 @@ export function actionRow(a: LtkAction, opts: ActionRowOptions): HTMLElement {
     });
   }
 
+  // left: issue (caps) stacked over the description
   const main = el("div", "ltk-action-main");
   if (opts.showIssue && a.issue.trim() !== "") {
     main.appendChild(el("div", "ltk-action-issue", a.issue));
   }
   main.appendChild(descEl);
-  const meta = el("div", "ltk-action-meta");
-  meta.appendChild(
-    el("span", undefined, a.assignees[0]?.who ?? "Unassigned")
-  );
-  if (a.due !== "") {
-    const dueEl = el("span", undefined, ` · Due ${a.due}`);
-    if (isOverdue(a)) dueEl.classList.add("ltk-action-overdue");
-    meta.appendChild(dueEl);
-  }
+
+  // right: who + date, prominent and right-aligned
+  const right = el("div", "ltk-action-right");
+  const whoEl = el("div", "ltk-action-who");
   if (a.escalated) {
-    meta.appendChild(el("span", "ltk-action-flag", " · ⚑ Escalated"));
+    whoEl.appendChild(el("span", "ltk-action-flag", "⚑ "));
   }
-  main.appendChild(meta);
+  whoEl.appendChild(
+    document.createTextNode(a.assignees[0]?.who ?? "Unassigned")
+  );
+  right.appendChild(whoEl);
+  if (a.due !== "") {
+    const dueEl = el("div", "ltk-action-due", `Due ${a.due}`);
+    if (isOverdue(a)) dueEl.classList.add("ltk-action-overdue");
+    right.appendChild(dueEl);
+  } else if (a.start !== "") {
+    right.appendChild(el("div", "ltk-action-due", `From ${a.start}`));
+  }
 
   if (!opts.readOnly) {
     main.addEventListener("click", () => opts.onEdit(a));
+    right.addEventListener("click", () => opts.onEdit(a));
+    right.style.cursor = "pointer";
     const edit = el("button", "ltk-action-edit", "✎");
     edit.type = "button";
     edit.title = "Edit action";
     edit.addEventListener("click", () => opts.onEdit(a));
-    row.append(circle, main, edit);
+    row.append(circle, main, right, edit);
   } else {
-    row.append(circle, main);
+    row.append(circle, main, right);
   }
   return row;
 }

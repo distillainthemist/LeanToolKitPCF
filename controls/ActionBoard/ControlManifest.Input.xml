@@ -43,6 +43,7 @@
               default-value="list">
       <value name="list" display-name-key="List">list</value>
       <value name="kanban" display-name-key="Kanban">kanban</value>
+      <value name="gantt" display-name-key="Gantt">gantt</value>
     </property>
 
     <property name="kanbanGroupBy"

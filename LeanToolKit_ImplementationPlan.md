@@ -257,6 +257,7 @@ bone. This is the demo that sells the toolkit.
   "issue": "Capper torque drift",
   "description": "Recalibrate capper heads and add torque check to CIL",
   "assignees": [ { "whoId": "guid-1", "who": "Sam P", "done": false } ],
+  "start": "2026-07-14",
   "due": "2026-07-17",
   "status": "open",          
   "comments": [ { "whoId": "guid-2", "when": "2026-07-10", "text": "Parts ordered" } ],
@@ -294,8 +295,8 @@ Dataverse actions table, keyed by `instanceId` (which card) + `context.source`
   must not reload — and a reload only notifies when the loaded state actually
   differs. Without both halves, Patch → reload → OnChange → Patch loops.
 - Suggested table columns (`ben_` prefix): ActionId (alternate key),
-  InstanceId, Source, SourceId, Issue, Description, Due, Status, Escalated,
-  AssigneesJSON, CommentsJSON, Hint.
+  InstanceId, Source, SourceId, Issue, Description, Start (optional, for
+  Gantt), Due, Status, Escalated, AssigneesJSON, CommentsJSON, Hint.
 - Knock-ons: ActionBoard binds the actions channel as its primary data (no
   envelope), and EscalationViewer/6C largely becomes
   `Filter(Actions, Escalated = true)` — the central table is the cascade
@@ -343,7 +344,7 @@ static ones). Codified in `shared/tokens.ts`, consumed by every control:
 | 2 | **FiveWhys** | 1B | 1–n why-chains as connected cards; drag to reorder/re-chain; root-cause flag reveals inline action capture; single-assignee actions with tap-to-complete circle (open ↔ done; full status set stays in the schema for ActionBoard) | M |
 | 3 | **FaultTree** | 1C (1D deferred) | Free-form cause tree; add/indent/re-parent by drag; collapse branches; gate/probability fields reserved | M–L |
 | 4 | **ProcessMap** | 2A–2D | Port ProcessMapPCF; restyle; **add Swimlane mode**; kaizen burst → action; envelope migration | L |
-| 5 | **ActionBoard** | 3A–3C | One control, `view: list/kanban/gantt`; per-assignee done; kanban split by status *or* issue; drag between columns/dates | L |
+| 5 | **ActionBoard** | 3A–3C | One control, `view: list/kanban/gantt` (all shipped); kanban split by status *or* issue with drag between columns; gantt plots start→due bars with today line, undated actions listed beneath | L |
 | 6 | **Raci** | 4A | People × deliverables grid; tap-cycle R/A/C/I; per-row single-A validation warning | M |
 | 7 | **BenefitEffort** | 4B | 2×2 drag canvas; items as chips; quadrant labels; import actions/causes; priority order out | S–M |
 | 8 | **RiskMatrix** | 4C | 5×5 likelihood × consequence; risk register list + plotted cells; pre/post-control ratings; treatment → action | M |
@@ -402,10 +403,12 @@ kit — this phase goes fast and makes a complete daily-management board possibl
 (including the attendance/recognition/idea-funnel presets of §5a).
 
 **Phase 3 — Maps, cadence, cascade.**
-ProcessMap port + Swimlane mode, ActionBoard Gantt view, Raci, SkillsMatrix,
-MeetingScheduler, EscalationViewer, BoardChrome + the **Leanboard canvas-app
-template**. Exit test: two cascaded boards; escalation raised on board A visible
-on board B (and surfacing as a StatusTile state).
+ProcessMap port + Swimlane mode, Raci, SkillsMatrix, MeetingScheduler,
+EscalationViewer, BoardChrome + the **Leanboard canvas-app template**.
+(ActionBoard's Gantt view was pulled forward and shipped with Phase 1 —
+actions carry an optional `start` date for it.) Exit test: two cascaded
+boards; escalation raised on board A visible on board B (and surfacing as a
+StatusTile state).
 
 **Phase 4 — Stretch.**
 Detailed fault tree mode (gates/probability), Leanboard mega-control spike,

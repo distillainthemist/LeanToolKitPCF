@@ -2,7 +2,7 @@
 // kanban. The actions channel IS the data — no card document. Cancelled
 // actions are hidden but preserved. Plain DOM; full re-render per mutation.
 
-import { applyThemeVars, defaultTheme, Theme } from "../../shared/tokens";
+import { applyThemeVars, defaultTheme, textOn, Theme } from "../../shared/tokens";
 import { LTK_BASE_CSS } from "../../shared/ui/baseCss";
 import { clear, el, ensureStylesheet } from "../../shared/ui/dom";
 import { parsePrompts, Prompts, renderGhost, renderTitleBar } from "../../shared/ui/chrome";
@@ -14,8 +14,25 @@ import { ActionStatus, isOverdue, LtkAction, newAction } from "../../shared/sche
 import { Person } from "../../shared/schema/people";
 import { ACTIONBOARD_CSS } from "./styles";
 
-export type BoardView = "list" | "kanban";
+export type BoardView = "list" | "kanban" | "gantt";
 export type KanbanGroupBy = "status" | "issue";
+
+/** Day number of a yyyy-mm-dd date (UTC, so arithmetic is DST-proof). */
+function dayNum(iso: string): number {
+  return Math.floor(Date.parse(iso + "T00:00:00Z") / 86400000);
+}
+
+function dayLabel(day: number): string {
+  const d = new Date(day * 86400000);
+  return `${d.getUTCDate()} ${d.toLocaleDateString(undefined, {
+    month: "short",
+    timeZone: "UTC",
+  })}`;
+}
+
+const GANTT_DAY_W = 24;
+const GANTT_LABEL_W = 210;
+const GANTT_ROW_H = 40;
 
 const STATUS_COLUMNS: { status: ActionStatus; label: string }[] = [
   { status: "open", label: "Open" },
@@ -189,6 +206,8 @@ export class ActionBoardEditor {
 
     if (this.view === "kanban") {
       body.appendChild(this.renderKanban(visible));
+    } else if (this.view === "gantt") {
+      body.appendChild(this.renderGantt(visible));
     } else {
       body.appendChild(this.renderList(visible));
     }
@@ -302,6 +321,136 @@ export class ActionBoardEditor {
 
     if (!this.readOnly) this.attachDrag(card, a);
     return card;
+  }
+
+  // ---- gantt ----
+
+  /**
+   * Time-axis view: one row per dated action, bar from start to due (a
+   * single-day bar when only one date is set). Undated actions list beneath.
+   * Tap a row to edit — dates are changed in the dialog.
+   */
+  private renderGantt(visible: LtkAction[]): HTMLElement {
+    const wrap = el("div", "ltk-ab-gantt");
+    const dated = visible.filter((a) => a.due !== "" || a.start !== "");
+    const undated = visible.filter((a) => a.due === "" && a.start === "");
+
+    if (dated.length === 0) {
+      wrap.appendChild(
+        el(
+          "div",
+          "ltk-ab-g-empty",
+          "No dated actions yet — add a start or due date to plot them here."
+        )
+      );
+    } else {
+      const today = dayNum(new Date().toISOString().slice(0, 10));
+      const startOf = (a: LtkAction) => dayNum(a.start !== "" ? a.start : a.due);
+      const endOf = (a: LtkAction) => dayNum(a.due !== "" ? a.due : a.start);
+      let minDay = Math.min(today, ...dated.map(startOf));
+      let maxDay = Math.max(today, ...dated.map(endOf));
+      minDay -= 2;
+      maxDay += 2;
+      const days = maxDay - minDay + 1;
+      const plotW = days * GANTT_DAY_W;
+
+      const scroller = el("div", "ltk-ab-g-scroll");
+      const inner = el("div", "ltk-ab-g-inner");
+      inner.style.width = `${GANTT_LABEL_W + plotW}px`;
+
+      // header: week tick labels (Mondays)
+      const header = el("div", "ltk-ab-g-header");
+      header.appendChild(el("div", "ltk-ab-g-corner"));
+      const scale = el("div", "ltk-ab-g-scale");
+      scale.style.width = `${plotW}px`;
+      for (let d = minDay; d <= maxDay; d++) {
+        if (new Date(d * 86400000).getUTCDay() === 1) {
+          const tick = el("div", "ltk-ab-g-tick", dayLabel(d));
+          tick.style.left = `${(d - minDay) * GANTT_DAY_W}px`;
+          scale.appendChild(tick);
+        }
+      }
+      header.appendChild(scale);
+      inner.appendChild(header);
+
+      const rows = el("div", "ltk-ab-g-rows");
+      const sorted = dated
+        .slice()
+        .sort((a, b) => startOf(a) - startOf(b) || endOf(a) - endOf(b));
+      for (const a of sorted) {
+        const row = el("div", "ltk-ab-g-row");
+        const label = el("div", "ltk-ab-g-label");
+        if (a.issue.trim() !== "") {
+          label.appendChild(el("div", "ltk-ab-card-issue", a.issue));
+        }
+        const desc = el(
+          "div",
+          "ltk-ab-g-desc" + (a.status === "done" ? " ltk-ab-done" : ""),
+          a.description || a.issue
+        );
+        label.appendChild(desc);
+        row.appendChild(label);
+
+        const plot = el("div", "ltk-ab-g-plot");
+        plot.style.width = `${plotW}px`;
+        const s = startOf(a);
+        const e = endOf(a);
+        const bar = el("div", "ltk-ab-g-bar");
+        bar.style.left = `${(s - minDay) * GANTT_DAY_W + 1}px`;
+        bar.style.width = `${(e - s + 1) * GANTT_DAY_W - 2}px`;
+        const colour =
+          a.status === "done"
+            ? this.doneColor()
+            : isOverdue(a)
+              ? this.overdueColor()
+              : this.openColor();
+        bar.style.background = colour;
+        const who = el(
+          "span",
+          "ltk-ab-g-bar-who",
+          `${a.escalated ? "⚑ " : ""}${a.assignees[0]?.who ?? ""}`
+        );
+        who.style.color = textOn(colour);
+        bar.appendChild(who);
+        plot.appendChild(bar);
+        row.appendChild(plot);
+
+        if (!this.readOnly) {
+          row.addEventListener("click", () => this.editAction(a));
+        }
+        rows.appendChild(row);
+      }
+      inner.appendChild(rows);
+
+      // today marker spanning header + rows
+      const marker = el("div", "ltk-ab-g-today");
+      marker.style.left = `${
+        GANTT_LABEL_W + (today - minDay) * GANTT_DAY_W + GANTT_DAY_W / 2
+      }px`;
+      marker.style.height = `${28 + sorted.length * GANTT_ROW_H}px`;
+      inner.appendChild(marker);
+
+      scroller.appendChild(inner);
+      wrap.appendChild(scroller);
+    }
+
+    if (undated.length > 0) {
+      wrap.appendChild(
+        el("div", "ltk-ab-g-undated-title", `No dates (${undated.length})`)
+      );
+      for (const a of this.sorted(undated)) {
+        wrap.appendChild(
+          actionRow(a, {
+            doneColor: this.doneColor(),
+            showIssue: true,
+            readOnly: this.readOnly,
+            onChanged: () => this.commit(),
+            onEdit: (act) => this.editAction(act),
+          })
+        );
+      }
+    }
+    return wrap;
   }
 
   // ---- kanban drag: move cards between columns ----

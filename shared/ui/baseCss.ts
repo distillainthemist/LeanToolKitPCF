@@ -176,7 +176,16 @@ export const LTK_BASE_CSS = `
   color: var(--ltk-muted);
 }
 .ltk-action-desc { font-size: 13px; line-height: 1.3; overflow-wrap: break-word; }
-.ltk-action-meta { color: var(--ltk-muted); font-size: 12px; }
+.ltk-action-right {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  text-align: right;
+}
+.ltk-action-who { font-size: 13px; font-weight: 600; color: var(--ltk-fg); }
+.ltk-action-due { font-size: 12px; color: var(--ltk-muted); }
 .ltk-action-overdue { color: #d13438; font-weight: 600; }
 .ltk-action-flag { color: var(--ltk-accent); font-weight: 600; }
 .ltk-action-edit {

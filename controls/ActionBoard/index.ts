@@ -93,8 +93,9 @@ export class ActionBoard implements ComponentFramework.StandardControl<IInputs, 
     this.applySize(context);
     this.instanceId = str(p.instanceId);
     this.editor.setTheme(readTheme(p));
+    const viewRaw = p.view?.raw as BoardView;
     this.editor.setOptions({
-      view: (p.view?.raw as BoardView) === "kanban" ? "kanban" : "list",
+      view: viewRaw === "kanban" || viewRaw === "gantt" ? viewRaw : "list",
       groupBy:
         (p.kanbanGroupBy?.raw as KanbanGroupBy) === "issue" ? "issue" : "status",
     });
