@@ -24,6 +24,15 @@ export function makeInteractive(el: HTMLElement | SVGElement, cb: DragCallbacks)
 
   target.addEventListener("pointerdown", (down: PointerEvent) => {
     if (down.button !== 0 && down.pointerType === "mouse") return;
+    // Ignore presses that start on an embedded control (a button, link, form
+    // field, or an element opting out via [data-ltk-stop]) inside the target:
+    // those handle their own clicks, so the tap/drag must not also fire.
+    const origin = down.target as Element | null;
+    const inner =
+      origin && origin.closest
+        ? origin.closest("button, a, input, select, textarea, [data-ltk-stop]")
+        : null;
+    if (inner && inner !== target && target.contains(inner)) return;
     let dragging = false;
     let longPressed = false;
     const startX = down.clientX;
