@@ -312,7 +312,7 @@ export class ProcessMap implements ComponentFramework.StandardControl<IInputs, I
         this.outputJson = doc;
         this.actionsJson = acts;
         this.gate.recordEmitted(doc, acts);
-        this.editor.setModel(envelope.data);
+        this.editor.setModel(envelope.data, true); // (re)load: auto-fit the view
         this.notifyOutputChanged();
       }
     }

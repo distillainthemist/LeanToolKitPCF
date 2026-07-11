@@ -96,6 +96,7 @@ export class ProcessMapEditor {
   private dlgHost?: HTMLElement;
 
   private model: PmModel = emptyModel();
+  private needsFit = false;
   private view: Viewport = { tx: 60, ty: 40, scale: 1 };
   private selected: Selection | null = null;
   private readOnly = false;
@@ -144,13 +145,14 @@ export class ProcessMapEditor {
 
   // ---------- public API ----------
 
-  setModel(model: PmModel): void {
+  setModel(model: PmModel, fit = false): void {
     this.model = model;
     if (this.selected && !this.selectionExists(this.selected)) this.selected = null;
     if (model.mode === "sipoc") this.relayoutSipoc();
     if (model.mode === "swimlane") this.ensureSwimlanes();
     this.syncModeUi();
     this.render();
+    if (fit) this.requestFit();
     this.schedulePng();
   }
 
@@ -185,6 +187,27 @@ export class ProcessMapEditor {
   resize(width: number, height: number): void {
     if (width > 0) this.root.style.width = width + "px";
     if (height > 0) this.root.style.height = height + "px";
+    // a fit deferred from before the container had real dimensions
+    if (this.needsFit && width > 40 && height > 40) {
+      this.needsFit = false;
+      requestAnimationFrame(() => this.fitView());
+    }
+  }
+
+  /**
+   * Auto-fit after a document (re)load. The stage may not be laid out yet on
+   * the first pass — retry via resize(), which runs on every updateView.
+   */
+  private requestFit(): void {
+    this.needsFit = true;
+    requestAnimationFrame(() => {
+      if (!this.needsFit) return;
+      const r = this.svg.getBoundingClientRect();
+      if (r.width > 40 && r.height > 40) {
+        this.needsFit = false;
+        this.fitView();
+      }
+    });
   }
 
   destroy(): void {
@@ -380,6 +403,7 @@ export class ProcessMapEditor {
     this.selected = null;
     this.syncModeUi();
     this.render();
+    this.requestFit();
     this.commit();
   }
 
