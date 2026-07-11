@@ -34,7 +34,7 @@ export interface RaciEditorCallbacks {
 }
 
 const LABEL_COL = 170;
-const ACTION_COL = 52;
+const ACTION_COL = 62;
 
 export class RaciEditor {
   private readonly root: HTMLElement;
@@ -163,7 +163,7 @@ export class RaciEditor {
       }
       grid.appendChild(head);
     });
-    grid.appendChild(el("div", "ltk-ra-acthead"));
+    grid.appendChild(el("div", "ltk-ra-acthead", "Actions"));
 
     // one row per deliverable
     for (const task of this.env.data.tasks) {
@@ -175,6 +175,8 @@ export class RaciEditor {
     }
     body.appendChild(grid);
 
+    // footer: add buttons on the left, RACI legend on the right, in line
+    const footer = el("div", "ltk-ra-footer");
     if (!this.readOnly) {
       const buttons = el("div", "ltk-ra-addrow");
       const addTask = el("button", "ltk-ra-add", "＋ Add deliverable");
@@ -184,10 +186,16 @@ export class RaciEditor {
       addRole.type = "button";
       addRole.addEventListener("click", () => this.editRole(null));
       buttons.append(addTask, addRole);
-      body.appendChild(buttons);
+      footer.appendChild(buttons);
     }
+    footer.appendChild(this.renderLegend());
+    body.appendChild(footer);
 
-    body.appendChild(this.renderLegend());
+    if (!this.readOnly) {
+      body.appendChild(
+        el("div", "ltk-ra-hint", "Tap a cell to cycle · tap a role or deliverable to edit")
+      );
+    }
   }
 
   private renderTaskLabel(task: RaciTask): HTMLElement {
@@ -263,11 +271,6 @@ export class RaciEditor {
       sw.style.color = textOn(d.color);
       item.append(sw, document.createTextNode(d.label));
       legend.appendChild(item);
-    }
-    if (!this.readOnly) {
-      legend.appendChild(
-        el("span", "ltk-ra-hint", "Tap a cell to cycle · tap a role or deliverable to edit")
-      );
     }
     return legend;
   }

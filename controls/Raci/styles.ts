@@ -19,7 +19,17 @@ export const RACI_CSS = `
 
 /* ---- headers ---- */
 .ltk-ra-corner { }
-.ltk-ra-acthead { border-bottom: 2px solid var(--ltk-hairline); }
+.ltk-ra-acthead {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  text-align: center;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--ltk-muted);
+  padding: 0 2px 4px;
+  border-bottom: 2px solid var(--ltk-hairline);
+}
 .ltk-ra-rolehead {
   display: flex;
   align-items: flex-end;
@@ -111,7 +121,13 @@ export const RACI_CSS = `
 .ltk-ra-cell:hover { filter: brightness(0.94); }
 .ltk-ra-cell.ltk-readonly { cursor: default; }
 
-/* ---- add buttons ---- */
+/* ---- footer: add buttons (left) + legend (right, in line) ---- */
+.ltk-ra-footer {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
 .ltk-ra-addrow { display: flex; gap: 8px; flex-wrap: wrap; }
 .ltk-ra-add {
   align-self: flex-start;
@@ -131,7 +147,7 @@ export const RACI_CSS = `
 }
 .ltk-ra-add:hover { border-color: var(--ltk-accent); color: var(--ltk-accent); }
 
-/* ---- legend ---- */
+/* ---- legend (sits at the right of the footer) ---- */
 .ltk-ra-legend {
   display: flex;
   gap: 16px;
@@ -139,6 +155,7 @@ export const RACI_CSS = `
   color: var(--ltk-fg);
   align-items: center;
   flex-wrap: wrap;
+  margin-left: auto;
 }
 .ltk-ra-legend-item { display: inline-flex; align-items: center; gap: 6px; }
 .ltk-ra-swatch {
@@ -151,5 +168,5 @@ export const RACI_CSS = `
   font-size: 11px;
   font-weight: 700;
 }
-.ltk-ra-hint { color: var(--ltk-muted); font-size: 11px; margin-left: auto; }
+.ltk-ra-hint { color: var(--ltk-muted); font-size: 11px; }
 `;
