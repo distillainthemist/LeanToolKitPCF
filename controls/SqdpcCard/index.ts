@@ -15,7 +15,7 @@ import {
   parseSubtitles,
   serializeSqdpc,
 } from "./types";
-import { LoadGate, readTheme, str } from "../../shared/pcf/standard";
+import { LoadGate, cfg, enumOr, parseSettings, rawOr, readTheme, str } from "../../shared/pcf/standard";
 import {
   parseActionsJson,
   serializeActions,
@@ -38,6 +38,7 @@ export class SqdpcCard implements ComponentFramework.StandardControl<IInputs, IO
   private actionsJson = "";
   private instanceId = "";
   private pngDataUri = "";
+  private svgMarkup = "";
   private outputTimer: ReturnType<typeof setTimeout> | null = null;
 
   public init(
@@ -65,8 +66,9 @@ export class SqdpcCard implements ComponentFramework.StandardControl<IInputs, IO
           OUTPUT_DEBOUNCE_MS
         );
       },
-      onPngReady: (dataUri) => {
+      onPngReady: (dataUri, svgMarkup) => {
         this.pngDataUri = dataUri;
+        this.svgMarkup = svgMarkup ?? "";
         this.notifyOutputChanged();
       },
     });
@@ -83,6 +85,7 @@ export class SqdpcCard implements ComponentFramework.StandardControl<IInputs, IO
       outputJSON: this.outputJson,
       actionsOutputJSON: this.actionsJson,
       pngExport: this.pngDataUri,
+      svgExport: this.svgMarkup,
     };
   }
 
@@ -110,23 +113,24 @@ export class SqdpcCard implements ComponentFramework.StandardControl<IInputs, IO
 
   private applyAll(context: ComponentFramework.Context<IInputs>): void {
     const p = context.parameters;
+    const s = parseSettings(p.settingsJSON?.raw);
 
     this.applySize(context);
-    this.instanceId = str(p.instanceId);
-    this.editor.setTheme(readTheme(p));
-    const gRaw = p.granularity?.raw as Granularity;
-    const dimensions = parseDimensions(p.dimensions?.raw);
+    this.instanceId = str(p.instanceId, cfg(s, "instanceId"));
+    this.editor.setTheme(readTheme(p, s));
+    const gRaw = enumOr(cfg(s, "granularity"), p.granularity) as Granularity;
+    const dimensions = parseDimensions(rawOr(p.dimensions, cfg(s, "dimensions")));
     this.editor.setOptions({
       granularity: gRaw === "weekday" || gRaw === "shift2" ? gRaw : "day",
       dimensions,
-      subtitles: parseSubtitles(p.subtitles?.raw, dimensions),
-      codes: parseStatusCodes(p.statusCodes?.raw),
+      subtitles: parseSubtitles(rawOr(p.subtitles, cfg(s, "subtitles")), dimensions),
+      codes: parseStatusCodes(rawOr(p.statusCodes, cfg(s, "statusCodes"))),
     });
-    this.editor.setPeople(parsePeople(p.peopleJSON?.raw));
-    this.editor.setChrome(str(p.cardTitle), p.prompts?.raw ?? "");
+    this.editor.setPeople(parsePeople(rawOr(p.peopleJSON, cfg(s, "peopleJSON"))));
+    this.editor.setChrome(str(p.cardTitle, s.title), rawOr(p.prompts, s.promptsRaw));
 
     const disabled = context.mode.isControlDisabled === true;
-    this.editor.setReadOnly(disabled || p.readOnly?.raw === true);
+    this.editor.setReadOnly(disabled || p.readOnly?.raw === true || s.readOnly);
 
     if (this.gate.shouldReload(p)) {
       const { envelope, embeddedActions } = parseSqdpc(p.inputJSON?.raw);

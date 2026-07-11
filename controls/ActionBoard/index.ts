@@ -5,7 +5,7 @@
 
 import { IInputs, IOutputs } from "./generated/ManifestTypes";
 import { ActionBoardEditor, BoardView, KanbanGroupBy } from "./editor";
-import { LoadGate, readTheme, str } from "../../shared/pcf/standard";
+import { LoadGate, cfg, enumOr, parseSettings, rawOr, readTheme, str } from "../../shared/pcf/standard";
 import {
   parseActionsJson,
   serializeActions,
@@ -25,6 +25,7 @@ export class ActionBoard implements ComponentFramework.StandardControl<IInputs, 
   private actionsJson = "";
   private instanceId = "";
   private pngDataUri = "";
+  private svgMarkup = "";
   private outputTimer: ReturnType<typeof setTimeout> | null = null;
 
   public init(
@@ -50,8 +51,9 @@ export class ActionBoard implements ComponentFramework.StandardControl<IInputs, 
           OUTPUT_DEBOUNCE_MS
         );
       },
-      onPngReady: (dataUri) => {
+      onPngReady: (dataUri, svgMarkup) => {
         this.pngDataUri = dataUri;
+        this.svgMarkup = svgMarkup ?? "";
         this.notifyOutputChanged();
       },
     });
@@ -67,6 +69,7 @@ export class ActionBoard implements ComponentFramework.StandardControl<IInputs, 
     return {
       actionsOutputJSON: this.actionsJson,
       pngExport: this.pngDataUri,
+      svgExport: this.svgMarkup,
     };
   }
 
@@ -89,21 +92,22 @@ export class ActionBoard implements ComponentFramework.StandardControl<IInputs, 
 
   private applyAll(context: ComponentFramework.Context<IInputs>): void {
     const p = context.parameters;
+    const s = parseSettings(p.settingsJSON?.raw);
 
     this.applySize(context);
-    this.instanceId = str(p.instanceId);
-    this.editor.setTheme(readTheme(p));
-    const viewRaw = p.view?.raw as BoardView;
+    this.instanceId = str(p.instanceId, cfg(s, "instanceId"));
+    this.editor.setTheme(readTheme(p, s));
+    const viewRaw = enumOr(cfg(s, "view"), p.view) as BoardView;
     this.editor.setOptions({
       view: viewRaw === "kanban" || viewRaw === "gantt" ? viewRaw : "list",
       groupBy:
-        (p.kanbanGroupBy?.raw as KanbanGroupBy) === "issue" ? "issue" : "status",
+        (enumOr(cfg(s, "kanbanGroupBy"), p.kanbanGroupBy) as KanbanGroupBy) === "issue" ? "issue" : "status",
     });
-    this.editor.setPeople(parsePeople(p.peopleJSON?.raw));
-    this.editor.setChrome(str(p.cardTitle), p.prompts?.raw ?? "");
+    this.editor.setPeople(parsePeople(rawOr(p.peopleJSON, cfg(s, "peopleJSON"))));
+    this.editor.setChrome(str(p.cardTitle, s.title), rawOr(p.prompts, s.promptsRaw));
 
     const disabled = context.mode.isControlDisabled === true;
-    this.editor.setReadOnly(disabled || p.readOnly?.raw === true);
+    this.editor.setReadOnly(disabled || p.readOnly?.raw === true || s.readOnly);
 
     if (this.gate.shouldReload(p)) {
       const actions = parseActionsJson(p.actionsInputJSON?.raw);

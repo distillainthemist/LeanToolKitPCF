@@ -14,7 +14,7 @@ import {
   SCHEMA_ID,
   serializeFishbone,
 } from "./types";
-import { LoadGate, readTheme, str } from "../../shared/pcf/standard";
+import { LoadGate, cfg, parseSettings, rawOr, readTheme, str } from "../../shared/pcf/standard";
 import { applyThemeVars, defaultTheme, Theme } from "../../shared/tokens";
 import { el } from "../../shared/ui/dom";
 import { ensureStylesheet } from "../../shared/ui/dom";
@@ -62,6 +62,7 @@ export class Fishbone implements ComponentFramework.StandardControl<IInputs, IOu
   private actionsJson = "";
   private instanceId = "";
   private pngDataUri = "";
+  private svgMarkup = "";
   private outputTimer: ReturnType<typeof setTimeout> | null = null;
 
   public init(
@@ -86,8 +87,9 @@ export class Fishbone implements ComponentFramework.StandardControl<IInputs, IOu
 
     this.editor = new FishboneEditor(this.editorHost, {
       onChange: (model) => this.absorbModel(model),
-      onPngReady: (dataUri) => {
+      onPngReady: (dataUri, svgMarkup) => {
         this.pngDataUri = dataUri;
+        this.svgMarkup = svgMarkup ?? "";
         this.notifyOutputChanged();
       },
       onManageActions: (causeId) => this.manageActions(causeId),
@@ -112,6 +114,7 @@ export class Fishbone implements ComponentFramework.StandardControl<IInputs, IOu
       outputJSON: this.outputJson,
       actionsOutputJSON: this.actionsJson,
       pngExport: this.pngDataUri,
+      svgExport: this.svgMarkup,
     };
   }
 
@@ -316,20 +319,21 @@ export class Fishbone implements ComponentFramework.StandardControl<IInputs, IOu
 
   private applyAll(context: ComponentFramework.Context<IInputs>): void {
     const p = context.parameters;
+    const s = parseSettings(p.settingsJSON?.raw);
 
-    this.instanceId = str(p.instanceId);
-    this.theme = readTheme(p);
-    this.people = parsePeople(p.peopleJSON?.raw);
+    this.instanceId = str(p.instanceId, cfg(s, "instanceId"));
+    this.theme = readTheme(p, s);
+    this.people = parsePeople(rawOr(p.peopleJSON, cfg(s, "peopleJSON")));
 
     const chromeKey =
-      str(p.cardTitle) + " " + (p.prompts?.raw ?? "") + " " +
-      String(p.readOnly?.raw === true) + " " + JSON.stringify(this.theme);
+      str(p.cardTitle, s.title) + " " + (rawOr(p.prompts, s.promptsRaw)) + " " +
+      String(p.readOnly?.raw === true || s.readOnly) + " " + JSON.stringify(this.theme);
     if (chromeKey !== this.lastChromeKey) {
       this.lastChromeKey = chromeKey;
-      this.cardTitle = str(p.cardTitle);
-      this.prompts = parsePrompts(p.prompts?.raw ?? "");
+      this.cardTitle = str(p.cardTitle, s.title);
+      this.prompts = parsePrompts(rawOr(p.prompts, s.promptsRaw));
       this.readOnly =
-        context.mode.isControlDisabled === true || p.readOnly?.raw === true;
+        context.mode.isControlDisabled === true || p.readOnly?.raw === true || s.readOnly;
       this.renderChrome();
     }
 

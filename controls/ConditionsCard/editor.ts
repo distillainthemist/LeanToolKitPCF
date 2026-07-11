@@ -36,7 +36,7 @@ export interface ConditionsOptions {
 
 export interface ConditionsEditorCallbacks {
   onChange: (env: ConditionsEnvelope, actions: LtkAction[]) => void;
-  onPngReady?: (dataUri: string) => void;
+  onPngReady?: (dataUri: string, svgMarkup?: string) => void;
 }
 
 const LABEL_COL = 168; // px reserved for the conditions column
@@ -386,8 +386,8 @@ export class ConditionsEditor {
 
   private generatePng(): void {
     if (!this.cb.onPngReady) return;
-    htmlToPng(this.root, LTK_BASE_CSS + CONDITIONS_CSS, this.theme.background, (uri) =>
-      this.cb.onPngReady!(uri)
+    htmlToPng(this.root, LTK_BASE_CSS + CONDITIONS_CSS, this.theme.background, (uri, svg) =>
+      this.cb.onPngReady!(uri, svg)
     );
   }
 

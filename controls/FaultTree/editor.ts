@@ -53,7 +53,7 @@ const DEFAULT_GHOST = [
 
 export interface FaultTreeEditorCallbacks {
   onChange: (env: FaultTreeEnvelope, actions: LtkAction[]) => void;
-  onPngReady?: (dataUri: string) => void;
+  onPngReady?: (dataUri: string, svgMarkup?: string) => void;
 }
 
 export class FaultTreeEditor {
@@ -691,8 +691,8 @@ export class FaultTreeEditor {
 
   private generatePng(): void {
     if (!this.cb.onPngReady) return;
-    htmlToPng(this.root, LTK_BASE_CSS + FAULTTREE_CSS, this.theme.background, (uri) =>
-      this.cb.onPngReady!(uri)
+    htmlToPng(this.root, LTK_BASE_CSS + FAULTTREE_CSS, this.theme.background, (uri, svg) =>
+      this.cb.onPngReady!(uri, svg)
     );
   }
 

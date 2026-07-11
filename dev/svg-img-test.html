@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>LeanToolKit — svgExport ⟶ &lt;img&gt; test</title>
+<style>
+  body { font: 14px "Segoe UI", system-ui, sans-serif; color: #141414; margin: 24px; max-width: 980px; }
+  h1 { font-size: 20px; }
+  p { max-width: 72ch; }
+  textarea { width: 100%; height: 140px; font: 12px monospace; }
+  .row { display: flex; gap: 20px; margin-top: 16px; flex-wrap: wrap; }
+  .pane { flex: 1; min-width: 320px; }
+  .pane h2 { font-size: 14px; }
+  .frame { border: 2px dashed #b5b5b5; min-height: 220px; padding: 8px; background: #fafafa; }
+  img { max-width: 100%; display: block; }
+  .verdict { font-weight: 700; margin-top: 6px; }
+  .ok { color: #107c10; } .bad { color: #d13438; }
+  button { font: inherit; padding: 8px 14px; margin-top: 8px; cursor: pointer; }
+</style>
+</head>
+<body>
+<h1>svgExport → &lt;img&gt; render test</h1>
+<p>
+  The DOM cards' <code>svgExport</code> uses SVG <code>&lt;foreignObject&gt;</code>.
+  It renders fine as a document, but some Safari versions refuse it inside an
+  <code>&lt;img&gt;</code> — which is how a board template would show card tiles.
+  <strong>Open this file in Safari</strong>, paste a card's <code>svgExport</code>
+  value below (from the harness output panel), and press Test. If the left pane
+  shows the card, Safari is good; if it stays blank while the right pane (inline
+  SVG) shows it, boards must fall back to <code>pngExport</code> for tiles.
+</p>
+
+<textarea id="src" placeholder="Paste the svgExport markup here (&lt;svg …&gt;…&lt;/svg&gt;)"></textarea>
+<button id="go">Test</button>
+
+<div class="row">
+  <div class="pane">
+    <h2>1 · Inside &lt;img&gt; (the board-tile case)</h2>
+    <div class="frame"><img id="probe" alt="" /></div>
+    <div class="verdict" id="verdict">—</div>
+  </div>
+  <div class="pane">
+    <h2>2 · Inline in the document (control case)</h2>
+    <div class="frame" id="inline"></div>
+  </div>
+</div>
+
+<script>
+  const probe = document.getElementById("probe");
+  const verdict = document.getElementById("verdict");
+  document.getElementById("go").addEventListener("click", () => {
+    const svg = document.getElementById("src").value.trim();
+    if (!svg.startsWith("<svg")) { verdict.textContent = "That doesn't look like SVG markup."; return; }
+    verdict.textContent = "Loading…"; verdict.className = "verdict";
+    probe.onload = () => {
+      // Safari can fire load yet paint nothing for foreignObject; check size
+      const ok = probe.naturalWidth > 0 && probe.naturalHeight > 0;
+      verdict.textContent = ok
+        ? "✓ Rendered in <img> (" + probe.naturalWidth + "×" + probe.naturalHeight + ") — svgExport is board-tile safe here."
+        : "⚠ Loaded but empty — fall back to pngExport for tiles in this browser.";
+      verdict.className = "verdict " + (ok ? "ok" : "bad");
+    };
+    probe.onerror = () => {
+      verdict.textContent = "✕ Refused in <img> — use pngExport for board tiles in this browser.";
+      verdict.className = "verdict bad";
+    };
+    probe.src = "data:image/svg+xml;utf8," + encodeURIComponent(svg);
+    document.getElementById("inline").innerHTML = svg;
+  });
+</script>
+</body>
+</html>

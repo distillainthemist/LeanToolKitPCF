@@ -20,7 +20,7 @@ import {
   SchedulerConfig,
   startOfDay,
 } from "./types";
-import { readTheme, str } from "../../shared/pcf/standard";
+import { cfg, enumOr, LtkSettings, parseSettings, rawOr, readTheme, str } from "../../shared/pcf/standard";
 import { nowIso } from "../../shared/schema/id";
 
 export class MeetingScheduler implements ComponentFramework.StandardControl<IInputs, IOutputs> {
@@ -30,6 +30,7 @@ export class MeetingScheduler implements ComponentFramework.StandardControl<IInp
 
   private selectedJson = "";
   private pngDataUri = "";
+  private svgMarkup = "";
 
   public init(
     context: ComponentFramework.Context<IInputs>,
@@ -49,8 +50,9 @@ export class MeetingScheduler implements ComponentFramework.StandardControl<IInp
         this.selectedJson = JSON.stringify({ ...instance, selectedAt: nowIso() });
         this.notifyOutputChanged();
       },
-      onPngReady: (dataUri) => {
+      onPngReady: (dataUri, svgMarkup) => {
         this.pngDataUri = dataUri;
+        this.svgMarkup = svgMarkup ?? "";
         this.notifyOutputChanged();
       },
     });
@@ -66,6 +68,7 @@ export class MeetingScheduler implements ComponentFramework.StandardControl<IInp
     return {
       selectedMeetingJSON: this.selectedJson,
       pngExport: this.pngDataUri,
+      svgExport: this.svgMarkup,
     };
   }
 
@@ -85,37 +88,45 @@ export class MeetingScheduler implements ComponentFramework.StandardControl<IInp
     }
   }
 
-  private readConfig(context: ComponentFramework.Context<IInputs>): SchedulerConfig {
+  private readConfig(
+    context: ComponentFramework.Context<IInputs>,
+    s: LtkSettings
+  ): SchedulerConfig {
     const p = context.parameters;
     const today = startOfDay(new Date());
-    const daysPrior = Number(p.daysPrior?.raw);
+    // daysPrior is a whole-number input: a non-null discrete value wins
+    const dpRaw = p.daysPrior?.raw;
+    const daysPrior = Number(dpRaw ?? cfg(s, "daysPrior"));
     return {
-      finalDate: parseLocalDate(p.finalDate?.raw) ?? today,
+      finalDate: parseLocalDate(rawOr(p.finalDate, cfg(s, "finalDate"))) ?? today,
       daysPrior:
         Number.isFinite(daysPrior) && daysPrior >= 0
           ? Math.min(400, Math.round(daysPrior))
           : 14,
-      category: parseCategory(p.category?.raw),
-      daysOfWeek: parseDaysOfWeek(p.daysOfWeek?.raw),
-      timeOfDay: parseTimeOfDay(p.timeOfDay?.raw),
-      crews: parseCrews(p.crewList?.raw),
-      roster: parseRosterPattern(p.rosterPattern?.raw),
-      baseStart: parseLocalDate(p.baseStartDate?.raw) ?? today,
+      category: parseCategory(enumOr(cfg(s, "category"), p.category)),
+      daysOfWeek: parseDaysOfWeek(rawOr(p.daysOfWeek, cfg(s, "daysOfWeek"))),
+      timeOfDay: parseTimeOfDay(rawOr(p.timeOfDay, cfg(s, "timeOfDay"))),
+      crews: parseCrews(rawOr(p.crewList, cfg(s, "crewList"))),
+      roster: parseRosterPattern(rawOr(p.rosterPattern, cfg(s, "rosterPattern"))),
+      baseStart: parseLocalDate(rawOr(p.baseStartDate, cfg(s, "baseStartDate"))) ?? today,
     };
   }
 
   private applyAll(context: ComponentFramework.Context<IInputs>): void {
     const p = context.parameters;
+    const s = parseSettings(p.settingsJSON?.raw);
 
     this.applySize(context);
-    this.view.setTheme(readTheme(p));
-    this.view.setChrome(str(p.cardTitle), p.prompts?.raw ?? "");
+    this.view.setTheme(readTheme(p, s));
+    this.view.setChrome(str(p.cardTitle, s.title), rawOr(p.prompts, s.promptsRaw));
 
     const disabled = context.mode.isControlDisabled === true;
-    this.view.setReadOnly(disabled || p.readOnly?.raw === true);
+    this.view.setReadOnly(disabled || p.readOnly?.raw === true || s.readOnly);
 
-    const cfg = this.readConfig(context);
-    const existing = parseExistingMeetings(p.existingMeetingsJSON?.raw);
-    this.view.setInstances(generateInstances(cfg, existing, new Date()), cfg.crews);
+    const config = this.readConfig(context, s);
+    const existing = parseExistingMeetings(
+      rawOr(p.existingMeetingsJSON, cfg(s, "existingMeetingsJSON"))
+    );
+    this.view.setInstances(generateInstances(config, existing, new Date()), config.crews);
   }
 }

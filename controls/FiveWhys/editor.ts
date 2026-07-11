@@ -50,7 +50,7 @@ const DEFAULT_GHOST = [
 
 export interface FiveWhysEditorCallbacks {
   onChange: (env: FiveWhysEnvelope, actions: LtkAction[]) => void;
-  onPngReady?: (dataUri: string) => void;
+  onPngReady?: (dataUri: string, svgMarkup?: string) => void;
 }
 
 export class FiveWhysEditor {
@@ -733,7 +733,7 @@ export class FiveWhysEditor {
       this.root,
       LTK_BASE_CSS + FIVEWHYS_CSS,
       this.theme.background,
-      (uri) => this.cb.onPngReady!(uri)
+      (uri, svg) => this.cb.onPngReady!(uri, svg)
     );
   }
 

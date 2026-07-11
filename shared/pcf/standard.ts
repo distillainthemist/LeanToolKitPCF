@@ -14,6 +14,7 @@ interface BoolProp {
 /** The standard parameters every LeanToolKit manifest declares. */
 export interface StandardParams {
   inputJSON?: StringProp;
+  settingsJSON?: StringProp;
   actionsInputJSON?: StringProp;
   instanceId?: StringProp;
   resetTrigger?: StringProp;
@@ -33,15 +34,109 @@ export function str(p: StringProp | undefined, fallback = ""): string {
   return v !== "" ? v : fallback;
 }
 
-/** Build a Theme from the standard styling inputs. */
-export function readTheme(params: StandardParams): Theme {
+// ---- settingsJSON (the consolidated configuration input) ----
+//
+// One JSON blob that can carry the whole configuration surface, so a board
+// template binds any card type through identical columns:
+//   {"title": "...", "prompts": ..., "readOnly": false,
+//    "theme": {"background","foreground","accent","legend","font"},
+//    "config": { ...card-specific keys, named after the discrete inputs... }}
+//
+// Precedence: settingsJSON is the BASE; a NON-EMPTY discrete text input
+// overrides its key (hand-placed cards keep the friendly property panel).
+// Enum and boolean inputs can never be blank, so for those the settings key
+// wins when present (readOnly merges with OR — either side can force it).
+
+export interface LtkSettings {
+  title: string;
+  promptsRaw: string;
+  theme: {
+    background: string;
+    foreground: string;
+    accent: string;
+    legend: string;
+    font: string;
+  };
+  readOnly: boolean;
+  config: Record<string, unknown>;
+}
+
+function asRaw(v: unknown): string {
+  if (v === null || v === undefined) return "";
+  if (typeof v === "string") return v.trim();
+  if (typeof v === "number" || typeof v === "boolean") return String(v);
+  try {
+    return JSON.stringify(v);
+  } catch {
+    return "";
+  }
+}
+
+/** Parse settingsJSON defensively; never throws. */
+export function parseSettings(raw: string | null | undefined): LtkSettings {
+  const empty: LtkSettings = {
+    title: "",
+    promptsRaw: "",
+    theme: { background: "", foreground: "", accent: "", legend: "", font: "" },
+    readOnly: false,
+    config: {},
+  };
+  const t = (raw ?? "").trim();
+  if (t === "" || !t.startsWith("{")) return empty;
+  try {
+    const d = JSON.parse(t) as Record<string, unknown>;
+    const themeRaw = (d.theme ?? {}) as Record<string, unknown>;
+    const config =
+      d.config && typeof d.config === "object" && !Array.isArray(d.config)
+        ? (d.config as Record<string, unknown>)
+        : {};
+    return {
+      title: asRaw(d.title),
+      promptsRaw: asRaw(d.prompts),
+      theme: {
+        background: asRaw(themeRaw.background),
+        foreground: asRaw(themeRaw.foreground),
+        accent: asRaw(themeRaw.accent),
+        legend: asRaw(themeRaw.legend),
+        font: asRaw(themeRaw.font),
+      },
+      readOnly: d.readOnly === true,
+      config,
+    };
+  } catch {
+    return empty;
+  }
+}
+
+/** A card-specific settings.config value, as a raw input string. */
+export function cfg(s: LtkSettings, key: string): string {
+  return asRaw(s.config[key]);
+}
+
+/** Discrete-over-settings merge for text inputs: non-empty discrete wins. */
+export function rawOr(p: StringProp | undefined, settingsValue: string): string {
+  const v = (p?.raw ?? "").trim();
+  return v !== "" ? v : settingsValue;
+}
+
+/**
+ * Settings-over-discrete merge for ENUM inputs (they can never be blank, so
+ * a discrete value can't signal "unset" — the settings key wins if present).
+ */
+export function enumOr(settingsValue: string, p: StringProp | undefined): string {
+  return settingsValue !== "" ? settingsValue : (p?.raw ?? "").trim();
+}
+
+/** Build a Theme from the standard styling inputs over the settings base. */
+export function readTheme(params: StandardParams, s?: LtkSettings): Theme {
   const d = defaultTheme();
+  const t = s?.theme;
   return {
-    background: str(params.backgroundColor, d.background),
-    foreground: str(params.foregroundColor, d.foreground),
-    accent: str(params.accentColor, d.accent),
-    legend: parseLegend(params.legendColors?.raw),
-    fontFamily: str(params.fontFamily, d.fontFamily),
+    background: str(params.backgroundColor, t?.background || d.background),
+    foreground: str(params.foregroundColor, t?.foreground || d.foreground),
+    accent: str(params.accentColor, t?.accent || d.accent),
+    legend: parseLegend(rawOr(params.legendColors, t?.legend ?? "")),
+    fontFamily: str(params.fontFamily, t?.font || d.fontFamily),
   };
 }
 

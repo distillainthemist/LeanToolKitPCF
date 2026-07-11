@@ -16,7 +16,7 @@ const DEFAULT_COLOURS = ["#107c10", "#f2c811", "#d13438"];
 
 export interface StatusTileEditorCallbacks {
   onChange: (env: StatusTileEnvelope) => void;
-  onPngReady?: (dataUri: string) => void;
+  onPngReady?: (dataUri: string, svgMarkup?: string) => void;
 }
 
 export class StatusTileEditor {
@@ -195,8 +195,8 @@ export class StatusTileEditor {
 
   private generatePng(): void {
     if (!this.cb.onPngReady) return;
-    htmlToPng(this.root, LTK_BASE_CSS + STATUSTILE_CSS, this.theme.background, (uri) =>
-      this.cb.onPngReady!(uri)
+    htmlToPng(this.root, LTK_BASE_CSS + STATUSTILE_CSS, this.theme.background, (uri, svg) =>
+      this.cb.onPngReady!(uri, svg)
     );
   }
 }

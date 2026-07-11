@@ -16,7 +16,7 @@ import { BENEFITEFFORT_CSS } from "./styles";
 
 export interface BenefitEffortEditorCallbacks {
   onChange: (env: BenefitEffortEnvelope) => void;
-  onPngReady?: (dataUri: string) => void;
+  onPngReady?: (dataUri: string, svgMarkup?: string) => void;
 }
 
 export class BenefitEffortEditor {
@@ -316,8 +316,8 @@ export class BenefitEffortEditor {
 
   private generatePng(): void {
     if (!this.cb.onPngReady) return;
-    htmlToPng(this.root, LTK_BASE_CSS + BENEFITEFFORT_CSS, this.theme.background, (uri) =>
-      this.cb.onPngReady!(uri)
+    htmlToPng(this.root, LTK_BASE_CSS + BENEFITEFFORT_CSS, this.theme.background, (uri, svg) =>
+      this.cb.onPngReady!(uri, svg)
     );
   }
 

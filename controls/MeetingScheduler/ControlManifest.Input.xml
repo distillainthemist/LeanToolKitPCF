@@ -85,6 +85,13 @@
               of-type="Multiple"
               usage="output" />
 
+    <property name="settingsJSON"
+              display-name-key="Settings (JSON)"
+              description-key="Consolidated configuration: {title, prompts, readOnly, theme:{background,foreground,accent,legend,font}, config:{finalDate, daysPrior, category, daysOfWeek, timeOfDay, crewList, rosterPattern, baseStartDate, existingMeetingsJSON}}. Settings are the base; a non-empty discrete text input overrides its key (enum inputs: the settings key wins when present)."
+              of-type="Multiple"
+              usage="input"
+              required="false" />
+
     <!-- Self-describing card chrome -->
     <property name="cardTitle"
               display-name-key="Card Title"
@@ -106,24 +113,21 @@
               description-key="Background colour (any CSS colour or hex). Default white."
               of-type="SingleLine.Text"
               usage="input"
-              required="false"
-              default-value="#ffffff" />
+              required="false" />
 
     <property name="foregroundColor"
               display-name-key="Foreground Colour"
               description-key="Text / line colour. Default rich black."
               of-type="SingleLine.Text"
               usage="input"
-              required="false"
-              default-value="#141414" />
+              required="false" />
 
     <property name="accentColor"
               display-name-key="Accent Colour"
               description-key="Accent colour for the selected row and highlights. Default rich black."
               of-type="SingleLine.Text"
               usage="input"
-              required="false"
-              default-value="#141414" />
+              required="false" />
 
     <property name="legendColors"
               display-name-key="Legend Colours"
@@ -137,8 +141,7 @@
               description-key="Font family (or comma-separated font stack) for all text."
               of-type="SingleLine.Text"
               usage="input"
-              required="false"
-              default-value="Segoe UI, system-ui, sans-serif" />
+              required="false" />
 
     <property name="readOnly"
               display-name-key="Read Only"
@@ -152,6 +155,15 @@
     <property name="pngExport"
               display-name-key="PNG Export (data URI)"
               description-key="Read-only PNG snapshot as a data URI, for an Image control or Power Automate."
+              of-type="Multiple"
+              usage="output" />
+
+    <!-- SVG snapshot of the card, refreshed alongside the PNG. Vector and
+         small — ideal for board tile images (verify Safari renders it in an
+         Image control; fall back to pngExport if not). -->
+    <property name="svgExport"
+              display-name-key="SVG Export (markup)"
+              description-key="Read-only SVG snapshot markup, refreshed after each change. Use as an Image control source via &quot;data:image/svg+xml;utf8, &quot; &amp; EncodeUrl(Self.Output) or store next to the card."
               of-type="Multiple"
               usage="output" />
 

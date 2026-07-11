@@ -46,7 +46,7 @@ const SVG_NS = "http://www.w3.org/2000/svg";
 export interface EditorOptions {
   onChange: (model: FishboneModel) => void;
   /** Called (debounced) with a PNG data URI after the diagram changes. */
-  onPngReady?: (dataUri: string) => void;
+  onPngReady?: (dataUri: string, svgMarkup?: string) => void;
   /** Open the toolkit's action management for a cause (LeanToolKit port). */
   onManageActions?: (causeId: string) => void;
   /** Open (non-cancelled) action count for a cause, drawn as a chip badge. */
@@ -112,7 +112,7 @@ export class FishboneEditor {
   private style: StyleConfig = defaultStyle();
   private readOnly = false;
   private onChange: (model: FishboneModel) => void;
-  private onPngReady?: (dataUri: string) => void;
+  private onPngReady?: (dataUri: string, svgMarkup?: string) => void;
   private onManageActions?: (causeId: string) => void;
   private getActionBadge?: (causeId: string) => number;
   private measurer: SVGTextElement | null = null;
@@ -1037,6 +1037,11 @@ export class FishboneEditor {
     const styleEl = document.createElementNS(SVG_NS, "style");
     styleEl.textContent = FISHBONE_CSS;
     clone.insertBefore(styleEl, clone.firstChild);
+    const bgRect = document.createElementNS(SVG_NS, "rect");
+    bgRect.setAttribute("width", "100%");
+    bgRect.setAttribute("height", "100%");
+    bgRect.setAttribute("fill", this.style.backgroundColor);
+    clone.insertBefore(bgRect, styleEl.nextSibling);
 
     const xml = new XMLSerializer().serializeToString(clone);
     const src =
@@ -1053,7 +1058,7 @@ export class FishboneEditor {
         ctx.fillStyle = this.style.backgroundColor;
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        if (this.onPngReady) this.onPngReady(canvas.toDataURL("image/png"));
+        if (this.onPngReady) this.onPngReady(canvas.toDataURL("image/png"), xml);
       } catch {
         /* rasterization unavailable in this host — skip silently */
       }

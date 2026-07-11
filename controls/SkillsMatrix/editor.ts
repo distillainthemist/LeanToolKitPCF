@@ -38,7 +38,7 @@ import { SKILLS_CSS } from "./styles";
 
 export interface SkillsEditorCallbacks {
   onChange: (env: SkillsEnvelope, actions: LtkAction[]) => void;
-  onPngReady?: (dataUri: string) => void;
+  onPngReady?: (dataUri: string, svgMarkup?: string) => void;
 }
 
 const LABEL_COL = 190;
@@ -713,8 +713,8 @@ export class SkillsMatrixEditor {
 
   private generatePng(): void {
     if (!this.cb.onPngReady) return;
-    htmlToPng(this.root, LTK_BASE_CSS + SKILLS_CSS, this.theme.background, (uri) =>
-      this.cb.onPngReady!(uri)
+    htmlToPng(this.root, LTK_BASE_CSS + SKILLS_CSS, this.theme.background, (uri, svg) =>
+      this.cb.onPngReady!(uri, svg)
     );
   }
 

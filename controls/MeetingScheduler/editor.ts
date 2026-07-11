@@ -16,7 +16,7 @@ import { MEETING_CSS } from "./styles";
 
 export interface MeetingViewCallbacks {
   onSelect: (instance: MeetingInstance) => void;
-  onPngReady?: (dataUri: string) => void;
+  onPngReady?: (dataUri: string, svgMarkup?: string) => void;
 }
 
 const CREW_FALLBACKS = ["#2b88d8", "#107c10", "#f2c811", "#8764b8"];
@@ -188,8 +188,8 @@ export class MeetingSchedulerView {
 
   private generatePng(): void {
     if (!this.cb.onPngReady) return;
-    htmlToPng(this.root, LTK_BASE_CSS + MEETING_CSS, this.theme.background, (uri) =>
-      this.cb.onPngReady!(uri)
+    htmlToPng(this.root, LTK_BASE_CSS + MEETING_CSS, this.theme.background, (uri, svg) =>
+      this.cb.onPngReady!(uri, svg)
     );
   }
 

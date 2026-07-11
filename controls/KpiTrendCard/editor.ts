@@ -25,7 +25,7 @@ const DEFAULT_GHOST = [
 
 export interface KpiTrendEditorCallbacks {
   onChange: (env: KpiTrendEnvelope) => void;
-  onPngReady?: (dataUri: string) => void;
+  onPngReady?: (dataUri: string, svgMarkup?: string) => void;
 }
 
 export class KpiTrendEditor {
@@ -461,8 +461,8 @@ export class KpiTrendEditor {
 
   private generatePng(): void {
     if (!this.cb.onPngReady) return;
-    htmlToPng(this.root, LTK_BASE_CSS + KPITREND_CSS, this.theme.background, (uri) =>
-      this.cb.onPngReady!(uri)
+    htmlToPng(this.root, LTK_BASE_CSS + KPITREND_CSS, this.theme.background, (uri, svg) =>
+      this.cb.onPngReady!(uri, svg)
     );
   }
 

@@ -8,7 +8,7 @@
 import { IInputs, IOutputs } from "./generated/ManifestTypes";
 import { RiskMatrixEditor } from "./editor";
 import { parseRiskMatrix, serializeRiskMatrix } from "./types";
-import { LoadGate, readTheme, str } from "../../shared/pcf/standard";
+import { LoadGate, cfg, parseSettings, rawOr, readTheme, str } from "../../shared/pcf/standard";
 import {
   parseActionsJson,
   serializeActions,
@@ -31,6 +31,7 @@ export class RiskMatrix implements ComponentFramework.StandardControl<IInputs, I
   private actionsJson = "";
   private instanceId = "";
   private pngDataUri = "";
+  private svgMarkup = "";
   private outputTimer: ReturnType<typeof setTimeout> | null = null;
 
   public init(
@@ -58,8 +59,9 @@ export class RiskMatrix implements ComponentFramework.StandardControl<IInputs, I
           OUTPUT_DEBOUNCE_MS
         );
       },
-      onPngReady: (dataUri) => {
+      onPngReady: (dataUri, svgMarkup) => {
         this.pngDataUri = dataUri;
+        this.svgMarkup = svgMarkup ?? "";
         this.notifyOutputChanged();
       },
     });
@@ -76,6 +78,7 @@ export class RiskMatrix implements ComponentFramework.StandardControl<IInputs, I
       outputJSON: this.outputJson,
       actionsOutputJSON: this.actionsJson,
       pngExport: this.pngDataUri,
+      svgExport: this.svgMarkup,
     };
   }
 
@@ -103,15 +106,16 @@ export class RiskMatrix implements ComponentFramework.StandardControl<IInputs, I
 
   private applyAll(context: ComponentFramework.Context<IInputs>): void {
     const p = context.parameters;
+    const s = parseSettings(p.settingsJSON?.raw);
 
     this.applySize(context);
-    this.instanceId = str(p.instanceId);
-    this.editor.setTheme(readTheme(p));
-    this.editor.setPeople(parsePeople(p.peopleJSON?.raw));
-    this.editor.setChrome(str(p.cardTitle), p.prompts?.raw ?? "");
+    this.instanceId = str(p.instanceId, cfg(s, "instanceId"));
+    this.editor.setTheme(readTheme(p, s));
+    this.editor.setPeople(parsePeople(rawOr(p.peopleJSON, cfg(s, "peopleJSON"))));
+    this.editor.setChrome(str(p.cardTitle, s.title), rawOr(p.prompts, s.promptsRaw));
 
     const disabled = context.mode.isControlDisabled === true;
-    this.editor.setReadOnly(disabled || p.readOnly?.raw === true);
+    this.editor.setReadOnly(disabled || p.readOnly?.raw === true || s.readOnly);
 
     if (this.gate.shouldReload(p)) {
       const { envelope, embeddedActions } = parseRiskMatrix(p.inputJSON?.raw);

@@ -39,7 +39,7 @@ export interface SqdpcOptions {
 
 export interface SqdpcEditorCallbacks {
   onChange: (env: SqdpcEnvelope, actions: LtkAction[]) => void;
-  onPngReady?: (dataUri: string) => void;
+  onPngReady?: (dataUri: string, svgMarkup?: string) => void;
 }
 
 export class SqdpcEditor {
@@ -437,8 +437,8 @@ export class SqdpcEditor {
 
   private generatePng(): void {
     if (!this.cb.onPngReady) return;
-    htmlToPng(this.root, LTK_BASE_CSS + SQDPC_CSS, this.theme.background, (uri) =>
-      this.cb.onPngReady!(uri)
+    htmlToPng(this.root, LTK_BASE_CSS + SQDPC_CSS, this.theme.background, (uri, svg) =>
+      this.cb.onPngReady!(uri, svg)
     );
   }
 

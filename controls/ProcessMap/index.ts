@@ -16,7 +16,7 @@ import {
   sanitizeModel,
   serializeProcessMap,
 } from "./types";
-import { LoadGate, readTheme, str } from "../../shared/pcf/standard";
+import { LoadGate, LtkSettings, cfg, enumOr, parseSettings, rawOr, readTheme, str } from "../../shared/pcf/standard";
 import { applyThemeVars, defaultTheme, Theme } from "../../shared/tokens";
 import { el, ensureStylesheet } from "../../shared/ui/dom";
 import { LTK_BASE_CSS } from "../../shared/ui/baseCss";
@@ -62,6 +62,7 @@ export class ProcessMap implements ComponentFramework.StandardControl<IInputs, I
   private actionsJson = "";
   private instanceId = "";
   private pngDataUri = "";
+  private svgMarkup = "";
   private outputTimer: ReturnType<typeof setTimeout> | null = null;
 
   public init(
@@ -85,8 +86,9 @@ export class ProcessMap implements ComponentFramework.StandardControl<IInputs, I
 
     this.editor = new ProcessMapEditor(this.editorHost, {
       onChange: (model) => this.absorbModel(model),
-      onPngReady: (dataUri) => {
+      onPngReady: (dataUri, svgMarkup) => {
         this.pngDataUri = dataUri;
+        this.svgMarkup = svgMarkup ?? "";
         this.notifyOutputChanged();
       },
       onManageActions: (nodeId) => this.manageActions(nodeId),
@@ -111,6 +113,7 @@ export class ProcessMap implements ComponentFramework.StandardControl<IInputs, I
       outputJSON: this.outputJson,
       actionsOutputJSON: this.actionsJson,
       pngExport: this.pngDataUri,
+      svgExport: this.svgMarkup,
     };
   }
 
@@ -266,27 +269,31 @@ export class ProcessMap implements ComponentFramework.StandardControl<IInputs, I
     };
   }
 
-  private defaultMode(context: ComponentFramework.Context<IInputs>): MapMode {
-    const raw = context.parameters.defaultMode?.raw;
+  private defaultMode(
+    context: ComponentFramework.Context<IInputs>,
+    s: LtkSettings
+  ): MapMode {
+    const raw = enumOr(cfg(s, "defaultMode"), context.parameters.defaultMode);
     return raw === "swimlane" || raw === "sipoc" || raw === "vsm" ? raw : "simple";
   }
 
   private applyAll(context: ComponentFramework.Context<IInputs>): void {
     const p = context.parameters;
+    const s = parseSettings(p.settingsJSON?.raw);
 
-    this.instanceId = str(p.instanceId);
-    this.theme = readTheme(p);
-    this.people = parsePeople(p.peopleJSON?.raw);
+    this.instanceId = str(p.instanceId, cfg(s, "instanceId"));
+    this.theme = readTheme(p, s);
+    this.people = parsePeople(rawOr(p.peopleJSON, cfg(s, "peopleJSON")));
 
     const chromeKey =
-      str(p.cardTitle) + " " + (p.prompts?.raw ?? "") + " " +
-      String(p.readOnly?.raw === true) + " " + JSON.stringify(this.theme);
+      str(p.cardTitle, s.title) + " " + (rawOr(p.prompts, s.promptsRaw)) + " " +
+      String(p.readOnly?.raw === true || s.readOnly) + " " + JSON.stringify(this.theme);
     if (chromeKey !== this.lastChromeKey) {
       this.lastChromeKey = chromeKey;
-      this.cardTitle = str(p.cardTitle);
-      this.prompts = parsePrompts(p.prompts?.raw ?? "");
+      this.cardTitle = str(p.cardTitle, s.title);
+      this.prompts = parsePrompts(rawOr(p.prompts, s.promptsRaw));
       this.readOnly =
-        context.mode.isControlDisabled === true || p.readOnly?.raw === true;
+        context.mode.isControlDisabled === true || p.readOnly?.raw === true || s.readOnly;
       this.renderChrome();
     }
 
@@ -297,7 +304,7 @@ export class ProcessMap implements ComponentFramework.StandardControl<IInputs, I
     if (this.gate.shouldReload(p)) {
       const { envelope, embeddedActions } = parseProcessMap(
         p.inputJSON?.raw,
-        this.defaultMode(context)
+        this.defaultMode(context, s)
       );
       const external = parseActionsJson(p.actionsInputJSON?.raw);
       const actions = external.length > 0 ? external : embeddedActions;

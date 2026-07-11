@@ -14,7 +14,7 @@ import {
   parseConditionsInput,
   serializeConditions,
 } from "./types";
-import { LoadGate, readTheme, str } from "../../shared/pcf/standard";
+import { LoadGate, cfg, enumOr, parseSettings, rawOr, readTheme, str } from "../../shared/pcf/standard";
 import {
   parseActionsJson,
   serializeActions,
@@ -37,6 +37,7 @@ export class ConditionsCard implements ComponentFramework.StandardControl<IInput
   private actionsJson = "";
   private instanceId = "";
   private pngDataUri = "";
+  private svgMarkup = "";
   private outputTimer: ReturnType<typeof setTimeout> | null = null;
 
   public init(
@@ -64,8 +65,9 @@ export class ConditionsCard implements ComponentFramework.StandardControl<IInput
           OUTPUT_DEBOUNCE_MS
         );
       },
-      onPngReady: (dataUri) => {
+      onPngReady: (dataUri, svgMarkup) => {
         this.pngDataUri = dataUri;
+        this.svgMarkup = svgMarkup ?? "";
         this.notifyOutputChanged();
       },
     });
@@ -82,6 +84,7 @@ export class ConditionsCard implements ComponentFramework.StandardControl<IInput
       outputJSON: this.outputJson,
       actionsOutputJSON: this.actionsJson,
       pngExport: this.pngDataUri,
+      svgExport: this.svgMarkup,
     };
   }
 
@@ -109,23 +112,24 @@ export class ConditionsCard implements ComponentFramework.StandardControl<IInput
 
   private applyAll(context: ComponentFramework.Context<IInputs>): void {
     const p = context.parameters;
+    const s = parseSettings(p.settingsJSON?.raw);
 
     this.applySize(context);
-    this.instanceId = str(p.instanceId);
-    this.editor.setTheme(readTheme(p));
-    const gRaw = p.granularity?.raw as Granularity;
+    this.instanceId = str(p.instanceId, cfg(s, "instanceId"));
+    this.editor.setTheme(readTheme(p, s));
+    const gRaw = enumOr(cfg(s, "granularity"), p.granularity) as Granularity;
     const granularity: Granularity =
       gRaw === "weekday" || gRaw === "week" || gRaw === "shift" ? gRaw : "day";
     this.editor.setOptions({
       granularity,
-      conditions: parseConditionsInput(p.conditions?.raw),
-      asOf: parseAsOf(p.asOfDate?.raw),
+      conditions: parseConditionsInput(rawOr(p.conditions, cfg(s, "conditions"))),
+      asOf: parseAsOf(rawOr(p.asOfDate, cfg(s, "asOfDate"))),
     });
-    this.editor.setPeople(parsePeople(p.peopleJSON?.raw));
-    this.editor.setChrome(str(p.cardTitle), p.prompts?.raw ?? "");
+    this.editor.setPeople(parsePeople(rawOr(p.peopleJSON, cfg(s, "peopleJSON"))));
+    this.editor.setChrome(str(p.cardTitle, s.title), rawOr(p.prompts, s.promptsRaw));
 
     const disabled = context.mode.isControlDisabled === true;
-    this.editor.setReadOnly(disabled || p.readOnly?.raw === true);
+    this.editor.setReadOnly(disabled || p.readOnly?.raw === true || s.readOnly);
 
     if (this.gate.shouldReload(p)) {
       const { envelope, embeddedActions } = parseConditions(p.inputJSON?.raw);

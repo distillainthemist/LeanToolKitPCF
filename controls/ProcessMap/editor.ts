@@ -54,7 +54,7 @@ export function defaultStyle(): StyleConfig {
 
 export interface EditorOptions {
   onChange: (model: PmModel) => void;
-  onPngReady?: (dataUri: string) => void;
+  onPngReady?: (dataUri: string, svgMarkup?: string) => void;
   /** Open the actions dialog for a kaizen burst (wrapper supplies the UI). */
   onManageActions?: (nodeId: string) => void;
   /** Open-action count shown as a badge on kaizen bursts. */
@@ -117,7 +117,7 @@ export class ProcessMapEditor {
   private readOnly = false;
   private style: StyleConfig = defaultStyle();
   private onChange: (model: PmModel) => void;
-  private onPngReady?: (dataUri: string) => void;
+  private onPngReady?: (dataUri: string, svgMarkup?: string) => void;
   private onManageActions?: (nodeId: string) => void;
   private getActionBadge?: (nodeId: string) => number;
   private pngTimer: ReturnType<typeof setTimeout> | null = null;
@@ -1655,8 +1655,9 @@ export class ProcessMapEditor {
     this.pngTimer = setTimeout(() => {
       this.pngTimer = null;
       if (this.model.nodes.length === 0) return;
+      const { svg } = this.buildExportSvg(); // true vector — the svgExport
       this.renderPngDataUri(2, (dataUri) => {
-        if (dataUri && this.onPngReady) this.onPngReady(dataUri);
+        if (dataUri && this.onPngReady) this.onPngReady(dataUri, svg);
       });
     }, 400);
   }

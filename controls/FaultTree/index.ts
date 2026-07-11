@@ -8,7 +8,7 @@
 import { IInputs, IOutputs } from "./generated/ManifestTypes";
 import { FaultTreeEditor } from "./editor";
 import { parseFaultTree, serializeFaultTree } from "./types";
-import { LoadGate, readTheme, str } from "../../shared/pcf/standard";
+import { LoadGate, cfg, parseSettings, rawOr, readTheme, str } from "../../shared/pcf/standard";
 import {
   parseActionsJson,
   serializeActions,
@@ -31,6 +31,7 @@ export class FaultTree implements ComponentFramework.StandardControl<IInputs, IO
   private actionsJson = "";
   private instanceId = "";
   private pngDataUri = "";
+  private svgMarkup = "";
   private outputTimer: ReturnType<typeof setTimeout> | null = null;
 
   public init(
@@ -58,8 +59,9 @@ export class FaultTree implements ComponentFramework.StandardControl<IInputs, IO
           OUTPUT_DEBOUNCE_MS
         );
       },
-      onPngReady: (dataUri) => {
+      onPngReady: (dataUri, svgMarkup) => {
         this.pngDataUri = dataUri;
+        this.svgMarkup = svgMarkup ?? "";
         this.notifyOutputChanged();
       },
     });
@@ -76,6 +78,7 @@ export class FaultTree implements ComponentFramework.StandardControl<IInputs, IO
       outputJSON: this.outputJson,
       actionsOutputJSON: this.actionsJson,
       pngExport: this.pngDataUri,
+      svgExport: this.svgMarkup,
     };
   }
 
@@ -103,16 +106,17 @@ export class FaultTree implements ComponentFramework.StandardControl<IInputs, IO
 
   private applyAll(context: ComponentFramework.Context<IInputs>): void {
     const p = context.parameters;
+    const s = parseSettings(p.settingsJSON?.raw);
 
     this.applySize(context);
-    this.instanceId = str(p.instanceId);
-    this.editor.setTheme(readTheme(p));
-    this.editor.setOptions({ showStatus: p.showStatus?.raw === true });
-    this.editor.setPeople(parsePeople(p.peopleJSON?.raw));
-    this.editor.setChrome(str(p.cardTitle), p.prompts?.raw ?? "");
+    this.instanceId = str(p.instanceId, cfg(s, "instanceId"));
+    this.editor.setTheme(readTheme(p, s));
+    this.editor.setOptions({ showStatus: p.showStatus?.raw === true || s.config.showStatus === true });
+    this.editor.setPeople(parsePeople(rawOr(p.peopleJSON, cfg(s, "peopleJSON"))));
+    this.editor.setChrome(str(p.cardTitle, s.title), rawOr(p.prompts, s.promptsRaw));
 
     const disabled = context.mode.isControlDisabled === true;
-    this.editor.setReadOnly(disabled || p.readOnly?.raw === true);
+    this.editor.setReadOnly(disabled || p.readOnly?.raw === true || s.readOnly);
 
     if (this.gate.shouldReload(p)) {
       const { envelope, embeddedActions } = parseFaultTree(p.inputJSON?.raw);

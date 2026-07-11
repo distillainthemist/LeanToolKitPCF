@@ -4,7 +4,7 @@
 import { IInputs, IOutputs } from "./generated/ManifestTypes";
 import { StatusTileEditor } from "./editor";
 import { parseStates, parseStatusTile, serializeStatusTile } from "./types";
-import { LoadGate, readTheme, str } from "../../shared/pcf/standard";
+import { LoadGate, cfg, parseSettings, rawOr, readTheme, str } from "../../shared/pcf/standard";
 
 const OUTPUT_DEBOUNCE_MS = 300;
 const ASPECT_RATIO = 1.77;
@@ -18,6 +18,7 @@ export class StatusTile implements ComponentFramework.StandardControl<IInputs, I
 
   private outputJson = "";
   private pngDataUri = "";
+  private svgMarkup = "";
   private outputTimer: ReturnType<typeof setTimeout> | null = null;
 
   public init(
@@ -43,8 +44,9 @@ export class StatusTile implements ComponentFramework.StandardControl<IInputs, I
           OUTPUT_DEBOUNCE_MS
         );
       },
-      onPngReady: (dataUri) => {
+      onPngReady: (dataUri, svgMarkup) => {
         this.pngDataUri = dataUri;
+        this.svgMarkup = svgMarkup ?? "";
         this.notifyOutputChanged();
       },
     });
@@ -57,7 +59,11 @@ export class StatusTile implements ComponentFramework.StandardControl<IInputs, I
   }
 
   public getOutputs(): IOutputs {
-    return { outputJSON: this.outputJson, pngExport: this.pngDataUri };
+    return {
+      outputJSON: this.outputJson,
+      pngExport: this.pngDataUri,
+      svgExport: this.svgMarkup,
+    };
   }
 
   public destroy(): void {
@@ -79,14 +85,15 @@ export class StatusTile implements ComponentFramework.StandardControl<IInputs, I
 
   private applyAll(context: ComponentFramework.Context<IInputs>): void {
     const p = context.parameters;
+    const s = parseSettings(p.settingsJSON?.raw);
 
     this.applySize(context);
-    this.editor.setTheme(readTheme(p));
-    this.editor.setStates(parseStates(p.states?.raw));
-    this.editor.setChrome(str(p.cardTitle), p.prompts?.raw ?? "");
+    this.editor.setTheme(readTheme(p, s));
+    this.editor.setStates(parseStates(rawOr(p.states, cfg(s, "states"))));
+    this.editor.setChrome(str(p.cardTitle, s.title), rawOr(p.prompts, s.promptsRaw));
 
     const disabled = context.mode.isControlDisabled === true;
-    this.editor.setReadOnly(disabled || p.readOnly?.raw === true);
+    this.editor.setReadOnly(disabled || p.readOnly?.raw === true || s.readOnly);
 
     if (this.gate.shouldReload(p)) {
       const { envelope } = parseStatusTile(p.inputJSON?.raw);

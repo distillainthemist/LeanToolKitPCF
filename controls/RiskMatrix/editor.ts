@@ -42,7 +42,7 @@ const BAND_COLOURS = ["#107c10", "#f2c811", "#ca5010", "#d13438"];
 
 export interface RiskMatrixEditorCallbacks {
   onChange: (env: RiskMatrixEnvelope, actions: LtkAction[]) => void;
-  onPngReady?: (dataUri: string) => void;
+  onPngReady?: (dataUri: string, svgMarkup?: string) => void;
 }
 
 export class RiskMatrixEditor {
@@ -536,8 +536,8 @@ export class RiskMatrixEditor {
 
   private generatePng(): void {
     if (!this.cb.onPngReady) return;
-    htmlToPng(this.root, LTK_BASE_CSS + RISKMATRIX_CSS, this.theme.background, (uri) =>
-      this.cb.onPngReady!(uri)
+    htmlToPng(this.root, LTK_BASE_CSS + RISKMATRIX_CSS, this.theme.background, (uri, svg) =>
+      this.cb.onPngReady!(uri, svg)
     );
   }
 
