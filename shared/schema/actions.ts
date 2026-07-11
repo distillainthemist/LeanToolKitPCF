@@ -22,8 +22,16 @@ export interface Assignee {
 
 export interface ActionComment {
   whoId: string;
+  who?: string;
   when: string; // yyyy-mm-dd
   text: string;
+}
+
+/** Receiving-board sign-off on an escalated action (EscalationViewer). */
+export interface Acknowledgement {
+  whoId: string;
+  who: string;
+  when: string; // ISO timestamp
 }
 
 /** Where an action came from, for provenance and in-component placement. */
@@ -45,6 +53,8 @@ export interface LtkAction {
   status: ActionStatus;
   comments: ActionComment[];
   escalated: boolean;
+  /** Set when the receiving board acknowledges the escalation. */
+  acknowledged?: Acknowledgement;
   context: ActionContext;
 }
 
@@ -86,11 +96,21 @@ export function sanitizeAction(a: Partial<LtkAction>): LtkAction {
         .filter((c) => c && typeof c === "object")
         .map((c) => ({
           whoId: typeof c.whoId === "string" ? c.whoId : "",
+          who: typeof c.who === "string" ? c.who : undefined,
           when: typeof c.when === "string" ? c.when : "",
           text: typeof c.text === "string" ? c.text : "",
         }))
         .filter((c) => c.text !== "")
     : [];
+  const ackRaw = (a.acknowledged ?? null) as Partial<Acknowledgement> | null;
+  const acknowledged: Acknowledgement | undefined =
+    ackRaw && typeof ackRaw === "object" && typeof ackRaw.when === "string" && ackRaw.when !== ""
+      ? {
+          whoId: typeof ackRaw.whoId === "string" ? ackRaw.whoId : "",
+          who: typeof ackRaw.who === "string" ? ackRaw.who : "",
+          when: ackRaw.when,
+        }
+      : undefined;
   const ctx = (a.context ?? {}) as Partial<ActionContext>;
   return {
     id: typeof a.id === "string" && a.id !== "" ? a.id : newId("a"),
@@ -103,6 +123,7 @@ export function sanitizeAction(a: Partial<LtkAction>): LtkAction {
     status: isStatus(a.status) ? a.status : "open",
     comments,
     escalated: a.escalated === true,
+    acknowledged,
     context: {
       source: typeof ctx.source === "string" ? ctx.source : "",
       sourceId: typeof ctx.sourceId === "string" ? ctx.sourceId : "",

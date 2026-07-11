@@ -296,7 +296,9 @@ Dataverse actions table, keyed by `instanceId` (which card) + `context.source`
   differs. Without both halves, Patch → reload → OnChange → Patch loops.
 - Suggested table columns (`ben_` prefix): ActionId (alternate key),
   InstanceId, Source, SourceId, Issue, Description, Start (optional, for
-  Gantt), Due, Status, Escalated, AssigneesJSON, CommentsJSON, Hint.
+  Gantt), Due, Status, Escalated, AssigneesJSON, CommentsJSON,
+  AcknowledgedJSON (receiving-board sign-off, written by EscalationViewer),
+  Hint.
 - Knock-ons: ActionBoard binds the actions channel as its primary data (no
   envelope), and EscalationViewer/6C largely becomes
   `Filter(Actions, Escalated = true)` — the central table is the cascade
