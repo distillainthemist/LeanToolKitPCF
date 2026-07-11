@@ -6,9 +6,9 @@
   "author": "Ben O'Brien",
   "scripts": {
     "prestart": "find . -name .DS_Store -not -path './node_modules/*' -delete 2>/dev/null || true",
-    "build": "pcf-scripts build",
+    "build": "NODE_OPTIONS=--max-old-space-size=8192 pcf-scripts build",
     "clean": "pcf-scripts clean",
-    "rebuild": "pcf-scripts rebuild",
+    "rebuild": "NODE_OPTIONS=--max-old-space-size=8192 pcf-scripts rebuild",
     "start": "pcf-scripts start",
     "start:watch": "pcf-scripts start watch",
     "refreshTypes": "pcf-scripts refreshTypes"
