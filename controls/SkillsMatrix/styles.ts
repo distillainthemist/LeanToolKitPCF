@@ -1,5 +1,6 @@
-// SkillsMatrix stylesheet — quadrant discs in a people × skills grid. Disc
-// fills, gap rings and target glyphs are drawn inline (Safari rule).
+// SkillsMatrix stylesheet — skills (rows, grouped by category) × people
+// (columns). Disc fills, gap rings and target glyphs are drawn inline (Safari
+// rule); layout + theme colours live here.
 
 export const SKILLS_CSS = `
 .ltk-sk-body {
@@ -10,6 +11,7 @@ export const SKILLS_CSS = `
   gap: 10px;
   padding: 8px 12px 12px;
   overflow: auto;
+  position: relative;
 }
 .ltk-sk-grid {
   display: grid;
@@ -19,53 +21,66 @@ export const SKILLS_CSS = `
 }
 
 /* ---- headers ---- */
-.ltk-sk-skillhead {
+.ltk-sk-corner { border-bottom: 2px solid var(--ltk-hairline); }
+.ltk-sk-personhead {
   display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 2px;
+  align-items: flex-end;
+  justify-content: center;
   text-align: center;
-  padding: 2px 2px 5px;
-  border-bottom: 2px solid var(--ltk-hairline);
-  border-radius: 4px 4px 0 0;
-  min-height: 46px;
-}
-.ltk-sk-skillname {
   font-size: 11.5px;
   font-weight: 700;
   color: var(--ltk-fg);
+  padding: 2px 2px 5px;
   line-height: 1.15;
+  border-bottom: 2px solid var(--ltk-hairline);
   overflow-wrap: anywhere;
+}
+
+/* ---- category band ---- */
+.ltk-sk-cathead {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  margin-top: 4px;
+  border-radius: 5px;
+  background: var(--ltk-hairline);
+}
+.ltk-sk-catname {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ltk-fg);
+}
+.ltk-sk-cathead.ltk-sk-drag::before {
+  content: "⠿";
+  color: var(--ltk-muted);
+  font-size: 13px;
+  line-height: 1;
+}
+
+/* ---- skill labels ---- */
+.ltk-sk-skilllabel {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  padding: 6px 8px 6px 16px;
+  border-right: 2px solid var(--ltk-hairline);
+  overflow: hidden;
+}
+.ltk-sk-skillname {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ltk-fg);
+  line-height: 1.2;
 }
 .ltk-sk-skillmeta { display: flex; align-items: center; gap: 5px; }
 .ltk-sk-cov { font-size: 10px; font-weight: 600; color: var(--ltk-muted); }
 .ltk-sk-cov-short { color: #b03a44; }
-.ltk-sk-acthead {
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  font-size: 10.5px;
-  font-weight: 700;
-  color: var(--ltk-muted);
-  padding: 0 2px 5px;
-  border-bottom: 2px solid var(--ltk-hairline);
-}
-.ltk-sk-head-edit { cursor: pointer; }
-.ltk-sk-head-edit:hover { background: var(--ltk-hairline); }
-
-/* ---- person labels ---- */
-.ltk-sk-person {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--ltk-fg);
-  padding: 8px 10px 8px 4px;
-  border-right: 2px solid var(--ltk-hairline);
-  border-radius: 4px 0 0 4px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
+.ltk-sk-drag { cursor: pointer; touch-action: none; }
+.ltk-sk-drag:hover { background: var(--ltk-hairline); }
 
 /* ---- cells ---- */
 .ltk-sk-cell {
@@ -81,8 +96,24 @@ export const SKILLS_CSS = `
 .ltk-sk-cell.ltk-readonly { cursor: default; }
 .ltk-sk-disc { display: block; }
 
-/* ---- trailing action column ---- */
-.ltk-sk-actcell { display: flex; align-items: center; justify-content: center; }
+/* ---- final Actions row ---- */
+.ltk-sk-actlabel {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ltk-muted);
+  padding: 8px 8px 4px 4px;
+  border-right: 2px solid var(--ltk-hairline);
+  border-top: 2px solid var(--ltk-hairline);
+}
+.ltk-sk-actcell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-top: 6px;
+  border-top: 2px solid var(--ltk-hairline);
+}
 .ltk-sk-actbtn {
   min-width: 30px;
   height: 30px;
@@ -102,6 +133,32 @@ export const SKILLS_CSS = `
   border-style: solid;
   border-color: var(--ltk-accent);
   color: var(--ltk-accent);
+}
+
+/* ---- drag ghost + insertion line ---- */
+.ltk-sk-ghost {
+  position: fixed;
+  z-index: 10000;
+  pointer-events: none;
+  background: var(--ltk-bg);
+  border: 1px solid var(--ltk-accent);
+  border-radius: 5px;
+  padding: 3px 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ltk-fg);
+  box-shadow: 0 3px 10px rgba(0,0,0,0.2);
+  opacity: 0.95;
+}
+.ltk-sk-insert {
+  position: absolute;
+  left: 8px;
+  right: 12px;
+  height: 2px;
+  background: var(--ltk-accent);
+  border-radius: 2px;
+  pointer-events: none;
+  z-index: 5;
 }
 
 /* ---- footer: add buttons (left) + level legend (right, in line) ---- */

@@ -1,8 +1,8 @@
-// SkillsMatrix document — the classic quadrant skills matrix. Rows are the
-// team members, columns are the skills (each with a 0–4 target level), and
-// each cell holds a proficiency 1–4 drawn as a quarter-filled disc. People,
-// skills, targets and levels all live in the board data and are editable
-// in-card.
+// SkillsMatrix document — the classic quadrant skills matrix, transposed:
+// SKILLS are the rows (grouped under categories), PEOPLE are the columns (fed
+// from the standard peopleJSON input, not the document). Each cell holds a
+// proficiency 1–4 drawn as a quarter-filled disc. Categories, skills and
+// targets live in the board data and are editable + reorderable in-card.
 
 import { newId } from "../../shared/schema/id";
 import {
@@ -25,37 +25,43 @@ export const LEVEL_LABELS = [
 
 export const MAX_LEVEL = 4;
 
-export interface SkillPerson {
-  id: string;
-  name: string;
-}
-
 export interface Skill {
   id: string;
   name: string;
   target: number; // 0 (no target) .. 4
 }
 
-export interface SkillsData {
-  people: SkillPerson[];
+export interface SkillCategory {
+  id: string;
+  name: string;
   skills: Skill[];
-  // personId -> skillId -> level 1..4
+}
+
+export interface SkillsData {
+  categories: SkillCategory[];
+  // skillId -> personId -> level 1..4
   levels: Record<string, Record<string, number>>;
 }
 
 export type SkillsEnvelope = Envelope<SkillsData>;
 
-export const DEFAULT_PEOPLE: SkillPerson[] = [
-  { id: "p1", name: "Alex" },
-  { id: "p2", name: "Sam" },
-  { id: "p3", name: "Jordan" },
-];
-
-export const DEFAULT_SKILLS: Skill[] = [
-  { id: "s1", name: "Setup", target: 3 },
-  { id: "s2", name: "Operation", target: 3 },
-  { id: "s3", name: "Quality checks", target: 2 },
-  { id: "s4", name: "Maintenance", target: 2 },
+export const DEFAULT_CATEGORIES: SkillCategory[] = [
+  {
+    id: "c1",
+    name: "Production",
+    skills: [
+      { id: "s1", name: "Mashing", target: 3 },
+      { id: "s2", name: "Distillation", target: 3 },
+    ],
+  },
+  {
+    id: "c2",
+    name: "Packaging",
+    skills: [
+      { id: "s3", name: "Bottling line", target: 2 },
+      { id: "s4", name: "Quality checks", target: 2 },
+    ],
+  },
 ];
 
 function clampLevel(v: unknown): number {
@@ -64,60 +70,66 @@ function clampLevel(v: unknown): number {
   return Math.max(0, Math.min(MAX_LEVEL, Math.round(n)));
 }
 
+function parseSkill(raw: unknown): Skill | null {
+  if (!raw || typeof raw !== "object") return null;
+  const o = raw as Partial<Skill>;
+  const name = typeof o.name === "string" ? o.name.trim() : "";
+  if (name === "") return null;
+  return {
+    id: typeof o.id === "string" && o.id !== "" ? o.id : newId("s"),
+    name,
+    target: clampLevel(o.target),
+  };
+}
+
 function parseData(data: unknown): SkillsData {
   const fallback: SkillsData = {
-    people: DEFAULT_PEOPLE.map((p) => ({ ...p })),
-    skills: DEFAULT_SKILLS.map((s) => ({ ...s })),
+    categories: DEFAULT_CATEGORIES.map((c) => ({
+      ...c,
+      skills: c.skills.map((s) => ({ ...s })),
+    })),
     levels: {},
   };
   if (!data || typeof data !== "object") return fallback;
-  const d = data as { people?: unknown; skills?: unknown; levels?: unknown };
+  const d = data as { categories?: unknown; levels?: unknown };
 
-  const people: SkillPerson[] = [];
-  if (Array.isArray(d.people)) {
-    for (const raw of d.people) {
+  const categories: SkillCategory[] = [];
+  if (Array.isArray(d.categories)) {
+    for (const raw of d.categories) {
       if (!raw || typeof raw !== "object") continue;
-      const o = raw as Partial<SkillPerson>;
+      const o = raw as Partial<SkillCategory> & { skills?: unknown };
       const name = typeof o.name === "string" ? o.name.trim() : "";
       if (name === "") continue;
-      people.push({
-        id: typeof o.id === "string" && o.id !== "" ? o.id : newId("p"),
+      const skills: Skill[] = [];
+      if (Array.isArray(o.skills)) {
+        for (const rs of o.skills) {
+          const s = parseSkill(rs);
+          if (s) skills.push(s);
+        }
+      }
+      categories.push({
+        id: typeof o.id === "string" && o.id !== "" ? o.id : newId("c"),
         name,
-      });
-    }
-  }
-
-  const skills: Skill[] = [];
-  if (Array.isArray(d.skills)) {
-    for (const raw of d.skills) {
-      if (!raw || typeof raw !== "object") continue;
-      const o = raw as Partial<Skill>;
-      const name = typeof o.name === "string" ? o.name.trim() : "";
-      if (name === "") continue;
-      skills.push({
-        id: typeof o.id === "string" && o.id !== "" ? o.id : newId("s"),
-        name,
-        target: clampLevel(o.target),
+        skills,
       });
     }
   }
 
   const levels: Record<string, Record<string, number>> = {};
   if (d.levels && typeof d.levels === "object") {
-    for (const [pid, row] of Object.entries(d.levels as Record<string, unknown>)) {
+    for (const [sid, row] of Object.entries(d.levels as Record<string, unknown>)) {
       if (!row || typeof row !== "object") continue;
       const out: Record<string, number> = {};
-      for (const [sid, lvl] of Object.entries(row as Record<string, unknown>)) {
+      for (const [pid, lvl] of Object.entries(row as Record<string, unknown>)) {
         const v = clampLevel(lvl);
-        if (v >= 1) out[sid] = v;
+        if (v >= 1) out[pid] = v;
       }
-      if (Object.keys(out).length > 0) levels[pid] = out;
+      if (Object.keys(out).length > 0) levels[sid] = out;
     }
   }
 
   return {
-    people: people.length > 0 ? people : fallback.people,
-    skills: skills.length > 0 ? skills : fallback.skills,
+    categories: categories.length > 0 ? categories : fallback.categories,
     levels,
   };
 }
@@ -130,16 +142,33 @@ export function serializeSkills(env: SkillsEnvelope): string {
   return serializeEnvelope(env);
 }
 
-export function levelOf(data: SkillsData, personId: string, skillId: string): number {
-  return data.levels[personId]?.[skillId] ?? 0;
+export function levelOf(data: SkillsData, skillId: string, personId: string): number {
+  return data.levels[skillId]?.[personId] ?? 0;
 }
 
-/** People at or above a skill's target (only counted when a target is set). */
-export function coverage(data: SkillsData, skill: Skill): { met: number; of: number } {
+export function setLevel(
+  data: SkillsData,
+  skillId: string,
+  personId: string,
+  level: number
+): void {
+  const row = data.levels[skillId] ?? {};
+  if (level >= 1) row[personId] = level;
+  else delete row[personId];
+  if (Object.keys(row).length > 0) data.levels[skillId] = row;
+  else delete data.levels[skillId];
+}
+
+/** People (by id) at or above a skill's target — coverage for the row. */
+export function coverage(
+  data: SkillsData,
+  skill: Skill,
+  personIds: string[]
+): { met: number; of: number } {
   if (skill.target <= 0) return { met: 0, of: 0 };
   let met = 0;
-  for (const p of data.people) {
-    if (levelOf(data, p.id, skill.id) >= skill.target) met++;
+  for (const pid of personIds) {
+    if (levelOf(data, skill.id, pid) >= skill.target) met++;
   }
-  return { met, of: data.people.length };
+  return { met, of: personIds.length };
 }

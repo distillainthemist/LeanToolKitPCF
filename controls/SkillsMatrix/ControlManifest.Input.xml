@@ -10,7 +10,7 @@
     <!-- Standard LeanToolKit data surface -->
     <property name="inputJSON"
               display-name-key="Input JSON"
-              description-key="Card document to preload: {schema, meta, data:{people:[{id,name}], skills:[{id,name,target}], levels:{personId:{skillId:1-4}}}}. People, skills, targets and levels are all editable in-card."
+              description-key="Card document to preload: {schema, meta, data:{categories:[{id,name,skills:[{id,name,target}]}], levels:{skillId:{personId:1-4}}}}. Categories, skills and targets are editable + drag-reorderable in-card; the people (columns) come from People (JSON)."
               of-type="Multiple"
               usage="input"
               required="false" />
@@ -50,7 +50,7 @@
 
     <property name="peopleJSON"
               display-name-key="People (JSON)"
-              description-key="People available for action assignment: [{whoId, who}]. (Separate from the matrix rows.)"
+              description-key="The team: [{whoId, who}]. These are the matrix COLUMNS and also the pool for action assignment. Levels are keyed by whoId."
               of-type="Multiple"
               usage="input"
               required="false" />
