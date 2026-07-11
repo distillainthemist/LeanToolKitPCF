@@ -31,6 +31,7 @@ import {
 } from "../../shared/schema/actions";
 import { CauseNode, sanitizeCause } from "../../shared/schema/causes";
 import { nowIso } from "../../shared/schema/id";
+import { saveSvg } from "../../shared/export/png";
 import { parsePeople, Person } from "../../shared/schema/people";
 
 const OUTPUT_DEBOUNCE_MS = 300;
@@ -133,6 +134,7 @@ export class Fishbone implements ComponentFramework.StandardControl<IInputs, IOu
     if (!this.readOnly) {
       renderKebab(this.root, [
         { label: "Download PNG", onClick: () => this.downloadPng() },
+        { label: "Download SVG", onClick: () => saveSvg(this.svgMarkup, "fishbone.svg") },
       ]);
     }
     this.root.appendChild(this.editorHost);

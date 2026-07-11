@@ -23,7 +23,7 @@ import {
 import { parsePrompts, Prompts, renderGhost, renderTitleBar, hintFor } from "../../shared/ui/chrome";
 import { renderKebab } from "../../shared/ui/menu";
 import { makeInteractive } from "../../shared/interact/drag";
-import { htmlToPng, SnapshotScheduler } from "../../shared/export/png";
+import { htmlToPng, saveSvg, SnapshotScheduler } from "../../shared/export/png";
 import {
   CauseNode,
   CauseStatus,
@@ -190,6 +190,7 @@ export class FiveWhysEditor {
     if (!this.readOnly) {
       renderKebab(this.root, [
         { label: "Download PNG", onClick: () => this.downloadPng() },
+        { label: "Download SVG", onClick: () => this.downloadSvg() },
       ]);
     }
 
@@ -734,6 +735,12 @@ export class FiveWhysEditor {
       LTK_BASE_CSS + FIVEWHYS_CSS,
       this.theme.background,
       (uri, svg) => this.cb.onPngReady!(uri, svg)
+    );
+  }
+
+  private downloadSvg(): void {
+    htmlToPng(this.root, LTK_BASE_CSS + FIVEWHYS_CSS, this.theme.background, (_uri, svg) =>
+      saveSvg(svg ?? "", "five-whys.svg")
     );
   }
 

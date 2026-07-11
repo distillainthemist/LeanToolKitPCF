@@ -9,7 +9,7 @@ import { checkItem, fieldRow, openDialog, textArea } from "../../shared/ui/dialo
 import { parsePrompts, Prompts, renderTitleBar, hintFor } from "../../shared/ui/chrome";
 import { renderKebab } from "../../shared/ui/menu";
 import { makeInteractive } from "../../shared/interact/drag";
-import { htmlToPng, SnapshotScheduler } from "../../shared/export/png";
+import { htmlToPng, saveSvg, SnapshotScheduler } from "../../shared/export/png";
 import { newId, nowIso } from "../../shared/schema/id";
 import { BenefitEffortEnvelope, BenefitEffortItem, SCHEMA_ID } from "./types";
 import { BENEFITEFFORT_CSS } from "./styles";
@@ -114,6 +114,7 @@ export class BenefitEffortEditor {
     if (!this.readOnly) {
       renderKebab(this.root, [
         { label: "Download PNG", onClick: () => this.downloadPng() },
+        { label: "Download SVG", onClick: () => this.downloadSvg() },
       ]);
     }
 
@@ -321,7 +322,13 @@ export class BenefitEffortEditor {
     );
   }
 
-  private downloadPng(): void {
+    private downloadSvg(): void {
+    htmlToPng(this.root, LTK_BASE_CSS + BENEFITEFFORT_CSS, this.theme.background, (_uri, svg) =>
+      saveSvg(svg ?? "", "benefit-effort.svg")
+    );
+  }
+
+private downloadPng(): void {
     htmlToPng(this.root, LTK_BASE_CSS + BENEFITEFFORT_CSS, this.theme.background, (uri) => {
       const link = document.createElement("a");
       link.href = uri;

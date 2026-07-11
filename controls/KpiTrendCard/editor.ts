@@ -9,7 +9,7 @@ import { clear, el, ensureStylesheet, svgEl } from "../../shared/ui/dom";
 import { checkItem, fieldRow, openDialog, sectionLabel, textInput } from "../../shared/ui/dialog";
 import { parsePrompts, Prompts, renderGhost, renderTitleBar } from "../../shared/ui/chrome";
 import { renderKebab } from "../../shared/ui/menu";
-import { htmlToPng, SnapshotScheduler } from "../../shared/export/png";
+import { htmlToPng, saveSvg, SnapshotScheduler } from "../../shared/export/png";
 import { nowIso, todayIso } from "../../shared/schema/id";
 import { KpiPoint, KpiTrendEnvelope, SCHEMA_ID } from "./types";
 import { KPITREND_CSS } from "./styles";
@@ -129,6 +129,7 @@ export class KpiTrendEditor {
       renderKebab(this.root, [
         { label: "Target & direction", onClick: () => this.editSettings() },
         { label: "Download PNG", onClick: () => this.downloadPng() },
+        { label: "Download SVG", onClick: () => this.downloadSvg() },
       ]);
     }
 
@@ -466,7 +467,13 @@ export class KpiTrendEditor {
     );
   }
 
-  private downloadPng(): void {
+    private downloadSvg(): void {
+    htmlToPng(this.root, LTK_BASE_CSS + KPITREND_CSS, this.theme.background, (_uri, svg) =>
+      saveSvg(svg ?? "", "kpi-trend.svg")
+    );
+  }
+
+private downloadPng(): void {
     htmlToPng(this.root, LTK_BASE_CSS + KPITREND_CSS, this.theme.background, (uri) => {
       const link = document.createElement("a");
       link.href = uri;

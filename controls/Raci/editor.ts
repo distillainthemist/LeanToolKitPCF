@@ -12,7 +12,7 @@ import { actionRow, openActionDialog } from "../../shared/ui/actionUi";
 import { parsePrompts, Prompts, renderTitleBar } from "../../shared/ui/chrome";
 import { renderKebab } from "../../shared/ui/menu";
 import { makeInteractive } from "../../shared/interact/drag";
-import { htmlToPng, SnapshotScheduler } from "../../shared/export/png";
+import { htmlToPng, saveSvg, SnapshotScheduler } from "../../shared/export/png";
 import { LtkAction, newAction } from "../../shared/schema/actions";
 import { newId, nowIso } from "../../shared/schema/id";
 import { Person } from "../../shared/schema/people";
@@ -141,6 +141,7 @@ export class RaciEditor {
         { label: "Add deliverable", onClick: () => this.editTask(null) },
         { label: "Add role", onClick: () => this.editRole(null) },
         { label: "Download PNG", onClick: () => this.downloadPng() },
+        { label: "Download SVG", onClick: () => this.downloadSvg() },
       ]);
     }
 
@@ -470,7 +471,13 @@ export class RaciEditor {
     );
   }
 
-  private downloadPng(): void {
+    private downloadSvg(): void {
+    htmlToPng(this.root, LTK_BASE_CSS + RACI_CSS, this.theme.background, (_uri, svg) =>
+      saveSvg(svg ?? "", "raci.svg")
+    );
+  }
+
+private downloadPng(): void {
     htmlToPng(this.root, LTK_BASE_CSS + RACI_CSS, this.theme.background, (uri) => {
       const link = document.createElement("a");
       link.href = uri;

@@ -7,7 +7,7 @@ import { clear, el, ensureStylesheet, svgEl } from "../../shared/ui/dom";
 import { fieldRow, openDialog, textInput } from "../../shared/ui/dialog";
 import { parsePrompts, Prompts, renderGhost, renderTitleBar, hintFor } from "../../shared/ui/chrome";
 import { renderKebab } from "../../shared/ui/menu";
-import { htmlToPng, SnapshotScheduler } from "../../shared/export/png";
+import { htmlToPng, saveSvg, SnapshotScheduler } from "../../shared/export/png";
 import { newId, nowIso } from "../../shared/schema/id";
 import { ParetoEnvelope, ParetoItem, SCHEMA_ID } from "./types";
 import { PARETO_CSS } from "./styles";
@@ -103,6 +103,7 @@ export class ParetoEditor {
     if (!this.readOnly) {
       renderKebab(this.root, [
         { label: "Download PNG", onClick: () => this.downloadPng() },
+        { label: "Download SVG", onClick: () => this.downloadSvg() },
       ]);
     }
 
@@ -396,7 +397,13 @@ export class ParetoEditor {
     );
   }
 
-  private downloadPng(): void {
+    private downloadSvg(): void {
+    htmlToPng(this.root, LTK_BASE_CSS + PARETO_CSS, this.theme.background, (_uri, svg) =>
+      saveSvg(svg ?? "", "pareto.svg")
+    );
+  }
+
+private downloadPng(): void {
     htmlToPng(this.root, LTK_BASE_CSS + PARETO_CSS, this.theme.background, (uri) => {
       const link = document.createElement("a");
       link.href = uri;

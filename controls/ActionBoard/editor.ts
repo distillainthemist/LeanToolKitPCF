@@ -9,7 +9,7 @@ import { parsePrompts, Prompts, renderGhost, renderTitleBar } from "../../shared
 import { renderKebab } from "../../shared/ui/menu";
 import { actionRow, openActionDialog } from "../../shared/ui/actionUi";
 import { makeInteractive } from "../../shared/interact/drag";
-import { htmlToPng, SnapshotScheduler } from "../../shared/export/png";
+import { htmlToPng, saveSvg, SnapshotScheduler } from "../../shared/export/png";
 import { ActionStatus, isOverdue, LtkAction, newAction } from "../../shared/schema/actions";
 import { Person } from "../../shared/schema/people";
 import { ACTIONBOARD_CSS } from "./styles";
@@ -192,6 +192,7 @@ export class ActionBoardEditor {
     if (!this.readOnly) {
       renderKebab(this.root, [
         { label: "Download PNG", onClick: () => this.downloadPng() },
+        { label: "Download SVG", onClick: () => this.downloadSvg() },
       ]);
     }
 
@@ -639,7 +640,13 @@ export class ActionBoardEditor {
     );
   }
 
-  private downloadPng(): void {
+    private downloadSvg(): void {
+    htmlToPng(this.root, LTK_BASE_CSS + ACTIONBOARD_CSS, this.theme.background, (_uri, svg) =>
+      saveSvg(svg ?? "", "action-board.svg")
+    );
+  }
+
+private downloadPng(): void {
     htmlToPng(this.root, LTK_BASE_CSS + ACTIONBOARD_CSS, this.theme.background, (uri) => {
       const link = document.createElement("a");
       link.href = uri;

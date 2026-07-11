@@ -24,7 +24,7 @@ import {
 import { parsePrompts, Prompts, renderGhost, renderTitleBar, hintFor } from "../../shared/ui/chrome";
 import { renderKebab } from "../../shared/ui/menu";
 import { makeInteractive } from "../../shared/interact/drag";
-import { htmlToPng, SnapshotScheduler } from "../../shared/export/png";
+import { htmlToPng, saveSvg, SnapshotScheduler } from "../../shared/export/png";
 import {
   CauseNode,
   CauseStatus,
@@ -181,6 +181,7 @@ export class FaultTreeEditor {
     if (!this.readOnly) {
       renderKebab(this.root, [
         { label: "Download PNG", onClick: () => this.downloadPng() },
+        { label: "Download SVG", onClick: () => this.downloadSvg() },
       ]);
     }
 
@@ -696,7 +697,13 @@ export class FaultTreeEditor {
     );
   }
 
-  private downloadPng(): void {
+    private downloadSvg(): void {
+    htmlToPng(this.root, LTK_BASE_CSS + FAULTTREE_CSS, this.theme.background, (_uri, svg) =>
+      saveSvg(svg ?? "", "fault-tree.svg")
+    );
+  }
+
+private downloadPng(): void {
     htmlToPng(this.root, LTK_BASE_CSS + FAULTTREE_CSS, this.theme.background, (uri) => {
       const link = document.createElement("a");
       link.href = uri;

@@ -15,7 +15,7 @@ import {
 } from "../../shared/ui/dialog";
 import { parsePrompts, Prompts, renderGhost, renderTitleBar, hintFor } from "../../shared/ui/chrome";
 import { renderKebab } from "../../shared/ui/menu";
-import { htmlToPng, SnapshotScheduler } from "../../shared/export/png";
+import { htmlToPng, saveSvg, SnapshotScheduler } from "../../shared/export/png";
 import { newId, nowIso } from "../../shared/schema/id";
 import {
   CaptureColumn,
@@ -174,6 +174,7 @@ export class CaptureEditor {
     if (!this.readOnly) {
       renderKebab(this.root, [
         { label: "Download PNG", onClick: () => this.downloadPng() },
+        { label: "Download SVG", onClick: () => this.downloadSvg() },
       ]);
     }
 
@@ -496,7 +497,13 @@ export class CaptureEditor {
     );
   }
 
-  private downloadPng(): void {
+    private downloadSvg(): void {
+    htmlToPng(this.root, LTK_BASE_CSS + CAPTURE_CSS, this.theme.background, (_uri, svg) =>
+      saveSvg(svg ?? "", "capture.svg")
+    );
+  }
+
+private downloadPng(): void {
     htmlToPng(this.root, LTK_BASE_CSS + CAPTURE_CSS, this.theme.background, (uri) => {
       const link = document.createElement("a");
       link.href = uri;

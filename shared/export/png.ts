@@ -98,6 +98,18 @@ export function htmlToPng(
   rasterize(markup, width, height, background, 2, (uri) => onReady(uri, markup));
 }
 
+/** Save SVG markup to a downloaded .svg file. */
+export function saveSvg(svg: string, filename: string): void {
+  if (!svg) return;
+  const blob = new Blob([svg], { type: "image/svg+xml" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
+}
+
 /** Debounced snapshot scheduling (the Fishbone 400 ms pattern). */
 export class SnapshotScheduler {
   private timer: ReturnType<typeof setTimeout> | null = null;

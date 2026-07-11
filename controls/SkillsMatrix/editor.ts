@@ -19,7 +19,7 @@ import { actionRow, openActionDialog } from "../../shared/ui/actionUi";
 import { parsePrompts, Prompts, renderGhost, renderTitleBar } from "../../shared/ui/chrome";
 import { renderKebab } from "../../shared/ui/menu";
 import { makeInteractive } from "../../shared/interact/drag";
-import { htmlToPng, SnapshotScheduler } from "../../shared/export/png";
+import { htmlToPng, saveSvg, SnapshotScheduler } from "../../shared/export/png";
 import { LtkAction, newAction } from "../../shared/schema/actions";
 import { newId, nowIso } from "../../shared/schema/id";
 import { Person } from "../../shared/schema/people";
@@ -221,6 +221,7 @@ export class SkillsMatrixEditor {
         { label: "Add category", onClick: () => this.editCategory(null) },
         { label: "Add skill", onClick: () => this.editSkill(null, null) },
         { label: "Download PNG", onClick: () => this.downloadPng() },
+        { label: "Download SVG", onClick: () => this.downloadSvg() },
       ]);
     }
 
@@ -718,7 +719,13 @@ export class SkillsMatrixEditor {
     );
   }
 
-  private downloadPng(): void {
+    private downloadSvg(): void {
+    htmlToPng(this.root, LTK_BASE_CSS + SKILLS_CSS, this.theme.background, (_uri, svg) =>
+      saveSvg(svg ?? "", "skills-matrix.svg")
+    );
+  }
+
+private downloadPng(): void {
     htmlToPng(this.root, LTK_BASE_CSS + SKILLS_CSS, this.theme.background, (uri) => {
       const link = document.createElement("a");
       link.href = uri;

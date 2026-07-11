@@ -9,7 +9,7 @@ import { LTK_BASE_CSS } from "../../shared/ui/baseCss";
 import { clear, el, ensureStylesheet } from "../../shared/ui/dom";
 import { parsePrompts, Prompts, renderGhost, renderTitleBar } from "../../shared/ui/chrome";
 import { renderKebab } from "../../shared/ui/menu";
-import { htmlToPng, SnapshotScheduler } from "../../shared/export/png";
+import { htmlToPng, saveSvg, SnapshotScheduler } from "../../shared/export/png";
 import { todayIso } from "../../shared/schema/id";
 import { MeetingInstance } from "./types";
 import { MEETING_CSS } from "./styles";
@@ -107,6 +107,7 @@ export class MeetingSchedulerView {
     if (!this.readOnly) {
       renderKebab(this.root, [
         { label: "Download PNG", onClick: () => this.downloadPng() },
+        { label: "Download SVG", onClick: () => this.downloadSvg() },
       ]);
     }
 
@@ -193,7 +194,13 @@ export class MeetingSchedulerView {
     );
   }
 
-  private downloadPng(): void {
+    private downloadSvg(): void {
+    htmlToPng(this.root, LTK_BASE_CSS + MEETING_CSS, this.theme.background, (_uri, svg) =>
+      saveSvg(svg ?? "", "meetings.svg")
+    );
+  }
+
+private downloadPng(): void {
     htmlToPng(this.root, LTK_BASE_CSS + MEETING_CSS, this.theme.background, (uri) => {
       const link = document.createElement("a");
       link.href = uri;
