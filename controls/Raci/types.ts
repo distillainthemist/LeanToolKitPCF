@@ -43,6 +43,7 @@ export interface RaciTask {
 }
 
 export interface RaciData {
+  roles: string[]; // matrix columns — part of the board data, editable in-card
   tasks: RaciTask[];
   // taskId -> role -> letter
   assign: Record<string, Record<string, RaciLetter>>;
@@ -59,9 +60,17 @@ export const DEFAULT_TASKS: RaciTask[] = [
 ];
 
 function parseData(data: unknown): RaciData {
-  const fallback: RaciData = { tasks: DEFAULT_TASKS.slice(), assign: {} };
+  const fallback: RaciData = {
+    roles: DEFAULT_ROLES.slice(),
+    tasks: DEFAULT_TASKS.slice(),
+    assign: {},
+  };
   if (!data || typeof data !== "object") return fallback;
-  const d = data as { tasks?: unknown; assign?: unknown };
+  const d = data as { roles?: unknown; tasks?: unknown; assign?: unknown };
+
+  const roles = Array.isArray(d.roles)
+    ? d.roles.map((v) => String(v ?? "").trim()).filter((v) => v !== "")
+    : [];
 
   const tasks: RaciTask[] = [];
   if (Array.isArray(d.tasks)) {
@@ -88,6 +97,7 @@ function parseData(data: unknown): RaciData {
   }
 
   return {
+    roles: roles.length > 0 ? roles : fallback.roles,
     tasks: tasks.length > 0 ? tasks : fallback.tasks,
     assign,
   };
@@ -101,32 +111,9 @@ export function serializeRaci(env: RaciEnvelope): string {
   return serializeEnvelope(env);
 }
 
-/** Parse the roles input (CSV or JSON array) into the matrix columns. */
-export function parseRoles(raw: string | null | undefined): string[] {
-  const t = (raw ?? "").trim();
-  if (t === "") return DEFAULT_ROLES.slice();
-  let items: string[];
-  if (t.startsWith("[")) {
-    try {
-      const arr = JSON.parse(t) as unknown;
-      items = Array.isArray(arr) ? arr.map((v) => String(v).trim()) : [];
-    } catch {
-      items = t.split(",").map((v) => v.trim());
-    }
-  } else {
-    items = t.split(",").map((v) => v.trim());
-  }
-  const clean = items.filter((v) => v !== "");
-  return clean.length > 0 ? clean : DEFAULT_ROLES.slice();
-}
-
 /** Count how many roles are marked Accountable for a task (should be 1). */
-export function accountableCount(
-  data: RaciData,
-  taskId: string,
-  roles: string[]
-): number {
+export function accountableCount(data: RaciData, taskId: string): number {
   const row = data.assign[taskId];
   if (!row) return 0;
-  return roles.filter((r) => row[r] === "A").length;
+  return data.roles.filter((r) => row[r] === "A").length;
 }

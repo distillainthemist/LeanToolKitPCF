@@ -19,6 +19,7 @@ export const RACI_CSS = `
 
 /* ---- headers ---- */
 .ltk-ra-corner { }
+.ltk-ra-acthead { border-bottom: 2px solid var(--ltk-hairline); }
 .ltk-ra-rolehead {
   display: flex;
   align-items: flex-end;
@@ -27,11 +28,14 @@ export const RACI_CSS = `
   font-size: 11.5px;
   font-weight: 700;
   color: var(--ltk-fg);
-  padding: 0 2px 4px;
+  padding: 2px 2px 4px;
   line-height: 1.15;
   border-bottom: 2px solid var(--ltk-hairline);
   overflow-wrap: anywhere;
+  border-radius: 4px 4px 0 0;
 }
+.ltk-ra-rolehead-edit { cursor: pointer; }
+.ltk-ra-rolehead-edit:hover { background: var(--ltk-hairline); }
 
 /* ---- deliverable (row) labels ---- */
 .ltk-ra-task {
@@ -45,14 +49,16 @@ export const RACI_CSS = `
   overflow: hidden;
 }
 .ltk-ra-task.ltk-ra-warn { background: rgba(242, 200, 17, 0.14); }
+.ltk-ra-task-edit { cursor: pointer; }
+.ltk-ra-task-edit:hover .ltk-ra-taskname { text-decoration: underline; }
 .ltk-ra-taskname {
   font-size: 13px;
   font-weight: 600;
   color: var(--ltk-fg);
   line-height: 1.2;
 }
-.ltk-ra-taskmeta { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .ltk-ra-warnflag {
+  align-self: flex-start;
   font-size: 10px;
   font-weight: 600;
   color: #9a6a00;
@@ -60,7 +66,33 @@ export const RACI_CSS = `
   border-radius: 8px;
   padding: 0 6px;
 }
-.ltk-ra-abadge { font-size: 10px; font-weight: 600; color: var(--ltk-accent); }
+
+/* ---- trailing action column ---- */
+.ltk-ra-actcell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.ltk-ra-actbtn {
+  min-width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  border: 1.5px dashed var(--ltk-hairline);
+  background: none;
+  color: var(--ltk-muted);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0 8px;
+  transition: border-color 150ms ease, color 150ms ease;
+}
+.ltk-ra-actbtn:hover { border-color: var(--ltk-accent); color: var(--ltk-accent); }
+.ltk-ra-actbtn-on {
+  border-style: solid;
+  border-color: var(--ltk-accent);
+  color: var(--ltk-accent);
+}
 
 /* ---- cells ---- */
 .ltk-ra-cell {
@@ -79,7 +111,8 @@ export const RACI_CSS = `
 .ltk-ra-cell:hover { filter: brightness(0.94); }
 .ltk-ra-cell.ltk-readonly { cursor: default; }
 
-/* ---- add button ---- */
+/* ---- add buttons ---- */
+.ltk-ra-addrow { display: flex; gap: 8px; flex-wrap: wrap; }
 .ltk-ra-add {
   align-self: flex-start;
   display: inline-flex;

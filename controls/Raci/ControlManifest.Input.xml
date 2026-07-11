@@ -10,15 +10,8 @@
     <!-- Standard LeanToolKit data surface -->
     <property name="inputJSON"
               display-name-key="Input JSON"
-              description-key="Card document to preload: {schema, meta, data:{tasks:[{id,label}], assign:{taskId:{role:letter}}}}."
+              description-key="Card document to preload: {schema, meta, data:{roles:[...], tasks:[{id,label}], assign:{taskId:{role:letter}}}}. Roles (columns), deliverables (rows) and assignments are all editable in-card."
               of-type="Multiple"
-              usage="input"
-              required="false" />
-
-    <property name="roles"
-              display-name-key="Roles"
-              description-key="The matrix columns (roles or people), CSV or JSON array, e.g. Sponsor,Lead,Team,QA."
-              of-type="SingleLine.Text"
               usage="input"
               required="false" />
 

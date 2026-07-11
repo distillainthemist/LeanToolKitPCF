@@ -1,13 +1,14 @@
 // The RaciCard editor: deliverables down the side, roles across the top, one
 // RACI letter per cell (tap to cycle unset → R → A → C → I). A task row warns
-// when it doesn't have exactly one Accountable. Tasks are editable in-card;
-// roles come from the `roles` input. Hold a task to raise an action.
+// when it doesn't have exactly one Accountable. Roles, deliverables and
+// assignments all live in the board data and are editable in-card; each row
+// ends with an action button (manage / raise actions for that deliverable).
 
 import { applyThemeVars, defaultTheme, textOn, Theme, tint } from "../../shared/tokens";
 import { LTK_BASE_CSS } from "../../shared/ui/baseCss";
 import { clear, el, ensureStylesheet } from "../../shared/ui/dom";
-import { fieldRow, openDialog, textInput } from "../../shared/ui/dialog";
-import { openActionDialog } from "../../shared/ui/actionUi";
+import { fieldRow, openDialog, sectionLabel, textInput } from "../../shared/ui/dialog";
+import { actionRow, openActionDialog } from "../../shared/ui/actionUi";
 import { parsePrompts, Prompts, renderTitleBar } from "../../shared/ui/chrome";
 import { renderKebab } from "../../shared/ui/menu";
 import { makeInteractive } from "../../shared/interact/drag";
@@ -17,7 +18,6 @@ import { newId, nowIso } from "../../shared/schema/id";
 import { Person } from "../../shared/schema/people";
 import {
   accountableCount,
-  DEFAULT_ROLES,
   RACI_CYCLE,
   RACI_DEFS,
   RaciDef,
@@ -28,16 +28,13 @@ import {
 } from "./types";
 import { RACI_CSS } from "./styles";
 
-export interface RaciOptions {
-  roles: string[];
-}
-
 export interface RaciEditorCallbacks {
   onChange: (env: RaciEnvelope, actions: LtkAction[]) => void;
   onPngReady?: (dataUri: string) => void;
 }
 
 const LABEL_COL = 170;
+const ACTION_COL = 52;
 
 export class RaciEditor {
   private readonly root: HTMLElement;
@@ -49,7 +46,6 @@ export class RaciEditor {
   private prompts: Prompts = { general: [], fields: {} };
   private lastPromptsRaw: string | null = null;
   private readOnly = false;
-  private roles: string[] = DEFAULT_ROLES.slice();
   private readonly png: SnapshotScheduler;
 
   constructor(host: HTMLElement, private readonly cb: RaciEditorCallbacks) {
@@ -60,7 +56,7 @@ export class RaciEditor {
     this.env = {
       schema: SCHEMA_ID,
       meta: { title: "", updated: "" },
-      data: { tasks: [], assign: {} },
+      data: { roles: [], tasks: [], assign: {} },
     };
     this.png = new SnapshotScheduler(() => this.generatePng());
     this.render();
@@ -71,12 +67,6 @@ export class RaciEditor {
     this.actions = actions;
     this.render();
     this.png.schedule();
-  }
-
-  setOptions(opts: RaciOptions): void {
-    if (JSON.stringify(opts.roles) === JSON.stringify(this.roles)) return;
-    this.roles = opts.roles;
-    this.render();
   }
 
   setTheme(theme: Theme): void {
@@ -149,6 +139,7 @@ export class RaciEditor {
     if (!this.readOnly) {
       renderKebab(this.root, [
         { label: "Add deliverable", onClick: () => this.editTask(null) },
+        { label: "Add role", onClick: () => this.editRole(null) },
         { label: "Download PNG", onClick: () => this.downloadPng() },
       ]);
     }
@@ -156,30 +147,44 @@ export class RaciEditor {
     const body = el("div", "ltk-ra-body");
     this.root.appendChild(body);
 
-    const n = this.roles.length;
+    const roles = this.env.data.roles;
+    const n = roles.length;
     const grid = el("div", "ltk-ra-grid");
-    grid.style.gridTemplateColumns = `${LABEL_COL}px repeat(${n}, minmax(58px, 1fr))`;
+    grid.style.gridTemplateColumns = `${LABEL_COL}px repeat(${n}, minmax(58px, 1fr)) ${ACTION_COL}px`;
 
-    // header row: corner + role names
+    // header row: corner + role names (tap to edit) + actions column spacer
     grid.appendChild(el("div", "ltk-ra-corner"));
-    for (const role of this.roles) {
-      grid.appendChild(el("div", "ltk-ra-rolehead", role));
-    }
+    roles.forEach((role, i) => {
+      const head = el("div", "ltk-ra-rolehead", role);
+      if (!this.readOnly) {
+        head.classList.add("ltk-ra-rolehead-edit");
+        head.title = "Tap to rename or remove this role";
+        head.addEventListener("click", () => this.editRole(i));
+      }
+      grid.appendChild(head);
+    });
+    grid.appendChild(el("div", "ltk-ra-acthead"));
 
     // one row per deliverable
     for (const task of this.env.data.tasks) {
       grid.appendChild(this.renderTaskLabel(task));
-      for (const role of this.roles) {
+      for (const role of roles) {
         grid.appendChild(this.renderCell(task, role));
       }
+      grid.appendChild(this.renderActionCell(task));
     }
     body.appendChild(grid);
 
     if (!this.readOnly) {
-      const add = el("button", "ltk-ra-add", "＋ Add deliverable");
-      add.type = "button";
-      add.addEventListener("click", () => this.editTask(null));
-      body.appendChild(add);
+      const buttons = el("div", "ltk-ra-addrow");
+      const addTask = el("button", "ltk-ra-add", "＋ Add deliverable");
+      addTask.type = "button";
+      addTask.addEventListener("click", () => this.editTask(null));
+      const addRole = el("button", "ltk-ra-add", "＋ Add role");
+      addRole.type = "button";
+      addRole.addEventListener("click", () => this.editRole(null));
+      buttons.append(addTask, addRole);
+      body.appendChild(buttons);
     }
 
     body.appendChild(this.renderLegend());
@@ -187,13 +192,12 @@ export class RaciEditor {
 
   private renderTaskLabel(task: RaciTask): HTMLElement {
     const cell = el("div", "ltk-ra-task");
-    const aCount = accountableCount(this.env.data, task.id, this.roles);
+    const aCount = accountableCount(this.env.data, task.id);
     if (aCount !== 1) cell.classList.add("ltk-ra-warn");
 
     const name = el("div", "ltk-ra-taskname", task.label || "Untitled");
     cell.appendChild(name);
 
-    const meta = el("div", "ltk-ra-taskmeta");
     if (aCount !== 1) {
       const warn = el(
         "span",
@@ -204,22 +208,28 @@ export class RaciEditor {
         aCount === 0
           ? "Every deliverable needs exactly one Accountable (A)."
           : "Only one role should be Accountable (A) for a deliverable.";
-      meta.appendChild(warn);
+      cell.appendChild(warn);
     }
-    const openCount = this.openActionCount(task.id);
-    if (openCount > 0) {
-      const badge = el("span", "ltk-ra-abadge", `● ${openCount}`);
-      badge.title = `${openCount} open action(s)`;
-      meta.appendChild(badge);
-    }
-    if (meta.childNodes.length > 0) cell.appendChild(meta);
 
     if (!this.readOnly) {
-      makeInteractive(cell, {
-        onTap: () => this.editTask(task),
-        onLongPress: () => this.raiseAction(task),
-      });
+      cell.classList.add("ltk-ra-task-edit");
+      cell.title = "Tap to rename or remove this deliverable";
+      cell.addEventListener("click", () => this.editTask(task));
     }
+    return cell;
+  }
+
+  /** Trailing per-row action button: manage / raise actions for the row. */
+  private renderActionCell(task: RaciTask): HTMLElement {
+    const cell = el("div", "ltk-ra-actcell");
+    if (this.readOnly) return cell;
+    const open = this.openActionCount(task.id);
+    const btn = el("button", "ltk-ra-actbtn", open > 0 ? `● ${open}` : "＋");
+    btn.type = "button";
+    btn.title = open > 0 ? `Actions (${open})` : "Add an action for this deliverable";
+    if (open > 0) btn.classList.add("ltk-ra-actbtn-on");
+    btn.addEventListener("click", () => this.openTaskActions(task));
+    cell.appendChild(btn);
     return cell;
   }
 
@@ -256,7 +266,7 @@ export class RaciEditor {
     }
     if (!this.readOnly) {
       legend.appendChild(
-        el("span", "ltk-ra-hint", "Tap a cell to cycle · tap a row to edit · hold to raise an action")
+        el("span", "ltk-ra-hint", "Tap a cell to cycle · tap a role or deliverable to edit")
       );
     }
     return legend;
@@ -324,6 +334,102 @@ export class RaciEditor {
     });
     dlg.body.appendChild(fieldRow("Deliverable", input));
     input.focus();
+  }
+
+  /** Rename or remove a role column (index into data.roles). */
+  private editRole(index: number | null): void {
+    const current = index !== null ? this.env.data.roles[index] : "";
+    const input = textInput(current, { placeholder: "Role or person" });
+    const buttons = [];
+    if (index !== null) {
+      buttons.push({
+        label: "Delete",
+        kind: "danger" as const,
+        onClick: () => {
+          const role = this.env.data.roles[index];
+          this.env.data.roles = this.env.data.roles.filter((_, i) => i !== index);
+          for (const row of Object.values(this.env.data.assign)) delete row[role];
+          dlg.close();
+          this.commit();
+        },
+      });
+    }
+    buttons.push({ label: "Cancel", kind: "secondary" as const, onClick: () => dlg.close() });
+    buttons.push({
+      label: index !== null ? "Save" : "Add",
+      kind: "primary" as const,
+      onClick: () => {
+        const name = input.value.trim();
+        if (name === "") return;
+        if (index !== null) {
+          const old = this.env.data.roles[index];
+          if (name !== old) {
+            // migrate assignments from the old key to the new one
+            for (const row of Object.values(this.env.data.assign)) {
+              if (row[old] !== undefined && row[name] === undefined) {
+                row[name] = row[old];
+              }
+              delete row[old];
+            }
+            this.env.data.roles[index] = name;
+          }
+        } else if (!this.env.data.roles.includes(name)) {
+          this.env.data.roles.push(name);
+        }
+        dlg.close();
+        this.commit();
+      },
+    });
+    const dlg = openDialog({
+      host: this.root,
+      title: index !== null ? "Edit role" : "Add role",
+      buttons,
+    });
+    dlg.body.appendChild(fieldRow("Role", input));
+    input.focus();
+  }
+
+  /** Manage the actions for a deliverable (list + raise); empty → raise now. */
+  private openTaskActions(task: RaciTask): void {
+    const existing = this.actions.filter(
+      (a) => a.context.sourceId === task.id && a.status !== "cancelled"
+    );
+    if (existing.length === 0) {
+      this.raiseAction(task);
+      return;
+    }
+    const dlg = openDialog({
+      host: this.root,
+      title: task.label || "Deliverable",
+      buttons: [
+        { label: "Close", kind: "secondary", onClick: () => dlg.close() },
+        {
+          label: "＋ Raise action",
+          kind: "primary",
+          onClick: () => {
+            dlg.close();
+            this.raiseAction(task);
+          },
+        },
+      ],
+    });
+    dlg.body.appendChild(sectionLabel(`Actions (${existing.length})`));
+    for (const a of existing) {
+      dlg.body.appendChild(
+        actionRow(a, {
+          doneColor: this.theme.legend[1] ?? "#107c10",
+          onChanged: () => this.emit(),
+          onEdit: (act) =>
+            openActionDialog({
+              host: this.root,
+              action: act,
+              people: this.people,
+              isNew: false,
+              onCommit: () => this.emit(),
+            }),
+        })
+      );
+    }
   }
 
   private raiseAction(task: RaciTask): void {

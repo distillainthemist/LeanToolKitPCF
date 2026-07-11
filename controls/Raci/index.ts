@@ -5,7 +5,7 @@
 
 import { IInputs, IOutputs } from "./generated/ManifestTypes";
 import { RaciEditor } from "./editor";
-import { parseRaci, parseRoles, serializeRaci } from "./types";
+import { parseRaci, serializeRaci } from "./types";
 import { LoadGate, readTheme, str } from "../../shared/pcf/standard";
 import { parseActionsJson, serializeActions } from "../../shared/schema/actions";
 import { parsePeople } from "../../shared/schema/people";
@@ -91,7 +91,6 @@ export class Raci implements ComponentFramework.StandardControl<IInputs, IOutput
     this.applySize(context);
     this.instanceId = str(p.instanceId);
     this.editor.setTheme(readTheme(p));
-    this.editor.setOptions({ roles: parseRoles(p.roles?.raw) });
     this.editor.setPeople(parsePeople(p.peopleJSON?.raw));
     this.editor.setChrome(str(p.cardTitle), p.prompts?.raw ?? "");
 
