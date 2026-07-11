@@ -7,7 +7,12 @@
 
 import { IInputs, IOutputs } from "./generated/ManifestTypes";
 import { ConditionsEditor } from "./editor";
-import { parseConditions, serializeConditions } from "./types";
+import {
+  Granularity,
+  parseConditions,
+  parseConditionsInput,
+  serializeConditions,
+} from "./types";
 import { LoadGate, readTheme, str } from "../../shared/pcf/standard";
 import {
   parseActionsJson,
@@ -107,6 +112,13 @@ export class ConditionsCard implements ComponentFramework.StandardControl<IInput
     this.applySize(context);
     this.instanceId = str(p.instanceId);
     this.editor.setTheme(readTheme(p));
+    const gRaw = p.granularity?.raw as Granularity;
+    const granularity: Granularity =
+      gRaw === "weekday" || gRaw === "week" || gRaw === "shift" ? gRaw : "day";
+    this.editor.setOptions({
+      granularity,
+      conditions: parseConditionsInput(p.conditions?.raw),
+    });
     this.editor.setPeople(parsePeople(p.peopleJSON?.raw));
     this.editor.setChrome(str(p.cardTitle), p.prompts?.raw ?? "");
 

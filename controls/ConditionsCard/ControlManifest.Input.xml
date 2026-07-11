@@ -4,16 +4,35 @@
            constructor="ConditionsCard"
            version="0.1.0"
            display-name-key="Conditions Card"
-           description-key="LeanToolKit conditions card — customisable conditions rated good/issue over a rolling seven days plus a next-shift forecast column. Hold a cell to raise an action."
+           description-key="LeanToolKit conditions card — a set of winning conditions rated good/issue over a rolling window ending today. Granularity picks the grain (day, weekday, week, or two shifts split diagonally). Hold a cell to raise an action."
            control-type="standard">
 
     <!-- Standard LeanToolKit data surface -->
     <property name="inputJSON"
               display-name-key="Input JSON"
-              description-key="Card document to preload: {schema, meta, data:{conditions, ratings, forecast}}. Ratings keyed condition|date."
+              description-key="Card document to preload: {schema, meta, data:{ratings}}. Ratings keyed condition|periodDate (plus |D or |N for shifts)."
               of-type="Multiple"
               usage="input"
               required="false" />
+
+    <property name="conditions"
+              display-name-key="Conditions"
+              description-key="The winning conditions to track, one row each — with an optional prompt shown under each. A JSON object keyed by condition ({&quot;Staffing&quot;:&quot;Crew to plan?&quot;}), a JSON array of strings or {name, prompt} objects, or a plain CSV of names."
+              of-type="Multiple"
+              usage="input"
+              required="false" />
+
+    <property name="granularity"
+              display-name-key="Granularity"
+              description-key="Grain of each column: one per day, weekdays only, whole weeks, or two shifts (day/night) split diagonally in the cell."
+              of-type="Enum"
+              usage="input"
+              default-value="day">
+      <value name="day" display-name-key="Day">day</value>
+      <value name="weekday" display-name-key="Weekday">weekday</value>
+      <value name="week" display-name-key="Week">week</value>
+      <value name="shift" display-name-key="Two shifts">shift</value>
+    </property>
 
     <property name="resetTrigger"
               display-name-key="Reset Trigger"
