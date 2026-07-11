@@ -21,7 +21,7 @@ export const SKILLS_CSS = `
 }
 
 /* ---- headers ---- */
-.ltk-sk-corner { border-bottom: 2px solid var(--ltk-hairline); }
+.ltk-sk-corner { }
 .ltk-sk-personhead {
   display: flex;
   align-items: flex-end;
@@ -30,10 +30,17 @@ export const SKILLS_CSS = `
   font-size: 11.5px;
   font-weight: 700;
   color: var(--ltk-fg);
-  padding: 2px 2px 5px;
+  padding: 2px 2px 6px;
   line-height: 1.15;
-  border-bottom: 2px solid var(--ltk-hairline);
   overflow-wrap: anywhere;
+}
+
+/* continuous full-width horizontal rule (spans all columns) */
+.ltk-sk-rule {
+  grid-column: 1 / -1;
+  height: 2px;
+  background: var(--ltk-hairline);
+  margin: 1px 0 3px;
 }
 
 /* ---- category band ---- */
@@ -67,7 +74,6 @@ export const SKILLS_CSS = `
   justify-content: center;
   gap: 2px;
   padding: 6px 8px 6px 16px;
-  border-right: 2px solid var(--ltk-hairline);
   overflow: hidden;
 }
 .ltk-sk-skillname {
@@ -98,21 +104,20 @@ export const SKILLS_CSS = `
 
 /* ---- final Actions row ---- */
 .ltk-sk-actlabel {
+  display: flex;
+  align-items: center;
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--ltk-muted);
-  padding: 8px 8px 4px 4px;
-  border-right: 2px solid var(--ltk-hairline);
-  border-top: 2px solid var(--ltk-hairline);
+  padding: 4px 8px 4px 16px;
 }
 .ltk-sk-actcell {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding-top: 6px;
-  border-top: 2px solid var(--ltk-hairline);
+  padding-top: 2px;
 }
 .ltk-sk-actbtn {
   min-width: 30px;

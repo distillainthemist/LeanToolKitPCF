@@ -247,11 +247,12 @@ export class SkillsMatrixEditor {
     const grid = el("div", "ltk-sk-grid");
     grid.style.gridTemplateColumns = `${LABEL_COL}px repeat(${people.length}, minmax(60px, 1fr))`;
 
-    // header row: corner + person names
+    // header row: corner + person names, closed by a continuous rule
     grid.appendChild(el("div", "ltk-sk-corner"));
     for (const p of people) {
       grid.appendChild(el("div", "ltk-sk-personhead", p.who));
     }
+    grid.appendChild(el("div", "ltk-sk-rule"));
 
     // categories, each a full-width band header then its skill rows
     for (const cat of cats) {
@@ -264,8 +265,9 @@ export class SkillsMatrixEditor {
       }
     }
 
-    // final Actions row: one button per person column
+    // final Actions row (separated by a continuous rule): a button per person
     if (people.length > 0) {
+      grid.appendChild(el("div", "ltk-sk-rule"));
       grid.appendChild(el("div", "ltk-sk-actlabel", "Actions"));
       for (const p of people) {
         grid.appendChild(this.renderActionCell(p));
