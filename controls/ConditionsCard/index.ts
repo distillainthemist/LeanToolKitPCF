@@ -9,6 +9,7 @@ import { IInputs, IOutputs } from "./generated/ManifestTypes";
 import { ConditionsEditor } from "./editor";
 import {
   Granularity,
+  parseAsOf,
   parseConditions,
   parseConditionsInput,
   serializeConditions,
@@ -118,6 +119,7 @@ export class ConditionsCard implements ComponentFramework.StandardControl<IInput
     this.editor.setOptions({
       granularity,
       conditions: parseConditionsInput(p.conditions?.raw),
+      asOf: parseAsOf(p.asOfDate?.raw),
     });
     this.editor.setPeople(parsePeople(p.peopleJSON?.raw));
     this.editor.setChrome(str(p.cardTitle), p.prompts?.raw ?? "");

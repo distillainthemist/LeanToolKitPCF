@@ -31,6 +31,7 @@ import { CONDITIONS_CSS } from "./styles";
 export interface ConditionsOptions {
   granularity: Granularity;
   conditions: Condition[];
+  asOf?: Date; // the date the window ends on; undefined = today
 }
 
 export interface ConditionsEditorCallbacks {
@@ -55,6 +56,7 @@ export class ConditionsEditor {
     name,
     prompt: "",
   }));
+  private asOf: Date | undefined = undefined;
   private readonly png: SnapshotScheduler;
   private resizeObserver: ResizeObserver | null = null;
 
@@ -90,14 +92,18 @@ export class ConditionsEditor {
   }
 
   setOptions(opts: ConditionsOptions): void {
+    const sameAsOf =
+      (opts.asOf?.getTime() ?? 0) === (this.asOf?.getTime() ?? 0);
     if (
       opts.granularity === this.granularity &&
+      sameAsOf &&
       JSON.stringify(opts.conditions) === JSON.stringify(this.conditions)
     ) {
       return;
     }
     this.granularity = opts.granularity;
     this.conditions = opts.conditions;
+    this.asOf = opts.asOf;
     this.render();
   }
 
@@ -174,7 +180,7 @@ export class ConditionsEditor {
     const body = el("div", "ltk-cn-body");
     this.root.appendChild(body);
 
-    const periods = buildPeriods(this.granularity);
+    const periods = buildPeriods(this.granularity, this.asOf);
     const n = periods.length;
 
     const grid = el("div", "ltk-cn-grid");
@@ -322,7 +328,7 @@ export class ConditionsEditor {
     if (w <= 0 || h <= 0) return;
 
     const GAP = 3;
-    const n = buildPeriods(this.granularity).length;
+    const n = buildPeriods(this.granularity, this.asOf).length;
     const rows = Math.max(1, this.conditions.length);
 
     const availW = w - 24 - LABEL_COL - GAP * n; // body padding + label col + gaps

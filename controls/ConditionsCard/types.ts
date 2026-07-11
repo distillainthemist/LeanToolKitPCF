@@ -157,12 +157,24 @@ function weekStart(d: Date): Date {
 }
 
 /**
- * The seven columns of the rolling window, oldest first and ending on today
- * (or the current week / most recent weekday). The final column is always
- * "today"; there is no forecast column.
+ * Parse the "as of" date input (yyyy-mm-dd). This is the date the rolling
+ * window ends on — leave empty for today, or set it to review a past period
+ * retrospectively. Returns undefined when unset or unparseable (→ today).
  */
-export function buildPeriods(gran: Granularity): Period[] {
-  const today = startOfDay(new Date());
+export function parseAsOf(raw: string | null | undefined): Date | undefined {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec((raw ?? "").trim());
+  if (!m) return undefined;
+  const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  return Number.isNaN(d.getTime()) ? undefined : startOfDay(d);
+}
+
+/**
+ * The seven columns of the rolling window, oldest first and ending on the
+ * anchor date (today by default, or the current week / most recent weekday).
+ * The final column is always the anchor; there is no forecast column.
+ */
+export function buildPeriods(gran: Granularity, anchor?: Date): Period[] {
+  const today = startOfDay(anchor ?? new Date());
   const out: Period[] = [];
 
   if (gran === "week") {

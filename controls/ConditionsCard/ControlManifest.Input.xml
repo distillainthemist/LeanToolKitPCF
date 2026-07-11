@@ -34,6 +34,13 @@
       <value name="shift" display-name-key="Two shifts">shift</value>
     </property>
 
+    <property name="asOfDate"
+              display-name-key="As-of Date"
+              description-key="The date the rolling window ends on (yyyy-mm-dd). Leave empty for today; set it (e.g. Text(SelectedDate,'[$-en-US]yyyy-mm-dd')) to retrospectively review a past period."
+              of-type="SingleLine.Text"
+              usage="input"
+              required="false" />
+
     <property name="resetTrigger"
               display-name-key="Reset Trigger"
               description-key="Reloads the control from Input JSON + Actions Input whenever this value CHANGES (e.g. Set(varReset, Text(Now())))."
