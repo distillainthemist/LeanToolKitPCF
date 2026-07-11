@@ -4,13 +4,45 @@
            constructor="SqdpcCard"
            version="0.1.0"
            display-name-key="SQDPC Card"
-           description-key="LeanToolKit SQDPC / cross capture card — one month of good/issue ratings per dimension letter at day, weekday or two-shift granularity. Hold a cell to raise an action."
+           description-key="LeanToolKit SQDPC card — each dimension's month drawn as its big letter built from day tiles. Tap a tile to cycle the configured status codes; hold to raise an action; two-shift granularity splits tiles diagonally."
            control-type="standard">
 
     <!-- Standard LeanToolKit data surface -->
     <property name="inputJSON"
               display-name-key="Input JSON"
-              description-key="Card document to preload: {schema, meta, data:{month, granularity, dimensions, ratings}}. Ratings keyed dimension|date(|shift)."
+              description-key="Card document to preload: {schema, meta, data:{month, ratings}}. Ratings keyed dimension|date(|D or |N for shifts) holding a status code."
+              of-type="Multiple"
+              usage="input"
+              required="false" />
+
+    <property name="granularity"
+              display-name-key="Granularity"
+              description-key="How each day rates: one rating per day, weekdays only, or two shifts (day/night) per day split diagonally in the tile."
+              of-type="Enum"
+              usage="input"
+              default-value="day">
+      <value name="day" display-name-key="Day">day</value>
+      <value name="weekday" display-name-key="Weekday">weekday</value>
+      <value name="shift2" display-name-key="Two shifts">shift2</value>
+    </property>
+
+    <property name="dimensions"
+              display-name-key="Dimensions"
+              description-key="Which elements to display, CSV or JSON array, e.g. S,Q,D,P,C or a subset. Letters S/Q/D/P/C draw as their letter shape; + draws a safety cross; anything else draws as a captioned block."
+              of-type="SingleLine.Text"
+              usage="input"
+              required="false" />
+
+    <property name="subtitles"
+              display-name-key="Subtitles"
+              description-key="Optional caption shown under each element. JSON object keyed by dimension ({&quot;S&quot;:&quot;Safety&quot;}), or a positional JSON array / CSV parallel to Dimensions."
+              of-type="SingleLine.Text"
+              usage="input"
+              required="false" />
+
+    <property name="statusCodes"
+              display-name-key="Status Codes (JSON)"
+              description-key="Up to four status codes to cycle through: [{code,label,color,icon}]. Default: Good (green ✓) and Issue (red ✕). Icons are emoji/short glyphs shown in rated tiles."
               of-type="Multiple"
               usage="input"
               required="false" />

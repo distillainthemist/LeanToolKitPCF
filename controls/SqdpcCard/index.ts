@@ -7,7 +7,14 @@
 
 import { IInputs, IOutputs } from "./generated/ManifestTypes";
 import { SqdpcEditor } from "./editor";
-import { parseSqdpc, serializeSqdpc } from "./types";
+import {
+  Granularity,
+  parseDimensions,
+  parseSqdpc,
+  parseStatusCodes,
+  parseSubtitles,
+  serializeSqdpc,
+} from "./types";
 import { LoadGate, readTheme, str } from "../../shared/pcf/standard";
 import {
   parseActionsJson,
@@ -107,6 +114,14 @@ export class SqdpcCard implements ComponentFramework.StandardControl<IInputs, IO
     this.applySize(context);
     this.instanceId = str(p.instanceId);
     this.editor.setTheme(readTheme(p));
+    const gRaw = p.granularity?.raw as Granularity;
+    const dimensions = parseDimensions(p.dimensions?.raw);
+    this.editor.setOptions({
+      granularity: gRaw === "weekday" || gRaw === "shift2" ? gRaw : "day",
+      dimensions,
+      subtitles: parseSubtitles(p.subtitles?.raw, dimensions),
+      codes: parseStatusCodes(p.statusCodes?.raw),
+    });
     this.editor.setPeople(parsePeople(p.peopleJSON?.raw));
     this.editor.setChrome(str(p.cardTitle), p.prompts?.raw ?? "");
 
