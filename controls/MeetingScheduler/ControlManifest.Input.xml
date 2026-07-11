@@ -2,49 +2,100 @@
 <manifest>
   <control namespace="BenOBrien"
            constructor="MeetingScheduler"
-           version="0.1.0"
+           version="0.2.0"
            display-name-key="Meeting Scheduler"
-           description-key="LeanToolKit meeting scheduler — recurring meetings (time + days) plus a crew roster pattern (weekday / 2 crews alternating / 4 crews continuous). Generates dated occurrences with the crew on shift, shown in a rolling preview and emitted on Occurrences (JSON)."
+           description-key="LeanToolKit meeting selector — generates the meeting instances for a cadence (annually … shiftly, with crew roster patterns like 2D-2N-5O), matches them to existing meeting records, flags past instances with no record, and emits the tapped row on Selected Meeting (JSON) so OnChange can open or create the record."
            control-type="standard">
 
-    <!-- Standard LeanToolKit data surface -->
-    <property name="inputJSON"
-              display-name-key="Input JSON"
-              description-key="Card document to preload: {schema, meta, data:{meetings:[{id,name,time,durationMin,days}], roster:{pattern,anchor,crews,swingDays}, horizonDays}}."
-              of-type="Multiple"
-              usage="input"
-              required="false" />
-
-    <property name="resetTrigger"
-              display-name-key="Reset Trigger"
-              description-key="Reloads the control from Input JSON whenever this value CHANGES (e.g. Set(varReset, Text(Now())))."
+    <!-- Cadence definition (from the meeting definition record) -->
+    <property name="finalDate"
+              display-name-key="Final Date"
+              description-key="The latest date to show meeting instances for (yyyy-mm-dd). Empty = today. e.g. Text(Today(),&quot;yyyy-mm-dd&quot;)."
               of-type="SingleLine.Text"
               usage="input"
               required="false" />
 
-    <property name="outputJSON"
-              display-name-key="Output JSON"
-              description-key="The edited schedule configuration. Read in OnChange and Patch to Dataverse."
-              of-type="Multiple"
-              usage="output" />
+    <property name="daysPrior"
+              display-name-key="Days Prior"
+              description-key="How many days before Final Date to include (the window size). Default 14."
+              of-type="Whole.None"
+              usage="input"
+              required="false" />
 
-    <property name="occurrencesJSON"
-              display-name-key="Occurrences (JSON)"
-              description-key="The generated meeting occurrences over the horizon: [{date, day, time, iso, meetingId, meeting, durationMin, crew, shift}]. Consume in the app or a Flow for countdowns and reminders."
+    <property name="category"
+              display-name-key="Category"
+              description-key="The meeting cadence. Shiftly generates a day-shift instance at Time Of Day and a night-shift instance 12 hours later."
+              of-type="Enum"
+              usage="input"
+              default-value="daily">
+      <value name="annually" display-name-key="Annually">annually</value>
+      <value name="quarterly" display-name-key="Quarterly">quarterly</value>
+      <value name="monthly" display-name-key="Monthly">monthly</value>
+      <value name="fortnightly" display-name-key="Fortnightly">fortnightly</value>
+      <value name="weekly" display-name-key="Weekly">weekly</value>
+      <value name="daily" display-name-key="Daily">daily</value>
+      <value name="shiftly" display-name-key="Shiftly">shiftly</value>
+    </property>
+
+    <property name="daysOfWeek"
+              display-name-key="Days Of Week"
+              description-key="Which weekdays the meeting occurs (weekly/daily/shiftly): CSV of names or numbers, e.g. Mon,Tue,Wed,Thu,Fri or 1,2,3,4,5. Empty = every day."
+              of-type="SingleLine.Text"
+              usage="input"
+              required="false" />
+
+    <property name="timeOfDay"
+              display-name-key="Time Of Day"
+              description-key="Meeting time, 24h HH:MM (e.g. 07:00). For shiftly this is the day-shift meeting; the night-shift meeting is 12 hours later."
+              of-type="SingleLine.Text"
+              usage="input"
+              required="false" />
+
+    <property name="crewList"
+              display-name-key="Crew List"
+              description-key="Crew names in roster order, CSV or JSON array, e.g. A,B,C,D."
+              of-type="SingleLine.Text"
+              usage="input"
+              required="false" />
+
+    <property name="rosterPattern"
+              display-name-key="Roster Pattern"
+              description-key="The crews' repeating pattern: blocks of Days / Nights / Off, e.g. 2D-2N-5O-2D-3N-4O. Applies to shiftly/daily. Empty = no roster."
+              of-type="SingleLine.Text"
+              usage="input"
+              required="false" />
+
+    <property name="baseStartDate"
+              display-name-key="Base Start Date"
+              description-key="The recurrence anchor (yyyy-mm-dd). For annually/quarterly/monthly the relative weekday (e.g. 1st Monday) is taken from this date. For roster patterns it is the date the FIRST listed crew started its first day shift; each next crew starts days when the previous crew moves onto nights."
+              of-type="SingleLine.Text"
+              usage="input"
+              required="false" />
+
+    <property name="existingMeetingsJSON"
+              display-name-key="Existing Meetings (JSON)"
+              description-key="The already-created meeting records: [{date (or datetime), rescheduledDate?, recordId}]. Instances are matched by date (and shift for shiftly); past instances with no match are flagged as having no record."
+              of-type="Multiple"
+              usage="input"
+              required="false" />
+
+    <property name="selectedMeetingJSON"
+              display-name-key="Selected Meeting (JSON)"
+              description-key="The tapped instance: {iso, date, day, time, crew, shift, recordId, rescheduledTo, status, selectedAt}. recordId is empty when no record exists yet — open or create accordingly in OnChange. selectedAt changes on every tap so OnChange always fires."
               of-type="Multiple"
               usage="output" />
 
     <!-- Self-describing card chrome -->
     <property name="cardTitle"
               display-name-key="Card Title"
-              description-key="Optional title bar. Leave empty for no chrome at all."
+              description-key="Optional title bar (typically the meeting's name). Leave empty for no chrome at all."
               of-type="SingleLine.Text"
               usage="input"
               required="false" />
 
     <property name="prompts"
               display-name-key="Prompts"
-              description-key="Optional coaching prompts: plain text, or JSON array of strings / {field, hint} objects. Shown as empty-state text, an info popover, and field hints."
+              description-key="Optional coaching prompts: plain text, or JSON array of strings / {field, hint} objects. Shown as empty-state text and an info popover."
               of-type="Multiple"
               usage="input"
               required="false" />
@@ -68,7 +119,7 @@
 
     <property name="accentColor"
               display-name-key="Accent Colour"
-              description-key="Accent colour for highlights (today marker, buttons). Default rich black."
+              description-key="Accent colour for the selected row and highlights. Default rich black."
               of-type="SingleLine.Text"
               usage="input"
               required="false"
@@ -91,7 +142,7 @@
 
     <property name="readOnly"
               display-name-key="Read Only"
-              description-key="When true, disables all editing (display mode)."
+              description-key="When true, hides the kebab menu (rows stay selectable — selection is the card's purpose)."
               of-type="TwoOptions"
               usage="input"
               required="false"

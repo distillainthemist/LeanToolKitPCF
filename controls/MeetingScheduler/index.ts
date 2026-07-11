@@ -1,29 +1,35 @@
-// MeetingScheduler PCF lifecycle — standard envelope pattern (no actions
-// channel; this card configures cadence rather than raising work). Alongside
-// outputJSON (the config document), the control emits occurrencesJSON: the
-// generated, dated meeting occurrences over the horizon, with crew + shift —
-// the piece apps and Flows actually consume (next-meeting countdowns,
-// reminders, attendance).
+// MeetingScheduler PCF lifecycle — a selection component. The cadence comes
+// entirely from discrete inputs (fed from the meeting definition record);
+// there is no document. The control generates the instances in the window,
+// matches existingMeetingsJSON, and emits the tapped row on
+// selectedMeetingJSON (stamped selectedAt so OnChange fires on every tap,
+// even re-selecting the same row).
 
 import { IInputs, IOutputs } from "./generated/ManifestTypes";
-import { MeetingSchedulerEditor } from "./editor";
-import { generateOccurrences, parseMeeting, serializeMeeting } from "./types";
-import { LoadGate, readTheme, str } from "../../shared/pcf/standard";
-
-const OUTPUT_DEBOUNCE_MS = 300;
-const ASPECT_RATIO = 1.77;
-const DEFAULT_WIDTH = 720;
+import { MeetingSchedulerView } from "./editor";
+import {
+  generateInstances,
+  MeetingInstance,
+  parseCategory,
+  parseCrews,
+  parseDaysOfWeek,
+  parseExistingMeetings,
+  parseLocalDate,
+  parseRosterPattern,
+  parseTimeOfDay,
+  SchedulerConfig,
+  startOfDay,
+} from "./types";
+import { readTheme, str } from "../../shared/pcf/standard";
+import { nowIso } from "../../shared/schema/id";
 
 export class MeetingScheduler implements ComponentFramework.StandardControl<IInputs, IOutputs> {
   private container!: HTMLDivElement;
-  private editor!: MeetingSchedulerEditor;
+  private view!: MeetingSchedulerView;
   private notifyOutputChanged!: () => void;
-  private readonly gate = new LoadGate();
 
-  private outputJson = "";
-  private occurrencesJson = "";
+  private selectedJson = "";
   private pngDataUri = "";
-  private outputTimer: ReturnType<typeof setTimeout> | null = null;
 
   public init(
     context: ComponentFramework.Context<IInputs>,
@@ -38,13 +44,10 @@ export class MeetingScheduler implements ComponentFramework.StandardControl<IInp
       context.mode.trackContainerResize(true);
     }
 
-    this.editor = new MeetingSchedulerEditor(container, {
-      onChange: (env) => {
-        this.outputJson = serializeMeeting(env);
-        this.occurrencesJson = JSON.stringify(generateOccurrences(env.data));
-        this.gate.recordEmitted(this.outputJson, "");
-        if (this.outputTimer) clearTimeout(this.outputTimer);
-        this.outputTimer = setTimeout(() => this.notifyOutputChanged(), OUTPUT_DEBOUNCE_MS);
+    this.view = new MeetingSchedulerView(container, {
+      onSelect: (instance: MeetingInstance) => {
+        this.selectedJson = JSON.stringify({ ...instance, selectedAt: nowIso() });
+        this.notifyOutputChanged();
       },
       onPngReady: (dataUri) => {
         this.pngDataUri = dataUri;
@@ -61,15 +64,13 @@ export class MeetingScheduler implements ComponentFramework.StandardControl<IInp
 
   public getOutputs(): IOutputs {
     return {
-      outputJSON: this.outputJson,
-      occurrencesJSON: this.occurrencesJson,
+      selectedMeetingJSON: this.selectedJson,
       pngExport: this.pngDataUri,
     };
   }
 
   public destroy(): void {
-    if (this.outputTimer) clearTimeout(this.outputTimer);
-    if (this.editor) this.editor.destroy();
+    if (this.view) this.view.destroy();
   }
 
   private applySize(context: ComponentFramework.Context<IInputs>): void {
@@ -79,31 +80,42 @@ export class MeetingScheduler implements ComponentFramework.StandardControl<IInp
     if (h > 0) {
       this.container.style.height = `${h}px`;
     } else {
-      const width = w > 0 ? w : this.container.clientWidth || DEFAULT_WIDTH;
-      this.container.style.height = `${Math.round(width / ASPECT_RATIO)}px`;
+      const width = w > 0 ? w : this.container.clientWidth || 640;
+      this.container.style.height = `${Math.round(width / 1.77)}px`;
     }
+  }
+
+  private readConfig(context: ComponentFramework.Context<IInputs>): SchedulerConfig {
+    const p = context.parameters;
+    const today = startOfDay(new Date());
+    const daysPrior = Number(p.daysPrior?.raw);
+    return {
+      finalDate: parseLocalDate(p.finalDate?.raw) ?? today,
+      daysPrior:
+        Number.isFinite(daysPrior) && daysPrior >= 0
+          ? Math.min(400, Math.round(daysPrior))
+          : 14,
+      category: parseCategory(p.category?.raw),
+      daysOfWeek: parseDaysOfWeek(p.daysOfWeek?.raw),
+      timeOfDay: parseTimeOfDay(p.timeOfDay?.raw),
+      crews: parseCrews(p.crewList?.raw),
+      roster: parseRosterPattern(p.rosterPattern?.raw),
+      baseStart: parseLocalDate(p.baseStartDate?.raw) ?? today,
+    };
   }
 
   private applyAll(context: ComponentFramework.Context<IInputs>): void {
     const p = context.parameters;
 
     this.applySize(context);
-    this.editor.setTheme(readTheme(p));
-    this.editor.setChrome(str(p.cardTitle), p.prompts?.raw ?? "");
+    this.view.setTheme(readTheme(p));
+    this.view.setChrome(str(p.cardTitle), p.prompts?.raw ?? "");
 
     const disabled = context.mode.isControlDisabled === true;
-    this.editor.setReadOnly(disabled || p.readOnly?.raw === true);
+    this.view.setReadOnly(disabled || p.readOnly?.raw === true);
 
-    if (this.gate.shouldReload(p)) {
-      const { envelope } = parseMeeting(p.inputJSON?.raw);
-      const doc = serializeMeeting(envelope);
-      if (doc !== this.outputJson) {
-        this.outputJson = doc;
-        this.occurrencesJson = JSON.stringify(generateOccurrences(envelope.data));
-        this.gate.recordEmitted(doc, "");
-        this.editor.setEnvelope(envelope);
-        this.notifyOutputChanged();
-      }
-    }
+    const cfg = this.readConfig(context);
+    const existing = parseExistingMeetings(p.existingMeetingsJSON?.raw);
+    this.view.setInstances(generateInstances(cfg, existing, new Date()), cfg.crews);
   }
 }
