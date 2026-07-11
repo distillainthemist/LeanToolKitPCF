@@ -11,6 +11,7 @@ export interface NodeBox {
   labelInside: boolean;
   labelY: number; // baseline y for the label
   labelChars: number; // wrap width in characters
+  labelLines?: number; // max wrapped lines (default 3)
 }
 
 /** Geometry per node kind. Connector anchors are (x ± hw, y) and (x, y ± ht). */
@@ -39,6 +40,8 @@ export function nodeBox(kind: NodeKind): NodeBox {
       return { hw: 55, ht: 25, labelInside: true, labelY: -4, labelChars: 12 };
     case "kaizen":
       return { hw: 62, ht: 32, labelInside: true, labelY: 4, labelChars: 12 };
+    case "note":
+      return { hw: 55, ht: 48, labelInside: true, labelY: 4, labelChars: 16, labelLines: 5 };
   }
 }
 
@@ -158,6 +161,26 @@ export function buildSymbol(node: Pick<PmNode, "kind" | "color" | "metrics">): S
     case "kaizen":
       g.appendChild(shape("path", { d: KAIZEN_PATH }, color));
       break;
+    case "note": {
+      // post-it: square with a folded bottom-right corner
+      const fold = 16;
+      g.appendChild(
+        shape(
+          "path",
+          {
+            d: `M -55 -48 L 55 -48 L 55 ${48 - fold} L ${55 - fold} 48 L -55 48 Z`,
+          },
+          color
+        )
+      );
+      g.appendChild(
+        el("path", {
+          d: `M 55 ${48 - fold} L ${55 - fold} ${48 - fold} L ${55 - fold} 48 Z`,
+          class: "pm-note-fold",
+        })
+      );
+      break;
+    }
   }
   return g;
 }
@@ -167,10 +190,11 @@ export function buildLabel(
   text: string,
   y: number,
   maxChars: number,
+  maxLines = 3,
   cls = "pm-label"
 ): SVGTextElement {
   const t = el("text", { class: cls, x: 0, y, "text-anchor": "middle" }) as SVGTextElement;
-  const lines = wrap(text, maxChars, 3);
+  const lines = wrap(text, maxChars, maxLines);
   if (lines.length === 1) {
     t.textContent = lines[0];
   } else {

@@ -85,6 +85,7 @@ export class ProcessMap implements ComponentFramework.StandardControl<IInputs, I
     this.editorHost.style.cssText = "flex:1 1 auto; min-height:0; position:relative;";
 
     this.editor = new ProcessMapEditor(this.editorHost, {
+      dialogHost: this.root,
       onChange: (model) => this.absorbModel(model),
       onPngReady: (dataUri, svgMarkup) => {
         this.pngDataUri = dataUri;
@@ -130,10 +131,15 @@ export class ProcessMap implements ComponentFramework.StandardControl<IInputs, I
     applyThemeVars(this.root, this.theme);
     renderTitleBar(this.root, this.cardTitle, this.prompts);
     if (!this.readOnly) {
-      renderKebab(this.root, [
+      const items = [];
+      if (this.env.data.mode === "vsm") {
+        items.push({ label: "Toggle timeline", onClick: () => this.editor.toggleTimeline() });
+      }
+      items.push(
         { label: "Download PNG", onClick: () => this.editor.exportPng() },
-        { label: "Download SVG", onClick: () => this.editor.exportSvg() },
-      ]);
+        { label: "Download SVG", onClick: () => this.editor.exportSvg() }
+      );
+      renderKebab(this.root, items);
     }
     this.root.appendChild(this.editorHost);
   }
@@ -269,11 +275,12 @@ export class ProcessMap implements ComponentFramework.StandardControl<IInputs, I
     };
   }
 
-  private defaultMode(
+  /** The configured map type — a maker setting; there is no in-card selector. */
+  private mapMode(
     context: ComponentFramework.Context<IInputs>,
     s: LtkSettings
   ): MapMode {
-    const raw = enumOr(cfg(s, "defaultMode"), context.parameters.defaultMode);
+    const raw = enumOr(cfg(s, "mapType"), context.parameters.mapType);
     return raw === "swimlane" || raw === "sipoc" || raw === "vsm" ? raw : "simple";
   }
 
@@ -284,28 +291,16 @@ export class ProcessMap implements ComponentFramework.StandardControl<IInputs, I
     this.instanceId = str(p.instanceId, cfg(s, "instanceId"));
     this.theme = readTheme(p, s);
     this.people = parsePeople(rawOr(p.peopleJSON, cfg(s, "peopleJSON")));
-
-    const chromeKey =
-      str(p.cardTitle, s.title) + " " + (rawOr(p.prompts, s.promptsRaw)) + " " +
-      String(p.readOnly?.raw === true || s.readOnly) + " " + JSON.stringify(this.theme);
-    if (chromeKey !== this.lastChromeKey) {
-      this.lastChromeKey = chromeKey;
-      this.cardTitle = str(p.cardTitle, s.title);
-      this.prompts = parsePrompts(rawOr(p.prompts, s.promptsRaw));
-      this.readOnly =
-        context.mode.isControlDisabled === true || p.readOnly?.raw === true || s.readOnly;
-      this.renderChrome();
-    }
+    this.readOnly =
+      context.mode.isControlDisabled === true || p.readOnly?.raw === true || s.readOnly;
 
     this.editor.setStyle(this.toStyle());
     this.editor.setReadOnly(this.readOnly);
     this.applySize(context);
 
+    const mode = this.mapMode(context, s);
     if (this.gate.shouldReload(p)) {
-      const { envelope, embeddedActions } = parseProcessMap(
-        p.inputJSON?.raw,
-        this.defaultMode(context, s)
-      );
+      const { envelope, embeddedActions } = parseProcessMap(p.inputJSON?.raw, mode);
       const external = parseActionsJson(p.actionsInputJSON?.raw);
       const actions = external.length > 0 ? external : embeddedActions;
 
@@ -320,6 +315,18 @@ export class ProcessMap implements ComponentFramework.StandardControl<IInputs, I
         this.editor.setModel(envelope.data);
         this.notifyOutputChanged();
       }
+    }
+    // the map type is a setting: enforce it over whatever the document stored
+    if (this.env.data.mode !== mode) this.editor.setMode(mode);
+
+    const chromeKey =
+      str(p.cardTitle, s.title) + " " + (rawOr(p.prompts, s.promptsRaw)) + " " +
+      String(this.readOnly) + " " + this.env.data.mode + " " + JSON.stringify(this.theme);
+    if (chromeKey !== this.lastChromeKey) {
+      this.lastChromeKey = chromeKey;
+      this.cardTitle = str(p.cardTitle, s.title);
+      this.prompts = parsePrompts(rawOr(p.prompts, s.promptsRaw));
+      this.renderChrome();
     }
   }
 }

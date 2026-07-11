@@ -49,40 +49,32 @@ export const PROCESS_MAP_CSS = `
 /* ---------- main column ---------- */
 .pm-main { flex: 1 1 auto; display: flex; flex-direction: column; min-width: 0; }
 
-/* ---------- toolbar ---------- */
-.pm-toolbar {
-  flex: 0 0 auto;
+/* ---------- floating zoom cluster (bottom-right of the stage) ---------- */
+.pm-zoom {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
   display: flex;
-  align-items: center;
   gap: 4px;
-  padding: 5px 8px;
-  border-bottom: 1px solid var(--ltk-hairline);
-  flex-wrap: wrap;
+  z-index: 5;
 }
-.pm-btn {
-  padding: 3px 10px;
+.pm-zbtn {
+  width: 26px;
+  height: 26px;
+  padding: 0;
   border: 1px solid var(--ltk-hairline);
-  border-radius: 4px;
+  border-radius: 6px;
   background: var(--ltk-bg);
-  font-size: 11px;
+  color: var(--ltk-fg);
+  font-size: 13px;
   font-family: inherit;
   cursor: pointer;
-  color: var(--ltk-fg);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   transition: border-color 120ms ease;
 }
-.pm-btn:hover { border-color: var(--ltk-accent); }
-.pm-select {
-  padding: 3px 4px;
-  border: 1px solid var(--ltk-hairline);
-  border-radius: 4px;
-  background: var(--ltk-bg);
-  font-size: 11px;
-  font-family: inherit;
-  color: var(--ltk-fg);
-}
-.pm-spacer { flex: 1 1 auto; }
-.pm-readonly .pm-btn.pm-edit-only { opacity: 0.45; pointer-events: none; }
-.pm-readonly .pm-mode { pointer-events: none; opacity: 0.7; }
+.pm-zbtn:hover { border-color: var(--ltk-accent); }
 
 /* ---------- stage / svg ---------- */
 .pm-stage { flex: 1 1 auto; position: relative; overflow: hidden; }
@@ -124,6 +116,8 @@ export const PROCESS_MAP_CSS = `
 .kind-decision .pm-shape { fill: #fffbe6; }
 .kind-card .pm-shape { fill: #f7f9fc; }
 .kind-kaizen .pm-shape { fill: #fff2b8; stroke: #b8860b; }
+.kind-note .pm-shape { fill: #fef3ad; stroke: #d8c356; }
+.pm-note-fold { fill: rgba(0, 0, 0, 0.10); stroke: none; pointer-events: none; }
 .pm-databox { fill: var(--ltk-bg); stroke: var(--ltk-fg); stroke-width: 1.2; }
 .pm-databox-line { stroke: var(--ltk-hairline); stroke-width: 1; }
 .pm-metric { fill: var(--ltk-fg); font-size: 9px; font-family: inherit; pointer-events: none; }
@@ -143,8 +137,22 @@ export const PROCESS_MAP_CSS = `
   text-anchor: middle;
   pointer-events: none;
 }
-.pm-swim-head { cursor: text; }
+.pm-swim-head { cursor: pointer; }
 .pm-readonly .pm-swim-head { cursor: default; }
+.pm-lane-add {
+  fill: transparent;
+  stroke: var(--ltk-hairline);
+  stroke-dasharray: 4 3;
+  cursor: pointer;
+}
+.pm-lane-add:hover { stroke: var(--ltk-accent); }
+.pm-lane-add-cap {
+  fill: var(--ltk-muted);
+  font-size: 11px;
+  font-family: inherit;
+  text-anchor: middle;
+  pointer-events: none;
+}
 
 /* ---------- edges ---------- */
 .pm-edge { fill: none; stroke: var(--ltk-fg); stroke-width: 1.8; pointer-events: none; }
@@ -184,60 +192,11 @@ export const PROCESS_MAP_CSS = `
 }
 .pm-ghost.pm-ghost-ok { opacity: 0.95; filter: none; }
 
-/* ---------- inline label editor ---------- */
-.pm-label-input {
-  position: absolute;
-  width: 150px;
-  padding: 3px 6px;
-  border: 1px solid var(--ltk-accent);
-  border-radius: 3px;
-  font-size: 11px;
-  font-family: inherit;
-  z-index: 20;
-  text-align: center;
-  background: var(--ltk-bg);
-  color: var(--ltk-fg);
-}
-
-/* ---------- properties panel ---------- */
-.pm-props {
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  width: 210px;
-  background: var(--ltk-bg);
-  border: 1px solid var(--ltk-hairline);
-  border-radius: 6px;
-  box-shadow: 0 2px 10px rgba(0,0,0,0.14);
-  padding: 8px 10px 10px;
-  z-index: 10;
-}
-.pm-props-head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  font-weight: 600;
-  font-size: 12px;
-  margin-bottom: 6px;
-}
-.pm-props-kind { font-weight: 400; font-size: 10px; color: var(--ltk-muted); }
-.pm-props-row { display: flex; align-items: center; gap: 6px; margin-top: 6px; }
-.pm-props-row > label { flex: 0 0 52px; font-size: 10px; color: var(--ltk-muted); }
-.pm-props-input, .pm-props-select {
-  flex: 1 1 auto;
-  min-width: 0;
-  padding: 3px 6px;
-  border: 1px solid var(--ltk-hairline);
-  border-radius: 3px;
-  font-size: 11px;
-  font-family: inherit;
-  background: var(--ltk-bg);
-  color: var(--ltk-fg);
-}
-.pm-swatches { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+/* ---------- edit-dialog extras (colour swatches, kaizen actions) ---------- */
+.pm-swatches { display: flex; flex-wrap: wrap; gap: 6px; }
 .pm-swatch {
-  width: 20px;
-  height: 20px;
+  width: 22px;
+  height: 22px;
   border: 1px solid var(--ltk-hairline);
   border-radius: 4px;
   cursor: pointer;
@@ -245,36 +204,26 @@ export const PROCESS_MAP_CSS = `
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 10px;
+  font-size: 11px;
   color: var(--ltk-muted);
   background: var(--ltk-bg);
 }
 .pm-swatch:hover { border-color: var(--ltk-accent); }
 .pm-swatch.pm-swatch-on { border: 2px solid var(--ltk-accent); }
-.pm-props-actions {
+.pm-swatch-custom { width: 28px; }
+.pm-dlg-actions {
   margin-top: 10px;
   width: 100%;
-  padding: 4px 0;
+  padding: 6px 0;
   border: 1px solid var(--ltk-hairline);
   border-radius: 4px;
   background: var(--ltk-bg);
   color: var(--ltk-fg);
-  font-size: 11px;
+  font-size: 12px;
   font-family: inherit;
   cursor: pointer;
+  transition: border-color 120ms ease;
 }
-.pm-props-actions:hover { border-color: var(--ltk-accent); }
-.pm-props-del {
-  margin-top: 8px;
-  width: 100%;
-  padding: 4px 0;
-  border: 1px solid #d4a0a5;
-  border-radius: 4px;
-  background: #fff5f5;
-  color: #a02832;
-  font-size: 11px;
-  font-family: inherit;
-  cursor: pointer;
-}
-.pm-props-del:hover { background: #fde7e9; }
+.pm-dlg-actions:hover { border-color: var(--ltk-accent); }
+.pm-dlg-note { margin-top: 8px; font-size: 11px; color: #a02832; }
 `;

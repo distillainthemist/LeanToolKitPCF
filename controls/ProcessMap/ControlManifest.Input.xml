@@ -4,7 +4,7 @@
            constructor="ProcessMap"
            version="0.1.0"
            display-name-key="Process Map"
-           description-key="LeanToolKit process map — simple flowchart, swimlane map, SIPOC and value stream map in one control. Palette drag-and-drop, connectors, pan/zoom, colour coding, VSM data boxes + lead-time ladder; kaizen bursts raise actions."
+           description-key="LeanToolKit process map — simple flowchart, swimlane map, SIPOC or value stream map (set via Map Type). Palette drag-and-drop, connectors, post-it notes, pan/zoom, colour coding, VSM data boxes + lead-time ladder; kaizen bursts raise actions."
            control-type="standard">
 
     <!-- Standard LeanToolKit data surface -->
@@ -15,9 +15,9 @@
               usage="input"
               required="false" />
 
-    <property name="defaultMode"
-              display-name-key="Default Map Type"
-              description-key="Map type used when the document doesn't specify one (new maps)."
+    <property name="mapType"
+              display-name-key="Map Type"
+              description-key="The map type this control shows: simple flowchart, swimlane, SIPOC or value stream map. A maker setting (no in-card selector); overrides the mode stored in the document. Settings key: mapType."
               of-type="Enum"
               usage="input"
               default-value="simple">

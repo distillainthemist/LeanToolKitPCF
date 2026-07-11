@@ -9,7 +9,6 @@ import {
   PmNode,
   PmEdge,
   MapMode,
-  MODES,
   NodeKind,
   EdgeKind,
   EDGE_KINDS,
@@ -23,6 +22,7 @@ import {
 } from "./types";
 import { SVG_NS, nodeBox, buildSymbol, buildLabel } from "./shapes";
 import { textOn } from "../../shared/tokens";
+import { fieldRow, openDialog, selectInput, textInput } from "../../shared/ui/dialog";
 import { PROCESS_MAP_CSS } from "./styles";
 
 interface Viewport {
@@ -59,6 +59,8 @@ export interface EditorOptions {
   onManageActions?: (nodeId: string) => void;
   /** Open-action count shown as a badge on kaizen bursts. */
   getActionBadge?: (nodeId: string) => number;
+  /** Host for edit dialogs — the wrapper's card root, so overlays cover the whole card. */
+  dialogHost?: HTMLElement;
 }
 
 const MIN_SCALE = 0.3;
@@ -80,11 +82,6 @@ const SWIM_MIN_W = 900;
 export class ProcessMapEditor {
   private root: HTMLDivElement;
   private palette!: HTMLDivElement;
-  private toolbar!: HTMLDivElement;
-  private modeSelect!: HTMLSelectElement;
-  private timelineBtn!: HTMLButtonElement;
-  private addLaneBtn!: HTMLButtonElement;
-  private rmLaneBtn!: HTMLButtonElement;
   private stage!: HTMLDivElement;
   private svg!: SVGSVGElement;
   private defs!: SVGDefsElement;
@@ -96,20 +93,7 @@ export class ProcessMapEditor {
   private overlay!: SVGGElement;
   private hint!: HTMLDivElement;
   private roBadge!: HTMLDivElement;
-
-  // properties panel
-  private props!: HTMLDivElement;
-  private propKind!: HTMLSpanElement;
-  private propLabel!: HTMLInputElement;
-  private propDetailRow!: HTMLDivElement;
-  private propDetail!: HTMLInputElement;
-  private propTypeRow!: HTMLDivElement;
-  private propType!: HTMLSelectElement;
-  private propColorRow!: HTMLDivElement;
-  private propSwatches!: HTMLDivElement;
-  private propCustomColor!: HTMLInputElement;
-  private propActionsBtn!: HTMLButtonElement;
-  private metricRows: { key: keyof PmMetrics; row: HTMLDivElement; input: HTMLInputElement }[] = [];
+  private dlgHost?: HTMLElement;
 
   private model: PmModel = emptyModel();
   private view: Viewport = { tx: 60, ty: 40, scale: 1 };
@@ -124,11 +108,17 @@ export class ProcessMapEditor {
   private uid = newId("pm");
 
   // interaction state
-  private dragNode: { id: string; offX: number; offY: number; moved: boolean } | null = null;
+  private dragNode: {
+    id: string;
+    offX: number;
+    offY: number;
+    moved: boolean;
+    sx: number; // pointerdown screen position, for the tap threshold
+    sy: number;
+  } | null = null;
   private panning: { sx: number; sy: number; tx: number; ty: number } | null = null;
   private connecting: { from: string; line: SVGLineElement } | null = null;
   private spawning: { kind: NodeKind; defaultLabel: string; ghost: HTMLDivElement } | null = null;
-  private labelInput: HTMLInputElement | null = null;
 
   // bound handlers so we can remove them on destroy
   private onWinMove = (e: PointerEvent) => this.handleWindowMove(e);
@@ -140,6 +130,7 @@ export class ProcessMapEditor {
     this.onPngReady = opts.onPngReady;
     this.onManageActions = opts.onManageActions;
     this.getActionBadge = opts.getActionBadge;
+    this.dlgHost = opts.dialogHost;
     this.root = document.createElement("div");
     this.root.className = "pm-root";
     const styleEl = document.createElement("style");
@@ -172,8 +163,14 @@ export class ProcessMapEditor {
     this.readOnly = ro;
     this.root.classList.toggle("pm-readonly", ro);
     this.roBadge.style.display = ro ? "block" : "none";
-    this.modeSelect.disabled = ro;
     this.render();
+  }
+
+  /** Toggle the VSM lead-time ladder (kebab menu item on the wrapper). */
+  toggleTimeline(): void {
+    this.model.showTimeline = !this.model.showTimeline;
+    this.render();
+    this.commit();
   }
 
   setStyle(style: StyleConfig): void {
@@ -204,48 +201,6 @@ export class ProcessMapEditor {
     this.palette = document.createElement("div");
     this.palette.className = "pm-palette";
     this.renderPalette();
-
-    // toolbar
-    this.toolbar = document.createElement("div");
-    this.toolbar.className = "pm-toolbar";
-
-    this.modeSelect = document.createElement("select");
-    this.modeSelect.className = "pm-select pm-mode";
-    this.modeSelect.title = "Map type";
-    for (const m of MODES) {
-      const opt = document.createElement("option");
-      opt.value = m.mode;
-      opt.textContent = m.title;
-      this.modeSelect.appendChild(opt);
-    }
-    this.modeSelect.addEventListener("change", () => {
-      this.setMode(this.modeSelect.value as MapMode);
-    });
-    this.toolbar.appendChild(this.modeSelect);
-
-    this.toolbar.appendChild(
-      this.makeButton("Delete", "Delete selected (Del)", () => this.deleteSelection())
-    );
-    this.timelineBtn = this.makeButton(
-      "Timeline",
-      "Toggle the lead-time ladder under the map",
-      () => {
-        this.model.showTimeline = !this.model.showTimeline;
-        this.render();
-        this.commit();
-      }
-    );
-    this.toolbar.appendChild(this.timelineBtn);
-    this.addLaneBtn = this.makeButton("＋ Lane", "Add a swimlane", () => this.addLane());
-    this.rmLaneBtn = this.makeButton("− Lane", "Remove the last (empty) swimlane", () =>
-      this.removeLane()
-    );
-    this.toolbar.appendChild(this.addLaneBtn);
-    this.toolbar.appendChild(this.rmLaneBtn);
-    this.toolbar.appendChild(this.makeSpacer());
-    this.toolbar.appendChild(this.makeButton("Zoom +", "Zoom in", () => this.zoomBy(1.2), true));
-    this.toolbar.appendChild(this.makeButton("Zoom −", "Zoom out", () => this.zoomBy(1 / 1.2), true));
-    this.toolbar.appendChild(this.makeButton("Fit", "Fit / reset view", () => this.fitView(), true));
 
     // stage + svg
     this.stage = document.createElement("div");
@@ -285,11 +240,16 @@ export class ProcessMapEditor {
     this.roBadge.style.display = "none";
     this.stage.appendChild(this.roBadge);
 
-    this.buildPropsPanel();
+    // quiet floating zoom cluster, bottom-right of the stage
+    const zoom = document.createElement("div");
+    zoom.className = "pm-zoom";
+    zoom.appendChild(this.makeZoomBtn("＋", "Zoom in", () => this.zoomBy(1.2)));
+    zoom.appendChild(this.makeZoomBtn("−", "Zoom out", () => this.zoomBy(1 / 1.2)));
+    zoom.appendChild(this.makeZoomBtn("⤢", "Fit / reset view", () => this.fitView()));
+    this.stage.appendChild(zoom);
 
     const main = document.createElement("div");
     main.className = "pm-main";
-    main.appendChild(this.toolbar);
     main.appendChild(this.stage);
 
     this.root.appendChild(this.palette);
@@ -313,28 +273,17 @@ export class ProcessMapEditor {
     }
   }
 
-  private makeButton(
-    text: string,
-    title: string,
-    onClick: () => void,
-    allowReadOnly = false
-  ): HTMLButtonElement {
+  private makeZoomBtn(text: string, title: string, onClick: () => void): HTMLButtonElement {
     const b = document.createElement("button");
-    b.className = "pm-btn" + (allowReadOnly ? "" : " pm-edit-only");
+    b.className = "pm-zbtn";
     b.type = "button";
     b.textContent = text;
     b.title = title;
     b.addEventListener("click", (e) => {
       e.preventDefault();
-      if (allowReadOnly || !this.readOnly) onClick();
+      onClick();
     });
     return b;
-  }
-
-  private makeSpacer(): HTMLSpanElement {
-    const s = document.createElement("span");
-    s.className = "pm-spacer";
-    return s;
   }
 
   private miniSymbol(kind: NodeKind): SVGSVGElement {
@@ -412,7 +361,12 @@ export class ProcessMapEditor {
 
   // ---------- mode ----------
 
-  private setMode(mode: MapMode): void {
+  /**
+   * Apply the configured map type (a maker setting on the wrapper — there is
+   * no in-card selector). Migrates node positions on entry into SIPOC or
+   * swimlane mode and commits the changed document.
+   */
+  setMode(mode: MapMode): void {
     if (this.model.mode === mode) return;
     this.model.mode = mode;
     if (mode === "sipoc") {
@@ -429,21 +383,16 @@ export class ProcessMapEditor {
     this.commit();
   }
 
-  /** Reflect the current mode in palette, toolbar and hint. */
+  /** Reflect the current mode in the palette and empty-state hint. */
   private syncModeUi(): void {
-    this.modeSelect.value = this.model.mode;
     this.renderPalette();
-    this.timelineBtn.style.display = this.model.mode === "vsm" ? "" : "none";
-    const swim = this.model.mode === "swimlane";
-    this.addLaneBtn.style.display = swim ? "" : "none";
-    this.rmLaneBtn.style.display = swim ? "" : "none";
     this.hint.textContent =
       this.model.mode === "sipoc"
         ? "Drag cards from the palette into the SIPOC columns."
         : this.model.mode === "vsm"
           ? "Drag value-stream symbols onto the canvas, then join them with the handles."
-          : swim
-            ? "Drag shapes into the lanes, join steps with the handles. Double-tap a lane header to rename it."
+          : this.model.mode === "swimlane"
+            ? "Drag shapes into the lanes, join steps with the handles. Tap a lane header to rename it."
             : "Drag a shape from the palette onto the canvas, then join steps with the handles.";
   }
 
@@ -460,6 +409,7 @@ export class ProcessMapEditor {
   /** First entry into swimlane mode: band nodes by y and tuck them inside. */
   private assignSwimlanesFromPositions(): void {
     for (const n of this.model.nodes) {
+      if (n.kind === "note") continue; // notes float free of the lanes
       const lane = this.swimLaneFromY(n.y);
       n.lane = lane;
       const b = nodeBox(n.kind);
@@ -485,27 +435,30 @@ export class ProcessMapEditor {
     this.commit();
   }
 
-  private removeLane(): void {
-    if (this.model.mode !== "swimlane") return;
-    if (this.model.lanes.length <= 1) return;
-    const last = this.model.lanes.length - 1;
-    const occupied = this.model.nodes.some(
-      (n) => (n.lane ?? this.swimLaneFromY(n.y)) === last
-    );
-    if (occupied) {
-      this.hint.textContent = "Move the shapes out of the last lane before removing it.";
-      this.hint.style.display = "block";
-      setTimeout(() => this.render(), 1600);
-      return;
+  /** Delete a lane (any index) if nothing sits in it; lanes below shift up. */
+  private removeLaneAt(index: number): boolean {
+    if (this.model.mode !== "swimlane") return false;
+    if (this.model.lanes.length <= 1) return false;
+    const laneOf = (n: PmNode) => n.lane ?? this.swimLaneFromY(n.y);
+    if (this.model.nodes.some((n) => laneOf(n) === index)) return false;
+    this.model.lanes.splice(index, 1);
+    for (const n of this.model.nodes) {
+      const l = laneOf(n);
+      if (l > index) {
+        n.y -= SWIM_LANE_H;
+        if (n.lane !== undefined) n.lane = l - 1;
+      }
     }
-    this.model.lanes.pop();
     this.render();
     this.commit();
+    return true;
   }
 
   /** First entry into SIPOC: spread existing nodes over the five columns by x. */
   private assignLanesFromPositions(): void {
-    const unassigned = this.model.nodes.filter((n) => n.lane === undefined);
+    const unassigned = this.model.nodes.filter(
+      (n) => n.kind !== "note" && n.lane === undefined
+    );
     if (unassigned.length === 0) return;
     let minX = Infinity;
     let maxX = -Infinity;
@@ -530,7 +483,12 @@ export class ProcessMapEditor {
   private relayoutSipoc(skipId?: string): void {
     for (let lane = 0; lane < 5; lane++) {
       const cards = this.model.nodes
-        .filter((n) => (n.lane ?? this.laneFromX(n.x)) === lane && n.id !== skipId)
+        .filter(
+          (n) =>
+            n.kind !== "note" && // notes float free of the columns
+            (n.lane ?? this.laneFromX(n.x)) === lane &&
+            n.id !== skipId
+        )
         .sort((a, b) => a.y - b.y);
       let cursor = LANE_STACK_TOP;
       for (const n of cards) {
@@ -564,7 +522,6 @@ export class ProcessMapEditor {
     this.renderEdges();
     this.renderNodes();
     this.renderTimeline();
-    this.updateProps();
   }
 
   private clear(layer: SVGGElement): void {
@@ -648,22 +605,39 @@ export class ProcessMapEditor {
       this.laneLayer.appendChild(head);
 
       if (!this.readOnly) {
-        const rename = (ev: Event) => {
+        const open = (ev: Event) => {
           ev.stopPropagation();
-          this.beginLaneRename(i, hy);
+          this.openLaneDialog(i);
         };
-        band.addEventListener("dblclick", rename);
+        const still = (ev: Event) => ev.stopPropagation(); // don't start a pan
+        band.addEventListener("pointerdown", still);
+        band.addEventListener("click", open);
         head.style.pointerEvents = "auto";
-        head.addEventListener("dblclick", rename);
+        head.addEventListener("pointerdown", still);
+        head.addEventListener("click", open);
       }
     });
-  }
 
-  private beginLaneRename(index: number, worldY: number): void {
-    this.showLabelInput(90, worldY, this.model.lanes[index], (value) => {
-      const v = value.trim();
-      if (v !== "") this.model.lanes[index] = v;
-    });
+    // ghost "add lane" strip under the last lane (toolkit add-affordance)
+    if (!this.readOnly && this.model.lanes.length < 12) {
+      const y = this.model.lanes.length * SWIM_LANE_H + 8;
+      const strip = document.createElementNS(SVG_NS, "rect");
+      strip.setAttribute("class", "pm-lane-add");
+      strip.setAttribute("x", String(-SWIM_HEAD_W));
+      strip.setAttribute("y", String(y));
+      strip.setAttribute("width", String(w + SWIM_HEAD_W));
+      strip.setAttribute("height", "26");
+      strip.setAttribute("rx", "6");
+      strip.addEventListener("pointerdown", (ev) => ev.stopPropagation());
+      strip.addEventListener("click", () => this.addLane());
+      this.laneLayer.appendChild(strip);
+      const cap = document.createElementNS(SVG_NS, "text");
+      cap.setAttribute("class", "pm-lane-add-cap");
+      cap.setAttribute("x", String((w - SWIM_HEAD_W) / 2));
+      cap.setAttribute("y", String(y + 17));
+      cap.textContent = "＋ Add lane";
+      this.laneLayer.appendChild(cap);
+    }
   }
 
   private renderEdges(): void {
@@ -700,10 +674,17 @@ export class ProcessMapEditor {
       hit.addEventListener("pointerdown", (ev) => {
         ev.stopPropagation();
         this.select({ type: "edge", id: e.id });
-      });
-      hit.addEventListener("dblclick", (ev) => {
-        ev.stopPropagation();
-        if (!this.readOnly) this.beginEdgeLabelEdit(e.id, geo.mx, geo.my);
+        // select() re-renders and detaches this element, so a click handler
+        // would never fire — detect the tap on window pointerup instead
+        const sx = ev.clientX;
+        const sy = ev.clientY;
+        const up = (ue: PointerEvent) => {
+          window.removeEventListener("pointerup", up);
+          if (Math.hypot(ue.clientX - sx, ue.clientY - sy) < 6) {
+            this.openEdgeDialog(e.id);
+          }
+        };
+        window.addEventListener("pointerup", up);
       });
       this.edgeLayer.appendChild(hit);
     }
@@ -786,7 +767,7 @@ export class ProcessMapEditor {
     g.appendChild(buildSymbol(n));
 
     if (n.label || box.labelInside) {
-      g.appendChild(buildLabel(n.label || "", box.labelY, box.labelChars));
+      g.appendChild(buildLabel(n.label || "", box.labelY, box.labelChars, box.labelLines ?? 3));
     }
 
     // secondary lines: inventory wait/qty, then the free detail text
@@ -852,10 +833,6 @@ export class ProcessMapEditor {
         this.select({ type: "node", id: n.id });
       });
     }
-    g.addEventListener("dblclick", (e) => {
-      e.stopPropagation();
-      if (!this.readOnly) this.beginLabelEdit(n.id);
-    });
     return g;
   }
 
@@ -947,10 +924,7 @@ export class ProcessMapEditor {
         this.selected !== null &&
         sel.type === this.selected.type &&
         sel.id === this.selected.id);
-    if (same) {
-      this.updateProps();
-      return;
-    }
+    if (same) return;
     this.selected = sel;
     this.render();
   }
@@ -987,7 +961,14 @@ export class ProcessMapEditor {
     const n = this.node(id);
     if (!n) return;
     const w = this.screenToWorld(e.clientX, e.clientY);
-    this.dragNode = { id, offX: w.x - n.x, offY: w.y - n.y, moved: false };
+    this.dragNode = {
+      id,
+      offX: w.x - n.x,
+      offY: w.y - n.y,
+      moved: false,
+      sx: e.clientX,
+      sy: e.clientY,
+    };
   }
 
   // ---------- connect ----------
@@ -1042,10 +1023,18 @@ export class ProcessMapEditor {
     if (this.dragNode) {
       const n = this.node(this.dragNode.id);
       if (!n) return;
+      if (!this.dragNode.moved) {
+        // 6px tap tolerance (same threshold as the shared makeInteractive)
+        const dist = Math.hypot(
+          e.clientX - this.dragNode.sx,
+          e.clientY - this.dragNode.sy
+        );
+        if (dist < 6) return;
+        this.dragNode.moved = true;
+      }
       const w = this.screenToWorld(e.clientX, e.clientY);
       n.x = this.snap(w.x - this.dragNode.offX);
       n.y = this.snap(w.y - this.dragNode.offY);
-      this.dragNode.moved = true;
       this.render();
       return;
     }
@@ -1083,13 +1072,17 @@ export class ProcessMapEditor {
           x: this.snap(w.x),
           y: this.snap(w.y),
         };
-        if (this.model.mode === "sipoc") node.lane = this.laneFromX(w.x);
-        if (this.model.mode === "swimlane") node.lane = this.swimLaneFromY(node.y);
+        if (kind !== "note") {
+          // notes float free of columns and lanes
+          if (this.model.mode === "sipoc") node.lane = this.laneFromX(w.x);
+          if (this.model.mode === "swimlane") node.lane = this.swimLaneFromY(node.y);
+        }
         this.model.nodes.push(node);
         if (this.model.mode === "sipoc") this.relayoutSipoc();
         this.selected = { type: "node", id: node.id };
         this.render();
         this.commit();
+        this.openNodeDialog(node.id); // name it straight away (toolkit add flow)
       }
       return;
     }
@@ -1098,19 +1091,21 @@ export class ProcessMapEditor {
       const { id, moved } = this.dragNode;
       this.dragNode = null;
       if (moved) {
-        if (this.model.mode === "sipoc") {
-          const n = this.node(id);
-          if (n) n.lane = this.laneFromX(n.x);
-          this.relayoutSipoc();
-          this.render();
-        } else if (this.model.mode === "swimlane") {
-          const n = this.node(id);
-          if (n) {
+        const n = this.node(id);
+        if (n && n.kind !== "note") {
+          if (this.model.mode === "sipoc") {
+            n.lane = this.laneFromX(n.x);
+            this.relayoutSipoc();
+            this.render();
+          } else if (this.model.mode === "swimlane") {
             n.lane = this.swimLaneFromY(n.y);
             this.render();
           }
         }
         this.commit();
+      } else {
+        // a tap: open the toolkit edit dialog
+        this.openNodeDialog(id);
       }
       return;
     }
@@ -1163,72 +1158,229 @@ export class ProcessMapEditor {
     this.commit();
   }
 
-  // ---------- inline label editing ----------
+  // ---------- edit dialogs (the toolkit's shared modal) ----------
 
-  private beginLabelEdit(id: string): void {
+  private host(): HTMLElement {
+    return this.dlgHost ?? this.root;
+  }
+
+  /** Colour swatch strip + custom picker for the node dialog. */
+  private colorField(initial: string): { row: HTMLElement; value: () => string } {
+    let chosen = initial;
+    const wrap = document.createElement("div");
+    wrap.className = "pm-swatches";
+    const buttons: HTMLButtonElement[] = [];
+    const sync = () => {
+      for (const b of buttons) {
+        b.classList.toggle("pm-swatch-on", (b.dataset.color ?? "") === chosen);
+      }
+    };
+    const custom = document.createElement("input");
+    custom.type = "color";
+    custom.className = "pm-swatch pm-swatch-custom";
+    custom.title = "Custom colour";
+    custom.value = /^#[0-9a-fA-F]{6}$/.test(initial) ? initial : "#ffffff";
+    custom.addEventListener("input", () => {
+      chosen = custom.value;
+      sync();
+    });
+    for (const preset of COLOR_PRESETS) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "pm-swatch";
+      b.title = preset.name;
+      if (preset.value) b.style.background = preset.value;
+      else b.textContent = "×";
+      b.dataset.color = preset.value;
+      b.addEventListener("click", () => {
+        chosen = preset.value;
+        if (/^#[0-9a-fA-F]{6}$/.test(chosen)) custom.value = chosen;
+        sync();
+      });
+      buttons.push(b);
+      wrap.appendChild(b);
+    }
+    wrap.appendChild(custom);
+    sync();
+    return { row: fieldRow("Colour", wrap), value: () => chosen };
+  }
+
+  private openNodeDialog(id: string): void {
+    if (this.readOnly) return;
     const n = this.node(id);
     if (!n) return;
-    const box = nodeBox(n.kind);
-    const y = n.y + (box.labelInside ? 0 : box.labelY - 6);
-    this.showLabelInput(n.x, y, n.label, (value) => {
-      n.label = value;
+
+    const metricDefs: { key: keyof PmMetrics; cap: string; ph: string }[] =
+      n.kind === "vsmProcess"
+        ? [
+            { key: "ct", cap: "C/T", ph: "e.g. 45 s" },
+            { key: "co", cap: "C/O", ph: "e.g. 10 min" },
+            { key: "uptime", cap: "Uptime", ph: "e.g. 95%" },
+            { key: "operators", cap: "Ops", ph: "e.g. 2" },
+          ]
+        : n.kind === "inventory"
+          ? [{ key: "wait", cap: "Wait / qty", ph: "e.g. 2 days" }]
+          : [];
+
+    const dlg = openDialog({
+      host: this.host(),
+      title: kindTitle(n.kind),
+      buttons: [
+        {
+          label: "Delete",
+          kind: "danger",
+          onClick: () => {
+            dlg.close();
+            this.selected = { type: "node", id };
+            this.deleteSelection();
+          },
+        },
+        { label: "Cancel", kind: "secondary", onClick: () => dlg.close() },
+        {
+          label: "Save",
+          kind: "primary",
+          onClick: () => {
+            n.label = label.value;
+            const d = detail.value.trim();
+            if (d === "") delete n.detail;
+            else n.detail = d;
+            const c = color.value();
+            if (c === "") delete n.color;
+            else n.color = c;
+            for (const m of metrics) {
+              if (!n.metrics) n.metrics = {};
+              const v = m.input.value.trim();
+              if (v === "") delete n.metrics[m.key];
+              else n.metrics[m.key] = v;
+            }
+            if (n.metrics && Object.keys(n.metrics).length === 0) delete n.metrics;
+            dlg.close();
+            this.render();
+            this.commit();
+          },
+        },
+      ],
     });
+
+    const label = textInput(n.label, { placeholder: "Label" });
+    dlg.body.appendChild(fieldRow("Label", label));
+    const detail = textInput(n.detail ?? "", { placeholder: "Owner, system, note…" });
+    dlg.body.appendChild(fieldRow("Detail", detail));
+    const color = this.colorField(n.color ?? "");
+    dlg.body.appendChild(color.row);
+
+    const metrics: { key: keyof PmMetrics; input: HTMLInputElement }[] = [];
+    for (const def of metricDefs) {
+      const input = textInput((n.metrics && n.metrics[def.key]) ?? "", {
+        placeholder: def.ph,
+      });
+      dlg.body.appendChild(fieldRow(def.cap, input));
+      metrics.push({ key: def.key, input });
+    }
+
+    if (n.kind === "kaizen" && this.onManageActions) {
+      const count = this.getActionBadge ? this.getActionBadge(id) : 0;
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "pm-dlg-actions";
+      btn.textContent = count > 0 ? `Actions (${count})` : "＋ Add action";
+      btn.addEventListener("click", () => {
+        dlg.close();
+        this.onManageActions!(id);
+      });
+      dlg.body.appendChild(btn);
+    }
+
+    label.focus();
+    label.select();
   }
 
-  private beginEdgeLabelEdit(id: string, mx: number, my: number): void {
+  private openEdgeDialog(id: string): void {
+    if (this.readOnly) return;
     const e = this.edge(id);
     if (!e) return;
-    this.showLabelInput(mx, my, e.label ?? "", (value) => {
-      if (value.trim() === "") delete e.label;
-      else e.label = value;
+    const dlg = openDialog({
+      host: this.host(),
+      title: "Connector",
+      buttons: [
+        {
+          label: "Delete",
+          kind: "danger",
+          onClick: () => {
+            dlg.close();
+            this.selected = { type: "edge", id };
+            this.deleteSelection();
+          },
+        },
+        { label: "Cancel", kind: "secondary", onClick: () => dlg.close() },
+        {
+          label: "Save",
+          kind: "primary",
+          onClick: () => {
+            const v = label.value.trim();
+            if (v === "") delete e.label;
+            else e.label = v;
+            e.kind = type.value as EdgeKind;
+            dlg.close();
+            this.render();
+            this.commit();
+          },
+        },
+      ],
     });
+    const label = textInput(e.label ?? "", { placeholder: "e.g. Yes / No" });
+    dlg.body.appendChild(fieldRow("Label", label));
+    const type = selectInput(
+      e.kind,
+      EDGE_KINDS.map((k) => ({ value: k.kind, label: k.title }))
+    );
+    dlg.body.appendChild(fieldRow("Type", type));
+    label.focus();
   }
 
-  private showLabelInput(
-    worldX: number,
-    worldY: number,
-    value: string,
-    apply: (value: string) => void
-  ): void {
-    this.endLabelEdit();
-    const r = this.svg.getBoundingClientRect();
-    const stageRect = this.stage.getBoundingClientRect();
-    const screenX = r.left + this.view.tx + worldX * this.view.scale;
-    const screenY = r.top + this.view.ty + worldY * this.view.scale;
-
-    const input = document.createElement("input");
-    input.className = "pm-label-input";
-    input.value = value;
-    input.style.left = screenX - stageRect.left - 75 + "px";
-    input.style.top = screenY - stageRect.top - 12 + "px";
-    this.stage.appendChild(input);
-    input.focus();
-    input.select();
-
-    const commit = () => {
-      apply(input.value);
-      this.endLabelEdit();
-      this.render();
-      this.commit();
-    };
-    input.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") {
-        e.preventDefault();
-        commit();
-      } else if (e.key === "Escape") {
-        e.preventDefault();
-        this.endLabelEdit();
-      }
+  private openLaneDialog(index: number): void {
+    if (this.readOnly) return;
+    const dlg = openDialog({
+      host: this.host(),
+      title: "Lane",
+      buttons: [
+        {
+          label: "Delete lane",
+          kind: "danger",
+          onClick: () => {
+            if (this.removeLaneAt(index)) {
+              dlg.close();
+              return;
+            }
+            note.textContent =
+              this.model.lanes.length <= 1
+                ? "A swimlane map needs at least one lane."
+                : "Move the shapes out of this lane before deleting it.";
+            note.style.display = "block";
+          },
+        },
+        { label: "Cancel", kind: "secondary", onClick: () => dlg.close() },
+        {
+          label: "Save",
+          kind: "primary",
+          onClick: () => {
+            const v = title.value.trim();
+            if (v !== "") this.model.lanes[index] = v;
+            dlg.close();
+            this.render();
+            this.commit();
+          },
+        },
+      ],
     });
-    input.addEventListener("blur", commit);
-    this.labelInput = input;
-  }
-
-  private endLabelEdit(): void {
-    if (this.labelInput && this.labelInput.parentElement) {
-      this.labelInput.parentElement.removeChild(this.labelInput);
-    }
-    this.labelInput = null;
+    const title = textInput(this.model.lanes[index], { placeholder: "Lane title" });
+    dlg.body.appendChild(fieldRow("Title", title));
+    const note = document.createElement("div");
+    note.className = "pm-dlg-note";
+    note.style.display = "none";
+    dlg.body.appendChild(note);
+    title.focus();
+    title.select();
   }
 
   // ---------- zoom / view ----------
@@ -1293,6 +1445,8 @@ export class ProcessMapEditor {
 
   private fitView(): void {
     const b = this.contentBounds();
+    // leave room for the add-lane strip below the last lane while editing
+    if (b && this.model.mode === "swimlane" && !this.readOnly) b.maxY += 40;
     if (!b) {
       this.view = { tx: 60, ty: 40, scale: 1 };
       this.render();
@@ -1312,255 +1466,12 @@ export class ProcessMapEditor {
   // ---------- keyboard ----------
 
   private handleKey(e: KeyboardEvent): void {
-    if (this.labelInput) return;
     if (this.readOnly) return;
     const tag = (document.activeElement && document.activeElement.tagName) || "";
     if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
     if ((e.key === "Delete" || e.key === "Backspace") && this.selected) {
       e.preventDefault();
       this.deleteSelection();
-    }
-  }
-
-  // ---------- properties panel ----------
-
-  private buildPropsPanel(): void {
-    this.props = document.createElement("div");
-    this.props.className = "pm-props";
-
-    const head = document.createElement("div");
-    head.className = "pm-props-head";
-    head.appendChild(document.createTextNode("Properties"));
-    this.propKind = document.createElement("span");
-    this.propKind.className = "pm-props-kind";
-    head.appendChild(this.propKind);
-    this.props.appendChild(head);
-
-    // label
-    const labelRow = this.makeRow("Label");
-    this.propLabel = document.createElement("input");
-    this.propLabel.className = "pm-props-input";
-    this.propLabel.type = "text";
-    this.propLabel.addEventListener("input", () => {
-      const n = this.selectedNode();
-      const e = this.selectedEdge();
-      if (n) n.label = this.propLabel.value;
-      else if (e) {
-        if (this.propLabel.value.trim() === "") delete e.label;
-        else e.label = this.propLabel.value;
-      } else return;
-      this.softRender();
-      this.commit();
-    });
-    labelRow.appendChild(this.propLabel);
-    this.props.appendChild(labelRow);
-
-    // detail
-    this.propDetailRow = this.makeRow("Detail");
-    this.propDetail = document.createElement("input");
-    this.propDetail.className = "pm-props-input";
-    this.propDetail.type = "text";
-    this.propDetail.placeholder = "owner, system, note…";
-    this.propDetail.addEventListener("input", () => {
-      const n = this.selectedNode();
-      if (!n) return;
-      if (this.propDetail.value.trim() === "") delete n.detail;
-      else n.detail = this.propDetail.value;
-      this.softRender();
-      this.commit();
-    });
-    this.propDetailRow.appendChild(this.propDetail);
-    this.props.appendChild(this.propDetailRow);
-
-    // connector type
-    this.propTypeRow = this.makeRow("Type");
-    this.propType = document.createElement("select");
-    this.propType.className = "pm-props-select";
-    for (const k of EDGE_KINDS) {
-      const opt = document.createElement("option");
-      opt.value = k.kind;
-      opt.textContent = k.title;
-      this.propType.appendChild(opt);
-    }
-    this.propType.addEventListener("change", () => {
-      const e = this.selectedEdge();
-      if (!e) return;
-      e.kind = this.propType.value as EdgeKind;
-      this.softRender();
-      this.commit();
-    });
-    this.propTypeRow.appendChild(this.propType);
-    this.props.appendChild(this.propTypeRow);
-
-    // colour coding
-    this.propColorRow = document.createElement("div");
-    const colorCap = document.createElement("div");
-    colorCap.className = "pm-props-row";
-    const cl = document.createElement("label");
-    cl.textContent = "Colour";
-    colorCap.appendChild(cl);
-    this.propCustomColor = document.createElement("input");
-    this.propCustomColor.type = "color";
-    this.propCustomColor.className = "pm-props-input";
-    this.propCustomColor.style.padding = "0";
-    this.propCustomColor.style.height = "22px";
-    this.propCustomColor.title = "Custom colour";
-    this.propCustomColor.addEventListener("input", () => {
-      const n = this.selectedNode();
-      if (!n) return;
-      n.color = this.propCustomColor.value;
-      this.softRender();
-      this.updateSwatches(n);
-      this.commit();
-    });
-    colorCap.appendChild(this.propCustomColor);
-    this.propColorRow.appendChild(colorCap);
-
-    this.propSwatches = document.createElement("div");
-    this.propSwatches.className = "pm-swatches";
-    for (const preset of COLOR_PRESETS) {
-      const b = document.createElement("button");
-      b.type = "button";
-      b.className = "pm-swatch";
-      b.title = preset.name;
-      if (preset.value) b.style.background = preset.value;
-      else b.textContent = "×";
-      (b as HTMLButtonElement & { dataset: DOMStringMap }).dataset.color = preset.value;
-      b.addEventListener("click", () => {
-        const n = this.selectedNode();
-        if (!n) return;
-        if (preset.value) n.color = preset.value;
-        else delete n.color;
-        this.softRender();
-        this.updateSwatches(n);
-        this.commit();
-      });
-      this.propSwatches.appendChild(b);
-    }
-    this.propColorRow.appendChild(this.propSwatches);
-    this.props.appendChild(this.propColorRow);
-
-    // VSM metrics
-    const metricDefs: { key: keyof PmMetrics; cap: string; ph: string }[] = [
-      { key: "ct", cap: "C/T", ph: "e.g. 45 s" },
-      { key: "co", cap: "C/O", ph: "e.g. 10 min" },
-      { key: "uptime", cap: "Uptime", ph: "e.g. 95%" },
-      { key: "operators", cap: "Ops", ph: "e.g. 2" },
-      { key: "wait", cap: "Wait/Qty", ph: "e.g. 2 days" },
-    ];
-    for (const def of metricDefs) {
-      const row = this.makeRow(def.cap);
-      const input = document.createElement("input");
-      input.className = "pm-props-input";
-      input.type = "text";
-      input.placeholder = def.ph;
-      input.addEventListener("input", () => {
-        const n = this.selectedNode();
-        if (!n) return;
-        if (!n.metrics) n.metrics = {};
-        if (input.value.trim() === "") delete n.metrics[def.key];
-        else n.metrics[def.key] = input.value;
-        this.softRender();
-        this.commit();
-      });
-      row.appendChild(input);
-      this.props.appendChild(row);
-      this.metricRows.push({ key: def.key, row, input });
-    }
-
-    // actions (kaizen bursts — the wrapper opens the shared action UI)
-    this.propActionsBtn = document.createElement("button");
-    this.propActionsBtn.type = "button";
-    this.propActionsBtn.className = "pm-props-actions";
-    this.propActionsBtn.textContent = "＋ Add action";
-    this.propActionsBtn.addEventListener("click", () => {
-      const n = this.selectedNode();
-      if (n && this.onManageActions) this.onManageActions(n.id);
-    });
-    this.props.appendChild(this.propActionsBtn);
-
-    // delete
-    const del = document.createElement("button");
-    del.type = "button";
-    del.className = "pm-props-del";
-    del.textContent = "Delete";
-    del.addEventListener("click", () => this.deleteSelection());
-    this.props.appendChild(del);
-
-    this.stage.appendChild(this.props);
-    this.updateProps();
-  }
-
-  private makeRow(caption: string): HTMLDivElement {
-    const row = document.createElement("div");
-    row.className = "pm-props-row";
-    const cap = document.createElement("label");
-    cap.textContent = caption;
-    row.appendChild(cap);
-    return row;
-  }
-
-  /** Re-render the drawing without rebuilding the props panel (keeps focus). */
-  private softRender(): void {
-    this.renderLanes();
-    this.renderEdges();
-    this.renderNodes();
-    this.renderTimeline();
-  }
-
-  private updateSwatches(n: PmNode): void {
-    const current = n.color ?? "";
-    this.propSwatches.querySelectorAll(".pm-swatch").forEach((el) => {
-      const sw = el as HTMLButtonElement & { dataset: DOMStringMap };
-      sw.classList.toggle("pm-swatch-on", (sw.dataset.color ?? "") === current);
-    });
-    if (/^#[0-9a-fA-F]{6}$/.test(current)) this.propCustomColor.value = current;
-    else this.propCustomColor.value = "#ffffff";
-  }
-
-  private updateProps(): void {
-    const n = this.selectedNode();
-    const e = this.selectedEdge();
-    if ((!n && !e) || this.readOnly) {
-      this.props.style.display = "none";
-      return;
-    }
-    this.props.style.display = "block";
-
-    if (n) {
-      this.propKind.textContent = kindTitle(n.kind);
-      if (document.activeElement !== this.propLabel) this.propLabel.value = n.label;
-      this.propDetailRow.style.display = "flex";
-      if (document.activeElement !== this.propDetail) this.propDetail.value = n.detail ?? "";
-      this.propTypeRow.style.display = "none";
-      this.propColorRow.style.display = "block";
-      this.updateSwatches(n);
-      for (const m of this.metricRows) {
-        const show =
-          (n.kind === "vsmProcess" && m.key !== "wait") ||
-          (n.kind === "inventory" && m.key === "wait");
-        m.row.style.display = show ? "flex" : "none";
-        if (show && document.activeElement !== m.input) {
-          m.input.value = (n.metrics && n.metrics[m.key]) ?? "";
-        }
-      }
-      if (n.kind === "kaizen" && this.onManageActions) {
-        const count = this.getActionBadge ? this.getActionBadge(n.id) : 0;
-        this.propActionsBtn.textContent =
-          count > 0 ? `Actions (${count})` : "＋ Add action";
-        this.propActionsBtn.style.display = "block";
-      } else {
-        this.propActionsBtn.style.display = "none";
-      }
-    } else if (e) {
-      this.propKind.textContent = "Connector";
-      if (document.activeElement !== this.propLabel) this.propLabel.value = e.label ?? "";
-      this.propDetailRow.style.display = "none";
-      this.propTypeRow.style.display = "flex";
-      if (document.activeElement !== this.propType) this.propType.value = e.kind;
-      this.propColorRow.style.display = "none";
-      for (const m of this.metricRows) m.row.style.display = "none";
-      this.propActionsBtn.style.display = "none";
     }
   }
 
@@ -1576,7 +1487,9 @@ export class ProcessMapEditor {
     const clone = this.world.cloneNode(true) as SVGGElement;
     clone.removeAttribute("transform");
     clone
-      .querySelectorAll(".pm-handle, .pm-halo, .pm-temp-edge, .pm-edge-hit")
+      .querySelectorAll(
+        ".pm-handle, .pm-halo, .pm-temp-edge, .pm-edge-hit, .pm-lane-add, .pm-lane-add-cap"
+      )
       .forEach((el) => el.remove());
     const serializer = new XMLSerializer();
     const inner = serializer.serializeToString(clone);
@@ -1704,6 +1617,8 @@ function exportStyle(s: StyleConfig): string {
 .kind-decision .pm-shape{fill:#fffbe6}
 .kind-card .pm-shape{fill:#f7f9fc}
 .kind-kaizen .pm-shape{fill:#fff2b8;stroke:#b8860b}
+.kind-note .pm-shape{fill:#fef3ad;stroke:#d8c356}
+.pm-note-fold{fill:rgba(0,0,0,0.10)}
 .pm-abadge-text{font-size:10px;font-weight:700;text-anchor:middle}
 .pm-databox{fill:${bg};stroke:${fg};stroke-width:1.2}
 .pm-databox-line{stroke:#d5d5d5;stroke-width:1}

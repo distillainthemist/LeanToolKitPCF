@@ -39,7 +39,9 @@ export type NodeKind =
   | "vsmProcess"
   | "inventory"
   | "truck"
-  | "kaizen";
+  | "kaizen"
+  // free-floating annotation, available on every map type
+  | "note";
 
 export type EdgeKind = "flow" | "info" | "electronic";
 
@@ -129,6 +131,7 @@ const NODE_KINDS: NodeKind[] = [
   "inventory",
   "truck",
   "kaizen",
+  "note",
 ];
 
 function isMode(v: unknown): v is MapMode {
@@ -267,11 +270,14 @@ export interface PaletteItem {
   defaultLabel: string;
 }
 
+/** The post-it note is available on every map type. */
+const NOTE_ITEM: PaletteItem = { kind: "note", title: "Note", defaultLabel: "" };
+
 /** Palette contents per map type. */
 export function paletteFor(mode: MapMode): PaletteItem[] {
   switch (mode) {
     case "sipoc":
-      return [{ kind: "card", title: "Card", defaultLabel: "New item" }];
+      return [{ kind: "card", title: "Card", defaultLabel: "New item" }, NOTE_ITEM];
     case "vsm":
       return [
         { kind: "outside", title: "Supplier / Customer", defaultLabel: "Supplier" },
@@ -279,6 +285,7 @@ export function paletteFor(mode: MapMode): PaletteItem[] {
         { kind: "inventory", title: "Inventory", defaultLabel: "" },
         { kind: "truck", title: "Shipment", defaultLabel: "Daily" },
         { kind: "kaizen", title: "Kaizen burst", defaultLabel: "Improve" },
+        NOTE_ITEM,
       ];
     default:
       return [
@@ -288,6 +295,7 @@ export function paletteFor(mode: MapMode): PaletteItem[] {
         { kind: "data", title: "Input / Output", defaultLabel: "Data" },
         { kind: "document", title: "Document", defaultLabel: "Document" },
         { kind: "end", title: "End", defaultLabel: "End" },
+        NOTE_ITEM,
       ];
   }
 }
