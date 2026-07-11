@@ -40,6 +40,7 @@ function isStatus(v: unknown): v is CauseStatus {
 export function sanitizeCause(c: Partial<CauseNode>): CauseNode {
   const votes = Number(c.votes);
   const prob = Number(c.probability);
+  const gate = typeof c.gate === "string" ? c.gate.toLowerCase() : "";
   return {
     id: typeof c.id === "string" && c.id !== "" ? c.id : newId("c"),
     text: typeof c.text === "string" ? c.text.slice(0, MAX_CAUSE_CHARS) : "",
@@ -49,7 +50,7 @@ export function sanitizeCause(c: Partial<CauseNode>): CauseNode {
     category: typeof c.category === "string" ? c.category : "",
     parentId:
       typeof c.parentId === "string" && c.parentId !== "" ? c.parentId : null,
-    gate: c.gate === "and" || c.gate === "or" ? c.gate : undefined,
+    gate: gate === "and" || gate === "or" ? gate : undefined,
     probability: Number.isFinite(prob)
       ? Math.max(0, Math.min(1, prob))
       : undefined,

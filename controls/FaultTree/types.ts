@@ -28,10 +28,11 @@ function parseData(data: unknown): FaultTreeData {
     return { problem: "", causes: [] };
   }
   const d = data as { problem?: unknown; causes?: unknown; rootGate?: unknown };
+  const rootGate = typeof d.rootGate === "string" ? d.rootGate.toLowerCase() : "";
   return {
     problem: typeof d.problem === "string" ? d.problem : "",
     causes: parseCauses(d.causes),
-    rootGate: d.rootGate === "and" || d.rootGate === "or" ? d.rootGate : undefined,
+    rootGate: rootGate === "and" || rootGate === "or" ? rootGate : undefined,
   };
 }
 
