@@ -624,15 +624,26 @@ export class FishboneEditor {
     const dc = this.style.diagramColor;
     const g = svgEl("g", { class: "fb-head" });
 
-    // The spine arrowhead points at the effect; the statement sits cleanly on
-    // the canvas (no box) so the head reads as part of the diagram.
     const mouth = svgEl("path", {
       d: `M ${x} ${layout.spineY} l -18 -14 l 0 28 Z`,
     });
     mouth.style.fill = dc;
     g.appendChild(mouth);
 
-    // The head title matches the category labels' size (22px uppercase).
+    const rect = svgEl("rect", {
+      x,
+      y,
+      width: w,
+      height: h,
+      rx: 10,
+      ry: 10,
+      class: "fb-head-box",
+    });
+    rect.style.stroke = dc;
+    rect.style.fill = mix(dc, 6, "white");
+    g.appendChild(rect);
+
+    // The box title matches the category labels' size (22px uppercase).
     const cap = svgEl("text", {
       x: x + w / 2,
       y: y + 34,

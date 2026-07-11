@@ -10,11 +10,10 @@ export const FISHBONE_CSS = `
   width: 100%;
   height: 100%;
   min-height: 420px;
-  font-family: "Segoe UI", system-ui, sans-serif;
+  font-family: inherit;
   font-size: 12px;
   color: #1b1b1b;
-  background: #ffffff;
-  border: 1px solid #d9d9d9;
+  background: transparent;
   box-sizing: border-box;
   overflow: hidden;
   position: relative;
