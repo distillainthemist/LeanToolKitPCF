@@ -38,7 +38,7 @@
 
     <property name="rowsJSON"
               display-name-key="Rows (JSON)"
-              description-key="Optional fixed row headers: [{key,label}] or [label,...]. When set, rows are fixed (no add/delete)."
+              description-key="Row mode. Empty = free rows (add/delete). A single number (e.g. 5) = that many fixed, untitled rows to fill in. A JSON array [{key,label}] or [label,...] = fixed rows with title headers. Fixed modes have no add/delete."
               of-type="Multiple"
               usage="input"
               required="false" />

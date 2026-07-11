@@ -114,30 +114,49 @@ export function parseColumns(raw: string | null | undefined): CaptureColumn[] {
   }
 }
 
-/** Parse the rowsJSON input: [{key,label}] or a plain array of labels. */
-export function parseRowHeaders(raw: string | null | undefined): RowHeader[] {
+/** The parsed rows input: fixed row headers, and whether they carry titles. */
+export interface RowConfig {
+  headers: RowHeader[];
+  titled: boolean; // false = a fixed count of untitled rows (no row-head column)
+}
+
+/**
+ * Parse the rowsJSON input into a row configuration:
+ *   • "" (empty)                → free rows (add/delete)
+ *   • a single number, e.g. "5" → 5 fixed, untitled rows (no row-head column)
+ *   • [{key,label}] / [labels]  → fixed rows with titles (row-head column)
+ */
+export function parseRows(raw: string | null | undefined): RowConfig {
   const t = (raw ?? "").trim();
-  if (t === "") return [];
+  if (t === "") return { headers: [], titled: true };
+
+  if (/^\d+$/.test(t)) {
+    const n = Math.max(1, Math.min(200, parseInt(t, 10)));
+    const headers: RowHeader[] = [];
+    for (let i = 1; i <= n; i++) headers.push({ key: `r${i}`, label: "" });
+    return { headers, titled: false };
+  }
+
   try {
     const data = JSON.parse(t) as unknown;
-    if (!Array.isArray(data)) return [];
-    const out: RowHeader[] = [];
+    if (!Array.isArray(data)) return { headers: [], titled: true };
+    const headers: RowHeader[] = [];
     for (const raw2 of data) {
       if (typeof raw2 === "string" && raw2.trim() !== "") {
-        out.push({ key: raw2.trim(), label: raw2.trim() });
+        headers.push({ key: raw2.trim(), label: raw2.trim() });
       } else if (raw2 && typeof raw2 === "object") {
         const o = raw2 as Partial<RowHeader>;
         const key = typeof o.key === "string" ? o.key.trim() : "";
         if (key === "") continue;
-        out.push({
+        headers.push({
           key,
           label: typeof o.label === "string" && o.label !== "" ? o.label : key,
         });
       }
     }
-    return out;
+    return { headers, titled: true };
   } catch {
-    return [];
+    return { headers: [], titled: true };
   }
 }
 

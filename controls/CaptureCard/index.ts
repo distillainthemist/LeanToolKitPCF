@@ -2,7 +2,7 @@
 
 import { IInputs, IOutputs } from "./generated/ManifestTypes";
 import { CaptureEditor } from "./editor";
-import { parseCapture, parseColumns, parseRowHeaders, serializeCapture } from "./types";
+import { parseCapture, parseColumns, parseRows, serializeCapture } from "./types";
 import { LoadGate, readTheme, str } from "../../shared/pcf/standard";
 
 const OUTPUT_DEBOUNCE_MS = 300;
@@ -81,7 +81,8 @@ export class CaptureCard implements ComponentFramework.StandardControl<IInputs, 
 
     this.applySize(context);
     this.editor.setTheme(readTheme(p));
-    this.editor.setConfig(parseColumns(p.columnsJSON?.raw), parseRowHeaders(p.rowsJSON?.raw));
+    const rows = parseRows(p.rowsJSON?.raw);
+    this.editor.setConfig(parseColumns(p.columnsJSON?.raw), rows.headers, rows.titled);
     this.editor.setChrome(str(p.cardTitle), p.prompts?.raw ?? "");
 
     const disabled = context.mode.isControlDisabled === true;

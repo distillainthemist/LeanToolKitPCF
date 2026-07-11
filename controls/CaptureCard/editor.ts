@@ -34,15 +34,20 @@ const DEFAULT_GHOST = [
   "Tap to add the first entry.",
 ];
 
+/** An icon is rendered as an image when it's a data URI or a URL. */
+function isImageIcon(icon: string): boolean {
+  return /^(data:|https?:\/\/|\/)/i.test(icon);
+}
+
 /** A field editor inside the row dialog. */
 interface FieldEditor {
   column: CaptureColumn;
   el: HTMLElement;
   read: () => CellValue | undefined;
-  /** Re-filter options when a parent value changes (dependent lists). */
-  refilter?: (parentValue: string) => void;
-  /** Current single value (for driving children). */
-  current?: () => string;
+  /** Re-filter options against the parent's selected value(s) (dependent lists). */
+  refilter?: (parentValues: string[]) => void;
+  /** All currently selected values (a multi-select parent drives children with every pick). */
+  currentValues?: () => string[];
   onChanged?: () => void; // wired by the dialog to cascade re-filters
 }
 
@@ -56,12 +61,14 @@ export class CaptureEditor {
   private env: CaptureEnvelope;
   private columns: CaptureColumn[] = DEFAULT_COLUMNS;
   private rowHeaders: RowHeader[] = [];
+  private titledRows = true;
   private theme: Theme = defaultTheme();
   private cardTitle = "";
   private prompts: Prompts = { general: [], fields: {} };
   private lastPromptsRaw: string | null = null;
   private readOnly = false;
   private readonly png: SnapshotScheduler;
+  private resizeObserver: ResizeObserver | null = null;
 
   constructor(
     host: HTMLElement,
@@ -77,7 +84,17 @@ export class CaptureEditor {
       data: { rows: [] },
     };
     this.png = new SnapshotScheduler(() => this.generatePng());
+    // a simple (no-list) card scales its text up to fill the box
+    if (typeof ResizeObserver !== "undefined") {
+      this.resizeObserver = new ResizeObserver(() => this.applyFontScale());
+      this.resizeObserver.observe(this.root);
+    }
     this.render();
+  }
+
+  /** True when every column is a plain value (no list/multi-select). */
+  private isSimple(): boolean {
+    return this.columns.every((c) => c.type !== "list");
   }
 
   setEnvelope(env: CaptureEnvelope): void {
@@ -87,15 +104,17 @@ export class CaptureEditor {
     this.png.schedule();
   }
 
-  setConfig(columns: CaptureColumn[], rowHeaders: RowHeader[]): void {
+  setConfig(columns: CaptureColumn[], rowHeaders: RowHeader[], titled: boolean): void {
     if (
       JSON.stringify(columns) === JSON.stringify(this.columns) &&
-      JSON.stringify(rowHeaders) === JSON.stringify(this.rowHeaders)
+      JSON.stringify(rowHeaders) === JSON.stringify(this.rowHeaders) &&
+      titled === this.titledRows
     ) {
       return;
     }
     this.columns = columns;
     this.rowHeaders = rowHeaders;
+    this.titledRows = titled;
     this.syncFixedRows();
     this.render();
   }
@@ -125,6 +144,7 @@ export class CaptureEditor {
 
   destroy(): void {
     this.png.cancel();
+    if (this.resizeObserver) this.resizeObserver.disconnect();
     this.root.remove();
   }
 
@@ -158,6 +178,7 @@ export class CaptureEditor {
     }
 
     const body = el("div", "ltk-cc-body");
+    if (this.isSimple()) body.classList.add("ltk-cc-simple");
     this.root.appendChild(body);
 
     const fixed = this.rowHeaders.length > 0;
@@ -172,10 +193,11 @@ export class CaptureEditor {
       return;
     }
 
+    const showHead = fixed && this.titledRows;
     const table = el("table", "ltk-cc-table");
     const thead = el("thead");
     const headRow = el("tr");
-    if (fixed) headRow.appendChild(el("th"));
+    if (showHead) headRow.appendChild(el("th"));
     for (const col of this.columns) {
       headRow.appendChild(el("th", undefined, col.label));
     }
@@ -186,7 +208,7 @@ export class CaptureEditor {
     for (const row of this.env.data.rows) {
       const tr = el("tr", "ltk-cc-row");
       if (this.readOnly) tr.classList.add("ltk-readonly");
-      if (fixed) {
+      if (showHead) {
         const header = this.rowHeaders.find((h) => h.key === row.rowKey);
         tr.appendChild(el("td", "ltk-cc-rowhead", header?.label ?? row.rowKey));
       }
@@ -199,13 +221,42 @@ export class CaptureEditor {
       tbody.appendChild(tr);
     }
     table.appendChild(tbody);
-    body.appendChild(table);
+    // the table scrolls inside its own wrapper so the Add-row button below it
+    // stays put even when rows expand to fill the height
+    const wrap = el("div", "ltk-cc-tablewrap");
+    wrap.appendChild(table);
+    body.appendChild(wrap);
 
     if (!this.readOnly && !fixed) {
       const add = el("button", "ltk-cc-add", "＋ Add row");
       add.type = "button";
       add.addEventListener("click", () => this.editRow(null));
       body.appendChild(add);
+    }
+
+    this.applyFontScale();
+  }
+
+  /**
+   * A simple card (plain value columns only) scales its cell text up to fill
+   * the height — the fewer the rows, the larger the text. Sets a --cc-font var
+   * the .ltk-cc-simple styles read. Card types with chips keep their fixed size.
+   */
+  private applyFontScale(): void {
+    if (!this.isSimple()) {
+      this.root.style.removeProperty("--cc-font");
+      return;
+    }
+    const h = this.root.clientHeight;
+    const rows = Math.max(1, this.env.data.rows.length);
+    if (h <= 0) return;
+    const addButton = this.rowHeaders.length === 0 ? 50 : 0; // free rows show ＋ Add row
+    const chromeH =
+      (this.cardTitle.trim() !== "" ? 36 : 8) + 28 + 30 + addButton; // title + header + paddings + add
+    const rowH = (h - chromeH) / rows;
+    const font = Math.max(14, Math.min(44, Math.floor(rowH * 0.4)));
+    if (this.root.style.getPropertyValue("--cc-font") !== `${font}px`) {
+      this.root.style.setProperty("--cc-font", `${font}px`);
     }
   }
 
@@ -235,7 +286,7 @@ export class CaptureEditor {
   private optionChip(option: ListOption | undefined, value: string): HTMLElement {
     const chip = el("span", "ltk-cc-chip");
     const icon = option?.icon ?? "";
-    if (icon.startsWith("data:")) {
+    if (isImageIcon(icon)) {
       const img = el("img") as HTMLImageElement;
       img.src = icon;
       img.alt = "";
@@ -295,16 +346,13 @@ export class CaptureEditor {
           if (picked.length === 0) return undefined;
           return col.multi ? picked : picked[0];
         },
-        current: () => {
-          const picked = boxes.find((b) => b.box.checked);
-          return picked ? picked.value : "";
-        },
+        currentValues: () => boxes.filter((b) => b.box.checked).map((b) => b.value),
       };
-      const rebuild = (parentValue: string) => {
+      const rebuild = (parentValues: string[]) => {
         while (list.firstChild) list.removeChild(list.firstChild);
         boxes = [];
         const options = col.options.filter(
-          (o) => o.when === "" || col.parent === "" || o.when === parentValue
+          (o) => o.when === "" || col.parent === "" || parentValues.includes(o.when)
         );
         for (const option of options) {
           const item = checkItem("");
@@ -338,7 +386,7 @@ export class CaptureEditor {
         }
       };
       field.refilter = rebuild;
-      rebuild("");
+      rebuild([]);
       return field;
     }
 
@@ -364,9 +412,9 @@ export class CaptureEditor {
       );
       if (children.length === 0) continue;
       const cascade = () => {
-        const parentValue = field.current ? field.current() : "";
+        const parentValues = field.currentValues ? field.currentValues() : [];
         for (const child of children) {
-          if (child.refilter) child.refilter(parentValue);
+          if (child.refilter) child.refilter(parentValues);
         }
       };
       field.onChanged = cascade;
@@ -410,12 +458,19 @@ export class CaptureEditor {
       },
     });
 
-    const header = fixed
-      ? this.rowHeaders.find((h) => h.key === row?.rowKey)?.label
-      : undefined;
+    let title = "Add entry";
+    if (row) {
+      if (fixed && this.titledRows) {
+        title = this.rowHeaders.find((h) => h.key === row.rowKey)?.label ?? "Edit entry";
+      } else if (fixed) {
+        title = `Entry ${this.env.data.rows.indexOf(row) + 1}`;
+      } else {
+        title = "Edit entry";
+      }
+    }
     const dlg = openDialog({
       host: this.root,
-      title: row ? (header ?? "Edit entry") : "Add entry",
+      title,
       buttons,
     });
     for (const field of fields) dlg.body.appendChild(field.el);

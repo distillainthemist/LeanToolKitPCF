@@ -8,9 +8,10 @@ export const CAPTURE_CSS = `
   flex-direction: column;
   gap: 8px;
   padding: 8px 12px 12px;
-  overflow: auto;
+  overflow: hidden;
 }
-.ltk-cc-table { border-collapse: collapse; min-width: max-content; }
+.ltk-cc-tablewrap { flex: 1; min-height: 0; overflow: auto; }
+.ltk-cc-table { border-collapse: collapse; min-width: max-content; width: 100%; height: 100%; }
 .ltk-cc-table th {
   font-size: 11px;
   font-weight: 600;
@@ -29,6 +30,17 @@ export const CAPTURE_CSS = `
   max-width: 260px;
   overflow-wrap: break-word;
 }
+/* simple (no-list) cards scale their text up to fill the box */
+.ltk-cc-simple td {
+  font-size: var(--cc-font, 15px);
+  vertical-align: middle;
+  padding: 6px 16px 6px 4px;
+}
+.ltk-cc-simple th {
+  font-size: calc(var(--cc-font, 15px) * 0.5);
+}
+.ltk-cc-simple .ltk-cc-rowhead { font-size: var(--cc-font, 15px); }
+
 .ltk-cc-row { cursor: pointer; }
 .ltk-cc-row:hover td { background: var(--ltk-hairline); }
 .ltk-cc-row.ltk-readonly { cursor: default; }
