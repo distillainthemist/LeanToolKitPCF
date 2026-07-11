@@ -2,7 +2,7 @@
 // their generated IInputs types, so these helpers work off the structural
 // shape of the standard parameters that every manifest declares.
 
-import { defaultTheme, parseLegend, Theme } from "../tokens";
+import { defaultTheme, parseColor, parseLegend, Theme } from "../tokens";
 
 interface StringProp {
   raw?: string | null;
@@ -32,6 +32,36 @@ export interface StandardParams {
 export function str(p: StringProp | undefined, fallback = ""): string {
   const v = (p?.raw ?? "").trim();
   return v !== "" ? v : fallback;
+}
+
+/**
+ * A colour input over a base, validated: the discrete value wins only when it
+ * is a parseable CSS colour (guards against the harness "val" placeholder and
+ * maker typos, which would otherwise poison the theme with an invalid CSS
+ * custom property). Falls through discrete → settings base → default.
+ */
+export function colorOr(p: StringProp | undefined, base: string, def: string): string {
+  const v = (p?.raw ?? "").trim();
+  if (v !== "" && parseColor(v) !== null) return v;
+  if (base !== "" && parseColor(base) !== null) return base;
+  return def;
+}
+
+/** A value looks like a font stack (has a space/comma, or is a CSS generic). */
+function isFontLike(v: string): boolean {
+  if (v === "") return false;
+  if (/[\s,]/.test(v)) return true;
+  return ["serif", "sans-serif", "monospace", "system-ui", "cursive", "fantasy"].includes(
+    v.toLowerCase()
+  );
+}
+
+/** A font input over a base, guarded against the "val" placeholder / stray words. */
+export function fontOr(p: StringProp | undefined, base: string, def: string): string {
+  const v = (p?.raw ?? "").trim();
+  if (isFontLike(v)) return v;
+  if (isFontLike(base)) return base;
+  return def;
 }
 
 // ---- settingsJSON (the consolidated configuration input) ----
@@ -132,11 +162,11 @@ export function readTheme(params: StandardParams, s?: LtkSettings): Theme {
   const d = defaultTheme();
   const t = s?.theme;
   return {
-    background: str(params.backgroundColor, t?.background || d.background),
-    foreground: str(params.foregroundColor, t?.foreground || d.foreground),
-    accent: str(params.accentColor, t?.accent || d.accent),
+    background: colorOr(params.backgroundColor, t?.background ?? "", d.background),
+    foreground: colorOr(params.foregroundColor, t?.foreground ?? "", d.foreground),
+    accent: colorOr(params.accentColor, t?.accent ?? "", d.accent),
     legend: parseLegend(rawOr(params.legendColors, t?.legend ?? "")),
-    fontFamily: str(params.fontFamily, t?.font || d.fontFamily),
+    fontFamily: fontOr(params.fontFamily, t?.font ?? "", d.fontFamily),
   };
 }
 
