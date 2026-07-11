@@ -46,6 +46,10 @@ export class HeatmapEditor {
   private lastPromptsRaw: string | null = null;
   private readOnly = false;
   private readonly png: SnapshotScheduler;
+  private resizeObserver: ResizeObserver | null = null;
+  private stageEl: HTMLElement | null = null;
+  private wrapEl: HTMLElement | null = null;
+  private imgAspect = 0;
 
   constructor(
     host: HTMLElement,
@@ -61,6 +65,11 @@ export class HeatmapEditor {
       data: { pins: [] },
     };
     this.png = new SnapshotScheduler(() => this.generatePng());
+    // keep the image scaled to fill the stage (aspect preserved) on resize
+    if (typeof ResizeObserver !== "undefined") {
+      this.resizeObserver = new ResizeObserver(() => this.fitImage());
+      this.resizeObserver.observe(this.root);
+    }
     this.render();
   }
 
@@ -106,6 +115,7 @@ export class HeatmapEditor {
 
   destroy(): void {
     this.png.cancel();
+    if (this.resizeObserver) this.resizeObserver.disconnect();
     this.root.remove();
   }
 
@@ -136,6 +146,9 @@ export class HeatmapEditor {
       ]);
     }
 
+    this.stageEl = null;
+    this.wrapEl = null;
+
     const body = el("div", "ltk-hm-body");
     this.root.appendChild(body);
 
@@ -150,12 +163,19 @@ export class HeatmapEditor {
       return;
     }
 
+    // image stage on the left, the issues listing on the right
+    const main = el("div", "ltk-hm-main");
     const stage = el("div", "ltk-hm-stage");
     const wrap = el("div", "ltk-hm-imgwrap");
     const img = el("img", "ltk-hm-img") as HTMLImageElement;
     if (this.readOnly) img.classList.add("ltk-readonly");
     img.src = this.image;
     img.draggable = false;
+    img.addEventListener("load", () => {
+      this.imgAspect =
+        img.naturalHeight > 0 ? img.naturalWidth / img.naturalHeight : 0;
+      this.fitImage();
+    });
     if (!this.readOnly) {
       img.addEventListener("click", (e) => {
         const r = img.getBoundingClientRect();
@@ -169,28 +189,163 @@ export class HeatmapEditor {
 
     this.env.data.pins.forEach((pin, idx) => {
       const dot = el("div", "ltk-hm-pin", String(idx + 1));
+      dot.dataset.pid = pin.id;
       if (this.readOnly) dot.classList.add("ltk-readonly");
       dot.style.left = `${pin.x * 100}%`;
       dot.style.top = `${pin.y * 100}%`;
       dot.style.background = this.severityColour(pin.severity);
       dot.title = pin.note || `Pin ${idx + 1}`;
+      dot.addEventListener("mouseenter", () => this.setHighlight(pin.id, true));
+      dot.addEventListener("mouseleave", () => this.setHighlight(pin.id, false));
       if (!this.readOnly) {
-        dot.addEventListener("click", (e) => {
-          e.stopPropagation();
-          this.editPin(pin, null, null);
-        });
+        this.attachPinDrag(dot, pin, img);
       }
       wrap.appendChild(dot);
     });
 
     stage.appendChild(wrap);
-    body.appendChild(stage);
-
+    main.appendChild(stage);
     if (!this.readOnly) {
-      body.appendChild(
-        el("div", "ltk-hm-hint", "Tap the image to pin an issue · tap a pin to edit")
+      main.appendChild(
+        el(
+          "div",
+          "ltk-hm-hint",
+          "Tap the image to pin an issue · drag a pin to move it · tap a pin or list item to edit"
+        )
       );
     }
+    body.appendChild(main);
+
+    // the issues listing on the right
+    body.appendChild(this.renderList());
+
+    this.stageEl = stage;
+    this.wrapEl = wrap;
+    this.fitImage();
+  }
+
+  /**
+   * Pointer-drag a pin to move it: past a small threshold the drag repositions
+   * the pin live (coordinates normalised to the image); a press that doesn't
+   * move is treated as a tap and opens the edit dialog. Clicks are shielded
+   * from the image's pin-creation handler.
+   */
+  private attachPinDrag(dot: HTMLElement, pin: HeatmapPin, img: HTMLImageElement): void {
+    let dragging = false;
+    let moved = false;
+    let sx = 0;
+    let sy = 0;
+    dot.style.touchAction = "none";
+
+    dot.addEventListener("pointerdown", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      dragging = true;
+      moved = false;
+      sx = e.clientX;
+      sy = e.clientY;
+      try {
+        dot.setPointerCapture(e.pointerId);
+      } catch {
+        /* older browsers */
+      }
+    });
+
+    dot.addEventListener("pointermove", (e) => {
+      if (!dragging) return;
+      if (!moved && Math.hypot(e.clientX - sx, e.clientY - sy) < 6) return;
+      moved = true;
+      dot.classList.add("ltk-hm-dragging");
+      const r = img.getBoundingClientRect();
+      if (r.width <= 0 || r.height <= 0) return;
+      const nx = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width));
+      const ny = Math.max(0, Math.min(1, (e.clientY - r.top) / r.height));
+      pin.x = nx;
+      pin.y = ny;
+      dot.style.left = `${nx * 100}%`;
+      dot.style.top = `${ny * 100}%`;
+    });
+
+    const end = (e: PointerEvent) => {
+      if (!dragging) return;
+      dragging = false;
+      dot.classList.remove("ltk-hm-dragging");
+      try {
+        dot.releasePointerCapture(e.pointerId);
+      } catch {
+        /* ignore */
+      }
+      // persist the new position without a full re-render, so the trailing
+      // click can still be suppressed by the `moved` flag below
+      if (moved) this.persistPins();
+    };
+    dot.addEventListener("pointerup", end);
+    dot.addEventListener("pointercancel", end);
+
+    dot.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (moved) {
+        moved = false;
+        return;
+      }
+      this.editPin(pin, null, null);
+    });
+  }
+
+  /** The issues listing, cross-linked to the pins by hover + click. */
+  private renderList(): HTMLElement {
+    const list = el("aside", "ltk-hm-list");
+    const pins = this.env.data.pins;
+    if (pins.length === 0) {
+      list.appendChild(el("div", "ltk-hm-list-empty", "No issues pinned yet"));
+      return list;
+    }
+    pins.forEach((pin, idx) => {
+      const item = el("div", "ltk-hm-listitem");
+      item.dataset.pid = pin.id;
+      const num = el("span", "ltk-hm-listnum", String(idx + 1));
+      num.style.background = this.severityColour(pin.severity);
+      const note = el("span", "ltk-hm-listnote", pin.note || `Pin ${idx + 1}`);
+      item.append(num, note);
+      item.addEventListener("mouseenter", () => this.setHighlight(pin.id, true));
+      item.addEventListener("mouseleave", () => this.setHighlight(pin.id, false));
+      if (!this.readOnly) {
+        item.addEventListener("click", () => this.editPin(pin, null, null));
+      }
+      list.appendChild(item);
+    });
+    return list;
+  }
+
+  /** Highlight a pin and its list entry together (either direction of hover). */
+  private setHighlight(id: string, on: boolean): void {
+    const dot = this.root.querySelector<HTMLElement>(`.ltk-hm-pin[data-pid="${id}"]`);
+    if (dot) dot.classList.toggle("ltk-hm-hi", on);
+    const item = this.root.querySelector<HTMLElement>(`.ltk-hm-listitem[data-pid="${id}"]`);
+    if (item) item.classList.toggle("ltk-hm-hi", on);
+  }
+
+  /**
+   * Size the image wrapper to the largest box that fits the stage while
+   * keeping the image's aspect ratio — so it fills the available width or
+   * height (whichever binds) without distortion. Pins overlay the wrapper by
+   * percentage, so they stay aligned at any size.
+   */
+  private fitImage(): void {
+    const stage = this.stageEl;
+    const wrap = this.wrapEl;
+    if (!stage || !wrap || this.imgAspect <= 0) return;
+    const sw = stage.clientWidth;
+    const sh = stage.clientHeight;
+    if (sw <= 0 || sh <= 0) return;
+    let w = sw;
+    let h = w / this.imgAspect;
+    if (h > sh) {
+      h = sh;
+      w = h * this.imgAspect;
+    }
+    wrap.style.width = `${Math.floor(w)}px`;
+    wrap.style.height = `${Math.floor(h)}px`;
   }
 
   // ---- mutations ----
@@ -198,6 +353,13 @@ export class HeatmapEditor {
   private commit(): void {
     this.env.meta.updated = nowIso();
     this.emit();
+  }
+
+  /** Persist a change (e.g. a pin drag) without rebuilding the DOM. */
+  private persistPins(): void {
+    this.env.meta.updated = nowIso();
+    this.cb.onChange(this.env, this.actions);
+    this.png.schedule();
   }
 
   private commitActions(): void {
