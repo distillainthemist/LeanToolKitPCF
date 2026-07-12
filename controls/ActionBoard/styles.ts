@@ -141,7 +141,10 @@ export const ACTIONBOARD_CSS = `
   align-items: flex-start;
   min-height: 0;
 }
-.ltk-ab-g-left { flex: 0 0 auto; }
+/* Explicit width (= c1 180 + c2 84 + c3 128), not flex:0 0 auto: Safari
+   resolves the shrink-to-fit width of these nested flex rows wrongly and the
+   plot pane slides over the Dates column, worse after a zoom re-render. */
+.ltk-ab-g-left { flex: 0 0 392px; width: 392px; }
 .ltk-ab-g-lhead {
   display: flex;
   height: 28px;
