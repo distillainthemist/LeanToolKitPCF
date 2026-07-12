@@ -35,6 +35,34 @@
               of-type="Multiple"
               usage="output" />
 
+    <!-- Actions channel: a follow-up action taken forward against an idea -->
+    <property name="actionsInputJSON"
+              display-name-key="Actions Input (JSON)"
+              description-key="Actions for this card instance, from the central actions table: JSON(Filter(Actions, InstanceId = ...)). Canonical action array."
+              of-type="Multiple"
+              usage="input"
+              required="false" />
+
+    <property name="actionsOutputJSON"
+              display-name-key="Actions Output (JSON)"
+              description-key="The full current action set, each stamped with Instance Id. Upsert by action id into the central actions table in OnChange. Actions are never hard-deleted — deleting an idea cancels its actions."
+              of-type="Multiple"
+              usage="output" />
+
+    <property name="instanceId"
+              display-name-key="Instance Id"
+              description-key="Identity of this card instance (e.g. the Dataverse row GUID it is saved against). Stamped on every emitted action."
+              of-type="SingleLine.Text"
+              usage="input"
+              required="false" />
+
+    <property name="peopleJSON"
+              display-name-key="People (JSON)"
+              description-key="People available for action assignment: [{whoId, who}]."
+              of-type="Multiple"
+              usage="input"
+              required="false" />
+
     <!-- Self-describing card chrome -->
     <property name="cardTitle"
               display-name-key="Card Title"

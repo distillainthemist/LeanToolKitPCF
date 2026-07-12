@@ -104,13 +104,18 @@ export const BENEFITEFFORT_CSS = `
   cursor: pointer;
   touch-action: none;
   box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+  display: flex;
+  align-items: baseline;
+  gap: 2px;
+}
+.ltk-be-chip-text {
+  min-width: 0;
+  overflow-wrap: break-word;
   /* allow up to two lines, then ellipsis */
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
   overflow: hidden;
-  overflow-wrap: break-word;
-  white-space: normal;
 }
 .ltk-be-chip:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.16); }
 .ltk-be-chip.ltk-readonly { cursor: default; }
@@ -121,7 +126,14 @@ export const BENEFITEFFORT_CSS = `
   font-weight: 600;
   box-shadow: 0 2px 8px rgba(0,0,0,0.18);
 }
-.ltk-be-star { margin-right: 4px; font-size: 11px; }
+.ltk-be-star { flex: 0 0 auto; font-size: 11px; }
+/* open-action count taken forward against the idea */
+.ltk-be-actbadge {
+  flex: 0 0 auto;
+  font-size: 10px;
+  font-weight: 700;
+  white-space: nowrap;
+}
 .ltk-be-ghost {
   position: fixed;
   z-index: 10001;
@@ -147,4 +159,21 @@ export const BENEFITEFFORT_CSS = `
   transition: border-color 150ms ease, color 150ms ease;
 }
 .ltk-be-add:hover { border-color: var(--ltk-accent); color: var(--ltk-accent); }
+
+/* dialog: capture / manage the action taken forward against an idea */
+.ltk-be-dlg-actions {
+  margin-top: 12px;
+  width: 100%;
+  padding: 8px 0;
+  border: 1px solid var(--ltk-hairline);
+  border-radius: 6px;
+  background: none;
+  color: var(--ltk-fg);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 150ms ease, color 150ms ease;
+}
+.ltk-be-dlg-actions:hover { border-color: var(--ltk-accent); color: var(--ltk-accent); }
 `;

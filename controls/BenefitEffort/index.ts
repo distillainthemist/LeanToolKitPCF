@@ -1,9 +1,12 @@
-// BenefitEffort PCF lifecycle — document-only (no actions channel).
+// BenefitEffort PCF lifecycle — envelope document + actions channel (a
+// follow-up action taken forward against an idea).
 
 import { IInputs, IOutputs } from "./generated/ManifestTypes";
 import { BenefitEffortEditor } from "./editor";
 import { parseBenefitEffort, serializeBenefitEffort } from "./types";
 import { LoadGate, cfg, parseSettings, rawOr, readTheme, str } from "../../shared/pcf/standard";
+import { parseActionsJson, serializeActions } from "../../shared/schema/actions";
+import { parsePeople } from "../../shared/schema/people";
 
 const OUTPUT_DEBOUNCE_MS = 300;
 const ASPECT_RATIO = 1.77;
@@ -16,6 +19,8 @@ export class BenefitEffort implements ComponentFramework.StandardControl<IInputs
   private readonly gate = new LoadGate();
 
   private outputJson = "";
+  private actionsJson = "";
+  private instanceId = "";
   private pngDataUri = "";
   private svgMarkup = "";
   private outputTimer: ReturnType<typeof setTimeout> | null = null;
@@ -34,9 +39,10 @@ export class BenefitEffort implements ComponentFramework.StandardControl<IInputs
     }
 
     this.editor = new BenefitEffortEditor(container, {
-      onChange: (env) => {
+      onChange: (env, actions) => {
         this.outputJson = serializeBenefitEffort(env);
-        this.gate.recordEmitted(this.outputJson, "");
+        this.actionsJson = serializeActions(actions, this.instanceId);
+        this.gate.recordEmitted(this.outputJson, this.actionsJson);
         if (this.outputTimer) clearTimeout(this.outputTimer);
         this.outputTimer = setTimeout(
           () => this.notifyOutputChanged(),
@@ -60,6 +66,7 @@ export class BenefitEffort implements ComponentFramework.StandardControl<IInputs
   public getOutputs(): IOutputs {
     return {
       outputJSON: this.outputJson,
+      actionsOutputJSON: this.actionsJson,
       pngExport: this.pngDataUri,
       svgExport: this.svgMarkup,
     };
@@ -87,19 +94,26 @@ export class BenefitEffort implements ComponentFramework.StandardControl<IInputs
     const s = parseSettings(p.settingsJSON?.raw);
 
     this.applySize(context);
+    this.instanceId = str(p.instanceId, cfg(s, "instanceId"));
     this.editor.setTheme(readTheme(p, s));
+    this.editor.setPeople(parsePeople(rawOr(p.peopleJSON, cfg(s, "peopleJSON"))));
     this.editor.setChrome(str(p.cardTitle, s.title), rawOr(p.prompts, s.promptsRaw));
 
     const disabled = context.mode.isControlDisabled === true;
     this.editor.setReadOnly(disabled || p.readOnly?.raw === true || s.readOnly);
 
     if (this.gate.shouldReload(p)) {
-      const { envelope } = parseBenefitEffort(p.inputJSON?.raw);
+      const { envelope, embeddedActions } = parseBenefitEffort(p.inputJSON?.raw);
+      const external = parseActionsJson(p.actionsInputJSON?.raw);
+      const actions = external.length > 0 ? external : embeddedActions;
+
       const doc = serializeBenefitEffort(envelope);
-      if (doc !== this.outputJson) {
+      const acts = serializeActions(actions, this.instanceId);
+      if (doc !== this.outputJson || acts !== this.actionsJson) {
         this.outputJson = doc;
-        this.gate.recordEmitted(doc, "");
-        this.editor.setEnvelope(envelope);
+        this.actionsJson = acts;
+        this.gate.recordEmitted(doc, acts);
+        this.editor.setEnvelope(envelope, actions);
         this.notifyOutputChanged();
       }
     }

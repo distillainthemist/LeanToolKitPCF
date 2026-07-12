@@ -5,23 +5,28 @@
 import { applyThemeVars, defaultTheme, Theme } from "../../shared/tokens";
 import { LTK_BASE_CSS } from "../../shared/ui/baseCss";
 import { clear, el, ensureStylesheet } from "../../shared/ui/dom";
-import { checkItem, fieldRow, openDialog, textArea } from "../../shared/ui/dialog";
+import { checkItem, fieldRow, openDialog, sectionLabel, textArea } from "../../shared/ui/dialog";
 import { parsePrompts, Prompts, renderTitleBar, hintFor } from "../../shared/ui/chrome";
 import { renderKebab } from "../../shared/ui/menu";
+import { actionRow, openActionDialog } from "../../shared/ui/actionUi";
 import { makeInteractive } from "../../shared/interact/drag";
 import { htmlToPng, saveSvg, SnapshotScheduler } from "../../shared/export/png";
+import { LtkAction, newAction } from "../../shared/schema/actions";
+import { Person } from "../../shared/schema/people";
 import { newId, nowIso } from "../../shared/schema/id";
 import { BenefitEffortEnvelope, BenefitEffortItem, SCHEMA_ID } from "./types";
 import { BENEFITEFFORT_CSS } from "./styles";
 
 export interface BenefitEffortEditorCallbacks {
-  onChange: (env: BenefitEffortEnvelope) => void;
+  onChange: (env: BenefitEffortEnvelope, actions: LtkAction[]) => void;
   onPngReady?: (dataUri: string, svgMarkup?: string) => void;
 }
 
 export class BenefitEffortEditor {
   private readonly root: HTMLElement;
   private env: BenefitEffortEnvelope;
+  private actions: LtkAction[] = [];
+  private people: Person[] = [];
   private theme: Theme = defaultTheme();
   private cardTitle = "";
   private prompts: Prompts = { general: [], fields: {} };
@@ -51,10 +56,25 @@ export class BenefitEffortEditor {
     this.render();
   }
 
-  setEnvelope(env: BenefitEffortEnvelope): void {
+  setEnvelope(env: BenefitEffortEnvelope, actions: LtkAction[]): void {
     this.env = env;
+    this.actions = actions;
     this.render();
     this.png.schedule();
+  }
+
+  setPeople(people: Person[]): void {
+    this.people = people;
+  }
+
+  /** Open, un-cancelled actions raised against an idea. */
+  private openActionCount(itemId: string): number {
+    return this.actions.filter(
+      (a) =>
+        a.context.sourceId === itemId &&
+        a.status !== "cancelled" &&
+        a.status !== "done"
+    ).length;
   }
 
   setTheme(theme: Theme): void {
@@ -205,8 +225,18 @@ export class BenefitEffortEditor {
       star.style.color = this.theme.accent;
       chip.appendChild(star);
     }
-    chip.appendChild(document.createTextNode(item.text));
+    chip.appendChild(el("span", "ltk-be-chip-text", item.text));
     chip.title = item.priority ? `★ ${item.text}` : item.text;
+
+    // badge: number of open actions taken forward against this idea
+    const openActions = this.openActionCount(item.id);
+    if (openActions > 0) {
+      const badge = el("span", "ltk-be-actbadge", `● ${openActions}`);
+      badge.style.color = this.theme.accent;
+      badge.title = `${openActions} open action${openActions === 1 ? "" : "s"}`;
+      chip.appendChild(badge);
+    }
+
     if (this.readOnly) chip.classList.add("ltk-readonly");
     chip.style.left = `${item.effort * 100}%`;
     chip.style.top = `${(1 - item.benefit) * 100}%`;
@@ -247,10 +277,16 @@ export class BenefitEffortEditor {
     return chip;
   }
 
+  /** A document change (items moved/edited): stamps the doc timestamp. */
   private commit(): void {
     this.env.meta.updated = nowIso();
+    this.emit();
+  }
+
+  /** Re-render and push document + actions out (no doc timestamp change). */
+  private emit(): void {
     this.render();
-    this.cb.onChange(this.env);
+    this.cb.onChange(this.env, this.actions);
     this.png.schedule();
   }
 
@@ -273,6 +309,12 @@ export class BenefitEffortEditor {
         kind: "danger" as const,
         onClick: () => {
           this.env.data.items = this.env.data.items.filter((i) => i.id !== item.id);
+          // never hard-delete actions: cancel the idea's open actions
+          for (const a of this.actions) {
+            if (a.context.sourceId === item.id && a.status !== "done") {
+              a.status = "cancelled";
+            }
+          }
           dlg.close();
           this.commit();
         },
@@ -312,7 +354,101 @@ export class BenefitEffortEditor {
     });
     dlg.body.appendChild(fieldRow("Item", ta));
     dlg.body.appendChild(priorityChk.wrap);
+
+    // capture / manage a follow-up action to take forward against this idea.
+    // Applies any pending text/priority edit first, then opens the action UI.
+    const open = item ? this.openActionCount(item.id) : 0;
+    const actBtn = el(
+      "button",
+      "ltk-be-dlg-actions",
+      open > 0 ? `Actions (${open})` : "＋ Add action to take forward"
+    );
+    actBtn.type = "button";
+    actBtn.addEventListener("click", () => {
+      const text = ta.value.trim();
+      if (text === "") {
+        ta.focus();
+        return;
+      }
+      let target = item;
+      if (target) {
+        target.text = text;
+        target.priority = priorityChk.box.checked;
+      } else {
+        target = {
+          id: newId("b"),
+          text,
+          benefit: at?.benefit ?? 0.5,
+          effort: at?.effort ?? 0.5,
+          priority: priorityChk.box.checked,
+        };
+        this.env.data.items.push(target);
+      }
+      dlg.close();
+      this.commit();
+      this.openItemActions(target);
+    });
+    dlg.body.appendChild(actBtn);
+
     ta.focus();
+  }
+
+  /** List + raise actions for an idea; when there are none, raise one directly. */
+  private openItemActions(item: BenefitEffortItem): void {
+    const existing = this.actions.filter(
+      (a) => a.context.sourceId === item.id && a.status !== "cancelled"
+    );
+    if (existing.length === 0) {
+      this.raiseAction(item);
+      return;
+    }
+    const dlg = openDialog({
+      host: this.root,
+      title: item.text || "Idea",
+      buttons: [
+        { label: "Close", kind: "secondary", onClick: () => dlg.close() },
+        {
+          label: "＋ Raise action",
+          kind: "primary",
+          onClick: () => {
+            dlg.close();
+            this.raiseAction(item);
+          },
+        },
+      ],
+    });
+    dlg.body.appendChild(sectionLabel(`Actions (${existing.length})`));
+    for (const a of existing) {
+      dlg.body.appendChild(
+        actionRow(a, {
+          doneColor: this.goodColor(),
+          onChanged: () => this.emit(),
+          onEdit: (act) =>
+            openActionDialog({
+              host: this.root,
+              action: act,
+              people: this.people,
+              isNew: false,
+              onCommit: () => this.emit(),
+            }),
+        })
+      );
+    }
+  }
+
+  private raiseAction(item: BenefitEffortItem): void {
+    const action = newAction({ source: "benefiteffort", sourceId: item.id });
+    action.issue = item.text;
+    openActionDialog({
+      host: this.root,
+      action,
+      people: this.people,
+      isNew: true,
+      onCommit: () => {
+        this.actions.push(action);
+        this.emit();
+      },
+    });
   }
 
   private generatePng(): void {
