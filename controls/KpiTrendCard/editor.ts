@@ -1,12 +1,12 @@
 // The KpiTrendCard editor: a run chart (SVG) with an optional dashed target
-// line. The latest value reads out large, RAG-coloured against the target
-// respecting `direction`. Tap a dot to edit it; ＋ adds a point; the kebab
-// holds target/direction settings.
+// line and optional specification limits (USL/LSL). The latest value reads out
+// large; readings go red only when they fall outside the spec limits. Tap a dot
+// to edit it; ＋ adds a point; the kebab holds target/spec-limit settings.
 
 import { applyThemeVars, defaultTheme, Theme } from "../../shared/tokens";
 import { LTK_BASE_CSS } from "../../shared/ui/baseCss";
 import { clear, el, ensureStylesheet, svgEl } from "../../shared/ui/dom";
-import { checkItem, fieldRow, openDialog, sectionLabel, textInput } from "../../shared/ui/dialog";
+import { fieldRow, openDialog, sectionLabel, textInput } from "../../shared/ui/dialog";
 import { parsePrompts, Prompts, renderGhost, renderTitleBar } from "../../shared/ui/chrome";
 import { renderKebab } from "../../shared/ui/menu";
 import { htmlToPng, saveSvg, SnapshotScheduler } from "../../shared/export/png";
@@ -49,7 +49,7 @@ export class KpiTrendEditor {
     this.env = {
       schema: SCHEMA_ID,
       meta: { title: "", updated: "" },
-      data: { points: [], target: null, ucl: null, lcl: null, direction: "up", unit: "" },
+      data: { points: [], target: null, usl: null, lsl: null, unit: "" },
     };
     this.png = new SnapshotScheduler(() => this.generatePng());
     this.render();
@@ -98,17 +98,10 @@ export class KpiTrendEditor {
     return this.theme.legend[2] ?? "#d13438";
   }
 
-  /** Is `value` on the good side of target (inclusive)? */
-  private onTarget(value: number): boolean | null {
-    const t = this.env.data.target;
-    if (t === null) return null;
-    return this.env.data.direction === "up" ? value >= t : value <= t;
-  }
-
-  /** Does `value` fall outside a set control limit? */
-  private isBreach(value: number): boolean {
-    const { ucl, lcl } = this.env.data;
-    return (ucl !== null && value > ucl) || (lcl !== null && value < lcl);
+  /** Does `value` fall outside a set specification limit (> USL or < LSL)? */
+  private outOfSpec(value: number): boolean {
+    const { usl, lsl } = this.env.data;
+    return (usl !== null && value > usl) || (lsl !== null && value < lsl);
   }
 
   // ---- rendering ----
@@ -127,7 +120,7 @@ export class KpiTrendEditor {
     renderTitleBar(this.root, this.cardTitle, this.prompts);
     if (!this.readOnly) {
       renderKebab(this.root, [
-        { label: "Target & direction", onClick: () => this.editSettings() },
+        { label: "Target & spec limits", onClick: () => this.editSettings() },
         { label: "Download PNG", onClick: () => this.downloadPng() },
         { label: "Download SVG", onClick: () => this.downloadSvg() },
       ]);
@@ -151,7 +144,7 @@ export class KpiTrendEditor {
       return;
     }
 
-    // readout: latest value RAG-coloured vs target
+    // readout: latest value, red only when it is out of spec
     const latest = points[points.length - 1];
     const readout = el("div", "ltk-kt-readout");
     const current = el(
@@ -159,17 +152,14 @@ export class KpiTrendEditor {
       "ltk-kt-current",
       `${latest.value}${unit ? " " + unit : ""}`
     );
-    const ok = this.onTarget(latest.value);
-    if (ok !== null) {
-      current.style.color = ok ? this.goodColor() : this.badColor();
-    }
+    if (this.outOfSpec(latest.value)) current.style.color = this.badColor();
     readout.appendChild(current);
     if (target !== null) {
       readout.appendChild(
         el(
           "div",
           "ltk-kt-target",
-          `Target ${this.env.data.direction === "up" ? "≥" : "≤"} ${target}${unit ? " " + unit : ""}`
+          `Target ${target}${unit ? " " + unit : ""}`
         )
       );
     }
@@ -191,14 +181,14 @@ export class KpiTrendEditor {
       viewBox: `0 0 ${VB_W} ${VB_H}`,
       preserveAspectRatio: "xMidYMid meet",
     });
-    const { points, target, ucl, lcl } = this.env.data;
+    const { points, target, usl, lsl } = this.env.data;
     const plotW = VB_W - M.left - M.right;
     const plotH = VB_H - M.top - M.bottom;
 
     const values = points.map((pt) => pt.value);
     if (target !== null) values.push(target);
-    if (ucl !== null) values.push(ucl);
-    if (lcl !== null) values.push(lcl);
+    if (usl !== null) values.push(usl);
+    if (lsl !== null) values.push(lsl);
     let lo = Math.min(...values);
     let hi = Math.max(...values);
     if (lo === hi) {
@@ -213,13 +203,13 @@ export class KpiTrendEditor {
       M.left + (points.length === 1 ? plotW / 2 : (i / (points.length - 1)) * plotW);
     const y = (v: number) => M.top + plotH - ((v - lo) / (hi - lo)) * plotH;
 
-    // control-limit zones (drawn first, behind everything): the band between
-    // the limits reads as "in control" (faint good tint); beyond a limit is
-    // "out of control" (faint bad tint)
+    // spec-limit zones (drawn first, behind everything): the band between the
+    // limits reads as "in spec" (faint good tint); beyond a limit is
+    // "out of spec" (faint bad tint)
     const topY = M.top;
     const botY = M.top + plotH;
     const clampY = (v: number) => Math.max(topY, Math.min(botY, v));
-    if (ucl !== null || lcl !== null) {
+    if (usl !== null || lsl !== null) {
       const zone = (y1: number, y2: number, colour: string, opacity: number) => {
         if (y2 - y1 <= 0.5) return;
         const rect = svgEl("rect", {
@@ -230,11 +220,11 @@ export class KpiTrendEditor {
         s.opacity = String(opacity);
         svg.appendChild(rect);
       };
-      const bandTop = ucl !== null ? clampY(y(ucl)) : topY;
-      const bandBot = lcl !== null ? clampY(y(lcl)) : botY;
-      zone(bandTop, bandBot, this.goodColor(), 0.08); // in-control band
-      if (ucl !== null) zone(topY, clampY(y(ucl)), this.badColor(), 0.1); // above UCL
-      if (lcl !== null) zone(clampY(y(lcl)), botY, this.badColor(), 0.1); // below LCL
+      const bandTop = usl !== null ? clampY(y(usl)) : topY;
+      const bandBot = lsl !== null ? clampY(y(lsl)) : botY;
+      zone(bandTop, bandBot, this.goodColor(), 0.08); // in-spec band
+      if (usl !== null) zone(topY, clampY(y(usl)), this.badColor(), 0.1); // above USL
+      if (lsl !== null) zone(clampY(y(lsl)), botY, this.badColor(), 0.1); // below LSL
     }
 
     // axes + y ticks
@@ -277,7 +267,7 @@ export class KpiTrendEditor {
       svg.appendChild(tl);
     }
 
-    // control-limit lines + small right-hand labels
+    // spec-limit lines + small right-hand labels
     const limitLine = (value: number, label: string) => {
       const ly = clampY(y(value));
       const ln = svgEl("line", {
@@ -294,8 +284,8 @@ export class KpiTrendEditor {
       t.textContent = `${label} ${value}`;
       svg.appendChild(t);
     };
-    if (ucl !== null) limitLine(ucl, "UCL");
-    if (lcl !== null) limitLine(lcl, "LCL");
+    if (usl !== null) limitLine(usl, "USL");
+    if (lsl !== null) limitLine(lsl, "LSL");
 
     // the line + dots
     const line = svgEl("polyline", {
@@ -310,25 +300,19 @@ export class KpiTrendEditor {
     svg.appendChild(line);
 
     points.forEach((pt, i) => {
-      const breach = this.isBreach(pt.value);
-      const ok = this.onTarget(pt.value);
-      // a control-limit breach is the strongest signal — flag it red and
-      // larger, whatever the target says
+      // a reading is flagged red (and larger) only when it is out of spec;
+      // otherwise it stays neutral
+      const oos = this.outOfSpec(pt.value);
       const dot = svgEl("circle", {
-        cx: x(i), cy: y(pt.value), r: breach ? 7 : 5,
+        cx: x(i), cy: y(pt.value), r: oos ? 7 : 5,
         class: "ltk-kt-dot" + (this.readOnly ? " ltk-readonly" : ""),
       });
-      const colour = breach
+      (dot as SVGElement & { style: CSSStyleDeclaration }).style.fill = oos
         ? this.badColor()
-        : ok === null
-          ? this.theme.foreground
-          : ok
-            ? this.goodColor()
-            : this.badColor();
-      (dot as SVGElement & { style: CSSStyleDeclaration }).style.fill = colour;
+        : this.theme.foreground;
       const tip = svgEl("title", {});
       tip.textContent =
-        `${pt.date}: ${pt.value}` + (breach ? " — out of control" : "");
+        `${pt.date}: ${pt.value}` + (oos ? " — out of spec" : "");
       dot.appendChild(tip);
       if (!this.readOnly) {
         dot.addEventListener("click", () => this.editPoint(pt));
@@ -409,11 +393,8 @@ export class KpiTrendEditor {
       textInput(v === null ? "" : String(v), { type: "number", placeholder });
     const target = numInput(this.env.data.target, "No target");
     const unit = textInput(this.env.data.unit, { placeholder: "e.g. %, units/hr" });
-    const ucl = numInput(this.env.data.ucl, "None");
-    const lcl = numInput(this.env.data.lcl, "None");
-    const higher = checkItem("Higher is better");
-    higher.box.checked = this.env.data.direction === "up";
-    higher.wrap.classList.toggle("ltk-check-on", higher.box.checked);
+    const usl = numInput(this.env.data.usl, "None");
+    const lsl = numInput(this.env.data.lsl, "None");
 
     const readNum = (input: HTMLInputElement): number | null => {
       const n = Number(input.value);
@@ -422,7 +403,7 @@ export class KpiTrendEditor {
 
     const dlg = openDialog({
       host: this.root,
-      title: "Target & limits",
+      title: "Target & spec limits",
       buttons: [
         { label: "Cancel", kind: "secondary", onClick: () => dlg.close() },
         {
@@ -431,9 +412,8 @@ export class KpiTrendEditor {
           onClick: () => {
             this.env.data.target = readNum(target);
             this.env.data.unit = unit.value.trim();
-            this.env.data.ucl = readNum(ucl);
-            this.env.data.lcl = readNum(lcl);
-            this.env.data.direction = higher.box.checked ? "up" : "down";
+            this.env.data.usl = readNum(usl);
+            this.env.data.lsl = readNum(lsl);
             dlg.close();
             this.commit();
           },
@@ -450,11 +430,10 @@ export class KpiTrendEditor {
       return r;
     };
     dlg.body.appendChild(row(fieldRow("Target", target), fieldRow("Unit", unit)));
-    dlg.body.appendChild(sectionLabel("Control limits (optional)"));
+    dlg.body.appendChild(sectionLabel("Specification limits (optional)"));
     dlg.body.appendChild(
-      row(fieldRow("Upper (UCL)", ucl), fieldRow("Lower (LCL)", lcl))
+      row(fieldRow("Upper (USL)", usl), fieldRow("Lower (LSL)", lsl))
     );
-    dlg.body.appendChild(higher.wrap);
     target.focus();
   }
 

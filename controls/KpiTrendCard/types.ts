@@ -1,6 +1,6 @@
-// KpiTrendCard document — a run chart of dated values with an optional
-// target. `direction` says which side of the target is good ("up" = higher
-// is better). The latest point drives the RAG readout.
+// KpiTrendCard document — a run chart of dated values with an optional target
+// (a reference goal line) and optional specification limits (USL/LSL). A
+// reading is flagged red only when it falls outside the spec limits.
 
 import {
   Envelope,
@@ -19,9 +19,8 @@ export interface KpiPoint {
 export interface KpiTrendData {
   points: KpiPoint[];
   target: number | null;
-  ucl: number | null; // upper control limit
-  lcl: number | null; // lower control limit
-  direction: "up" | "down";
+  usl: number | null; // upper specification limit
+  lsl: number | null; // lower specification limit
   unit: string;
 }
 
@@ -29,14 +28,15 @@ export type KpiTrendEnvelope = Envelope<KpiTrendData>;
 
 function parseData(data: unknown): KpiTrendData {
   if (!data || typeof data !== "object") {
-    return { points: [], target: null, ucl: null, lcl: null, direction: "up", unit: "" };
+    return { points: [], target: null, usl: null, lsl: null, unit: "" };
   }
   const d = data as {
     points?: unknown;
     target?: unknown;
-    ucl?: unknown;
+    usl?: unknown;
+    lsl?: unknown;
+    ucl?: unknown; // legacy: control limits are read as spec limits
     lcl?: unknown;
-    direction?: unknown;
     unit?: unknown;
   };
   const points: KpiPoint[] = [];
@@ -58,9 +58,8 @@ function parseData(data: unknown): KpiTrendData {
   return {
     points,
     target: num(d.target),
-    ucl: num(d.ucl),
-    lcl: num(d.lcl),
-    direction: d.direction === "down" ? "down" : "up",
+    usl: num(d.usl ?? d.ucl),
+    lsl: num(d.lsl ?? d.lcl),
     unit: typeof d.unit === "string" ? d.unit : "",
   };
 }

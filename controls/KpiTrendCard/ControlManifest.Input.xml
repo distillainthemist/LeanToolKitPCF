@@ -10,7 +10,7 @@
     <!-- Standard LeanToolKit data surface -->
     <property name="inputJSON"
               display-name-key="Input JSON"
-              description-key="Card document to preload: {schema, meta, data:{points:[{date,value}], target, direction, unit}}."
+              description-key="Card document to preload: {schema, meta, data:{points:[{date,value}], target, usl, lsl, unit}}. Legacy ucl/lcl load as usl/lsl."
               of-type="Multiple"
               usage="input"
               required="false" />
