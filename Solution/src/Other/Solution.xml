@@ -8,7 +8,7 @@
     <Descriptions>
       <Description description="LeanToolKit — lean-board code components: root cause analysis, process mapping, action management, board cards and cascade elements." languagecode="1033" />
     </Descriptions>
-    <Version>0.1.0.0</Version>
+    <Version>0.1.1.0</Version>
     <Managed>2</Managed>
     <Publisher>
       <UniqueName>BenOBrien</UniqueName>

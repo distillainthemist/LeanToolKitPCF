@@ -4,7 +4,7 @@
            constructor="SqdpcCard"
            version="0.1.0"
            display-name-key="SQDPC Card"
-           description-key="LeanToolKit SQDPC card — each dimension's month drawn as its big letter built from day tiles. Tap a tile to cycle the configured status codes; hold to raise an action; two-shift granularity splits tiles diagonally."
+           description-key="LeanToolKit SQDPC card — each dimension rendered as its month in the shape of its big letter, built from day tiles. Tap a tile to cycle the configured status codes; hold to raise an action; two-shift granularity splits tiles diagonally."
            control-type="standard">
 
     <!-- Standard LeanToolKit data surface -->

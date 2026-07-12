@@ -60,7 +60,7 @@
 
     <property name="rosterPattern"
               display-name-key="Roster Pattern"
-              description-key="The crews' repeating pattern: blocks of Days / Nights / Off, e.g. 2D-2N-5O-2D-3N-4O. Applies to shiftly/daily. Empty = no roster."
+              description-key="The repeating crew pattern: blocks of Days / Nights / Off, e.g. 2D-2N-5O-2D-3N-4O. Applies to shiftly/daily. Empty = no roster."
               of-type="SingleLine.Text"
               usage="input"
               required="false" />
@@ -102,7 +102,7 @@
     <!-- Self-describing card chrome -->
     <property name="cardTitle"
               display-name-key="Card Title"
-              description-key="Optional title bar (typically the meeting's name). Leave empty for no chrome at all."
+              description-key="Optional title bar (typically the meeting name). Leave empty for no chrome at all."
               of-type="SingleLine.Text"
               usage="input"
               required="false" />
@@ -152,7 +152,7 @@
 
     <property name="readOnly"
               display-name-key="Read Only"
-              description-key="When true, the custom-column fields are disabled (rows stay selectable — selection is the card's purpose)."
+              description-key="When true, the custom-column fields are disabled (rows stay selectable — selecting a row is what the card is for)."
               of-type="TwoOptions"
               usage="input"
               required="false"

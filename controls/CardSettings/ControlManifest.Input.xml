@@ -4,7 +4,7 @@
            constructor="CardSettings"
            version="0.1.0"
            display-name-key="Card Settings"
-           description-key="LeanToolKit settings composer — pick a card type (or load an existing settingsJSON to edit), fill in common, theme and card-specific configuration with typed fields, and emit a complete settingsJSON (stamped with cardType) ready to store against the card's row."
+           description-key="LeanToolKit settings composer — pick a card type (or load an existing settingsJSON to edit), fill in common, theme and card-specific configuration with typed fields, and emit a complete settingsJSON (stamped with cardType) ready to store against the card row."
            control-type="standard">
 
     <!-- The blob being edited rides the standard document channel -->
@@ -17,7 +17,7 @@
 
     <property name="cardType"
               display-name-key="Card Type"
-              description-key="Optional: preselect AND lock the card type (the control name, e.g. SqdpcCard) — use when editing a known card's row. Empty = the maker picks."
+              description-key="Optional: preselect AND lock the card type (the control name, e.g. SqdpcCard) — use when editing a known card row. Empty = the maker picks."
               of-type="SingleLine.Text"
               usage="input"
               required="false" />
@@ -31,20 +31,20 @@
 
     <property name="outputJSON"
               display-name-key="Output JSON"
-              description-key="The composed settingsJSON for the selected card — sparse (only values the maker set), stamped with cardType, unknown input keys preserved. Bind a live card's settingsJSON to this for a live preview; persist it in OnChange."
+              description-key="The composed settingsJSON for the selected card — sparse (only values the maker set), stamped with cardType, unknown input keys preserved. Bind this to a live card settingsJSON input for a live preview; persist it in OnChange."
               of-type="Multiple"
               usage="output" />
 
     <property name="selectedCardType"
               display-name-key="Selected Card Type"
-              description-key="The chosen card type (control name), also stamped inside Output JSON — bind to the card row's type column."
+              description-key="The chosen card type (control name), also stamped inside Output JSON — bind to the card row type column."
               of-type="SingleLine.Text"
               usage="output" />
 
     <!-- Self-describing card chrome -->
     <property name="cardTitle"
               display-name-key="Card Title"
-              description-key="Optional title bar for this form (e.g. 'Card settings'). Leave empty for no chrome at all."
+              description-key="Optional title bar for this form (for example, Card settings). Leave empty for no chrome at all."
               of-type="SingleLine.Text"
               usage="input"
               required="false" />

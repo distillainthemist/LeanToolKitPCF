@@ -17,7 +17,7 @@
 
     <property name="actionsOutputJSON"
               display-name-key="Actions Output (JSON)"
-              description-key="The action set with acknowledgements, comments and status edits. Each action keeps its SOURCE card's Instance Id — upsert by action id in OnChange."
+              description-key="The action set with acknowledgements, comments and status edits. Each action keeps the Instance Id of its SOURCE card — upsert by action id in OnChange."
               of-type="Multiple"
               usage="output" />
 
@@ -44,14 +44,14 @@
 
     <property name="viewerName"
               display-name-key="Viewer Name"
-              description-key="The current user's display name (e.g. User().FullName) — stamped on acknowledgements and comments."
+              description-key="The display name of the current user (e.g. User().FullName) — stamped on acknowledgements and comments."
               of-type="SingleLine.Text"
               usage="input"
               required="false" />
 
     <property name="viewerId"
               display-name-key="Viewer Id"
-              description-key="The current user's id (e.g. their email or Dataverse GUID) — stamped on acknowledgements and comments."
+              description-key="The id of the current user (e.g. their email or Dataverse GUID) — stamped on acknowledgements and comments."
               of-type="SingleLine.Text"
               usage="input"
               required="false" />
