@@ -10,6 +10,7 @@ import { FishboneModel, StyleConfig } from "./model";
 import {
   FishboneData,
   FishboneEnvelope,
+  parseCategoriesSetting,
   parseFishbone,
   SCHEMA_ID,
   serializeFishbone,
@@ -344,7 +345,10 @@ export class Fishbone implements ComponentFramework.StandardControl<IInputs, IOu
     this.applySize(context);
 
     if (this.gate.shouldReload(p)) {
-      const { envelope, embeddedActions } = parseFishbone(p.inputJSON?.raw);
+      // the `categories` setting names the bones for a NEW/empty document;
+      // a document that already carries categories keeps its own
+      const defaultCats = parseCategoriesSetting(cfg(s, "categories"));
+      const { envelope, embeddedActions } = parseFishbone(p.inputJSON?.raw, defaultCats);
       const external = parseActionsJson(p.actionsInputJSON?.raw);
       const actions = external.length > 0 ? external : embeddedActions;
 

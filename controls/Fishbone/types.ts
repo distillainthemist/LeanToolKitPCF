@@ -38,23 +38,45 @@ function dedupe(names: unknown[]): string[] {
   return out;
 }
 
-function parseData(data: unknown): FishboneData {
+/**
+ * Parse the `categories` setting (settings config): a JSON array or CSV /
+ * newline-separated text of bone names. Empty / unparsable = [].
+ */
+export function parseCategoriesSetting(raw: string | null | undefined): string[] {
+  const t = (raw ?? "").trim();
+  if (t === "") return [];
+  if (t.startsWith("[")) {
+    try {
+      const data = JSON.parse(t) as unknown;
+      if (Array.isArray(data)) return dedupe(data);
+    } catch {
+      /* fall through to CSV */
+    }
+  }
+  return dedupe(t.split(/[,\n]/));
+}
+
+function parseData(data: unknown, defaultCategories: string[]): FishboneData {
+  const fallback = defaultCategories.length ? defaultCategories : DEFAULT_CATEGORIES;
   if (!data || typeof data !== "object") {
-    return { problem: "", categories: DEFAULT_CATEGORIES.slice(), causes: [] };
+    return { problem: "", categories: fallback.slice(), causes: [] };
   }
   const d = data as { problem?: unknown; categories?: unknown; causes?: unknown };
   const categories = Array.isArray(d.categories) ? dedupe(d.categories) : [];
   return {
     problem: typeof d.problem === "string" ? d.problem : "",
-    categories: categories.length ? categories : DEFAULT_CATEGORIES.slice(),
+    categories: categories.length ? categories : fallback.slice(),
     causes: parseCauses(d.causes),
   };
 }
 
+/** `defaultCategories` (the `categories` setting) seeds NEW / empty documents;
+ *  a document that already names its bones keeps them. */
 export function parseFishbone(
-  raw: string | null | undefined
+  raw: string | null | undefined,
+  defaultCategories: string[] = []
 ): ParsedEnvelope<FishboneData> {
-  return parseEnvelope(raw, SCHEMA_ID, parseData);
+  return parseEnvelope(raw, SCHEMA_ID, (data) => parseData(data, defaultCategories));
 }
 
 export function serializeFishbone(env: FishboneEnvelope): string {
