@@ -8,8 +8,9 @@ import { LTK_BASE_CSS } from "../../shared/ui/baseCss";
 import { clear, el, ensureStylesheet } from "../../shared/ui/dom";
 import { parsePrompts, Prompts, renderTitleBar } from "../../shared/ui/chrome";
 import { sectionLabel } from "../../shared/ui/dialog";
-import { CARDS, cardSpec } from "./registry";
-import { SettingsDraft, emptyDraft } from "./types";
+import { CARDS, cardSpec, COMMON_FIELDS, THEME_FIELDS } from "./registry";
+import { renderField, renderPromptsField, FieldHost } from "./fields";
+import { SettingsDraft, ThemeDraft, emptyDraft } from "./types";
 import { CARDSETTINGS_CSS } from "./styles";
 
 export interface CardSettingsCallbacks {
@@ -162,15 +163,66 @@ export class CardSettingsEditor {
     }
     body.appendChild(head);
 
-    // sections — populated by the typed field editors (step 3)
+    const host: FieldHost = {
+      readOnly: this.readOnly,
+      onChanged: () => this.commit(),
+    };
+
+    // Common: title, prompts, read-only
     body.appendChild(sectionLabel("Common"));
-    body.appendChild(
-      el("div", "ltk-cs-note", "Title, prompts and read-only — field editors land in the next step.")
+    const common = el("div", "ltk-cs-grid");
+    const [titleSpec, promptsSpec, roSpec] = COMMON_FIELDS;
+    common.appendChild(
+      renderField(
+        titleSpec,
+        () => this.draft.title,
+        (v) => {
+          this.draft.title = typeof v === "string" ? v : "";
+        },
+        host
+      )
     );
+    common.appendChild(
+      renderPromptsField(
+        promptsSpec,
+        () => this.draft.prompts,
+        (v) => {
+          this.draft.prompts = v;
+        },
+        host
+      )
+    );
+    common.appendChild(
+      renderField(
+        roSpec,
+        () => this.draft.readOnly,
+        (v) => {
+          this.draft.readOnly = v === true;
+        },
+        host
+      )
+    );
+    body.appendChild(common);
+
+    // Theme (empty = inherit the card's defaults)
     body.appendChild(sectionLabel("Theme"));
-    body.appendChild(
-      el("div", "ltk-cs-note", "Colours and font — field editors land in the next step.")
-    );
+    const themeGrid = el("div", "ltk-cs-grid");
+    for (const f of THEME_FIELDS) {
+      const key = f.key as keyof ThemeDraft;
+      themeGrid.appendChild(
+        renderField(
+          f,
+          () => this.draft.theme[key],
+          (v) => {
+            this.draft.theme[key] = typeof v === "string" ? v : "";
+          },
+          host
+        )
+      );
+    }
+    body.appendChild(themeGrid);
+
+    // Card-specific configuration
     body.appendChild(sectionLabel("Configuration"));
     if (spec.config.length === 0) {
       body.appendChild(
@@ -181,9 +233,24 @@ export class CardSettingsEditor {
         )
       );
     } else {
-      body.appendChild(
-        el("div", "ltk-cs-note", `${spec.config.length} setting(s) — field editors land in the next step.`)
-      );
+      if (spec.configNote) {
+        body.appendChild(el("div", "ltk-cs-note", spec.configNote));
+      }
+      const cfgGrid = el("div", "ltk-cs-grid");
+      for (const f of spec.config) {
+        cfgGrid.appendChild(
+          renderField(
+            f,
+            () => this.draft.config[f.key],
+            (v) => {
+              if (v === undefined) delete this.draft.config[f.key];
+              else this.draft.config[f.key] = v;
+            },
+            host
+          )
+        );
+      }
+      body.appendChild(cfgGrid);
     }
     if (spec.appBound.length > 0) {
       body.appendChild(

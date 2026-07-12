@@ -76,7 +76,136 @@ export const CARDSETTINGS_CSS = `
 }
 .ltk-cs-change:hover { border-color: var(--ltk-accent); color: var(--ltk-accent); }
 
-/* ---- sections (populated by the field editors) ---- */
+/* ---- sections ---- */
 .ltk-cs-note { font-size: 12px; color: var(--ltk-muted); line-height: 1.4; }
 .ltk-cs-appbound { font-size: 11px; color: var(--ltk-muted); font-style: italic; }
+
+/* ---- field grid ---- */
+.ltk-cs-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 10px 18px;
+  align-items: start;
+}
+.ltk-cs-field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.ltk-cs-field-wide { grid-column: 1 / -1; }
+.ltk-cs-field-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ltk-muted);
+  min-height: 13px;
+}
+.ltk-cs-help { font-size: 11px; color: var(--ltk-muted); line-height: 1.35; }
+
+/* ---- chips (string lists) ---- */
+.ltk-cs-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  border: 1px solid var(--ltk-hairline);
+  border-radius: 6px;
+  padding: 6px;
+  background: var(--ltk-bg);
+}
+.ltk-cs-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid var(--ltk-hairline);
+  border-radius: 999px;
+  padding: 2px 9px;
+  font-size: 12px;
+}
+.ltk-cs-chip-x {
+  border: none;
+  background: none;
+  color: var(--ltk-muted);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 2px;
+}
+.ltk-cs-chip-x:hover { color: #a02832; }
+.ltk-cs-chipinput {
+  flex: 1 1 90px;
+  min-width: 80px;
+  border: none;
+  outline: none;
+  font: inherit;
+  font-size: 12px;
+  background: transparent;
+  color: var(--ltk-fg);
+  padding: 2px;
+}
+
+/* ---- colours ---- */
+.ltk-cs-colorwrap { display: inline-flex; align-items: center; gap: 6px; }
+.ltk-cs-color {
+  width: 30px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid var(--ltk-hairline);
+  border-radius: 4px;
+  background: var(--ltk-bg);
+  cursor: pointer;
+}
+.ltk-cs-color-unset { opacity: 0.35; }
+.ltk-cs-colorhex {
+  font-size: 11px;
+  color: var(--ltk-muted);
+  font-variant-numeric: tabular-nums;
+  min-width: 52px;
+}
+.ltk-cs-colorclear {
+  border: none;
+  background: none;
+  color: var(--ltk-muted);
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  padding: 0 2px;
+}
+.ltk-cs-colorclear:hover { color: #a02832; }
+.ltk-cs-colorslot { display: inline-flex; align-items: center; gap: 2px; }
+
+/* ---- small tables (objectList / kvList) ---- */
+.ltk-cs-table { display: flex; flex-direction: column; gap: 4px; }
+.ltk-cs-tr { display: flex; gap: 6px; align-items: center; }
+.ltk-cs-th .ltk-cs-td {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ltk-muted);
+}
+.ltk-cs-td { flex: 1 1 0; min-width: 0; }
+.ltk-cs-td-x { flex: 0 0 20px; text-align: center; }
+.ltk-cs-td-key { flex: 0 0 32%; }
+.ltk-cs-cell { width: 100%; box-sizing: border-box; font-size: 12px; padding: 4px 6px; }
+.ltk-cs-add {
+  align-self: flex-start;
+  border: 1px dashed var(--ltk-hairline);
+  border-radius: 6px;
+  background: none;
+  color: var(--ltk-muted);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 10px;
+  cursor: pointer;
+  transition: border-color 120ms ease, color 120ms ease;
+}
+.ltk-cs-add:hover { border-color: var(--ltk-accent); color: var(--ltk-accent); }
+
+/* ---- raw JSON fallback ---- */
+.ltk-cs-json {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11.5px;
+}
+.ltk-cs-json-bad { border-color: #a02832 !important; }
+.ltk-cs-jsonerr { font-size: 11px; color: #a02832; }
 `;
