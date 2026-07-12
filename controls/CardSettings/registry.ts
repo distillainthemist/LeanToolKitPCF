@@ -22,6 +22,7 @@ export type FieldKind =
   | "colorList" // list of colours, emitted as CSV text
   | "objectList" // array of flat objects, edited as a small table (`fields`)
   | "kvList" // key→value map, edited as pairs, emitted as an object
+  | "captureColumns" // CaptureCard's typed columns (dedicated builder)
   | "json"; // raw JSON fallback (validated before emit)
 
 export interface ObjectField {
@@ -133,8 +134,17 @@ export const CARDS: CardSpec[] = [
     type: "Fishbone",
     label: "Fishbone",
     description: "Cause-and-effect diagram — causes on category bones.",
-    config: [],
-    appBound: [],
+    config: [
+      {
+        key: "categories",
+        label: "Cause categories",
+        kind: "csvChips",
+        help:
+          "The bone labels for a NEW fishbone (a diagram that already has bones keeps its own). Empty = the classic 6M set.",
+        placeholder: "Measurements, Materials, People, Environment, Methods, Machines",
+      },
+    ],
+    appBound: ["instanceId", "peopleJSON"],
     configNote: DOC_NOTE_RCA,
   },
   {
@@ -322,11 +332,9 @@ export const CARDS: CardSpec[] = [
       {
         key: "columnsJSON",
         label: "Columns",
-        kind: "json",
+        kind: "captureColumns",
         help:
-          "Typed columns. type: text | number | decimal | yesno | list; list options may carry an icon and a `when` parent value for two-level dependent lists; multi: true allows multiple selections; parent names the controlling column.",
-        placeholder:
-          '[{"key":"station","label":"Station","type":"list","options":[{"value":"fv","label":"Fermenter","icon":"🫧"}]},{"key":"note","label":"Note","type":"text"}]',
+          "The grid's typed columns. Picklist options can carry an icon (an emoji, or an image URL / data URI); a picklist can depend on another picklist so its options filter by the parent's selection.",
       },
       {
         key: "rowsJSON",

@@ -201,6 +201,55 @@ export const CARDSETTINGS_CSS = `
 }
 .ltk-cs-add:hover { border-color: var(--ltk-accent); color: var(--ltk-accent); }
 
+/* ---- capture columns builder ---- */
+.ltk-cs-cols { display: flex; flex-direction: column; gap: 8px; }
+.ltk-cs-col {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border: 1px solid var(--ltk-hairline);
+  border-radius: 6px;
+  padding: 8px;
+  background: var(--ltk-bg);
+}
+.ltk-cs-col-head { display: flex; gap: 6px; align-items: center; }
+.ltk-cs-col-label { flex: 1 1 auto; min-width: 0; }
+/* Safari: fixed flex items need an explicit width, not shrink-to-fit */
+.ltk-cs-col-key {
+  flex: 0 0 110px;
+  width: 110px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+  color: var(--ltk-muted);
+}
+.ltk-cs-col-type { flex: 0 0 118px; width: 118px; font-size: 12px; padding: 4px 6px; }
+.ltk-cs-td-icon { flex: 0 0 30%; }
+.ltk-cs-td-prev, .ltk-cs-iconprev {
+  flex: 0 0 24px;
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  overflow: hidden;
+}
+.ltk-cs-iconprev img { max-width: 22px; max-height: 22px; }
+.ltk-cs-col-foot {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.ltk-cs-col-dep {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--ltk-muted);
+}
+.ltk-cs-col-dep select { font-size: 12px; padding: 4px 6px; }
+
 /* ---- raw JSON fallback ---- */
 .ltk-cs-json {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;

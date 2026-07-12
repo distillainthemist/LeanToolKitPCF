@@ -7,6 +7,7 @@
 import { el } from "../../shared/ui/dom";
 import { checkItem } from "../../shared/ui/dialog";
 import { FieldSpec, ObjectField } from "./registry";
+import { captureColumnsEditor } from "./captureColumns";
 
 export interface FieldHost {
   readOnly: boolean;
@@ -554,6 +555,8 @@ export function renderField(
       return objectListEditor(spec, get, set, host);
     case "kvList":
       return kvListEditor(spec, get, set, host);
+    case "captureColumns":
+      return captureColumnsEditor(spec, get, set, host);
     case "json":
       return jsonEditor(spec, get, set, host);
     case "text":

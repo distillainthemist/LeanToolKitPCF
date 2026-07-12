@@ -8,6 +8,7 @@
 
 import { IInputs, IOutputs } from "./generated/ManifestTypes";
 import { CardSettingsEditor } from "./editor";
+import { cardSpec } from "./registry";
 import { parseDraft, serializeDraft, SettingsDraft } from "./types";
 import { LoadGate, rawOr, readTheme, str } from "../../shared/pcf/standard";
 
@@ -94,17 +95,20 @@ export class CardSettings implements ComponentFramework.StandardControl<IInputs,
 
     if (this.gate.shouldReload(p)) {
       const draft = parseDraft(p.inputJSON?.raw);
-      // a non-empty cardType input pins the type (the app is editing a known
-      // card's row) — it wins over whatever the blob says
+      // a cardType input naming a KNOWN card pins the type (the app is
+      // editing a known card's row) — it wins over whatever the blob says.
+      // Unknown values (a typo'd binding, the harness's "val" seed) are
+      // ignored rather than locking the maker out of the picker.
       const pinned = str(p.cardType).trim();
-      if (pinned !== "") draft.cardType = pinned;
+      const locked = pinned !== "" && cardSpec(pinned) !== undefined;
+      if (locked) draft.cardType = pinned;
 
       const doc = serializeDraft(draft);
       if (doc !== this.outputJson || draft.cardType !== this.cardType) {
         this.outputJson = doc;
         this.cardType = draft.cardType;
         this.gate.recordEmitted(doc, "");
-        this.editor.setDraft(draft, pinned !== "");
+        this.editor.setDraft(draft, locked);
         this.notifyOutputChanged();
       }
     }
