@@ -22,6 +22,7 @@ import {
 } from "../../shared/ui/actionUi";
 import { parsePrompts, Prompts, renderGhost, renderTitleBar, hintFor } from "../../shared/ui/chrome";
 import { renderKebab } from "../../shared/ui/menu";
+import { PanZoom } from "../../shared/ui/panzoom";
 import { makeInteractive } from "../../shared/interact/drag";
 import { htmlToPng, saveSvg, SnapshotScheduler } from "../../shared/export/png";
 import {
@@ -66,6 +67,7 @@ export class FiveWhysEditor {
   private readOnly = false;
   private showStatus = false;
   private readonly png: SnapshotScheduler;
+  private readonly panzoom: PanZoom;
 
   // drag state: a fixed-position ghost follows the pointer; chain rows and
   // the add-chain button register as drop zones each render. Within a chain
@@ -96,6 +98,7 @@ export class FiveWhysEditor {
       data: { problem: "", causes: [] },
     };
     this.png = new SnapshotScheduler(() => this.generatePng());
+    this.panzoom = new PanZoom({ onView: () => this.png.schedule() });
     this.render();
   }
 
@@ -105,6 +108,7 @@ export class FiveWhysEditor {
     this.env = env;
     this.actions = actions;
     this.render();
+    this.panzoom.requestFit(); // auto-fit the (re)loaded chains
     this.png.schedule();
   }
 
@@ -148,6 +152,7 @@ export class FiveWhysEditor {
 
   destroy(): void {
     this.png.cancel();
+    this.panzoom.destroy();
     this.root.remove();
   }
 
@@ -210,13 +215,16 @@ export class FiveWhysEditor {
       return;
     }
 
-    body.appendChild(this.renderProblem());
+    // chains live in a pan/zoom "world" inside the body viewport, so growing
+    // chains can be shrunk to fit, zoomed and dragged around
+    const world = el("div", "ltk-fw-world");
+    world.appendChild(this.renderProblem());
 
     const chainsWrap = el("div", "ltk-fw-chains");
     for (const chain of chains(this.env.data)) {
       chainsWrap.appendChild(this.renderChain(chain));
     }
-    body.appendChild(chainsWrap);
+    world.appendChild(chainsWrap);
 
     if (!this.readOnly) {
       const addChain = el(
@@ -226,9 +234,13 @@ export class FiveWhysEditor {
       );
       addChain.type = "button";
       addChain.addEventListener("click", () => this.addCause(null));
-      body.appendChild(addChain);
+      world.appendChild(addChain);
       this.dropZones.push({ el: addChain, startId: null });
     }
+
+    body.appendChild(world);
+    body.appendChild(this.panzoom.cluster());
+    this.panzoom.mount(body, world);
   }
 
   private renderProblem(): HTMLElement {

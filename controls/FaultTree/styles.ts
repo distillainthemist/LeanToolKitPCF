@@ -10,6 +10,8 @@ export const FAULTTREE_CSS = `
   flex-direction: column;
   gap: 12px;
 }
+/* the pan/zoom world holds the tree and carries the transform */
+.ltk-ft-world { padding: 8px; }
 
 /* ---- top event (problem): the root card of the tree ---- */
 .ltk-ft-problem {

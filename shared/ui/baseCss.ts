@@ -216,4 +216,31 @@ export const LTK_BASE_CSS = `
 .ltk-btn-secondary:hover { background: var(--ltk-hairline); }
 .ltk-btn-danger { background: none; color: #d13438; border-color: #d13438; }
 .ltk-btn-danger:hover { background: #d13438; color: #ffffff; }
+
+/* ---- pan / zoom cluster (shared PanZoom controller) ---- */
+.ltk-pz-zoom {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  display: flex;
+  gap: 4px;
+  z-index: 5;
+}
+.ltk-pz-btn {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid var(--ltk-hairline);
+  border-radius: 6px;
+  background: var(--ltk-bg);
+  color: var(--ltk-fg);
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: border-color 120ms ease;
+}
+.ltk-pz-btn:hover { border-color: var(--ltk-accent); }
 `;

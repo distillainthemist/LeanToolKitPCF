@@ -11,6 +11,14 @@ export const FIVEWHYS_CSS = `
   flex-direction: column;
   gap: 12px;
 }
+/* the pan/zoom world holds the problem + chains and carries the transform */
+.ltk-fw-world {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 8px;
+}
 
 /* ---- problem card ---- */
 .ltk-fw-problem {

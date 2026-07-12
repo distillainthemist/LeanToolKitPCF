@@ -23,6 +23,7 @@ import {
 } from "../../shared/ui/actionUi";
 import { parsePrompts, Prompts, renderGhost, renderTitleBar, hintFor } from "../../shared/ui/chrome";
 import { renderKebab } from "../../shared/ui/menu";
+import { PanZoom } from "../../shared/ui/panzoom";
 import { makeInteractive } from "../../shared/interact/drag";
 import { htmlToPng, saveSvg, SnapshotScheduler } from "../../shared/export/png";
 import {
@@ -68,6 +69,7 @@ export class FaultTreeEditor {
   private readOnly = false;
   private showStatus = false;
   private readonly png: SnapshotScheduler;
+  private readonly panzoom: PanZoom;
 
   /** Collapsed branch ids — transient UI state, not persisted. */
   private collapsed = new Set<string>();
@@ -94,6 +96,7 @@ export class FaultTreeEditor {
       data: { problem: "", causes: [] },
     };
     this.png = new SnapshotScheduler(() => this.generatePng());
+    this.panzoom = new PanZoom({ onView: () => this.png.schedule() });
     this.render();
   }
 
@@ -103,6 +106,7 @@ export class FaultTreeEditor {
     this.env = env;
     this.actions = actions;
     this.render();
+    this.panzoom.requestFit(); // auto-fit the (re)loaded tree
     this.png.schedule();
   }
 
@@ -142,6 +146,7 @@ export class FaultTreeEditor {
 
   destroy(): void {
     this.png.cancel();
+    this.panzoom.destroy();
     this.root.remove();
   }
 
@@ -204,7 +209,9 @@ export class FaultTreeEditor {
       return;
     }
 
-    // the tree: top event as the root node, gated branches beneath
+    // the tree lives in a pan/zoom "world" inside the body viewport, so a big
+    // tree can be shrunk to fit, zoomed and dragged around
+    const world = el("div", "ltk-ft-world");
     const tree = el("div", "ltk-ft-tree");
     const root = el("div", "ltk-ft-node");
     root.appendChild(this.renderProblem());
@@ -228,7 +235,10 @@ export class FaultTreeEditor {
       root.appendChild(add);
     }
     tree.appendChild(root);
-    body.appendChild(tree);
+    world.appendChild(tree);
+    body.appendChild(world);
+    body.appendChild(this.panzoom.cluster());
+    this.panzoom.mount(body, world);
   }
 
   /**
