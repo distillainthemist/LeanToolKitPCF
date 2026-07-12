@@ -7,7 +7,7 @@ import { LTK_BASE_CSS } from "../../shared/ui/baseCss";
 import { clear, el, ensureStylesheet } from "../../shared/ui/dom";
 import { parsePrompts, Prompts, renderGhost, renderTitleBar } from "../../shared/ui/chrome";
 import { renderKebab } from "../../shared/ui/menu";
-import { actionRow, openActionDialog } from "../../shared/ui/actionUi";
+import { actionRow, completeCircle, openActionDialog } from "../../shared/ui/actionUi";
 import { makeInteractive } from "../../shared/interact/drag";
 import { htmlToPng, saveSvg, SnapshotScheduler } from "../../shared/export/png";
 import { ActionStatus, isOverdue, LtkAction, newAction } from "../../shared/schema/actions";
@@ -68,6 +68,14 @@ export class ActionBoardEditor {
   // after a zoom re-render
   private ganttDayW = 24;
   private ganttScrollFrac: number | null = null;
+  // one-shot: fit the day-width to [today … latest] and start the view at
+  // today. Armed on first render and whenever the gantt view is (re)entered,
+  // then consumed once the plot has been measured.
+  private ganttAutoFit = true;
+  // day pinned to the left edge (today after an auto-fit). Re-applied on every
+  // gantt render so a host re-render can't lose it; cleared once the user
+  // scrolls away or zooms.
+  private ganttViewStart: number | null = null;
 
   // drag state (kanban): ghost follows pointer, columns are drop zones
   private ghost: HTMLElement | null = null;
@@ -125,6 +133,8 @@ export class ActionBoardEditor {
 
   setOptions(opts: { view: BoardView; groupBy: KanbanGroupBy }): void {
     if (this.view === opts.view && this.groupBy === opts.groupBy) return;
+    // re-fit the gantt whenever it is (re)entered
+    if (opts.view === "gantt" && this.view !== "gantt") this.ganttAutoFit = true;
     this.view = opts.view;
     this.groupBy = opts.groupBy;
     this.render();
@@ -305,9 +315,15 @@ export class ActionBoardEditor {
           : this.openColor();
     card.style.borderLeftColor = edge;
 
+    // top row: complete circle beside the issue tag (or standing alone)
+    const head = el("div", "ltk-ab-card-head");
+    const circle = completeCircle(a, this.doneColor(), () => this.commit(), this.readOnly);
+    head.appendChild(circle);
     if (this.groupBy !== "issue" && a.issue.trim() !== "") {
-      card.appendChild(el("div", "ltk-ab-card-issue", a.issue));
+      head.appendChild(el("div", "ltk-ab-card-issue", a.issue));
     }
+    card.appendChild(head);
+
     const desc = el(
       "div",
       "ltk-ab-card-desc" + (a.status === "done" ? " ltk-ab-done" : ""),
@@ -372,6 +388,7 @@ export class ActionBoardEditor {
 
       const scroller = el("div", "ltk-ab-g-scroll");
       const zoom = (mult: number, focusFrac?: number) => {
+        this.ganttViewStart = null; // manual zoom takes over from the today-pin
         this.ganttScrollFrac =
           focusFrac ??
           (scroller.scrollLeft + scroller.clientWidth / 2) /
@@ -402,6 +419,7 @@ export class ActionBoardEditor {
       const left = el("div", "ltk-ab-g-left");
       const lhead = el("div", "ltk-ab-g-lhead");
       lhead.append(
+        el("div", "ltk-ab-g-hcell ltk-ab-g-c0"),
         el("div", "ltk-ab-g-hcell ltk-ab-g-c1", "Issue / Action"),
         el("div", "ltk-ab-g-hcell ltk-ab-g-c2", "Who"),
         el("div", "ltk-ab-g-hcell ltk-ab-g-c3", "Dates")
@@ -409,6 +427,10 @@ export class ActionBoardEditor {
       left.appendChild(lhead);
       for (const a of sorted) {
         const lrow = el("div", "ltk-ab-g-lrow");
+        const c0 = el("div", "ltk-ab-g-c0");
+        c0.appendChild(
+          completeCircle(a, this.doneColor(), () => this.commit(), this.readOnly)
+        );
         const c1 = el("div", "ltk-ab-g-c1");
         if (a.issue.trim() !== "") {
           c1.appendChild(el("div", "ltk-ab-card-issue", a.issue));
@@ -431,7 +453,7 @@ export class ActionBoardEditor {
         }
         c3.appendChild(rangeEl);
         if (a.escalated) c3.appendChild(el("span", "ltk-action-flag", " ⚑"));
-        lrow.append(c1, c2, c3);
+        lrow.append(c0, c1, c2, c3);
         if (!this.readOnly) {
           lrow.addEventListener("click", () => this.editAction(a));
         }
@@ -498,8 +520,53 @@ export class ActionBoardEditor {
       main.appendChild(scroller);
       wrap.appendChild(main);
 
-      // restore the scroll position after a zoom re-render
-      if (this.ganttScrollFrac !== null) {
+      // where today (or another pinned day) should sit at the left edge,
+      // clamped to the scroll range
+      const pinTarget = () => {
+        const maxScroll = Math.max(0, scroller.scrollWidth - scroller.clientWidth);
+        return Math.min(
+          maxScroll,
+          Math.max(0, (this.ganttViewStart! - minDay) * this.ganttDayW)
+        );
+      };
+      const applyPin = () => {
+        if (this.ganttViewStart === null) return;
+        requestAnimationFrame(() => {
+          if (this.ganttViewStart !== null) scroller.scrollLeft = pinTarget();
+        });
+      };
+      // a scroll that lands away from the pin means the user took control
+      scroller.addEventListener("scroll", () => {
+        if (this.ganttViewStart === null) return;
+        if (Math.abs(scroller.scrollLeft - pinTarget()) > 2) {
+          this.ganttViewStart = null;
+        }
+      });
+
+      if (this.ganttAutoFit) {
+        // measure the plot pane, size a day so [today … latest] fills it, then
+        // pin today to the left edge (re-rendering if the zoom changed)
+        requestAnimationFrame(() => {
+          const avail = scroller.clientWidth;
+          if (avail <= 0) return;
+          this.ganttAutoFit = false;
+          this.ganttViewStart = today;
+          const spanDays = Math.max(1, maxDay - today + 1);
+          const w = Math.max(
+            GANTT_MIN_DAY_W,
+            Math.min(GANTT_MAX_DAY_W, Math.floor(avail / spanDays))
+          );
+          if (w !== this.ganttDayW) {
+            this.ganttDayW = w;
+            this.render(); // applyPin runs in the fresh render
+          } else {
+            applyPin();
+          }
+        });
+      } else if (this.ganttViewStart !== null) {
+        applyPin();
+      } else if (this.ganttScrollFrac !== null) {
+        // restore the centre after a manual zoom re-render
         const frac = this.ganttScrollFrac;
         this.ganttScrollFrac = null;
         requestAnimationFrame(() => {

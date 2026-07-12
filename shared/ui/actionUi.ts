@@ -158,36 +158,63 @@ export interface ActionRowOptions {
 }
 
 /**
- * One action as a row: complete/not-complete circle (toggles live), the
- * description with who/due underneath, and an edit affordance.
+ * The shared complete/not-complete circle. Toggling flips the action between
+ * done and open, syncs the assignee done flags, then fires onToggled (commit +
+ * re-render there). Colours are inline (Safari rule). Used by the list row and
+ * by the kanban / gantt board views so completing an action looks identical
+ * everywhere.
  */
-export function actionRow(a: LtkAction, opts: ActionRowOptions): HTMLElement {
-  const row = el("div", "ltk-action-row");
-  const dc = opts.doneColor;
-
-  const circle = el("button", "ltk-action-circle");
+export function completeCircle(
+  a: LtkAction,
+  doneColor: string,
+  onToggled: () => void,
+  readOnly = false
+): HTMLButtonElement {
+  const circle = el("button", "ltk-action-circle") as HTMLButtonElement;
   circle.type = "button";
-  const descEl = el("div", "ltk-action-desc", a.description || a.issue);
   const paint = () => {
     const done = a.status === "done";
     circle.textContent = done ? "✓" : "";
     circle.title = done ? "Mark not complete" : "Mark complete";
-    circle.style.background = done ? dc : "";
-    circle.style.borderColor = done ? dc : "";
-    circle.style.color = done ? textOn(dc) : "transparent";
-    descEl.style.textDecoration = done ? "line-through" : "";
+    circle.style.background = done ? doneColor : "";
+    circle.style.borderColor = done ? doneColor : "";
+    circle.style.color = done ? textOn(doneColor) : "transparent";
   };
   paint();
-  if (!opts.readOnly) {
+  if (!readOnly) {
     circle.addEventListener("click", (e) => {
       e.stopPropagation();
       const nowDone = a.status !== "done";
       a.status = nowDone ? "done" : "open";
       for (const x of a.assignees) x.done = nowDone;
       paint();
-      opts.onChanged();
+      onToggled();
     });
   }
+  return circle;
+}
+
+/**
+ * One action as a row: complete/not-complete circle (toggles live), the
+ * description with who/due underneath, and an edit affordance.
+ */
+export function actionRow(a: LtkAction, opts: ActionRowOptions): HTMLElement {
+  const row = el("div", "ltk-action-row");
+
+  const descEl = el("div", "ltk-action-desc", a.description || a.issue);
+  const strike = () => {
+    descEl.style.textDecoration = a.status === "done" ? "line-through" : "";
+  };
+  strike();
+  const circle = completeCircle(
+    a,
+    opts.doneColor,
+    () => {
+      strike();
+      opts.onChanged();
+    },
+    opts.readOnly
+  );
 
   // left: issue (caps) stacked over the description
   const main = el("div", "ltk-action-main");

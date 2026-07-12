@@ -81,12 +81,21 @@ export const ACTIONBOARD_CSS = `
 }
 .ltk-ab-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.12); }
 .ltk-ab-card.ltk-readonly { cursor: default; }
+.ltk-ab-card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
 .ltk-ab-card-issue {
   font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--ltk-muted);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .ltk-ab-card-desc { font-size: 13px; line-height: 1.35; overflow-wrap: break-word; }
 .ltk-ab-card-desc.ltk-ab-done { text-decoration: line-through; }
@@ -141,10 +150,10 @@ export const ACTIONBOARD_CSS = `
   align-items: flex-start;
   min-height: 0;
 }
-/* Explicit width (= c1 180 + c2 84 + c3 128), not flex:0 0 auto: Safari
-   resolves the shrink-to-fit width of these nested flex rows wrongly and the
-   plot pane slides over the Dates column, worse after a zoom re-render. */
-.ltk-ab-g-left { flex: 0 0 392px; width: 392px; }
+/* Explicit width (= c0 30 + c1 244 + c2 78 + c3 128), not flex:0 0 auto:
+   Safari resolves the shrink-to-fit width of these nested flex rows wrongly and
+   the plot pane slides over the Dates column, worse after a zoom re-render. */
+.ltk-ab-g-left { flex: 0 0 480px; width: 480px; }
 .ltk-ab-g-lhead {
   display: flex;
   height: 28px;
@@ -166,15 +175,22 @@ export const ACTIONBOARD_CSS = `
   cursor: pointer;
 }
 .ltk-ab-g-lrow:hover { background: var(--ltk-hairline); }
+.ltk-ab-g-c0 {
+  flex: 0 0 30px;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
 .ltk-ab-g-c1 {
-  flex: 0 0 180px;
+  flex: 0 0 244px;
   min-width: 0;
   padding-right: 10px;
   overflow: hidden;
   text-align: left;
 }
 .ltk-ab-g-c2 {
-  flex: 0 0 84px;
+  flex: 0 0 78px;
   min-width: 0;
   padding-right: 10px;
   overflow: hidden;
@@ -203,6 +219,7 @@ export const ACTIONBOARD_CSS = `
   text-overflow: ellipsis;
   text-align: left;
 }
+.ltk-ab-g-desc.ltk-ab-done { text-decoration: line-through; }
 .ltk-ab-g-scroll { overflow-x: auto; flex: 1 1 auto; min-width: 0; }
 .ltk-ab-g-inner { position: relative; }
 .ltk-ab-g-scale {
