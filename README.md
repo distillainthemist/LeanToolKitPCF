@@ -3,7 +3,9 @@
 A suite of lean-board PowerApps Component Framework controls with a shared
 Flat 2.0 design system and common JSON contracts, shipped as **one importable
 solution**. See [LeanToolKit_ImplementationPlan.md](LeanToolKit_ImplementationPlan.md)
-for the full architecture, component specs and roadmap.
+for the full architecture, component specs and roadmap, and
+[docs/controls](docs/controls/README.md) for per-control reference — what each
+control does and the exact schema of its `outputJSON` and `actionsOutputJSON`.
 
 ## Controls
 
