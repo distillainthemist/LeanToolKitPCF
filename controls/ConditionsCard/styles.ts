@@ -30,7 +30,8 @@ export const CONDITIONS_CSS = `
   overflow: hidden;
 }
 .ltk-cn-cond-name {
-  font-size: 24px;
+  /* match the card title (.ltk-titlebar-text) so the headings sit together */
+  font-size: 20px;
   font-weight: 700;
   line-height: 1.1;
   color: var(--ltk-fg);
