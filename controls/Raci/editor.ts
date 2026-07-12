@@ -33,7 +33,7 @@ export interface RaciEditorCallbacks {
   onPngReady?: (dataUri: string, svgMarkup?: string) => void;
 }
 
-const LABEL_COL = 170;
+const LABEL_COL = 200;
 const ACTION_COL = 62;
 
 export class RaciEditor {
@@ -153,8 +153,8 @@ export class RaciEditor {
     const grid = el("div", "ltk-ra-grid");
     grid.style.gridTemplateColumns = `${LABEL_COL}px repeat(${n}, minmax(58px, 1fr)) ${ACTION_COL}px`;
 
-    // header row: corner + role names (tap to edit) + actions column spacer
-    grid.appendChild(el("div", "ltk-ra-corner"));
+    // header row: corner (labels the deliverable column) + role names + actions
+    grid.appendChild(el("div", "ltk-ra-corner", "Deliverable"));
     roles.forEach((role, i) => {
       const head = el("div", "ltk-ra-rolehead", role);
       if (!this.readOnly) {

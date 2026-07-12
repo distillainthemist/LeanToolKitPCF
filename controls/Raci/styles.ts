@@ -18,7 +18,17 @@ export const RACI_CSS = `
 }
 
 /* ---- headers ---- */
-.ltk-ra-corner { }
+.ltk-ra-corner {
+  display: flex;
+  align-items: flex-end;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ltk-muted);
+  padding: 0 4px 4px 4px;
+  border-bottom: 2px solid var(--ltk-hairline);
+}
 .ltk-ra-acthead {
   display: flex;
   align-items: flex-end;
@@ -52,8 +62,8 @@ export const RACI_CSS = `
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 2px;
-  padding: 6px 10px 6px 4px;
+  gap: 3px;
+  padding: 6px 12px 6px 6px;
   border-right: 2px solid var(--ltk-hairline);
   cursor: pointer;
   overflow: hidden;
@@ -62,10 +72,10 @@ export const RACI_CSS = `
 .ltk-ra-task-edit { cursor: pointer; }
 .ltk-ra-task-edit:hover .ltk-ra-taskname { text-decoration: underline; }
 .ltk-ra-taskname {
-  font-size: 13px;
-  font-weight: 600;
+  font-size: 14px;
+  font-weight: 700;
   color: var(--ltk-fg);
-  line-height: 1.2;
+  line-height: 1.25;
 }
 .ltk-ra-warnflag {
   align-self: flex-start;
