@@ -8,15 +8,14 @@ import { applyThemeVars, defaultTheme, textOn, Theme } from "../../shared/tokens
 import { LTK_BASE_CSS } from "../../shared/ui/baseCss";
 import { clear, el, ensureStylesheet } from "../../shared/ui/dom";
 import { parsePrompts, Prompts, renderGhost, renderTitleBar } from "../../shared/ui/chrome";
-import { renderKebab } from "../../shared/ui/menu";
-import { htmlToPng, saveSvg, SnapshotScheduler } from "../../shared/export/png";
 import { todayIso } from "../../shared/schema/id";
-import { MeetingInstance } from "./types";
+import { MeetingColumn, MeetingInstance } from "./types";
 import { MEETING_CSS } from "./styles";
 
 export interface MeetingViewCallbacks {
-  onSelect: (instance: MeetingInstance) => void;
-  onPngReady?: (dataUri: string, svgMarkup?: string) => void;
+  /** A row was selected (tapped) or its column values edited. `values` merges
+   *  the record's stored values with the in-card edits. */
+  onSelect: (instance: MeetingInstance, values: Record<string, string>) => void;
 }
 
 const CREW_FALLBACKS = ["#2b88d8", "#107c10", "#f2c811", "#8764b8"];
@@ -31,14 +30,15 @@ export class MeetingSchedulerView {
   private lastPromptsRaw: string | null = null;
   private readOnly = false;
   private selectedIso = "";
-  private readonly png: SnapshotScheduler;
+  private columns: MeetingColumn[] = [];
+  // in-card edits to column values, by instance iso then column key
+  private edits: Record<string, Record<string, string>> = {};
 
   constructor(host: HTMLElement, private readonly cb: MeetingViewCallbacks) {
     ensureStylesheet("ltk-base-css", LTK_BASE_CSS);
     ensureStylesheet("ltk-meeting-css", MEETING_CSS);
     this.root = el("div", "ltk-root");
     host.appendChild(this.root);
-    this.png = new SnapshotScheduler(() => this.generatePng());
     this.render();
   }
 
@@ -55,7 +55,12 @@ export class MeetingSchedulerView {
       this.selectedIso = "";
     }
     this.render();
-    this.png.schedule();
+  }
+
+  setColumns(columns: MeetingColumn[]): void {
+    if (JSON.stringify(columns) === JSON.stringify(this.columns)) return;
+    this.columns = columns;
+    this.render();
   }
 
   setTheme(theme: Theme): void {
@@ -80,11 +85,20 @@ export class MeetingSchedulerView {
   }
 
   destroy(): void {
-    this.png.cancel();
     this.root.remove();
   }
 
   // ---- helpers ----
+
+  /** The value to show for a column cell: an in-card edit over the record's. */
+  private valueFor(inst: MeetingInstance, key: string): string {
+    return this.edits[inst.iso]?.[key] ?? inst.values[key] ?? "";
+  }
+
+  /** Record values overlaid with in-card edits, for emitting on select. */
+  private mergedValues(inst: MeetingInstance): Record<string, string> {
+    return { ...inst.values, ...(this.edits[inst.iso] ?? {}) };
+  }
 
   private crewColor(crew: string): string {
     const i = Math.max(0, this.crews.indexOf(crew));
@@ -104,12 +118,6 @@ export class MeetingSchedulerView {
     clear(this.root);
     applyThemeVars(this.root, this.theme);
     renderTitleBar(this.root, this.cardTitle, this.prompts);
-    if (!this.readOnly) {
-      renderKebab(this.root, [
-        { label: "Download PNG", onClick: () => this.downloadPng() },
-        { label: "Download SVG", onClick: () => this.downloadSvg() },
-      ]);
-    }
 
     const body = el("div", "ltk-ms-body");
     this.root.appendChild(body);
@@ -139,12 +147,15 @@ export class MeetingSchedulerView {
     if (inst.date === today) row.classList.add("ltk-ms-today");
     if (inst.iso === this.selectedIso) row.classList.add("ltk-ms-selected");
 
-    const date = el("span", "ltk-ms-row-date", this.prettyDate(inst));
-    const time = el("span", "ltk-ms-row-time", inst.time);
-    row.append(date, time);
+    // identity line: tapping it selects/opens the meeting
+    const main = el("div", "ltk-ms-row-main");
+    main.append(
+      el("span", "ltk-ms-row-date", this.prettyDate(inst)),
+      el("span", "ltk-ms-row-time", inst.time)
+    );
 
     if (inst.shift !== "") {
-      row.appendChild(
+      main.appendChild(
         el("span", "ltk-ms-row-shift", inst.shift === "day" ? "Day" : "Night ☾")
       );
     }
@@ -154,13 +165,13 @@ export class MeetingSchedulerView {
       const c = this.crewColor(inst.crew);
       badge.style.background = c;
       badge.style.color = textOn(c);
-      row.appendChild(badge);
+      main.appendChild(badge);
     }
 
     if (inst.rescheduledTo !== "") {
       const move = el("span", "ltk-ms-resched", `→ ${inst.rescheduledTo}`);
       move.title = "Rescheduled";
-      row.appendChild(move);
+      main.appendChild(move);
     }
 
     const status = el("span", "ltk-ms-status");
@@ -170,42 +181,46 @@ export class MeetingSchedulerView {
     } else if (inst.status === "missing") {
       status.classList.add("ltk-ms-status-missing");
       status.textContent = "⚠ No record";
-      status.title = "This past meeting has no meeting instance.";
+      status.title = "This past meeting has no record.";
     } else {
       status.classList.add("ltk-ms-status-planned");
       status.textContent = "○ Planned";
     }
-    row.appendChild(status);
-
-    row.addEventListener("click", () => {
+    main.appendChild(status);
+    main.addEventListener("click", () => {
       this.selectedIso = inst.iso;
       this.render();
-      this.cb.onSelect(inst);
+      this.cb.onSelect(inst, this.mergedValues(inst));
     });
+    row.appendChild(main);
+
+    // custom-column entry cells (topic, chair, notetaker…) — editing a value
+    // emits the row so the app can persist it; it does not re-select/re-render
+    if (this.columns.length > 0) {
+      const cols = el("div", "ltk-ms-row-cols");
+      for (const col of this.columns) {
+        const cell = el("div", "ltk-ms-col");
+        cell.appendChild(el("span", "ltk-ms-col-label", col.label));
+        const input = el("input", "ltk-ms-col-input") as HTMLInputElement;
+        input.type = "text";
+        input.value = this.valueFor(inst, col.key);
+        input.placeholder = col.label;
+        input.disabled = this.readOnly;
+        // don't let a field interaction fall through to the row's select
+        input.addEventListener("click", (e) => e.stopPropagation());
+        input.addEventListener("pointerdown", (e) => e.stopPropagation());
+        input.addEventListener("input", () => {
+          (this.edits[inst.iso] ??= {})[col.key] = input.value;
+        });
+        input.addEventListener("change", () => {
+          this.cb.onSelect(inst, this.mergedValues(inst));
+        });
+        cell.appendChild(input);
+        cols.appendChild(cell);
+      }
+      row.appendChild(cols);
+    }
+
     return row;
-  }
-
-  // ---- PNG export ----
-
-  private generatePng(): void {
-    if (!this.cb.onPngReady) return;
-    htmlToPng(this.root, LTK_BASE_CSS + MEETING_CSS, this.theme.background, (uri, svg) =>
-      this.cb.onPngReady!(uri, svg)
-    );
-  }
-
-    private downloadSvg(): void {
-    htmlToPng(this.root, LTK_BASE_CSS + MEETING_CSS, this.theme.background, (_uri, svg) =>
-      saveSvg(svg ?? "", "meetings.svg")
-    );
-  }
-
-private downloadPng(): void {
-    htmlToPng(this.root, LTK_BASE_CSS + MEETING_CSS, this.theme.background, (uri) => {
-      const link = document.createElement("a");
-      link.href = uri;
-      link.download = "meetings.png";
-      link.click();
-    });
   }
 }

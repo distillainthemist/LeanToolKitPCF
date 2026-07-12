@@ -43,11 +43,18 @@ export interface SchedulerConfig {
   baseStart: Date;
 }
 
+/** A per-meeting text column (topic, chair, notetaker…), maker-configured. */
+export interface MeetingColumn {
+  key: string;
+  label: string;
+}
+
 export interface ExistingMeeting {
   date: string; // yyyy-mm-dd of the scheduled instance
   hour: number; // scheduled hour (locates the shift for shiftly)
   recordId: string;
   rescheduledTo: string; // "" when not rescheduled
+  values: Record<string, string>; // stored custom-column values, by key
 }
 
 export type InstanceStatus = "existing" | "missing" | "planned";
@@ -62,7 +69,11 @@ export interface MeetingInstance {
   recordId: string; // "" when no record exists yet
   rescheduledTo: string;
   status: InstanceStatus;
+  values: Record<string, string>; // custom-column values from the record
 }
+
+/** Hide a missing (assumed didn't-happen) instance once it is this old. */
+export const STALE_MISS_DAYS = 7;
 
 // ---- date helpers (all local time) ----
 
@@ -169,9 +180,55 @@ export function parseRosterPattern(raw: string | null | undefined): RosterBlock[
   return out.length > 0 ? out : [];
 }
 
+function slug(s: string): string {
+  return s.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+}
+
+/**
+ * columns input: CSV of labels ("Topic,Chair,Notetaker"), or a JSON array of
+ * strings / {key,label} objects. Keys default to a slug of the label.
+ */
+export function parseColumns(raw: string | null | undefined): MeetingColumn[] {
+  const t = String(raw ?? "").trim();
+  if (t === "") return [];
+  let items: unknown[];
+  if (t.startsWith("[")) {
+    try {
+      const a = JSON.parse(t);
+      items = Array.isArray(a) ? a : [];
+    } catch {
+      items = t.split(",");
+    }
+  } else {
+    items = t.split(",");
+  }
+  const out: MeetingColumn[] = [];
+  const seen = new Set<string>();
+  for (const it of items) {
+    let label = "";
+    let key = "";
+    if (it && typeof it === "object") {
+      const o = it as Record<string, unknown>;
+      label = String(o.label ?? o.name ?? o.key ?? "").trim();
+      key = String(o.key ?? "").trim();
+    } else {
+      label = String(it ?? "").trim();
+    }
+    if (label === "" && key === "") continue;
+    if (label === "") label = key;
+    if (key === "") key = slug(label);
+    if (key === "" || seen.has(key)) continue;
+    seen.add(key);
+    out.push({ key, label });
+    if (out.length >= 8) break;
+  }
+  return out;
+}
+
 /**
  * existingMeetingsJSON: [{date|datetime|when, rescheduledDate|rescheduledTo,
- * recordId|id}] — datetimes may be "yyyy-mm-dd", ISO, or "yyyy-mm-dd HH:MM".
+ * recordId|id, values:{colKey: text}}] — datetimes may be "yyyy-mm-dd", ISO,
+ * or "yyyy-mm-dd HH:MM".
  */
 export function parseExistingMeetings(raw: string | null | undefined): ExistingMeeting[] {
   const t = String(raw ?? "").trim();
@@ -187,11 +244,18 @@ export function parseExistingMeetings(raw: string | null | undefined): ExistingM
       const date = parseLocalDate(whenRaw);
       if (!date) continue;
       const hm = /[T ](\d{1,2}):(\d{2})/.exec(whenRaw);
+      const values: Record<string, string> = {};
+      if (o.values && typeof o.values === "object") {
+        for (const [k, v] of Object.entries(o.values as Record<string, unknown>)) {
+          values[k] = String(v ?? "");
+        }
+      }
       out.push({
         date: isoLocal(date),
         hour: hm ? Math.max(0, Math.min(23, Number(hm[1]))) : -1,
         recordId: String(o.recordId ?? o.id ?? "").trim(),
         rescheduledTo: String(o.rescheduledDate ?? o.rescheduledTo ?? "").trim(),
+        values,
       });
     }
     return out;
@@ -347,6 +411,7 @@ export function generateInstances(
       recordId: rec?.recordId ?? "",
       rescheduledTo: rec?.rescheduledTo ?? "",
       status: rec && rec.recordId !== "" ? "existing" : past ? "missing" : "planned",
+      values: rec?.values ?? {},
     });
   };
 
@@ -365,6 +430,15 @@ export function generateInstances(
     }
   }
 
-  out.sort((a, b) => (a.iso < b.iso ? 1 : a.iso > b.iso ? -1 : 0)); // newest first
-  return out;
+  // hide missing instances more than STALE_MISS_DAYS old — assume they simply
+  // didn't happen (a recent miss stays, so its record can still be created)
+  const staleCutoff = now.getTime() - STALE_MISS_DAYS * DAY_MS;
+  const visible = out.filter(
+    (inst) =>
+      inst.status !== "missing" ||
+      new Date(`${inst.date}T${inst.time}:00`).getTime() >= staleCutoff
+  );
+
+  visible.sort((a, b) => (a.iso < b.iso ? 1 : a.iso > b.iso ? -1 : 0)); // newest first
+  return visible;
 }

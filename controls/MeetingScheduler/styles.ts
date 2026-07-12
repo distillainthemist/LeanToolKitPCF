@@ -22,12 +22,11 @@ export const MEETING_CSS = `
 /* ---- instance rows ---- */
 .ltk-ms-row {
   display: flex;
-  align-items: center;
-  gap: 10px;
+  flex-direction: column;
+  gap: 6px;
   padding: 7px 10px;
   border: 1px solid var(--ltk-hairline);
   border-radius: 6px;
-  cursor: pointer;
   transition: border-color 120ms ease, background 120ms ease;
 }
 .ltk-ms-row:hover { border-color: var(--ltk-accent); }
@@ -36,6 +35,48 @@ export const MEETING_CSS = `
   box-shadow: inset 0 0 0 1px var(--ltk-accent);
 }
 .ltk-ms-row.ltk-ms-today { background: rgba(0,0,0,0.03); }
+
+/* identity line — the tappable selector */
+.ltk-ms-row-main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+}
+
+/* ---- custom column entry cells ---- */
+.ltk-ms-row-cols {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.ltk-ms-col {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1 1 120px;
+  min-width: 0;
+}
+.ltk-ms-col-label {
+  font-size: 9.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ltk-muted);
+}
+.ltk-ms-col-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 4px 6px;
+  border: 1px solid var(--ltk-hairline);
+  border-radius: 4px;
+  font-family: inherit;
+  font-size: 12px;
+  background: var(--ltk-bg);
+  color: var(--ltk-fg);
+}
+.ltk-ms-col-input:focus { outline: none; border-color: var(--ltk-accent); }
+.ltk-ms-col-input:disabled { opacity: 0.6; cursor: default; }
 
 .ltk-ms-row-date {
   flex: 0 0 92px;

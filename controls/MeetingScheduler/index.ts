@@ -11,6 +11,7 @@ import {
   generateInstances,
   MeetingInstance,
   parseCategory,
+  parseColumns,
   parseCrews,
   parseDaysOfWeek,
   parseExistingMeetings,
@@ -29,8 +30,6 @@ export class MeetingScheduler implements ComponentFramework.StandardControl<IInp
   private notifyOutputChanged!: () => void;
 
   private selectedJson = "";
-  private pngDataUri = "";
-  private svgMarkup = "";
 
   public init(
     context: ComponentFramework.Context<IInputs>,
@@ -46,13 +45,8 @@ export class MeetingScheduler implements ComponentFramework.StandardControl<IInp
     }
 
     this.view = new MeetingSchedulerView(container, {
-      onSelect: (instance: MeetingInstance) => {
-        this.selectedJson = JSON.stringify({ ...instance, selectedAt: nowIso() });
-        this.notifyOutputChanged();
-      },
-      onPngReady: (dataUri, svgMarkup) => {
-        this.pngDataUri = dataUri;
-        this.svgMarkup = svgMarkup ?? "";
+      onSelect: (instance: MeetingInstance, values: Record<string, string>) => {
+        this.selectedJson = JSON.stringify({ ...instance, values, selectedAt: nowIso() });
         this.notifyOutputChanged();
       },
     });
@@ -67,8 +61,6 @@ export class MeetingScheduler implements ComponentFramework.StandardControl<IInp
   public getOutputs(): IOutputs {
     return {
       selectedMeetingJSON: this.selectedJson,
-      pngExport: this.pngDataUri,
-      svgExport: this.svgMarkup,
     };
   }
 
@@ -122,6 +114,8 @@ export class MeetingScheduler implements ComponentFramework.StandardControl<IInp
 
     const disabled = context.mode.isControlDisabled === true;
     this.view.setReadOnly(disabled || p.readOnly?.raw === true || s.readOnly);
+
+    this.view.setColumns(parseColumns(rawOr(p.columns, cfg(s, "columns"))));
 
     const config = this.readConfig(context, s);
     const existing = parseExistingMeetings(

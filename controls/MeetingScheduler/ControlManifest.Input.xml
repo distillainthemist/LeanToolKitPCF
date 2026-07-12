@@ -74,20 +74,27 @@
 
     <property name="existingMeetingsJSON"
               display-name-key="Existing Meetings (JSON)"
-              description-key="The already-created meeting records: [{date (or datetime), rescheduledDate?, recordId}]. Instances are matched by date (and shift for shiftly); past instances with no match are flagged as having no record."
+              description-key="The already-created meeting records: [{date (or datetime), rescheduledDate?, recordId, values?:{colKey: text}}]. Instances are matched by date (and shift for shiftly); past instances with no match are flagged as having no record, and vanish once more than 7 days old (assumed not to have happened). values pre-fill the custom columns."
               of-type="Multiple"
+              usage="input"
+              required="false" />
+
+    <property name="columns"
+              display-name-key="Columns"
+              description-key="Optional custom text columns entered per meeting row (e.g. topic, chair, notetaker): CSV of labels (Topic,Chair,Notetaker) or a JSON array of strings / {key,label}. Values pre-fill from Existing Meetings and are emitted on Selected Meeting."
+              of-type="SingleLine.Text"
               usage="input"
               required="false" />
 
     <property name="selectedMeetingJSON"
               display-name-key="Selected Meeting (JSON)"
-              description-key="The tapped instance: {iso, date, day, time, crew, shift, recordId, rescheduledTo, status, selectedAt}. recordId is empty when no record exists yet — open or create accordingly in OnChange. selectedAt changes on every tap so OnChange always fires."
+              description-key="The tapped (or edited) instance: {iso, date, day, time, crew, shift, recordId, rescheduledTo, status, values:{colKey: text}, selectedAt}. recordId is empty when no record exists yet — open or create accordingly in OnChange. selectedAt changes on every tap/edit so OnChange always fires."
               of-type="Multiple"
               usage="output" />
 
     <property name="settingsJSON"
               display-name-key="Settings (JSON)"
-              description-key="Consolidated configuration: {title, prompts, readOnly, theme:{background,foreground,accent,legend,font}, config:{finalDate, daysPrior, category, daysOfWeek, timeOfDay, crewList, rosterPattern, baseStartDate, existingMeetingsJSON}}. Settings are the base; a non-empty discrete text input overrides its key (enum inputs: the settings key wins when present)."
+              description-key="Consolidated configuration: {title, prompts, readOnly, theme:{background,foreground,accent,legend,font}, config:{finalDate, daysPrior, category, daysOfWeek, timeOfDay, crewList, rosterPattern, baseStartDate, existingMeetingsJSON, columns}}. Settings are the base; a non-empty discrete text input overrides its key (enum inputs: the settings key wins when present)."
               of-type="Multiple"
               usage="input"
               required="false" />
@@ -145,27 +152,14 @@
 
     <property name="readOnly"
               display-name-key="Read Only"
-              description-key="When true, hides the kebab menu (rows stay selectable — selection is the card's purpose)."
+              description-key="When true, the custom-column fields are disabled (rows stay selectable — selection is the card's purpose)."
               of-type="TwoOptions"
               usage="input"
               required="false"
               default-value="false" />
 
-    <!-- PNG snapshot of the card as a data URI, refreshed after each change. -->
-    <property name="pngExport"
-              display-name-key="PNG Export (data URI)"
-              description-key="Read-only PNG snapshot as a data URI, for an Image control or Power Automate."
-              of-type="Multiple"
-              usage="output" />
-
-    <!-- SVG snapshot of the card, refreshed alongside the PNG. Vector and
-         small — ideal for board tile images (verify Safari renders it in an
-         Image control; fall back to pngExport if not). -->
-    <property name="svgExport"
-              display-name-key="SVG Export (markup)"
-              description-key="Read-only SVG snapshot markup, refreshed after each change. Use as an Image control source via &quot;data:image/svg+xml;utf8, &quot; &amp; EncodeUrl(Self.Output) or store next to the card."
-              of-type="Multiple"
-              usage="output" />
+    <!-- This control has no PNG/SVG export (it is a live selector, not a
+         snapshot tile) and therefore no kebab. -->
 
     <!-- CSS is bundled into the code (see styles.ts) because canvas apps
          sometimes fail to load a separate css resource. -->
