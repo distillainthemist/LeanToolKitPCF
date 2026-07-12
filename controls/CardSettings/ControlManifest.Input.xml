@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<manifest>
+  <control namespace="BenOBrien"
+           constructor="CardSettings"
+           version="0.1.0"
+           display-name-key="Card Settings"
+           description-key="LeanToolKit settings composer — pick a card type (or load an existing settingsJSON to edit), fill in common, theme and card-specific configuration with typed fields, and emit a complete settingsJSON (stamped with cardType) ready to store against the card's row."
+           control-type="standard">
+
+    <!-- The blob being edited rides the standard document channel -->
+    <property name="inputJSON"
+              display-name-key="Input JSON"
+              description-key="An existing settingsJSON to edit (edit mode). Empty = compose a new one from scratch. Unrecognised keys are preserved on output."
+              of-type="Multiple"
+              usage="input"
+              required="false" />
+
+    <property name="cardType"
+              display-name-key="Card Type"
+              description-key="Optional: preselect AND lock the card type (the control name, e.g. SqdpcCard) — use when editing a known card's row. Empty = the maker picks."
+              of-type="SingleLine.Text"
+              usage="input"
+              required="false" />
+
+    <property name="resetTrigger"
+              display-name-key="Reset Trigger"
+              description-key="Reloads the control from Input JSON whenever this value CHANGES (e.g. Set(varReset, Text(Now())))."
+              of-type="SingleLine.Text"
+              usage="input"
+              required="false" />
+
+    <property name="outputJSON"
+              display-name-key="Output JSON"
+              description-key="The composed settingsJSON for the selected card — sparse (only values the maker set), stamped with cardType, unknown input keys preserved. Bind a live card's settingsJSON to this for a live preview; persist it in OnChange."
+              of-type="Multiple"
+              usage="output" />
+
+    <property name="selectedCardType"
+              display-name-key="Selected Card Type"
+              description-key="The chosen card type (control name), also stamped inside Output JSON — bind to the card row's type column."
+              of-type="SingleLine.Text"
+              usage="output" />
+
+    <!-- Self-describing card chrome -->
+    <property name="cardTitle"
+              display-name-key="Card Title"
+              description-key="Optional title bar for this form (e.g. 'Card settings'). Leave empty for no chrome at all."
+              of-type="SingleLine.Text"
+              usage="input"
+              required="false" />
+
+    <property name="prompts"
+              display-name-key="Prompts"
+              description-key="Optional coaching prompts: plain text, or JSON array of strings / {field, hint} objects. Shown as an info popover."
+              of-type="Multiple"
+              usage="input"
+              required="false" />
+
+    <!-- Standard styling surface (for this form itself) -->
+    <property name="backgroundColor"
+              display-name-key="Background Colour"
+              description-key="Background colour (any CSS colour or hex). Default white."
+              of-type="SingleLine.Text"
+              usage="input"
+              required="false" />
+
+    <property name="foregroundColor"
+              display-name-key="Foreground Colour"
+              description-key="Text / line colour. Default rich black."
+              of-type="SingleLine.Text"
+              usage="input"
+              required="false" />
+
+    <property name="accentColor"
+              display-name-key="Accent Colour"
+              description-key="Accent colour for focus and highlights. Default rich black."
+              of-type="SingleLine.Text"
+              usage="input"
+              required="false" />
+
+    <property name="legendColors"
+              display-name-key="Legend Colours"
+              description-key="Unused by this control; present for surface consistency."
+              of-type="SingleLine.Text"
+              usage="input"
+              required="false" />
+
+    <property name="fontFamily"
+              display-name-key="Font"
+              description-key="Font family (or comma-separated font stack) for all text."
+              of-type="SingleLine.Text"
+              usage="input"
+              required="false" />
+
+    <property name="readOnly"
+              display-name-key="Read Only"
+              description-key="When true, the form is view-only (fields disabled)."
+              of-type="TwoOptions"
+              usage="input"
+              required="false"
+              default-value="false" />
+
+    <!-- No settingsJSON input of its own (it composes OTHER cards' settings —
+         the name would mislead), and no PNG/SVG export (it is a form, not a
+         snapshot tile). -->
+
+    <!-- CSS is bundled into the code (see styles.ts) because canvas apps
+         sometimes fail to load a separate css resource. -->
+    <resources>
+      <code path="index.ts" order="1" />
+    </resources>
+
+  </control>
+</manifest>
