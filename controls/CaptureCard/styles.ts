@@ -44,7 +44,18 @@ export const CAPTURE_CSS = `
 .ltk-cc-row { cursor: pointer; }
 .ltk-cc-row:hover td { background: var(--ltk-hairline); }
 .ltk-cc-row.ltk-readonly { cursor: default; }
-.ltk-cc-rowhead { font-weight: 600; white-space: nowrap; }
+/* Row-head labels can be full sentences (question-style cards), so they wrap
+   within a generous column instead of forcing one long line — the general
+   td max-width above is overridden here so the label gets the room. */
+.ltk-cc-rowhead {
+  font-weight: 600;
+  white-space: normal;
+  overflow-wrap: break-word;
+  word-break: break-word;
+  min-width: 140px;
+  width: 38%;
+  max-width: 460px;
+}
 .ltk-cc-chip {
   display: inline-flex;
   align-items: center;
