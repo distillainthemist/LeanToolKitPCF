@@ -10,7 +10,7 @@ export const HEATMAP_CSS = `
   padding: 8px 12px 12px;
 }
 
-/* ---- issues listing (right column) ---- */
+/* ---- issues listing (left column, beside the image) ---- */
 .ltk-hm-list {
   flex: 0 0 190px;
   min-width: 150px;

@@ -215,10 +215,9 @@ export class HeatmapEditor {
         )
       );
     }
-    body.appendChild(main);
-
-    // the issues listing on the right
+    // the issues listing sits on the left, beside the image
     body.appendChild(this.renderList());
+    body.appendChild(main);
 
     this.stageEl = stage;
     this.wrapEl = wrap;
