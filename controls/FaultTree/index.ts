@@ -30,6 +30,7 @@ export class FaultTree implements ComponentFramework.StandardControl<IInputs, IO
   private outputJson = "";
   private actionsJson = "";
   private instanceId = "";
+  private lastProblemInput: string | null = null;
   private pngDataUri = "";
   private svgMarkup = "";
   private outputTimer: ReturnType<typeof setTimeout> | null = null;
@@ -118,8 +119,14 @@ export class FaultTree implements ComponentFramework.StandardControl<IInputs, IO
     const disabled = context.mode.isControlDisabled === true;
     this.editor.setReadOnly(disabled || p.readOnly?.raw === true || s.readOnly);
 
+    // Optional discrete top-event input: when non-empty it seeds/overrides the
+    // document problem (standard "discrete overrides" precedence).
+    const problemIn = str(p.problem);
+    const problemChanged = problemIn !== (this.lastProblemInput ?? "");
+
     if (this.gate.shouldReload(p)) {
       const { envelope, embeddedActions } = parseFaultTree(p.inputJSON?.raw);
+      if (problemIn !== "") envelope.data.problem = problemIn; // seed/override on load
       // actions channel is authoritative; a legacy combined document's
       // embedded actions migrate in only when the channel is empty
       const external = parseActionsJson(p.actionsInputJSON?.raw);
@@ -136,6 +143,20 @@ export class FaultTree implements ComponentFramework.StandardControl<IInputs, IO
         this.editor.setEnvelope(envelope, actions);
         this.notifyOutputChanged();
       }
+    } else if (problemChanged && problemIn !== "") {
+      // the top-event input changed on its own (no document reload): override
+      // it on the CURRENT document so in-card cause edits are preserved
+      const { envelope } = parseFaultTree(this.outputJson);
+      if (envelope.data.problem !== problemIn) {
+        envelope.data.problem = problemIn;
+        const actions = parseActionsJson(this.actionsJson);
+        const doc = serializeFaultTree(envelope);
+        this.outputJson = doc;
+        this.gate.recordEmitted(doc, this.actionsJson);
+        this.editor.setEnvelope(envelope, actions);
+        this.notifyOutputChanged();
+      }
     }
+    this.lastProblemInput = problemIn;
   }
 }

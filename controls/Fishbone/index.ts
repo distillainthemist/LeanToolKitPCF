@@ -63,6 +63,7 @@ export class Fishbone implements ComponentFramework.StandardControl<IInputs, IOu
   private outputJson = "";
   private actionsJson = "";
   private instanceId = "";
+  private lastProblemInput: string | null = null;
   private pngDataUri = "";
   private svgMarkup = "";
   private outputTimer: ReturnType<typeof setTimeout> | null = null;
@@ -344,11 +345,17 @@ export class Fishbone implements ComponentFramework.StandardControl<IInputs, IOu
     this.editor.setReadOnly(this.readOnly);
     this.applySize(context);
 
+    // Optional discrete problem input: when non-empty it seeds/overrides the
+    // document problem (the fish head), matching the "discrete overrides" rule.
+    const problemIn = str(p.problem);
+    const problemChanged = problemIn !== (this.lastProblemInput ?? "");
+
     if (this.gate.shouldReload(p)) {
       // the `categories` setting names the bones for a NEW/empty document;
       // a document that already carries categories keeps its own
       const defaultCats = parseCategoriesSetting(cfg(s, "categories"));
       const { envelope, embeddedActions } = parseFishbone(p.inputJSON?.raw, defaultCats);
+      if (problemIn !== "") envelope.data.problem = problemIn; // seed/override on load
       const external = parseActionsJson(p.actionsInputJSON?.raw);
       const actions = external.length > 0 ? external : embeddedActions;
 
@@ -363,6 +370,16 @@ export class Fishbone implements ComponentFramework.StandardControl<IInputs, IOu
         this.editor.setModel(this.toModel(envelope.data));
         this.notifyOutputChanged();
       }
+    } else if (problemChanged && problemIn !== "" && this.env.data.problem !== problemIn) {
+      // the problem input changed on its own (no document reload): override it
+      // on the current document so in-card cause edits are preserved
+      this.env.data.problem = problemIn;
+      this.env.meta.updated = nowIso();
+      this.outputJson = serializeFishbone(this.env);
+      this.gate.recordEmitted(this.outputJson, this.actionsJson);
+      this.editor.setModel(this.toModel(this.env.data));
+      this.notifyOutputChanged();
     }
+    this.lastProblemInput = problemIn;
   }
 }

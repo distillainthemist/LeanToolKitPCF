@@ -29,6 +29,13 @@
               usage="input"
               required="false" />
 
+    <property name="problem"
+              display-name-key="Top Event"
+              description-key="Optional: set the top event directly instead of (or on top of) Input JSON. When non-empty it seeds and overrides the document top event, and a change to it flows into the card live; the causes are kept. Leave empty to take the top event from Input JSON and edit it in-card."
+              of-type="SingleLine.Text"
+              usage="input"
+              required="false" />
+
     <property name="outputJSON"
               display-name-key="Output JSON"
               description-key="The edited card document (no actions — see Actions Output). Read in OnChange and Patch to Dataverse."
