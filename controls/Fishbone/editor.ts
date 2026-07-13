@@ -111,6 +111,7 @@ export class FishboneEditor {
   private model: FishboneModel = emptyModel();
   private style: StyleConfig = defaultStyle();
   private readOnly = false;
+  private disableActions = false; // hide the raise-action affordance
   private onChange: (model: FishboneModel) => void;
   private onPngReady?: (dataUri: string, svgMarkup?: string) => void;
   private onManageActions?: (causeId: string) => void;
@@ -178,6 +179,11 @@ export class FishboneEditor {
     this.root.classList.toggle("fb-readonly", ro);
     this.roBadge.style.display = ro ? "" : "none";
     this.render();
+  }
+
+  /** Hide the raise-action affordance (the cause dialog reads this on open). */
+  setDisableActions(on: boolean): void {
+    this.disableActions = on;
   }
 
   resize(width: number, height: number): void {
@@ -1193,16 +1199,20 @@ export class FishboneEditor {
     // the wrapper opens the shared action UI)
     if (editing && existing && this.onManageActions) {
       const n = this.getActionBadge ? this.getActionBadge(existing.id) : 0;
-      const act = this.button(
-        n > 0 ? `Actions (${n})…` : "＋ Raise action…",
-        "fb-btn",
-        () => {
-          this.closeDialog(overlay);
-          this.onManageActions!(existing.id);
-        }
-      );
-      act.style.marginTop = "10px";
-      card.appendChild(act);
+      // when capture is disabled, only offer the affordance if there are
+      // existing actions to view — otherwise hide it entirely
+      if (!this.disableActions || n > 0) {
+        const act = this.button(
+          n > 0 ? `Actions (${n})…` : "＋ Raise action…",
+          "fb-btn",
+          () => {
+            this.closeDialog(overlay);
+            this.onManageActions!(existing.id);
+          }
+        );
+        act.style.marginTop = "10px";
+        card.appendChild(act);
+      }
     }
 
     const footer = document.createElement("div");

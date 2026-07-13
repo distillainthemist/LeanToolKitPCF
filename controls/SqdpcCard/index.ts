@@ -125,6 +125,7 @@ export class SqdpcCard implements ComponentFramework.StandardControl<IInputs, IO
       dimensions,
       subtitles: parseSubtitles(rawOr(p.subtitles, cfg(s, "subtitles")), dimensions),
       codes: parseStatusCodes(rawOr(p.statusCodes, cfg(s, "statusCodes"))),
+      disableActions: p.disableActions?.raw === true || s.config.disableActions === true,
     });
     this.editor.setPeople(parsePeople(rawOr(p.peopleJSON, cfg(s, "peopleJSON"))));
     this.editor.setChrome(str(p.cardTitle, s.title), rawOr(p.prompts, s.promptsRaw));

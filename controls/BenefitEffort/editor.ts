@@ -32,6 +32,7 @@ export class BenefitEffortEditor {
   private prompts: Prompts = { general: [], fields: {} };
   private lastPromptsRaw: string | null = null;
   private readOnly = false;
+  private disableActions = false; // hide the add/raise-action affordances
   private readonly png: SnapshotScheduler;
 
   private canvas: HTMLElement | null = null;
@@ -96,6 +97,13 @@ export class BenefitEffortEditor {
   setReadOnly(ro: boolean): void {
     if (this.readOnly !== ro) {
       this.readOnly = ro;
+      this.render();
+    }
+  }
+
+  setDisableActions(on: boolean): void {
+    if (this.disableActions !== on) {
+      this.disableActions = on;
       this.render();
     }
   }
@@ -399,6 +407,8 @@ export class BenefitEffortEditor {
       (a) => a.context.sourceId === item.id && a.status !== "cancelled"
     );
     if (existing.length === 0) {
+      // nothing to view and creating is disabled → the affordance does nothing
+      if (this.disableActions) return;
       this.raiseAction(item);
       return;
     }
@@ -407,14 +417,18 @@ export class BenefitEffortEditor {
       title: item.text || "Idea",
       buttons: [
         { label: "Close", kind: "secondary", onClick: () => dlg.close() },
-        {
-          label: "＋ Raise action",
-          kind: "primary",
-          onClick: () => {
-            dlg.close();
-            this.raiseAction(item);
-          },
-        },
+        ...(this.disableActions
+          ? []
+          : [
+              {
+                label: "＋ Raise action",
+                kind: "primary" as const,
+                onClick: () => {
+                  dlg.close();
+                  this.raiseAction(item);
+                },
+              },
+            ]),
       ],
     });
     dlg.body.appendChild(sectionLabel(`Actions (${existing.length})`));
@@ -437,6 +451,7 @@ export class BenefitEffortEditor {
   }
 
   private raiseAction(item: BenefitEffortItem): void {
+    if (this.disableActions) return;
     const action = newAction({ source: "benefiteffort", sourceId: item.id });
     action.issue = item.text;
     openActionDialog({

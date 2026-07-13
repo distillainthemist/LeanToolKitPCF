@@ -91,6 +91,16 @@ Each element is a canonical **`LtkAction`**:
 
 Source: [`shared/schema/actions.ts`](../../shared/schema/actions.ts).
 
+### Disabling capture
+
+Every action-capable card takes a **`disableActions`** input (also settable via
+`settingsJSON` as `config.disableActions`). When true, the add / raise-action
+affordances are hidden so **no new actions can be captured** on that card;
+existing actions stay visible and can still be completed, commented and edited.
+It applies to all capture cards — not to [ActionBoard](ActionBoard.md) or
+[EscalationViewer](EscalationViewer.md), which are the action surfaces
+themselves.
+
 ---
 
 ## Snapshot outputs (`pngExport` / `svgExport`)

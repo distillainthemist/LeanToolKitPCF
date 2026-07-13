@@ -59,6 +59,7 @@ export class Fishbone implements ComponentFramework.StandardControl<IInputs, IOu
   private cardTitle = "";
   private lastChromeKey = "";
   private readOnly = false;
+  private disableActions = false;
 
   private outputJson = "";
   private actionsJson = "";
@@ -238,23 +239,25 @@ export class Fishbone implements ComponentFramework.StandardControl<IInputs, IOu
       (a) => a.context.sourceId === causeId && a.status !== "cancelled"
     );
     if (existing.length === 0) {
-      this.raiseAction(cause);
+      this.raiseAction(cause); // no-ops when actions are disabled
       return;
     }
     const dlg = openDialog({
       host: this.root,
       title: "Actions",
-      buttons: [
-        { label: "Close", kind: "secondary", onClick: () => dlg.close() },
-        {
-          label: "＋ Raise action",
-          kind: "primary",
-          onClick: () => {
-            dlg.close();
-            this.raiseAction(cause);
-          },
-        },
-      ],
+      buttons: this.disableActions
+        ? [{ label: "Close", kind: "secondary", onClick: () => dlg.close() }]
+        : [
+            { label: "Close", kind: "secondary", onClick: () => dlg.close() },
+            {
+              label: "＋ Raise action",
+              kind: "primary",
+              onClick: () => {
+                dlg.close();
+                this.raiseAction(cause);
+              },
+            },
+          ],
     });
     dlg.body.appendChild(sectionLabel(`Actions (${existing.length})`));
     for (const a of existing) {
@@ -276,6 +279,7 @@ export class Fishbone implements ComponentFramework.StandardControl<IInputs, IOu
   }
 
   private raiseAction(cause: CauseNode): void {
+    if (this.disableActions) return;
     const action = newAction({ source: "fishbone", sourceId: cause.id });
     action.issue = cause.text;
     openActionDialog({
@@ -343,6 +347,9 @@ export class Fishbone implements ComponentFramework.StandardControl<IInputs, IOu
 
     this.editor.setStyle(this.toStyle());
     this.editor.setReadOnly(this.readOnly);
+    this.editor.setDisableActions(
+      p.disableActions?.raw === true || s.config.disableActions === true
+    );
     this.applySize(context);
 
     // Optional discrete problem input: when non-empty it seeds/overrides the

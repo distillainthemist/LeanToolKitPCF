@@ -35,6 +35,7 @@ export interface SqdpcOptions {
   dimensions: string[];
   subtitles: string[];
   codes: StatusCode[];
+  disableActions: boolean;
 }
 
 export interface SqdpcEditorCallbacks {
@@ -52,6 +53,7 @@ export class SqdpcEditor {
   private prompts: Prompts = { general: [], fields: {} };
   private lastPromptsRaw: string | null = null;
   private readOnly = false;
+  private disableActions = false; // hide the add/raise-action affordances
   private granularity: Granularity = "day";
   private dimensions: string[] = DEFAULT_DIMENSIONS.slice();
   private subtitles: string[] = [];
@@ -95,7 +97,8 @@ export class SqdpcEditor {
       opts.granularity === this.granularity &&
       JSON.stringify(opts.dimensions) === JSON.stringify(this.dimensions) &&
       JSON.stringify(opts.subtitles) === JSON.stringify(this.subtitles) &&
-      JSON.stringify(opts.codes) === JSON.stringify(this.codes)
+      JSON.stringify(opts.codes) === JSON.stringify(this.codes) &&
+      opts.disableActions === this.disableActions
     ) {
       return;
     }
@@ -103,6 +106,7 @@ export class SqdpcEditor {
     this.dimensions = opts.dimensions;
     this.subtitles = opts.subtitles;
     this.codes = opts.codes;
+    this.disableActions = opts.disableActions;
     this.render();
   }
 
@@ -208,13 +212,14 @@ export class SqdpcEditor {
       legend.appendChild(item);
     }
     if (!this.readOnly) {
+      const raiseHint = this.disableActions ? "" : " · hold to raise an action";
       legend.appendChild(
         el(
           "span",
           "ltk-sq-legend-hint",
           this.granularity === "shift2"
-            ? "Tap a half to cycle (day ◤ / night ◢) · hold to raise an action"
-            : "Tap to cycle · hold to raise an action"
+            ? `Tap a half to cycle (day ◤ / night ◢)${raiseHint}`
+            : `Tap to cycle${raiseHint}`
         )
       );
     }
@@ -401,6 +406,7 @@ export class SqdpcEditor {
   // ---- mutations ----
 
   private raiseAction(dim: string, day: string, shift: string): void {
+    if (this.disableActions) return;
     const action = newAction({
       source: "sqdpc",
       sourceId: shift === "" ? `${dim}|${day}` : `${dim}|${day}|${shift}`,

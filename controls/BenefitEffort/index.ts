@@ -101,6 +101,9 @@ export class BenefitEffort implements ComponentFramework.StandardControl<IInputs
 
     const disabled = context.mode.isControlDisabled === true;
     this.editor.setReadOnly(disabled || p.readOnly?.raw === true || s.readOnly);
+    this.editor.setDisableActions(
+      p.disableActions?.raw === true || s.config.disableActions === true
+    );
 
     if (this.gate.shouldReload(p)) {
       const { envelope, embeddedActions } = parseBenefitEffort(p.inputJSON?.raw);

@@ -112,7 +112,10 @@ export class FaultTree implements ComponentFramework.StandardControl<IInputs, IO
     this.applySize(context);
     this.instanceId = str(p.instanceId, cfg(s, "instanceId"));
     this.editor.setTheme(readTheme(p, s));
-    this.editor.setOptions({ showStatus: p.showStatus?.raw === true || s.config.showStatus === true });
+    this.editor.setOptions({
+      showStatus: p.showStatus?.raw === true || s.config.showStatus === true,
+      disableActions: p.disableActions?.raw === true || s.config.disableActions === true,
+    });
     this.editor.setPeople(parsePeople(rawOr(p.peopleJSON, cfg(s, "peopleJSON"))));
     this.editor.setChrome(str(p.cardTitle, s.title), rawOr(p.prompts, s.promptsRaw));
 

@@ -68,6 +68,7 @@ export class FaultTreeEditor {
   private lastPromptsRaw: string | null = null;
   private readOnly = false;
   private showStatus = false;
+  private disableActions = false; // hide the add/raise-action affordances
   private readonly png: SnapshotScheduler;
   private readonly panzoom: PanZoom;
 
@@ -137,9 +138,13 @@ export class FaultTreeEditor {
     }
   }
 
-  setOptions(opts: { showStatus: boolean }): void {
-    if (this.showStatus !== opts.showStatus) {
+  setOptions(opts: { showStatus: boolean; disableActions: boolean }): void {
+    if (
+      this.showStatus !== opts.showStatus ||
+      this.disableActions !== opts.disableActions
+    ) {
       this.showStatus = opts.showStatus;
+      this.disableActions = opts.disableActions;
       this.render();
     }
   }
@@ -548,7 +553,7 @@ export class FaultTreeEditor {
       maxLength: MAX_CAUSE_CHARS,
     });
     const rootChk = checkItem("This is the root cause");
-    const inline = addActionSection(this.people);
+    const inline = this.disableActions ? null : addActionSection(this.people);
     const dlg = openDialog({
       host: this.root,
       title: "Add cause",
@@ -566,7 +571,7 @@ export class FaultTreeEditor {
               isRoot: rootChk.box.checked,
             });
             this.env.data.causes.push(created);
-            if (inline.form.hasContent()) {
+            if (inline && inline.form.hasContent()) {
               this.pushAction(created, text, inline.form);
             }
             dlg.close();
@@ -578,7 +583,7 @@ export class FaultTreeEditor {
     dlg.body.appendChild(fieldRow("Cause", ta));
     dlg.body.appendChild(charCounter(ta, MAX_CAUSE_CHARS));
     dlg.body.appendChild(rootChk.wrap);
-    dlg.body.appendChild(inline.el);
+    if (inline) dlg.body.appendChild(inline.el);
     ta.focus();
   }
 
@@ -646,28 +651,30 @@ export class FaultTreeEditor {
         })
       );
     }
-    const raise = el("button", "ltk-btn ltk-btn-secondary", "＋ Raise action");
-    raise.type = "button";
-    raise.addEventListener("click", () => {
-      dlg.close();
-      const action = newAction({
-        source: "faulttree",
-        sourceId: cause.id,
-        hint: cause.isRoot ? "root-cause" : undefined,
+    if (!this.disableActions) {
+      const raise = el("button", "ltk-btn ltk-btn-secondary", "＋ Raise action");
+      raise.type = "button";
+      raise.addEventListener("click", () => {
+        dlg.close();
+        const action = newAction({
+          source: "faulttree",
+          sourceId: cause.id,
+          hint: cause.isRoot ? "root-cause" : undefined,
+        });
+        action.issue = cause.text;
+        openActionDialog({
+          host: this.root,
+          action,
+          people: this.people,
+          isNew: true,
+          onCommit: () => {
+            this.actions.push(action);
+            this.commitActions();
+          },
+        });
       });
-      action.issue = cause.text;
-      openActionDialog({
-        host: this.root,
-        action,
-        people: this.people,
-        isNew: true,
-        onCommit: () => {
-          this.actions.push(action);
-          this.commitActions();
-        },
-      });
-    });
-    dlg.body.appendChild(raise);
+      dlg.body.appendChild(raise);
+    }
     ta.focus();
   }
 

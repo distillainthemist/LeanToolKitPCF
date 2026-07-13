@@ -9,6 +9,7 @@ import { applyThemeVars, defaultTheme, Theme, tint } from "../../shared/tokens";
 import { LTK_BASE_CSS } from "../../shared/ui/baseCss";
 import { clear, el, ensureStylesheet } from "../../shared/ui/dom";
 import {
+  DialogButton,
   fieldRow,
   openDialog,
   sectionLabel,
@@ -73,6 +74,7 @@ export class SkillsMatrixEditor {
   private prompts: Prompts = { general: [], fields: {} };
   private lastPromptsRaw: string | null = null;
   private readOnly = false;
+  private disableActions = false; // hide the add/raise-action affordances
   private readonly png: SnapshotScheduler;
   private drag: DragState | null = null;
   private insertLine: HTMLElement | null = null;
@@ -122,6 +124,13 @@ export class SkillsMatrixEditor {
   setReadOnly(ro: boolean): void {
     if (this.readOnly !== ro) {
       this.readOnly = ro;
+      this.render();
+    }
+  }
+
+  setDisableActions(on: boolean): void {
+    if (this.disableActions !== on) {
+      this.disableActions = on;
       this.render();
     }
   }
@@ -647,23 +656,27 @@ export class SkillsMatrixEditor {
       (a) => a.context.sourceId === person.whoId && a.status !== "cancelled"
     );
     if (existing.length === 0) {
+      if (this.disableActions) return;
       this.raiseAction(person);
       return;
+    }
+    const buttons: DialogButton[] = [
+      { label: "Close", kind: "secondary", onClick: () => dlg.close() },
+    ];
+    if (!this.disableActions) {
+      buttons.push({
+        label: "＋ Raise action",
+        kind: "primary",
+        onClick: () => {
+          dlg.close();
+          this.raiseAction(person);
+        },
+      });
     }
     const dlg = openDialog({
       host: this.root,
       title: person.who,
-      buttons: [
-        { label: "Close", kind: "secondary", onClick: () => dlg.close() },
-        {
-          label: "＋ Raise action",
-          kind: "primary",
-          onClick: () => {
-            dlg.close();
-            this.raiseAction(person);
-          },
-        },
-      ],
+      buttons,
     });
     dlg.body.appendChild(sectionLabel(`Actions (${existing.length})`));
     for (const a of existing) {
@@ -685,6 +698,7 @@ export class SkillsMatrixEditor {
   }
 
   private raiseAction(person: Person): void {
+    if (this.disableActions) return;
     const action = newAction({ source: "skills", sourceId: person.whoId });
     action.issue = `Training — ${person.who}`;
     openActionDialog({

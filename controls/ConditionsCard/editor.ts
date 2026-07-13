@@ -51,6 +51,7 @@ export class ConditionsEditor {
   private prompts: Prompts = { general: [], fields: {} };
   private lastPromptsRaw: string | null = null;
   private readOnly = false;
+  private disableActions = false; // hide the add/raise-action affordances
   private granularity: Granularity = "day";
   private conditions: Condition[] = DEFAULT_CONDITIONS.map((name) => ({
     name,
@@ -130,6 +131,13 @@ export class ConditionsEditor {
   setReadOnly(ro: boolean): void {
     if (this.readOnly !== ro) {
       this.readOnly = ro;
+      this.render();
+    }
+  }
+
+  setDisableActions(on: boolean): void {
+    if (this.disableActions !== on) {
+      this.disableActions = on;
       this.render();
     }
   }
@@ -354,6 +362,7 @@ export class ConditionsEditor {
   // ---- mutations ----
 
   private raiseAction(sourceId: string, title: string): void {
+    if (this.disableActions) return;
     const action = newAction({ source: "conditions", sourceId });
     action.issue = title;
     openActionDialog({

@@ -508,6 +508,34 @@ export const CARDS: CardSpec[] = [
   },
 ];
 
+// Every action-capable card (all but ActionBoard and EscalationViewer, which
+// ARE the action surfaces) gains a shared "disable actions" toggle — appended
+// last in its Configuration section.
+const DISABLE_ACTIONS_FIELD: FieldSpec = {
+  key: "disableActions",
+  label: "Disable actions",
+  kind: "boolean",
+  help:
+    "Hide the add / raise-action controls so no new actions can be captured on this card. Existing actions stay visible and can still be completed, commented and edited.",
+};
+
+const ACTION_CAPABLE = new Set([
+  "FiveWhys",
+  "Fishbone",
+  "FaultTree",
+  "SqdpcCard",
+  "ConditionsCard",
+  "BenefitEffort",
+  "RiskMatrix",
+  "Raci",
+  "SkillsMatrix",
+  "ProcessMap",
+  "HeatmapCard",
+]);
+for (const card of CARDS) {
+  if (ACTION_CAPABLE.has(card.type)) card.config.push(DISABLE_ACTIONS_FIELD);
+}
+
 export function cardSpec(type: string): CardSpec | undefined {
   return CARDS.find((c) => c.type === type);
 }

@@ -7,7 +7,7 @@
 import { applyThemeVars, defaultTheme, textOn, Theme, tint } from "../../shared/tokens";
 import { LTK_BASE_CSS } from "../../shared/ui/baseCss";
 import { clear, el, ensureStylesheet } from "../../shared/ui/dom";
-import { fieldRow, openDialog, sectionLabel, textInput } from "../../shared/ui/dialog";
+import { DialogButton, fieldRow, openDialog, sectionLabel, textInput } from "../../shared/ui/dialog";
 import { actionRow, openActionDialog } from "../../shared/ui/actionUi";
 import { parsePrompts, Prompts, renderTitleBar } from "../../shared/ui/chrome";
 import { renderKebab } from "../../shared/ui/menu";
@@ -46,6 +46,7 @@ export class RaciEditor {
   private prompts: Prompts = { general: [], fields: {} };
   private lastPromptsRaw: string | null = null;
   private readOnly = false;
+  private disableActions = false; // hide the add/raise-action affordances
   private readonly png: SnapshotScheduler;
 
   constructor(host: HTMLElement, private readonly cb: RaciEditorCallbacks) {
@@ -90,6 +91,13 @@ export class RaciEditor {
   setReadOnly(ro: boolean): void {
     if (this.readOnly !== ro) {
       this.readOnly = ro;
+      this.render();
+    }
+  }
+
+  setDisableActions(on: boolean): void {
+    if (this.disableActions !== on) {
+      this.disableActions = on;
       this.render();
     }
   }
@@ -399,23 +407,27 @@ export class RaciEditor {
       (a) => a.context.sourceId === task.id && a.status !== "cancelled"
     );
     if (existing.length === 0) {
+      if (this.disableActions) return;
       this.raiseAction(task);
       return;
+    }
+    const buttons: DialogButton[] = [
+      { label: "Close", kind: "secondary", onClick: () => dlg.close() },
+    ];
+    if (!this.disableActions) {
+      buttons.push({
+        label: "＋ Raise action",
+        kind: "primary",
+        onClick: () => {
+          dlg.close();
+          this.raiseAction(task);
+        },
+      });
     }
     const dlg = openDialog({
       host: this.root,
       title: task.label || "Deliverable",
-      buttons: [
-        { label: "Close", kind: "secondary", onClick: () => dlg.close() },
-        {
-          label: "＋ Raise action",
-          kind: "primary",
-          onClick: () => {
-            dlg.close();
-            this.raiseAction(task);
-          },
-        },
-      ],
+      buttons,
     });
     dlg.body.appendChild(sectionLabel(`Actions (${existing.length})`));
     for (const a of existing) {
@@ -437,6 +449,7 @@ export class RaciEditor {
   }
 
   private raiseAction(task: RaciTask): void {
+    if (this.disableActions) return;
     const action = newAction({ source: "raci", sourceId: task.id });
     action.issue = task.label;
     openActionDialog({

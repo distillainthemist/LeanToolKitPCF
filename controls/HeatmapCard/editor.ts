@@ -45,6 +45,7 @@ export class HeatmapEditor {
   private prompts: Prompts = { general: [], fields: {} };
   private lastPromptsRaw: string | null = null;
   private readOnly = false;
+  private disableActions = false; // hide the add/raise-action affordances
   private readonly png: SnapshotScheduler;
   private resizeObserver: ResizeObserver | null = null;
   private stageEl: HTMLElement | null = null;
@@ -109,6 +110,13 @@ export class HeatmapEditor {
   setReadOnly(ro: boolean): void {
     if (this.readOnly !== ro) {
       this.readOnly = ro;
+      this.render();
+    }
+  }
+
+  setDisableActions(on: boolean): void {
+    if (this.disableActions !== on) {
+      this.disableActions = on;
       this.render();
     }
   }
@@ -383,7 +391,7 @@ export class HeatmapEditor {
       { value: "2", label: "Medium" },
       { value: "3", label: "High" },
     ]);
-    const inline = pin === null ? addActionSection(this.people) : null;
+    const inline = (pin === null && !this.disableActions) ? addActionSection(this.people) : null;
 
     const buttons = [];
     if (pin) {
@@ -471,24 +479,26 @@ export class HeatmapEditor {
           })
         );
       }
-      const raise = el("button", "ltk-btn ltk-btn-secondary", "＋ Raise action");
-      raise.type = "button";
-      raise.addEventListener("click", () => {
-        dlg.close();
-        const action = newAction({ source: "heatmap", sourceId: pin.id });
-        action.issue = pin.note;
-        openActionDialog({
-          host: this.root,
-          action,
-          people: this.people,
-          isNew: true,
-          onCommit: () => {
-            this.actions.push(action);
-            this.commitActions();
-          },
+      if (!this.disableActions) {
+        const raise = el("button", "ltk-btn ltk-btn-secondary", "＋ Raise action");
+        raise.type = "button";
+        raise.addEventListener("click", () => {
+          dlg.close();
+          const action = newAction({ source: "heatmap", sourceId: pin.id });
+          action.issue = pin.note;
+          openActionDialog({
+            host: this.root,
+            action,
+            people: this.people,
+            isNew: true,
+            onCommit: () => {
+              this.actions.push(action);
+              this.commitActions();
+            },
+          });
         });
-      });
-      dlg.body.appendChild(raise);
+        dlg.body.appendChild(raise);
+      }
     }
     ta.focus();
   }

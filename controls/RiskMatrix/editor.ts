@@ -55,6 +55,7 @@ export class RiskMatrixEditor {
   private prompts: Prompts = { general: [], fields: {} };
   private lastPromptsRaw: string | null = null;
   private readOnly = false;
+  private disableActions = false; // hide the add/raise-action affordances
   private readonly png: SnapshotScheduler;
 
   constructor(
@@ -104,6 +105,13 @@ export class RiskMatrixEditor {
   setReadOnly(ro: boolean): void {
     if (this.readOnly !== ro) {
       this.readOnly = ro;
+      this.render();
+    }
+  }
+
+  setDisableActions(on: boolean): void {
+    if (this.disableActions !== on) {
+      this.disableActions = on;
       this.render();
     }
   }
@@ -355,7 +363,7 @@ export class RiskMatrixEditor {
     const cSel = this.ratingSelect(risk?.consequence ?? prefillC ?? 3, false, CONSEQUENCE_LABELS);
     const plSel = this.ratingSelect(risk?.postLikelihood ?? null, true, LIKELIHOOD_LABELS);
     const pcSel = this.ratingSelect(risk?.postConsequence ?? null, true, CONSEQUENCE_LABELS);
-    const inline = risk === null ? addActionSection(this.people, "Treatment action") : null;
+    const inline = (risk === null && !this.disableActions) ? addActionSection(this.people, "Treatment action") : null;
 
     // live class readouts under each rating pair
     const preClassEl = el("div", "ltk-rm-classreadout");
@@ -500,24 +508,26 @@ export class RiskMatrixEditor {
           })
         );
       }
-      const raise = el("button", "ltk-btn ltk-btn-secondary", "＋ Raise action");
-      raise.type = "button";
-      raise.addEventListener("click", () => {
-        dlg.close();
-        const action = newAction({ source: "riskmatrix", sourceId: risk.id });
-        action.issue = riskLabel(risk);
-        openActionDialog({
-          host: this.root,
-          action,
-          people: this.people,
-          isNew: true,
-          onCommit: () => {
-            this.actions.push(action);
-            this.commitActions();
-          },
+      if (!this.disableActions) {
+        const raise = el("button", "ltk-btn ltk-btn-secondary", "＋ Raise action");
+        raise.type = "button";
+        raise.addEventListener("click", () => {
+          dlg.close();
+          const action = newAction({ source: "riskmatrix", sourceId: risk.id });
+          action.issue = riskLabel(risk);
+          openActionDialog({
+            host: this.root,
+            action,
+            people: this.people,
+            isNew: true,
+            onCommit: () => {
+              this.actions.push(action);
+              this.commitActions();
+            },
+          });
         });
-      });
-      dlg.body.appendChild(raise);
+        dlg.body.appendChild(raise);
+      }
     }
     (risk ? riskField : hazard).focus();
   }

@@ -57,6 +57,7 @@ export class ProcessMap implements ComponentFramework.StandardControl<IInputs, I
   private cardTitle = "";
   private lastChromeKey = "";
   private readOnly = false;
+  private disableActions = false;
 
   private outputJson = "";
   private actionsJson = "";
@@ -199,23 +200,25 @@ export class ProcessMap implements ComponentFramework.StandardControl<IInputs, I
       (a) => a.context.sourceId === nodeId && a.status !== "cancelled"
     );
     if (existing.length === 0) {
-      this.raiseAction(nodeId, node.label);
+      this.raiseAction(nodeId, node.label); // no-ops when actions are disabled
       return;
     }
     const dlg = openDialog({
       host: this.root,
       title: "Actions",
-      buttons: [
-        { label: "Close", kind: "secondary", onClick: () => dlg.close() },
-        {
-          label: "＋ Raise action",
-          kind: "primary",
-          onClick: () => {
-            dlg.close();
-            this.raiseAction(nodeId, node.label);
-          },
-        },
-      ],
+      buttons: this.disableActions
+        ? [{ label: "Close", kind: "secondary", onClick: () => dlg.close() }]
+        : [
+            { label: "Close", kind: "secondary", onClick: () => dlg.close() },
+            {
+              label: "＋ Raise action",
+              kind: "primary",
+              onClick: () => {
+                dlg.close();
+                this.raiseAction(nodeId, node.label);
+              },
+            },
+          ],
     });
     dlg.body.appendChild(sectionLabel(`Actions (${existing.length})`));
     for (const a of existing) {
@@ -237,6 +240,7 @@ export class ProcessMap implements ComponentFramework.StandardControl<IInputs, I
   }
 
   private raiseAction(nodeId: string, label: string): void {
+    if (this.disableActions) return;
     const action = newAction({ source: "processmap", sourceId: nodeId, hint: "kaizen" });
     action.issue = label;
     openActionDialog({
@@ -293,6 +297,8 @@ export class ProcessMap implements ComponentFramework.StandardControl<IInputs, I
     this.people = parsePeople(rawOr(p.peopleJSON, cfg(s, "peopleJSON")));
     this.readOnly =
       context.mode.isControlDisabled === true || p.readOnly?.raw === true || s.readOnly;
+    this.disableActions =
+      p.disableActions?.raw === true || s.config.disableActions === true;
 
     this.editor.setStyle(this.toStyle());
     this.editor.setReadOnly(this.readOnly);

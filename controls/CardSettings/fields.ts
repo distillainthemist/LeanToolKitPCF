@@ -108,7 +108,8 @@ function booleanEditor(spec: FieldSpec, get: Get, set: Set, host: FieldHost): HT
   item.wrap.classList.toggle("ltk-check-on", item.box.checked);
   item.box.disabled = host.readOnly;
   item.box.addEventListener("change", () => {
-    set(item.box.checked);
+    // unchecked = unset, so a false boolean is omitted from the sparse blob
+    set(item.box.checked ? true : undefined);
     host.onChanged();
   });
   const field = el("div", "ltk-cs-field");
