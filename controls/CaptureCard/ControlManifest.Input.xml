@@ -2,7 +2,7 @@
 <manifest>
   <control namespace="BenOBrien"
            constructor="CaptureCard"
-           version="0.2.1"
+           version="0.2.2"
            display-name-key="Capture Card"
            description-key="LeanToolKit capture card — a config-driven grid: typed columns (text, number, decimal, yes/no, list) with multi-select, option icons and two-layer dependent picklists; free or fixed rows. The simple card is the default single-column config."
            control-type="standard">
