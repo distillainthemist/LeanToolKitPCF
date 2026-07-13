@@ -2,7 +2,7 @@
 <manifest>
   <control namespace="BenOBrien"
            constructor="KpiTrendCard"
-           version="0.2.2"
+           version="0.3.0"
            display-name-key="KPI Trend Card"
            description-key="LeanToolKit KPI trend — a run chart of dated readings with an optional target line; the latest value reads out RAG-coloured against target."
            control-type="standard">
