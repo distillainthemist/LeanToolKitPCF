@@ -91,6 +91,10 @@ Each element is a canonical **`LtkAction`**:
 
 Source: [`shared/schema/actions.ts`](../../shared/schema/actions.ts).
 
+For persisting this channel in a central Dataverse table — table spec plus the
+Power Fx to convert actions to/from collections — see
+[Actions in Dataverse](../actions-dataverse.md).
+
 ### Disabling capture
 
 Every action-capable card takes a **`disableActions`** input (also settable via
