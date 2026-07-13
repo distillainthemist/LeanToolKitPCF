@@ -325,6 +325,53 @@ export const CARDS: CardSpec[] = [
     appBound: ["instanceId", "peopleJSON"],
   },
   {
+    type: "AgendaCard",
+    label: "Agenda",
+    description:
+      "Runs a traditional meeting: checkable pre-work, the agenda running order (who, timing, links, actions per item) and a checkable outputs list.",
+    config: [],
+    appBound: ["instanceId", "peopleJSON"],
+    configNote:
+      "The pre-work, agenda items and outputs live in the card DOCUMENT (Input / Output JSON), edited in the card itself — not in settings.",
+  },
+  {
+    type: "EmbedCard",
+    label: "Embed",
+    description:
+      "An embedded page — a Power BI report or any https embed link — with a refresh button. Never reloads on resize.",
+    config: [
+      {
+        key: "embedUrl",
+        label: "Embed URL",
+        kind: "text",
+        help:
+          "A Power BI embed link (File > Embed report) or any https url that allows framing.",
+        placeholder: "https://app.powerbi.com/reportEmbed?reportId=...",
+      },
+      {
+        key: "hideFilterPane",
+        label: "Hide filter pane",
+        kind: "boolean",
+        help: "Power BI links only: hides the report filter pane.",
+      },
+      {
+        key: "hidePageNav",
+        label: "Hide page navigation",
+        kind: "boolean",
+        help: "Power BI links only: hides the page-navigation pane.",
+      },
+      {
+        key: "pageName",
+        label: "Page name",
+        kind: "text",
+        help:
+          "Power BI links only: open on this page (the ReportSection id from the page url).",
+        placeholder: "ReportSection1a2b3c",
+      },
+    ],
+    appBound: [],
+  },
+  {
     type: "CaptureCard",
     label: "Capture card",
     description: "Typed capture grid — text/number/yes-no/list columns, free or fixed rows.",
@@ -531,6 +578,7 @@ const ACTION_CAPABLE = new Set([
   "SkillsMatrix",
   "ProcessMap",
   "HeatmapCard",
+  "AgendaCard",
 ]);
 for (const card of CARDS) {
   if (ACTION_CAPABLE.has(card.type)) card.config.push(DISABLE_ACTIONS_FIELD);

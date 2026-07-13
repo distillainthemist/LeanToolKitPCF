@@ -1,0 +1,117 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<manifest>
+  <control namespace="BenOBrien"
+           constructor="EmbedCard"
+           version="0.2.2"
+           display-name-key="Embed Card"
+           description-key="LeanToolKit embed card — shows an embedded page (a Power BI report or any https embed link) with a refresh button. The frame is created once and never reloads on resize or re-render; Power BI links can hide the filter and page-navigation panes and open on a chosen page."
+           control-type="standard">
+
+    <property name="embedUrl"
+              display-name-key="Embed URL"
+              description-key="The page to embed: a Power BI embed link (File, Embed report) or any https url that allows framing. Only http and https urls are loaded."
+              of-type="SingleLine.Text"
+              usage="input"
+              required="false" />
+
+    <property name="refreshTrigger"
+              display-name-key="Refresh Trigger"
+              description-key="Reloads the embedded frame whenever this value CHANGES (e.g. Set(varRefresh, Text(Now())) after a dataset refresh completes). Note: a reload re-renders the report; for Import-mode Power BI datasets the underlying data only moves when the dataset itself refreshes."
+              of-type="SingleLine.Text"
+              usage="input"
+              required="false" />
+
+    <property name="hideFilterPane"
+              display-name-key="Hide Filter Pane"
+              description-key="Power BI links only: hides the report filter pane (filterPaneEnabled=false). Ignored for other urls."
+              of-type="TwoOptions"
+              usage="input"
+              required="false"
+              default-value="false" />
+
+    <property name="hidePageNav"
+              display-name-key="Hide Page Navigation"
+              description-key="Power BI links only: hides the page-navigation pane (navContentPaneEnabled=false). Ignored for other urls."
+              of-type="TwoOptions"
+              usage="input"
+              required="false"
+              default-value="false" />
+
+    <property name="pageName"
+              display-name-key="Page Name"
+              description-key="Power BI links only: open the report on this page (the pageName / ReportSection id from the page url). Ignored for other urls."
+              of-type="SingleLine.Text"
+              usage="input"
+              required="false" />
+
+    <property name="settingsJSON"
+              display-name-key="Settings (JSON)"
+              description-key="Consolidated configuration: {title, prompts, readOnly, theme:{background,foreground,accent,legend,font}, config:{embedUrl, hideFilterPane, hidePageNav, pageName}}. Settings are the base; a non-empty discrete text input overrides its key (boolean inputs merge with OR)."
+              of-type="Multiple"
+              usage="input"
+              required="false" />
+
+    <!-- Self-describing card chrome -->
+    <property name="cardTitle"
+              display-name-key="Card Title"
+              description-key="Optional title bar. Leave empty for no chrome at all."
+              of-type="SingleLine.Text"
+              usage="input"
+              required="false" />
+
+    <property name="prompts"
+              display-name-key="Prompts"
+              description-key="Optional empty-state text shown while no Embed URL is set: plain text or a JSON array of strings."
+              of-type="Multiple"
+              usage="input"
+              required="false" />
+
+    <!-- Standard styling surface -->
+    <property name="backgroundColor"
+              display-name-key="Background Colour"
+              description-key="Background colour (any CSS colour or hex). Default white."
+              of-type="SingleLine.Text"
+              usage="input"
+              required="false" />
+
+    <property name="foregroundColor"
+              display-name-key="Foreground Colour"
+              description-key="Text / line colour. Default rich black."
+              of-type="SingleLine.Text"
+              usage="input"
+              required="false" />
+
+    <property name="accentColor"
+              display-name-key="Accent Colour"
+              description-key="Accent colour for the refresh button hover state. Default rich black."
+              of-type="SingleLine.Text"
+              usage="input"
+              required="false" />
+
+    <property name="fontFamily"
+              display-name-key="Font"
+              description-key="Font family (or comma-separated font stack) for the chrome text."
+              of-type="SingleLine.Text"
+              usage="input"
+              required="false" />
+
+    <property name="readOnly"
+              display-name-key="Read Only"
+              description-key="When true, hides the refresh button (display mode). The embedded page itself is unaffected."
+              of-type="TwoOptions"
+              usage="input"
+              required="false"
+              default-value="false" />
+
+    <!-- No outputs: this card is display-only. There are deliberately no
+         pngExport / svgExport outputs — a cross-origin iframe cannot be
+         snapshotted, and a blank export would be a decoy. -->
+
+    <!-- CSS is bundled into the code (see styles.ts) because canvas apps
+         sometimes fail to load a separate css resource. -->
+    <resources>
+      <code path="index.ts" order="1" />
+    </resources>
+
+  </control>
+</manifest>

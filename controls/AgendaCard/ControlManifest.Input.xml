@@ -1,0 +1,153 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<manifest>
+  <control namespace="BenOBrien"
+           constructor="AgendaCard"
+           version="0.2.2"
+           display-name-key="Agenda Card"
+           description-key="LeanToolKit agenda card — runs a traditional meeting: checkable pre-work (with links and owners), the agenda running order (title, prompt, who, timing, links; actions captured per item) and a checkable outputs list. Sections collapse; pre-work and outputs start collapsed."
+           control-type="standard">
+
+    <!-- Standard LeanToolKit data surface -->
+    <property name="inputJSON"
+              display-name-key="Input JSON"
+              description-key="Card document to preload: {schema, meta, data:{prework, items, outputs}}."
+              of-type="Multiple"
+              usage="input"
+              required="false" />
+
+    <property name="settingsJSON"
+              display-name-key="Settings (JSON)"
+              description-key="Consolidated configuration: {title, prompts, readOnly, theme:{background,foreground,accent,legend,font}, config:{...card-specific keys named after the discrete inputs...}}. Settings are the base; a non-empty discrete text input overrides its key (enum/boolean inputs: the settings key wins when present)."
+              of-type="Multiple"
+              usage="input"
+              required="false" />
+
+    <property name="resetTrigger"
+              display-name-key="Reset Trigger"
+              description-key="Reloads the control from Input JSON + Actions Input whenever this value CHANGES (e.g. Set(varReset, Text(Now())))."
+              of-type="SingleLine.Text"
+              usage="input"
+              required="false" />
+
+    <property name="outputJSON"
+              display-name-key="Output JSON"
+              description-key="The edited card document (no actions — see Actions Output). Read in OnChange and Patch to Dataverse."
+              of-type="Multiple"
+              usage="output" />
+
+    <property name="actionsInputJSON"
+              display-name-key="Actions Input (JSON)"
+              description-key="Actions for this card instance, from the central actions table: JSON(Filter(Actions, InstanceId = ...)). Canonical action array."
+              of-type="Multiple"
+              usage="input"
+              required="false" />
+
+    <property name="actionsOutputJSON"
+              display-name-key="Actions Output (JSON)"
+              description-key="The full current action set, each stamped with Instance Id. Upsert by action id into the central actions table in OnChange. Actions are never hard-deleted — deleting an agenda item cancels its actions."
+              of-type="Multiple"
+              usage="output" />
+
+    <property name="instanceId"
+              display-name-key="Instance Id"
+              description-key="Identity of this card instance (e.g. the Dataverse row GUID it is saved against). Stamped on every emitted action."
+              of-type="SingleLine.Text"
+              usage="input"
+              required="false" />
+
+    <property name="peopleJSON"
+              display-name-key="People (JSON)"
+              description-key="People available for pre-work / agenda owners and action assignment: [{whoId, who}]. A free-text name can always be typed instead."
+              of-type="Multiple"
+              usage="input"
+              required="false" />
+
+    <!-- Self-describing card chrome -->
+    <property name="cardTitle"
+              display-name-key="Card Title"
+              description-key="Optional title bar. Leave empty for no chrome at all."
+              of-type="SingleLine.Text"
+              usage="input"
+              required="false" />
+
+    <property name="prompts"
+              display-name-key="Prompts"
+              description-key="Optional coaching prompts: plain text, or JSON array of strings / {field, hint} objects. Shown as empty-state text, an info popover, and field hints."
+              of-type="Multiple"
+              usage="input"
+              required="false" />
+
+    <!-- Standard styling surface -->
+    <property name="backgroundColor"
+              display-name-key="Background Colour"
+              description-key="Background colour (any CSS colour or hex). Default white."
+              of-type="SingleLine.Text"
+              usage="input"
+              required="false" />
+
+    <property name="foregroundColor"
+              display-name-key="Foreground Colour"
+              description-key="Text / line colour. Default rich black."
+              of-type="SingleLine.Text"
+              usage="input"
+              required="false" />
+
+    <property name="accentColor"
+              display-name-key="Accent Colour"
+              description-key="Accent colour for links, buttons and highlights. Default rich black."
+              of-type="SingleLine.Text"
+              usage="input"
+              required="false" />
+
+    <property name="legendColors"
+              display-name-key="Legend Colours"
+              description-key="JSON array or CSV: [unused, Done, Issue] colours used by the check circles and action UI. Defaults green / red."
+              of-type="SingleLine.Text"
+              usage="input"
+              required="false" />
+
+    <property name="fontFamily"
+              display-name-key="Font"
+              description-key="Font family (or comma-separated font stack) for all text."
+              of-type="SingleLine.Text"
+              usage="input"
+              required="false" />
+
+    <property name="readOnly"
+              display-name-key="Read Only"
+              description-key="When true, disables all editing (display mode). Sections can still be expanded and collapsed."
+              of-type="TwoOptions"
+              usage="input"
+              required="false"
+              default-value="false" />
+
+    <property name="disableActions"
+              display-name-key="Disable Actions"
+              description-key="When true, hides the raise-action affordances so no new actions can be captured on this card. Existing actions stay visible and can still be completed, commented and edited."
+              of-type="TwoOptions"
+              usage="input"
+              required="false"
+              default-value="false" />
+
+    <!-- PNG snapshot of the card as a data URI, refreshed after each change. -->
+    <property name="pngExport"
+              display-name-key="PNG Export (data URI)"
+              description-key="Read-only PNG snapshot as a data URI, for an Image control or Power Automate."
+              of-type="Multiple"
+              usage="output" />
+
+    <!-- SVG snapshot of the card, refreshed alongside the PNG. -->
+    <property name="svgExport"
+              display-name-key="SVG Export (markup)"
+              description-key="Read-only SVG snapshot markup, refreshed after each change. Use as an Image control source via &quot;data:image/svg+xml;utf8, &quot; &amp; EncodeUrl(Self.Output) or store next to the card."
+              of-type="Multiple"
+              usage="output" />
+
+    <!-- CSS is bundled into the code (see styles.ts) because canvas apps
+         sometimes fail to load a separate css resource. -->
+    <resources>
+      <code path="index.ts" order="1" />
+    </resources>
+
+  </control>
+</manifest>
