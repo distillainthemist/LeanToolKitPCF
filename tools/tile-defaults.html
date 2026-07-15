@@ -135,9 +135,17 @@ function harvest(type) {
     }
     const t0 = Date.now();
     const poll = () => {
-      let svg = "";
-      try { svg = (inst.getOutputs() || {}).svgExport || ""; } catch (e) { /* ignore */ }
-      if (svg !== "") { done({ type, svg }); return; }
+      let svg = "", png = "";
+      try {
+        const o = inst.getOutputs() || {};
+        svg = o.svgExport || "";
+        png = o.pngExport || "";
+      } catch (e) { /* ignore */ }
+      // png arrives in the same snapshot callback; give it a beat to land
+      if (svg !== "" && (png !== "" || Date.now() - t0 > 6000)) {
+        done({ type, svg, png });
+        return;
+      }
       if (Date.now() - t0 > 12000) { done({ type, error: "timed out waiting for svgExport" }); return; }
       setTimeout(poll, 250);
     };
@@ -167,6 +175,7 @@ function show(type, svg, error) {
 (async () => {
   const status = document.getElementById("status");
   const tiles = {};
+  const pngs = {}; // pngExport fallbacks — for the Safari spike page, not tile-defaults.json
   const errors = [];
   for (const type of TYPES) {
     status.textContent = "loading " + type + "…";
@@ -176,6 +185,7 @@ function show(type, svg, error) {
     status.textContent = "rendering " + type + "…";
     const r = await harvest(type);
     if (r.svg) tiles[type] = r.svg; else errors.push(type + ": " + r.error);
+    if (r.png) pngs[type] = r.png;
     show(type, r.svg, r.error);
   }
   tiles.EmbedCard = EMBED_PLACEHOLDER;
@@ -183,6 +193,7 @@ function show(type, svg, error) {
 
   const out = { generated: new Date().toISOString(), tiles };
   window.__tileDefaults = out;
+  window.__tilePngs = pngs;
   const dl = document.getElementById("dl");
   dl.href = "data:application/json;charset=utf-8," + encodeURIComponent(JSON.stringify(out, null, 2));
   dl.style.display = "inline-block";

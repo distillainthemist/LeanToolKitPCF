@@ -49,8 +49,11 @@ http
     const file =
       url === "/" || url === "/tile-defaults.html"
         ? page
-        : path.join(root, path.normalize(url).replace(/^([.][.][/\\])+/, ""));
-    if (!file.startsWith(root) && file !== page) {
+        : url === "/safari-tile-spike.html"
+          ? path.resolve(__dirname, "safari-tile-spike.html")
+          : path.join(root, path.normalize(url).replace(/^([.][.][/\\])+/, ""));
+    const spike = path.resolve(__dirname, "safari-tile-spike.html");
+    if (!file.startsWith(root) && file !== page && file !== spike) {
       res.writeHead(403).end();
       return;
     }

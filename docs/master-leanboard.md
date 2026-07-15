@@ -7,7 +7,9 @@ living instance). This page records the reviewed architecture, the data
 model, the Power Fx recipes and the phased plan.
 
 Status: **Phases 1–2 done** (data model designed; PCF enhancements shipped in
-v0.4.0). Next: Phase 0 spikes + Phase 3, the board app itself.
+v0.4.0). Phase 0 spike kit and the Phase 3 build recipe are ready — see
+[board-app-build.md](board-app-build.md); the spikes need a run on the
+target devices, then the board app is a paste-job from that page.
 Related: [Actions in Dataverse](actions-dataverse.md) ·
 [Controls reference](controls/README.md)
 
@@ -277,8 +279,14 @@ Filter('LTK Actions',
 
 - **Version re-adoption**: the board app hosts every control; each release
   needs re-adopt + republish in that one app. Deliberate release events.
-- **Safari SVG tiles**: verify SVG-in-Image on Safari early (Phase 0 spike);
-  fall back to `pngExport` per card if needed (bigger rows — add retention).
+- **Safari SVG tiles**: **16 of 19 tiles are `foreignObject`-wrapped HTML**
+  (only Fishbone, ProcessMap and EmbedCard are pure vector) — exactly the SVG
+  form Safari can refuse inside an `<img>`. The Phase 0 spike page
+  (`node tools/tile-defaults.js` → `/safari-tile-spike.html`, regenerated
+  alongside the tile defaults) shows every tile's SVG and PNG fallback side
+  by side — open it on Mac Safari, iPad Safari and in a Power Apps Image
+  control. If SVG fails, the board stores `pngExport` instead (~85KB per
+  tile vs ~15KB; add instance retention) — the controls already emit both.
 - **Instance accumulation**: a daily meeting ≈ 250 instances/yr × cards.
   Decide retention; closed instances should set `readOnly` on their cards.
 - **Concurrency**: per-card rows make same-meeting different-card edits safe;
@@ -291,7 +299,7 @@ Filter('LTK Actions',
 
 | Phase | Scope | Status |
 | --- | --- | --- |
-| 0 | Spikes: Safari SVG-in-Image; 21-control editor screen load | pending |
+| 0 | Spikes: Safari SVG-in-Image (spike page built — needs a run on the target devices); 21-control editor screen load (in-studio) | **kit ready** |
 | 1 | Tables + manifest schema + Power Fx recipes (this page) | **done — this page** |
 | 2 | PCF: CardSettings board mode + catalogJSON; crew attendees; tile defaults | **done — v0.4.0** |
 | 3 | Board app: board list → grid screen → editor screen → meeting flow | pending |

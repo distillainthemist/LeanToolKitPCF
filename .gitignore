@@ -12,3 +12,4 @@ Solution/obj/
 # pcf-scripts writes a stray literal ~ dir on some setups
 ~/
 .DS_Store
+tools/safari-tile-spike.html
