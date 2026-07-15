@@ -2,7 +2,7 @@
 <manifest>
   <control namespace="BenOBrien"
            constructor="AgendaCard"
-           version="0.4.0"
+           version="0.5.0"
            display-name-key="Agenda Card"
            description-key="LeanToolKit agenda card — runs a traditional meeting: checkable pre-work (with links and owners), the agenda running order (title, prompt, who, timing, links; actions captured per item) and a checkable outputs list. Sections collapse; pre-work and outputs start collapsed."
            control-type="standard">
