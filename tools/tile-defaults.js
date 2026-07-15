@@ -46,14 +46,22 @@ http
       });
       return;
     }
+    // pages + data served from tools/ itself
+    const toolFiles = {
+      "/safari-tile-spike.html": "safari-tile-spike.html",
+      "/boardgrid-demo.html": "boardgrid-demo.html",
+      "/tile-defaults.json": "tile-defaults.json",
+    };
     const file =
       url === "/" || url === "/tile-defaults.html"
         ? page
-        : url === "/safari-tile-spike.html"
-          ? path.resolve(__dirname, "safari-tile-spike.html")
+        : toolFiles[url]
+          ? path.resolve(__dirname, toolFiles[url])
           : path.join(root, path.normalize(url).replace(/^([.][.][/\\])+/, ""));
-    const spike = path.resolve(__dirname, "safari-tile-spike.html");
-    if (!file.startsWith(root) && file !== page && file !== spike) {
+    const allowed =
+      file === page ||
+      Object.values(toolFiles).some((f) => file === path.resolve(__dirname, f));
+    if (!file.startsWith(root) && !allowed) {
       res.writeHead(403).end();
       return;
     }

@@ -1,0 +1,109 @@
+<!doctype html>
+<!-- BoardGrid hands-on demo — serve via tools/tile-defaults.js:
+       npm run build            (if out/controls is stale)
+       node tools/tile-defaults.js
+       open http://localhost:8295/boardgrid-demo.html
+     Open it in Safari to confirm the inline-SVG tiles scale correctly (the
+     whole point of BoardGrid). Toggle edit mode to configure/add/drag; every
+     output the control emits is logged on the right. -->
+<html>
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>BoardGrid demo</title>
+<style>
+  body { font-family: system-ui, sans-serif; margin: 0; background: #f2f1ee; color: #26241f;
+         display: grid; grid-template-columns: 1fr 340px; grid-template-rows: auto 1fr; height: 100vh; }
+  header { grid-column: 1 / -1; display: flex; gap: 14px; align-items: center;
+           padding: 10px 16px; background: #fff; border-bottom: 1px solid #ddd9d2; flex-wrap: wrap; }
+  header h1 { font-size: 15px; margin: 0 12px 0 0; }
+  header label { font-size: 13px; display: inline-flex; gap: 6px; align-items: center; }
+  #host { min-width: 0; padding: 14px; }
+  aside { border-left: 1px solid #ddd9d2; background: #fff; overflow: auto; padding: 12px; }
+  aside h2 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; color: #8d887e; margin: 0 0 8px; }
+  .evt { font: 11.5px/1.45 ui-monospace, monospace; border-bottom: 1px solid #eee;
+         padding: 6px 0; white-space: pre-wrap; word-break: break-all; }
+  .evt b { color: #8b1e1e; }
+  @media (max-width: 800px) { body { grid-template-columns: 1fr; } aside { border-left: none; border-top: 1px solid #ddd9d2; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>BoardGrid demo</h1>
+  <label><input type="checkbox" id="edit" /> Edit mode (tap = configure/add, drag = swap)</label>
+  <label><input type="checkbox" id="ro" /> Read only</label>
+  <label>Grid <select id="grid"><option>3x3</option><option>2x2</option><option>4x3</option><option value="">auto</option></select></label>
+  <span id="status" style="font-size:12px;color:#8d887e">loading…</span>
+</header>
+<div id="host"></div>
+<aside><h2>Control outputs (OnChange)</h2><div id="log"></div></aside>
+
+<script>
+(async () => {
+  const status = document.getElementById("status");
+  // grab the constructor via the registerControl hook, then load the bundle
+  let Ctor = null;
+  window.ComponentFramework = {
+    registerControl(name, exportsOrCtor) {
+      Ctor = typeof exportsOrCtor === "function" ? exportsOrCtor : exportsOrCtor.BoardGrid;
+    },
+  };
+  await new Promise((res, rej) => {
+    const s = document.createElement("script");
+    s.src = "./BoardGrid/bundle.js";
+    s.onload = res; s.onerror = () => rej(new Error("build first: npm run build"));
+    document.head.appendChild(s);
+  });
+  Ctor = Ctor || (window.pcf_tools_652ac3f36e1e4bca82eb3c1dc44e6fad || {}).BoardGrid;
+  const tiles = (await (await fetch("/tile-defaults.json")).json()).tiles;
+
+  const params = {
+    tilesJSON: { raw: JSON.stringify([
+      { pos: 1, cardId: "b-sqdpc", cardType: "SqdpcCard", title: "Daily SQDPC", svg: tiles.SqdpcCard },
+      { pos: 2, cardId: "b-fish", cardType: "Fishbone", title: "Top issue", svg: tiles.Fishbone },
+      { pos: 3, cardId: "b-agenda", cardType: "AgendaCard", title: "Run sheet", svg: tiles.AgendaCard },
+      { pos: 4, cardId: "b-conditions", cardType: "ConditionsCard", title: "Winning conditions", svg: tiles.ConditionsCard },
+      { pos: 5, cardId: "b-actions", cardType: "ActionBoard", title: "Actions", svg: tiles.ActionBoard },
+      { pos: 7, cardId: "b-embed", cardType: "EmbedCard", title: "KPI report", svg: tiles.EmbedCard }
+    ]) },
+    gridSize: { raw: "3x3" },
+    editMode: { raw: false }, readOnly: { raw: false },
+    settingsJSON: { raw: "" }, cardTitle: { raw: "Bottling line board" }, prompts: { raw: "" },
+    backgroundColor: { raw: "" }, foregroundColor: { raw: "" }, accentColor: { raw: "#8b1e1e" }, fontFamily: { raw: "" }
+  };
+  const host = document.getElementById("host");
+  const ctx = {
+    mode: {
+      trackContainerResize() {},
+      get allocatedWidth() { return host.clientWidth - 28; },
+      get allocatedHeight() { return host.clientHeight - 28; },
+      isControlDisabled: false,
+    },
+    parameters: params,
+  };
+
+  const inst = new Ctor();
+  const log = document.getElementById("log");
+  let lastSel = "", lastLayout = "";
+  inst.init(ctx, () => {
+    const out = inst.getOutputs();
+    const add = (kind, body) => {
+      const div = document.createElement("div");
+      div.className = "evt";
+      div.innerHTML = "<b>" + kind + "</b>\n" + JSON.stringify(JSON.parse(body), null, 1);
+      log.prepend(div);
+    };
+    if (out.selectedSlotJSON !== lastSel) { lastSel = out.selectedSlotJSON; add("selectedSlotJSON", lastSel); }
+    if (out.layoutJSON !== lastLayout) { lastLayout = out.layoutJSON; add("layoutJSON", lastLayout); }
+  }, {}, host);
+
+  const rerun = () => inst.updateView(ctx);
+  document.getElementById("edit").addEventListener("change", (e) => { params.editMode.raw = e.target.checked; rerun(); });
+  document.getElementById("ro").addEventListener("change", (e) => { params.readOnly.raw = e.target.checked; rerun(); });
+  document.getElementById("grid").addEventListener("change", (e) => { params.gridSize.raw = e.target.value; rerun(); });
+  window.addEventListener("resize", rerun);
+  status.textContent = "ready — tiles are inline SVGs; check they scale crisply (especially in Safari)";
+})().catch((e) => { document.getElementById("status").textContent = String(e); });
+</script>
+</body>
+</html>
