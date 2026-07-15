@@ -38,49 +38,90 @@ export const BOARDGRID_CSS = `
 .ltk-bg-readonly .ltk-bg-tile { cursor: default; }
 .ltk-bg-tile:hover { box-shadow: 0 2px 10px rgba(0, 0, 0, 0.10); }
 
-/* the snapshot: inline svg or an <img>, letterboxed to fit */
-.ltk-bg-snap { flex: 1; display: flex; align-items: center; justify-content: center; overflow: hidden; }
-.ltk-bg-snap svg { width: 100%; height: 100%; }
-.ltk-bg-snap img { width: 100%; height: 100%; object-fit: contain; }
+/* the snapshot area: a positioning context for the scaled stage / svg / img */
+.ltk-bg-snap {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.ltk-bg-snap img { width: 100%; height: 100%; object-fit: contain; pointer-events: none; }
 .ltk-bg-snap .ltk-bg-nosnap {
   font-size: 12.5px;
   color: var(--ltk-muted);
   text-align: center;
   padding: 12px;
 }
-
-/* title chip along the bottom edge */
-.ltk-bg-chip {
+/* the extracted foreignObject content at natural size, fitted by transform:
+   scale() — the WebKit-safe alternative to svg viewport scaling */
+.ltk-bg-stage {
   position: absolute;
   left: 0;
+  top: 0;
+  transform-origin: 0 0;
+  pointer-events: none; /* the copied card DOM is a picture, not a control */
+  overflow: hidden;
+}
+
+/* card type — a quiet tag at the top of the tile */
+.ltk-bg-typetag {
+  position: absolute;
+  top: 0;
+  left: 0;
   right: 0;
-  bottom: 0;
-  padding: 4px 10px;
-  font-size: 12.5px;
-  font-weight: 700;
-  color: var(--ltk-fg);
-  background: color-mix(in srgb, var(--ltk-bg) 88%, transparent);
-  border-top: 1px solid var(--ltk-hairline);
+  padding: 3px 10px;
+  font-size: 10.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ltk-muted);
+  background: color-mix(in srgb, var(--ltk-bg) 82%, transparent);
+  border-bottom: 1px solid var(--ltk-hairline);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   pointer-events: none;
 }
-.ltk-bg-chip .ltk-bg-type { font-weight: 400; color: var(--ltk-muted); }
 
-/* edit-mode configure hint, top-right of a filled tile */
-.ltk-bg-cog {
+/* title bar along the bottom: title text + the ✎ button at its right end */
+.ltk-bg-chip {
   position: absolute;
-  top: 6px;
-  right: 6px;
-  font-size: 13px;
-  color: var(--ltk-muted);
-  background: color-mix(in srgb, var(--ltk-bg) 85%, transparent);
-  border: 1px solid var(--ltk-hairline);
-  border-radius: 6px;
-  padding: 2px 7px;
-  pointer-events: none;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px;
+  background: color-mix(in srgb, var(--ltk-bg) 88%, transparent);
+  border-top: 1px solid var(--ltk-hairline);
+  pointer-events: none; /* the ✎ button opts back in */
 }
+.ltk-bg-chip-title {
+  flex: 1;
+  min-width: 0;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--ltk-fg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ltk-bg-editbtn {
+  flex: none;
+  pointer-events: auto;
+  border: 1px solid var(--ltk-hairline);
+  background: var(--ltk-bg);
+  color: var(--ltk-muted);
+  border-radius: 6px;
+  font-size: 13px;
+  line-height: 1;
+  padding: 3px 8px;
+  cursor: pointer;
+}
+.ltk-bg-editbtn:hover { color: var(--ltk-accent); border-color: var(--ltk-accent); }
 
 /* empty slot */
 .ltk-bg-empty {

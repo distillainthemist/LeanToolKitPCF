@@ -167,11 +167,12 @@ tiles are `foreignObject`-wrapped HTML, and WebKit renders those **unscaled
 inside an `<img>`** — on Safari/iPad the tile shows a zoomed-in corner of
 the card (confirmed on device). Rather than paying for PNG tiles
 (~50–250KB per card per instance in database capacity), the
-**[BoardGrid](controls/BoardGrid.md) control** renders the SVG markup
-**inline in the DOM**, where WebKit scales it correctly — the same reason
-the live controls render fine in Safari. Tiles therefore stay **`svgExport`
-markup (~15KB)**; BoardGrid also accepts a `data:image/png` URI per tile,
-so a PNG path remains available as a per-card fallback.
+**[BoardGrid](controls/BoardGrid.md) control** extracts each snapshot's
+HTML content and fits it with a **CSS `transform: scale()`** — WebKit does
+not apply svg viewport scaling to foreignObject content even inline, but it
+scales CSS transforms correctly. Tiles therefore stay **`svgExport` markup
+(~15KB)**; BoardGrid also accepts a `data:image/png` URI per tile, so a PNG
+path remains available as a per-card fallback.
 
 - **A — generated defaults (baseline):** every control renders a meaningful
   empty state; `node tools/tile-defaults.js` serves the generator that

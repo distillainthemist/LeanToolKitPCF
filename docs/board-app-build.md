@@ -8,10 +8,11 @@ Phase 0 spikes:
 
 1. **Tile format — RESOLVED (v0.5.0): tiles are `svgExport`, rendered by
    BoardGrid.** WebKit renders `foreignObject` SVGs unscaled inside an
-   `<img>` (confirmed on device), so the grid is not a gallery of Image
-   controls — it is the **[BoardGrid](controls/BoardGrid.md) control**,
-   which renders the SVG markup inline where WebKit scales it correctly.
-   Tiles stay ~15KB.
+   `<img>` (confirmed on device — and inline too), so the grid is not a
+   gallery of Image controls — it is the
+   **[BoardGrid](controls/BoardGrid.md) control**, which extracts each
+   snapshot's HTML and fits it with a CSS transform, which WebKit scales
+   correctly. Tiles stay ~15KB.
 2. **Editor screen load** — an empty test app with all 22 controls on one
    screen, `Visible` switched by a variable. If load is unacceptable, split
    the editor into 2–3 screens by card family; nothing else changes.

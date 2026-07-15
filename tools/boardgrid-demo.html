@@ -32,7 +32,16 @@
   <h1>BoardGrid demo</h1>
   <label><input type="checkbox" id="edit" /> Edit mode (tap = configure/add, drag = swap)</label>
   <label><input type="checkbox" id="ro" /> Read only</label>
-  <label>Grid <select id="grid"><option>3x3</option><option>2x2</option><option>4x3</option><option value="">auto</option></select></label>
+  <label>Grid <select id="grid">
+    <option value="3x3">3×3</option>
+    <option value="2x2">2×2</option>
+    <option value="5x5">5×5</option>
+    <option value="2x1">2 cols × 1 row</option>
+    <option value="3x1">3 cols × 1 row</option>
+    <option value="3x2">3 cols × 2 rows</option>
+    <option value="4x3">4 cols × 3 rows</option>
+    <option value="">auto</option>
+  </select></label>
   <span id="status" style="font-size:12px;color:#8d887e">loading…</span>
 </header>
 <div id="host"></div>
