@@ -24,15 +24,16 @@ types of hidden controls) is a load-time and maintenance disaster.
 
 **The pattern: snapshot tiles + one editor screen.**
 
-- **Board screen** — a plain gallery of **Image controls** rendering each
-  card's stored snapshot (`pngExport` — see the spike verdict under Tile
-  defaults), with the configured title overlaid as a label. Grid size is just `WrapCount`. Empty
+- **Board screen** — one **[BoardGrid](controls/BoardGrid.md) control**
+  rendering the cards' stored `svgExport` snapshots **inline** (never in an
+  `<img>` — see the spike verdict under Tile defaults), with title chips,
+  read/edit modes, tap-to-open and drag-to-rearrange built in. Grid size is just `WrapCount`. Empty
   slots render as "＋ add card" tiles in edit mode. A **meeting board** keeps
   a fixed left pane hosting a *live* MeetingScheduler (one fixed control —
   no slot problem).
 - **Card editor screen** — one full-screen instance of each card type
   (stacked, one visible), bound to whichever tile was tapped. On save the app
-  patches `outputJSON` + fresh `pngExport` back to the card's row; the tile
+  patches `outputJSON` + fresh `svgExport` back to the card's row; the tile
   updates.
 
 Cost of a future card type: **one control instance on the editor screen +
@@ -83,7 +84,7 @@ paths, no parallel schema. A meeting board gets one instance per occurrence.
 | Card Id | Text (80) | The slot's `cardId` — also the `instanceId` fed to the control (actions stamp themselves with it) |
 | Card Type | Text (40) | e.g. `FiveWhys` |
 | Output (JSON) | Multiline (1,000,000) | The card document |
-| Tile (data URI) | Multiline (500,000) | `pngExport` at last save — the board tile (see the spike verdict under Tile defaults) |
+| Tile SVG | Multiline (200,000) | `svgExport` at last save — rendered inline by BoardGrid (a `data:image/png` URI is also accepted per tile, as a fallback) |
 
 One row per card (not one blob per instance) so that: patches are small and
 per-card (two people editing different cards never collide), the 1MB
@@ -97,7 +98,7 @@ look up a single card's output directly.
 | Card Type (primary-ish) | Text (40) | Alternate key |
 | Label | Text (100) | |
 | Description | Text (400) | |
-| Default Tile (data URI) | Multiline (500,000) | The card's rendered **empty state** (see tile defaults) |
+| Default Tile SVG | Multiline (200,000) | The card's rendered **empty state** (see tile defaults) |
 | Solution Version | Text (20) | Which release generated it |
 
 Dual purpose: (1) default tiles for never-opened cards; (2) the palette
@@ -161,32 +162,36 @@ roll up — empty means this board.
 
 A freshly configured board must not be a wall of blank tiles.
 
-**Spike verdict (2026-07-15): tiles are PNG.** 16 of 19 `svgExport` tiles are
-`foreignObject`-wrapped HTML, and WebKit renders those **unscaled inside an
-`<img>`** — on Safari/iPad the tile shows a zoomed-in corner of the card.
-The PNG fallback rendered correctly on the same devices, so tiles ship as
-**`pngExport`** (~50–250KB per tile) stored as complete data URIs, directly
-bindable with no `EncodeUrl`. EmbedCard's hand-drawn placeholder is pure
-vector (no foreignObject) and stays SVG safely.
+**Spike verdict (2026-07-15) and its resolution.** 16 of 19 `svgExport`
+tiles are `foreignObject`-wrapped HTML, and WebKit renders those **unscaled
+inside an `<img>`** — on Safari/iPad the tile shows a zoomed-in corner of
+the card (confirmed on device). Rather than paying for PNG tiles
+(~50–250KB per card per instance in database capacity), the
+**[BoardGrid](controls/BoardGrid.md) control** renders the SVG markup
+**inline in the DOM**, where WebKit scales it correctly — the same reason
+the live controls render fine in Safari. Tiles therefore stay **`svgExport`
+markup (~15KB)**; BoardGrid also accepts a `data:image/png` URI per tile,
+so a PNG path remains available as a per-card fallback.
 
 - **A — generated defaults (baseline):** every control renders a meaningful
   empty state; `node tools/tile-defaults.js` serves the generator that
-  captures each card's empty-state `pngExport` and writes
-  `tools/tile-defaults.json` (`{generated, format, tiles: {cardType:
-  dataUri}}`). Regenerate per release; seed the Card Catalog table from it.
+  captures each card's empty-state `svgExport` and writes
+  `tools/tile-defaults.json` (`{generated, format: "svg-markup", tiles:
+  {cardType: svg}}`). Regenerate per release; seed the Card Catalog table
+  from it.
 - **C — hand-authored:** EmbedCard / CardSettings / MeetingScheduler have no
   snapshot outputs by design; the generator includes a static placeholder
   for the one that can sit on a board (EmbedCard).
 - **B — priming (later, optional):** for settings-accurate empty tiles, the
   app can cycle a new board's slots through the editor-screen host behind a
-  "Preparing board…" overlay and harvest real `pngExport` per slot. Nothing
+  "Preparing board…" overlay and harvest real `svgExport` per slot. Nothing
   in A blocks B — a saved/primed tile always wins over the catalog default.
 
-Tile image formula (both values are complete data URIs):
+The default lands in each BoardGrid tile via the `tilesJSON` join:
 
 ```powerfx
-Image = Coalesce(ThisItem.cardRow.ben_tilepng,
-    LookUp('LTK Card Catalog', ben_cardtype = ThisItem.cardType).ben_defaulttile)
+svg: Coalesce(row.ben_tilesvg,
+     LookUp('LTK Card Catalog', ben_cardtype = ThisItem.cardType).ben_defaultsvg)
 ```
 
 ---
@@ -226,11 +231,11 @@ With({ inst: Patch('LTK Board Instances', Defaults('LTK Board Instances'), {
             "link",  LookUp('LTK Card Data',
                        ben_cardid = srcCard).ben_outputjson,   // latest via sort/filter as needed
             /* clear */ Blank()),
-        ben_tilepng:
+        ben_tilesvg:
           If(policy = "carry",
              LookUp('LTK Card Data',
                     ben_instance.'LTK Board Instance' = prev.'LTK Board Instance'
-                    && ben_cardid = Text(S.Value.cardId)).ben_tilepng,
+                    && ben_cardid = Text(S.Value.cardId)).ben_tilesvg,
              Blank()) }))))
 ```
 
@@ -241,7 +246,7 @@ slot, seeded per policy, snapshot stored on the instance.)
 
 ```powerfx
 Patch('LTK Card Data', varCardRow,
-      { ben_outputjson: Self.outputJSON, ben_tilepng: Self.pngExport });
+      { ben_outputjson: Self.outputJSON, ben_tilesvg: Self.svgExport });
 // actions: recipe 3 of docs/actions-dataverse.md, plus the board stamp:
 //   ben_boardid: varBoardId
 ```
@@ -276,7 +281,11 @@ Filter('LTK Actions',
    a crew (staff who always attend). No roster / no crew on the instance =
    everyone. Bind `MeetingScheduler.attendeesJSON` straight into each card's
    `peopleJSON`.
-4. **Tile defaults generator.** `tools/tile-defaults.html` +
+4. **BoardGrid control (v0.5.0).** The tile wall itself — inline snapshot
+   rendering (WebKit-safe), read/edit modes, tap → `selectedSlotJSON`
+   (`open` / `configure` / `add`), drag-to-swap → `layoutJSON`. See
+   [BoardGrid](controls/BoardGrid.md).
+5. **Tile defaults generator.** `tools/tile-defaults.html` +
    `tools/tile-defaults.json` (see above).
 
 ---
@@ -285,14 +294,15 @@ Filter('LTK Actions',
 
 - **Version re-adoption**: the board app hosts every control; each release
   needs re-adopt + republish in that one app. Deliberate release events.
-- **Safari SVG tiles — RESOLVED (2026-07-15)**: the Phase 0 spike confirmed
+- **Safari SVG tiles — RESOLVED (2026-07-16)**: the Phase 0 spike confirmed
   WebKit renders the 16 `foreignObject`-wrapped SVG tiles **unscaled** inside
-  an `<img>` (zoomed-to-a-corner tiles), while the PNG fallback rendered
-  correctly. Verdict: tiles are **`pngExport`** everywhere (see Tile
-  defaults). Consequence: ~50–250KB per tile per instance — set an instance
-  **retention** policy (e.g. clear `ben_tilepng` on instances older than N
-  months; the `outputJSON` stays, so a tile can always be re-rendered by
-  opening the card).
+  an `<img>` (zoomed-to-a-corner tiles, confirmed on device). Resolution: the
+  **BoardGrid control** renders tiles inline instead of via Image controls,
+  so tiles stay `svgExport` (~15KB) and the interim PNG-tile decision is
+  superseded. Storage stays modest (a daily 9-card board ≈ 34MB/yr), and a
+  per-tile PNG data-URI fallback remains supported by BoardGrid. Retention
+  (clearing old instances' `ben_tilesvg`) is still worthwhile, just far less
+  urgent.
 - **Instance accumulation**: a daily meeting ≈ 250 instances/yr × cards.
   Decide retention; closed instances should set `readOnly` on their cards.
 - **Concurrency**: per-card rows make same-meeting different-card edits safe;
@@ -305,7 +315,7 @@ Filter('LTK Actions',
 
 | Phase | Scope | Status |
 | --- | --- | --- |
-| 0 | Spikes: Safari SVG-in-Image (**done — verdict: PNG tiles**); 21-control editor screen load (in-studio) | **half done** |
+| 0 | Spikes: Safari SVG-in-Image (**done — resolved by BoardGrid, tiles stay SVG**); 22-control editor screen load (in-studio) | **half done** |
 | 1 | Tables + manifest schema + Power Fx recipes (this page) | **done — this page** |
 | 2 | PCF: CardSettings board mode + catalogJSON; crew attendees; tile defaults | **done — v0.4.0** |
 | 3 | Board app: board list → grid screen → editor screen → meeting flow | pending |

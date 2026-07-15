@@ -133,6 +133,7 @@ and CardSettings (which are a selector and a form, not display tiles).
 | [ConditionsCard](ConditionsCard.md) | `ltk/conditions@1` | ✅ | ✅ | `conditions` |
 | [AgendaCard](AgendaCard.md) | `ltk/agenda@1` | ✅ | ✅ | `agenda` |
 | [EmbedCard](EmbedCard.md) | — | ✖ (display-only) | ✖ | — |
+| [BoardGrid](BoardGrid.md) | — | ✖ (board tile wall) | ✖ | — |
 | [StatusTile](StatusTile.md) | `ltk/statustile@1` | ✅ | ✖ | — |
 | [KpiTrendCard](KpiTrendCard.md) | `ltk/kpitrend@1` | ✅ | ✖ | — |
 | [ParetoCard](ParetoCard.md) | `ltk/pareto@1` | ✅ | ✖ | — |

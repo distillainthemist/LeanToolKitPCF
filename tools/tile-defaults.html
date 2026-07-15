@@ -191,20 +191,14 @@ function show(type, svg, error) {
   tiles.EmbedCard = EMBED_PLACEHOLDER;
   show("EmbedCard (static)", EMBED_PLACEHOLDER);
 
-  // The OPERATIVE defaults are complete data URIs, directly bindable to a
-  // canvas Image control with no EncodeUrl. Phase 0 spike verdict
-  // (2026-07-15): WebKit renders foreignObject SVGs unscaled inside <img>
-  // (zoomed-to-a-corner tiles on Safari/iPad), so tiles ship as pngExport;
-  // EmbedCard's hand-drawn placeholder is pure vector and safe as SVG.
-  const uriTiles = {};
-  for (const type of Object.keys(tiles)) {
-    uriTiles[type] =
-      pngs[type] ??
-      "data:image/svg+xml;utf8," + encodeURIComponent(tiles[type]);
-  }
-  const out = { generated: new Date().toISOString(), format: "data-uri (png; svg for static placeholders)", tiles: uriTiles };
+  // The OPERATIVE defaults are raw svg markup: BoardGrid renders tiles
+  // INLINE in the DOM, which sidesteps the WebKit foreignObject-in-<img>
+  // scaling bug the Phase 0 spike confirmed — so tiles stay at SVG size
+  // (~15KB) instead of PNG (~50-250KB). BoardGrid also accepts data: image
+  // URIs per tile, so a PNG pipeline remains a per-card fallback.
+  const out = { generated: new Date().toISOString(), format: "svg-markup", tiles };
   window.__tileDefaults = out;
-  window.__tileSvgs = tiles; // raw svg markup — kept for the spike-page builder
+  window.__tilePngs = pngs; // kept for the spike page / any PNG fallback
   const dl = document.getElementById("dl");
   dl.href = "data:application/json;charset=utf-8," + encodeURIComponent(JSON.stringify(out, null, 2));
   dl.style.display = "inline-block";

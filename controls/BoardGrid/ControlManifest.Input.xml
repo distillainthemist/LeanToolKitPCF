@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<manifest>
+  <control namespace="BenOBrien"
+           constructor="BoardGrid"
+           version="0.4.0"
+           display-name-key="Board Grid"
+           description-key="LeanToolKit board grid — the master-leanboard tile wall. Renders each card snapshot INLINE (WebKit-safe, so SVG tiles stay small), in a configurable grid. Read mode: tap a tile to open its card. Edit mode: tap a tile to configure it, tap an empty slot to add a card, drag tiles to swap positions."
+           control-type="standard">
+
+    <property name="tilesJSON"
+              display-name-key="Tiles (JSON)"
+              description-key="The board slots joined to their card data: [{pos, cardId, cardType, title, svg}]. svg is raw svgExport markup (rendered inline) or a data image URI (rendered as an image). Tiles without a snapshot show a typed placeholder."
+              of-type="Multiple"
+              usage="input"
+              required="false" />
+
+    <property name="gridSize"
+              display-name-key="Grid Size"
+              description-key="Columns x rows, e.g. 3x3, or a bare column count. Empty = a near-square grid sized to fit the tiles. Grows rows as needed so every tile always fits."
+              of-type="SingleLine.Text"
+              usage="input"
+              required="false" />
+
+    <property name="editMode"
+              display-name-key="Edit Mode"
+              description-key="Layout editing: tap a tile to configure it (action configure), tap an empty slot to add a card (action add), drag a tile onto another slot to swap positions (emits Layout). Off = read mode, where tapping a tile emits action open for navigation."
+              of-type="TwoOptions"
+              usage="input"
+              required="false"
+              default-value="false" />
+
+    <property name="selectedSlotJSON"
+              display-name-key="Selected Slot (JSON)"
+              description-key="The tapped slot: {action: open | configure | add, pos, cardId, cardType, title, selectedAt}. open = navigate to the card (read mode); configure = open the composer for this slot; add = open the composer for the empty position. selectedAt changes on every tap so OnChange always fires."
+              of-type="Multiple"
+              usage="output" />
+
+    <property name="layoutJSON"
+              display-name-key="Layout (JSON)"
+              description-key="Emitted after a drag rearranges the tiles: {movedAt, slots:[{cardId, pos}]}. Persist the new positions into the board manifest in OnChange."
+              of-type="Multiple"
+              usage="output" />
+
+    <property name="settingsJSON"
+              display-name-key="Settings (JSON)"
+              description-key="Consolidated configuration: {title, prompts, readOnly, theme:{background,foreground,accent,legend,font}, config:{tilesJSON, gridSize, editMode}}. Settings are the base; a non-empty discrete text input overrides its key (boolean inputs merge with OR)."
+              of-type="Multiple"
+              usage="input"
+              required="false" />
+
+    <!-- Self-describing card chrome -->
+    <property name="cardTitle"
+              display-name-key="Card Title"
+              description-key="Optional title bar (e.g. the board name). Leave empty for no chrome at all."
+              of-type="SingleLine.Text"
+              usage="input"
+              required="false" />
+
+    <property name="prompts"
+              display-name-key="Prompts"
+              description-key="Optional empty-state text shown while the board has no cards: plain text or a JSON array of strings."
+              of-type="Multiple"
+              usage="input"
+              required="false" />
+
+    <!-- Standard styling surface -->
+    <property name="backgroundColor"
+              display-name-key="Background Colour"
+              description-key="Board background colour (any CSS colour or hex). Default white."
+              of-type="SingleLine.Text"
+              usage="input"
+              required="false" />
+
+    <property name="foregroundColor"
+              display-name-key="Foreground Colour"
+              description-key="Text / line colour. Default rich black."
+              of-type="SingleLine.Text"
+              usage="input"
+              required="false" />
+
+    <property name="accentColor"
+              display-name-key="Accent Colour"
+              description-key="Accent colour for drop targets and add-card hover. Default rich black."
+              of-type="SingleLine.Text"
+              usage="input"
+              required="false" />
+
+    <property name="fontFamily"
+              display-name-key="Font"
+              description-key="Font family (or comma-separated font stack) for the chrome text."
+              of-type="SingleLine.Text"
+              usage="input"
+              required="false" />
+
+    <property name="readOnly"
+              display-name-key="Read Only"
+              description-key="When true, the grid is display-only: no taps, no editing (wallboard mode)."
+              of-type="TwoOptions"
+              usage="input"
+              required="false"
+              default-value="false" />
+
+    <!-- No snapshot outputs: a board-of-boards image would reintroduce the
+         very foreignObject-in-img problem this control exists to avoid. -->
+
+    <!-- CSS is bundled into the code (see styles.ts) because canvas apps
+         sometimes fail to load a separate css resource. -->
+    <resources>
+      <code path="index.ts" order="1" />
+    </resources>
+
+  </control>
+</manifest>

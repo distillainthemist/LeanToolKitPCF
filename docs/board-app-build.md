@@ -6,23 +6,24 @@ Everything here is paste-ready Power Fx; adapt logical names to taste.
 
 Phase 0 spikes:
 
-1. **Tile format — DONE (2026-07-15): tiles are `pngExport`.** WebKit
-   renders `foreignObject` SVGs unscaled inside an `<img>` (zoomed to a
-   corner on Safari/iPad); the PNG fallback rendered correctly. Every
-   formula below already reflects the verdict: tiles and catalog defaults
-   are complete **data URIs**, bound directly with no `EncodeUrl`.
-2. **Editor screen load** — an empty test app with all 21 controls on one
+1. **Tile format — RESOLVED (v0.5.0): tiles are `svgExport`, rendered by
+   BoardGrid.** WebKit renders `foreignObject` SVGs unscaled inside an
+   `<img>` (confirmed on device), so the grid is not a gallery of Image
+   controls — it is the **[BoardGrid](controls/BoardGrid.md) control**,
+   which renders the SVG markup inline where WebKit scales it correctly.
+   Tiles stay ~15KB.
+2. **Editor screen load** — an empty test app with all 22 controls on one
    screen, `Visible` switched by a variable. If load is unacceptable, split
    the editor into 2–3 screens by card family; nothing else changes.
 
 ## 0. Prerequisites
 
-- Import **LeanToolKit v0.4.0+**.
+- Import **LeanToolKit v0.5.0+**.
 - Create the five tables from the
   [design page](master-leanboard.md#data-model-five-tables): LTK Board,
   LTK Board Instance, LTK Card Data, LTK Card Catalog, and add
   `ben_boardid` to LTK Actions.
-- Add all 21 code components to the app (Insert → Get more components →
+- Add all 22 code components to the app (Insert → Get more components →
   Code).
 
 ## 1. Seed the Card Catalog
@@ -43,7 +44,7 @@ ForAll(
 ```
 
 Default tile SVGs come from `tools/tile-defaults.json` — paste each card's
-`tiles.<Type>` data URI into its row's `ben_defaulttile` (or bulk-load with
+`tiles.<Type>` svg markup into its row's `ben_defaultsvg` (or bulk-load with
 a Power Automate flow reading the JSON file). Stamp `ben_solutionversion`.
 
 ## 2. App.OnStart
@@ -108,13 +109,21 @@ Bind every card's `peopleJSON` to
 `Coalesce(varAttendees, varBoard.ben_peoplejson)` — attendees when an
 instance is selected, the whole roster otherwise.
 
-### The tile grid
+### The tile grid — one BoardGrid control
 
-A blank flexible-height **gallery** `galTiles`:
+| Property | Binding |
+| --- | --- |
+| `tilesJSON` | the join below |
+| `gridSize` | `Text(varManifest.grid)` (e.g. `"3x3"`) |
+| `editMode` | `varEditMode` (board owners' toggle) |
+| `readOnly` | `false` (or `true` for a wallboard screen) |
+| `cardTitle` | `varBoard.ben_name` |
 
 ```powerfx
-// Items — one row per manifest slot, joined to its Card Data row
-ForAll(Table(varManifest.slots) As S,
+// tilesJSON — one entry per manifest slot, joined to its Card Data row;
+// the catalog default fills tiles that have never been saved
+BoardGrid.tilesJSON =
+JSON(ForAll(Table(varManifest.slots) As S,
     With({ row: LookUp('LTK Card Datas',
                 ben_instance.'LTK Board Instance' = varInstance.'LTK Board Instance'
                 && ben_cardid = Text(S.Value.cardId)) },
@@ -122,26 +131,35 @@ ForAll(Table(varManifest.slots) As S,
           cardId: Text(S.Value.cardId),
           cardType: Text(S.Value.cardType),
           title: Text(S.Value.title),
-          settings: JSON(S.Value.settingsJSON, JSONFormat.Compact),
-          rowRef: row }))
-// WrapCount: Sqrt of the slot count for the square-ish grid, e.g. 3
+          svg: Coalesce(row.ben_tilesvg,
+               LookUp('LTK Card Catalogs',
+                      ben_cardtype = Text(S.Value.cardType)).ben_defaultsvg) })),
+    JSONFormat.Compact)
 ```
 
-Inside the template: an **Image** + a title label:
+`OnChange` — taps navigate, drags persist:
 
 ```powerfx
-// both values are complete data URIs — no EncodeUrl
-Image.Image =
-  Coalesce(ThisItem.rowRef.ben_tilepng,
-           LookUp('LTK Card Catalogs', ben_cardtype = ThisItem.cardType).ben_defaulttile)
-
-Image.OnSelect =
-  Set(varSlot, ThisItem); Navigate(EditorScreen)
+If(Self.layoutJSON <> varLastLayout,
+   // a drag rearranged the tiles: write the new positions into the manifest
+   Set(varLastLayout, Self.layoutJSON);
+   Patch('LTK Boards', varBoard, { ben_manifestjson:
+       JSON({ grid: Text(varManifest.grid),
+              slots: ForAll(Table(varManifest.slots) As S,
+                  Patch(S.Value, { pos:
+                      LookUp(Table(ParseJSON(Self.layoutJSON).slots),
+                             Text(Value.cardId) = Text(S.Value.cardId)).Value.pos })) },
+            JSONFormat.Compact) });
+   Set(varBoard, LookUp('LTK Boards', 'LTK Board' = varBoard.'LTK Board'));
+   Set(varManifest, ParseJSON(varBoard.ben_manifestjson)),
+   // otherwise a tap: open / configure / add
+   With({ s: ParseJSON(Self.selectedSlotJSON) },
+      Set(varSlot, LookUp(colSlots, cardId = Text(s.cardId)));  // your slot lookup
+      Switch(Text(s.action),
+         "open",      Navigate(EditorScreen),
+         "configure", Navigate(ComposerScreen),
+         "add",       Set(varSlotPos, Value(s.pos)); Navigate(ComposerScreen))))
 ```
-
-**Edit mode** (`varEditMode` toggle, board owners only): empty positions
-render "＋ add card" tiles navigating to the Composer screen (§6); filled
-tiles get a small "settings" chip doing the same with the slot preloaded.
 
 ## 5. Creating an instance — the data policies
 
@@ -198,7 +216,7 @@ brevity.)
 
 ## 7. Editor screen
 
-All 21 controls stacked full-screen, exactly one visible:
+All 21 card controls stacked full-screen (BoardGrid stays on the board screen), exactly one visible:
 
 ```powerfx
 cmpFiveWhys.Visible = varSlot.cardType = "FiveWhys"   // …and so on per control
@@ -220,7 +238,7 @@ Common bindings (per control):
 
 ```powerfx
 Patch('LTK Card Datas', varSlot.rowRef,
-    { ben_outputjson: Self.outputJSON, ben_tilepng: Self.pngExport })
+    { ben_outputjson: Self.outputJSON, ben_tilesvg: Self.svgExport })
 ```
 
 `OnChange` (actions channel): recipe 3 of
