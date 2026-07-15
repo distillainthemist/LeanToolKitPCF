@@ -4,15 +4,13 @@ The screen-by-screen recipe for building the master-leanboard canvas app.
 Architecture and data model: [master-leanboard.md](master-leanboard.md).
 Everything here is paste-ready Power Fx; adapt logical names to taste.
 
-Do the two **Phase 0 spikes first** — they decide one column and one layout
-choice:
+Phase 0 spikes:
 
-1. **Tile format** — open `/safari-tile-spike.html`
-   (`node tools/tile-defaults.js`, or the published artifact) on Mac Safari,
-   iPad Safari and a Power Apps Image control. SVG crisp everywhere → store
-   `svgExport` tiles; any SVG broken → store `pngExport` instead (swap
-   `Self.svgExport` for `Self.pngExport` in the save formula below, and the
-   catalog seeds from a PNG regeneration).
+1. **Tile format — DONE (2026-07-15): tiles are `pngExport`.** WebKit
+   renders `foreignObject` SVGs unscaled inside an `<img>` (zoomed to a
+   corner on Safari/iPad); the PNG fallback rendered correctly. Every
+   formula below already reflects the verdict: tiles and catalog defaults
+   are complete **data URIs**, bound directly with no `EncodeUrl`.
 2. **Editor screen load** — an empty test app with all 21 controls on one
    screen, `Visible` switched by a variable. If load is unacceptable, split
    the editor into 2–3 screens by card family; nothing else changes.
@@ -45,8 +43,8 @@ ForAll(
 ```
 
 Default tile SVGs come from `tools/tile-defaults.json` — paste each card's
-`tiles.<Type>` string into its row's `ben_defaultsvg` (or bulk-load with a
-Power Automate flow reading the JSON file). Stamp `ben_solutionversion`.
+`tiles.<Type>` data URI into its row's `ben_defaulttile` (or bulk-load with
+a Power Automate flow reading the JSON file). Stamp `ben_solutionversion`.
 
 ## 2. App.OnStart
 
@@ -132,11 +130,10 @@ ForAll(Table(varManifest.slots) As S,
 Inside the template: an **Image** + a title label:
 
 ```powerfx
+// both values are complete data URIs — no EncodeUrl
 Image.Image =
-  "data:image/svg+xml;utf8," & EncodeUrl(
-      Coalesce(ThisItem.rowRef.ben_tilesvg,
-               LookUp('LTK Card Catalogs', ben_cardtype = ThisItem.cardType).ben_defaultsvg))
-// (If the spike chose PNG: the stored value is already a data URI — bind it directly.)
+  Coalesce(ThisItem.rowRef.ben_tilepng,
+           LookUp('LTK Card Catalogs', ben_cardtype = ThisItem.cardType).ben_defaulttile)
 
 Image.OnSelect =
   Set(varSlot, ThisItem); Navigate(EditorScreen)
@@ -223,7 +220,7 @@ Common bindings (per control):
 
 ```powerfx
 Patch('LTK Card Datas', varSlot.rowRef,
-    { ben_outputjson: Self.outputJSON, ben_tilesvg: Self.svgExport })
+    { ben_outputjson: Self.outputJSON, ben_tilepng: Self.pngExport })
 ```
 
 `OnChange` (actions channel): recipe 3 of
