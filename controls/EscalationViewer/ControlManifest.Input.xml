@@ -2,7 +2,7 @@
 <manifest>
   <control namespace="BenOBrien"
            constructor="EscalationViewer"
-           version="0.3.0"
+           version="0.4.0"
            display-name-key="Escalation Viewer"
            description-key="LeanToolKit escalation viewer — the actions escalated to this board, grouped by their source card, with one-tap acknowledge and comment capture written back to the central actions table. Feed it Filter(Actions, Escalated = true)."
            control-type="standard">
