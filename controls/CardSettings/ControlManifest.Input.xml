@@ -29,6 +29,13 @@
               usage="input"
               required="false" />
 
+    <property name="boardsManifestJSON"
+              display-name-key="Boards Manifest (JSON)"
+              description-key="Board-composer mode: the boards available as link / rollup sources, [{boardId, name, cards:[{cardId, cardType, title}]}]. When supplied, the form gains a Board section that edits the blob board key: the new-instance data policy (clear / carry / link) and the source pickers. Leave empty when composing a standalone card."
+              of-type="Multiple"
+              usage="input"
+              required="false" />
+
     <property name="outputJSON"
               display-name-key="Output JSON"
               description-key="The composed settingsJSON for the selected card — sparse (only values the maker set), stamped with cardType, unknown input keys preserved. Bind this to a live card settingsJSON input for a live preview; persist it in OnChange."
@@ -39,6 +46,12 @@
               display-name-key="Selected Card Type"
               description-key="The chosen card type (control name), also stamped inside Output JSON — bind to the card row type column."
               of-type="SingleLine.Text"
+              usage="output" />
+
+    <property name="catalogJSON"
+              display-name-key="Card Catalog (JSON)"
+              description-key="The card registry of this solution version, [{type, label, description, actionCapable}] — read-only. Seed the board app card palette and the Card Catalog table from it so neither drifts from the installed version."
+              of-type="Multiple"
               usage="output" />
 
     <!-- Self-describing card chrome -->

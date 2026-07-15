@@ -1,0 +1,195 @@
+<!doctype html>
+<!-- Tile-defaults generator — serve via tools/tile-defaults.js (which routes
+     "/" here over out/controls). Instantiates every snapshot-capable control
+     with EMPTY inputs, harvests the empty-state svgExport each one emits,
+     and offers the combined tile-defaults.json for download. -->
+<html>
+<head>
+<meta charset="utf-8" />
+<title>LeanToolKit tile defaults</title>
+<style>
+  body { font-family: system-ui, sans-serif; margin: 20px; background: #f6f5f2; }
+  h1 { font-size: 18px; }
+  #status { margin: 8px 0 16px; font-size: 14px; color: #555; }
+  #grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; }
+  .tile { background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 10px; }
+  .tile h3 { margin: 0 0 6px; font-size: 13px; }
+  .tile img { width: 100%; height: 180px; object-fit: contain; background: #fff; }
+  .tile .err { color: #b00; font-size: 12px; }
+  #dl { display: inline-block; margin-left: 12px; font-size: 14px; }
+  /* the live control being harvested renders off-screen but LAID OUT */
+  #stage { position: absolute; left: -10000px; top: 0; width: 640px; height: 400px; }
+</style>
+</head>
+<body>
+<h1>LeanToolKit tile defaults <a id="dl" style="display:none" download="tile-defaults.json">download tile-defaults.json</a></h1>
+<div id="status">loading bundles…</div>
+<div id="grid"></div>
+<div id="stage"></div>
+<script>
+// Every control that emits svgExport (all except MeetingScheduler,
+// CardSettings and EmbedCard — EmbedCard gets a hand-authored placeholder).
+const TYPES = [
+  "FiveWhys", "Fishbone", "FaultTree", "ActionBoard", "SqdpcCard",
+  "ConditionsCard", "StatusTile", "KpiTrendCard", "ParetoCard",
+  "BenefitEffort", "RiskMatrix", "Raci", "SkillsMatrix", "ProcessMap",
+  "CaptureCard", "HeatmapCard", "AgendaCard", "EscalationViewer",
+];
+
+// EmbedCard cannot snapshot a cross-origin iframe — static placeholder tile.
+const EMBED_PLACEHOLDER =
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 400">' +
+  '<rect width="640" height="400" fill="#ffffff"/>' +
+  '<rect x="24" y="24" width="592" height="352" rx="10" fill="none" stroke="#c8c4bc" stroke-width="2" stroke-dasharray="10 8"/>' +
+  '<g fill="#8a8579" font-family="system-ui, sans-serif" text-anchor="middle">' +
+  '<text x="320" y="180" font-size="56">▦</text>' +
+  '<text x="320" y="232" font-size="24" font-weight="600">Embedded report</text>' +
+  '<text x="320" y="262" font-size="16">Tap to open the live view</text>' +
+  '</g></svg>';
+
+// Bundles overwrite the shared pcf_tools global as they load, but each one
+// also calls ComponentFramework.registerControl — hook it to catch every
+// constructor.
+const registry = {};
+window.ComponentFramework = {
+  registerControl(name, exportsOrCtor) {
+    registry[name.split(".").pop()] = exportsOrCtor;
+  },
+};
+
+function loadBundle(type) {
+  return new Promise((resolve, reject) => {
+    const s = document.createElement("script");
+    s.src = "./" + type + "/bundle.js";
+    s.onload = () => resolve();
+    s.onerror = () => reject(new Error("failed to load " + type));
+    document.head.appendChild(s);
+  });
+}
+
+function ctorFor(type) {
+  const reg = registry[type];
+  if (typeof reg === "function") return reg;
+  if (reg && typeof reg[type] === "function") return reg[type];
+  const ns = window.pcf_tools_652ac3f36e1e4bca82eb3c1dc44e6fad;
+  return ns && typeof ns[type] === "function" ? ns[type] : null;
+}
+
+// ProcessMap deliberately emits no snapshot for an EMPTY map (nodes.length
+// check), so its default tile is seeded with a minimal representative flow.
+const SEED_DOCS = {
+  ProcessMap: JSON.stringify({
+    schema: "ltk/processmap@1",
+    meta: { title: "", updated: "2026-01-01T00:00:00.000Z" },
+    data: {
+      mode: "simple",
+      nodes: [
+        { id: "n1", kind: "start", label: "Start", x: 60, y: 160 },
+        { id: "n2", kind: "process", label: "Step", x: 260, y: 160 },
+        { id: "n3", kind: "process", label: "Step", x: 460, y: 160 },
+      ],
+      edges: [
+        { id: "e1", from: "n1", to: "n2", kind: "flow" },
+        { id: "e2", from: "n2", to: "n3", kind: "flow" },
+      ],
+    },
+  }),
+};
+
+// Every input reads as empty (bar a per-type seed doc); boolean checks
+// (=== true) come out false.
+function emptyContext(type) {
+  const seed = SEED_DOCS[type] || "";
+  return {
+    mode: {
+      trackContainerResize() {},
+      allocatedWidth: 640,
+      allocatedHeight: 400,
+      isControlDisabled: false,
+    },
+    parameters: new Proxy({}, {
+      get: (t, k) => ({ raw: k === "inputJSON" ? seed : "" }),
+    }),
+  };
+}
+
+function harvest(type) {
+  return new Promise((resolve) => {
+    const Ctor = ctorFor(type);
+    if (!Ctor) { resolve({ type, error: "constructor not found" }); return; }
+    const stage = document.getElementById("stage");
+    const host = document.createElement("div");
+    stage.appendChild(host);
+    let inst;
+    const done = (result) => {
+      try { if (inst) inst.destroy(); } catch (e) { /* ignore */ }
+      host.remove();
+      resolve(result);
+    };
+    try {
+      inst = new Ctor();
+      inst.init(emptyContext(type), () => {}, {}, host);
+    } catch (e) {
+      done({ type, error: String(e) });
+      return;
+    }
+    const t0 = Date.now();
+    const poll = () => {
+      let svg = "";
+      try { svg = (inst.getOutputs() || {}).svgExport || ""; } catch (e) { /* ignore */ }
+      if (svg !== "") { done({ type, svg }); return; }
+      if (Date.now() - t0 > 12000) { done({ type, error: "timed out waiting for svgExport" }); return; }
+      setTimeout(poll, 250);
+    };
+    setTimeout(poll, 400);
+  });
+}
+
+function show(type, svg, error) {
+  const tile = document.createElement("div");
+  tile.className = "tile";
+  const h = document.createElement("h3");
+  h.textContent = type;
+  tile.appendChild(h);
+  if (svg) {
+    const img = document.createElement("img");
+    img.src = "data:image/svg+xml;utf8," + encodeURIComponent(svg);
+    tile.appendChild(img);
+  } else {
+    const e = document.createElement("div");
+    e.className = "err";
+    e.textContent = error || "no svg";
+    tile.appendChild(e);
+  }
+  document.getElementById("grid").appendChild(tile);
+}
+
+(async () => {
+  const status = document.getElementById("status");
+  const tiles = {};
+  const errors = [];
+  for (const type of TYPES) {
+    status.textContent = "loading " + type + "…";
+    try { await loadBundle(type); } catch (e) { errors.push(type + ": " + e.message); continue; }
+  }
+  for (const type of TYPES) {
+    status.textContent = "rendering " + type + "…";
+    const r = await harvest(type);
+    if (r.svg) tiles[type] = r.svg; else errors.push(type + ": " + r.error);
+    show(type, r.svg, r.error);
+  }
+  tiles.EmbedCard = EMBED_PLACEHOLDER;
+  show("EmbedCard (static)", EMBED_PLACEHOLDER);
+
+  const out = { generated: new Date().toISOString(), tiles };
+  window.__tileDefaults = out;
+  const dl = document.getElementById("dl");
+  dl.href = "data:application/json;charset=utf-8," + encodeURIComponent(JSON.stringify(out, null, 2));
+  dl.style.display = "inline-block";
+  status.textContent =
+    Object.keys(tiles).length + " tiles generated" +
+    (errors.length ? " — errors: " + errors.join("; ") : "");
+})();
+</script>
+</body>
+</html>

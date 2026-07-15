@@ -86,9 +86,22 @@
               usage="input"
               required="false" />
 
+    <property name="peopleJSON"
+              display-name-key="People (JSON)"
+              description-key="The full roster this meeting draws attendees from: [{whoId, who, crew?}]. crew links a person to an entry in Crew List; people without a crew always attend. Feeds the Attendees output when an instance is selected."
+              of-type="Multiple"
+              usage="input"
+              required="false" />
+
     <property name="selectedMeetingJSON"
               display-name-key="Selected Meeting (JSON)"
               description-key="The tapped (or edited) instance: {iso, date, day, time, crew, shift, recordId, rescheduledTo, status, values:{colKey: text}, selectedAt}. recordId is empty when no record exists yet — open or create accordingly in OnChange. selectedAt changes on every tap/edit so OnChange always fires."
+              of-type="Multiple"
+              usage="output" />
+
+    <property name="attendeesJSON"
+              display-name-key="Attendees (JSON)"
+              description-key="The expected attendees of the SELECTED instance: people whose crew matches the on-shift crew, plus everyone without a crew. No roster or no crew on the instance = the whole people list. Bind straight into the board cards People (JSON) inputs. Empty until an instance is selected."
               of-type="Multiple"
               usage="output" />
 

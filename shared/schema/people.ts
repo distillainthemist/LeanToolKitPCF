@@ -1,11 +1,14 @@
 // The people list supplied to action-capable controls via the peopleJSON
-// input: [{whoId, who, initials?, colour?}].
+// input: [{whoId, who, initials?, colour?, crew?}]. `crew` links a person to
+// a rostered crew (MeetingScheduler attendee filtering); people without a
+// crew are treated as always attending.
 
 export interface Person {
   whoId: string;
   who: string;
   initials: string;
   colour?: string;
+  crew?: string;
 }
 
 export function initialsFor(name: string): string {
@@ -39,6 +42,10 @@ export function parsePeople(raw: string | null | undefined): Person[] {
           : typeof p.id === "string" && p.id !== ""
             ? String(p.id)
             : who.toLowerCase().replace(/\s+/g, "-");
+      const crew =
+        typeof p.crew === "string" && p.crew.trim() !== ""
+          ? p.crew.trim()
+          : undefined;
       out.push({
         whoId,
         who,
@@ -47,6 +54,7 @@ export function parsePeople(raw: string | null | undefined): Person[] {
             ? p.initials
             : initialsFor(who),
         colour: typeof p.colour === "string" ? p.colour : undefined,
+        crew,
       });
     }
     return out;

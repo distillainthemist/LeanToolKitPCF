@@ -8,8 +8,8 @@
 
 import { IInputs, IOutputs } from "./generated/ManifestTypes";
 import { CardSettingsEditor } from "./editor";
-import { cardSpec } from "./registry";
-import { parseDraft, serializeDraft, SettingsDraft } from "./types";
+import { buildCatalogJson, cardSpec } from "./registry";
+import { parseBoardsManifest, parseDraft, serializeDraft, SettingsDraft } from "./types";
 import { LoadGate, rawOr, readTheme, str } from "../../shared/pcf/standard";
 
 const OUTPUT_DEBOUNCE_MS = 300;
@@ -24,6 +24,7 @@ export class CardSettings implements ComponentFramework.StandardControl<IInputs,
 
   private outputJson = "";
   private cardType = "";
+  private readonly catalogJson = buildCatalogJson();
   private outputTimer: ReturnType<typeof setTimeout> | null = null;
 
   public init(
@@ -53,6 +54,9 @@ export class CardSettings implements ComponentFramework.StandardControl<IInputs,
     });
 
     this.applyAll(context);
+    // surface catalogJSON immediately — it is static per solution version,
+    // so the app can seed its palette without waiting for an edit
+    this.notifyOutputChanged();
   }
 
   public updateView(context: ComponentFramework.Context<IInputs>): void {
@@ -63,6 +67,7 @@ export class CardSettings implements ComponentFramework.StandardControl<IInputs,
     return {
       outputJSON: this.outputJson,
       selectedCardType: this.cardType,
+      catalogJSON: this.catalogJson,
     };
   }
 
@@ -89,6 +94,7 @@ export class CardSettings implements ComponentFramework.StandardControl<IInputs,
     this.applySize(context);
     this.editor.setTheme(readTheme(p));
     this.editor.setChrome(str(p.cardTitle), rawOr(p.prompts, ""));
+    this.editor.setBoards(parseBoardsManifest(p.boardsManifestJSON?.raw));
 
     const disabled = context.mode.isControlDisabled === true;
     this.editor.setReadOnly(disabled || p.readOnly?.raw === true);

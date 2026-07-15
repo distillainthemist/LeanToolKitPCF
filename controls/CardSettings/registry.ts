@@ -522,7 +522,7 @@ export const CARDS: CardSpec[] = [
         placeholder: "Topic, Chair, Notetaker",
       },
     ],
-    appBound: ["existingMeetingsJSON"],
+    appBound: ["existingMeetingsJSON", "peopleJSON"],
   },
   {
     type: "EscalationViewer",
@@ -586,4 +586,20 @@ for (const card of CARDS) {
 
 export function cardSpec(type: string): CardSpec | undefined {
   return CARDS.find((c) => c.type === type);
+}
+
+/**
+ * The registry as JSON — the catalogJSON output. Seeds the board app's card
+ * palette and the LTK Card Catalog table, so neither can drift from the
+ * installed solution version.
+ */
+export function buildCatalogJson(): string {
+  return JSON.stringify(
+    CARDS.map((c) => ({
+      type: c.type,
+      label: c.label,
+      description: c.description,
+      actionCapable: ACTION_CAPABLE.has(c.type),
+    }))
+  );
 }

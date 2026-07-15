@@ -9,7 +9,7 @@ record.
 
 - **Schema id:** none · **Document:** ✖ · **Actions:** ✖ · **Snapshots:** none
 
-## selectedMeetingJSON — the only output
+## selectedMeetingJSON
 
 `of-type Multiple`, emitted on every tap or field edit. It is the tapped
 instance plus its custom-column values and a fresh timestamp:
@@ -44,7 +44,27 @@ instance plus its custom-column values and a fresh timestamp:
 | `values` | `Record<string, string>` | Custom-column values, keyed by the column `key` (from the `columns` setting). |
 | `selectedAt` | string | ISO stamp, refreshed on **every** tap — so re-selecting the same row still fires `OnChange`. |
 
+## attendeesJSON — crew-linked attendees
+
+Supply the meeting's roster on the **People (JSON)** input —
+`[{whoId, who, crew?}]`, where `crew` (optional) names an entry in the crew
+list. When an instance is selected, `attendeesJSON` emits the **expected
+attendees**:
+
+- people whose `crew` matches the instance's on-shift crew, **plus**
+- everyone **without** a crew (staff who always attend);
+- no roster / no crew on the instance = the whole people list;
+- `""` until an instance is selected, or when no people are supplied.
+
+```json
+[{ "whoId": "u1", "who": "Sam Lee", "crew": "A" },
+ { "whoId": "u4", "who": "Ben Super" }]
+```
+
+Bind it straight into the board cards' **People (JSON)** inputs so assignee
+pickers offer that meeting's attendees — see the
+[master leanboard design](../master-leanboard.md).
+
 ## Actions channel
 
-Not used. MeetingScheduler emits no document and no actions — only
-`selectedMeetingJSON`.
+Not used. MeetingScheduler emits no document and no actions.

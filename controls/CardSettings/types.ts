@@ -13,6 +13,17 @@ export interface ThemeDraft {
   font: string;
 }
 
+/**
+ * The board section of a settings blob — written by the composer in board
+ * mode, read by the BOARD APP at instance creation (the cards themselves
+ * ignore it). policy: "" = unset (the app defaults to carry).
+ */
+export interface BoardDraft {
+  policy: "" | "clear" | "carry" | "link";
+  sourceBoardId: string;
+  sourceCardId: string;
+}
+
 export interface SettingsDraft {
   /** Which card this blob configures (stamped into the JSON). "" = not chosen. */
   cardType: string;
@@ -22,6 +33,7 @@ export interface SettingsDraft {
   readOnly: boolean;
   theme: ThemeDraft;
   config: Record<string, unknown>;
+  board: BoardDraft;
   /** Unrecognised top-level keys, preserved verbatim on output. */
   extraTop: Record<string, unknown>;
   /** Unrecognised theme keys, preserved verbatim on output. */
@@ -36,13 +48,14 @@ export function emptyDraft(): SettingsDraft {
     readOnly: false,
     theme: { background: "", foreground: "", accent: "", legend: "", font: "" },
     config: {},
+    board: { policy: "", sourceBoardId: "", sourceCardId: "" },
     extraTop: {},
     extraTheme: {},
   };
 }
 
 const THEME_KEYS = ["background", "foreground", "accent", "legend", "font"] as const;
-const TOP_KEYS = ["cardType", "title", "prompts", "readOnly", "theme", "config"];
+const TOP_KEYS = ["cardType", "title", "prompts", "readOnly", "theme", "config", "board"];
 
 function s(v: unknown): string {
   return typeof v === "string" ? v : "";
@@ -77,6 +90,16 @@ export function parseDraft(raw: string | null | undefined): SettingsDraft {
 
   if (o.config && typeof o.config === "object" && !Array.isArray(o.config)) {
     draft.config = { ...(o.config as Record<string, unknown>) };
+  }
+
+  if (o.board && typeof o.board === "object" && !Array.isArray(o.board)) {
+    const b = o.board as Record<string, unknown>;
+    const pol = s(b.policy).trim();
+    draft.board.policy =
+      pol === "clear" || pol === "carry" || pol === "link" ? pol : "";
+    const src = (b.source ?? {}) as Record<string, unknown>;
+    draft.board.sourceBoardId = s(src.boardId).trim();
+    draft.board.sourceCardId = s(src.cardId).trim();
   }
 
   for (const [k, v] of Object.entries(o)) {
@@ -120,9 +143,69 @@ export function serializeDraft(draft: SettingsDraft): string {
   }
   if (Object.keys(config).length > 0) out.config = config;
 
+  const board: Record<string, unknown> = {};
+  if (draft.board.policy !== "") board.policy = draft.board.policy;
+  if (draft.board.sourceBoardId !== "" || draft.board.sourceCardId !== "") {
+    const source: Record<string, unknown> = {};
+    if (draft.board.sourceBoardId !== "") source.boardId = draft.board.sourceBoardId;
+    if (draft.board.sourceCardId !== "") source.cardId = draft.board.sourceCardId;
+    board.source = source;
+  }
+  if (Object.keys(board).length > 0) out.board = board;
+
   for (const [k, v] of Object.entries(draft.extraTop)) {
     if (!(k in out)) out[k] = v;
   }
 
   return Object.keys(out).length === 0 ? "" : JSON.stringify(out);
+}
+
+// ---- boards manifest (the composer's source-picker feed) -------------------
+
+/** One board the composer can offer as a link/rollup source. */
+export interface BoardRef {
+  boardId: string;
+  name: string;
+  cards: { cardId: string; cardType: string; title: string }[];
+}
+
+/**
+ * Parse boardsManifestJSON: [{boardId, name, cards:[{cardId, cardType,
+ * title}]}]. Supplying it (even empty "[]") switches the composer into board
+ * mode; null means the input was not provided at all.
+ */
+export function parseBoardsManifest(
+  raw: string | null | undefined
+): BoardRef[] | null {
+  const t = (raw ?? "").trim();
+  if (t === "") return null;
+  try {
+    const arr = JSON.parse(t) as unknown;
+    if (!Array.isArray(arr)) return null;
+    const out: BoardRef[] = [];
+    for (const item of arr) {
+      if (!item || typeof item !== "object") continue;
+      const o = item as Record<string, unknown>;
+      const boardId = s(o.boardId).trim();
+      if (boardId === "") continue;
+      const cards: BoardRef["cards"] = [];
+      if (Array.isArray(o.cards)) {
+        for (const c of o.cards) {
+          if (!c || typeof c !== "object") continue;
+          const co = c as Record<string, unknown>;
+          const cardId = s(co.cardId).trim();
+          if (cardId === "") continue;
+          cards.push({
+            cardId,
+            cardType: s(co.cardType).trim(),
+            title: s(co.title).trim(),
+          });
+        }
+      }
+      out.push({ boardId, name: s(o.name).trim() || boardId, cards });
+    }
+    return out;
+  } catch {
+    return null;
+  }
 }

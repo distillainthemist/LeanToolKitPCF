@@ -69,8 +69,9 @@ Design decisions:
   `due` in the past and status not `done`/`cancelled`).
 - **No deletes, ever.** Matches the channel contract — deleting the element an
   action hangs off sets its status to `cancelled`. Upsert only.
-- **Anticipated extension:** a `ben_boardid` Text (80) column, so one central
-  table can serve multiple boards/areas without every app pulling everything.
+- **Board column:** `ben_boardid` Text (80), stamped by the app's upsert —
+  the [master leanboard](master-leanboard.md) rollup filter
+  (`Filter('LTK Actions', ben_boardid = varBoardId)` is delegable).
 
 ---
 

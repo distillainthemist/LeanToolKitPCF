@@ -23,6 +23,7 @@ import {
 } from "./types";
 import { cfg, enumOr, LtkSettings, parseSettings, rawOr, readTheme, str } from "../../shared/pcf/standard";
 import { nowIso } from "../../shared/schema/id";
+import { parsePeople, Person } from "../../shared/schema/people";
 
 export class MeetingScheduler implements ComponentFramework.StandardControl<IInputs, IOutputs> {
   private container!: HTMLDivElement;
@@ -30,6 +31,8 @@ export class MeetingScheduler implements ComponentFramework.StandardControl<IInp
   private notifyOutputChanged!: () => void;
 
   private selectedJson = "";
+  private attendeesJson = "";
+  private people: Person[] = [];
 
   public init(
     context: ComponentFramework.Context<IInputs>,
@@ -47,11 +50,31 @@ export class MeetingScheduler implements ComponentFramework.StandardControl<IInp
     this.view = new MeetingSchedulerView(container, {
       onSelect: (instance: MeetingInstance, values: Record<string, string>) => {
         this.selectedJson = JSON.stringify({ ...instance, values, selectedAt: nowIso() });
+        this.attendeesJson = this.buildAttendeesJson(instance.crew);
         this.notifyOutputChanged();
       },
     });
 
     this.applyAll(context);
+  }
+
+  /**
+   * Expected attendees of the selected instance: people whose crew matches
+   * the instance's on-shift crew, plus everyone without a crew (they always
+   * attend). No crew on the instance (no roster) = the whole people list.
+   */
+  private buildAttendeesJson(instanceCrew: string): string {
+    if (this.people.length === 0) return "";
+    const crew = instanceCrew.trim().toLowerCase();
+    const attendees =
+      crew === ""
+        ? this.people
+        : this.people.filter(
+            (p) => p.crew === undefined || p.crew.toLowerCase() === crew
+          );
+    return JSON.stringify(
+      attendees.map((p) => ({ whoId: p.whoId, who: p.who, crew: p.crew }))
+    );
   }
 
   public updateView(context: ComponentFramework.Context<IInputs>): void {
@@ -61,6 +84,7 @@ export class MeetingScheduler implements ComponentFramework.StandardControl<IInp
   public getOutputs(): IOutputs {
     return {
       selectedMeetingJSON: this.selectedJson,
+      attendeesJSON: this.attendeesJson,
     };
   }
 
@@ -116,6 +140,7 @@ export class MeetingScheduler implements ComponentFramework.StandardControl<IInp
     this.view.setReadOnly(disabled || p.readOnly?.raw === true || s.readOnly);
 
     this.view.setColumns(parseColumns(rawOr(p.columns, cfg(s, "columns"))));
+    this.people = parsePeople(rawOr(p.peopleJSON, cfg(s, "peopleJSON")));
 
     const config = this.readConfig(context, s);
     const existing = parseExistingMeetings(

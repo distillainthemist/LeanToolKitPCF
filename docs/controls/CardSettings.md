@@ -42,15 +42,42 @@ inheriting future control defaults. Returns `""` when nothing is set.
 | `readOnly` | `true`? | Emitted only when true. |
 | `theme` | object? | Only the non-blank keys of `{ background, foreground, accent, legend, font }`, plus any preserved unknown theme keys. Omitted if empty. |
 | `config` | object? | Per-card keys, named after that card's own settings/inputs (e.g. `granularity`, `dimensions`, `columnsJSON`). Only "set" values; omitted if empty. |
+| `board` | object? | Board-composer mode only (see below): `{ policy, source: { boardId, cardId } }`. Read by the **board app** at instance creation; the cards themselves ignore it. |
 
 Unrecognised top-level keys from an input blob are preserved verbatim on output
-(lossless round-trip). This blob is what each target control reads via its
+(lossless round-trip) — including a `board` key when the composer is used
+outside board mode. This blob is what each target control reads via its
 `settingsJSON` input.
+
+## Board-composer mode (`boardsManifestJSON`)
+
+Supplying the **Boards Manifest (JSON)** input —
+`[{boardId, name, cards:[{cardId, cardType, title}]}]`, all boards up front,
+no runtime round-trip — adds a **Board** section to the form that edits the
+blob's `board` key (see the
+[master leanboard design](../master-leanboard.md)):
+
+- **Capture cards** get the new-instance **data policy**: default/carry,
+  `clear`, `carry`, or `link` — `link` adds source **board** and **card**
+  pickers fed from the manifest.
+- **ActionBoard / EscalationViewer** have no document to seed, so they get a
+  rollup **source board** picker instead (`empty = the board this card sits
+  on`), emitted as `board.source.boardId` with no policy.
+
+Leave the input empty when composing a standalone card — the section
+disappears, and any existing `board` key still round-trips untouched.
 
 ## selectedCardType
 
 `SingleLine.Text`. The chosen card type (the control name), also stamped inside
 `outputJSON`. Bind it to the card row's type column.
+
+## catalogJSON
+
+Read-only output: the card registry of the **installed solution version**, as
+`[{type, label, description, actionCapable}]`. Seed the board app's palette
+and the LTK Card Catalog table from it so neither can drift from the solution
+(pairs with `tools/tile-defaults.json` for the default tile SVGs).
 
 ## Actions channel
 

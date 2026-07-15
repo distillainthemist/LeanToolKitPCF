@@ -7,10 +7,10 @@ import { applyThemeVars, defaultTheme, Theme } from "../../shared/tokens";
 import { LTK_BASE_CSS } from "../../shared/ui/baseCss";
 import { clear, el, ensureStylesheet } from "../../shared/ui/dom";
 import { parsePrompts, Prompts, renderTitleBar } from "../../shared/ui/chrome";
-import { sectionLabel } from "../../shared/ui/dialog";
+import { fieldRow, sectionLabel, selectInput } from "../../shared/ui/dialog";
 import { CARDS, cardSpec, COMMON_FIELDS, THEME_FIELDS } from "./registry";
 import { renderField, renderPromptsField, FieldHost } from "./fields";
-import { SettingsDraft, ThemeDraft, emptyDraft } from "./types";
+import { BoardRef, SettingsDraft, ThemeDraft, emptyDraft } from "./types";
 import { CARDSETTINGS_CSS } from "./styles";
 
 export interface CardSettingsCallbacks {
@@ -27,6 +27,8 @@ export class CardSettingsEditor {
   private lastPromptsRaw: string | null = null;
   private readOnly = false;
   private search = "";
+  /** Boards offered as link/rollup sources; null = not in board mode. */
+  private boards: BoardRef[] | null = null;
 
   constructor(host: HTMLElement, private readonly cb: CardSettingsCallbacks) {
     ensureStylesheet("ltk-base-css", LTK_BASE_CSS);
@@ -62,6 +64,13 @@ export class CardSettingsEditor {
       this.readOnly = ro;
       this.render();
     }
+  }
+
+  /** Boards manifest (board-composer mode); null switches the section off. */
+  setBoards(boards: BoardRef[] | null): void {
+    if (JSON.stringify(boards) === JSON.stringify(this.boards)) return;
+    this.boards = boards;
+    this.render();
   }
 
   destroy(): void {
@@ -252,12 +261,113 @@ export class CardSettingsEditor {
       }
       body.appendChild(cfgGrid);
     }
+    // Board (composer mode only): the new-instance data policy + sources
+    if (this.boards !== null) {
+      body.appendChild(sectionLabel("Board"));
+      this.renderBoardSection(body);
+    }
+
     if (spec.appBound.length > 0) {
       body.appendChild(
         el(
           "div",
           "ltk-cs-appbound",
           `Bound by the app at runtime (not set here): ${spec.appBound.join(", ")}.`
+        )
+      );
+    }
+  }
+
+  /**
+   * The Board section (only when a boards manifest is supplied): edits the
+   * blob's `board` key — read by the BOARD APP at instance creation, ignored
+   * by the cards themselves. Action surfaces (ActionBoard/EscalationViewer)
+   * have no document to seed, so they get a rollup-source picker instead of
+   * a data policy.
+   */
+  private renderBoardSection(body: HTMLElement): void {
+    const boards = this.boards ?? [];
+    const b = this.draft.board;
+    const grid = el("div", "ltk-cs-grid");
+    body.appendChild(grid);
+
+    const boardOptions = (emptyLabel: string) => [
+      { value: "", label: emptyLabel },
+      ...boards.map((ref) => ({ value: ref.boardId, label: ref.name })),
+    ];
+
+    const isActionSurface =
+      this.draft.cardType === "ActionBoard" ||
+      this.draft.cardType === "EscalationViewer";
+
+    if (isActionSurface) {
+      const src = selectInput(b.sourceBoardId, boardOptions("This board"));
+      src.disabled = this.readOnly;
+      src.addEventListener("change", () => {
+        b.sourceBoardId = src.value;
+        b.sourceCardId = "";
+        b.policy = "";
+        this.commit();
+      });
+      grid.appendChild(fieldRow("Actions from board", src));
+      body.appendChild(
+        el(
+          "div",
+          "ltk-cs-note",
+          "Rolls up every action on the chosen board (empty = the board this card sits on)."
+        )
+      );
+      return;
+    }
+
+    const policy = selectInput(b.policy, [
+      { value: "", label: "Default (carry from previous)" },
+      { value: "clear", label: "Clear — start each instance empty" },
+      { value: "carry", label: "Carry — keep the previous instance" },
+      { value: "link", label: "Link — show a card from another board" },
+    ]);
+    policy.disabled = this.readOnly;
+    policy.addEventListener("change", () => {
+      b.policy = policy.value as SettingsDraft["board"]["policy"];
+      if (b.policy !== "link") {
+        b.sourceBoardId = "";
+        b.sourceCardId = "";
+      }
+      this.commit();
+      this.render(); // link pickers appear/disappear
+    });
+    grid.appendChild(fieldRow("New-instance data", policy));
+
+    if (b.policy === "link") {
+      const srcBoard = selectInput(b.sourceBoardId, boardOptions("Choose a board…"));
+      srcBoard.disabled = this.readOnly;
+      srcBoard.addEventListener("change", () => {
+        b.sourceBoardId = srcBoard.value;
+        b.sourceCardId = "";
+        this.commit();
+        this.render(); // repopulate the card picker
+      });
+      grid.appendChild(fieldRow("Source board", srcBoard));
+
+      const chosen = boards.find((ref) => ref.boardId === b.sourceBoardId);
+      const srcCard = selectInput(b.sourceCardId, [
+        { value: "", label: chosen ? "Choose a card…" : "Choose a board first" },
+        ...(chosen?.cards ?? []).map((c) => ({
+          value: c.cardId,
+          label: c.title !== "" ? `${c.title} (${c.cardType})` : c.cardId,
+        })),
+      ]);
+      srcCard.disabled = this.readOnly || !chosen;
+      srcCard.addEventListener("change", () => {
+        b.sourceCardId = srcCard.value;
+        this.commit();
+      });
+      grid.appendChild(fieldRow("Source card", srcCard));
+      body.appendChild(
+        el(
+          "div",
+          "ltk-cs-note",
+          "Each new instance loads the latest saved content of the source card — usually pair with Read only."
         )
       );
     }
