@@ -33,9 +33,9 @@
   <label><input type="checkbox" id="edit" /> Edit mode (tap = configure/add, drag = move, ⤡ = stretch)</label>
   <label><input type="checkbox" id="ro" /> Read only</label>
   <label>Columns <select id="grid">
-    <option value="3">3</option>
     <option value="1">1</option>
     <option value="2">2</option>
+    <option value="3" selected>3</option>
     <option value="4">4</option>
     <option value="5">5</option>
     <option value="6">6</option>
@@ -65,15 +65,18 @@
   Ctor = Ctor || (window.pcf_tools_652ac3f36e1e4bca82eb3c1dc44e6fad || {}).BoardGrid;
   const tiles = (await (await fetch("/tile-defaults.json")).json()).tiles;
 
+  // the demo's "board manifest" — layoutJSON output is merged back into this
+  // (playing the app's persist role), so drags and resizes survive re-renders
+  let boardTiles = [
+    { pos: 1, cardId: "b-sqdpc", cardType: "SqdpcCard", title: "Daily SQDPC", svg: tiles.SqdpcCard, w: 2 },
+    { pos: 3, cardId: "b-fish", cardType: "Fishbone", title: "Top issue", svg: tiles.Fishbone },
+    { pos: 4, cardId: "b-agenda", cardType: "AgendaCard", title: "Run sheet", svg: tiles.AgendaCard },
+    { pos: 5, cardId: "b-conditions", cardType: "ConditionsCard", title: "Winning conditions", svg: tiles.ConditionsCard },
+    { pos: 6, cardId: "b-actions", cardType: "ActionBoard", title: "Actions", svg: tiles.ActionBoard },
+    { pos: 7, cardId: "b-embed", cardType: "EmbedCard", title: "KPI report", svg: tiles.EmbedCard, w: 2, h: 2 }
+  ];
   const params = {
-    tilesJSON: { raw: JSON.stringify([
-      { pos: 1, cardId: "b-sqdpc", cardType: "SqdpcCard", title: "Daily SQDPC", svg: tiles.SqdpcCard, w: 2 },
-      { pos: 3, cardId: "b-fish", cardType: "Fishbone", title: "Top issue", svg: tiles.Fishbone },
-      { pos: 4, cardId: "b-agenda", cardType: "AgendaCard", title: "Run sheet", svg: tiles.AgendaCard },
-      { pos: 5, cardId: "b-conditions", cardType: "ConditionsCard", title: "Winning conditions", svg: tiles.ConditionsCard },
-      { pos: 6, cardId: "b-actions", cardType: "ActionBoard", title: "Actions", svg: tiles.ActionBoard },
-      { pos: 7, cardId: "b-embed", cardType: "EmbedCard", title: "KPI report", svg: tiles.EmbedCard, w: 2, h: 2 }
-    ]) },
+    tilesJSON: { raw: JSON.stringify(boardTiles) },
     gridSize: { raw: "3" },
     editMode: { raw: false }, readOnly: { raw: false },
     settingsJSON: { raw: "" }, cardTitle: { raw: "Bottling line board" }, prompts: { raw: "" },
@@ -103,7 +106,17 @@
       log.prepend(div);
     };
     if (out.selectedSlotJSON !== lastSel) { lastSel = out.selectedSlotJSON; add("selectedSlotJSON", lastSel); }
-    if (out.layoutJSON !== lastLayout) { lastLayout = out.layoutJSON; add("layoutJSON", lastLayout); }
+    if (out.layoutJSON !== lastLayout) {
+      lastLayout = out.layoutJSON; add("layoutJSON", lastLayout);
+      // persist the new layout like the real app's OnChange would: merge each
+      // tile's resolved pos/w/h back into the demo's board manifest
+      const moved = JSON.parse(lastLayout).slots;
+      boardTiles = boardTiles.map((t) => {
+        const m = moved.find((s) => s.cardId === t.cardId);
+        return m ? { ...t, pos: m.pos, w: m.w, h: m.h } : t;
+      });
+      params.tilesJSON.raw = JSON.stringify(boardTiles);
+    }
   }, {}, host);
 
   const rerun = () => inst.updateView(ctx);
