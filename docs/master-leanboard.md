@@ -118,9 +118,10 @@ rollups become one delegable filter (see recipes).
 Lives in `LTK Board.Manifest (JSON)`; snapshotted onto each instance.
 
 ```json
-{ "grid": "3x3",
+{ "grid": "3",
   "slots": [
-    { "pos": 1, "cardId": "b-bottling-sqdpc", "cardType": "SqdpcCard",
+    { "pos": 1, "w": 2, "h": 1,
+      "cardId": "b-bottling-sqdpc", "cardType": "SqdpcCard",
       "title": "Daily SQDPC",
       "settingsJSON": { "cardType": "SqdpcCard", "title": "Daily SQDPC",
                         "config": { "granularity": "shift2" },

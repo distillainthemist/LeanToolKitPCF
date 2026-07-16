@@ -10,9 +10,11 @@ snapshot's HTML content is **extracted and fitted with a CSS
 render inline, and `data:image` URIs go through an `<img>`.
 See [master-leanboard.md](../master-leanboard.md).
 
-**Tile anatomy:** the card type as a quiet tag along the top; the snapshot
-filling the middle; the **title bar along the bottom** showing the title
-only — with the **✎ configure button at its right end in edit mode**.
+**Tile anatomy:** a **title bar along the top** showing the title only (the
+card type appears only as a fallback for untitled cards), with the **✎
+configure button at its right end in edit mode**; the snapshot filling the
+rest. Edit mode adds a **⤡ resize handle at the bottom-right corner** —
+drag it to stretch the tile across multiple cells.
 
 - **Schema id:** none (display/selection only) · **Document:** ✖ ·
   **Actions:** ✖ · **Snapshots:** ✖ (a board-of-boards image would
@@ -20,18 +22,23 @@ only — with the **✎ configure button at its right end in edit mode**.
 
 ## Modes
 
-| | Tap a tile | Tap an empty slot | Drag a tile |
-| --- | --- | --- | --- |
-| **Read mode** (`editMode` false) | emits `action: "open"` — navigate to the card's full-screen editor | — | — |
-| **Edit mode** (`editMode` true) | emits `action: "configure"` — open the composer for this slot | emits `action: "add"` with the position | drop on another slot to **swap** positions — emits `layoutJSON` |
-| **Read only** | inert wallboard — no taps, no editing | | |
+| | Tap a tile | Tap an empty cell | Drag a tile | Drag the ⤡ handle |
+| --- | --- | --- | --- | --- |
+| **Read mode** (`editMode` false) | emits `action: "open"` — navigate to the card's full-screen editor | — | — | — |
+| **Edit mode** (`editMode` true) | emits `action: "configure"` — open the composer for this slot | emits `action: "add"` with the position | drop on a free cell to **move**, on another tile to **swap** — emits `layoutJSON` | stretch the tile to the cell under the pointer — emits `layoutJSON` |
+| **Read only** | inert wallboard — no taps, no editing | | | |
+
+Edit mode also keeps a **spare blank row** at the bottom whenever the final
+row has no free cell, so there is always somewhere to add or drop a card.
+The spare row disappears outside edit mode — rows are derived from the
+content, never stored.
 
 ## Inputs
 
 | Input | Notes |
 | --- | --- |
-| `tilesJSON` | `[{pos, cardId, cardType, title, svg}]` — the board slots joined to their card rows. `svg` is raw `svgExport` markup (rendered inline, sanitised: scripts / event handlers / `javascript:` hrefs stripped) **or** a `data:image/…` URI (rendered as an image — plain PNG data URIs are WebKit-safe). Empty `svg` shows a typed placeholder. |
-| `gridSize` | **columns × rows**: `"3x3"`, `"5x5"`, `"2x1"` (2 cols × 1 row), `"3x1"`, `"3x2"` (3 cols × 2 rows)… or a bare column count, or empty for a near-square auto fit. Rows grow so every tile always fits; a tile with a taken/invalid `pos` takes the next free slot. |
+| `tilesJSON` | `[{pos, cardId, cardType, title, svg, w, h}]` — the board slots joined to their card rows. `svg` is raw `svgExport` markup (rendered inline, sanitised: scripts / event handlers / `javascript:` hrefs stripped) **or** a `data:image/…` URI (rendered as an image — plain PNG data URIs are WebKit-safe). Empty `svg` shows a typed placeholder. `w`/`h` are optional column/row **spans** (default 1) for stretched cards. |
+| `gridSize` | the **number of columns, 1–6** (e.g. `"3"`), or empty for a near-square auto fit. Rows are never specified — they grow to fit the tiles. `pos` is the tile's anchor cell (1-based, row-major); a tile whose anchor is taken, or whose span no longer fits, scans forward to the first free area. Legacy `"CxR"` values still parse (the column count is used, the row count ignored). |
 | `editMode` | Boolean; also settable via `settingsJSON` `config.editMode`. |
 | `readOnly` | Display-only wallboard. |
 
@@ -57,12 +64,12 @@ filled tile) or `"add"` (edit-mode tap on an empty slot — `cardId` empty,
 
 ```json
 { "movedAt": "2026-07-16T05:21:00.000Z",
-  "slots": [ { "cardId": "b-bottling-actions", "pos": 1 },
-             { "cardId": "b-bottling-5y", "pos": 2 } ] }
+  "slots": [ { "cardId": "b-bottling-actions", "pos": 1, "w": 2, "h": 1 },
+             { "cardId": "b-bottling-5y", "pos": 3, "w": 1, "h": 1 } ] }
 ```
 
-Emitted after a drag rearranges tiles: every filled slot's new position.
-Persist into the board manifest in `OnChange`.
+Emitted after a drag moves, swaps or resizes a tile: every tile's resolved
+anchor position and span. Persist into the board manifest in `OnChange`.
 
 ## App wiring sketch
 

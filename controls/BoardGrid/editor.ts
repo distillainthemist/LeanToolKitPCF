@@ -1,8 +1,10 @@
 // The BoardGrid view — the master-leanboard tile wall. Read mode: tap a
 // tile to open its card (the app navigates). Edit mode: tap a tile (or its
-// ✎ button) to configure it, tap an empty slot to add a card, drag a tile
-// onto another slot to swap positions (the new layout is emitted for the
-// app to persist).
+// ✎ button) to configure it, tap an empty cell to add a card, drag a tile
+// onto another cell to move/swap, drag the ⤡ corner handle to stretch a
+// tile across multiple cells (the new layout is emitted for the app to
+// persist). The grid is columns-wide only — rows derive from the content,
+// and edit mode keeps a spare blank row available at the bottom.
 //
 // Snapshot rendering — the WebKit rule, learned the hard way: Safari does
 // not apply the svg viewport (viewBox) scale to foreignObject content, in
@@ -16,7 +18,15 @@ import { LTK_BASE_CSS } from "../../shared/ui/baseCss";
 import { clear, el, ensureStylesheet } from "../../shared/ui/dom";
 import { parsePrompts, Prompts, renderTitleBar, renderGhost } from "../../shared/ui/chrome";
 import { makeInteractive } from "../../shared/interact/drag";
-import { BoardTile, GridShape, isImageUri, layoutSlots, sanitizeSvg } from "./types";
+import {
+  BoardLayout,
+  BoardTile,
+  cellPos,
+  isImageUri,
+  layoutBoard,
+  PlacedTile,
+  sanitizeSvg,
+} from "./types";
 import { BOARDGRID_CSS } from "./styles";
 
 export type SlotAction = "open" | "configure" | "add";
@@ -31,15 +41,18 @@ export interface SlotEvent {
 
 export interface BoardGridCallbacks {
   onSelect: (e: SlotEvent) => void;
-  /** Fired after a drag changes the arrangement: every filled slot's new pos. */
-  onLayout: (slots: { cardId: string; pos: number }[]) => void;
+  /** Fired after a drag moves or resizes a tile: every tile's new placement. */
+  onLayout: (slots: { cardId: string; pos: number; w: number; h: number }[]) => void;
 }
+
+/** Must match the .ltk-bg-grid gap in styles.ts (cell hit-testing needs it). */
+const GRID_GAP = 10;
 
 export class BoardGridView {
   private readonly root: HTMLElement;
   private tiles: BoardTile[] = [];
-  private shape: GridShape = { cols: 1, rows: 1 };
-  private slots: (BoardTile | null)[] = [null];
+  private cols = 1;
+  private layout: BoardLayout | null = null;
   private editMode = false;
   private readOnly = false;
   private theme: Theme = defaultTheme();
@@ -72,17 +85,15 @@ export class BoardGridView {
 
   // ---- host-facing API (setters no-op when unchanged) ----
 
-  setTiles(tiles: BoardTile[], shape: GridShape): void {
+  setTiles(tiles: BoardTile[], cols: number): void {
     if (
       JSON.stringify(tiles) === JSON.stringify(this.tiles) &&
-      shape.cols === this.shape.cols &&
-      shape.rows === this.shape.rows
+      cols === this.cols
     ) {
       return;
     }
     this.tiles = tiles;
-    this.shape = shape;
-    this.slots = layoutSlots(tiles, shape);
+    this.cols = cols;
     this.render();
   }
 
@@ -145,30 +156,49 @@ export class BoardGridView {
       return;
     }
 
+    // rows derive from content; the spare add-row exists only in edit mode
+    const lay = layoutBoard(this.tiles, this.cols, this.editMode && !this.readOnly);
+    this.layout = lay;
+
     const grid = el("div", "ltk-bg-grid");
-    grid.style.gridTemplateColumns = `repeat(${this.shape.cols}, 1fr)`;
-    grid.style.gridTemplateRows = `repeat(${this.shape.rows}, 1fr)`;
+    grid.style.gridTemplateColumns = `repeat(${lay.cols}, 1fr)`;
+    grid.style.gridTemplateRows = `repeat(${lay.rows}, 1fr)`;
     body.appendChild(grid);
 
-    this.slots.forEach((tile, idx) => {
-      grid.appendChild(tile ? this.renderTile(tile, idx, grid) : this.renderEmpty(idx));
-    });
+    for (const placed of lay.placed) grid.appendChild(this.renderTile(placed, grid));
+    for (const cell of lay.free) grid.appendChild(this.renderEmpty(cell));
     // fit once the grid has laid out (tile sizes are unknown until then).
     // A timer, NOT requestAnimationFrame — rAF starves in background /
     // throttled tabs (a wallboard on a TV must still lay out correctly).
     setTimeout(() => this.refit(), 0);
   }
 
-  private renderEmpty(idx: number): HTMLElement {
+  /** Grid-place a slot element at a 0-based cell with a span. */
+  private placeSlot(
+    slot: HTMLElement,
+    col: number,
+    row: number,
+    w: number,
+    h: number
+  ): void {
+    slot.style.gridColumn = `${col + 1} / span ${w}`;
+    slot.style.gridRow = `${row + 1} / span ${h}`;
+    slot.dataset.col = String(col);
+    slot.dataset.row = String(row);
+    slot.dataset.w = String(w);
+    slot.dataset.h = String(h);
+  }
+
+  private renderEmpty(cell: { col: number; row: number }): HTMLElement {
     const slot = el("div", "ltk-bg-slot");
-    slot.dataset.slotIdx = String(idx);
+    this.placeSlot(slot, cell.col, cell.row, 1, 1);
     const zone = el("div", "ltk-bg-empty", this.editMode && !this.readOnly ? "＋ Add card" : "");
     slot.appendChild(zone);
     if (this.editMode && !this.readOnly) {
       zone.addEventListener("click", () =>
         this.cb.onSelect({
           action: "add",
-          pos: idx + 1,
+          pos: cellPos(this.cols, cell.col, cell.row),
           cardId: "",
           cardType: "",
           title: "",
@@ -252,9 +282,11 @@ export class BoardGridView {
     fit();
   }
 
-  private renderTile(tile: BoardTile, idx: number, grid: HTMLElement): HTMLElement {
+  private renderTile(placed: PlacedTile, grid: HTMLElement): HTMLElement {
+    const tile = placed.tile;
     const slot = el("div", "ltk-bg-slot");
-    slot.dataset.slotIdx = String(idx);
+    this.placeSlot(slot, placed.col, placed.row, placed.w, placed.h);
+    const anchorPos = cellPos(this.cols, placed.col, placed.row);
     const card = el("div", "ltk-bg-tile");
     slot.appendChild(card);
 
@@ -278,7 +310,7 @@ export class BoardGridView {
           e.stopPropagation();
           this.cb.onSelect({
             action: "configure",
-            pos: idx + 1,
+            pos: anchorPos,
             cardId: tile.cardId,
             cardType: tile.cardType,
             title: tile.title,
@@ -294,7 +326,7 @@ export class BoardGridView {
 
     const event = (action: SlotAction): SlotEvent => ({
       action,
-      pos: idx + 1,
+      pos: anchorPos,
       cardId: tile.cardId,
       cardType: tile.cardType,
       title: tile.title,
@@ -307,8 +339,9 @@ export class BoardGridView {
       return slot;
     }
 
-    // edit mode: tap configures; drag swaps slots
-    let targetIdx: number | null = null;
+    // edit mode: tap configures; drag moves the tile to the cell under the
+    // pointer (swapping with the tile already there, if any)
+    let target: { col: number; row: number } | null = null;
     makeInteractive(card, {
       onTap: () => this.cb.onSelect(event("configure")),
       onStart: () => {
@@ -319,11 +352,14 @@ export class BoardGridView {
       },
       onMove: (e, dx, dy) => {
         card.style.transform = `translate(${dx}px, ${dy}px)`;
-        targetIdx = this.slotAt(grid, e.clientX, e.clientY, idx);
-        for (const s of Array.from(grid.children)) {
+        const cell = this.cellAt(grid, e.clientX, e.clientY);
+        target =
+          cell && !this.inArea(cell, placed) ? cell : null;
+        for (const child of Array.from(grid.children)) {
+          const s = child as HTMLElement;
           s.classList.toggle(
             "ltk-bg-droptarget",
-            (s as HTMLElement).dataset.slotIdx === String(targetIdx)
+            target !== null && this.slotCovers(s, target)
           );
         }
       },
@@ -331,33 +367,133 @@ export class BoardGridView {
         card.style.transform = "";
         card.classList.remove("ltk-bg-dragging");
         grid.classList.remove("ltk-bg-draglive");
-        if (targetIdx !== null && targetIdx !== idx) {
-          [this.slots[idx], this.slots[targetIdx]] = [
-            this.slots[targetIdx],
-            this.slots[idx],
-          ];
-          this.cb.onLayout(
-            this.slots.flatMap((s, i) =>
-              s ? [{ cardId: s.cardId, pos: i + 1 }] : []
-            )
+        if (target !== null) {
+          const victim = this.layout?.placed.find(
+            (p) => p.tile !== tile && this.inArea(target as { col: number; row: number }, p)
           );
+          if (victim) {
+            // land on an occupied area: trade anchors with that tile
+            tile.pos = cellPos(this.cols, victim.col, victim.row);
+            victim.tile.pos = anchorPos;
+          } else {
+            tile.pos = cellPos(this.cols, target.col, target.row);
+          }
+          this.emitLayout();
         }
-        targetIdx = null;
+        target = null;
+        this.render();
+      },
+    });
+
+    // ⤡ resize: drag the corner handle to the cell the tile should stretch to
+    const handle = el("button", "ltk-bg-resize") as HTMLButtonElement;
+    handle.type = "button";
+    handle.textContent = "⤡";
+    handle.title = "Drag to resize";
+    card.appendChild(handle);
+    let live: { w: number; h: number } | null = null;
+    makeInteractive(handle, {
+      onStart: () => {
+        card.classList.add("ltk-bg-resizing");
+        grid.classList.add("ltk-bg-draglive");
+        const sel = window.getSelection();
+        if (sel) sel.removeAllRanges();
+      },
+      onMove: (e) => {
+        const cell = this.cellAt(grid, e.clientX, e.clientY);
+        if (!cell) return;
+        live = {
+          w: Math.min(Math.max(1, cell.col - placed.col + 1), this.cols - placed.col),
+          h: Math.max(1, cell.row - placed.row + 1),
+        };
+        // preview the stretch live; the snapshot rescales with it. dataset
+        // follows so cellAt keeps subdividing this slot correctly
+        slot.style.gridColumn = `${placed.col + 1} / span ${live.w}`;
+        slot.style.gridRow = `${placed.row + 1} / span ${live.h}`;
+        slot.dataset.w = String(live.w);
+        slot.dataset.h = String(live.h);
+        this.refit();
+      },
+      onEnd: () => {
+        card.classList.remove("ltk-bg-resizing");
+        grid.classList.remove("ltk-bg-draglive");
+        if (live && (live.w !== placed.w || live.h !== placed.h)) {
+          tile.w = live.w;
+          tile.h = live.h;
+          tile.pos = anchorPos; // keep the anchor while the span changes
+          this.emitLayout();
+        }
+        live = null;
         this.render();
       },
     });
     return slot;
   }
 
-  /** The slot index under the pointer (excluding the dragged slot), or null. */
-  private slotAt(grid: HTMLElement, x: number, y: number, dragIdx: number): number | null {
+  /** Re-place everything and hand the app each tile's resolved pos + span. */
+  private emitLayout(): void {
+    const lay = layoutBoard(this.tiles, this.cols, false);
+    this.cb.onLayout(
+      lay.placed.map((p) => ({
+        cardId: p.tile.cardId,
+        pos: cellPos(this.cols, p.col, p.row),
+        w: p.w,
+        h: p.h,
+      }))
+    );
+  }
+
+  /**
+   * The 0-based grid cell under the pointer, or null when outside the grid.
+   * Hit-tests the slot elements (together they tile the whole grid) rather
+   * than dividing the grid rect — the rect lies about track sizes once the
+   * min-height tracks overflow the container. A spanned slot is subdivided
+   * into its w×h cells.
+   */
+  private cellAt(
+    grid: HTMLElement,
+    x: number,
+    y: number
+  ): { col: number; row: number } | null {
     for (const child of Array.from(grid.children)) {
       const s = child as HTMLElement;
-      const idx = Number(s.dataset.slotIdx);
-      if (idx === dragIdx) continue;
       const r = s.getBoundingClientRect();
-      if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) return idx;
+      if (x < r.left || x > r.right || y < r.top || y > r.bottom) continue;
+      const w = Number(s.dataset.w) || 1;
+      const h = Number(s.dataset.h) || 1;
+      const cw = (r.width - GRID_GAP * (w - 1)) / w;
+      const ch = (r.height - GRID_GAP * (h - 1)) / h;
+      return {
+        col:
+          Number(s.dataset.col) +
+          Math.max(0, Math.min(w - 1, Math.floor((x - r.left) / (cw + GRID_GAP)))),
+        row:
+          Number(s.dataset.row) +
+          Math.max(0, Math.min(h - 1, Math.floor((y - r.top) / (ch + GRID_GAP)))),
+      };
     }
     return null;
+  }
+
+  private inArea(
+    cell: { col: number; row: number },
+    area: { col: number; row: number; w: number; h: number }
+  ): boolean {
+    return (
+      cell.col >= area.col &&
+      cell.col < area.col + area.w &&
+      cell.row >= area.row &&
+      cell.row < area.row + area.h
+    );
+  }
+
+  /** Does this slot element's placed area cover the cell? */
+  private slotCovers(slot: HTMLElement, cell: { col: number; row: number }): boolean {
+    return this.inArea(cell, {
+      col: Number(slot.dataset.col),
+      row: Number(slot.dataset.row),
+      w: Number(slot.dataset.w) || 1,
+      h: Number(slot.dataset.h) || 1,
+    });
   }
 }

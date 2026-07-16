@@ -9,21 +9,21 @@
 
     <property name="tilesJSON"
               display-name-key="Tiles (JSON)"
-              description-key="The board slots joined to their card data: [{pos, cardId, cardType, title, svg}]. svg is raw svgExport markup (rendered inline) or a data image URI (rendered as an image). Tiles without a snapshot show a typed placeholder."
+              description-key="The board slots joined to their card data: [{pos, cardId, cardType, title, svg, w, h}]. svg is raw svgExport markup (rendered inline) or a data image URI (rendered as an image); w/h are optional column/row spans (default 1) for stretched cards. Tiles without a snapshot show a typed placeholder."
               of-type="Multiple"
               usage="input"
               required="false" />
 
     <property name="gridSize"
-              display-name-key="Grid Size"
-              description-key="Columns x rows, e.g. 3x3, or a bare column count. Empty = a near-square grid sized to fit the tiles. Grows rows as needed so every tile always fits."
+              display-name-key="Columns"
+              description-key="Number of columns, 1 to 6. Rows are never specified — they grow to fit the tiles, and edit mode keeps a spare blank row at the bottom for adding cards. Empty = an automatic near-square column count. Legacy CxR values still parse (the column count is used)."
               of-type="SingleLine.Text"
               usage="input"
               required="false" />
 
     <property name="editMode"
               display-name-key="Edit Mode"
-              description-key="Layout editing: tap a tile to configure it (action configure), tap an empty slot to add a card (action add), drag a tile onto another slot to swap positions (emits Layout). Off = read mode, where tapping a tile emits action open for navigation."
+              description-key="Layout editing: tap a tile to configure it (action configure), tap an empty cell to add a card (action add), drag a tile onto another cell to move or swap it, drag the corner handle to stretch it across cells (both emit Layout). Off = read mode, where tapping a tile emits action open for navigation."
               of-type="TwoOptions"
               usage="input"
               required="false"
@@ -37,7 +37,7 @@
 
     <property name="layoutJSON"
               display-name-key="Layout (JSON)"
-              description-key="Emitted after a drag rearranges the tiles: {movedAt, slots:[{cardId, pos}]}. Persist the new positions into the board manifest in OnChange."
+              description-key="Emitted after a drag moves or resizes a tile: {movedAt, slots:[{cardId, pos, w, h}]}. Persist the new positions and spans into the board manifest in OnChange."
               of-type="Multiple"
               usage="output" />
 

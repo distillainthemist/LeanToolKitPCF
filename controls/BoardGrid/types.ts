@@ -8,27 +8,49 @@
 // are pure output. No envelope, no actions channel, no snapshots.
 
 export interface BoardTile {
-  pos: number; // 1-based grid position
+  pos: number; // 1-based anchor cell, row-major; 0 = take the next free spot
   cardId: string;
   cardType: string;
   title: string;
   /** Raw svg markup (rendered inline) or a data: image URI (rendered <img>). */
   svg: string;
+  /** Column span (stretched cards). Clamped to the grid width at layout. */
+  w: number;
+  /** Row span. */
+  h: number;
 }
 
-export interface GridShape {
+/** One tile resolved onto the grid: 0-based anchor cell + effective span. */
+export interface PlacedTile {
+  tile: BoardTile;
+  col: number;
+  row: number;
+  w: number;
+  h: number;
+}
+
+export interface BoardLayout {
   cols: number;
   rows: number;
+  placed: PlacedTile[];
+  /** 0-based cells covered by no tile — each is an add / drop target. */
+  free: { col: number; row: number }[];
 }
 
 function asStr(v: unknown): string {
   return typeof v === "string" ? v : "";
 }
 
+function asSpan(v: unknown): number {
+  const n = Number(v);
+  return Number.isFinite(n) && n >= 1 ? Math.min(6, Math.round(n)) : 1;
+}
+
 /**
- * Parse tilesJSON: [{pos, cardId, cardType, title, svg}]. Tiles without a
- * cardId are dropped; a missing/invalid pos gets the next free slot when
- * the grid is laid out. Defensive; never throws.
+ * Parse tilesJSON: [{pos, cardId, cardType, title, svg, w, h}]. Tiles
+ * without a cardId are dropped; a missing/invalid pos gets the next free
+ * spot when the grid is laid out; w/h default to a single cell. Defensive;
+ * never throws.
  */
 export function parseTiles(raw: string | null | undefined): BoardTile[] {
   const t = (raw ?? "").trim();
@@ -49,6 +71,8 @@ export function parseTiles(raw: string | null | undefined): BoardTile[] {
         cardType: asStr(o.cardType).trim(),
         title: asStr(o.title).trim(),
         svg: asStr(o.svg),
+        w: asSpan(o.w),
+        h: asSpan(o.h),
       });
     }
     return out;
@@ -58,58 +82,103 @@ export function parseTiles(raw: string | null | undefined): BoardTile[] {
 }
 
 /**
- * Grid shape from the gridSize input: "3x3" (columns x rows), a bare number
- * of columns ("4"), or empty for auto — a near-square grid sized to fit
- * every tile (and every tile's declared position).
+ * Column count from the gridSize input: a bare number 1..6. Rows are never
+ * specified — they derive from the content. Legacy "CxR" values still parse
+ * (the column count is kept, the row count ignored). Empty/invalid = auto:
+ * a near-square column count for the tiles' total cell area.
  */
-export function parseGridSize(
+export function parseColumns(
   raw: string | null | undefined,
   tiles: BoardTile[]
-): GridShape {
-  const need = Math.max(
-    1,
-    tiles.length,
-    ...tiles.map((t) => t.pos)
-  );
+): number {
   const t = (raw ?? "").trim().toLowerCase();
-  const m = /^(\d{1,2})\s*[x×]\s*(\d{1,2})$/.exec(t);
-  if (m) {
-    const cols = Math.max(1, Math.min(6, Number(m[1])));
-    let rows = Math.max(1, Math.min(6, Number(m[2])));
-    while (cols * rows < need && rows < 12) rows++;
-    return { cols, rows };
-  }
+  const m = /^(\d{1,2})\s*[x×]\s*\d{1,2}$/.exec(t);
+  if (m) return Math.max(1, Math.min(6, Number(m[1])));
   const n = Number(t);
-  if (t !== "" && Number.isInteger(n) && n >= 1 && n <= 6) {
-    return { cols: n, rows: Math.max(1, Math.ceil(need / n)) };
-  }
-  const cols = Math.max(1, Math.ceil(Math.sqrt(need)));
-  return { cols, rows: Math.max(1, Math.ceil(need / cols)) };
+  if (t !== "" && Number.isInteger(n) && n >= 1 && n <= 6) return n;
+  const area = Math.max(
+    1,
+    tiles.reduce((sum, tile) => sum + tile.w * tile.h, 0)
+  );
+  return Math.max(1, Math.min(6, Math.ceil(Math.sqrt(area))));
+}
+
+/** Layout can never run away past this many rows, whatever the input says. */
+const MAX_ROWS = 24;
+
+/** 1-based row-major pos of a 0-based cell. */
+export function cellPos(cols: number, col: number, row: number): number {
+  return row * cols + col + 1;
 }
 
 /**
- * Lay tiles into slots 1..capacity. A tile with a valid free position keeps
- * it; collisions and unplaced tiles take the next free slot; overflow tiles
- * beyond capacity are dropped (the shape from parseGridSize always fits).
+ * Place every tile on a cols-wide grid. A tile anchors at its pos and covers
+ * w×h cells; when its area collides with an earlier (lower-pos) tile, or its
+ * span no longer fits its column, it scans forward to the first area that
+ * fits. Rows are exactly what the content needs; `spareRow` (edit mode)
+ * appends a blank row when the final row has no free cell, so there is
+ * always somewhere to add or drop a card — the row disappears outside edit
+ * mode because rows are derived, never stored.
  */
-export function layoutSlots(
+export function layoutBoard(
   tiles: BoardTile[],
-  shape: GridShape
-): (BoardTile | null)[] {
-  const capacity = shape.cols * shape.rows;
-  const slots: (BoardTile | null)[] = new Array(capacity).fill(null);
-  const spill: BoardTile[] = [];
-  for (const tile of tiles) {
-    const idx = tile.pos - 1;
-    if (idx >= 0 && idx < capacity && slots[idx] === null) slots[idx] = tile;
-    else spill.push(tile);
+  cols: number,
+  spareRow: boolean
+): BoardLayout {
+  const occ: boolean[][] = [];
+  const rowAt = (r: number): boolean[] => {
+    while (occ.length <= r) occ.push(new Array<boolean>(cols).fill(false));
+    return occ[r];
+  };
+  const fits = (col: number, row: number, w: number, h: number): boolean => {
+    if (row + h > MAX_ROWS) return false;
+    for (let r = row; r < row + h; r++) {
+      for (let c = col; c < col + w; c++) {
+        if (rowAt(r)[c]) return false;
+      }
+    }
+    return true;
+  };
+
+  // anchor in pos order so the lower pos wins a contested area
+  const ordered = tiles
+    .map((tile, i) => ({ tile, i }))
+    .sort(
+      (a, b) =>
+        (a.tile.pos || Number.MAX_SAFE_INTEGER) -
+          (b.tile.pos || Number.MAX_SAFE_INTEGER) || a.i - b.i
+    );
+
+  const placed: PlacedTile[] = [];
+  for (const { tile } of ordered) {
+    const w = Math.max(1, Math.min(tile.w, cols));
+    const h = Math.max(1, Math.min(tile.h, MAX_ROWS));
+    const start = tile.pos >= 1 ? tile.pos - 1 : 0;
+    for (let idx = start; idx < cols * MAX_ROWS; idx++) {
+      const col = idx % cols;
+      const row = Math.floor(idx / cols);
+      if (col + w > cols) continue;
+      if (!fits(col, row, w, h)) continue;
+      for (let r = row; r < row + h; r++) {
+        for (let c = col; c < col + w; c++) rowAt(r)[c] = true;
+      }
+      placed.push({ tile, col, row, w, h });
+      break;
+    }
   }
-  for (const tile of spill) {
-    const free = slots.indexOf(null);
-    if (free === -1) break;
-    slots[free] = tile;
+
+  let rows = Math.max(1, ...placed.map((p) => p.row + p.h));
+  const lastRowFull =
+    placed.length > 0 && rowAt(rows - 1).every((cell) => cell);
+  if (spareRow && lastRowFull && rows < MAX_ROWS) rows++;
+
+  const free: { col: number; row: number }[] = [];
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      if (!rowAt(r)[c]) free.push({ col: c, row: r });
+    }
   }
-  return slots;
+  return { cols, rows, placed, free };
 }
 
 const URI_PREFIX = /^data:image\//i;

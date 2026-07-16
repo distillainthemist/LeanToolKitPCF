@@ -1,7 +1,8 @@
 // BoardGrid stylesheet — the tile wall. Tiles are white cards on the board
 // background; the stored card snapshot fills each tile (inline svg or img),
-// with the slot title as a chip along the tile's bottom edge. Edit mode
-// shows dashed add-tiles in the empty slots and a grab cursor on the rest.
+// below a title bar along the tile's top edge. Edit mode shows dashed
+// add-tiles in the empty cells, a grab cursor on the rest, and a ⤡ corner
+// handle for stretching a tile across multiple cells.
 
 export const BOARDGRID_CSS = `
 .ltk-bg-body {
@@ -119,6 +120,29 @@ export const BOARDGRID_CSS = `
 }
 .ltk-bg-edit .ltk-bg-empty { cursor: pointer; }
 .ltk-bg-edit .ltk-bg-empty:hover { border-color: var(--ltk-accent); color: var(--ltk-accent); }
+
+/* ⤡ resize handle: bottom-right corner, edit mode only */
+.ltk-bg-resize {
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  z-index: 3;
+  border: 1px solid var(--ltk-hairline);
+  background: var(--ltk-bg);
+  color: var(--ltk-muted);
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 1;
+  padding: 3px 6px;
+  cursor: nwse-resize;
+}
+.ltk-bg-resize:hover { color: var(--ltk-accent); border-color: var(--ltk-accent); }
+.ltk-bg-resizing {
+  z-index: 5;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.22);
+  outline: 3px solid var(--ltk-accent);
+  outline-offset: -3px;
+}
 
 /* ---- drag states ---- */
 .ltk-bg-dragging {

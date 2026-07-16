@@ -5,7 +5,7 @@
 
 import { IInputs, IOutputs } from "./generated/ManifestTypes";
 import { BoardGridView } from "./editor";
-import { parseGridSize, parseTiles } from "./types";
+import { parseColumns, parseTiles } from "./types";
 import { cfg, parseSettings, rawOr, readTheme, str } from "../../shared/pcf/standard";
 import { nowIso } from "../../shared/schema/id";
 
@@ -99,7 +99,7 @@ export class BoardGrid implements ComponentFramework.StandardControl<IInputs, IO
     const tiles = parseTiles(rawOr(p.tilesJSON, cfg(s, "tilesJSON")));
     this.view.setTiles(
       tiles,
-      parseGridSize(rawOr(p.gridSize, cfg(s, "gridSize")), tiles)
+      parseColumns(rawOr(p.gridSize, cfg(s, "gridSize")), tiles)
     );
   }
 }

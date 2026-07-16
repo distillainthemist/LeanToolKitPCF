@@ -115,7 +115,7 @@ instance is selected, the whole roster otherwise.
 | Property | Binding |
 | --- | --- |
 | `tilesJSON` | the join below |
-| `gridSize` | `Text(varManifest.grid)` (e.g. `"3x3"`) |
+| `gridSize` | `Text(varManifest.grid)` — the column count, e.g. `"3"` (rows derive from the tiles) |
 | `editMode` | `varEditMode` (board owners' toggle) |
 | `readOnly` | `false` (or `true` for a wallboard screen) |
 | `cardTitle` | `varBoard.ben_name` |
@@ -129,6 +129,8 @@ JSON(ForAll(Table(varManifest.slots) As S,
                 ben_instance.'LTK Board Instance' = varInstance.'LTK Board Instance'
                 && ben_cardid = Text(S.Value.cardId)) },
         { pos: Value(S.Value.pos),
+          w: Coalesce(Value(S.Value.w), 1),
+          h: Coalesce(Value(S.Value.h), 1),
           cardId: Text(S.Value.cardId),
           cardType: Text(S.Value.cardType),
           title: Text(S.Value.title),
@@ -147,9 +149,9 @@ If(Self.layoutJSON <> varLastLayout,
    Patch('LTK Boards', varBoard, { ben_manifestjson:
        JSON({ grid: Text(varManifest.grid),
               slots: ForAll(Table(varManifest.slots) As S,
-                  Patch(S.Value, { pos:
-                      LookUp(Table(ParseJSON(Self.layoutJSON).slots),
-                             Text(Value.cardId) = Text(S.Value.cardId)).Value.pos })) },
+                  With({ moved: LookUp(Table(ParseJSON(Self.layoutJSON).slots),
+                             Text(Value.cardId) = Text(S.Value.cardId)).Value },
+                      Patch(S.Value, { pos: moved.pos, w: moved.w, h: moved.h }))) },
             JSONFormat.Compact) });
    Set(varBoard, LookUp('LTK Boards', 'LTK Board' = varBoard.'LTK Board'));
    Set(varManifest, ParseJSON(varBoard.ben_manifestjson)),

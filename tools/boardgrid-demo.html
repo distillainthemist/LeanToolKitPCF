@@ -30,16 +30,15 @@
 <body>
 <header>
   <h1>BoardGrid demo</h1>
-  <label><input type="checkbox" id="edit" /> Edit mode (tap = configure/add, drag = swap)</label>
+  <label><input type="checkbox" id="edit" /> Edit mode (tap = configure/add, drag = move, ⤡ = stretch)</label>
   <label><input type="checkbox" id="ro" /> Read only</label>
-  <label>Grid <select id="grid">
-    <option value="3x3">3×3</option>
-    <option value="2x2">2×2</option>
-    <option value="5x5">5×5</option>
-    <option value="2x1">2 cols × 1 row</option>
-    <option value="3x1">3 cols × 1 row</option>
-    <option value="3x2">3 cols × 2 rows</option>
-    <option value="4x3">4 cols × 3 rows</option>
+  <label>Columns <select id="grid">
+    <option value="3">3</option>
+    <option value="1">1</option>
+    <option value="2">2</option>
+    <option value="4">4</option>
+    <option value="5">5</option>
+    <option value="6">6</option>
     <option value="">auto</option>
   </select></label>
   <span id="status" style="font-size:12px;color:#8d887e">loading…</span>
@@ -68,14 +67,14 @@
 
   const params = {
     tilesJSON: { raw: JSON.stringify([
-      { pos: 1, cardId: "b-sqdpc", cardType: "SqdpcCard", title: "Daily SQDPC", svg: tiles.SqdpcCard },
-      { pos: 2, cardId: "b-fish", cardType: "Fishbone", title: "Top issue", svg: tiles.Fishbone },
-      { pos: 3, cardId: "b-agenda", cardType: "AgendaCard", title: "Run sheet", svg: tiles.AgendaCard },
-      { pos: 4, cardId: "b-conditions", cardType: "ConditionsCard", title: "Winning conditions", svg: tiles.ConditionsCard },
-      { pos: 5, cardId: "b-actions", cardType: "ActionBoard", title: "Actions", svg: tiles.ActionBoard },
-      { pos: 7, cardId: "b-embed", cardType: "EmbedCard", title: "KPI report", svg: tiles.EmbedCard }
+      { pos: 1, cardId: "b-sqdpc", cardType: "SqdpcCard", title: "Daily SQDPC", svg: tiles.SqdpcCard, w: 2 },
+      { pos: 3, cardId: "b-fish", cardType: "Fishbone", title: "Top issue", svg: tiles.Fishbone },
+      { pos: 4, cardId: "b-agenda", cardType: "AgendaCard", title: "Run sheet", svg: tiles.AgendaCard },
+      { pos: 5, cardId: "b-conditions", cardType: "ConditionsCard", title: "Winning conditions", svg: tiles.ConditionsCard },
+      { pos: 6, cardId: "b-actions", cardType: "ActionBoard", title: "Actions", svg: tiles.ActionBoard },
+      { pos: 7, cardId: "b-embed", cardType: "EmbedCard", title: "KPI report", svg: tiles.EmbedCard, w: 2, h: 2 }
     ]) },
-    gridSize: { raw: "3x3" },
+    gridSize: { raw: "3" },
     editMode: { raw: false }, readOnly: { raw: false },
     settingsJSON: { raw: "" }, cardTitle: { raw: "Bottling line board" }, prompts: { raw: "" },
     backgroundColor: { raw: "" }, foregroundColor: { raw: "" }, accentColor: { raw: "#8b1e1e" }, fontFamily: { raw: "" }
