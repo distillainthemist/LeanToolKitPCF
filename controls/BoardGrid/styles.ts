@@ -47,6 +47,8 @@ export const BOARDGRID_CSS = `
   align-items: center;
   justify-content: center;
 }
+/* with a title bar, the snapshot sits below it rather than sliding under */
+.ltk-bg-haschip .ltk-bg-snap { top: 28px; }
 .ltk-bg-snap img { width: 100%; height: 100%; object-fit: contain; pointer-events: none; }
 .ltk-bg-snap .ltk-bg-nosnap {
   font-size: 12.5px;
@@ -65,38 +67,18 @@ export const BOARDGRID_CSS = `
   overflow: hidden;
 }
 
-/* card type — a quiet tag at the top of the tile */
-.ltk-bg-typetag {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  padding: 3px 10px;
-  font-size: 10.5px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--ltk-muted);
-  background: color-mix(in srgb, var(--ltk-bg) 82%, transparent);
-  border-bottom: 1px solid var(--ltk-hairline);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  pointer-events: none;
-}
-
-/* title bar along the bottom: title text + the ✎ button at its right end */
+/* title bar along the top: title text + the ✎ button at its right end */
 .ltk-bg-chip {
   position: absolute;
   left: 0;
   right: 0;
-  bottom: 0;
+  top: 0;
   display: flex;
   align-items: center;
   gap: 8px;
   padding: 4px 10px;
   background: color-mix(in srgb, var(--ltk-bg) 88%, transparent);
-  border-top: 1px solid var(--ltk-hairline);
+  border-bottom: 1px solid var(--ltk-hairline);
   pointer-events: none; /* the ✎ button opts back in */
 }
 .ltk-bg-chip-title {

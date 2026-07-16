@@ -262,13 +262,8 @@ export class BoardGridView {
     this.renderSnapshot(snap, tile);
     card.appendChild(snap);
 
-    // card type — a quiet tag at the top of the tile
-    if (tile.cardType !== "") {
-      card.appendChild(el("div", "ltk-bg-typetag", tile.cardType));
-    }
-
-    // title bar along the bottom: the title only, with the ✎ edit button at
-    // its right end in edit mode
+    // title bar along the top: the title only (card type as fallback), with
+    // the ✎ edit button at its right end in edit mode
     const canEdit = this.editMode && !this.readOnly;
     const barText = tile.title !== "" ? tile.title : tile.cardType;
     if (barText !== "" || canEdit) {
@@ -292,6 +287,7 @@ export class BoardGridView {
         chip.appendChild(edit);
       }
       card.appendChild(chip);
+      card.classList.add("ltk-bg-haschip"); // snap insets below the bar
     }
 
     if (this.readOnly) return slot;

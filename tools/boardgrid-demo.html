@@ -18,7 +18,7 @@
            padding: 10px 16px; background: #fff; border-bottom: 1px solid #ddd9d2; flex-wrap: wrap; }
   header h1 { font-size: 15px; margin: 0 12px 0 0; }
   header label { font-size: 13px; display: inline-flex; gap: 6px; align-items: center; }
-  #host { min-width: 0; padding: 14px; }
+  #host { min-width: 0; width: 100%; box-sizing: border-box; padding: 14px; }
   aside { border-left: 1px solid #ddd9d2; background: #fff; overflow: auto; padding: 12px; }
   aside h2 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; color: #8d887e; margin: 0 0 8px; }
   .evt { font: 11.5px/1.45 ui-monospace, monospace; border-bottom: 1px solid #eee;
@@ -84,8 +84,9 @@
   const ctx = {
     mode: {
       trackContainerResize() {},
-      get allocatedWidth() { return host.clientWidth - 28; },
-      get allocatedHeight() { return host.clientHeight - 28; },
+      // clamp so a mid-layout measurement can never collapse the board
+      get allocatedWidth() { return Math.max(480, host.clientWidth - 28); },
+      get allocatedHeight() { return Math.max(360, host.clientHeight - 28); },
       isControlDisabled: false,
     },
     parameters: params,
