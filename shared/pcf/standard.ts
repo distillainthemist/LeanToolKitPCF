@@ -24,6 +24,7 @@ export interface StandardParams {
   backgroundColor?: StringProp;
   foregroundColor?: StringProp;
   accentColor?: StringProp;
+  titleBarColor?: StringProp;
   legendColors?: StringProp;
   fontFamily?: StringProp;
   readOnly?: BoolProp;
@@ -84,6 +85,7 @@ export interface LtkSettings {
     background: string;
     foreground: string;
     accent: string;
+    titlebar: string;
     legend: string;
     font: string;
   };
@@ -107,7 +109,7 @@ export function parseSettings(raw: string | null | undefined): LtkSettings {
   const empty: LtkSettings = {
     title: "",
     promptsRaw: "",
-    theme: { background: "", foreground: "", accent: "", legend: "", font: "" },
+    theme: { background: "", foreground: "", accent: "", titlebar: "", legend: "", font: "" },
     readOnly: false,
     config: {},
   };
@@ -127,6 +129,7 @@ export function parseSettings(raw: string | null | undefined): LtkSettings {
         background: asRaw(themeRaw.background),
         foreground: asRaw(themeRaw.foreground),
         accent: asRaw(themeRaw.accent),
+        titlebar: asRaw(themeRaw.titlebar),
         legend: asRaw(themeRaw.legend),
         font: asRaw(themeRaw.font),
       },
@@ -167,6 +170,7 @@ export function readTheme(params: StandardParams, s?: LtkSettings): Theme {
     accent: colorOr(params.accentColor, t?.accent ?? "", d.accent),
     legend: parseLegend(rawOr(params.legendColors, t?.legend ?? "")),
     fontFamily: fontOr(params.fontFamily, t?.font ?? "", d.fontFamily),
+    titleBar: colorOr(params.titleBarColor, t?.titlebar ?? "", d.titleBar),
   };
 }
 

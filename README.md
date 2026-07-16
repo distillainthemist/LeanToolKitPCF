@@ -46,8 +46,9 @@ Every control exposes the same properties:
 - `peopleJSON` (input) — `[{whoId, who}]` for action assignment
 - `cardTitle` / `prompts` (inputs) — optional self-describing chrome and
   coaching prompts (plain text or `[{field, hint}]`)
-- `backgroundColor` / `foregroundColor` / `accentColor` / `legendColors` /
-  `fontFamily` — theming
+- `backgroundColor` / `foregroundColor` / `accentColor` / `titleBarColor` /
+  `legendColors` / `fontFamily` — theming (`titleBarColor` fills just the
+  title strip — one colour across related cards associates them on a board)
 - `readOnly` — display mode
 - `pngExport` (output) — PNG snapshot as a data URI
 

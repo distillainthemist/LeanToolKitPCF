@@ -116,6 +116,7 @@ instance is selected, the whole roster otherwise.
 | --- | --- |
 | `tilesJSON` | the join below |
 | `gridSize` | `Text(varManifest.grid)` — the column count, e.g. `"3"` (rows derive from the tiles) |
+| `columnTitles` | `Text(varManifest.columnTitles)` — optional JSON array / CSV of column headers |
 | `editMode` | `varEditMode` (board owners' toggle) |
 | `readOnly` | `false` (or `true` for a wallboard screen) |
 | `cardTitle` | `varBoard.ben_name` |
@@ -131,6 +132,8 @@ JSON(ForAll(Table(varManifest.slots) As S,
         { pos: Value(S.Value.pos),
           w: Coalesce(Value(S.Value.w), 1),
           h: Coalesce(Value(S.Value.h), 1),
+          nav: Coalesce(Value(S.Value.nav), 0),
+          barColor: Coalesce(Text(S.Value.settingsJSON.theme.titlebar), ""),
           cardId: Text(S.Value.cardId),
           cardType: Text(S.Value.cardType),
           title: Text(S.Value.title),
@@ -151,7 +154,8 @@ If(Self.layoutJSON <> varLastLayout,
               slots: ForAll(Table(varManifest.slots) As S,
                   With({ moved: LookUp(Table(ParseJSON(Self.layoutJSON).slots),
                              Text(Value.cardId) = Text(S.Value.cardId)).Value },
-                      Patch(S.Value, { pos: moved.pos, w: moved.w, h: moved.h }))) },
+                      Patch(S.Value, { pos: moved.pos, w: moved.w, h: moved.h,
+                                       nav: moved.nav }))) },
             JSONFormat.Compact) });
    Set(varBoard, LookUp('LTK Boards', 'LTK Board' = varBoard.'LTK Board'));
    Set(varManifest, ParseJSON(varBoard.ben_manifestjson)),
@@ -256,6 +260,25 @@ save patch (no outputs). ActionBoard/EscalationViewer slots bind
 Filter('LTK Actions',
     ben_boardid = Coalesce(Text(ParseJSON(varSlot.settings).board.source.boardId), varBoardId))
 ```
+
+### Meeting flow — next / previous card
+
+Each manifest slot's `nav` (set from the tile's number field in BoardGrid's
+edit mode) is the running order, distinct from the layout `pos`. Slots with
+`nav` 0/blank are skipped. Two buttons on the editor screen walk the flow,
+wrapping at the ends:
+
+```powerfx
+// btnNextCard.OnSelect — btnPrevCard is the mirror image (Last / nav < …)
+With({ flow: SortByColumns(Filter(colSlots, nav > 0), "nav", SortOrder.Ascending) },
+    Set(varSlot,
+        Coalesce(LookUp(flow, nav > varSlot.nav),   // first slot later in the flow
+                 First(flow))))                     // wrap to the start
+```
+
+(Bindings all key off `varSlot`, so setting it is the whole navigation —
+the visible card switches via the per-control `Visible` rules. Disable or
+hide the buttons when `CountRows(Filter(colSlots, nav > 0)) < 2`.)
 
 ## 8. Templates & project boards (Phase 4)
 

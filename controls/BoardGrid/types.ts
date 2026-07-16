@@ -18,6 +18,10 @@ export interface BoardTile {
   w: number;
   /** Row span. */
   h: number;
+  /** Title-strip fill for the tile chip ("" = board default). */
+  barColor: string;
+  /** Meeting navigation order (distinct from layout pos); 0 = unset. */
+  nav: number;
 }
 
 /** One tile resolved onto the grid: 0-based anchor cell + effective span. */
@@ -46,11 +50,34 @@ function asSpan(v: unknown): number {
   return Number.isFinite(n) && n >= 1 ? Math.min(6, Math.round(n)) : 1;
 }
 
+function asNav(v: unknown): number {
+  const n = Number(v);
+  return Number.isFinite(n) && n >= 1 ? Math.min(99, Math.round(n)) : 0;
+}
+
 /**
- * Parse tilesJSON: [{pos, cardId, cardType, title, svg, w, h}]. Tiles
- * without a cardId are dropped; a missing/invalid pos gets the next free
- * spot when the grid is laid out; w/h default to a single cell. Defensive;
- * never throws.
+ * Parse the columnTitles input: JSON array preferred, CSV accepted (the
+ * parseLegend contract). Never throws; empty/invalid = no header row.
+ */
+export function parseColumnTitles(raw: string | null | undefined): string[] {
+  const t = (raw ?? "").trim();
+  if (t === "") return [];
+  if (t.startsWith("[")) {
+    try {
+      const arr = JSON.parse(t) as unknown;
+      if (Array.isArray(arr)) return arr.map((v) => String(v ?? "").trim());
+    } catch {
+      /* fall through to CSV */
+    }
+  }
+  return t.split(",").map((v) => v.trim());
+}
+
+/**
+ * Parse tilesJSON: [{pos, cardId, cardType, title, svg, w, h, barColor,
+ * nav}]. Tiles without a cardId are dropped; a missing/invalid pos gets the
+ * next free spot when the grid is laid out; w/h default to a single cell.
+ * Defensive; never throws.
  */
 export function parseTiles(raw: string | null | undefined): BoardTile[] {
   const t = (raw ?? "").trim();
@@ -73,6 +100,8 @@ export function parseTiles(raw: string | null | undefined): BoardTile[] {
         svg: asStr(o.svg),
         w: asSpan(o.w),
         h: asSpan(o.h),
+        barColor: asStr(o.barColor).trim(),
+        nav: asNav(o.nav),
       });
     }
     return out;

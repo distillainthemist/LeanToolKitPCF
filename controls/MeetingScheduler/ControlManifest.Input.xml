@@ -149,6 +149,13 @@
               usage="input"
               required="false" />
 
+    <property name="titleBarColor"
+              display-name-key="Title Strip Colour"
+              description-key="Background fill for just the title bar, distinct from the card background - use one colour across related cards to visually associate them on a board. Empty = no strip fill."
+              of-type="SingleLine.Text"
+              usage="input"
+              required="false" />
+
     <property name="legendColors"
               display-name-key="Legend Colours"
               description-key="JSON array or CSV: [unused, crew 1, crew 2, crew 3, crew 4] badge colours. Defaults blue / green / amber / purple."

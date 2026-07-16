@@ -10,11 +10,33 @@ export const BOARDGRID_CSS = `
   min-height: 0;
   padding: 10px 12px 12px;
   overflow: auto;
+  display: flex;
+  flex-direction: column;
 }
 .ltk-bg-grid {
   display: grid;
   gap: 10px;
-  height: 100%;
+  flex: 1;
+  min-height: 0;
+}
+
+/* optional column headers above the grid */
+.ltk-bg-colheads {
+  display: grid;
+  gap: 10px;
+  flex: 0 0 auto;
+  padding-bottom: 6px;
+}
+.ltk-bg-colhead {
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ltk-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 0 2px;
 }
 
 /* ---- one slot ---- */
@@ -91,6 +113,31 @@ export const BOARDGRID_CSS = `
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+/* meeting nav-order field (edit mode) and its read-mode tag */
+.ltk-bg-nav {
+  flex: none;
+  pointer-events: auto;
+  width: 38px;
+  border: 1px solid var(--ltk-hairline);
+  background: var(--ltk-bg);
+  color: var(--ltk-fg);
+  border-radius: 6px;
+  font: inherit;
+  font-size: 11.5px;
+  padding: 2px 4px;
+  text-align: center;
+}
+.ltk-bg-navtag {
+  flex: none;
+  font-size: 10.5px;
+  font-weight: 700;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  min-width: 18px;
+  text-align: center;
+  padding: 1px 4px;
+  opacity: 0.75;
 }
 .ltk-bg-editbtn {
   flex: none;

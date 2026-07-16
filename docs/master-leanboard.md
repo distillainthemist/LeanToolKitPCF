@@ -119,16 +119,18 @@ Lives in `LTK Board.Manifest (JSON)`; snapshotted onto each instance.
 
 ```json
 { "grid": "3",
+  "columnTitles": ["Perform", "Improve", "Act"],
   "slots": [
-    { "pos": 1, "w": 2, "h": 1,
+    { "pos": 1, "w": 2, "h": 1, "nav": 1,
       "cardId": "b-bottling-sqdpc", "cardType": "SqdpcCard",
       "title": "Daily SQDPC",
       "settingsJSON": { "cardType": "SqdpcCard", "title": "Daily SQDPC",
                         "config": { "granularity": "shift2" },
                         "board": { "policy": "carry" } } },
-    { "pos": 2, "cardId": "b-bottling-5y", "cardType": "FiveWhys",
+    { "pos": 2, "nav": 2, "cardId": "b-bottling-5y", "cardType": "FiveWhys",
       "title": "Top issue",
       "settingsJSON": { "cardType": "FiveWhys", "title": "Top issue",
+                        "theme": { "titlebar": "#8b1e1e" },
                         "board": { "policy": "clear" } } },
     { "pos": 3, "cardId": "b-bottling-actions", "cardType": "ActionBoard",
       "title": "Actions",
@@ -140,6 +142,14 @@ Lives in `LTK Board.Manifest (JSON)`; snapshotted onto each instance.
 - `cardId` is minted once when the slot is configured
   (e.g. `<board>-<slug>`), never changes, and is the `instanceId` the card
   runs under — so its actions key themselves correctly with zero extra wiring.
+- `nav` is the **meeting navigation order** (distinct from the layout
+  `pos`): the editor screen's next/previous buttons walk slots in `nav`
+  order, skipping blanks. Set from the number field in each tile's title bar
+  in BoardGrid's edit mode; persisted from `layoutJSON`.
+- `columnTitles` renders optional headers above the board columns; the
+  slot's `theme.titlebar` colours both the card's own title strip and its
+  tile chip on the board (`barColor` in the tilesJSON join) — one colour
+  across related cards associates them visually.
 - The **`board` section inside `settingsJSON`** is written by the
   CardSettings composer (see below) and read only by the app at instance
   creation. Controls ignore unknown settings keys, so the same blob feeds the

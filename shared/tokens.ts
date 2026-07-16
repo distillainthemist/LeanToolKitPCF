@@ -15,6 +15,12 @@ export interface Theme {
    */
   legend: (string | undefined)[];
   fontFamily: string;
+  /**
+   * Title strip fill — colours just the title bar, distinct from the card
+   * background, so related cards can be visually associated on a board.
+   * Empty = no fill (the strip inherits the card background).
+   */
+  titleBar: string;
 }
 
 export function defaultTheme(): Theme {
@@ -24,6 +30,7 @@ export function defaultTheme(): Theme {
     accent: "#141414",
     legend: [],
     fontFamily: "Segoe UI, system-ui, sans-serif",
+    titleBar: "",
   };
 }
 
@@ -208,4 +215,12 @@ export function applyThemeVars(el: HTMLElement, theme: Theme): void {
   el.style.setProperty("--ltk-hairline", hairline(theme));
   el.style.setProperty("--ltk-muted", muted(theme));
   el.style.setProperty("--ltk-font", theme.fontFamily);
+  if (theme.titleBar !== "") {
+    // strip fill + a text colour that stays readable on it
+    el.style.setProperty("--ltk-titlebar", theme.titleBar);
+    el.style.setProperty("--ltk-titlebar-fg", textOn(theme.titleBar));
+  } else {
+    el.style.removeProperty("--ltk-titlebar");
+    el.style.removeProperty("--ltk-titlebar-fg");
+  }
 }

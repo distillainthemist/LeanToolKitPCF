@@ -68,16 +68,17 @@
   // the demo's "board manifest" — layoutJSON output is merged back into this
   // (playing the app's persist role), so drags and resizes survive re-renders
   let boardTiles = [
-    { pos: 1, cardId: "b-sqdpc", cardType: "SqdpcCard", title: "Daily SQDPC", svg: tiles.SqdpcCard, w: 2 },
-    { pos: 3, cardId: "b-fish", cardType: "Fishbone", title: "Top issue", svg: tiles.Fishbone },
-    { pos: 4, cardId: "b-agenda", cardType: "AgendaCard", title: "Run sheet", svg: tiles.AgendaCard },
+    { pos: 1, cardId: "b-sqdpc", cardType: "SqdpcCard", title: "Daily SQDPC", svg: tiles.SqdpcCard, w: 2, nav: 1 },
+    { pos: 3, cardId: "b-fish", cardType: "Fishbone", title: "Top issue", svg: tiles.Fishbone, barColor: "#8b1e1e", nav: 3 },
+    { pos: 4, cardId: "b-agenda", cardType: "AgendaCard", title: "Run sheet", svg: tiles.AgendaCard, nav: 2 },
     { pos: 5, cardId: "b-conditions", cardType: "ConditionsCard", title: "Winning conditions", svg: tiles.ConditionsCard },
-    { pos: 6, cardId: "b-actions", cardType: "ActionBoard", title: "Actions", svg: tiles.ActionBoard },
+    { pos: 6, cardId: "b-actions", cardType: "ActionBoard", title: "Actions", svg: tiles.ActionBoard, barColor: "#8b1e1e", nav: 4 },
     { pos: 7, cardId: "b-embed", cardType: "EmbedCard", title: "KPI report", svg: tiles.EmbedCard, w: 2, h: 2 }
   ];
   const params = {
     tilesJSON: { raw: JSON.stringify(boardTiles) },
     gridSize: { raw: "3" },
+    columnTitles: { raw: '["Perform", "Improve", "Act"]' },
     editMode: { raw: false }, readOnly: { raw: false },
     settingsJSON: { raw: "" }, cardTitle: { raw: "Bottling line board" }, prompts: { raw: "" },
     backgroundColor: { raw: "" }, foregroundColor: { raw: "" }, accentColor: { raw: "#8b1e1e" }, fontFamily: { raw: "" }
@@ -113,7 +114,7 @@
       const moved = JSON.parse(lastLayout).slots;
       boardTiles = boardTiles.map((t) => {
         const m = moved.find((s) => s.cardId === t.cardId);
-        return m ? { ...t, pos: m.pos, w: m.w, h: m.h } : t;
+        return m ? { ...t, pos: m.pos, w: m.w, h: m.h, nav: m.nav } : t;
       });
       params.tilesJSON.raw = JSON.stringify(boardTiles);
     }

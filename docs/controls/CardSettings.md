@@ -40,7 +40,7 @@ inheriting future control defaults. Returns `""` when nothing is set.
 | `title` | string? | Trimmed; omitted when blank. |
 | `prompts` | string \| string[] \| `{field,hint}[]`? | Coaching prompts. Omitted when empty. |
 | `readOnly` | `true`? | Emitted only when true. |
-| `theme` | object? | Only the non-blank keys of `{ background, foreground, accent, legend, font }`, plus any preserved unknown theme keys. Omitted if empty. |
+| `theme` | object? | Only the non-blank keys of `{ background, foreground, accent, titlebar, legend, font }`, plus any preserved unknown theme keys. Omitted if empty. `titlebar` fills just the title strip (associate related cards by colour). |
 | `config` | object? | Per-card keys, named after that card's own settings/inputs (e.g. `granularity`, `dimensions`, `columnsJSON`). Only "set" values; omitted if empty. |
 | `board` | object? | Board-composer mode only (see below): `{ policy, source: { boardId, cardId } }`. Read by the **board app** at instance creation; the cards themselves ignore it. |
 

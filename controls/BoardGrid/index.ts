@@ -5,7 +5,7 @@
 
 import { IInputs, IOutputs } from "./generated/ManifestTypes";
 import { BoardGridView } from "./editor";
-import { parseColumns, parseTiles } from "./types";
+import { parseColumns, parseColumnTitles, parseTiles } from "./types";
 import { cfg, parseSettings, rawOr, readTheme, str } from "../../shared/pcf/standard";
 import { nowIso } from "../../shared/schema/id";
 
@@ -96,6 +96,9 @@ export class BoardGrid implements ComponentFramework.StandardControl<IInputs, IO
       p.editMode?.raw === true || s.config.editMode === true
     );
 
+    this.view.setColumnTitles(
+      parseColumnTitles(rawOr(p.columnTitles, cfg(s, "columnTitles")))
+    );
     const tiles = parseTiles(rawOr(p.tilesJSON, cfg(s, "tilesJSON")));
     this.view.setTiles(
       tiles,

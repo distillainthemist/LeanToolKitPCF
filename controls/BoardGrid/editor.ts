@@ -13,7 +13,7 @@
 // WebKit handles correctly. Pure-vector svgs scale fine inline, and data:
 // image URIs (plain PNGs) are fine in an <img>.
 
-import { applyThemeVars, defaultTheme, Theme } from "../../shared/tokens";
+import { applyThemeVars, defaultTheme, parseColor, textOn, Theme } from "../../shared/tokens";
 import { LTK_BASE_CSS } from "../../shared/ui/baseCss";
 import { clear, el, ensureStylesheet } from "../../shared/ui/dom";
 import { parsePrompts, Prompts, renderTitleBar, renderGhost } from "../../shared/ui/chrome";
@@ -41,8 +41,13 @@ export interface SlotEvent {
 
 export interface BoardGridCallbacks {
   onSelect: (e: SlotEvent) => void;
-  /** Fired after a drag moves or resizes a tile: every tile's new placement. */
-  onLayout: (slots: { cardId: string; pos: number; w: number; h: number }[]) => void;
+  /**
+   * Fired after a drag moves/resizes a tile or its nav order is edited:
+   * every tile's placement plus its meeting navigation order.
+   */
+  onLayout: (
+    slots: { cardId: string; pos: number; w: number; h: number; nav: number }[]
+  ) => void;
 }
 
 /** Must match the .ltk-bg-grid gap in styles.ts (cell hit-testing needs it). */
@@ -52,6 +57,7 @@ export class BoardGridView {
   private readonly root: HTMLElement;
   private tiles: BoardTile[] = [];
   private cols = 1;
+  private colTitles: string[] = [];
   private layout: BoardLayout | null = null;
   private editMode = false;
   private readOnly = false;
@@ -94,6 +100,12 @@ export class BoardGridView {
     }
     this.tiles = tiles;
     this.cols = cols;
+    this.render();
+  }
+
+  setColumnTitles(titles: string[]): void {
+    if (JSON.stringify(titles) === JSON.stringify(this.colTitles)) return;
+    this.colTitles = titles;
     this.render();
   }
 
@@ -159,6 +171,16 @@ export class BoardGridView {
     // rows derive from content; the spare add-row exists only in edit mode
     const lay = layoutBoard(this.tiles, this.cols, this.editMode && !this.readOnly);
     this.layout = lay;
+
+    // optional column headers above the grid (same column template)
+    if (this.colTitles.some((t) => t !== "")) {
+      const heads = el("div", "ltk-bg-colheads");
+      heads.style.gridTemplateColumns = `repeat(${lay.cols}, 1fr)`;
+      for (let c = 0; c < lay.cols; c++) {
+        heads.appendChild(el("div", "ltk-bg-colhead", this.colTitles[c] ?? ""));
+      }
+      body.appendChild(heads);
+    }
 
     const grid = el("div", "ltk-bg-grid");
     grid.style.gridTemplateColumns = `repeat(${lay.cols}, 1fr)`;
@@ -295,12 +317,36 @@ export class BoardGridView {
     card.appendChild(snap);
 
     // title bar along the top: the title only (card type as fallback), with
-    // the ✎ edit button at its right end in edit mode
+    // the nav-order field and ✎ edit button at its right end in edit mode
     const canEdit = this.editMode && !this.readOnly;
     const barText = tile.title !== "" ? tile.title : tile.cardType;
     if (barText !== "" || canEdit) {
       const chip = el("div", "ltk-bg-chip");
+      // per-tile strip colour (association between related cards)
+      if (tile.barColor !== "" && parseColor(tile.barColor) !== null) {
+        chip.style.background = tile.barColor;
+        chip.style.color = textOn(tile.barColor);
+      }
       chip.appendChild(el("span", "ltk-bg-chip-title", barText));
+      if (canEdit) {
+        // meeting navigation order — distinct from the layout pos
+        const nav = el("input", "ltk-bg-nav") as HTMLInputElement;
+        nav.type = "number";
+        nav.min = "1";
+        nav.max = "99";
+        nav.placeholder = "–";
+        nav.title = "Navigation order when running the meeting (empty = not in the flow)";
+        nav.value = tile.nav > 0 ? String(tile.nav) : "";
+        nav.addEventListener("change", () => {
+          const n = Math.round(Number(nav.value));
+          tile.nav = Number.isFinite(n) && n >= 1 ? Math.min(99, n) : 0;
+          this.emitLayout();
+        });
+        chip.appendChild(nav);
+      } else if (tile.nav > 0) {
+        // read mode: show the flow position quietly
+        chip.appendChild(el("span", "ltk-bg-navtag", String(tile.nav)));
+      }
       if (canEdit) {
         const edit = el("button", "ltk-bg-editbtn") as HTMLButtonElement;
         edit.type = "button";
@@ -439,6 +485,7 @@ export class BoardGridView {
         pos: cellPos(this.cols, p.col, p.row),
         w: p.w,
         h: p.h,
+        nav: p.tile.nav,
       }))
     );
   }

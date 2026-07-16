@@ -9,6 +9,7 @@ export interface ThemeDraft {
   background: string;
   foreground: string;
   accent: string;
+  titlebar: string; // title strip fill, distinct from the card background
   legend: string; // CSV or JSON-array text, as the controls accept
   font: string;
 }
@@ -46,7 +47,7 @@ export function emptyDraft(): SettingsDraft {
     title: "",
     prompts: undefined,
     readOnly: false,
-    theme: { background: "", foreground: "", accent: "", legend: "", font: "" },
+    theme: { background: "", foreground: "", accent: "", titlebar: "", legend: "", font: "" },
     config: {},
     board: { policy: "", sourceBoardId: "", sourceCardId: "" },
     extraTop: {},
@@ -54,7 +55,7 @@ export function emptyDraft(): SettingsDraft {
   };
 }
 
-const THEME_KEYS = ["background", "foreground", "accent", "legend", "font"] as const;
+const THEME_KEYS = ["background", "foreground", "accent", "titlebar", "legend", "font"] as const;
 const TOP_KEYS = ["cardType", "title", "prompts", "readOnly", "theme", "config", "board"];
 
 function s(v: unknown): string {

@@ -27,6 +27,9 @@ export const LTK_BASE_CSS = `
   padding: 8px 12px 6px;
   position: relative;
   flex: 0 0 auto;
+  /* optional strip fill (theme.titlebar) with auto-contrast text */
+  background: var(--ltk-titlebar, transparent);
+  color: var(--ltk-titlebar-fg, inherit);
 }
 .ltk-titlebar-text { font-size: 20px; font-weight: 600; line-height: 1.2; }
 .ltk-info-btn {

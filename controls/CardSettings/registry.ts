@@ -101,6 +101,13 @@ export const THEME_FIELDS: FieldSpec[] = [
     help: "Highlights, selection, primary buttons. Empty = rich black.",
   },
   {
+    key: "titlebar",
+    label: "Title strip",
+    kind: "color",
+    help:
+      "Fill for just the title bar — use one colour across related cards to associate them on a board. Empty = no strip.",
+  },
+  {
     key: "legend",
     label: "Legend colours",
     kind: "colorList",

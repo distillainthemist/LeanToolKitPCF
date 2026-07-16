@@ -9,7 +9,7 @@
 
     <property name="tilesJSON"
               display-name-key="Tiles (JSON)"
-              description-key="The board slots joined to their card data: [{pos, cardId, cardType, title, svg, w, h}]. svg is raw svgExport markup (rendered inline) or a data image URI (rendered as an image); w/h are optional column/row spans (default 1) for stretched cards. Tiles without a snapshot show a typed placeholder."
+              description-key="The board slots joined to their card data: [{pos, cardId, cardType, title, svg, w, h, barColor, nav}]. svg is raw svgExport markup (rendered inline) or a data image URI (rendered as an image); w/h are optional column/row spans (default 1); barColor fills the tile title chip (associate related cards); nav is the meeting navigation order, distinct from pos. Tiles without a snapshot show a typed placeholder."
               of-type="Multiple"
               usage="input"
               required="false" />
@@ -18,6 +18,13 @@
               display-name-key="Columns"
               description-key="Number of columns, 1 to 6. Rows are never specified — they grow to fit the tiles, and edit mode keeps a spare blank row at the bottom for adding cards. Empty = an automatic near-square column count. Legacy CxR values still parse (the column count is used)."
               of-type="SingleLine.Text"
+              usage="input"
+              required="false" />
+
+    <property name="columnTitles"
+              display-name-key="Column Titles"
+              description-key="Optional headers rendered above the board columns: a JSON array of strings or a comma-separated list, one per column (e.g. Safety, Quality, Delivery). Empty entries leave that column unheaded; empty input hides the header row."
+              of-type="Multiple"
               usage="input"
               required="false" />
 
@@ -37,13 +44,13 @@
 
     <property name="layoutJSON"
               display-name-key="Layout (JSON)"
-              description-key="Emitted after a drag moves or resizes a tile: {movedAt, slots:[{cardId, pos, w, h}]}. Persist the new positions and spans into the board manifest in OnChange."
+              description-key="Emitted after a drag moves or resizes a tile, or a nav order is edited: {movedAt, slots:[{cardId, pos, w, h, nav}]}. Persist the new positions, spans and navigation order into the board manifest in OnChange."
               of-type="Multiple"
               usage="output" />
 
     <property name="settingsJSON"
               display-name-key="Settings (JSON)"
-              description-key="Consolidated configuration: {title, prompts, readOnly, theme:{background,foreground,accent,legend,font}, config:{tilesJSON, gridSize, editMode}}. Settings are the base; a non-empty discrete text input overrides its key (boolean inputs merge with OR)."
+              description-key="Consolidated configuration: {title, prompts, readOnly, theme:{background,foreground,accent,titlebar,legend,font}, config:{tilesJSON, gridSize, columnTitles, editMode}}. Settings are the base; a non-empty discrete text input overrides its key (boolean inputs merge with OR)."
               of-type="Multiple"
               usage="input"
               required="false" />
@@ -81,6 +88,13 @@
     <property name="accentColor"
               display-name-key="Accent Colour"
               description-key="Accent colour for drop targets and add-card hover. Default rich black."
+              of-type="SingleLine.Text"
+              usage="input"
+              required="false" />
+
+    <property name="titleBarColor"
+              display-name-key="Title Strip Colour"
+              description-key="Background fill for just the title bar, distinct from the card background - use one colour across related cards to visually associate them on a board. Empty = no strip fill."
               of-type="SingleLine.Text"
               usage="input"
               required="false" />
