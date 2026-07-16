@@ -102,6 +102,7 @@ export const BOARDGRID_CSS = `
   padding: 4px 10px;
   background: color-mix(in srgb, var(--ltk-bg) 88%, transparent);
   border-bottom: 1px solid var(--ltk-hairline);
+  color: var(--ltk-fg); /* barColor overrides inline with textOn(barColor) */
   pointer-events: none; /* the ✎ button opts back in */
 }
 .ltk-bg-chip-title {
@@ -109,7 +110,7 @@ export const BOARDGRID_CSS = `
   min-width: 0;
   font-size: 12.5px;
   font-weight: 700;
-  color: var(--ltk-fg);
+  color: inherit; /* follows the chip's auto-contrast colour */
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -130,13 +131,17 @@ export const BOARDGRID_CSS = `
 }
 .ltk-bg-navtag {
   flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   font-size: 10.5px;
   font-weight: 700;
   border: 1px solid currentColor;
   border-radius: 999px;
+  /* equal min sides = a true circle for one digit, a pill for two */
   min-width: 18px;
-  text-align: center;
-  padding: 1px 4px;
+  height: 18px;
+  padding: 0 4px;
   opacity: 0.75;
 }
 .ltk-bg-editbtn {
