@@ -41,8 +41,8 @@ export class BoardGrid implements ComponentFramework.StandardControl<IInputs, IO
         this.selectedJson = JSON.stringify({ ...e, selectedAt: nowIso() });
         this.notifyOutputChanged();
       },
-      onLayout: (slots) => {
-        this.layoutJson = JSON.stringify({ movedAt: nowIso(), slots });
+      onLayout: (slots, columnTitles) => {
+        this.layoutJson = JSON.stringify({ movedAt: nowIso(), slots, columnTitles });
         this.notifyOutputChanged();
       },
     });

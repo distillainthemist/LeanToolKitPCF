@@ -111,12 +111,13 @@
       lastLayout = out.layoutJSON; add("layoutJSON", lastLayout);
       // persist the new layout like the real app's OnChange would: merge each
       // tile's resolved pos/w/h back into the demo's board manifest
-      const moved = JSON.parse(lastLayout).slots;
+      const layout = JSON.parse(lastLayout);
       boardTiles = boardTiles.map((t) => {
-        const m = moved.find((s) => s.cardId === t.cardId);
+        const m = layout.slots.find((s) => s.cardId === t.cardId);
         return m ? { ...t, pos: m.pos, w: m.w, h: m.h, nav: m.nav } : t;
       });
       params.tilesJSON.raw = JSON.stringify(boardTiles);
+      if (layout.columnTitles) params.columnTitles.raw = JSON.stringify(layout.columnTitles);
     }
   }, {}, host);
 

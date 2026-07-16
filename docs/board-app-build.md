@@ -151,6 +151,7 @@ If(Self.layoutJSON <> varLastLayout,
    Set(varLastLayout, Self.layoutJSON);
    Patch('LTK Boards', varBoard, { ben_manifestjson:
        JSON({ grid: Text(varManifest.grid),
+              columnTitles: ParseJSON(Self.layoutJSON).columnTitles,
               slots: ForAll(Table(varManifest.slots) As S,
                   With({ moved: LookUp(Table(ParseJSON(Self.layoutJSON).slots),
                              Text(Value.cardId) = Text(S.Value.cardId)).Value },

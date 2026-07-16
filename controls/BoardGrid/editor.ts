@@ -42,11 +42,13 @@ export interface SlotEvent {
 export interface BoardGridCallbacks {
   onSelect: (e: SlotEvent) => void;
   /**
-   * Fired after a drag moves/resizes a tile or its nav order is edited:
-   * every tile's placement plus its meeting navigation order.
+   * Fired after a drag moves/resizes a tile, a nav order is edited, or a
+   * column heading is edited: every tile's placement plus its meeting
+   * navigation order, and the column headings.
    */
   onLayout: (
-    slots: { cardId: string; pos: number; w: number; h: number; nav: number }[]
+    slots: { cardId: string; pos: number; w: number; h: number; nav: number }[],
+    columnTitles: string[]
   ) => void;
 }
 
@@ -172,12 +174,31 @@ export class BoardGridView {
     const lay = layoutBoard(this.tiles, this.cols, this.editMode && !this.readOnly);
     this.layout = lay;
 
-    // optional column headers above the grid (same column template)
-    if (this.colTitles.some((t) => t !== "")) {
+    // optional column headers above the grid (same column template) —
+    // read mode shows them only when set; edit mode always offers the
+    // fields so headings can be added to an unheaded board
+    const canEdit = this.editMode && !this.readOnly;
+    if (canEdit || this.colTitles.some((t) => t !== "")) {
       const heads = el("div", "ltk-bg-colheads");
       heads.style.gridTemplateColumns = `repeat(${lay.cols}, 1fr)`;
       for (let c = 0; c < lay.cols; c++) {
-        heads.appendChild(el("div", "ltk-bg-colhead", this.colTitles[c] ?? ""));
+        if (canEdit) {
+          const field = el("input", "ltk-bg-colhead-input") as HTMLInputElement;
+          field.type = "text";
+          field.placeholder = "Column title";
+          field.title = "Column heading (empty = none)";
+          field.value = this.colTitles[c] ?? "";
+          field.addEventListener("change", () => {
+            const next = this.colTitles.slice(0, lay.cols);
+            while (next.length < lay.cols) next.push("");
+            next[c] = field.value.trim();
+            this.colTitles = next;
+            this.emitLayout();
+          });
+          heads.appendChild(field);
+        } else {
+          heads.appendChild(el("div", "ltk-bg-colhead", this.colTitles[c] ?? ""));
+        }
       }
       body.appendChild(heads);
     }
@@ -486,7 +507,8 @@ export class BoardGridView {
         w: p.w,
         h: p.h,
         nav: p.tile.nav,
-      }))
+      })),
+      this.colTitles.slice(0, this.cols)
     );
   }
 

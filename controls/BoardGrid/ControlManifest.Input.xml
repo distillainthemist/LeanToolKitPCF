@@ -23,7 +23,7 @@
 
     <property name="columnTitles"
               display-name-key="Column Titles"
-              description-key="Optional headers rendered above the board columns: a JSON array of strings or a comma-separated list, one per column (e.g. Safety, Quality, Delivery). Empty entries leave that column unheaded; empty input hides the header row."
+              description-key="Optional headers rendered above the board columns: a JSON array of strings or a comma-separated list, one per column (e.g. Safety, Quality, Delivery). Empty entries leave that column unheaded; empty input hides the header row in read mode. In edit mode the headings become editable fields and changes are emitted in Layout."
               of-type="Multiple"
               usage="input"
               required="false" />
@@ -44,7 +44,7 @@
 
     <property name="layoutJSON"
               display-name-key="Layout (JSON)"
-              description-key="Emitted after a drag moves or resizes a tile, or a nav order is edited: {movedAt, slots:[{cardId, pos, w, h, nav}]}. Persist the new positions, spans and navigation order into the board manifest in OnChange."
+              description-key="Emitted after a drag moves or resizes a tile, a nav order is edited, or a column heading is edited: {movedAt, slots:[{cardId, pos, w, h, nav}], columnTitles}. Persist the positions, spans, navigation order and column headings into the board manifest in OnChange."
               of-type="Multiple"
               usage="output" />
 

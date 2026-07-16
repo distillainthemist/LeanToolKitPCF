@@ -38,6 +38,26 @@ export const BOARDGRID_CSS = `
   text-overflow: ellipsis;
   padding: 0 2px;
 }
+/* edit mode: the heading as a field, same visual weight as the label */
+.ltk-bg-colhead-input {
+  min-width: 0;
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ltk-fg);
+  background: var(--ltk-bg);
+  border: 1px solid var(--ltk-hairline);
+  border-radius: 6px;
+  padding: 3px 6px;
+}
+.ltk-bg-colhead-input::placeholder {
+  color: var(--ltk-muted);
+  text-transform: none;
+  letter-spacing: normal;
+  font-weight: 400;
+}
 
 /* ---- one slot ---- */
 .ltk-bg-slot {
