@@ -2,7 +2,7 @@
 <manifest>
   <control namespace="BenOBrien"
            constructor="ParetoCard"
-           version="0.5.0"
+           version="0.6.0"
            display-name-key="Pareto Card"
            description-key="LeanToolKit Pareto chart — labelled counts as descending bars with a cumulative % line. Fishbone/five-whys causes with votes paste straight in."
            control-type="standard">

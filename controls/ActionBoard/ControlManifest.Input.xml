@@ -2,7 +2,7 @@
 <manifest>
   <control namespace="BenOBrien"
            constructor="ActionBoard"
-           version="0.5.0"
+           version="0.6.0"
            display-name-key="Action Board"
            description-key="LeanToolKit action board — one canonical action list rendered as a list or kanban. Binds directly to the central actions table via Actions Input/Output."
            control-type="standard">
