@@ -186,6 +186,16 @@ export const WIZARD_CSS = `
   padding: 2px 10px;
 }
 
+/* topic rotation rows (cadence step) */
+.ltk-mw-topic-ordinal {
+  flex: 0 0 84px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ltk-muted);
+}
+
 /* review */
 .ltk-mw-review {
   display: flex;

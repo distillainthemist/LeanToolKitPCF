@@ -41,6 +41,10 @@ export interface SchedulerConfig {
   crews: string[];
   roster: RosterBlock[]; // empty = no roster
   baseStart: Date;
+  /** Weekly topic rotation by week-of-month: [1st, 2nd, 3rd, 4th, 5th]. */
+  weekTopics: string[];
+  /** Daily/shiftly topics by weekday (0=Sun .. 6=Sat). */
+  dayTopics: Record<number, string>;
 }
 
 /** A per-meeting text column (topic, chair, notetaker…), maker-configured. */
@@ -66,6 +70,8 @@ export interface MeetingInstance {
   time: string; // "HH:MM"
   crew: string; // "" when no roster applies
   shift: "" | "day" | "night";
+  /** The rotation topic for this occurrence ("" = none configured). */
+  topic: string;
   recordId: string; // "" when no record exists yet
   rescheduledTo: string;
   status: InstanceStatus;
@@ -178,6 +184,69 @@ export function parseRosterPattern(raw: string | null | undefined): RosterBlock[
     out.push({ len, type: m[2] as RosterBlock["type"] });
   }
   return out.length > 0 ? out : [];
+}
+
+/**
+ * weekTopics input — the weekly meeting's topic rotation through the month:
+ * a JSON array or CSV of up to five entries ([1st, 2nd, 3rd, 4th, 5th
+ * week]). Blank entries leave that week untopiced.
+ */
+export function parseWeekTopics(raw: string | null | undefined): string[] {
+  const t = String(raw ?? "").trim();
+  if (t === "") return [];
+  let items: string[];
+  if (t.startsWith("[")) {
+    try {
+      const arr = JSON.parse(t) as unknown;
+      items = Array.isArray(arr) ? arr.map((v) => String(v ?? "")) : [];
+    } catch {
+      items = t.split(",");
+    }
+  } else {
+    items = t.split(",");
+  }
+  const out = items.slice(0, 5).map((v) => v.trim());
+  while (out.length > 0 && out[out.length - 1] === "") out.pop();
+  return out;
+}
+
+/**
+ * dayTopics input — daily/shiftly topics keyed by weekday: a JSON object
+ * ({"Mon": "Safety", "2": "Quality"}) or CSV pairs ("Mon:Safety,Tue:Quality").
+ * Keys are day names or indices (0=Sun).
+ */
+export function parseDayTopics(raw: string | null | undefined): Record<number, string> {
+  const t = String(raw ?? "").trim();
+  if (t === "") return {};
+  const names = DAY_LABELS.map((d) => d.toLowerCase());
+  const dayIndex = (key: string): number => {
+    const s = key.trim().toLowerCase();
+    const n = Number(s);
+    if (Number.isInteger(n) && n >= 0 && n <= 6) return n;
+    return names.findIndex((d) => s.startsWith(d));
+  };
+  const out: Record<number, string> = {};
+  if (t.startsWith("{")) {
+    try {
+      const obj = JSON.parse(t) as Record<string, unknown>;
+      for (const [k, v] of Object.entries(obj)) {
+        const idx = dayIndex(k);
+        const topic = String(v ?? "").trim();
+        if (idx >= 0 && topic !== "") out[idx] = topic;
+      }
+      return out;
+    } catch {
+      return {};
+    }
+  }
+  for (const pair of t.split(",")) {
+    const sep = pair.indexOf(":");
+    if (sep < 0) continue;
+    const idx = dayIndex(pair.slice(0, sep));
+    const topic = pair.slice(sep + 1).trim();
+    if (idx >= 0 && topic !== "") out[idx] = topic;
+  }
+  return out;
 }
 
 function slug(s: string): string {
@@ -395,6 +464,18 @@ export function generateInstances(
   const dates = recurrenceDates(cfg, from, to);
   const hasRoster = cfg.roster.length > 0 && cfg.crews.length > 0;
 
+  // the occurrence's rotation topic: weekly rotates through the month
+  // (1st..5th occurrence of the weekday), daily/shiftly follows the weekday
+  const topicFor = (date: Date): string => {
+    if (cfg.category === "weekly") {
+      return cfg.weekTopics[Math.ceil(date.getDate() / 7) - 1] ?? "";
+    }
+    if (cfg.category === "daily" || cfg.category === "shiftly") {
+      return cfg.dayTopics[date.getDay()] ?? "";
+    }
+    return "";
+  };
+
   const out: MeetingInstance[] = [];
   const push = (date: Date, time: string, shift: "" | "day" | "night", crew: string) => {
     const dIso = isoLocal(date);
@@ -408,6 +489,7 @@ export function generateInstances(
       time,
       crew,
       shift,
+      topic: topicFor(date),
       recordId: rec?.recordId ?? "",
       rescheduledTo: rec?.rescheduledTo ?? "",
       status: rec && rec.recordId !== "" ? "existing" : past ? "missing" : "planned",

@@ -72,6 +72,20 @@
               usage="input"
               required="false" />
 
+    <property name="weekTopics"
+              display-name-key="Week Topics"
+              description-key="Weekly cadence only: the topic rotation through the month as a JSON array or CSV of up to five entries — [1st, 2nd, 3rd, 4th, 5th week] (5th applies only when the month has one). Each instance shows the topic for its week of the month."
+              of-type="Multiple"
+              usage="input"
+              required="false" />
+
+    <property name="dayTopics"
+              display-name-key="Day Topics"
+              description-key="Daily/shiftly cadences: topics keyed by weekday — a JSON object like {Mon: Safety, Tue: Quality} or CSV pairs Mon:Safety,Tue:Quality. Each instance shows the topic for its day of the week."
+              of-type="Multiple"
+              usage="input"
+              required="false" />
+
     <property name="existingMeetingsJSON"
               display-name-key="Existing Meetings (JSON)"
               description-key="The already-created meeting records: [{date (or datetime), rescheduledDate?, recordId, values?:{colKey: text}}]. Instances are matched by date (and shift for shiftly); past instances with no match are flagged as having no record, and vanish once more than 7 days old (assumed not to have happened). values pre-fill the custom columns."
@@ -107,7 +121,7 @@
 
     <property name="settingsJSON"
               display-name-key="Settings (JSON)"
-              description-key="Consolidated configuration: {title, prompts, readOnly, theme:{background,foreground,accent,titlebar,legend,font}, config:{finalDate, daysPrior, category, daysOfWeek, timeOfDay, crewList, rosterPattern, baseStartDate, existingMeetingsJSON, columns}, meeting:{purpose, owner, org:{site,department,area}, participants}}. The meeting section (written by MeetingWizard) renders as an identity strip under the title bar. Settings are the base; a non-empty discrete text input overrides its key (enum inputs: the settings key wins when present)."
+              description-key="Consolidated configuration: {title, prompts, readOnly, theme:{background,foreground,accent,titlebar,legend,font}, config:{finalDate, daysPrior, category, daysOfWeek, timeOfDay, crewList, rosterPattern, baseStartDate, weekTopics, dayTopics, existingMeetingsJSON, columns}, meeting:{purpose, owner, org:{site,department,area}, participants}}. The meeting section (written by MeetingWizard) renders as an identity strip under the title bar. Settings are the base; a non-empty discrete text input overrides its key (enum inputs: the settings key wins when present)."
               of-type="Multiple"
               usage="input"
               required="false" />

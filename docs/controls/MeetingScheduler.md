@@ -38,6 +38,7 @@ instance plus its custom-column values and a fresh timestamp:
 | `time` | string | `HH:MM`. |
 | `crew` | string | Roster crew; `""` when no roster applies. |
 | `shift` | `"" \| "day" \| "night"` | |
+| `topic` | string | The occurrence's **rotation topic** (shown on the row, italic): weekly = `weekTopics[week-of-month]` (1st–5th occurrence of the weekday in the month), daily/shiftly = `dayTopics[weekday]`. `""` when none configured. |
 | `recordId` | string | The matched record's id; `""` when none exists yet. |
 | `rescheduledTo` | string | Set when the record was moved. |
 | `status` | enum | `"existing" \| "missing" \| "planned"`. |

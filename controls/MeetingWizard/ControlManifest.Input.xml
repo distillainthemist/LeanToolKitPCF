@@ -37,7 +37,7 @@
 
     <property name="outputJSON"
               display-name-key="Output (JSON)"
-              description-key="The composed MeetingScheduler settings blob: {cardType, title, config:{category, daysOfWeek, timeOfDay, daysPrior, crewList, rosterPattern, baseStartDate, columns}, meeting:{purpose, owner, org:{site,department,area}, participants}}. Emitted live as the maker edits."
+              description-key="The composed MeetingScheduler settings blob: {cardType, title, config:{category, daysOfWeek, timeOfDay, daysPrior, crewList, rosterPattern, baseStartDate, weekTopics, dayTopics, columns}, meeting:{purpose, owner, org:{site,department,area}, participants}}. baseStartDate anchors rostered AND anchored cadences (fortnightly week parity, monthly/quarterly/annually nth weekday); weekTopics is the weekly topic rotation through the month; dayTopics keys daily/shiftly topics by weekday. Emitted live as the maker edits."
               of-type="Multiple"
               usage="output" />
 

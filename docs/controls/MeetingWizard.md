@@ -11,6 +11,16 @@ snapshots, and does not appear in the card catalog.
 / area) → Cadence → Crews & roster (rostered cadences only) → Participants
 → Meeting records → Review (with the **Create meeting** button).
 
+**Cadence step details:** weekly and fortnightly meetings run on exactly
+**one day** (the toggles are single-select); annually / quarterly / monthly
+/ fortnightly get a **First occurrence** anchor date — the recurrence
+projects forward from it (fortnightly = same week parity; monthly+ = the
+date's nth weekday, e.g. its 2nd Tuesday). Weekly meetings can define a
+**topic rotation** through the month (1st–5th occurrence, 5th only when the
+month has one); daily/shiftly meetings can define **topics by day of
+week**. Topics land in `config.weekTopics` / `config.dayTopics` and show on
+every MeetingScheduler row.
+
 - **Schema id:** none · **Document:** ✖ · **Actions:** ✖ · **Snapshots:** ✖
 
 ## Inputs

@@ -30,8 +30,35 @@ export function isRostered(category: string): boolean {
 
 /** Cadences where picking weekdays makes sense. */
 export function hasWeekdays(category: string): boolean {
-  return category === "weekly" || category === "daily" || category === "shiftly";
+  return (
+    category === "weekly" ||
+    category === "fortnightly" ||
+    category === "daily" ||
+    category === "shiftly"
+  );
 }
+
+/** Cadences that meet on exactly ONE day of the week. */
+export function isSingleDay(category: string): boolean {
+  return category === "weekly" || category === "fortnightly";
+}
+
+/**
+ * Cadences whose recurrence projects forward from an anchor date (the
+ * scheduler's baseStartDate): fortnightly = same week parity as the anchor;
+ * monthly/quarterly/annually = the anchor's nth weekday (e.g. 2nd Tuesday).
+ * Rostered cadences anchor via the roster's first day shift instead.
+ */
+export function isAnchored(category: string): boolean {
+  return (
+    category === "annually" ||
+    category === "quarterly" ||
+    category === "monthly" ||
+    category === "fortnightly"
+  );
+}
+
+export const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 export interface WizardDraft {
   title: string;
@@ -46,6 +73,10 @@ export interface WizardDraft {
   rosterPattern: string; // e.g. 2D-2N-5O
   baseStartDate: string; // yyyy-mm-dd
   columns: string; // CSV of row-column labels
+  /** Weekly topic rotation through the month: [1st..5th week]. */
+  weekTopics: string[];
+  /** Daily/shiftly topics keyed by weekday label ("Mon".."Sun"). */
+  dayTopics: Record<string, string>;
   participants: MeetingPerson[];
   /** Unmanaged top-level keys (theme, prompts, board, …), kept verbatim. */
   extraTop: Record<string, unknown>;
@@ -67,6 +98,8 @@ export function emptyDraft(): WizardDraft {
     rosterPattern: "",
     baseStartDate: "",
     columns: "",
+    weekTopics: [],
+    dayTopics: {},
     participants: [],
     extraTop: {},
     extraConfig: {},
@@ -83,6 +116,8 @@ const MANAGED_CONFIG = [
   "rosterPattern",
   "baseStartDate",
   "columns",
+  "weekTopics",
+  "dayTopics",
 ];
 
 function s(v: unknown): string {
@@ -115,6 +150,17 @@ export function parseWizardDraft(raw: string | null | undefined): WizardDraft {
     draft.rosterPattern = s(config.rosterPattern);
     draft.baseStartDate = s(config.baseStartDate);
     draft.columns = s(config.columns);
+    if (Array.isArray(config.weekTopics)) {
+      draft.weekTopics = config.weekTopics.slice(0, 5).map((v) => s(v));
+    } else if (s(config.weekTopics) !== "") {
+      draft.weekTopics = s(config.weekTopics).split(",").slice(0, 5).map((v) => v.trim());
+    }
+    if (config.dayTopics && typeof config.dayTopics === "object" && !Array.isArray(config.dayTopics)) {
+      for (const [k, v] of Object.entries(config.dayTopics as Record<string, unknown>)) {
+        const day = WEEKDAYS.find((d) => k.trim().toLowerCase().startsWith(d.toLowerCase()));
+        if (day && s(v) !== "") draft.dayTopics[day] = s(v);
+      }
+    }
     for (const key of Object.keys(config)) {
       if (!MANAGED_CONFIG.includes(key)) draft.extraConfig[key] = config[key];
     }
@@ -150,7 +196,26 @@ export function serializeWizardDraft(draft: WizardDraft): string {
   if (isRostered(draft.category)) {
     if (draft.crewList !== "") config.crewList = draft.crewList;
     if (draft.rosterPattern !== "") config.rosterPattern = draft.rosterPattern;
-    if (draft.baseStartDate !== "") config.baseStartDate = draft.baseStartDate;
+  }
+  // the recurrence anchor: rostered cadences anchor the roster, anchored
+  // cadences project the recurrence (nth weekday / week parity) from it
+  if (
+    (isRostered(draft.category) || isAnchored(draft.category)) &&
+    draft.baseStartDate !== ""
+  ) {
+    config.baseStartDate = draft.baseStartDate;
+  }
+  if (draft.category === "weekly") {
+    const topics = draft.weekTopics.map((t) => t.trim());
+    while (topics.length > 0 && topics[topics.length - 1] === "") topics.pop();
+    if (topics.some((t) => t !== "")) config.weekTopics = topics;
+  }
+  if (isRostered(draft.category)) {
+    const days: Record<string, string> = {};
+    for (const [day, topic] of Object.entries(draft.dayTopics)) {
+      if (topic.trim() !== "") days[day] = topic.trim();
+    }
+    if (Object.keys(days).length > 0) config.dayTopics = days;
   }
   if (draft.columns !== "") config.columns = draft.columns;
 

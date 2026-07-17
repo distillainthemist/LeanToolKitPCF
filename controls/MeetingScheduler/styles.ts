@@ -151,6 +151,17 @@ export const MEETING_CSS = `
   font-variant-numeric: tabular-nums;
 }
 .ltk-ms-row-shift { font-size: 11px; color: var(--ltk-muted); }
+/* the occurrence's rotation topic */
+.ltk-ms-topic {
+  font-size: 12px;
+  font-style: italic;
+  color: var(--ltk-muted);
+  flex: 0 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .ltk-ms-crew {
   font-size: 10.5px;
   font-weight: 700;

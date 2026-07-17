@@ -233,6 +233,12 @@ export class MeetingSchedulerView {
       main.appendChild(badge);
     }
 
+    if (inst.topic !== "") {
+      const topic = el("span", "ltk-ms-topic", inst.topic);
+      topic.title = "This occurrence's rotation topic";
+      main.appendChild(topic);
+    }
+
     if (inst.rescheduledTo !== "") {
       const move = el("span", "ltk-ms-resched", `→ ${inst.rescheduledTo}`);
       move.title = "Rescheduled";

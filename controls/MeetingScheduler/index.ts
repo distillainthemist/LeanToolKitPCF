@@ -14,10 +14,12 @@ import {
   parseColumns,
   parseCrews,
   parseDaysOfWeek,
+  parseDayTopics,
   parseExistingMeetings,
   parseLocalDate,
   parseRosterPattern,
   parseTimeOfDay,
+  parseWeekTopics,
   SchedulerConfig,
   startOfDay,
 } from "./types";
@@ -126,6 +128,8 @@ export class MeetingScheduler implements ComponentFramework.StandardControl<IInp
       crews: parseCrews(rawOr(p.crewList, cfg(s, "crewList"))),
       roster: parseRosterPattern(rawOr(p.rosterPattern, cfg(s, "rosterPattern"))),
       baseStart: parseLocalDate(rawOr(p.baseStartDate, cfg(s, "baseStartDate"))) ?? today,
+      weekTopics: parseWeekTopics(rawOr(p.weekTopics, cfg(s, "weekTopics"))),
+      dayTopics: parseDayTopics(rawOr(p.dayTopics, cfg(s, "dayTopics"))),
     };
   }
 

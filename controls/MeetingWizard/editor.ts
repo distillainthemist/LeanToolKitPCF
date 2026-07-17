@@ -20,7 +20,10 @@ import {
   csvJoin,
   emptyDraft,
   hasWeekdays,
+  isAnchored,
   isRostered,
+  isSingleDay,
+  WEEKDAYS,
   WizardDraft,
 } from "./types";
 import { WIZARD_CSS } from "./styles";
@@ -36,8 +39,6 @@ interface Step {
   label: string;
   render: (body: HTMLElement) => void;
 }
-
-const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 export class MeetingWizardView {
   private readonly root: HTMLElement;
@@ -454,7 +455,9 @@ export class MeetingWizardView {
       )
     );
     if (hasWeekdays(d.category)) {
-      // weekday toggles read better than a chips field for a fixed set
+      // weekday toggles read better than a chips field for a fixed set;
+      // weekly/fortnightly meetings run on exactly ONE day
+      const single = isSingleDay(d.category);
       const days = el("div", "ltk-mw-days");
       const active = csvItems(d.daysOfWeek);
       for (const day of WEEKDAYS) {
@@ -463,16 +466,34 @@ export class MeetingWizardView {
         if (active.includes(day)) btn.classList.add("ltk-mw-day-on");
         btn.disabled = this.readOnly;
         btn.addEventListener("click", () => {
-          const next = active.includes(day)
-            ? active.filter((x) => x !== day)
-            : [...active, day];
+          const next = single
+            ? [day]
+            : active.includes(day)
+              ? active.filter((x) => x !== day)
+              : [...active, day];
           d.daysOfWeek = csvJoin(WEEKDAYS.filter((x) => next.includes(x)));
           this.commit();
           this.render();
         });
         days.appendChild(btn);
       }
-      body.appendChild(this.row("Days of week", days, "None selected = every day."));
+      body.appendChild(
+        single
+          ? this.row("Day of week", days, "The one day this meeting runs on.")
+          : this.row("Days of week", days, "None selected = every day.")
+      );
+    }
+    if (isAnchored(d.category)) {
+      body.appendChild(
+        this.row(
+          "First occurrence",
+          this.textInput(d.baseStartDate, (v) => (d.baseStartDate = v), "", "date"),
+          d.category === "fortnightly"
+            ? "Anchors which alternating week — occurrences fall in the same week as this date, every second week."
+            : "The recurrence projects forward from this date — e.g. its 2nd Tuesday repeats every " +
+                (d.category === "monthly" ? "month." : d.category === "quarterly" ? "quarter." : "year.")
+        )
+      );
     }
     body.appendChild(
       this.row(
@@ -490,6 +511,64 @@ export class MeetingWizardView {
         "How many days of instances the scheduler lists. Empty = 14."
       )
     );
+
+    // topic rotation: weekly rotates through the month, daily/shiftly by day
+    if (d.category === "weekly") {
+      const box = el("div", "ltk-mw-people");
+      const ORDINALS = ["1st week", "2nd week", "3rd week", "4th week", "5th week"];
+      ORDINALS.forEach((label, i) => {
+        const row = el("div", "ltk-mw-person");
+        row.appendChild(el("span", "ltk-mw-topic-ordinal", label));
+        const input = el("input", "ltk-mw-input") as HTMLInputElement;
+        input.type = "text";
+        input.value = this.draft.weekTopics[i] ?? "";
+        input.placeholder = i === 4 ? "Only when the month has a 5th" : "e.g. Safety focus";
+        input.disabled = this.readOnly;
+        input.addEventListener("change", () => {
+          while (this.draft.weekTopics.length <= i) this.draft.weekTopics.push("");
+          this.draft.weekTopics[i] = input.value.trim();
+          this.commit();
+        });
+        row.appendChild(input);
+        box.appendChild(row);
+      });
+      body.appendChild(
+        this.row(
+          "Topic rotation",
+          box,
+          "Optional — the meeting topic for the 1st to 5th occurrence each month; shown on every scheduler row."
+        )
+      );
+    }
+    if (isRostered(d.category)) {
+      const active = csvItems(d.daysOfWeek);
+      const scope = active.length > 0 ? active : WEEKDAYS;
+      const box = el("div", "ltk-mw-people");
+      for (const day of scope) {
+        const row = el("div", "ltk-mw-person");
+        row.appendChild(el("span", "ltk-mw-topic-ordinal", day));
+        const input = el("input", "ltk-mw-input") as HTMLInputElement;
+        input.type = "text";
+        input.value = this.draft.dayTopics[day] ?? "";
+        input.placeholder = "e.g. Quality focus";
+        input.disabled = this.readOnly;
+        input.addEventListener("change", () => {
+          const v = input.value.trim();
+          if (v === "") delete this.draft.dayTopics[day];
+          else this.draft.dayTopics[day] = v;
+          this.commit();
+        });
+        row.appendChild(input);
+        box.appendChild(row);
+      }
+      body.appendChild(
+        this.row(
+          "Topics by day",
+          box,
+          "Optional — the meeting topic for each day it runs; shown on every scheduler row."
+        )
+      );
+    }
   }
 
   private renderRoster(body: HTMLElement): void {
@@ -682,12 +761,36 @@ export class MeetingWizardView {
       [d.org.site, d.org.department, d.org.area].filter((v) => v !== "").join(" / ")
     );
     add("Cadence", CADENCES.find((c) => c.value === d.category)?.label ?? d.category);
-    if (hasWeekdays(d.category)) add("Days", d.daysOfWeek || "Every day");
+    if (hasWeekdays(d.category)) {
+      add(
+        isSingleDay(d.category) ? "Day" : "Days",
+        d.daysOfWeek || (isSingleDay(d.category) ? "" : "Every day")
+      );
+    }
+    if (isAnchored(d.category)) add("First occurrence", d.baseStartDate);
     add("Time", d.timeOfDay);
     if (isRostered(d.category)) {
       add("Crews", d.crewList);
       add("Roster", d.rosterPattern);
       add("First day shift", d.baseStartDate);
+    }
+    if (d.category === "weekly" && d.weekTopics.some((t) => t.trim() !== "")) {
+      const ords = ["1st", "2nd", "3rd", "4th", "5th"];
+      add(
+        "Topic rotation",
+        d.weekTopics
+          .map((t, i) => (t.trim() !== "" ? `${ords[i]}: ${t.trim()}` : ""))
+          .filter((v) => v !== "")
+          .join(" · ")
+      );
+    }
+    if (isRostered(d.category) && Object.keys(d.dayTopics).length > 0) {
+      add(
+        "Topics by day",
+        WEEKDAYS.filter((day) => d.dayTopics[day])
+          .map((day) => `${day}: ${d.dayTopics[day]}`)
+          .join(" · ")
+      );
     }
     add("Row columns", d.columns);
     add(
