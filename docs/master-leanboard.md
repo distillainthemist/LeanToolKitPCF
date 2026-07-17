@@ -119,6 +119,13 @@ Add **`ben_boardid`** (Text 80) to the
 [actions table](actions-dataverse.md), stamped by the app's upsert. Board
 rollups become one delegable filter (see recipes).
 
+### LeanHub config — two small tables
+
+| Table | Columns | Notes |
+| --- | --- | --- |
+| **LTK Site Settings** (`ben_ltksitesettings`) | Site Text (100), Protected Times (JSON) Multiline (10,000) | One row per site; the protected time zones (`[{label, color, days, start, end}]`) fed to LeanHub's calendar and edited from its Settings tab by site admins (`canEditSite`) |
+| **LTK User Prefs** (`ben_ltkuserprefs`) | User Lookup → systemuser (or Text whoId), Preferences (JSON) Multiline (4,000) | One row per person; LeanHub's calendar preferences, persisted from `preferencesOutputJSON` |
+
 ---
 
 ## The board manifest
@@ -335,6 +342,13 @@ Filter('LTK Actions',
    `submittedAt` for the app's create-board flow — recipe §6b of the
    [build kit](board-app-build.md). See
    [MeetingWizard](controls/MeetingWizard.md).
+7. **LeanHub (v0.8.0).** The person's home: a Calendar tab projecting every
+   meeting's cadence (shared recurrence engine, scoped person / area /
+   department / site, protected time zones as coloured bands), an Actions
+   tab (the viewer's actions from every source on the standard channel),
+   and a Settings tab (preferences + site protected-time editor). Tapping
+   an occurrence deep-links the board's scheduler via its new **`selectIso`**
+   input. See [LeanHub](controls/LeanHub.md).
 
 ---
 

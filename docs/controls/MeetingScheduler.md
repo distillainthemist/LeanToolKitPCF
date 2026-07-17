@@ -45,6 +45,12 @@ instance plus its custom-column values and a fresh timestamp:
 | `values` | `Record<string, string>` | Custom-column values, keyed by the column `key` (from the `columns` setting). |
 | `selectedAt` | string | ISO stamp, refreshed on **every** tap — so re-selecting the same row still fires `OnChange`. |
 
+**Deep-linking:** the `selectIso` input (change-of-value) selects an
+instance programmatically, exactly as a tap would — pass a full iso
+(`yyyy-mm-ddTHH:MM`) or a bare date. The LeanHub calendar uses this to
+land a user on the meeting they tapped; clear then re-set to reselect the
+same instance.
+
 ## attendeesJSON — crew-linked attendees
 
 Supply the meeting's roster on the **People (JSON)** input —

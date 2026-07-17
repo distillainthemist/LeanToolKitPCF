@@ -80,6 +80,51 @@ If(varBoard.ben_boardkind = "project",
    Navigate(BoardScreen))
 ```
 
+## 3a. Home screen — LeanHub
+
+The app's landing screen: one **LeanHub** control `cmpHub`.
+
+| Property | Binding |
+| --- | --- |
+| `meetingsJSON` | `JSON(ForAll(Filter('LTK Boards', ben_boardkind = "meeting") As B, { boardId: Text(B.ben_boardid), settingsJSON: B.ben_occurrencesettings }), JSONFormat.Compact)` |
+| `protectedTimesJSON` | `LookUp('LTK Site Settings', ben_site = varMySite).ben_protectedtimes` |
+| `actionsInputJSON` | the viewer's rollup — `JSON(Filter('LTK Actions', ben_assigneeids contains varMyWhoId), …)` reassembled per [actions-dataverse.md](actions-dataverse.md) |
+| `actionSourcesJSON` | `JSON(ForAll(colSlots As S, { instanceId: S.cardId, label: S.boardName & " · " & S.title }), JSONFormat.Compact)` |
+| `peopleJSON` / `viewerId` | the org roster; the signed-in person's whoId |
+| `preferencesJSON` | `LookUp('LTK User Prefs', ben_user = varMyWhoId).ben_preferences` |
+| `canEditSite` | the viewer's site-admin flag |
+
+`OnChange` — calendar taps navigate (deep-linking the scheduler), edits
+persist:
+
+```powerfx
+With({ sel: ParseJSON(Self.selectedMeetingJSON) },
+  If(Text(sel.selectedAt) <> varLastHubSel && Text(sel.selectedAt) <> "",
+     Set(varLastHubSel, Text(sel.selectedAt));
+     Set(varBoard, LookUp('LTK Boards', ben_boardid = Text(sel.boardId)));
+     Set(varManifest, ParseJSON(varBoard.ben_manifestjson));
+     Set(varSelectIso, Text(sel.iso));         // → the scheduler's selectIso
+     Navigate(BoardScreen)));
+If(Self.actionsOutputJSON <> varLastHubActions,
+   Set(varLastHubActions, Self.actionsOutputJSON);
+   UpsertActions(Self.actionsOutputJSON));     // recipe 3, actions-dataverse.md
+If(Self.preferencesOutputJSON <> varLastHubPrefs,
+   Set(varLastHubPrefs, Self.preferencesOutputJSON);
+   Patch('LTK User Prefs',
+       Coalesce(LookUp('LTK User Prefs', ben_user = varMyWhoId),
+                Defaults('LTK User Prefs')),
+       { ben_user: varMyWhoId, ben_preferences: Self.preferencesOutputJSON }));
+If(Self.protectedTimesOutputJSON <> varLastHubZones,
+   Set(varLastHubZones, Self.protectedTimesOutputJSON);
+   Patch('LTK Site Settings',
+       LookUp('LTK Site Settings', ben_site = varMySite),
+       { ben_protectedtimes: Self.protectedTimesOutputJSON }))
+```
+
+On the board screen, clear `varSelectIso` after the scheduler consumes it
+(`Set(varSelectIso, "")` in `OnVisible` after a short timer, or on leaving
+the screen) so the same meeting can be deep-linked again later.
+
 ## 4. Board screen
 
 Layout: a fixed **left pane** (meeting boards only) + the **tile grid**.
@@ -89,6 +134,7 @@ Layout: a fixed **left pane** (meeting boards only) + the **tile grid**.
 | Property | Binding |
 | --- | --- |
 | `settingsJSON` | `varBoard.ben_occurrencesettings` |
+| `selectIso` | `varSelectIso` — set by the LeanHub calendar (§3a); the scheduler lands with that instance selected |
 | `peopleJSON` | `varBoard.ben_peoplejson` |
 | `existingMeetingsJSON` | `JSON(ForAll(Filter('LTK Board Instances', ben_board.'LTK Board' = varBoard.'LTK Board') As I, { date: Text(I.ben_when, "yyyy-mm-dd hh:mm"), recordId: Text(I.'LTK Board Instance') }), JSONFormat.Compact)` |
 | `Visible` | `varBoard.ben_boardkind = "meeting"` |

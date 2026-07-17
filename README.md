@@ -30,6 +30,7 @@ control does and the exact schema of its `outputJSON` and `actionsOutputJSON`.
 | **MeetingScheduler** — cadence-driven meeting-instance selector (annually → shiftly, incl. crew rosters); emits the tapped instance | ✅ Phase 3 |
 | **EscalationViewer** — read/acknowledge view over escalated actions, grouped by source card | ✅ Phase 3 |
 | **MeetingWizard** — guided meeting setup (identity, org, cadence, crews, participants); emits a MeetingScheduler settings blob | ✅ Master board |
+| **LeanHub** — the person's home: cadence calendar (scoped, protected-time bands), my-actions list, preferences | ✅ Master board |
 | **AgendaCard** — runs a meeting from one card: pre-work checklist, timed agenda with per-item actions, outputs checklist | ✅ Master board |
 | **BoardGrid** — the master-leanboard tile wall: renders each card's stored snapshot in a grid, taps and drags become outputs | ✅ Master board |
 | **EmbedCard** — embedded Power BI report or any https page with a refresh button; the frame only reloads when it must | ✅ Master board |
