@@ -261,9 +261,10 @@ export class CardSettingsEditor {
       }
       body.appendChild(cfgGrid);
     }
-    // Board (composer mode only): the new-instance data policy + sources
+    // New meeting instance (composer mode only): THIS CARD's data policy +
+    // sources — each card on a board chooses its own
     if (this.boards !== null) {
-      body.appendChild(sectionLabel("Board"));
+      body.appendChild(sectionLabel("New meeting instance"));
       this.renderBoardSection(body);
     }
 
@@ -323,7 +324,8 @@ export class CardSettingsEditor {
     const policy = selectInput(b.policy, [
       { value: "", label: "Default (carry from previous)" },
       { value: "clear", label: "Clear — start each instance empty" },
-      { value: "carry", label: "Carry — keep the previous instance" },
+      { value: "carry", label: "Carry — copy the previous instance" },
+      { value: "shared", label: "Shared — one live document across instances" },
       { value: "link", label: "Link — show a card from another board" },
     ]);
     policy.disabled = this.readOnly;
@@ -336,7 +338,15 @@ export class CardSettingsEditor {
       this.commit();
       this.render(); // link pickers appear/disappear
     });
-    grid.appendChild(fieldRow("New-instance data", policy));
+    grid.appendChild(fieldRow("This card, each new instance", policy));
+    body.appendChild(
+      el(
+        "div",
+        "ltk-cs-note",
+        "Per card, applied when a meeting instance is created. Carry keeps a snapshot per meeting; " +
+          "Shared edits one running document (each meeting still archives its tile image at close)."
+      )
+    );
 
     if (b.policy === "link") {
       const srcBoard = selectInput(b.sourceBoardId, boardOptions("Choose a board…"));

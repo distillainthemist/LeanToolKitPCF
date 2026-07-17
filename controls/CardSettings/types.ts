@@ -20,7 +20,7 @@ export interface ThemeDraft {
  * ignore it). policy: "" = unset (the app defaults to carry).
  */
 export interface BoardDraft {
-  policy: "" | "clear" | "carry" | "link";
+  policy: "" | "clear" | "carry" | "link" | "shared";
   sourceBoardId: string;
   sourceCardId: string;
 }
@@ -97,7 +97,9 @@ export function parseDraft(raw: string | null | undefined): SettingsDraft {
     const b = o.board as Record<string, unknown>;
     const pol = s(b.policy).trim();
     draft.board.policy =
-      pol === "clear" || pol === "carry" || pol === "link" ? pol : "";
+      pol === "clear" || pol === "carry" || pol === "link" || pol === "shared"
+        ? pol
+        : "";
     const src = (b.source ?? {}) as Record<string, unknown>;
     draft.board.sourceBoardId = s(src.boardId).trim();
     draft.board.sourceCardId = s(src.cardId).trim();

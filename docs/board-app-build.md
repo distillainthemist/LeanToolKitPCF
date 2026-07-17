@@ -138,6 +138,11 @@ JSON(ForAll(Table(varManifest.slots) As S,
           cardType: Text(S.Value.cardType),
           title: Text(S.Value.title),
           svg: Coalesce(row.ben_tilesvg,
+               // shared cards: current instance shows the LIVE document's
+               // tile until the archive svg is stamped at close
+               LookUp('LTK Card Datas',
+                      IsBlank(ben_instance) && ben_boardid = varBoardId
+                      && ben_cardid = Text(S.Value.cardId)).ben_tilesvg,
                LookUp('LTK Card Catalogs',
                       ben_cardtype = Text(S.Value.cardType)).ben_defaultsvg) })),
     JSONFormat.Compact)
@@ -179,12 +184,27 @@ in a reusable way (canvas: a hidden button `btnCreateInstance` whose
 1. Patches the **LTK Board Instance** (settings snapshot, `open`).
 2. For each slot, creates its **LTK Card Data** row seeded per
    `settingsJSON.board.policy` — `clear` (blank), `carry` (previous
-   instance's row), `link` (latest row of `board.source`).
+   instance's row), `shared` (blank row; the live document is a separate
+   instance-less row, created once), `link` (latest row of `board.source`).
 3. Sets `varInstance` to the new row.
 
-**Close meeting** button: `Patch('LTK Board Instances', varInstance,
-{ ben_status: "closed" })` — with `varClosed` feeding every card's
-`readOnly`, a closed meeting becomes view-only automatically.
+**Close meeting** button — close the instance AND stamp the SVG archive
+for shared cards (freeze what this meeting saw):
+
+```powerfx
+Patch('LTK Board Instances', varInstance, { ben_status: "closed" });
+ForAll(Filter(colSlots, policy = "shared") As S,
+    Patch('LTK Card Datas',
+        LookUp('LTK Card Datas',
+            ben_instance.'LTK Board Instance' = varInstance.'LTK Board Instance'
+            && ben_cardid = S.cardId),
+        { ben_tilesvg: LookUp('LTK Card Datas',
+              IsBlank(ben_instance) && ben_boardid = varBoardId
+              && ben_cardid = S.cardId).ben_tilesvg }))
+```
+
+With `varClosed` feeding every card's `readOnly`, a closed meeting becomes
+view-only automatically.
 
 ## 6. Composer screen (board layout edit)
 
@@ -234,7 +254,7 @@ Common bindings (per control):
 
 | Property | Binding |
 | --- | --- |
-| `inputJSON` | `varSlot.rowRef.ben_outputjson` |
+| `inputJSON` | `varSlot.rowRef.ben_outputjson` — for a **shared** slot, `rowRef` is the card's **live row** (`IsBlank(ben_instance) && ben_boardid && ben_cardid`), not the instance row; resolve it when the slot is selected |
 | `settingsJSON` | `varSlot.settings` |
 | `instanceId` | `varSlot.cardId` |
 | `peopleJSON` | `Coalesce(varAttendees, varBoard.ben_peoplejson)` |

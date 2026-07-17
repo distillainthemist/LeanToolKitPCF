@@ -57,9 +57,13 @@ no runtime round-trip — adds a **Board** section to the form that edits the
 blob's `board` key (see the
 [master leanboard design](../master-leanboard.md)):
 
+- The section is titled **"New meeting instance"** — the policy is **per
+  card** (each slot's blob carries its own), applied by the app when a
+  meeting instance is created.
 - **Capture cards** get the new-instance **data policy**: default/carry,
-  `clear`, `carry`, or `link` — `link` adds source **board** and **card**
-  pickers fed from the manifest.
+  `clear`, `carry`, `shared` (one live document across instances, with a
+  per-meeting SVG archive stamped at close), or `link` — `link` adds source
+  **board** and **card** pickers fed from the manifest.
 - **ActionBoard / EscalationViewer** have no document to seed, so they get a
   rollup **source board** picker instead (`empty = the board this card sits
   on`), emitted as `board.source.boardId` with no policy.

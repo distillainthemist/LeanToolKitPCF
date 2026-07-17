@@ -80,11 +80,19 @@ paths, no parallel schema. A meeting board gets one instance per occurrence.
 
 | Column | Type | Notes |
 | --- | --- | --- |
-| Instance | Lookup → LTK Board Instance | |
+| Instance | Lookup → LTK Board Instance | **Blank on a `shared` card's live row** |
+| Board Id | Text (80) | The board's id — lets a live row (no instance) key by `(boardId, cardId)` |
 | Card Id | Text (80) | The slot's `cardId` — also the `instanceId` fed to the control (actions stamp themselves with it) |
 | Card Type | Text (40) | e.g. `FiveWhys` |
 | Output (JSON) | Multiline (1,000,000) | The card document |
 | Tile SVG | Multiline (200,000) | `svgExport` at last save — rendered inline by BoardGrid (a `data:image/png` URI is also accepted per tile, as a fallback) |
+
+A `shared` card has **one live row** (Instance blank, keyed by Board Id +
+Card Id) holding the running document, **plus** the normal per-instance
+rows — which for shared cards hold only the Tile SVG, stamped at meeting
+close. That per-instance SVG trail is the archive: opening a past instance
+renders what the card showed when that meeting ended, exactly as `carry`
+cards render their historical copies.
 
 One row per card (not one blob per instance) so that: patches are small and
 per-card (two people editing different cards never collide), the 1MB
@@ -157,11 +165,20 @@ Lives in `LTK Board.Manifest (JSON)`; snapshotted onto each instance.
 
 ### Data policies (`settingsJSON.board.policy`)
 
+The policy is **per card** — every slot's `settingsJSON` carries its own
+(the CardSettings section is titled "New meeting instance").
+
 | Policy | At instance creation |
 | --- | --- |
 | `clear` | Card row created with empty `outputJSON`; tile falls back to the catalog default |
-| `carry` (default) | Copy `outputJSON` + `Tile SVG` from the same card in the **previous instance** |
+| `carry` (default) | Copy `outputJSON` + `Tile SVG` from the same card in the **previous instance** — a snapshot per meeting |
+| `shared` | No copy: every instance reads and writes **one live row** (Instance blank). The per-instance row is created empty and receives only the **Tile SVG at meeting close** — the archive of what each meeting saw. Best for cumulative data that crews hand between them: KPI trends, Paretos |
 | `link` | Read the **latest** card row of `board.source.{boardId, cardId}`; feed as `inputJSON`, normally with `readOnly: true` in the slot settings |
+
+"Previous instance" for `carry` means **latest by scheduled datetime**, so
+shiftly boards carry deterministically across crews — the chain follows the
+meeting, never the crew; date-indexed documents (SQDPC, Winning
+Conditions) accumulate every crew's entries in one history.
 
 ActionBoard / EscalationViewer slots ignore `policy` (they render the actions
 table live); `board.source.boardId` overrides *which board's* actions they
@@ -231,8 +248,17 @@ With({ inst: Patch('LTK Board Instances', Defaults('LTK Board Instances'), {
     With({ policy: Coalesce(Text(S.Value.settingsJSON.board.policy), "carry"),
            srcBoard: Text(S.Value.settingsJSON.board.source.boardId),
            srcCard:  Text(S.Value.settingsJSON.board.source.cardId) },
+      // shared cards keep ONE live row — ensure it exists, never copy into it
+      If(policy = "shared" && IsBlank(LookUp('LTK Card Data',
+             IsBlank(ben_instance) && ben_boardid = varBoardId
+             && ben_cardid = Text(S.Value.cardId))),
+         Patch('LTK Card Data', Defaults('LTK Card Data'), {
+           ben_boardid: varBoardId,
+           ben_cardid: Text(S.Value.cardId),
+           ben_cardtype: Text(S.Value.cardType) }));
       Patch('LTK Card Data', Defaults('LTK Card Data'), {
         ben_instance: inst,
+        ben_boardid: varBoardId,
         ben_cardid: Text(S.Value.cardId),
         ben_cardtype: Text(S.Value.cardType),
         ben_outputjson:
@@ -242,17 +268,18 @@ With({ inst: Patch('LTK Board Instances', Defaults('LTK Board Instances'), {
                        && ben_cardid = Text(S.Value.cardId)).ben_outputjson,
             "link",  LookUp('LTK Card Data',
                        ben_cardid = srcCard).ben_outputjson,   // latest via sort/filter as needed
-            /* clear */ Blank()),
+            /* clear, shared */ Blank()),
         ben_tilesvg:
           If(policy = "carry",
              LookUp('LTK Card Data',
                     ben_instance.'LTK Board Instance' = prev.'LTK Board Instance'
                     && ben_cardid = Text(S.Value.cardId)).ben_tilesvg,
-             Blank()) }))))
+             Blank()) }))))   // shared: stays blank until stamped at close
 ```
 
 (Adapt lookups to taste — the shape is what matters: one Card Data row per
-slot, seeded per policy, snapshot stored on the instance.)
+slot, seeded per policy, snapshot stored on the instance; shared cards add
+a single live row per board that instance creation never touches.)
 
 ### Card editor save (on the card's `OnChange`)
 
@@ -278,8 +305,9 @@ Filter('LTK Actions',
 1. **CardSettings — board composer mode.** New optional input
    `boardsManifestJSON` (`[{boardId, name, cards:[{cardId, cardType, title}]}]`
    — all boards, supplied up front; there is no runtime round-trip). When
-   non-empty, the form gains a **Board** section that edits
-   `settingsJSON.board`: the data policy (`clear` / `carry` / `link`) with
+   non-empty, the form gains a **New meeting instance** section that edits
+   `settingsJSON.board`: the per-card data policy (`clear` / `carry` /
+   `shared` / `link`) with
    board + card pickers for `link`; ActionBoard / EscalationViewer get a
    source-board picker only. The `board` section rides inside the same
    settings blob (sparse, lossless), so the slot stores ONE blob.
