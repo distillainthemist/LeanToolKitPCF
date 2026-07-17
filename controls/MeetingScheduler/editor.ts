@@ -94,6 +94,22 @@ export class MeetingSchedulerView {
     this.render();
   }
 
+  /**
+   * Programmatic selection (the selectIso deep-link): behaves exactly like
+   * tapping the row — selects, renders, and emits through onSelect. Accepts
+   * a full iso ("yyyy-mm-ddTHH:MM") or a bare date (first instance that
+   * day). Unknown values no-op.
+   */
+  selectByIso(iso: string): void {
+    const target =
+      this.instances.find((i) => i.iso === iso) ??
+      this.instances.find((i) => i.date === iso);
+    if (!target) return;
+    this.selectedIso = target.iso;
+    this.render();
+    this.cb.onSelect(target, this.mergedValues(target));
+  }
+
   destroy(): void {
     this.root.remove();
   }

@@ -100,6 +100,13 @@
               usage="input"
               required="false" />
 
+    <property name="selectIso"
+              display-name-key="Select Instance"
+              description-key="Deep-link selection: when this VALUE changes to an instance iso (yyyy-mm-ddTHH:MM) or a bare date, that instance is selected exactly as if tapped — Selected Meeting and Attendees emit. Clear then re-set to reselect the same instance. Used by the LeanHub calendar to land on a meeting."
+              of-type="SingleLine.Text"
+              usage="input"
+              required="false" />
+
     <property name="peopleJSON"
               display-name-key="People (JSON)"
               description-key="The full roster this meeting draws attendees from: [{whoId, who, crew?}]. crew links a person to an entry in Crew List; people without a crew always attend. Feeds the Attendees output when an instance is selected."

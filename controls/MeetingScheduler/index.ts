@@ -8,6 +8,7 @@
 import { IInputs, IOutputs } from "./generated/ManifestTypes";
 import { MeetingSchedulerView } from "./editor";
 import {
+  attendeesFor,
   generateInstances,
   MeetingInstance,
   parseCategory,
@@ -35,6 +36,8 @@ export class MeetingScheduler implements ComponentFramework.StandardControl<IInp
 
   private selectedJson = "";
   private attendeesJson = "";
+  /** Last seen selectIso value (fires on change, like resetTrigger). */
+  private lastSelectIso = "";
   private people: Person[] = [];
 
   public init(
@@ -61,22 +64,15 @@ export class MeetingScheduler implements ComponentFramework.StandardControl<IInp
     this.applyAll(context);
   }
 
-  /**
-   * Expected attendees of the selected instance: people whose crew matches
-   * the instance's on-shift crew, plus everyone without a crew (they always
-   * attend). No crew on the instance (no roster) = the whole people list.
-   */
+  /** Expected attendees of the selected instance (shared crew filter). */
   private buildAttendeesJson(instanceCrew: string): string {
     if (this.people.length === 0) return "";
-    const crew = instanceCrew.trim().toLowerCase();
-    const attendees =
-      crew === ""
-        ? this.people
-        : this.people.filter(
-            (p) => p.crew === undefined || p.crew.toLowerCase() === crew
-          );
     return JSON.stringify(
-      attendees.map((p) => ({ whoId: p.whoId, who: p.who, crew: p.crew }))
+      attendeesFor(this.people, instanceCrew).map((p) => ({
+        whoId: p.whoId,
+        who: p.who,
+        crew: p.crew,
+      }))
     );
   }
 
@@ -153,5 +149,13 @@ export class MeetingScheduler implements ComponentFramework.StandardControl<IInp
       rawOr(p.existingMeetingsJSON, cfg(s, "existingMeetingsJSON"))
     );
     this.view.setInstances(generateInstances(config, existing, new Date()), config.crews);
+
+    // deep-link: a changed selectIso selects that instance as if tapped
+    // (LeanHub's calendar → board navigation lands pre-selected)
+    const sel = (p.selectIso?.raw ?? "").trim();
+    if (sel !== this.lastSelectIso) {
+      this.lastSelectIso = sel;
+      if (sel !== "") this.view.selectByIso(sel);
+    }
   }
 }
