@@ -2,7 +2,7 @@
 <manifest>
   <control namespace="BenOBrien"
            constructor="HeatmapCard"
-           version="0.7.1"
+           version="0.8.0"
            display-name-key="Heat Map Card"
            description-key="LeanToolKit heat map — pin issues onto a fixed image (floor plan, machine photo). Pins are numbered and severity-coloured; actions capture at pin time."
            control-type="standard">

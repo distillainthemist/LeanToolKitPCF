@@ -2,7 +2,7 @@
 <manifest>
   <control namespace="BenOBrien"
            constructor="Fishbone"
-           version="0.7.1"
+           version="0.8.0"
            display-name-key="Fishbone Diagram"
            description-key="LeanToolKit Fishbone / Ishikawa diagram — categorised root causes with votes and status, drag between bones, action capture. inputJSON preloads, resetTrigger reloads, outputJSON carries the edited document."
            control-type="standard">

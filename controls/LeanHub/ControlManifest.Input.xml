@@ -2,7 +2,7 @@
 <manifest>
   <control namespace="BenOBrien"
            constructor="LeanHub"
-           version="0.7.1"
+           version="0.8.0"
            display-name-key="Lean Hub"
            description-key="LeanToolKit home hub — three tabs. Calendar: every supplied meeting cadence projected onto a day/week grid, scoped to a person (crew-aware), area, department or site, with site-level protected time zones as coloured background bands; tapping an occurrence emits it with its boardId for navigation. Actions: the viewer's actions from every source, grouped and due-ordered, on the standard actions channel. Settings: calendar preferences plus the protected-time editor for site admins."
            control-type="standard">
