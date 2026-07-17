@@ -29,7 +29,7 @@ every MeetingScheduler row.
 | --- | --- |
 | `inputJSON` | An existing MeetingScheduler settings blob to edit; empty = new meeting. **Lossless:** keys the wizard does not manage (`theme`, `board`, `prompts`, unknown config keys) ride through verbatim, so wizard-editing a composed meeting never strips composer settings. |
 | `peopleJSON` | The roster to pick the owner and participants from: `[{whoId, who, crew?}]`. Participants outside the roster can be added by name. |
-| `orgJSON` | The hierarchical picklist tree: `[{site, departments:[{department, areas:[…]}]}]`. Site filters departments, department filters areas; a department with no areas skips the area field ("Whole department"). Empty input falls back to free-text organisation fields. |
+| `orgJSON` | The hierarchical picklist tree: `[{site, departments:[{department, areas:[…]}]}]`. Site filters departments, department filters areas. **Department and area are optional** — "Whole site" / "Whole department" — so a meeting can be site-, department- or area-level. Empty input falls back to free-text organisation fields. |
 | `resetTrigger` | Reloads `inputJSON` on change of value: `Set(varReset, Text(Now()))`. |
 
 Plus the standard chrome/styling surface (`cardTitle`, `prompts`, colours
