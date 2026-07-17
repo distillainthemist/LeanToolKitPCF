@@ -167,6 +167,14 @@ export const LEANHUB_CSS = `
   gap: 4px;
   max-width: 760px;
 }
+.ltk-lh-compose {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 6px;
+}
+.ltk-lh-compose-issue { flex: 1; min-width: 0; }
+.ltk-lh-compose-due { width: 140px; }
 .ltk-lh-group {
   font-size: 11px;
   font-weight: 700;
@@ -182,6 +190,14 @@ export const LEANHUB_CSS = `
   border: 1px solid var(--ltk-hairline);
   border-radius: 8px;
   padding: 8px 10px;
+}
+.ltk-lh-tick {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  margin: 0;
+  accent-color: var(--ltk-accent);
+  cursor: pointer;
 }
 .ltk-lh-action-main { flex: 1; min-width: 0; }
 .ltk-lh-action-issue { font-size: 13px; font-weight: 600; }

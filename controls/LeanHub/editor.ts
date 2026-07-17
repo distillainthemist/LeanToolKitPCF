@@ -13,7 +13,7 @@ import { applyThemeVars, defaultTheme, Theme } from "../../shared/tokens";
 import { LTK_BASE_CSS } from "../../shared/ui/baseCss";
 import { clear, el, ensureStylesheet } from "../../shared/ui/dom";
 import { parsePrompts, Prompts, renderGhost, renderTitleBar } from "../../shared/ui/chrome";
-import { isOverdue, LtkAction } from "../../shared/schema/actions";
+import { isOverdue, LtkAction, newAction } from "../../shared/schema/actions";
 import { Person } from "../../shared/schema/people";
 import { DAY_LABELS, MONTH_LABELS, isoLocal, startOfDay } from "../../shared/schema/recurrence";
 import { OrgSite } from "../../shared/schema/meeting";
@@ -421,6 +421,10 @@ export class LeanHubView {
   }
 
   private renderActions(body: HTMLElement): void {
+    const wrap = el("div", "ltk-lh-actions");
+    body.appendChild(wrap);
+    if (!this.readOnly) wrap.appendChild(this.renderActionComposer());
+
     const mine =
       this.viewerId === ""
         ? this.actions
@@ -429,7 +433,7 @@ export class LeanHubView {
           );
     const open = mine.filter((a) => a.status !== "done" && a.status !== "cancelled");
     if (open.length === 0) {
-      renderGhost(body, ["Nothing on your plate", "Actions assigned to you appear here."]);
+      renderGhost(wrap, ["Nothing on your plate", "Actions assigned to you appear here."]);
       return;
     }
 
@@ -438,10 +442,13 @@ export class LeanHubView {
     for (const a of open) {
       const label =
         this.sourceLabels[a.instanceId] ??
-        (a.instanceId !== "" ? a.instanceId : "Other");
+        (a.context.source === "leanhub"
+          ? "Personal"
+          : a.instanceId !== ""
+            ? a.instanceId
+            : "Other");
       groups.set(label, [...(groups.get(label) ?? []), a]);
     }
-    const wrap = el("div", "ltk-lh-actions");
     for (const [label, group] of groups) {
       wrap.appendChild(el("div", "ltk-lh-group", label));
       group.sort((a, b) => {
@@ -454,14 +461,58 @@ export class LeanHubView {
         wrap.appendChild(this.renderActionRow(action));
       }
     }
-    body.appendChild(wrap);
+  }
+
+  /**
+   * Ad-hoc capture: a personal action minted right here — assigned to the
+   * viewer, instanceId "hub-<viewerId>" (a stable personal bucket for the
+   * central-table upsert), grouped under Personal.
+   */
+  private renderActionComposer(): HTMLElement {
+    const row = el("div", "ltk-lh-compose");
+    const issue = el("input", "ltk-lh-input ltk-lh-compose-issue") as HTMLInputElement;
+    issue.type = "text";
+    issue.placeholder = "Add an action…";
+    const due = el("input", "ltk-lh-input ltk-lh-compose-due") as HTMLInputElement;
+    due.type = "date";
+    due.title = "Due date (optional)";
+    const add = el("button", "ltk-lh-btn", "＋ Add") as HTMLButtonElement;
+    add.type = "button";
+    const submit = () => {
+      const text = issue.value.trim();
+      if (text === "") return;
+      const me = this.people.find((p) => p.whoId === this.viewerId);
+      const action = newAction({ source: "leanhub", sourceId: "" });
+      action.instanceId = this.viewerId !== "" ? `hub-${this.viewerId}` : "hub";
+      action.issue = text;
+      action.due = due.value;
+      action.assignees = [
+        {
+          whoId: this.viewerId !== "" ? this.viewerId : "me",
+          who: me?.who ?? "Me",
+          done: false,
+        },
+      ];
+      this.actions.push(action);
+      this.cb.onActions(this.actions);
+      this.render();
+    };
+    issue.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        submit();
+      }
+    });
+    add.addEventListener("click", submit);
+    row.append(issue, due, add);
+    return row;
   }
 
   private renderActionRow(action: LtkAction): HTMLElement {
     const row = el("div", "ltk-lh-action");
     const my = this.myPart(action);
     if (my) {
-      const tick = el("input") as HTMLInputElement;
+      const tick = el("input", "ltk-lh-tick") as HTMLInputElement;
       tick.type = "checkbox";
       tick.checked = my.done;
       tick.title = "My part is done";
@@ -521,23 +572,23 @@ export class LeanHubView {
         )
       )
     );
-    if (this.prefs.scopeKind === "org") {
-      const cascade = el("div", "ltk-lh-cascade");
-      for (const sel of this.orgCascade(this.prefs.org, () => {
-        commit();
-        this.render(); // re-cascade the dependent selects
-      })) {
-        cascade.appendChild(sel);
-      }
-      form.appendChild(this.field("My site / department / area", cascade));
-      form.appendChild(
-        el(
-          "div",
-          "ltk-lh-help",
-          "Your home in the organisation — the cadence view opens here. Department and area are optional."
-        )
-      );
+    // the viewer's home location — set regardless of the default scope
+    // kind, because the Organisation view always lands here on switch
+    const cascade = el("div", "ltk-lh-cascade");
+    for (const sel of this.orgCascade(this.prefs.org, () => {
+      commit();
+      this.render(); // re-cascade the dependent selects
+    })) {
+      cascade.appendChild(sel);
     }
+    form.appendChild(this.field("My site / department / area", cascade));
+    form.appendChild(
+      el(
+        "div",
+        "ltk-lh-help",
+        "Your home in the organisation — switching to the Organisation view starts here. Department and area are optional."
+      )
+    );
     form.appendChild(
       this.field(
         "Default view",

@@ -53,11 +53,19 @@ friendly names), ordered overdue-first then by due date. The viewer can
 tick **their part** done; the full set emits on `actionsOutputJSON` for
 the usual `(instanceId, id)` upsert.
 
+**Ad-hoc capture:** an add row at the top mints a personal action on the
+spot — issue text + optional due date, assigned to the viewer, grouped
+under **Personal**. It carries `instanceId: "hub-<viewerId>"` (a stable
+personal bucket in the central actions table) and
+`context.source: "leanhub"`, and rides the same output channel.
+
 ## Settings tab
 
-- **Cadence preferences** — default scope (person, or the viewer's own
-  **default site / department / area** via the same cascade — department
-  and area optional), day/week view, week start, visible hours — emitted
+- **Cadence preferences** — default scope, plus the viewer's own
+  **default site / department / area** (always settable, whichever scope
+  they default to — it is where the Organisation view lands on switch;
+  department and area optional), day/week view, week start, visible
+  hours — emitted
   on `preferencesOutputJSON` as `{scopeKind: person|org, person,
   org:{site, department, area}, view, weekStart, dayStart, dayEnd}`;
   persist per user and feed back into `preferencesJSON`. Old flat

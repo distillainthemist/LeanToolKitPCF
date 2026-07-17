@@ -79,7 +79,7 @@
 
     <property name="actionsOutputJSON"
               display-name-key="Actions Output (JSON)"
-              description-key="The full current action set after an edit (my-part-done toggles), each action keeping its own instanceId — upsert to the central actions table by (instanceId, id)."
+              description-key="The full current action set after an edit — my-part-done toggles and ad-hoc additions (new personal actions carry instanceId hub-viewerId and context.source leanhub). Each action keeps its own instanceId — upsert to the central actions table by (instanceId, id)."
               of-type="Multiple"
               usage="output" />
 
