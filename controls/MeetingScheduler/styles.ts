@@ -2,6 +2,65 @@
 // Crew badge colours are set inline (Safari rule).
 
 export const MEETING_CSS = `
+/* ---- meeting identity strip (settingsJSON.meeting) ---- */
+.ltk-ms-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 12px 6px;
+  border-bottom: 1px solid var(--ltk-hairline);
+  flex: 0 0 auto;
+}
+.ltk-ms-meta-line {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  color: var(--ltk-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ltk-ms-meta-toggle {
+  flex: none;
+  border: none;
+  background: none;
+  color: var(--ltk-muted);
+  font-size: 12px;
+  cursor: pointer;
+  padding: 2px 4px;
+}
+.ltk-ms-meta-toggle:hover { color: var(--ltk-accent); }
+.ltk-ms-about {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--ltk-hairline);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+.ltk-ms-about-purpose { font-size: 13px; line-height: 1.45; }
+.ltk-ms-about-people { display: flex; flex-wrap: wrap; gap: 6px; }
+.ltk-ms-person {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  border: 1px solid var(--ltk-hairline);
+  border-radius: 999px;
+  padding: 2px 8px;
+}
+.ltk-ms-person-crew {
+  font-size: 10px;
+  font-weight: 700;
+  border-radius: 999px;
+  min-width: 16px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 4px;
+}
+
 .ltk-ms-body {
   flex: 1;
   min-height: 0;

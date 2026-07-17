@@ -9,6 +9,7 @@ import { LTK_BASE_CSS } from "../../shared/ui/baseCss";
 import { clear, el, ensureStylesheet } from "../../shared/ui/dom";
 import { parsePrompts, Prompts, renderGhost, renderTitleBar } from "../../shared/ui/chrome";
 import { todayIso } from "../../shared/schema/id";
+import { MeetingInfo } from "../../shared/schema/meeting";
 import { MeetingColumn, MeetingInstance } from "./types";
 import { MEETING_CSS } from "./styles";
 
@@ -33,6 +34,9 @@ export class MeetingSchedulerView {
   private columns: MeetingColumn[] = [];
   // in-card edits to column values, by instance iso then column key
   private edits: Record<string, Record<string, string>> = {};
+  /** The settings blob's meeting section (owner, purpose, org, people). */
+  private meetingInfo: MeetingInfo | null = null;
+  private aboutOpen = false;
 
   constructor(host: HTMLElement, private readonly cb: MeetingViewCallbacks) {
     ensureStylesheet("ltk-base-css", LTK_BASE_CSS);
@@ -84,6 +88,12 @@ export class MeetingSchedulerView {
     }
   }
 
+  setMeetingInfo(info: MeetingInfo | null): void {
+    if (JSON.stringify(info) === JSON.stringify(this.meetingInfo)) return;
+    this.meetingInfo = info;
+    this.render();
+  }
+
   destroy(): void {
     this.root.remove();
   }
@@ -118,6 +128,7 @@ export class MeetingSchedulerView {
     clear(this.root);
     applyThemeVars(this.root, this.theme);
     renderTitleBar(this.root, this.cardTitle, this.prompts);
+    this.renderMeetingInfo();
 
     const body = el("div", "ltk-ms-body");
     this.root.appendChild(body);
@@ -140,6 +151,60 @@ export class MeetingSchedulerView {
     body.appendChild(
       el("div", "ltk-ms-hint", "Tap a meeting to open it — rows without a record create one.")
     );
+  }
+
+  /**
+   * The meeting's identity, under the title bar: a quiet one-line strip
+   * (owner · site / department / area) with a disclosure toggle revealing
+   * the purpose and the participant list with crew badges.
+   */
+  private renderMeetingInfo(): void {
+    const info = this.meetingInfo;
+    if (!info) return;
+
+    const strip = el("div", "ltk-ms-meta");
+    const bits: string[] = [];
+    if (info.owner) bits.push(`Owner ${info.owner.who}`);
+    const org = [info.org.site, info.org.department, info.org.area]
+      .filter((v) => v !== "")
+      .join(" / ");
+    if (org !== "") bits.push(org);
+    strip.appendChild(el("span", "ltk-ms-meta-line", bits.join(" · ")));
+
+    const hasMore = info.purpose !== "" || info.participants.length > 0;
+    if (hasMore) {
+      const toggle = el("button", "ltk-ms-meta-toggle") as HTMLButtonElement;
+      toggle.type = "button";
+      toggle.textContent = this.aboutOpen ? "Hide ▴" : "About ▾";
+      toggle.addEventListener("click", () => {
+        this.aboutOpen = !this.aboutOpen;
+        this.render();
+      });
+      strip.appendChild(toggle);
+    }
+    this.root.appendChild(strip);
+
+    if (!this.aboutOpen || !hasMore) return;
+    const about = el("div", "ltk-ms-about");
+    if (info.purpose !== "") {
+      about.appendChild(el("div", "ltk-ms-about-purpose", info.purpose));
+    }
+    if (info.participants.length > 0) {
+      const people = el("div", "ltk-ms-about-people");
+      for (const p of info.participants) {
+        const chip = el("span", "ltk-ms-person", p.who);
+        if (p.crew !== "") {
+          const badge = el("span", "ltk-ms-person-crew", p.crew);
+          const c = this.crewColor(p.crew);
+          badge.style.background = c;
+          badge.style.color = textOn(c);
+          chip.appendChild(badge);
+        }
+        people.appendChild(chip);
+      }
+      about.appendChild(people);
+    }
+    this.root.appendChild(about);
   }
 
   private renderRow(inst: MeetingInstance, today: string): HTMLElement {

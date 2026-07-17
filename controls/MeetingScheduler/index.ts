@@ -23,6 +23,7 @@ import {
 } from "./types";
 import { cfg, enumOr, LtkSettings, parseSettings, rawOr, readTheme, str } from "../../shared/pcf/standard";
 import { nowIso } from "../../shared/schema/id";
+import { parseMeetingInfo } from "../../shared/schema/meeting";
 import { parsePeople, Person } from "../../shared/schema/people";
 
 export class MeetingScheduler implements ComponentFramework.StandardControl<IInputs, IOutputs> {
@@ -139,6 +140,7 @@ export class MeetingScheduler implements ComponentFramework.StandardControl<IInp
     const disabled = context.mode.isControlDisabled === true;
     this.view.setReadOnly(disabled || p.readOnly?.raw === true || s.readOnly);
 
+    this.view.setMeetingInfo(parseMeetingInfo(p.settingsJSON?.raw));
     this.view.setColumns(parseColumns(rawOr(p.columns, cfg(s, "columns"))));
     this.people = parsePeople(rawOr(p.peopleJSON, cfg(s, "peopleJSON")));
 

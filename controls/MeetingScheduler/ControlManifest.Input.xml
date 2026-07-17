@@ -107,7 +107,7 @@
 
     <property name="settingsJSON"
               display-name-key="Settings (JSON)"
-              description-key="Consolidated configuration: {title, prompts, readOnly, theme:{background,foreground,accent,legend,font}, config:{finalDate, daysPrior, category, daysOfWeek, timeOfDay, crewList, rosterPattern, baseStartDate, existingMeetingsJSON, columns}}. Settings are the base; a non-empty discrete text input overrides its key (enum inputs: the settings key wins when present)."
+              description-key="Consolidated configuration: {title, prompts, readOnly, theme:{background,foreground,accent,titlebar,legend,font}, config:{finalDate, daysPrior, category, daysOfWeek, timeOfDay, crewList, rosterPattern, baseStartDate, existingMeetingsJSON, columns}, meeting:{purpose, owner, org:{site,department,area}, participants}}. The meeting section (written by MeetingWizard) renders as an identity strip under the title bar. Settings are the base; a non-empty discrete text input overrides its key (enum inputs: the settings key wins when present)."
               of-type="Multiple"
               usage="input"
               required="false" />
