@@ -225,6 +225,8 @@ export const LEANHUB_CSS = `
 .ltk-lh-help { font-size: 12px; color: var(--ltk-muted); }
 .ltk-lh-field { display: flex; align-items: center; gap: 10px; }
 .ltk-lh-label { flex: 0 0 130px; font-size: 12.5px; font-weight: 600; }
+.ltk-lh-cascade { display: flex; gap: 8px; flex-wrap: wrap; }
+.ltk-lh-cascade select.ltk-lh-input { width: auto; max-width: 200px; }
 
 /* protected time editor */
 .ltk-lh-zone {

@@ -16,16 +16,19 @@ import { parsePrompts, Prompts, renderGhost, renderTitleBar } from "../../shared
 import { isOverdue, LtkAction } from "../../shared/schema/actions";
 import { Person } from "../../shared/schema/people";
 import { DAY_LABELS, MONTH_LABELS, isoLocal, startOfDay } from "../../shared/schema/recurrence";
+import { OrgSite } from "../../shared/schema/meeting";
 import {
   defaultPrefs,
+  deriveOrgTree,
   HubInstance,
   HubMeeting,
   HubPrefs,
-  instanceInScope,
+  instanceForPerson,
+  meetingMatchesOrg,
+  OrgScope,
   projectInstances,
   ProtectedTime,
   ScopeKind,
-  scopeOptions,
   timeToMinutes,
 } from "./types";
 import { LEANHUB_CSS } from "./styles";
@@ -62,9 +65,12 @@ export class LeanHubView {
   private tab: Tab = "calendar";
   private anchor: Date = startOfDay(new Date());
   private scopeKind: ScopeKind = "person";
-  private scopeValue = "";
+  private scopePerson = "";
+  private scopeOrg: OrgScope = { site: "", department: "", area: "" };
   private scopeTouched = false;
   private view: "day" | "week" = "week";
+  /** Supplied org tree; empty = derive from the meetings at render. */
+  private orgTree: OrgSite[] = [];
 
   constructor(
     host: HTMLElement,
@@ -96,9 +102,16 @@ export class LeanHubView {
     this.prefs = prefs;
     if (!this.scopeTouched) {
       this.scopeKind = prefs.scopeKind;
-      this.scopeValue = prefs.scopeValue;
+      this.scopePerson = prefs.person;
+      this.scopeOrg = { ...prefs.org };
       this.view = prefs.view;
     }
+    this.render();
+  }
+
+  setOrgTree(tree: OrgSite[]): void {
+    if (JSON.stringify(tree) === JSON.stringify(this.orgTree)) return;
+    this.orgTree = tree;
     this.render();
   }
 
@@ -115,10 +128,10 @@ export class LeanHubView {
     if (
       !this.scopeTouched &&
       this.scopeKind === "person" &&
-      this.scopeValue === "" &&
+      this.scopePerson === "" &&
       viewerId !== ""
     ) {
-      this.scopeValue = viewerId;
+      this.scopePerson = viewerId;
     }
     this.render();
   }
@@ -176,7 +189,7 @@ export class LeanHubView {
 
     const tabs = el("div", "ltk-lh-tabs");
     const defs: { key: Tab; label: string }[] = [
-      { key: "calendar", label: "Calendar" },
+      { key: "calendar", label: "Cadence" },
       { key: "actions", label: "Actions" },
       { key: "settings", label: "Settings" },
     ];
@@ -216,49 +229,53 @@ export class LeanHubView {
 
     // toolbar: scope + view + navigation
     const bar = el("div", "ltk-lh-bar");
-    const kindSel = this.select(
-      this.scopeKind,
-      [
-        { value: "person", label: "Person" },
-        { value: "area", label: "Area" },
-        { value: "department", label: "Department" },
-        { value: "site", label: "Site" },
-      ],
-      (v) => {
-        this.scopeKind = v as ScopeKind;
-        this.scopeTouched = true;
-        this.scopeValue =
-          this.scopeKind === "person"
-            ? this.viewerId
-            : (scopeOptions(this.meetings, this.scopeKind)[0] ?? "");
-        this.render();
-      }
+    bar.appendChild(
+      this.select(
+        this.scopeKind,
+        [
+          { value: "person", label: "Person" },
+          { value: "org", label: "Organisation" },
+        ],
+        (v) => {
+          this.scopeKind = v as ScopeKind;
+          this.scopeTouched = true;
+          if (this.scopeKind === "person" && this.scopePerson === "") {
+            this.scopePerson = this.viewerId;
+          }
+          if (this.scopeKind === "org" && this.scopeOrg.site === "") {
+            this.scopeOrg = { ...this.prefs.org };
+          }
+          this.render();
+        }
+      )
     );
-    bar.appendChild(kindSel);
 
-    const valueOptions =
-      this.scopeKind === "person"
-        ? [
+    if (this.scopeKind === "person") {
+      bar.appendChild(
+        this.select(
+          this.scopePerson,
+          [
             { value: "", label: "Everyone" },
             ...this.people.map((p) => ({
               value: p.whoId,
               label: p.whoId === this.viewerId ? `${p.who} (me)` : p.who,
             })),
-          ]
-        : [
-            { value: "", label: "All" },
-            ...scopeOptions(this.meetings, this.scopeKind).map((v) => ({
-              value: v,
-              label: v,
-            })),
-          ];
-    bar.appendChild(
-      this.select(this.scopeValue, valueOptions, (v) => {
-        this.scopeValue = v;
+          ],
+          (v) => {
+            this.scopePerson = v;
+            this.scopeTouched = true;
+            this.render();
+          }
+        )
+      );
+    } else {
+      for (const sel of this.orgCascade(this.scopeOrg, () => {
         this.scopeTouched = true;
         this.render();
-      })
-    );
+      })) {
+        bar.appendChild(sel);
+      }
+    }
 
     const viewBtn = el(
       "button",
@@ -306,9 +323,10 @@ export class LeanHubView {
     const byId = new Map(this.meetings.map((m) => [m.boardId, m]));
     const instances = projectInstances(this.meetings, from, to).filter((inst) => {
       const meeting = byId.get(inst.boardId);
-      return meeting
-        ? instanceInScope(meeting, inst, this.scopeKind, this.scopeValue)
-        : false;
+      if (!meeting) return false;
+      return this.scopeKind === "person"
+        ? instanceForPerson(meeting, inst, this.scopePerson)
+        : meetingMatchesOrg(meeting, this.scopeOrg);
     });
 
     const { dayStart, dayEnd } = this.prefs;
@@ -499,7 +517,7 @@ export class LeanHubView {
     body.appendChild(form);
     const commit = () => this.cb.onPrefs(this.prefs);
 
-    form.appendChild(el("div", "ltk-lh-section", "Calendar preferences"));
+    form.appendChild(el("div", "ltk-lh-section", "Cadence preferences"));
     form.appendChild(
       this.field(
         "Default scope",
@@ -507,18 +525,33 @@ export class LeanHubView {
           this.prefs.scopeKind,
           [
             { value: "person", label: "Person (me)" },
-            { value: "area", label: "Area" },
-            { value: "department", label: "Department" },
-            { value: "site", label: "Site" },
+            { value: "org", label: "Organisation" },
           ],
           (v) => {
             this.prefs.scopeKind = v as ScopeKind;
-            this.prefs.scopeValue = "";
             commit();
+            this.render(); // the default-org cascade appears/disappears
           }
         )
       )
     );
+    if (this.prefs.scopeKind === "org") {
+      const cascade = el("div", "ltk-lh-cascade");
+      for (const sel of this.orgCascade(this.prefs.org, () => {
+        commit();
+        this.render(); // re-cascade the dependent selects
+      })) {
+        cascade.appendChild(sel);
+      }
+      form.appendChild(this.field("My site / department / area", cascade));
+      form.appendChild(
+        el(
+          "div",
+          "ltk-lh-help",
+          "Your home in the organisation — the cadence view opens here. Department and area are optional."
+        )
+      );
+    }
     form.appendChild(
       this.field(
         "Default view",
@@ -691,6 +724,66 @@ export class LeanHubView {
       row.appendChild(remove);
     }
     return row;
+  }
+
+  /**
+   * The cascading site → department → area selects for an OrgScope,
+   * mutating `scope` in place and calling `changed` after each pick.
+   * Department and area appear only when applicable (parent chosen and
+   * options exist) — a meeting can be site- or department-level only.
+   */
+  private orgCascade(scope: OrgScope, changed: () => void): HTMLSelectElement[] {
+    const tree = this.orgTree.length > 0 ? this.orgTree : deriveOrgTree(this.meetings);
+    const out: HTMLSelectElement[] = [];
+    out.push(
+      this.select(
+        scope.site,
+        [
+          { value: "", label: "All sites" },
+          ...tree.map((s) => ({ value: s.site, label: s.site })),
+        ],
+        (v) => {
+          scope.site = v;
+          scope.department = "";
+          scope.area = "";
+          changed();
+        }
+      )
+    );
+    const site = tree.find((s) => s.site === scope.site);
+    if (site && site.departments.length > 0) {
+      out.push(
+        this.select(
+          scope.department,
+          [
+            { value: "", label: "Whole site" },
+            ...site.departments.map((d) => ({ value: d.department, label: d.department })),
+          ],
+          (v) => {
+            scope.department = v;
+            scope.area = "";
+            changed();
+          }
+        )
+      );
+      const dept = site.departments.find((d) => d.department === scope.department);
+      if (dept && dept.areas.length > 0) {
+        out.push(
+          this.select(
+            scope.area,
+            [
+              { value: "", label: "Whole department" },
+              ...dept.areas.map((a) => ({ value: a, label: a })),
+            ],
+            (v) => {
+              scope.area = v;
+              changed();
+            }
+          )
+        );
+      }
+    }
+    return out;
   }
 
   // ---- small helpers ----

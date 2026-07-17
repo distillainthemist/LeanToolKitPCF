@@ -20,6 +20,7 @@ import {
 import { LtkAction, parseActionsJson, serializeActions } from "../../shared/schema/actions";
 import { rawOr, readTheme, str } from "../../shared/pcf/standard";
 import { nowIso } from "../../shared/schema/id";
+import { parseOrgTree } from "../../shared/schema/meeting";
 import { parsePeople } from "../../shared/schema/people";
 
 const ASPECT_RATIO = 1.6;
@@ -114,6 +115,7 @@ export class LeanHub implements ComponentFramework.StandardControl<IInputs, IOut
     this.view.setReadOnly(disabled || p.readOnly?.raw === true);
 
     this.view.setMeetings(parseHubMeetings(p.meetingsJSON?.raw));
+    this.view.setOrgTree(parseOrgTree(p.orgJSON?.raw));
     this.view.setPeople(parsePeople(p.peopleJSON?.raw), str(p.viewerId));
     this.view.setCanEditSite(p.canEditSite?.raw === true);
     this.view.setSourceLabels(parseSourceLabels(p.actionSourcesJSON?.raw));

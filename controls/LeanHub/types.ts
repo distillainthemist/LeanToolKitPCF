@@ -21,7 +21,7 @@ import {
   SchedulerConfig,
   startOfDay,
 } from "../../shared/schema/recurrence";
-import { MeetingInfo, parseMeetingInfo } from "../../shared/schema/meeting";
+import { MeetingInfo, OrgSite, parseMeetingInfo } from "../../shared/schema/meeting";
 
 /** One meeting definition on the calendar: a board + its scheduler blob. */
 export interface HubMeeting {
@@ -49,11 +49,21 @@ export interface ProtectedTime {
   end: string; // "HH:MM"
 }
 
-export type ScopeKind = "person" | "area" | "department" | "site";
+export type ScopeKind = "person" | "org";
+
+/** A cascading organisation scope; "" at any level means all below it. */
+export interface OrgScope {
+  site: string;
+  department: string;
+  area: string;
+}
 
 export interface HubPrefs {
   scopeKind: ScopeKind;
-  scopeValue: string; // whoId for person, org value otherwise; "" = viewer/all
+  /** Person scope: a whoId; "" = the viewer. */
+  person: string;
+  /** The viewer's default site / department / area (cascading). */
+  org: OrgScope;
   view: "day" | "week";
   weekStart: 0 | 1; // Sun | Mon
   dayStart: number; // first visible hour
@@ -63,7 +73,8 @@ export interface HubPrefs {
 export function defaultPrefs(): HubPrefs {
   return {
     scopeKind: "person",
-    scopeValue: "",
+    person: "",
+    org: { site: "", department: "", area: "" },
     view: "week",
     weekStart: 1,
     dayStart: 6,
@@ -158,39 +169,61 @@ export function projectInstances(
 }
 
 /**
- * Does this occurrence concern the scope? Org scopes match the meeting's
- * org section. Person scope: the owner (attends everything) or a
- * participant — crew-linked participants only when their crew is on shift.
+ * Person scope: the owner (attends everything) or a participant —
+ * crew-linked participants only when their crew is on shift.
  */
-export function instanceInScope(
+export function instanceForPerson(
   meeting: HubMeeting,
   inst: HubInstance,
-  kind: ScopeKind,
-  value: string
+  whoId: string
 ): boolean {
-  if (value === "") return true;
-  const org = meeting.info?.org;
-  if (kind === "site") return org?.site === value;
-  if (kind === "department") return org?.department === value;
-  if (kind === "area") return org?.area === value;
-  // person
-  if (meeting.info?.owner?.whoId === value) return true;
-  const p = meeting.info?.participants.find((x) => x.whoId === value);
+  if (whoId === "") return true;
+  if (meeting.info?.owner?.whoId === whoId) return true;
+  const p = meeting.info?.participants.find((x) => x.whoId === whoId);
   if (!p) return false;
   if (p.crew === "" || inst.crew === "") return true;
   return p.crew.toLowerCase() === inst.crew.toLowerCase();
 }
 
-/** The distinct org values available for a scope kind, for the selector. */
-export function scopeOptions(meetings: HubMeeting[], kind: ScopeKind): string[] {
-  const values = new Set<string>();
+/**
+ * Cascading org scope: each set level narrows — site alone shows the whole
+ * site (department- and area-level meetings included); site + department
+ * narrows to that department; area narrows further. All empty = everything.
+ */
+export function meetingMatchesOrg(meeting: HubMeeting, scope: OrgScope): boolean {
+  const org = meeting.info?.org;
+  if (scope.site !== "" && org?.site !== scope.site) return false;
+  if (scope.department !== "" && org?.department !== scope.department) return false;
+  if (scope.area !== "" && org?.area !== scope.area) return false;
+  return true;
+}
+
+/**
+ * An org tree derived from the meetings themselves — the fallback when no
+ * orgJSON is supplied. Sites → their departments → their areas, as seen in
+ * the meeting identities.
+ */
+export function deriveOrgTree(meetings: HubMeeting[]): OrgSite[] {
+  const sites = new Map<string, Map<string, Set<string>>>();
   for (const m of meetings) {
     const org = m.info?.org;
-    const v =
-      kind === "site" ? org?.site : kind === "department" ? org?.department : org?.area;
-    if (v) values.add(v);
+    if (!org || org.site === "") continue;
+    const depts = sites.get(org.site) ?? new Map<string, Set<string>>();
+    if (org.department !== "") {
+      const areas = depts.get(org.department) ?? new Set<string>();
+      if (org.area !== "") areas.add(org.area);
+      depts.set(org.department, areas);
+    }
+    sites.set(org.site, depts);
   }
-  return [...values].sort();
+  return [...sites.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([site, depts]) => ({
+      site,
+      departments: [...depts.entries()]
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([department, areas]) => ({ department, areas: [...areas].sort() })),
+    }));
 }
 
 // ---- protected time zones ----
@@ -256,10 +289,22 @@ export function parsePrefs(raw: string | null | undefined): HubPrefs {
   try {
     const o = JSON.parse(t) as Record<string, unknown>;
     const kind = asStr(o.scopeKind);
-    if (["person", "area", "department", "site"].includes(kind)) {
-      d.scopeKind = kind as ScopeKind;
+    if (kind === "person" || kind === "org") d.scopeKind = kind;
+    d.person = asStr(o.person);
+    const org = (o.org ?? {}) as Record<string, unknown>;
+    d.org = {
+      site: asStr(org.site),
+      department: asStr(org.department),
+      area: asStr(org.area),
+    };
+    // pre-cascade blobs: {scopeKind: site|department|area, scopeValue}
+    if (["site", "department", "area"].includes(kind)) {
+      d.scopeKind = "org";
+      const value = asStr(o.scopeValue);
+      if (kind === "site") d.org.site = value;
+      if (kind === "department") d.org.department = value;
+      if (kind === "area") d.org.area = value;
     }
-    d.scopeValue = asStr(o.scopeValue);
     if (asStr(o.view) === "day") d.view = "day";
     if (o.weekStart === 0) d.weekStart = 0;
     const start = Number(o.dayStart);
