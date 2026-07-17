@@ -90,6 +90,7 @@ The app's landing screen: one **LeanHub** control `cmpHub`.
 | `protectedTimesJSON` | `LookUp('LTK Site Settings', ben_site = varMySite).ben_protectedtimes` |
 | `actionsInputJSON` | the viewer's rollup — `JSON(Filter('LTK Actions', ben_assigneeids contains varMyWhoId), …)` reassembled per [actions-dataverse.md](actions-dataverse.md) |
 | `actionSourcesJSON` | `JSON(ForAll(colSlots As S, { instanceId: S.cardId, label: S.boardName & " · " & S.title }), JSONFormat.Compact)` |
+| `orgJSON` | `varOrgTree` — the same site/department/area tree bound to MeetingWizard (§6b) |
 | `peopleJSON` / `viewerId` | the org roster; the signed-in person's whoId |
 | `preferencesJSON` | `LookUp('LTK User Prefs', ben_user = varMyWhoId).ben_preferences` |
 | `canEditSite` | the viewer's site-admin flag |

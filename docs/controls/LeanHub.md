@@ -1,6 +1,6 @@
 # LeanHub (`LeanHub`)
 
-The **person's home** — a tabbed shell (Calendar / Actions / Settings)
+The **person's home** — a tabbed shell (Cadence / Actions / Settings)
 that fronts the whole meeting system. Like CardSettings and MeetingWizard
 it is a **shell, not a board card**: no document, no snapshots, everything
 in and out is JSON.
@@ -8,7 +8,7 @@ in and out is JSON.
 - **Schema id:** none · **Document:** ✖ · **Actions:** standard channel ·
   **Snapshots:** ✖
 
-## Calendar tab
+## Cadence tab
 
 Every supplied meeting's cadence is projected onto a day/week grid by the
 **shared recurrence engine** (`shared/schema/recurrence.ts` — the same
@@ -16,12 +16,12 @@ maths as MeetingScheduler, so the calendar and the scheduler can never
 disagree). Occurrence chips carry the meeting's title-strip colour, time,
 shift, crew and rotation topic.
 
-**Scope selector** — person / area / department / site:
+**Scope selector** — Person, or a **cascading Organisation** scope:
 
 | Scope | An occurrence shows when |
 | --- | --- |
 | Person | they are the **owner** (attends everything) or a **participant** — crew-linked participants only when their crew is on shift. Defaults to the viewer. |
-| Area / Department / Site | the meeting's `meeting.org` matches (site-level meetings appear for their whole site) |
+| Organisation (site → department → area) | each chosen level narrows the meetings' `meeting.org`: a site alone shows the whole site (department- and area-level meetings included); adding a department narrows to it; adding an area narrows further. The cascade tree comes from `orgJSON` (the same tree MeetingWizard uses) or is derived from the meetings when absent. |
 
 **Protected time zones** render as coloured background bands behind the
 chips — field leadership time, 1:1s, problem solving — from
@@ -51,9 +51,13 @@ the usual `(instanceId, id)` upsert.
 
 ## Settings tab
 
-- **Calendar preferences** — default scope, day/week view, week start,
-  visible hours — emitted on `preferencesOutputJSON`; persist per user and
-  feed back into `preferencesJSON`.
+- **Cadence preferences** — default scope (person, or the viewer's own
+  **default site / department / area** via the same cascade — department
+  and area optional), day/week view, week start, visible hours — emitted
+  on `preferencesOutputJSON` as `{scopeKind: person|org, person,
+  org:{site, department, area}, view, weekStart, dayStart, dayEnd}`;
+  persist per user and feed back into `preferencesJSON`. Old flat
+  `{scopeKind: site|department|area, scopeValue}` blobs migrate on parse.
 - **Protected time editor** (shown when `canEditSite` is true) — label,
   colour, weekday toggles, start/end — emitted on
   `protectedTimesOutputJSON`; persist at site level and feed back into
@@ -66,6 +70,7 @@ the usual `(instanceId, id)` upsert.
 | `meetingsJSON` | `[{boardId, settingsJSON}]` — each board's MeetingScheduler settings blob (string or object). Cadence, topics, crews and identity all come from the blob; nothing else is needed. |
 | `protectedTimesJSON` | `[{label, color, days, start, end}]` — days as names or indices. |
 | `actionsInputJSON` / `actionSourcesJSON` | The viewer's action rollup + optional source labels. |
+| `orgJSON` | The site / department / area tree for the cascade — bind the same value as MeetingWizard's `orgJSON`. Optional: derived from the meetings when empty. |
 | `peopleJSON` / `viewerId` | The roster for the person scope; the signed-in person's `whoId`. |
 | `preferencesJSON` | The viewer's stored prefs (echo-guarded — a write of our own coming home is ignored). |
 | `canEditSite` | Shows the protected-time editor. |
