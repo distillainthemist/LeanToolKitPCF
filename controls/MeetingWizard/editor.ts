@@ -409,7 +409,7 @@ export class MeetingWizardView {
         this.selectInput(
           d.org.department,
           [
-            { value: "", label: site ? "Choose a department…" : "Choose a site first" },
+            { value: "", label: site ? "Whole site" : "Choose a site first" },
             ...departments.map((x) => ({ value: x.department, label: x.department })),
           ],
           (v) => {
@@ -417,7 +417,8 @@ export class MeetingWizardView {
             d.org.area = "";
             this.render();
           }
-        )
+        ),
+        "Optional — leave as whole site for a site-level meeting."
       )
     );
 
