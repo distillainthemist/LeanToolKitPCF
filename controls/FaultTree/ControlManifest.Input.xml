@@ -2,7 +2,7 @@
 <manifest>
   <control namespace="BenOBrien"
            constructor="FaultTree"
-           version="0.6.0"
+           version="0.7.0"
            display-name-key="Fault Tree"
            description-key="LeanToolKit Fault Tree — break a top event down through a branching cause tree to root causes, and raise actions on them. inputJSON preloads, resetTrigger reloads, outputJSON carries the edited document."
            control-type="standard">
