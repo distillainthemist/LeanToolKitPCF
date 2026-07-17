@@ -2,7 +2,7 @@
 <manifest>
   <control namespace="BenOBrien"
            constructor="StatusTile"
-           version="0.8.0"
+           version="0.8.1"
            display-name-key="Status Tile"
            description-key="LeanToolKit Status Tile — one big tap-to-cycle state with a reason and timestamp; the line-of-sight element of a cascade."
            control-type="standard">
