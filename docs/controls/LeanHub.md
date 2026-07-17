@@ -20,8 +20,12 @@ shift, crew and rotation topic.
 
 | Scope | An occurrence shows when |
 | --- | --- |
-| Person | they are the **owner** (attends everything) or a **participant** — crew-linked participants only when their crew is on shift. Defaults to the viewer. |
+| Person | they are the **owner** (attends everything) or a **participant** — crew-linked participants only when their crew is on shift. A roster **type-ahead** (org-scale): exact name scopes, empty = everyone, a **Me** button jumps back to the viewer. Defaults to the viewer. |
 | Organisation (site → department → area) | each chosen level narrows the meetings' `meeting.org`: a site alone shows the whole site (department- and area-level meetings included); adding a department narrows to it; adding an area narrows further. The cascade tree comes from `orgJSON` (the same tree MeetingWizard uses) or is derived from the meetings when absent. |
+
+Switching scope kind lands on the saved defaults: **Person → me**,
+**Organisation → the viewer's default site / department / area** from
+Settings.
 
 **Protected time zones** render as coloured background bands behind the
 chips — field leadership time, 1:1s, problem solving — from

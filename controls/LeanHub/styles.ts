@@ -51,6 +51,8 @@ export const LEANHUB_CSS = `
 }
 /* toolbar/form selects size to content, not the row */
 .ltk-lh-bar select.ltk-lh-input { width: auto; max-width: 230px; }
+.ltk-lh-person-pick { display: inline-flex; align-items: center; gap: 6px; }
+.ltk-lh-person-input { width: 210px; }
 .ltk-lh-field select.ltk-lh-input { width: auto; max-width: 260px; }
 .ltk-lh-btn {
   font: inherit;

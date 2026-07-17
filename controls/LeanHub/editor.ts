@@ -102,7 +102,9 @@ export class LeanHubView {
     this.prefs = prefs;
     if (!this.scopeTouched) {
       this.scopeKind = prefs.scopeKind;
-      this.scopePerson = prefs.person;
+      // an unset person pref means "me", whichever order inputs arrive in
+      this.scopePerson =
+        prefs.person !== "" ? prefs.person : this.viewerId;
       this.scopeOrg = { ...prefs.org };
       this.view = prefs.view;
     }
@@ -239,10 +241,10 @@ export class LeanHubView {
         (v) => {
           this.scopeKind = v as ScopeKind;
           this.scopeTouched = true;
-          if (this.scopeKind === "person" && this.scopePerson === "") {
-            this.scopePerson = this.viewerId;
-          }
-          if (this.scopeKind === "org" && this.scopeOrg.site === "") {
+          // switching kind lands on the saved defaults: me / my org
+          if (this.scopeKind === "person") {
+            this.scopePerson = this.prefs.person !== "" ? this.prefs.person : this.viewerId;
+          } else {
             this.scopeOrg = { ...this.prefs.org };
           }
           this.render();
@@ -251,23 +253,7 @@ export class LeanHubView {
     );
 
     if (this.scopeKind === "person") {
-      bar.appendChild(
-        this.select(
-          this.scopePerson,
-          [
-            { value: "", label: "Everyone" },
-            ...this.people.map((p) => ({
-              value: p.whoId,
-              label: p.whoId === this.viewerId ? `${p.who} (me)` : p.who,
-            })),
-          ],
-          (v) => {
-            this.scopePerson = v;
-            this.scopeTouched = true;
-            this.render();
-          }
-        )
-      );
+      bar.appendChild(this.personPicker());
     } else {
       for (const sel of this.orgCascade(this.scopeOrg, () => {
         this.scopeTouched = true;
@@ -724,6 +710,59 @@ export class LeanHubView {
       row.appendChild(remove);
     }
     return row;
+  }
+
+  /**
+   * The person scope as a roster type-ahead (a select cannot scale to an
+   * org-sized roster): exact name match scopes to that person, empty =
+   * everyone, unmatched text snaps back to the current person. A Me button
+   * jumps to the viewer.
+   */
+  private personPicker(): HTMLElement {
+    const wrap = el("span", "ltk-lh-person-pick");
+    const input = el("input", "ltk-lh-input ltk-lh-person-input") as HTMLInputElement;
+    input.type = "search";
+    input.placeholder = "Everyone — type a name…";
+    input.setAttribute("list", "ltk-lh-people-list");
+    const current = this.people.find((p) => p.whoId === this.scopePerson);
+    input.value = current ? current.who : "";
+    const suggestions = el("datalist") as HTMLDataListElement;
+    suggestions.id = "ltk-lh-people-list";
+    for (const p of this.people) {
+      const option = el("option") as HTMLOptionElement;
+      option.value = p.who;
+      suggestions.appendChild(option);
+    }
+    input.addEventListener("change", () => {
+      const name = input.value.trim();
+      if (name === "") {
+        this.scopePerson = "";
+        this.scopeTouched = true;
+        this.render();
+        return;
+      }
+      const match = this.people.find(
+        (p) => p.who.toLowerCase() === name.toLowerCase()
+      );
+      if (match) {
+        this.scopePerson = match.whoId;
+        this.scopeTouched = true;
+      }
+      this.render(); // unmatched: snap the field back to the current person
+    });
+    wrap.append(input, suggestions);
+    if (this.viewerId !== "" && this.scopePerson !== this.viewerId) {
+      const me = el("button", "ltk-lh-btn", "Me") as HTMLButtonElement;
+      me.type = "button";
+      me.title = "My cadence";
+      me.addEventListener("click", () => {
+        this.scopePerson = this.viewerId;
+        this.scopeTouched = true;
+        this.render();
+      });
+      wrap.appendChild(me);
+    }
+    return wrap;
   }
 
   /**
