@@ -50,9 +50,10 @@ export class MeetingWizardView {
   private lastPromptsRaw: string | null = null;
   private readOnly = false;
   private stepKey = "basics";
-  private ownerOther = false;
   /** Chips field to refocus after an add re-renders (typing flow). */
   private pendingFocus = "";
+  /** The participants step's roster search, kept across renders. */
+  private peopleQuery = "";
 
   constructor(
     host: HTMLElement,
@@ -69,10 +70,8 @@ export class MeetingWizardView {
 
   setDraft(draft: WizardDraft): void {
     this.draft = draft;
-    this.ownerOther =
-      draft.owner !== null &&
-      !this.people.some((p) => p.whoId === draft.owner?.whoId);
     this.stepKey = "basics";
+    this.peopleQuery = "";
     this.render();
   }
 
@@ -172,7 +171,10 @@ export class MeetingWizardView {
 
     const body = el("div", "ltk-mw-body");
     this.root.appendChild(body);
-    step.render(body);
+    // the centred form column — fields compose the same at any host width
+    const form = el("div", "ltk-mw-form");
+    body.appendChild(form);
+    step.render(form);
 
     // footer: Back / Next, or Create on the review step
     const foot = el("div", "ltk-mw-foot");
@@ -330,39 +332,40 @@ export class MeetingWizardView {
     });
     body.appendChild(this.row("Purpose", purpose));
 
-    // owner: pick from the roster, or name someone outside it
-    const OTHER = " other";
-    const ownerOptions = [
-      { value: "", label: "— No owner —" },
-      ...this.people.map((p) => ({ value: p.whoId, label: p.who })),
-      { value: OTHER, label: "Someone else…" },
-    ];
-    const current = this.ownerOther ? OTHER : (this.draft.owner?.whoId ?? "");
-    const ownerSel = this.selectInput(current, ownerOptions, (v) => {
-      if (v === OTHER) {
-        this.ownerOther = true;
+    // owner: type-ahead over the whole roster (works at org scale); an
+    // unmatched name becomes a free-text owner
+    const owner = el("input", "ltk-mw-input") as HTMLInputElement;
+    owner.type = "text";
+    owner.value = this.draft.owner?.who ?? "";
+    owner.placeholder = "Start typing a name…";
+    owner.disabled = this.readOnly;
+    owner.setAttribute("list", "ltk-mw-owner-list");
+    const suggestions = el("datalist") as HTMLDataListElement;
+    suggestions.id = "ltk-mw-owner-list";
+    for (const p of this.people) {
+      const option = el("option") as HTMLOptionElement;
+      option.value = p.who;
+      suggestions.appendChild(option);
+    }
+    owner.addEventListener("change", () => {
+      const name = owner.value.trim();
+      if (name === "") {
         this.draft.owner = null;
       } else {
-        this.ownerOther = false;
-        const p = this.people.find((x) => x.whoId === v);
-        this.draft.owner = p ? { whoId: p.whoId, who: p.who, crew: "" } : null;
+        const match = this.people.find(
+          (p) => p.who.toLowerCase() === name.toLowerCase()
+        );
+        this.draft.owner = match
+          ? { whoId: match.whoId, who: match.who, crew: "" }
+          : { whoId: name.toLowerCase().replace(/\s+/g, "-"), who: name, crew: "" };
       }
-      this.render();
+      this.commit();
     });
-    body.appendChild(this.row("Owner", ownerSel));
-    if (this.ownerOther) {
-      body.appendChild(
-        this.row(
-          "Owner name",
-          this.textInput(this.draft.owner?.who ?? "", (v) => {
-            this.draft.owner =
-              v === ""
-                ? null
-                : { whoId: v.toLowerCase().replace(/\s+/g, "-"), who: v, crew: "" };
-          })
-        )
-      );
-    }
+    const ownerWrap = el("div");
+    ownerWrap.append(owner, suggestions);
+    body.appendChild(
+      this.row("Owner", ownerWrap, "Pick from the roster, or type any name.")
+    );
   }
 
   private renderOrg(body: HTMLElement): void {
@@ -514,82 +517,124 @@ export class MeetingWizardView {
     );
   }
 
+  /**
+   * Participants: the chosen people pinned on top (crew select + remove),
+   * a search over the roster below — built for org-scale rosters, so
+   * results are capped and refreshed IN PLACE (the search input is never
+   * rebuilt, keeping focus while typing).
+   */
   private renderPeople(body: HTMLElement): void {
     const d = this.draft;
     const crews = csvItems(d.crewList);
-    const isIn = (whoId: string) => d.participants.some((p) => p.whoId === whoId);
-    const setCrew = (whoId: string, crew: string) => {
-      const p = d.participants.find((x) => x.whoId === whoId);
-      if (p) p.crew = crew;
+    const MAX_RESULTS = 25;
+
+    const selectedBox = el("div", "ltk-mw-people");
+    const resultsBox = el("div", "ltk-mw-people");
+    const countNote = el("div", "ltk-mw-people-count");
+
+    const refreshSelected = () => {
+      clear(selectedBox);
+      if (d.participants.length === 0) {
+        selectedBox.appendChild(
+          el("div", "ltk-mw-help", "No one selected yet — search the roster below.")
+        );
+        return;
+      }
+      for (const p of d.participants) {
+        const row = el("div", "ltk-mw-person");
+        row.appendChild(el("span", "ltk-mw-person-name", p.who));
+        if (crews.length > 0) {
+          const crewSel = this.selectInput(
+            p.crew,
+            [
+              { value: "", label: "Every meeting" },
+              ...crews.map((c) => ({ value: c, label: `Crew ${c}` })),
+            ],
+            (v) => (p.crew = v)
+          );
+          crewSel.classList.add("ltk-mw-person-crew");
+          row.appendChild(crewSel);
+        }
+        if (!this.readOnly) {
+          const remove = el("button", "ltk-mw-person-x", "×") as HTMLButtonElement;
+          remove.type = "button";
+          remove.title = "Remove";
+          remove.addEventListener("click", () => {
+            d.participants = d.participants.filter((x) => x.whoId !== p.whoId);
+            this.commit();
+            refreshSelected();
+            refreshResults();
+          });
+          row.appendChild(remove);
+        }
+        selectedBox.appendChild(row);
+      }
     };
 
-    if (this.people.length === 0 && d.participants.length === 0) {
-      body.appendChild(
-        el("div", "ltk-mw-help", "No roster bound (peopleJSON) — add participants by name below.")
+    const refreshResults = () => {
+      clear(resultsBox);
+      countNote.textContent = "";
+      if (this.readOnly) return;
+      const q = this.peopleQuery.trim().toLowerCase();
+      const pool = this.people.filter(
+        (p) =>
+          !d.participants.some((x) => x.whoId === p.whoId) &&
+          (q === "" || p.who.toLowerCase().includes(q))
       );
-    }
-
-    const list = el("div", "ltk-mw-people");
-    // the supplied roster first, then wizard-added names not in it
-    const extras = d.participants.filter((p) => !this.people.some((x) => x.whoId === p.whoId));
-    const rows: { whoId: string; who: string; fromRoster: boolean; crew: string }[] = [
-      ...this.people.map((p) => ({
-        whoId: p.whoId,
-        who: p.who,
-        fromRoster: true,
-        crew: d.participants.find((x) => x.whoId === p.whoId)?.crew ?? p.crew ?? "",
-      })),
-      ...extras.map((p) => ({ whoId: p.whoId, who: p.who, fromRoster: false, crew: p.crew })),
-    ];
-    for (const person of rows) {
-      const row = el("div", "ltk-mw-person");
-      const tick = el("input") as HTMLInputElement;
-      tick.type = "checkbox";
-      tick.checked = isIn(person.whoId);
-      tick.disabled = this.readOnly;
-      tick.addEventListener("change", () => {
-        if (tick.checked) {
-          d.participants.push({ whoId: person.whoId, who: person.who, crew: person.crew });
-        } else {
-          d.participants = d.participants.filter((x) => x.whoId !== person.whoId);
-        }
-        this.commit();
-        this.render();
-      });
-      row.append(tick, el("span", "ltk-mw-person-name", person.who));
-      if (crews.length > 0 && isIn(person.whoId)) {
-        const crewSel = this.selectInput(
-          person.crew,
-          [{ value: "", label: "Every meeting" }, ...crews.map((c) => ({ value: c, label: `Crew ${c}` }))],
-          (v) => setCrew(person.whoId, v)
-        );
-        crewSel.classList.add("ltk-mw-person-crew");
-        row.appendChild(crewSel);
+      for (const p of pool.slice(0, MAX_RESULTS)) {
+        const row = el("div", "ltk-mw-result");
+        row.appendChild(el("span", "ltk-mw-result-add", "＋"));
+        row.appendChild(el("span", "ltk-mw-person-name", p.who));
+        if (p.crew) row.appendChild(el("span", "ltk-mw-result-crew", `Crew ${p.crew}`));
+        row.addEventListener("click", () => {
+          d.participants.push({ whoId: p.whoId, who: p.who, crew: p.crew ?? "" });
+          this.commit();
+          refreshSelected();
+          refreshResults();
+        });
+        resultsBox.appendChild(row);
       }
-      list.appendChild(row);
+      if (pool.length > MAX_RESULTS) {
+        countNote.textContent = `Showing ${MAX_RESULTS} of ${pool.length} — keep typing to narrow.`;
+      } else if (pool.length === 0 && q !== "") {
+        countNote.textContent = "No roster match — add them by name below.";
+      }
+    };
+
+    body.appendChild(this.row("Participants", selectedBox));
+
+    if (this.people.length > 0 && !this.readOnly) {
+      const search = el("input", "ltk-mw-input") as HTMLInputElement;
+      search.type = "search";
+      search.placeholder = `Search ${this.people.length} people…`;
+      search.value = this.peopleQuery;
+      search.addEventListener("input", () => {
+        this.peopleQuery = search.value;
+        refreshResults();
+      });
+      const searchWrap = el("div", "ltk-mw-row");
+      searchWrap.appendChild(el("label", "ltk-mw-label", "Add from the roster"));
+      searchWrap.append(search, resultsBox, countNote);
+      body.appendChild(searchWrap);
     }
-    body.appendChild(list);
 
     if (!this.readOnly) {
-      const adder = this.textInput(
-        "",
-        () => {
-          /* handled on change below via value */
-        },
-        "Add someone by name…"
-      );
+      const adder = el("input", "ltk-mw-input") as HTMLInputElement;
+      adder.type = "text";
+      adder.placeholder = "Someone outside the roster…";
       adder.addEventListener("change", () => {
         const name = adder.value.trim();
         if (name === "") return;
         const whoId = name.toLowerCase().replace(/\s+/g, "-");
-        if (!isIn(whoId)) {
+        if (!d.participants.some((x) => x.whoId === whoId)) {
           d.participants.push({ whoId, who: name, crew: "" });
           this.commit();
+          refreshSelected();
+          refreshResults();
         }
         adder.value = "";
-        this.render();
       });
-      body.appendChild(this.row("Add participant", adder));
+      body.appendChild(this.row("Add by name", adder));
     }
     if (crews.length > 0) {
       body.appendChild(
@@ -600,6 +645,9 @@ export class MeetingWizardView {
         )
       );
     }
+
+    refreshSelected();
+    refreshResults();
   }
 
   private renderRecords(body: HTMLElement): void {
