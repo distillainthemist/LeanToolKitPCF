@@ -2,7 +2,7 @@
 <manifest>
   <control namespace="BenOBrien"
            constructor="EmbedCard"
-           version="0.7.0"
+           version="0.7.1"
            display-name-key="Embed Card"
            description-key="LeanToolKit embed card — shows an embedded page (a Power BI report or any https embed link) with a refresh button. The frame is created once and never reloads on resize or re-render; Power BI links can hide the filter and page-navigation panes and open on a chosen page."
            control-type="standard">

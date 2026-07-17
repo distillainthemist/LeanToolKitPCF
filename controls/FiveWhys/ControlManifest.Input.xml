@@ -2,7 +2,7 @@
 <manifest>
   <control namespace="BenOBrien"
            constructor="FiveWhys"
-           version="0.7.0"
+           version="0.7.1"
            display-name-key="Five Whys"
            description-key="LeanToolKit 5 Whys — drill from a problem through why-chains to root causes, and raise actions on them. inputJSON preloads, resetTrigger reloads, outputJSON carries the edited document."
            control-type="standard">
