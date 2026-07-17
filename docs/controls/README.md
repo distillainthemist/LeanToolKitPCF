@@ -147,3 +147,4 @@ and CardSettings (which are a selector and a form, not display tiles).
 | [MeetingScheduler](MeetingScheduler.md) | — | ✖ (selection-only) | ✖ | — |
 | [EscalationViewer](EscalationViewer.md) | — | ✖ (actions-only) | ✅ | (passthrough) |
 | [CardSettings](CardSettings.md) | — | composes other cards' settings | ✖ | — |
+| [MeetingWizard](MeetingWizard.md) | — | composes a MeetingScheduler settings blob | ✖ | — |

@@ -25,6 +25,7 @@ control does and the exact schema of its `outputJSON` and `actionsOutputJSON`.
 | **CaptureCard** — config-driven grid: typed columns, multi-select and two-layer picklists with icons, free or fixed rows | ✅ Phase 2 |
 | **HeatmapCard** — pin issues onto a fixed image, severity-coloured, actions at pin time | ✅ Phase 2 |
 | ProcessMap (+ swimlanes), Raci, SkillsMatrix, MeetingScheduler, EscalationViewer, BoardChrome | Phase 3 |
+| **MeetingWizard** — guided meeting setup (identity, org, cadence, crews, participants); emits a MeetingScheduler settings blob | ✅ Master board |
 
 ## The standard surface
 

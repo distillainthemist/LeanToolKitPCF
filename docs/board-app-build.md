@@ -242,6 +242,39 @@ Set(varManifest, ParseJSON(varBoard.ben_manifestjson));
 `Table(varManifest.slots)` plus the new record; shown merged above for
 brevity.)
 
+## 6b. New meeting — MeetingWizard
+
+One **MeetingWizard** control `cmpWizard` on its own screen:
+
+| Property | Binding |
+| --- | --- |
+| `inputJSON` | empty for a new meeting, or `varBoard.ben_occurrencesettings` to re-edit one |
+| `peopleJSON` | the tenant/site roster (`JSON(colRoster)`) |
+| `orgJSON` | `varOrgTree` — `[{site, departments:[{department, areas:[…]}]}]`, from a table or a static formula |
+| `resetTrigger` | `varWizardReset` (set on entry) |
+
+`OnChange` — the Create meeting press creates the board row, seeds its
+roster from the wizard's participants, and opens it:
+
+```powerfx
+If(Self.submittedAt <> varLastSubmit && Self.submittedAt <> "",
+   Set(varLastSubmit, Self.submittedAt);
+   With({ blob: ParseJSON(Self.outputJSON) },
+       Set(varBoard, Patch('LTK Boards', Defaults('LTK Boards'), {
+           ben_name: Text(blob.title),
+           ben_boardkind: "meeting",
+           ben_occurrencesettings: Self.outputJSON,        // the scheduler card reads this
+           ben_peoplejson: JSON(Table(blob.meeting.participants), JSONFormat.Compact),
+           ben_manifestjson: JSON({ grid: "3", slots: [] }, JSONFormat.Compact) })));
+   Set(varManifest, ParseJSON(varBoard.ben_manifestjson));
+   Navigate(BoardScreen))
+```
+
+The new board opens with an empty grid — compose its cards in BoardGrid's
+edit mode (§4/§6). Re-editing the meeting later: bind `inputJSON` to the
+stored `ben_occurrencesettings` — keys the wizard does not manage (theme,
+per-card `board` policies on other slots, prompts) ride through untouched.
+
 ## 7. Editor screen
 
 All 21 card controls stacked full-screen (BoardGrid stays on the board screen), exactly one visible:

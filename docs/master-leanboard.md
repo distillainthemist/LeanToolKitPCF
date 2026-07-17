@@ -327,6 +327,14 @@ Filter('LTK Actions',
    [BoardGrid](controls/BoardGrid.md).
 5. **Tile defaults generator.** `tools/tile-defaults.html` +
    `tools/tile-defaults.json` (see above).
+6. **MeetingWizard (v0.7.0).** Guided meeting setup: title / purpose /
+   owner, hierarchical site → department → area picklists (`orgJSON`),
+   cadence, crews + roster, participants with crew linkage, record columns,
+   review. Emits a complete MeetingScheduler `settingsJSON` (including the
+   **`meeting` section** the scheduler renders as its identity strip) and
+   `submittedAt` for the app's create-board flow — recipe §6b of the
+   [build kit](board-app-build.md). See
+   [MeetingWizard](controls/MeetingWizard.md).
 
 ---
 

@@ -70,7 +70,7 @@ export function fontOr(p: StringProp | undefined, base: string, def: string): st
 // One JSON blob that can carry the whole configuration surface, so a board
 // template binds any card type through identical columns:
 //   {"title": "...", "prompts": ..., "readOnly": false,
-//    "theme": {"background","foreground","accent","legend","font"},
+//    "theme": {"background","foreground","accent","titlebar","legend","font"},
 //    "config": { ...card-specific keys, named after the discrete inputs... }}
 //
 // Precedence: settingsJSON is the BASE; a NON-EMPTY discrete text input
