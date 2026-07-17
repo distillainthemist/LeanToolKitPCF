@@ -24,8 +24,17 @@ control does and the exact schema of its `outputJSON` and `actionsOutputJSON`.
 | **ConditionsCard** — rolling 7 days × conditions + next-shift forecast column | ✅ Phase 2 |
 | **CaptureCard** — config-driven grid: typed columns, multi-select and two-layer picklists with icons, free or fixed rows | ✅ Phase 2 |
 | **HeatmapCard** — pin issues onto a fixed image, severity-coloured, actions at pin time | ✅ Phase 2 |
-| ProcessMap (+ swimlanes), Raci, SkillsMatrix, MeetingScheduler, EscalationViewer, BoardChrome | Phase 3 |
+| **ProcessMap** — flowchart, swimlane map, SIPOC or value stream map in one control; drag-drop nodes, connectors, kaizen bursts raise actions | ✅ Phase 3 |
+| **Raci** — responsibility matrix, cells cycle R/A/C/I; warns unless exactly one Accountable per row | ✅ Phase 3 |
+| **SkillsMatrix** — skills × people proficiency 1–4 as quarter-filled discs, gap rings against target levels | ✅ Phase 3 |
+| **MeetingScheduler** — cadence-driven meeting-instance selector (annually → shiftly, incl. crew rosters); emits the tapped instance | ✅ Phase 3 |
+| **EscalationViewer** — read/acknowledge view over escalated actions, grouped by source card | ✅ Phase 3 |
 | **MeetingWizard** — guided meeting setup (identity, org, cadence, crews, participants); emits a MeetingScheduler settings blob | ✅ Master board |
+| **AgendaCard** — runs a meeting from one card: pre-work checklist, timed agenda with per-item actions, outputs checklist | ✅ Master board |
+| **BoardGrid** — the master-leanboard tile wall: renders each card's stored snapshot in a grid, taps and drags become outputs | ✅ Master board |
+| **EmbedCard** — embedded Power BI report or any https page with a refresh button; the frame only reloads when it must | ✅ Master board |
+| **CardSettings** — settings composer for the other cards; typed fields emit a complete `settingsJSON` per card type | ✅ Master board |
+| BoardChrome — board title/agenda strip, escalation count, edit/display toggle | Not built (Phase 3) |
 
 ## The standard surface
 
