@@ -1,0 +1,157 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<manifest>
+  <control namespace="BenOBrien"
+           constructor="LeanHub"
+           version="0.7.1"
+           display-name-key="Lean Hub"
+           description-key="LeanToolKit home hub — three tabs. Calendar: every supplied meeting cadence projected onto a day/week grid, scoped to a person (crew-aware), area, department or site, with site-level protected time zones as coloured background bands; tapping an occurrence emits it with its boardId for navigation. Actions: the viewer's actions from every source, grouped and due-ordered, on the standard actions channel. Settings: calendar preferences plus the protected-time editor for site admins."
+           control-type="standard">
+
+    <property name="meetingsJSON"
+              display-name-key="Meetings (JSON)"
+              description-key="Every meeting to project: [{boardId, settingsJSON}] where settingsJSON is each board's MeetingScheduler settings blob (string or object). Cadence, topics, crews and the meeting identity (org, participants) all come from the blob."
+              of-type="Multiple"
+              usage="input"
+              required="false" />
+
+    <property name="protectedTimesJSON"
+              display-name-key="Protected Times (JSON)"
+              description-key="Site-level protected time zones: [{label, color, days (names or indices), start HH:MM, end HH:MM}]. Rendered as coloured background bands behind the calendar — field leadership time, 1:1s, problem solving."
+              of-type="Multiple"
+              usage="input"
+              required="false" />
+
+    <property name="actionsInputJSON"
+              display-name-key="Actions Input (JSON)"
+              description-key="The viewer's actions from the central actions table, standard action schema, any number of source cards. The Actions tab groups them by source and orders by due date."
+              of-type="Multiple"
+              usage="input"
+              required="false" />
+
+    <property name="actionSourcesJSON"
+              display-name-key="Action Sources (JSON)"
+              description-key="Optional friendly labels for action grouping: [{instanceId, label}] mapping card instance ids to display names (e.g. board and card title). Unmapped ids fall back to the id."
+              of-type="Multiple"
+              usage="input"
+              required="false" />
+
+    <property name="peopleJSON"
+              display-name-key="People (JSON)"
+              description-key="The roster for the person scope selector: [{whoId, who, crew?}]."
+              of-type="Multiple"
+              usage="input"
+              required="false" />
+
+    <property name="viewerId"
+              display-name-key="Viewer Id"
+              description-key="The signed-in person's whoId. Defaults the person scope to them, filters the Actions tab to their assignments, and drives the my-part-done toggle."
+              of-type="SingleLine.Text"
+              usage="input"
+              required="false" />
+
+    <property name="preferencesJSON"
+              display-name-key="Preferences (JSON)"
+              description-key="The viewer's stored preferences: {scopeKind, scopeValue, view, weekStart, dayStart, dayEnd}. Edits are emitted on Preferences Output for the app to persist per user."
+              of-type="Multiple"
+              usage="input"
+              required="false" />
+
+    <property name="canEditSite"
+              display-name-key="Can Edit Site"
+              description-key="When true, the Settings tab shows the protected-time editor; edits are emitted on Protected Times Output for the app to persist at site level."
+              of-type="TwoOptions"
+              usage="input"
+              required="false"
+              default-value="false" />
+
+    <property name="selectedMeetingJSON"
+              display-name-key="Selected Meeting (JSON)"
+              description-key="The tapped calendar occurrence: {boardId, title, iso, date, day, time, crew, shift, topic, selectedAt}. Navigate to the board and pass iso into its MeetingScheduler Select Instance input to land pre-selected. selectedAt changes on every tap so OnChange always fires."
+              of-type="Multiple"
+              usage="output" />
+
+    <property name="actionsOutputJSON"
+              display-name-key="Actions Output (JSON)"
+              description-key="The full current action set after an edit (my-part-done toggles), each action keeping its own instanceId — upsert to the central actions table by (instanceId, id)."
+              of-type="Multiple"
+              usage="output" />
+
+    <property name="preferencesOutputJSON"
+              display-name-key="Preferences Output (JSON)"
+              description-key="Emitted when the viewer changes a preference — persist per user and feed back into Preferences (JSON)."
+              of-type="Multiple"
+              usage="output" />
+
+    <property name="protectedTimesOutputJSON"
+              display-name-key="Protected Times Output (JSON)"
+              description-key="Emitted when a site admin edits the protected time zones — persist at site level and feed back into Protected Times (JSON)."
+              of-type="Multiple"
+              usage="output" />
+
+    <!-- Self-describing card chrome -->
+    <property name="cardTitle"
+              display-name-key="Card Title"
+              description-key="Optional title bar (e.g. My day). Leave empty for no chrome."
+              of-type="SingleLine.Text"
+              usage="input"
+              required="false" />
+
+    <property name="prompts"
+              display-name-key="Prompts"
+              description-key="Optional empty-state text: plain text or a JSON array of strings."
+              of-type="Multiple"
+              usage="input"
+              required="false" />
+
+    <!-- Standard styling surface -->
+    <property name="backgroundColor"
+              display-name-key="Background Colour"
+              description-key="Hub background colour (any CSS colour or hex). Default white."
+              of-type="SingleLine.Text"
+              usage="input"
+              required="false" />
+
+    <property name="foregroundColor"
+              display-name-key="Foreground Colour"
+              description-key="Text / line colour. Default rich black."
+              of-type="SingleLine.Text"
+              usage="input"
+              required="false" />
+
+    <property name="accentColor"
+              display-name-key="Accent Colour"
+              description-key="Active tab, today highlight, buttons. Default rich black."
+              of-type="SingleLine.Text"
+              usage="input"
+              required="false" />
+
+    <property name="titleBarColor"
+              display-name-key="Title Strip Colour"
+              description-key="Background fill for just the title bar, distinct from the card background - use one colour across related cards to visually associate them on a board. Empty = no strip fill."
+              of-type="SingleLine.Text"
+              usage="input"
+              required="false" />
+
+    <property name="fontFamily"
+              display-name-key="Font"
+              description-key="Font family (or comma-separated font stack)."
+              of-type="SingleLine.Text"
+              usage="input"
+              required="false" />
+
+    <property name="readOnly"
+              display-name-key="Read Only"
+              description-key="When true the hub is display-only: no action toggles, no settings edits (calendar navigation stays available)."
+              of-type="TwoOptions"
+              usage="input"
+              required="false"
+              default-value="false" />
+
+    <!-- CSS is bundled into the code (see styles.ts) because canvas apps
+         sometimes fail to load a separate css resource. -->
+    <resources>
+      <code path="index.ts" order="1" />
+    </resources>
+
+  </control>
+</manifest>
