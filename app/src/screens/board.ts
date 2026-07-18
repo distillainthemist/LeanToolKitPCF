@@ -81,9 +81,11 @@ async function renderBoard(
   const bar = el("div", "app-board-toolbar");
   const title = el("span", "app-board-title", board.name);
   const status = el("span", "app-board-status", "");
+  const setupBtn = el("a", "app-btn", "Board setup") as HTMLAnchorElement;
+  setupBtn.href = `#/setup/${board.boardId}`;
   const closeBtn = el("button", "app-btn", "Close meeting") as HTMLButtonElement;
   closeBtn.style.display = "none";
-  bar.append(title, status, el("span", "app-bar-gap"), closeBtn);
+  bar.append(title, status, el("span", "app-bar-gap"), setupBtn, closeBtn);
   parent.appendChild(bar);
 
   const split = el("div", "app-board-split");
