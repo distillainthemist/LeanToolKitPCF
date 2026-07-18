@@ -171,6 +171,31 @@ export for Production is a `pac solution export --managed` away.
   ben_ltkcarddatas, ben_ltkcardcatalogs, ben_ltkactions,
   ben_ltksitesettingses, ben_ltkuserprefses, ben_ltkpeoples.
 
+## Phase 3 results (2026-07-18) — typed store + tests
+
+- `pac code init` ran in `app/` ("LeanToolKit") and
+  `pac code add-data-source --apiId dataverse` generated typed
+  models/services for all eight tables (`app/src/generated/`).
+- `app/src/store/` translates the build-kit recipes into TypeScript with
+  pure logic split from IO: `mappers` (manifest parse/serialize, action
+  row ↔ LtkAction, people/org conversions), `policies` (seed plans for
+  clear/carry/shared/link, close-meeting archive set), `tiles` (the
+  tilesJSON join with instance → live → catalog fallback), and IO modules
+  `boards` / `instances` (create with policies incl. shared live rows;
+  close stamps the SVG archive) / `cards` (save loop with the 190k svg
+  guard) / `actions` (rollups + upsert by action id) / `people` /
+  `config` (org tree + prefs) / `catalog` (version-keyed self-heal from
+  catalogJSON + tile defaults).
+- **vitest: 16 tests green** — the recurrence engine's first-ever unit
+  tests (weekly week-of-month topics, fortnight parity, monthly nth
+  weekday, shiftly crew stagger + night offset, staleness, attendees)
+  plus manifest round-trip, policy plans, tiles fallbacks, action row
+  round-trip. `npm test` / `npm run typecheck` in `app/`.
+- Entra search seam: `people.searchEntra` throws with instructions until
+  the Office 365 Users **connection** exists (maker portal, one click)
+  and `pac code add-data-source -a shared_office365users -c <id>` has
+  generated its client. People admin degrades to manual entry meanwhile.
+
 ## Risks / open items
 
 - Code-app platform maturity (mobile, offline = none, ALM depth) —

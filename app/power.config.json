@@ -1,0 +1,52 @@
+{
+  "version": "1.0",
+  "appId": null,
+  "appDisplayName": "LeanToolKit",
+  "region": "prod",
+  "environmentId": "5636a57c-b563-ea93-9772-1c883cc88cc0",
+  "description": "Pechey Distilling lean meeting system",
+  "buildPath": "dist",
+  "buildEntryPoint": "index.html",
+  "localAppUrl": "http://localhost:3000",
+  "logoPath": "Default",
+  "connectionReferences": {},
+  "databaseReferences": {
+    "default.cds": {
+      "dataSources": {
+        "ltkboards": {
+          "entitySetName": "ben_ltkboards",
+          "logicalName": "ben_ltkboard"
+        },
+        "ltkboardinstances": {
+          "entitySetName": "ben_ltkboardinstances",
+          "logicalName": "ben_ltkboardinstance"
+        },
+        "ltkcarddatas": {
+          "entitySetName": "ben_ltkcarddatas",
+          "logicalName": "ben_ltkcarddata"
+        },
+        "ltkcardcatalogs": {
+          "entitySetName": "ben_ltkcardcatalogs",
+          "logicalName": "ben_ltkcardcatalog"
+        },
+        "ltkactions": {
+          "entitySetName": "ben_ltkactions",
+          "logicalName": "ben_ltkaction"
+        },
+        "ltksitesettings": {
+          "entitySetName": "ben_ltksitesettingses",
+          "logicalName": "ben_ltksitesettings"
+        },
+        "ltkuserprefs": {
+          "entitySetName": "ben_ltkuserprefses",
+          "logicalName": "ben_ltkuserprefs"
+        },
+        "ltkpeople": {
+          "entitySetName": "ben_ltkpeoples",
+          "logicalName": "ben_ltkpeople"
+        }
+      },
+      "environmentVariableName": ""
+    }
+  }
+}
