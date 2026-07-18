@@ -1,10 +1,9 @@
 // People IO — the curated LTK People roster (the operative people list),
-// plus the Entra ID search seam. Entra search runs through the Office 365
-// Users connector once its connection exists in the environment; until
-// then searchEntra reports unavailable and People admin degrades to
-// manual entry (the table design is identical either way).
+// plus Entra ID search through the Office 365 Users connector (the
+// shared_office365users connection added via pac code add-data-source).
 
 import { Ben_ltkpeoplesService } from "../generated/services/Ben_ltkpeoplesService";
+import { Office365UsersService } from "../generated/services/Office365UsersService";
 import { allWhere, eq, upsertWhere } from "./dv";
 import { personFromRow, RosterPerson } from "./mappers";
 
@@ -39,20 +38,22 @@ export interface EntraHit {
   objectId: string;
   displayName: string;
   mail: string;
+  department: string;
 }
 
-/**
- * Search Entra ID via the Office 365 Users connector. Requires a
- * connection in the environment (make.powerapps.com → Connections → New →
- * Office 365 Users) and the connector added as a data source
- * (`pac code add-data-source -a shared_office365users -c <connectionId>`),
- * which generates its typed client. Until both exist this throws, and the
- * People admin screen offers manual entry instead.
- */
-export async function searchEntra(_query: string): Promise<EntraHit[]> {
-  throw new Error(
-    "Entra search not wired yet: create an Office 365 Users connection, add it with pac code add-data-source, then implement this call with the generated client."
-  );
+/** Search Entra ID (Office 365 Users connector, SearchUserV2). */
+export async function searchEntra(query: string): Promise<EntraHit[]> {
+  const q = query.trim();
+  if (q === "") return [];
+  const result = await Office365UsersService.SearchUserV2(q, 15, true);
+  return (result.data?.value ?? [])
+    .filter((u) => u.Id)
+    .map((u) => ({
+      objectId: u.Id,
+      displayName: u.DisplayName ?? u.UserPrincipalName ?? u.Id,
+      mail: u.Mail ?? u.UserPrincipalName ?? "",
+      department: u.Department ?? "",
+    }));
 }
 
 /** The viewer's roster row, matched by Entra object id (whoId). */

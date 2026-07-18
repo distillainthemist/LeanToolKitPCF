@@ -13,6 +13,7 @@ export * as Ben_ltkpeoplesModel from './models/Ben_ltkpeoplesModel';
 export * as Ben_ltksitesettingsesModel from './models/Ben_ltksitesettingsesModel';
 export * as Ben_ltkuserprefsesModel from './models/Ben_ltkuserprefsesModel';
 export * as CommonModels from './models/CommonModels';
+export * as Office365UsersModel from './models/Office365UsersModel';
 
 // Services
 export * from './services/Ben_ltkactionsService';
@@ -23,3 +24,4 @@ export * from './services/Ben_ltkcarddatasService';
 export * from './services/Ben_ltkpeoplesService';
 export * from './services/Ben_ltksitesettingsesService';
 export * from './services/Ben_ltkuserprefsesService';
+export * from './services/Office365UsersService';
