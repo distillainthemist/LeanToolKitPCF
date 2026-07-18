@@ -149,6 +149,28 @@ handshake works in-process), Fishbone as the card-mount demonstrator.
 Type-checks clean with the editors compiled straight from `../controls`.
 Dev server: `ltk-app` on :5180.
 
+## Phase 2 results (2026-07-18) — schema deployed
+
+The eight tables live in **Pechey Distilling Development**, created by
+`data/deploy-schema.mjs` (idempotent Web API deployer; declarative source
+of truth in `data/schema.mjs`; read-back check in `data/verify-schema.mjs`;
+device-code token via `data/get-token.mjs`). Everything sits inside the
+**LeanToolKitData 0.1.0** solution under the `ben` publisher, so managed
+export for Production is a `pac solution export --managed` away.
+
+- ben_ltkboard (key ben_boardid) · ben_ltkboardinstance (lookup ben_board)
+  · ben_ltkcarddata (nullable lookup ben_instance + ben_boardid — the
+  shared-policy live rows) · ben_ltkcardcatalog (key ben_cardtype) ·
+  ben_ltkaction (column-for-column per actions-dataverse.md, key
+  ben_actionid) · ben_ltksitesettings (key ben_site; org subtree +
+  protected times per site) · ben_ltkuserprefs (key ben_userid) ·
+  ben_ltkpeople (key ben_whoid = Entra object id)
+- CRUD smoke passed using the store's exact pattern: **upsert by
+  alternate key** (`PATCH ben_ltkboards(ben_boardid='…')`), read, delete.
+- Entity set names for the store: ben_ltkboards, ben_ltkboardinstances,
+  ben_ltkcarddatas, ben_ltkcardcatalogs, ben_ltkactions,
+  ben_ltksitesettingses, ben_ltkuserprefses, ben_ltkpeoples.
+
 ## Risks / open items
 
 - Code-app platform maturity (mobile, offline = none, ALM depth) —
