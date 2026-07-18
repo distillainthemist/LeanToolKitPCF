@@ -48,3 +48,72 @@ jobs:
         with:
           files: dist/*
           generate_release_notes: true
+
+  # Board-app artifacts: the installable code-app package always; the
+  # managed LeanToolKitData tables zip when the service-principal secrets
+  # exist (docs/deploy-to-new-org.md is the receiving org's runbook).
+  board-app:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Build app
+        working-directory: app
+        run: |
+          npm ci
+          npm run build
+
+      - name: Stage app package
+        shell: bash
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          mkdir -p ship/app dist
+          cp -r app/dist ship/app/dist
+          # template the config: target org sets environmentId + connection,
+          # and the first push mints the appId
+          node -e '
+            const fs = require("fs");
+            const cfg = JSON.parse(fs.readFileSync("app/power.config.json", "utf8"));
+            delete cfg.appId;
+            cfg.environmentId = "";
+            fs.writeFileSync("ship/app/power.config.json", JSON.stringify(cfg, null, 2));
+          '
+          cp docs/deploy-to-new-org.md ship/app/INSTALL.md
+          (cd ship/app && zip -rq "../../dist/LeanToolKitApp_${TAG}.zip" .)
+
+      - name: Check pipeline secrets
+        id: secrets
+        env:
+          PP_APP_ID: ${{ secrets.PP_APP_ID }}
+        run: echo "present=$([ -n "$PP_APP_ID" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+
+      - name: Install pac
+        if: steps.secrets.outputs.present == 'true'
+        run: dotnet tool install --global Microsoft.PowerApps.CLI.Tool
+
+      - name: Export managed data solution from Dev
+        if: steps.secrets.outputs.present == 'true'
+        shell: bash
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          pac auth create --applicationId "${{ secrets.PP_APP_ID }}" \
+            --clientSecret "${{ secrets.PP_CLIENT_SECRET }}" \
+            --tenant "${{ secrets.PP_TENANT_ID }}" \
+            --environment "${{ vars.PP_DEV_URL }}"
+          pac solution online-version --solution-name LeanToolKitData \
+            --solution-version "${TAG#v}"
+          pac solution export --name LeanToolKitData --managed \
+            --path "dist/LeanToolKitData_${TAG}_managed.zip"
+
+      - name: Attach board-app artifacts to the release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*

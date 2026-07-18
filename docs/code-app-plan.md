@@ -310,3 +310,24 @@ Follow-ups spotted:
   board-app-build.md banner'd as canvas-era.
 - Pilot: driven end to end earlier this phase (see Pilot run above);
   composer slice closed the last authoring gap.
+
+## Cross-org shipping (2026-07-18) — --solutionName verdict revised
+
+Spike-tested with a throwaway app CREATED via `pac code push
+--solutionName`: still no solutioncomponents row, no canvasapps row,
+and the managed export contains no app payload — code apps are not
+Dataverse solution components on this platform version at all (the
+Phase 5 "association is create-time" reading was too generous). Ship
+model is therefore two release artifacts, built by the extended
+release.yml `board-app` job on every version tag:
+- `LeanToolKitData_<tag>_managed.zip` — managed tables, exported from
+  Dev with the version stamped to the tag (needs the service-principal
+  secrets; step skips with the app package still published if absent).
+- `LeanToolKitApp_<tag>.zip` — built dist + templated power.config
+  (appId/environmentId cleared) + INSTALL.md
+  (= docs/deploy-to-new-org.md): target org imports the tables,
+  creates an O365 Users connection, sets environmentId + connection,
+  `pac code push`. Data lives entirely in the tables; the app is
+  stateless and re-pushable.
+Junk to clean in Dev: "LTK Ship Test" app (spike, maker portal) along
+with "LTK Hello".

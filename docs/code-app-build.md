@@ -46,11 +46,13 @@ pac code push      # updates the app in power.config.json's environment
   on push does **not** retarget — edit the config to point elsewhere.
 - Open sessions show "You're using an old version — Refresh" after a
   push; new sessions get the latest.
-- `pac code push --solutionName LeanToolKitData` associates the app
-  with the solution **only when the push creates the app** (no appId).
-  Updates silently skip association. The Dev app predates the solution;
-  to move it inside, delete the app in the maker portal and push once
-  with `--solutionName` (new app id → new play URL).
+- `pac code push --solutionName` is accepted but **inert on this
+  platform version** (verified 2026-07-18 with a create-time push:
+  no solutioncomponents row, no canvasapps row, exported zip empty of
+  the app). Code apps cannot ship inside a managed solution today —
+  cross-org deployment is managed tables zip + `pac code push`, per
+  [deploy-to-new-org.md](deploy-to-new-org.md). Keep passing the flag;
+  it's forward-compatible if code-app solution ALM lands.
 
 ## Schema (Dataverse tables)
 
