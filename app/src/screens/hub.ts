@@ -1,6 +1,7 @@
-// Home screen — LeanHub mounted via CardHost. The store callbacks are
-// console stubs until Phase 3; the meeting tap drives real navigation to
-// the board screen (the selectIso deep-link handshake).
+// Home screen — LeanHub. Hosted: everything from the Dataverse store
+// (meetings join, viewer action rollup, org tree, prefs, protected
+// times), with the viewer self-registering into LTK People on first
+// visit. Dev server (no host): demo data, writes logged.
 
 import { LeanHubView } from "../../../controls/LeanHub/editor";
 import {
@@ -8,10 +9,23 @@ import {
   parsePrefs,
   parseProtectedTimes,
 } from "../../../controls/LeanHub/types";
-import { parseActionsJson } from "../../../shared/schema/actions";
+import { LtkAction, parseActionsJson } from "../../../shared/schema/actions";
 import { parseOrgTree } from "../../../shared/schema/meeting";
 import { parsePeople } from "../../../shared/schema/people";
 import { appTheme, editorHost } from "../cardHost";
+import { currentViewer, detectHost } from "../runtime";
+import { actionsForViewer, upsertActions } from "../store/actions";
+import { listBoards } from "../store/boards";
+import { selfHealCatalog } from "../store/catalog";
+import {
+  protectedTimesJson,
+  orgJson,
+  saveProtectedTimes,
+  saveUserPrefs,
+  userPrefsJson,
+} from "../store/config";
+import { parseManifest } from "../store/mappers";
+import { listPeople, upsertPerson, viewerPerson } from "../store/people";
 import {
   ACTIONS,
   ACTION_SOURCES,
@@ -21,30 +35,103 @@ import {
   PROTECTED_TIMES,
   VIEWER_ID,
 } from "../demoData";
+import { el } from "../../../shared/ui/dom";
 
 export function mountHub(parent: HTMLElement): () => void {
   const host = editorHost(parent);
-  const view = new LeanHubView(host, {
-    onSelectMeeting: (inst) => {
-      window.location.hash = `#/board/${inst.boardId}/${encodeURIComponent(inst.iso)}`;
-    },
-    onActions: (actions) => console.log("store: upsert actions", actions),
-    onPrefs: (prefs) => console.log("store: save prefs", prefs),
-    onProtected: (times) => console.log("store: save protected times", times),
-  });
+  const note = el("div", "app-board-note", "Loading…");
+  parent.prepend(note);
+  let view: LeanHubView | null = null;
 
-  view.setTheme(appTheme());
-  view.setChrome("My day", "");
-  view.setMeetings(parseHubMeetings(JSON.stringify(BOARDS)));
-  view.setOrgTree(parseOrgTree(JSON.stringify(ORG_TREE)));
-  view.setPeople(parsePeople(JSON.stringify(PEOPLE)), VIEWER_ID);
-  view.setProtectedTimes(parseProtectedTimes(JSON.stringify(PROTECTED_TIMES)));
-  view.setActions(parseActionsJson(JSON.stringify(ACTIONS)));
-  view.setSourceLabels(
-    Object.fromEntries(ACTION_SOURCES.map((s) => [s.instanceId, s.label]))
-  );
-  view.setCanEditSite(true);
-  view.setPrefs(parsePrefs(""));
+  void (async () => {
+    const hosted = await detectHost();
 
-  return () => view.destroy();
+    let meetingsRaw: string;
+    let peopleRaw: string;
+    let orgRaw: string;
+    let protectedRaw: string;
+    let prefsRaw = "";
+    let actions: LtkAction[];
+    let sourceLabels: Record<string, string> = {};
+    let viewerId: string;
+    let site = "";
+
+    if (hosted) {
+      const viewer = currentViewer()!;
+      viewerId = viewer.objectId;
+      await selfHealCatalog();
+      // self-register the viewer into the roster on first visit
+      let me = await viewerPerson(viewerId);
+      if (!me) {
+        me = {
+          whoId: viewerId,
+          who: viewer.name,
+          email: viewer.email,
+          site: "",
+          department: "",
+          active: true,
+        };
+        await upsertPerson(me);
+      }
+      site = me.site;
+
+      const boards = await listBoards();
+      meetingsRaw = JSON.stringify(
+        boards
+          .filter((b) => b.kind === "meeting" && b.occurrenceSettingsRaw.trim() !== "")
+          .map((b) => ({ boardId: b.boardId, settingsJSON: b.occurrenceSettingsRaw }))
+      );
+      for (const b of boards) {
+        for (const slot of parseManifest(b.manifestRaw).slots) {
+          sourceLabels[slot.cardId] = `${b.name} · ${slot.title || slot.cardType}`;
+        }
+      }
+      const roster = await listPeople();
+      peopleRaw = JSON.stringify(
+        roster.map((p) => ({ whoId: p.whoId, who: p.who, crew: p.crew }))
+      );
+      actions = await actionsForViewer(viewerId);
+      orgRaw = await orgJson();
+      protectedRaw = site !== "" ? await protectedTimesJson(site) : "[]";
+      prefsRaw = await userPrefsJson(viewerId);
+      note.remove();
+    } else {
+      viewerId = VIEWER_ID;
+      meetingsRaw = JSON.stringify(BOARDS);
+      peopleRaw = JSON.stringify(PEOPLE);
+      orgRaw = JSON.stringify(ORG_TREE);
+      protectedRaw = JSON.stringify(PROTECTED_TIMES);
+      actions = parseActionsJson(JSON.stringify(ACTIONS));
+      sourceLabels = Object.fromEntries(ACTION_SOURCES.map((s) => [s.instanceId, s.label]));
+      note.textContent = "Demo mode — no Power Apps host; writes are logged, not saved.";
+    }
+
+    view = new LeanHubView(host, {
+      onSelectMeeting: (inst) => {
+        window.location.hash = `#/board/${inst.boardId}/${encodeURIComponent(inst.iso)}`;
+      },
+      onActions: (all) =>
+        hosted ? void upsertActions(all) : console.log("demo: actions", all),
+      onPrefs: (prefs) =>
+        hosted
+          ? void saveUserPrefs(viewerId, JSON.stringify(prefs))
+          : console.log("demo: prefs", prefs),
+      onProtected: (times) =>
+        hosted && site !== ""
+          ? void saveProtectedTimes(site, JSON.stringify(times))
+          : console.log("demo: protected", times),
+    });
+    view.setTheme(appTheme());
+    view.setChrome("My day", "");
+    view.setMeetings(parseHubMeetings(meetingsRaw));
+    view.setOrgTree(parseOrgTree(orgRaw));
+    view.setPeople(parsePeople(peopleRaw), viewerId);
+    view.setProtectedTimes(parseProtectedTimes(protectedRaw));
+    view.setActions(actions);
+    view.setSourceLabels(sourceLabels);
+    view.setCanEditSite(true);
+    view.setPrefs(parsePrefs(prefsRaw));
+  })();
+
+  return () => view?.destroy();
 }

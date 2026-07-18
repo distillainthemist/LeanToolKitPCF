@@ -17,8 +17,8 @@
     /* Linting — verbatimModuleSyntax / erasableSyntaxOnly are off because
        the toolkit's editor classes use parameter properties and mixed
        type/value imports (they compile under the PCF toolchain). */
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
+    /* noUnusedLocals/Parameters stay off: the program includes control
+       sources authored under the PCF toolchain's lint rules, not ours */
     "noFallthroughCasesInSwitch": true
   },
   /* Only src is included — imported editor/shared modules are checked

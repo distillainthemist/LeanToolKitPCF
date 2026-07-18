@@ -196,6 +196,31 @@ export for Production is a `pac solution export --managed` away.
   and `pac code add-data-source -a shared_office365users -c <id>` has
   generated its client. People admin degrades to manual entry meanwhile.
 
+## Phase 4 results (2026-07-18) — screens live in Power Apps
+
+Deployed as code app **LeanToolKit** in Dev and verified running hosted:
+the viewer self-registers into LTK People from `getContext().user`
+(person picker showed "Ben Pechey"), catalog self-heal runs on first
+visit, and the hub renders store-backed with a truthful empty state
+until boards exist.
+
+- Screens: **My day** (LeanHub — store-wired meetings join, viewer
+  action rollup, prefs, protected times), **Boards** list, **Board**
+  (left-pane scheduler with record matching + deep-link, instance
+  creation with the four policies on first open, BoardGrid tile wall
+  from the store join, Close meeting with the shared-card SVG archive),
+  **Card editor** (registry: KpiTrendCard, SqdpcCard, ConditionsCard,
+  FiveWhys — save loop patches document + freshest tile svg; other
+  types get an honest banner, each is a ~25-line adapter), **New
+  meeting** (wizard → saveMeetingBoard → open board), **People** admin
+  (manual entry until the Entra connection exists).
+- Dev server = demo mode (banner, writes logged); hosted = Dataverse.
+- **Screens lazy-load**: the shell paints before any SDK/store module
+  evaluates, screen-load failures render their error instead of a white
+  app, and the bundle code-splits per screen.
+- Host gotcha: after each `pac code push`, an open session shows
+  "You're using an old version — Refresh"; new sessions get the latest.
+
 ## Risks / open items
 
 - Code-app platform maturity (mobile, offline = none, ALM depth) —

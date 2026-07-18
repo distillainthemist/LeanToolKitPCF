@@ -170,13 +170,15 @@ export function actionFromRow(row: Ben_ltkactions): LtkAction {
 
 export function actionToRow(
   action: LtkAction,
-  boardId: string
+  boardId?: string
 ): Partial<Ben_ltkactionsBase> {
   return {
     ben_actionid: action.id,
     ben_name: (action.issue || action.description).slice(0, 300),
     ben_instanceid: action.instanceId,
-    ben_boardid: boardId,
+    // omit when unknown (e.g. hub edits across boards) so an update
+    // never clobbers a stamped board id
+    ...(boardId !== undefined ? { ben_boardid: boardId } : {}),
     ben_issue: action.issue.slice(0, 400),
     ben_description: action.description,
     ben_assigneesjson: JSON.stringify(action.assignees),

@@ -29,7 +29,7 @@ export async function actionsForViewer(whoId: string): Promise<LtkAction[]> {
 /** Upsert the emitted set — one row per action, keyed by action id. */
 export async function upsertActions(
   actions: LtkAction[],
-  boardId: string
+  boardId?: string
 ): Promise<void> {
   for (const action of actions) {
     await upsertWhere(

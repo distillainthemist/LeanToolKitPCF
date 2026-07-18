@@ -1,11 +1,9 @@
 // LeanToolKit app shell — vanilla TS, hash-routed. Screens mount the
-// toolkit's platform-free editor classes through CardHost; the Dataverse
-// store arrives in Phase 3 (demo data until then).
+// toolkit's platform-free editor classes through CardHost; data comes
+// from the typed Dataverse store inside Power Apps, demo data on a bare
+// dev server.
 
 import { el, clear } from "../../shared/ui/dom";
-import { mountHub } from "./screens/hub";
-import { mountBoard } from "./screens/board";
-import { mountCard } from "./screens/card";
 import "./style.css";
 
 const app = document.querySelector<HTMLDivElement>("#app")!;
@@ -20,7 +18,9 @@ const link = (label: string, hash: string) => {
   return a;
 };
 link("My day", "#/");
-link("Card demo", "#/card/fishbone");
+link("Boards", "#/boards");
+link("New meeting", "#/wizard");
+link("People", "#/people");
 bar.append(brand, nav);
 app.appendChild(bar);
 
@@ -29,8 +29,12 @@ app.appendChild(outlet);
 
 let cleanup: () => void = () => undefined;
 
+// Screens load lazily: the shell paints before any store/SDK module
+// evaluates, and a screen that fails to load shows its error instead of
+// blanking the whole app (host-side failures stay debuggable).
 function route(): void {
   cleanup();
+  cleanup = () => undefined;
   clear(outlet);
   const hash = window.location.hash || "#/";
   const parts = hash.slice(2).split("/").filter(Boolean); // drop "#/"
@@ -39,13 +43,33 @@ function route(): void {
     a.classList.toggle("app-link-on", a.getAttribute("href") === hash);
   }
 
-  if (parts[0] === "board" && parts[1]) {
-    cleanup = mountBoard(outlet, parts[1], decodeURIComponent(parts[2] ?? ""));
-  } else if (parts[0] === "card") {
-    cleanup = mountCard(outlet);
-  } else {
-    cleanup = mountHub(outlet);
-  }
+  void (async () => {
+    try {
+      if (parts[0] === "board" && parts[1]) {
+        const { mountBoard } = await import("./screens/board");
+        cleanup = mountBoard(outlet, parts[1], decodeURIComponent(parts[2] ?? ""));
+      } else if (parts[0] === "edit" && parts[1] && parts[2] && parts[3]) {
+        const { mountCardEditor } = await import("./screens/cardEditor");
+        cleanup = mountCardEditor(outlet, parts[1], parts[2], parts[3]);
+      } else if (parts[0] === "boards") {
+        const { mountBoards } = await import("./screens/boards");
+        cleanup = mountBoards(outlet);
+      } else if (parts[0] === "wizard") {
+        const { mountWizard } = await import("./screens/wizard");
+        cleanup = mountWizard(outlet);
+      } else if (parts[0] === "people") {
+        const { mountPeople } = await import("./screens/people");
+        cleanup = mountPeople(outlet);
+      } else {
+        const { mountHub } = await import("./screens/hub");
+        cleanup = mountHub(outlet);
+      }
+    } catch (err) {
+      const box = el("pre", "app-missing");
+      box.textContent = `Screen failed to load:\n${err instanceof Error ? (err.stack ?? err.message) : String(err)}`;
+      outlet.appendChild(box);
+    }
+  })();
 }
 
 window.addEventListener("hashchange", route);
