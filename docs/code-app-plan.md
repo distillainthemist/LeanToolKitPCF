@@ -232,3 +232,48 @@ until boards exist.
 - Viewer identity mapping: signed-in user → LTK People row (match on
   Entra object id / email at app start; prompt to self-register if
   missing).
+
+## Pilot run — results (2026-07-18)
+
+Full loop driven end-to-end in the deployed app (board
+`board-bottling-line-standup-6a73`, Dev environment):
+
+1. **Wizard → Create meeting**: Basics / Organisation (free-text) /
+   Cadence shiftly Mon–Fri 07:00 / Crews B,C,D,A + pattern 2D-2N-4O /
+   Participants (roster pick) / Row columns Topic,Chair / Review.
+   Board upserted, `#/board/<id>` opened, hub "My day" shows the
+   meeting across the week.
+2. **Composer stand-in**: manifest seeded via Web API script
+   (`PATCH ben_ltkboards(ben_boardid='…')`) — SQDPC (carry),
+   Line KPIs (shared), Five whys (clear); rotation anchor set at
+   `config.baseStartDate` **inside** the wizard blob (the blob nests
+   scheduler config under `config`; a top-level patch is ignored).
+3. **Instance creation**: tapping an occurrence created the instance
+   with the policy seed plan — per-instance rows for all three slots
+   plus exactly one live (instance-null) row for the shared KPI card.
+4. **Tiles**: BoardGrid renders the three slots; svg fallback chain
+   verified (instance svg for the edited SQDPC, catalog defaults for
+   the untouched cards).
+5. **Card edit**: SQDPC opened via `#/edit/...`, cell tapped, debounced
+   save stamped "saved <time>"; back on the board the tile shows the
+   saved svg (230-char outputJSON + 48 kB tilesvg in
+   `ben_ltkcarddatas`).
+6. **Close meeting**: status open → closed; shared-slot archive
+   stamping ran (live KPI svg was empty, so the stamp is empty —
+   correct).
+
+Fixed during the run: **MeetingWizard forward-nav latch** — Next/step
+dots computed `disabled` once at render; typing a title never
+re-enabled them in hosts without envelope round-trips. Gates now
+refresh per keystroke (commit `7486c76`).
+
+Follow-ups spotted:
+- Board screen loses the selected occurrence when returning from the
+  card editor (remount) — consider deep-linking back or restoring
+  selection.
+- SQDPC appears to persist its default envelope on first open without
+  a user edit (two instances have 208-char outputJSON from mounts) —
+  check the initial onChange/save path.
+- Driving the UI via automation: chips fields commit on Enter/comma
+  *keydown* or blur; native date inputs can't be filled without real
+  key events (left empty in the pilot, anchor patched via Web API).
