@@ -55,6 +55,8 @@ export class MeetingWizardView {
   private pendingFocus = "";
   /** The participants step's roster search, kept across renders. */
   private peopleQuery = "";
+  /** Re-applies the basics gate to forward nav without a full re-render. */
+  private refreshGates: () => void = () => undefined;
 
   constructor(
     host: HTMLElement,
@@ -153,7 +155,9 @@ export class MeetingWizardView {
     if (idx === -1) idx = 0; // e.g. roster step vanished with the cadence
     const step = steps[idx];
 
-    // stepper header — visited steps are tappable
+    // stepper header — visited steps are tappable; forward steps open once
+    // the basics gate passes (kept live by refreshGates, not the render)
+    const gated: HTMLButtonElement[] = [];
     const head = el("div", "ltk-mw-steps");
     steps.forEach((s, i) => {
       const dot = el("button", "ltk-mw-step") as HTMLButtonElement;
@@ -161,7 +165,7 @@ export class MeetingWizardView {
       dot.append(el("span", "ltk-mw-step-n", String(i + 1)), el("span", "ltk-mw-step-label", s.label));
       if (i === idx) dot.classList.add("ltk-mw-step-current");
       if (i < idx) dot.classList.add("ltk-mw-step-done");
-      dot.disabled = i > idx && !this.canLeaveBasics();
+      if (i > idx) gated.push(dot);
       dot.addEventListener("click", () => {
         this.stepKey = s.key;
         this.render();
@@ -192,8 +196,7 @@ export class MeetingWizardView {
     if (idx < steps.length - 1) {
       const next = el("button", "ltk-mw-btn ltk-mw-btn-primary", "Next ›") as HTMLButtonElement;
       next.type = "button";
-      next.disabled = step.key === "basics" && !this.canLeaveBasics();
-      next.title = next.disabled ? "Give the meeting a title first" : "";
+      if (step.key === "basics") gated.push(next);
       next.addEventListener("click", () => {
         this.stepKey = steps[idx + 1].key;
         this.render();
@@ -207,6 +210,15 @@ export class MeetingWizardView {
       foot.appendChild(create);
     }
     this.root.appendChild(foot);
+
+    this.refreshGates = () => {
+      const block = !this.canLeaveBasics();
+      for (const b of gated) {
+        b.disabled = block;
+        b.title = block ? "Give the meeting a title first" : "";
+      }
+    };
+    this.refreshGates();
   }
 
   // ---- field helpers ----
@@ -315,13 +327,18 @@ export class MeetingWizardView {
   // ---- step bodies ----
 
   private renderBasics(body: HTMLElement): void {
-    body.appendChild(
-      this.row(
-        "Meeting title",
-        this.textInput(this.draft.title, (v) => (this.draft.title = v), "e.g. Bottling line standup"),
-        "Becomes the card title on the board."
-      )
+    const title = this.textInput(
+      this.draft.title,
+      (v) => (this.draft.title = v),
+      "e.g. Bottling line standup"
     );
+    // keep the draft (and the forward-nav gate) live per keystroke — the
+    // change event only fires on blur, which left Next stuck disabled
+    title.addEventListener("input", () => {
+      this.draft.title = title.value.trim();
+      this.refreshGates();
+    });
+    body.appendChild(this.row("Meeting title", title, "Becomes the card title on the board."));
 
     const purpose = el("textarea", "ltk-mw-input ltk-mw-textarea") as HTMLTextAreaElement;
     purpose.value = this.draft.purpose;
