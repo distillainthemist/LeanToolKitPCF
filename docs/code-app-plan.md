@@ -119,6 +119,36 @@ recipe into tested TS:
 - Docs: this file + a code-app build doc as source of truth;
   board-app-build.md marked canvas-era.
 
+## Phase 0 results (2026-07-18) — loop proven
+
+- `pac` fixed by updating the dotnet tool 2.8.1 → **2.9.3** (2.8.1 crashed
+  constructing the Windows-only MSAL broker on macOS).
+- `pac code` requires **Node 22+** — installed as a Homebrew keg
+  (`/opt/homebrew/opt/node@22/bin`, PATH-prefixed for pac commands only).
+- Auth: device-code flow as partnership@pecheydistilling.com; target
+  environment **Pechey Distilling Development**
+  (`https://pecheydistillingdev.crm6.dynamics.com/`).
+- The **Enable code apps** environment toggle (PPAC → environment →
+  Settings → Product → Features → "Power Apps Code Apps") took
+  **~20–25 minutes to propagate** — pushes 403
+  (`CodeAppOperationNotAllowedInEnvironment`) until then. Patience, not
+  misconfiguration.
+- **vite must build with `base: "./"`** — the appruntime host serves the
+  bundle from a deep path, so absolute `/assets` URLs 404 and the app
+  renders blank inside Power Apps. This is baked into `app/vite.config.ts`.
+- Spike app "LTK Hello" deployed and verified running IN Power Apps with a
+  **typed Dataverse read** (147 systemusers) under user-context auth.
+- Outstanding: open the play URL once in **Safari** (wallboard check).
+
+## Phase 1 results (2026-07-18) — shell proven
+
+`app/` scaffold (vite + vanilla TS, hash router, CardHost) mounts the
+unmodified editor classes: LeanHub as the home screen, MeetingScheduler on
+a board screen **landing pre-selected via `selectByIso`** (the deep-link
+handshake works in-process), Fishbone as the card-mount demonstrator.
+Type-checks clean with the editors compiled straight from `../controls`.
+Dev server: `ltk-app` on :5180.
+
 ## Risks / open items
 
 - Code-app platform maturity (mobile, offline = none, ALM depth) —

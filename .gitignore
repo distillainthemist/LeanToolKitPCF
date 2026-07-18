@@ -13,3 +13,5 @@ Solution/obj/
 ~/
 .DS_Store
 tools/safari-tile-spike.html
+app/dist/
+app/.power/

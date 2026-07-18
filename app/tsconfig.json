@@ -1,0 +1,27 @@
+{
+  "compilerOptions": {
+    "target": "es2023",
+    "module": "esnext",
+    "lib": ["ES2023", "DOM"],
+    "types": ["vite/client"],
+    "allowArbitraryExtensions": true,
+    "skipLibCheck": true,
+
+    /* Bundler mode */
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "moduleDetection": "force",
+    "noEmit": true,
+
+    /* Linting — verbatimModuleSyntax / erasableSyntaxOnly are off because
+       the toolkit's editor classes use parameter properties and mixed
+       type/value imports (they compile under the PCF toolchain). */
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true
+  },
+  /* Only src is included — imported editor/shared modules are checked
+     transitively; the PCF index.ts wrappers (which need the
+     ComponentFramework ambient types) are never imported by the app. */
+  "include": ["src"]
+}
