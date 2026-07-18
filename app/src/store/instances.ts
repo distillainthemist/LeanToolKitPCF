@@ -32,6 +32,11 @@ function fromRow(row: Ben_ltkboardinstances): InstanceSummary {
   };
 }
 
+export async function getInstance(id: string): Promise<InstanceSummary | null> {
+  const result = await Ben_ltkboardinstancesService.get(id);
+  return result.data ? fromRow(result.data) : null;
+}
+
 export async function listInstances(boardId: string): Promise<InstanceSummary[]> {
   const rows = await allWhere(
     Ben_ltkboardinstancesService.getAll,

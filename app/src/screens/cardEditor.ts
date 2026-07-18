@@ -10,6 +10,7 @@ import { appTheme, editorHost } from "../cardHost";
 import { detectHost } from "../runtime";
 import { getBoard } from "../store/boards";
 import { instanceRow, liveRow, saveCard } from "../store/cards";
+import { getInstance } from "../store/instances";
 import { parseManifest, slotPolicy } from "../store/mappers";
 import { listPeople } from "../store/people";
 
@@ -43,6 +44,14 @@ export function mountCardEditor(
     const saved = el("span", "app-board-status", "");
     bar.append(back, el("span", "app-board-title", slot.title || slot.cardType), saved);
     parent.appendChild(bar);
+
+    // deep-link the back button to this card's occurrence so the board
+    // reselects it (and its tiles) instead of remounting unselected
+    void getInstance(instanceGuid).then((instance) => {
+      if (instance && instance.when !== "") {
+        back.href = `#/board/${boardId}/${encodeURIComponent(instance.when.slice(0, 16))}`;
+      }
+    });
 
     const policy = slotPolicy(slot);
     const row =

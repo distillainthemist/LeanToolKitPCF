@@ -133,6 +133,15 @@ async function renderBoard(
   const s = (k: string) => String(config[k] ?? "");
   const today = startOfDay(new Date());
 
+  // keep the selected occurrence in the URL (replaceState fires no
+  // hashchange, so no remount) — card-editor back and browser back both
+  // land on a deep link that reselects it
+  const rememberSelection = () => {
+    if (!current) return;
+    const iso = encodeURIComponent(current.when.slice(0, 16));
+    window.history.replaceState(null, "", `#/board/${board.boardId}/${iso}`);
+  };
+
   const schedulerView = new MeetingSchedulerView(leftHost, {
     onSelect: (inst) => {
       void (async () => {
@@ -145,6 +154,7 @@ async function renderBoard(
           cardRows = await rowsForBoard(board.boardId);
           refreshScheduler();
         }
+        rememberSelection();
         renderTiles();
       })();
     },
