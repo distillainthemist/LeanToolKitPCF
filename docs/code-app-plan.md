@@ -269,11 +269,16 @@ refresh per keystroke (commit `7486c76`).
 
 Follow-ups spotted:
 - Board screen loses the selected occurrence when returning from the
-  card editor (remount) — consider deep-linking back or restoring
-  selection.
-- SQDPC appears to persist its default envelope on first open without
-  a user edit (two instances have 208-char outputJSON from mounts) —
-  check the initial onChange/save path.
+  card editor (remount) — FIXED (`021655c`): selection is written into
+  the hash via replaceState and the editor's back button deep-links to
+  its occurrence; both land on the scheduler's selectByIso.
+- ~~SQDPC appears to persist its default envelope on first open~~ —
+  investigated and CLEARED: the editor's onChange fires only from
+  commit()/commitActions() (user actions; no mount/setter path emits),
+  and the suspect rows' rating keys sit in tap order (S|01, 02, 07,
+  03…) — they were the pilot driver's stray automation clicks landing
+  on S-column cells, then copied forward by the carry policy. The
+  stray marks were scrubbed from the pilot row; no code change needed.
 - Driving the UI via automation: chips fields commit on Enter/comma
   *keydown* or blur; native date inputs can't be filled without real
   key events (left empty in the pilot, anchor patched via Web API).
