@@ -83,7 +83,9 @@ export function mountHub(parent: HTMLElement): () => void {
       );
       for (const b of boards) {
         for (const slot of parseManifest(b.manifestRaw).slots) {
-          sourceLabels[slot.cardId] = `${b.name} · ${slot.title || slot.cardType}`;
+          // actions carry instanceId = boardId:cardId (the app's action key)
+          sourceLabels[`${b.boardId}:${slot.cardId}`] =
+            `${b.name} · ${slot.title || slot.cardType}`;
         }
       }
       const roster = await listPeople();
