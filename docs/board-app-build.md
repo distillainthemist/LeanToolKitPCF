@@ -1,5 +1,11 @@
 # Board app — build kit (Phase 3)
 
+> **Canvas-era document.** The board app shipped as a **Power Apps code
+> app** instead — see [code-app-plan.md](code-app-plan.md) (design of
+> record) and [code-app-build.md](code-app-build.md) (build & deploy).
+> This file is kept for the Power Fx recipes and screen designs it
+> contains; nothing here is the current build path.
+
 The screen-by-screen recipe for building the master-leanboard canvas app.
 Architecture and data model: [master-leanboard.md](master-leanboard.md).
 Everything here is paste-ready Power Fx; adapt logical names to taste.

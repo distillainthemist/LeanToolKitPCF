@@ -282,3 +282,31 @@ Follow-ups spotted:
 - Driving the UI via automation: chips fields commit on Enter/comma
   *keydown* or blur; native date inputs can't be filled without real
   key events (left empty in the pilot, anchor patched via Web API).
+
+## Phase 5 results (2026-07-18) — ALM
+
+- **Managed export verified**: `pac solution export --name
+  LeanToolKitData --managed` produces a clean managed zip (v0.1.0,
+  `<Managed>1</Managed>`, all eight tables) — Production import is one
+  `pac solution import` away.
+- **`pac code push --solutionName` verdict**: association happens only
+  when the push CREATES the app. Update pushes accept the flag but the
+  app stays outside the solution (verified: no solutioncomponents row
+  for the app id; re-creating collides on the display name until the
+  old app is deleted in the maker portal — left as Ben's call, the CI
+  push path doesn't need it). In Production the pipeline creates the
+  app with `--solutionName`, so it is solution-owned there from birth.
+- **CI**: `app-ci.yml` (Node 22: tsc + vitest + vite build on app/
+  controls/shared changes) alongside the existing PCF `ci.yml`;
+  `deploy-app.yml` (manual) exports managed schema from Dev, imports to
+  Production, retargets `power.config.json`, and pushes the app with
+  `--solutionName`. Needs the one-time service-principal setup
+  (`pac admin create-service-principal` in both environments) and the
+  repo secrets/variables listed in code-app-build.md.
+- **Repo fix**: `app/src/generated/` (the pac-generated typed clients)
+  was swallowed by the PCF `**/generated/` gitignore rule — un-ignored
+  and committed; a fresh clone now builds the app.
+- **Docs**: code-app-build.md is the build/deploy source of truth;
+  board-app-build.md banner'd as canvas-era.
+- Pilot: driven end to end earlier this phase (see Pilot run above);
+  composer slice closed the last authoring gap.

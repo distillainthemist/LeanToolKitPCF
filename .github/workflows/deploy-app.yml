@@ -1,0 +1,81 @@
+name: Deploy app
+
+# Manual promotion: export the LeanToolKitData managed solution from Dev,
+# import it into the target environment, then push the code app there.
+#
+# One-time setup (see docs/code-app-build.md § CI/CD):
+#   pac admin create-service-principal --environment <dev url>
+#   pac admin create-service-principal --environment <prod url>   (same app)
+# then set repo secrets  PP_TENANT_ID, PP_APP_ID, PP_CLIENT_SECRET
+# and repo variables     PP_DEV_URL, PP_PROD_URL, PP_PROD_ENV_ID,
+#                        PP_PROD_APP_ID (blank until the first prod push
+#                        prints the created app's id).
+on:
+  workflow_dispatch:
+    inputs:
+      import_schema:
+        description: "Import the LeanToolKitData managed solution first"
+        type: boolean
+        default: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Install pac
+        run: dotnet tool install --global Microsoft.PowerApps.CLI.Tool
+
+      - name: Authenticate (service principal)
+        run: |
+          pac auth create --applicationId "${{ secrets.PP_APP_ID }}" \
+            --clientSecret "${{ secrets.PP_CLIENT_SECRET }}" \
+            --tenant "${{ secrets.PP_TENANT_ID }}" \
+            --environment "${{ vars.PP_DEV_URL }}"
+
+      - name: Export managed schema from Dev
+        if: inputs.import_schema
+        run: |
+          pac solution export --name LeanToolKitData --managed \
+            --path LeanToolKitData_managed.zip \
+            --environment "${{ vars.PP_DEV_URL }}"
+
+      - name: Import schema into Production
+        if: inputs.import_schema
+        run: |
+          pac solution import --path LeanToolKitData_managed.zip \
+            --environment "${{ vars.PP_PROD_URL }}"
+
+      - name: Build app
+        working-directory: app
+        run: |
+          npm ci
+          npm run build
+
+      - name: Retarget power.config at Production
+        working-directory: app
+        run: |
+          node -e '
+            const fs = require("fs");
+            const cfg = JSON.parse(fs.readFileSync("power.config.json", "utf8"));
+            cfg.environmentId = "${{ vars.PP_PROD_ENV_ID }}";
+            const prodAppId = "${{ vars.PP_PROD_APP_ID }}";
+            if (prodAppId) cfg.appId = prodAppId; else delete cfg.appId;
+            fs.writeFileSync("power.config.json", JSON.stringify(cfg, null, 2));
+          '
+
+      - name: Push code app to Production
+        working-directory: app
+        # first run creates the app inside the solution — copy the printed
+        # app id into the PP_PROD_APP_ID repo variable so later runs update
+        # instead of colliding on the display name
+        run: pac code push --solutionName LeanToolKitData

@@ -1,0 +1,42 @@
+name: App CI
+
+# Type-check, test, and build the code app whenever it (or the editor
+# sources it consumes) changes. The PCF control bundles have their own
+# CI workflow; this one needs Node 22 (the pac code toolchain floor).
+on:
+  push:
+    branches: [main]
+    paths:
+      - "app/**"
+      - "controls/**"
+      - "shared/**"
+      - "tools/tile-defaults.json"
+      - ".github/workflows/app-ci.yml"
+  pull_request:
+    paths:
+      - "app/**"
+      - "controls/**"
+      - "shared/**"
+      - "tools/tile-defaults.json"
+      - ".github/workflows/app-ci.yml"
+
+jobs:
+  app:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - run: npm ci
+      - name: Type-check
+        run: npx tsc -p tsconfig.json
+      - name: Unit tests
+        run: npx vitest run
+      - name: Build
+        run: npm run build

@@ -5,6 +5,13 @@ obj/
 bin/
 .vs/
 **/generated/
+# …but the code app's pac-generated typed clients are source, not build output
+!app/src/generated/
+!app/src/generated/**
+
+# code-app build + solution exports
+app/dist/
+data/dist/
 *.pcfproj.user
 Solution/bin/
 Solution/obj/
