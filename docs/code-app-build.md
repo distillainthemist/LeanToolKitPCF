@@ -46,13 +46,14 @@ pac code push      # updates the app in power.config.json's environment
   on push does **not** retarget — edit the config to point elsewhere.
 - Open sessions show "You're using an old version — Refresh" after a
   push; new sessions get the latest.
-- `pac code push --solutionName` is accepted but **inert on this
-  platform version** (verified 2026-07-18 with a create-time push:
-  no solutioncomponents row, no canvasapps row, exported zip empty of
-  the app). Code apps cannot ship inside a managed solution today —
-  cross-org deployment is managed tables zip + `pac code push`, per
-  [deploy-to-new-org.md](deploy-to-new-org.md). Keep passing the flag;
-  it's forward-compatible if code-app solution ALM lands.
+- Solution membership: code apps get their Dataverse `canvasapp` row
+  (type 4) only when **added to a solution in the maker portal** (Add
+  existing → App) — done for LeanToolKitData on 2026-07-18, so managed
+  exports now carry the app + its connection reference and import
+  cleanly elsewhere (Ben verified in Production). `pac code push
+  --solutionName` does NOT perform that registration (verified inert
+  on this platform version, even at app creation) — the portal add is
+  the one-time bridge. Ship steps: [deploy-to-new-org.md](deploy-to-new-org.md).
 
 ## Schema (Dataverse tables)
 

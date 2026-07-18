@@ -331,3 +331,18 @@ release.yml `board-app` job on every version tag:
   stateless and re-pushable.
 Junk to clean in Dev: "LTK Ship Test" app (spike, maker portal) along
 with "LTK Hello".
+
+## Cross-org shipping — verdict corrected (2026-07-18, later)
+
+Ben added the code app to the LeanToolKitData UNMANAGED solution via
+the maker portal (Add existing → App), exported managed, imported into
+Production — and it worked. Dataverse now shows the app as a canvasapp
+row (canvasapptype 4) + solution component type 300, plus the O365
+Users connection reference (type 10150). Corrected understanding:
+code apps CAN ship in a managed solution; what's inert is only the
+`pac code push --solutionName` registration path. The portal add is a
+one-time step per environment holding the master; pushes keep updating
+the same app and exports snapshot the latest bundle. The single
+managed zip is therefore the primary ship vehicle; the app-package zip
+stays on releases as the CLI fallback. deploy-to-new-org.md rewritten
+accordingly.

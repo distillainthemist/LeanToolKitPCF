@@ -1,75 +1,55 @@
 # Deploying LeanToolKit to a new organisation
 
-Every GitHub release (v0.x.y tag) carries two LeanToolKit board-app
-artifacts alongside the PCF solution zips:
+One managed solution carries everything: the eight Dataverse tables,
+the code app itself, and its Office 365 Users connection reference.
+Every GitHub release (v0.x.y tag) attaches
+**`LeanToolKitData_<tag>_managed.zip`** alongside the PCF solution zips.
 
-- **`LeanToolKitData_<tag>_managed.zip`** — the eight Dataverse tables
-  as a managed solution.
-- **`LeanToolKitApp_<tag>.zip`** — the built code app + `power.config`
-  + these instructions.
-
-Code apps are **not** Dataverse solution components (verified 2026-07-18:
-even a create-time `pac code push --solutionName` registers nothing
-exportable), so the app cannot ride inside the managed zip — it is
-pushed into the target environment with the pac CLI instead. That is a
-one-time, five-minute step.
+How the app rides along: code apps live in the Power Apps service and
+gain a Dataverse `canvasapp` row (type 4) only when **added to a
+solution in the maker portal** (Solutions → LeanToolKitData → Add
+existing → App). That registration was done 2026-07-18 and persists —
+every subsequent `pac code push` updates the same app, and every
+export snapshots the latest pushed bundle. Note `pac code push
+--solutionName` does NOT perform this registration (verified inert);
+the portal add is the one-time bridge.
 
 ## Prerequisites in the target organisation
 
 1. A Dataverse environment, and someone with maker/admin rights in it.
 2. **Power Apps Code Apps enabled**: Power Platform admin centre →
    environment → Settings → Product → Features → "Power Apps Code
-   Apps" → On. Allow **~20–25 minutes** to propagate (pushes 403 with
-   `CodeAppOperationNotAllowedInEnvironment` until then).
-3. pac CLI 2.9.3+ on the installing machine
-   (`dotnet tool install --global Microsoft.PowerApps.CLI.Tool`).
-4. Users need Power Apps premium licences (code apps requirement).
+   Apps" → On (allow ~20–25 minutes to propagate).
+3. Users need Power Apps premium licences (code apps requirement).
 
-## Install steps
+## Install / update steps
+
+1. Import `LeanToolKitData_<tag>_managed.zip` (maker portal →
+   Solutions → Import, or `pac solution import`).
+2. When prompted for the **Office 365 Users connection reference**,
+   bind it to a connection in the target environment (create one on
+   the spot if none exists — it powers Entra people search).
+3. Share the LeanToolKit app with users. On first open each user
+   approves the connection once; the card catalog self-seeds; People
+   admin builds the roster.
+
+Updates are the same import — managed upgrades apply tables and the
+app in place, and all data (boards, meetings, cards, actions, people)
+lives in the tables, untouched by app updates.
+
+## Fallback: pac CLI install (no solution import for the app)
+
+Releases also attach **`LeanToolKitApp_<tag>.zip`** (built bundle +
+templated `power.config.json`). If importing the app via solution is
+ever blocked, the app can be pushed directly:
 
 ```sh
-# 1. Sign in as a maker in the target environment
-pac auth create --deviceCode
-pac org who        # confirm the right environment
-
-# 2. Import the tables
+pac auth create --deviceCode          # maker in the target environment
 pac solution import --path LeanToolKitData_<tag>_managed.zip
-
-# 3. Create an Office 365 Users connection (for Entra people search)
-#    make.powerapps.com → Connections → + New connection →
-#    Office 365 Users → Create, then note its id:
-pac connection list
-
-# 4. Unzip LeanToolKitApp_<tag>.zip and, inside that folder:
-#    - edit power.config.json: set "environmentId" to the target
-#      environment's GUID (pac org who shows it)
-#    - rebind the connection: either run
-#        pac code add-data-source -a shared_office365users -c <connection id>
-#      or replace the GUID key under "connectionReferences" with the id.
-# 5. Push the app (creates it; prints the play URL):
-pac code push --solutionName LeanToolKitData
+# unzip LeanToolKitApp_<tag>.zip, set environmentId + the O365
+# connection id in power.config.json, then:
+pac code push
 ```
 
-Then share the app with users from make.powerapps.com → Apps. On first
-open each user approves the Office 365 Users connection once; the card
-catalog self-seeds; People admin (Entra search or manual) builds the
-roster.
-
-## Updates
-
-- **Tables**: import the newer `LeanToolKitData_*_managed.zip` (managed
-  upgrades in place).
-- **App**: in the unzipped newer app package, copy the previous
-  `power.config.json`'s `appId`, `environmentId`, and
-  `connectionReferences` over the template values, then
-  `pac code push` — it updates the existing app in place (without the
-  appId a push would collide on the display name).
-
-## Notes
-
-- The app is created **inside** the LeanToolKitData solution where the
-  platform supports it; today that has no export effect (see above) but
-  is forward-compatible if code-app solution ALM lands.
-- All app data (boards, meetings, cards, actions, people) lives in the
-  imported tables; the app itself is stateless and can be deleted and
-  re-pushed at any time without data loss.
+The pushed app is identical; it just lives outside the solution until
+someone does the portal Add-existing step there.
