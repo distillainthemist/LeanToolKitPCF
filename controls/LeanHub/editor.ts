@@ -297,13 +297,8 @@ export class LeanHubView {
     bar.appendChild(el("span", "ltk-lh-range", range));
     body.appendChild(bar);
 
-    if (this.meetings.length === 0) {
-      renderGhost(body, [
-        "No meetings supplied",
-        "Bind meetingsJSON to the boards' scheduler settings.",
-      ]);
-      return;
-    }
+    // no meetings = an empty calendar, not a maker hint — the grid
+    // below renders fine with zero instances
 
     // project + scope-filter the window's occurrences
     const byId = new Map(this.meetings.map((m) => [m.boardId, m]));

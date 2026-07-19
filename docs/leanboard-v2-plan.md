@@ -58,7 +58,7 @@ upgrade for other orgs)
 
 ## Slices
 
-### Slice 1 — Quick wins (S)
+### Slice 1 — Quick wins (S) — DONE 2026-07-19
 - LeanHub: empty meetings → render the empty calendar (drop the
   "bind meetingsJSON" maker hint from the user path).
 - Default theme: white header, blue accent (branding fallback values).

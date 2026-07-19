@@ -31,7 +31,7 @@ export const BOARDS = [
     settingsJSON: {
       cardType: "MeetingScheduler",
       title: "Bottling standup",
-      theme: { titlebar: "#8b1e1e", accent: "#8b1e1e" },
+      theme: { titlebar: "#2563eb", accent: "#2563eb" },
       config: {
         category: "shiftly",
         daysOfWeek: "Mon,Tue,Wed,Thu,Fri",

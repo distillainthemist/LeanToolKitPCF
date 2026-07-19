@@ -22,6 +22,7 @@ import {
   startOfDay,
 } from "../../../shared/schema/recurrence";
 import { parseMeetingInfo } from "../../../shared/schema/meeting";
+import { openDialog } from "../../../shared/ui/dialog";
 import { el } from "../../../shared/ui/dom";
 import { appTheme } from "../cardHost";
 import { detectHost } from "../runtime";
@@ -142,21 +143,49 @@ async function renderBoard(
     window.history.replaceState(null, "", `#/board/${board.boardId}/${iso}`);
   };
 
+  const createAndSelect = async (whenIso: string) => {
+    current = await createInstance(board.boardId, whenIso);
+    instances = await listInstances(board.boardId);
+    cardRows = await rowsForBoard(board.boardId);
+    refreshScheduler();
+    rememberSelection();
+    renderTiles();
+  };
+
   const schedulerView = new MeetingSchedulerView(leftHost, {
     onSelect: (inst) => {
-      void (async () => {
-        const existing = instances.find((i) => i.when.startsWith(inst.iso));
-        if (existing) {
-          current = existing;
-        } else {
-          current = await createInstance(board.boardId, `${inst.iso}:00Z`);
-          instances = await listInstances(board.boardId);
-          cardRows = await rowsForBoard(board.boardId);
-          refreshScheduler();
-        }
+      const existing = instances.find((i) => i.when.startsWith(inst.iso));
+      if (existing) {
+        current = existing;
         rememberSelection();
         renderTiles();
-      })();
+        return;
+      }
+      // no record yet: confirm before creating (accidental taps were a
+      // real source of stray instances in the pilot). Host the dialog
+      // inside the scheduler's themed root so the toolkit styles apply.
+      const dlg = openDialog({
+        host: (leftHost.querySelector(".ltk-root") as HTMLElement) ?? leftHost,
+        title: "Create meeting record?",
+        buttons: [
+          { label: "Cancel", kind: "secondary", onClick: () => dlg.close() },
+          {
+            label: "Create record",
+            kind: "primary",
+            onClick: () => {
+              dlg.close();
+              void createAndSelect(`${inst.iso}:00Z`);
+            },
+          },
+        ],
+      });
+      dlg.body.appendChild(
+        el(
+          "p",
+          "",
+          `${inst.iso.slice(0, 10)} at ${inst.iso.slice(11, 16)} has no meeting record yet.`
+        )
+      );
     },
   });
   cleanups.push(() => schedulerView.destroy());
@@ -197,7 +226,7 @@ async function renderBoard(
   schedulerView.setTheme({
     ...appTheme(),
     titleBar:
-      String(((blob.theme ?? {}) as Record<string, unknown>).titlebar ?? "") || "#8b1e1e",
+      String(((blob.theme ?? {}) as Record<string, unknown>).titlebar ?? "") || "#2563eb",
   });
   schedulerView.setChrome(String(blob.title ?? board.name), "");
   schedulerView.setMeetingInfo(parseMeetingInfo(blobRaw));

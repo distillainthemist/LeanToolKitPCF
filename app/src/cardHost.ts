@@ -9,8 +9,8 @@ import { el } from "../../shared/ui/dom";
 /** The LeanBoard app theme, applied to every mounted editor. */
 export function appTheme(): Theme {
   const theme = defaultTheme();
-  theme.accent = "#8b1e1e";
-  theme.titleBar = "#8b1e1e";
+  theme.accent = "#2563eb";
+  theme.titleBar = "#2563eb";
   return theme;
 }
 
