@@ -57,6 +57,8 @@ export class MeetingWizardView {
   private peopleQuery = "";
   /** Re-applies the basics gate to forward nav without a full re-render. */
   private refreshGates: () => void = () => undefined;
+  /** Named roster patterns per site (site settings library). */
+  private rosterPatterns: Record<string, { name: string; pattern: string }[]> = {};
 
   constructor(
     host: HTMLElement,
@@ -109,6 +111,13 @@ export class MeetingWizardView {
       this.readOnly = ro;
       this.render();
     }
+  }
+
+  /** The site-settings roster-pattern library ({site: [{name, pattern}]}). */
+  setRosterPatterns(lib: Record<string, { name: string; pattern: string }[]>): void {
+    if (JSON.stringify(lib) === JSON.stringify(this.rosterPatterns)) return;
+    this.rosterPatterns = lib;
+    this.render();
   }
 
   destroy(): void {
@@ -598,6 +607,28 @@ export class MeetingWizardView {
         "In roster order. Leave empty for no crew rotation."
       )
     );
+    // standard patterns from the site's library, custom as the fallback
+    const sitePatterns = this.rosterPatterns[d.org.site] ?? [];
+    if (sitePatterns.length > 0 && !this.readOnly) {
+      const pick = el("select", "ltk-mw-input") as HTMLSelectElement;
+      const mk = (value: string, label: string) => {
+        const o = el("option", "", label) as HTMLOptionElement;
+        o.value = value;
+        pick.appendChild(o);
+      };
+      mk("", "Custom\u2026");
+      for (const sp of sitePatterns) mk(sp.pattern, `${sp.name} (${sp.pattern})`);
+      const match = sitePatterns.find((sp) => sp.pattern === d.rosterPattern);
+      pick.value = match ? match.pattern : "";
+      pick.addEventListener("change", () => {
+        if (pick.value !== "") {
+          d.rosterPattern = pick.value;
+          this.commit();
+          this.render();
+        }
+      });
+      body.appendChild(this.row("Standard pattern", pick, "From this site's settings."));
+    }
     body.appendChild(
       this.row(
         "Roster pattern",

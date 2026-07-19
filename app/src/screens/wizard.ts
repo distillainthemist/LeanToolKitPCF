@@ -13,7 +13,7 @@ import { el } from "../../../shared/ui/dom";
 import { appTheme, editorHost } from "../cardHost";
 import { detectHost } from "../runtime";
 import { saveMeetingBoard } from "../store/boards";
-import { orgJson } from "../store/config";
+import { orgJson, rosterPatternLibrary } from "../store/config";
 import { listPeople } from "../store/people";
 
 function mintBoardId(title: string): string {
@@ -54,6 +54,7 @@ export function mountWizard(parent: HTMLElement): () => void {
     view.setTheme(appTheme());
     view.setChrome("New meeting", "");
     view.setOrgTree(parseOrgTree(org));
+    if (hosted) view.setRosterPatterns(await rosterPatternLibrary());
     view.setPeople(parsePeople(peopleRaw));
     view.setDraft(parseWizardDraft(""));
     if (!hosted) {

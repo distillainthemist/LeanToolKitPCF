@@ -42,10 +42,6 @@
           "entitySetName": "ben_ltkactions",
           "logicalName": "ben_ltkaction"
         },
-        "ltksitesettings": {
-          "entitySetName": "ben_ltksitesettingses",
-          "logicalName": "ben_ltksitesettings"
-        },
         "ltkuserprefs": {
           "entitySetName": "ben_ltkuserprefses",
           "logicalName": "ben_ltkuserprefs"
@@ -53,6 +49,10 @@
         "ltkpeople": {
           "entitySetName": "ben_ltkpeoples",
           "logicalName": "ben_ltkpeople"
+        },
+        "ltksitesettings": {
+          "entitySetName": "ben_ltksitesettingses",
+          "logicalName": "ben_ltksitesettings"
         }
       },
       "environmentVariableName": ""

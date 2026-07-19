@@ -14,11 +14,16 @@ export const Ben_ltksitesettingsesstatuscode = {
 export type Ben_ltksitesettingsesstatuscode = keyof typeof Ben_ltksitesettingsesstatuscode;
 
 export interface Ben_ltksitesettingsesBase {
+  ben_accent?: string;
+  ben_appname?: string;
   ben_departments?: string;
+  ben_logo?: string;
   ben_ltksitesettingsid: string;
   ben_name?: string;
   ben_protectedtimes?: string;
+  ben_rosterpatterns?: string;
   ben_site: string;
+  ben_timezone?: string;
   importsequencenumber?: number;
   overriddencreatedon?: string;
   statecode: Ben_ltksitesettingsesstatecode;

@@ -125,6 +125,12 @@ export const TABLES = [
       ben_site: { ...text(100), display: "Site", required: true },
       ben_departments: { ...memo(10000), display: "Departments (JSON)" },
       ben_protectedtimes: { ...memo(10000), display: "Protected Times (JSON)" },
+      ben_timezone: { ...text(60), display: "Time zone (IANA)" },
+      ben_accent: { ...text(20), display: "Accent colour" },
+      ben_rosterpatterns: { ...memo(10000), display: "Roster Patterns (JSON)" },
+      // app-level branding lives on the reserved "__app__" row
+      ben_appname: { ...text(60), display: "App name (branding)" },
+      ben_logo: { ...memo(200000), display: "Logo (data URI)" },
     },
     key: ["ben_site"],
   },

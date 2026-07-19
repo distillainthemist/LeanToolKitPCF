@@ -6,11 +6,15 @@
 import { defaultTheme, Theme } from "../../shared/tokens";
 import { el } from "../../shared/ui/dom";
 
-/** The LeanBoard app theme, applied to every mounted editor. */
+/** The LeanBoard app theme — follows the live --app-accent variable
+ * (branding/site settings override it; #2563eb is the default). */
 export function appTheme(): Theme {
   const theme = defaultTheme();
-  theme.accent = "#2563eb";
-  theme.titleBar = "#2563eb";
+  const accent =
+    getComputedStyle(document.documentElement).getPropertyValue("--app-accent").trim() ||
+    "#2563eb";
+  theme.accent = accent;
+  theme.titleBar = accent;
   return theme;
 }
 

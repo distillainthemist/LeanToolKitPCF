@@ -65,7 +65,7 @@ upgrade for other orgs)
 - Board screen: tapping a recordless occurrence asks "Create the
   meeting record for <when>?" before createInstance.
 
-### Slice 2 — Roles + Settings shell (M)
+### Slice 2 — Roles + Settings shell (M) — DONE 2026-07-19
 - Schema: `ben_role`, `ben_area`.
 - Settings cog (header right) → tabbed screen; role-gated tabs.
 - My profile tab: site/department/area pickers; first-access prompt
@@ -75,7 +75,7 @@ upgrade for other orgs)
 - Nav trim: header = brand + Settings cog; My day tabs = Cadence /
   Actions / Boards (list view, challenge #2).
 
-### Slice 3 — Organisation + branding (M/L)
+### Slice 3 — Organisation + branding (M/L) — DONE 2026-07-19
 - Org hierarchy editor: sites → departments → areas as a navigable
   tree (super: sites; site admin: their site's tree).
 - Site settings: timezone, protected times (relocated), site accent,

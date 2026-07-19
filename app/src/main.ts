@@ -29,6 +29,37 @@ app.appendChild(bar);
 const outlet = el("main", "app-outlet");
 app.appendChild(outlet);
 
+// Branding: app accent < site accent precedence, name + logo in the bar.
+// Loaded lazily so the shell paints before any SDK module evaluates.
+void (async () => {
+  try {
+    const { detectHost, currentViewer } = await import("./runtime");
+    if (!(await detectHost())) return;
+    const { branding, siteSettings } = await import("./store/config");
+    const { viewerPerson } = await import("./store/people");
+    const b = await branding();
+    if (b.appName.trim() !== "") brand.textContent = b.appName.trim();
+    if (b.logo.startsWith("data:image/")) {
+      const img = el("img", "app-logo") as HTMLImageElement;
+      img.src = b.logo;
+      img.alt = "";
+      brand.prepend(img);
+    }
+    let accent = b.accent.trim();
+    const viewer = currentViewer();
+    const me = viewer ? await viewerPerson(viewer.objectId) : null;
+    if (me && me.site !== "") {
+      const s = await siteSettings(me.site);
+      if (s.accent.trim() !== "") accent = s.accent.trim();
+    }
+    if (/^#[0-9a-fA-F]{3,8}$/.test(accent)) {
+      document.documentElement.style.setProperty("--app-accent", accent);
+    }
+  } catch {
+    /* branding is cosmetic — never block the shell */
+  }
+})();
+
 let cleanup: () => void = () => undefined;
 
 // Screens load lazily: the shell paints before any store/SDK module

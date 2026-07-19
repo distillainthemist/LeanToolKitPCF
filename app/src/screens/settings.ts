@@ -7,7 +7,16 @@
 
 import { clear, el } from "../../../shared/ui/dom";
 import { currentViewer, detectHost } from "../runtime";
-import { orgJson } from "../store/config";
+import {
+  branding,
+  orgJson,
+  protectedTimesJson,
+  saveBranding,
+  saveProtectedTimes,
+  saveSiteDepartments,
+  saveSiteSettings,
+  siteSettings,
+} from "../store/config";
 import { parseOrgTree } from "../../../shared/schema/meeting";
 import { RosterPerson } from "../store/mappers";
 import {
@@ -46,7 +55,12 @@ export function mountSettings(parent: HTMLElement): () => void {
     ];
     if (isAdmin) {
       tabs.push({ key: "users", label: "Users", render: () => renderUsers(body, me) });
-    } else {
+      tabs.push({ key: "org", label: "Organisation", render: () => renderOrg(body, me) });
+    }
+    if (me.role === "superadmin") {
+      tabs.push({ key: "brand", label: "Branding", render: () => renderBranding(body) });
+    }
+    if (!isAdmin) {
       tabs.push({ key: "request", label: "Request admin", render: () => renderRequest(body, me) });
     }
 
@@ -216,4 +230,344 @@ async function renderRequest(body: HTMLElement, me: RosterPerson): Promise<void>
     })();
   });
   body.append(row("Setup code", code), row("", go), note);
+}
+
+// ---- Organisation: site tree + site settings + protected times ----
+
+interface OrgSiteNode {
+  site: string;
+  departments: { department: string; areas: string[] }[];
+}
+
+async function renderOrg(body: HTMLElement, me: RosterPerson): Promise<void> {
+  clear(body);
+  const isSuper = me.role === "superadmin";
+  const tree = parseOrgTree(await orgJson()) as OrgSiteNode[];
+  const sites = tree.map((s) => s.site);
+  // site admins manage their own site only
+  const editable = isSuper ? sites : sites.filter((s) => s === me.site);
+
+  let currentSite = editable[0] ?? "";
+
+  const picker = el("div", "app-settings-row");
+  const siteSel = select(sites, currentSite);
+  siteSel.addEventListener("change", () => {
+    currentSite = siteSel.value;
+    void renderSite();
+  });
+  picker.append(el("span", "app-settings-label", "Site"), siteSel);
+  if (isSuper) {
+    const newSite = el("input", "app-input") as HTMLInputElement;
+    newSite.placeholder = "New site name";
+    const addSite = el("button", "app-btn", "\uFF0B Add site") as HTMLButtonElement;
+    addSite.addEventListener("click", () => {
+      const name = newSite.value.trim();
+      if (name === "" || name === "__app__") return;
+      void saveSiteDepartments(name, "[]").then(() => renderOrg(body, me));
+    });
+    picker.append(newSite, addSite);
+  }
+  body.appendChild(picker);
+
+  const siteBox = el("div", "app-settings-body");
+  siteBox.style.boxShadow = "none";
+  siteBox.style.padding = "0";
+  body.appendChild(siteBox);
+
+  const renderSite = async () => {
+    clear(siteBox);
+    if (currentSite === "") {
+      siteBox.appendChild(el("div", "app-settings-note", "Add a site to begin."));
+      return;
+    }
+    const canEdit = editable.includes(currentSite);
+    const node = tree.find((s) => s.site === currentSite) ?? {
+      site: currentSite,
+      departments: [],
+    };
+    const s = await siteSettings(currentSite);
+    const times = JSON.parse(await protectedTimesJson(currentSite)) as {
+      label?: string;
+      color?: string;
+      days?: string;
+      start?: string;
+      end?: string;
+    }[];
+    let patterns: { name: string; pattern: string }[] = [];
+    try {
+      const arr = JSON.parse(s.rosterPatternsJson || "[]");
+      if (Array.isArray(arr)) patterns = arr;
+    } catch { /* fresh */ }
+
+    // --- departments & areas tree ---
+    siteBox.appendChild(sectionTitle("Departments & areas"));
+    const treeBox = el("div", "app-org-tree");
+    siteBox.appendChild(treeBox);
+    const drawTree = () => {
+      clear(treeBox);
+      for (const d of node.departments) {
+        const dr = el("div", "app-org-row app-org-dept");
+        dr.appendChild(el("span", "app-org-site", d.department));
+        if (canEdit) dr.appendChild(removeBtn(() => {
+          node.departments = node.departments.filter((x) => x !== d);
+          drawTree();
+        }));
+        treeBox.appendChild(dr);
+        for (const a of d.areas) {
+          const ar = el("div", "app-org-row app-org-area");
+          ar.appendChild(el("span", "", a));
+          if (canEdit) ar.appendChild(removeBtn(() => {
+            d.areas = d.areas.filter((x) => x !== a);
+            drawTree();
+          }));
+          treeBox.appendChild(ar);
+        }
+        if (canEdit) {
+          const addA = adder("Add area", (v) => {
+            d.areas.push(v);
+            drawTree();
+          });
+          addA.classList.add("app-org-area");
+          treeBox.appendChild(addA);
+        }
+      }
+      if (canEdit) {
+        treeBox.appendChild(adder("Add department", (v) => {
+          node.departments.push({ department: v, areas: [] });
+          drawTree();
+        }));
+      }
+    };
+    drawTree();
+
+    // --- site settings ---
+    siteBox.appendChild(sectionTitle("Site settings"));
+    const tz = el("input", "app-input") as HTMLInputElement;
+    tz.placeholder = "e.g. Australia/Brisbane";
+    tz.value = s.timezone;
+    tz.setAttribute("list", "app-tz-list");
+    ensureTzDatalist();
+    const accent = el("input", "app-input") as HTMLInputElement;
+    accent.type = "color";
+    accent.value = /^#[0-9a-fA-F]{6}$/.test(s.accent) ? s.accent : "#2563eb";
+    const accentOn = el("input", "") as HTMLInputElement;
+    accentOn.type = "checkbox";
+    accentOn.checked = s.accent !== "";
+    const accentWrap = el("span", "app-settings-row");
+    accentWrap.append(accentOn, accent, el("span", "app-settings-note", "override app accent"));
+    siteBox.append(row("Time zone", tz), row("Accent", accentWrap));
+
+    // --- roster patterns ---
+    siteBox.appendChild(sectionTitle("Shift roster patterns"));
+    const patBox = el("div", "app-org-tree");
+    siteBox.appendChild(patBox);
+    const drawPatterns = () => {
+      clear(patBox);
+      for (const pat of patterns) {
+        const r = el("div", "app-org-row");
+        r.append(
+          el("span", "app-org-site", pat.name),
+          el("span", "app-settings-note", pat.pattern)
+        );
+        if (canEdit) r.appendChild(removeBtn(() => {
+          patterns = patterns.filter((x) => x !== pat);
+          drawPatterns();
+        }));
+        patBox.appendChild(r);
+      }
+      if (canEdit) {
+        const name = el("input", "app-input") as HTMLInputElement;
+        name.placeholder = "Name (e.g. 4-crew rotating)";
+        const pattern = el("input", "app-input") as HTMLInputElement;
+        pattern.placeholder = "Pattern (e.g. 2D-2N-4O)";
+        const add = el("button", "app-btn", "\uFF0B") as HTMLButtonElement;
+        add.addEventListener("click", () => {
+          if (name.value.trim() === "" || pattern.value.trim() === "") return;
+          patterns.push({ name: name.value.trim(), pattern: pattern.value.trim().toUpperCase() });
+          drawPatterns();
+        });
+        const r = el("div", "app-org-row");
+        r.append(name, pattern, add);
+        patBox.appendChild(r);
+      }
+    };
+    drawPatterns();
+
+    // --- protected times ---
+    siteBox.appendChild(sectionTitle("Protected times"));
+    const ptBox = el("div", "app-org-tree");
+    siteBox.appendChild(ptBox);
+    const drawTimes = () => {
+      clear(ptBox);
+      for (const pt of times) {
+        const r = el("div", "app-org-row");
+        r.append(
+          el("span", "app-org-site", pt.label ?? ""),
+          el("span", "app-settings-note", `${pt.days ?? "all days"} ${pt.start ?? ""}\u2013${pt.end ?? ""}`)
+        );
+        if (canEdit) r.appendChild(removeBtn(() => {
+          times.splice(times.indexOf(pt), 1);
+          drawTimes();
+        }));
+        ptBox.appendChild(r);
+      }
+      if (canEdit) {
+        const label = el("input", "app-input") as HTMLInputElement;
+        label.placeholder = "Label";
+        const days = el("input", "app-input") as HTMLInputElement;
+        days.placeholder = "Days (e.g. Mon-Fri)";
+        days.style.width = "120px";
+        const start = el("input", "app-input") as HTMLInputElement;
+        start.type = "time";
+        const end = el("input", "app-input") as HTMLInputElement;
+        end.type = "time";
+        const add = el("button", "app-btn", "\uFF0B") as HTMLButtonElement;
+        add.addEventListener("click", () => {
+          if (label.value.trim() === "" || start.value === "" || end.value === "") return;
+          times.push({ label: label.value.trim(), days: days.value.trim(), start: start.value, end: end.value });
+          drawTimes();
+        });
+        const r = el("div", "app-org-row");
+        r.append(label, days, start, end, add);
+        ptBox.appendChild(r);
+      }
+    };
+    drawTimes();
+
+    // --- save ---
+    if (canEdit) {
+      const save = el("button", "app-btn", "Save site") as HTMLButtonElement;
+      const note = el("span", "app-settings-note", "");
+      save.addEventListener("click", () => {
+        void (async () => {
+          await saveSiteDepartments(currentSite, JSON.stringify(node.departments));
+          await saveSiteSettings(currentSite, {
+            timezone: tz.value.trim(),
+            accent: accentOn.checked ? accent.value : "",
+            rosterPatternsJson: JSON.stringify(patterns),
+          });
+          await saveProtectedTimes(currentSite, JSON.stringify(times));
+          note.textContent = `saved ${new Date().toLocaleTimeString()}`;
+        })();
+      });
+      const r = el("div", "app-settings-row");
+      r.append(save, note);
+      siteBox.appendChild(r);
+    } else {
+      siteBox.appendChild(
+        el("div", "app-settings-note", "Read-only — this site is managed by its site admins.")
+      );
+    }
+  };
+  await renderSite();
+}
+
+function sectionTitle(text: string): HTMLElement {
+  const t = el("div", "app-settings-label", text);
+  t.style.width = "auto";
+  t.style.marginTop = "12px";
+  return t;
+}
+
+function removeBtn(onClick: () => void): HTMLButtonElement {
+  const b = el("button", "app-org-x", "\u00d7") as HTMLButtonElement;
+  b.addEventListener("click", onClick);
+  return b;
+}
+
+function adder(placeholder: string, onAdd: (v: string) => void): HTMLElement {
+  const r = el("div", "app-org-row");
+  const input = el("input", "app-input") as HTMLInputElement;
+  input.placeholder = placeholder;
+  const b = el("button", "app-btn", "\uFF0B") as HTMLButtonElement;
+  b.addEventListener("click", () => {
+    const v = input.value.trim();
+    if (v !== "") onAdd(v);
+  });
+  r.append(input, b);
+  return r;
+}
+
+function ensureTzDatalist(): void {
+  if (document.getElementById("app-tz-list")) return;
+  const dl = document.createElement("datalist");
+  dl.id = "app-tz-list";
+  const zones =
+    typeof Intl.supportedValuesOf === "function" ? Intl.supportedValuesOf("timeZone") : [];
+  for (const z of zones) {
+    const o = document.createElement("option");
+    o.value = z;
+    dl.appendChild(o);
+  }
+  document.body.appendChild(dl);
+}
+
+// ---- Branding (super admins) ----
+
+async function renderBranding(body: HTMLElement): Promise<void> {
+  clear(body);
+  const b = await branding();
+  const name = el("input", "app-input") as HTMLInputElement;
+  name.placeholder = "LeanBoard";
+  name.value = b.appName;
+  const accent = el("input", "app-input") as HTMLInputElement;
+  accent.type = "color";
+  accent.value = /^#[0-9a-fA-F]{6}$/.test(b.accent) ? b.accent : "#2563eb";
+  const accentOn = el("input", "") as HTMLInputElement;
+  accentOn.type = "checkbox";
+  accentOn.checked = b.accent !== "";
+  const accentWrap = el("span", "app-settings-row");
+  accentWrap.append(accentOn, accent, el("span", "app-settings-note", "override default blue"));
+
+  let logo = b.logo;
+  const preview = el("img", "app-logo") as HTMLImageElement;
+  if (logo !== "") preview.src = logo;
+  const file = el("input", "") as HTMLInputElement;
+  file.type = "file";
+  file.accept = "image/png,image/svg+xml,image/jpeg";
+  const logoNote = el("span", "app-settings-note", "PNG/SVG, ≤150 KB");
+  file.addEventListener("change", () => {
+    const f = file.files?.[0];
+    if (!f) return;
+    if (f.size > 150_000) {
+      logoNote.textContent = "Too big — keep the logo under 150 KB.";
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      logo = String(reader.result ?? "");
+      preview.src = logo;
+      logoNote.textContent = f.name;
+    };
+    reader.readAsDataURL(f);
+  });
+  const clearLogo = el("button", "app-btn", "Remove logo") as HTMLButtonElement;
+  clearLogo.addEventListener("click", () => {
+    logo = "";
+    preview.removeAttribute("src");
+    logoNote.textContent = "logo removed";
+  });
+  const logoWrap = el("span", "app-settings-row");
+  logoWrap.append(file, clearLogo, preview, logoNote);
+
+  const save = el("button", "app-btn", "Save branding") as HTMLButtonElement;
+  const note = el("span", "app-settings-note", "");
+  save.addEventListener("click", () => {
+    void saveBranding({
+      appName: name.value.trim(),
+      logo,
+      accent: accentOn.checked ? accent.value : "",
+    }).then(() => {
+      note.textContent = "saved — reload to see it applied";
+    });
+  });
+
+  body.append(
+    el("div", "app-settings-note", "Applies to everyone; site accents override the app accent."),
+    row("App name", name),
+    row("Accent", accentWrap),
+    row("Logo", logoWrap),
+    row("", save),
+    note
+  );
 }

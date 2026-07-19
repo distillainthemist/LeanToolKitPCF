@@ -7,9 +7,97 @@ import { Ben_ltkuserprefsesService } from "../generated/services/Ben_ltkuserpref
 import { allWhere, eq, upsertWhere } from "./dv";
 import { orgTreeFromRows, protectedTimesForSite } from "./mappers";
 
+/** Reserved sitesettings row that carries app-level branding. */
+export const APP_ROW = "__app__";
+
 export async function orgJson(): Promise<string> {
   const rows = await allWhere(Ben_ltksitesettingsesService.getAll);
-  return JSON.stringify(orgTreeFromRows(rows));
+  return JSON.stringify(orgTreeFromRows(rows.filter((r) => r.ben_site !== APP_ROW)));
+}
+
+export interface Branding {
+  appName: string;
+  logo: string; // data URI or ""
+  accent: string;
+}
+
+export async function branding(): Promise<Branding> {
+  const rows = await allWhere(Ben_ltksitesettingsesService.getAll, eq("ben_site", APP_ROW));
+  const r = rows[0];
+  return {
+    appName: r?.ben_appname ?? "",
+    logo: r?.ben_logo ?? "",
+    accent: r?.ben_accent ?? "",
+  };
+}
+
+export async function saveBranding(b: Branding): Promise<void> {
+  await upsertWhere(
+    Ben_ltksitesettingsesService,
+    eq("ben_site", APP_ROW),
+    (row) => row.ben_ltksitesettingsid,
+    {
+      ben_site: APP_ROW,
+      ben_name: "App branding",
+      ben_appname: b.appName,
+      ben_logo: b.logo,
+      ben_accent: b.accent,
+    }
+  );
+}
+
+export interface SiteSettings {
+  timezone: string;
+  accent: string;
+  /** [{name, pattern}] */
+  rosterPatternsJson: string;
+}
+
+export async function siteSettings(site: string): Promise<SiteSettings> {
+  const rows = await allWhere(Ben_ltksitesettingsesService.getAll, eq("ben_site", site));
+  const r = rows[0];
+  return {
+    timezone: r?.ben_timezone ?? "",
+    accent: r?.ben_accent ?? "",
+    rosterPatternsJson: r?.ben_rosterpatterns ?? "",
+  };
+}
+
+export async function saveSiteSettings(site: string, s: SiteSettings): Promise<void> {
+  await upsertWhere(
+    Ben_ltksitesettingsesService,
+    eq("ben_site", site),
+    (row) => row.ben_ltksitesettingsid,
+    {
+      ben_site: site,
+      ben_name: site,
+      ben_timezone: s.timezone,
+      ben_accent: s.accent,
+      ben_rosterpatterns: s.rosterPatternsJson,
+    }
+  );
+}
+
+/** Named roster patterns for every real site: {site: [{name, pattern}]}. */
+export async function rosterPatternLibrary(): Promise<
+  Record<string, { name: string; pattern: string }[]>
+> {
+  const rows = await allWhere(Ben_ltksitesettingsesService.getAll);
+  const out: Record<string, { name: string; pattern: string }[]> = {};
+  for (const r of rows) {
+    if (r.ben_site === APP_ROW || !r.ben_site) continue;
+    try {
+      const arr = JSON.parse(r.ben_rosterpatterns ?? "[]");
+      if (Array.isArray(arr) && arr.length > 0) {
+        out[r.ben_site] = arr
+          .filter((x) => x && typeof x.name === "string" && typeof x.pattern === "string")
+          .map((x) => ({ name: x.name, pattern: x.pattern }));
+      }
+    } catch {
+      /* ignore malformed */
+    }
+  }
+  return out;
 }
 
 export async function protectedTimesJson(site: string): Promise<string> {

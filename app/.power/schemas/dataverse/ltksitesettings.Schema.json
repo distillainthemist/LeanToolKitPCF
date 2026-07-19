@@ -10,6 +10,22 @@
       "x-ms-dataverse-primary-id": "ben_ltksitesettingsid",
       "x-ms-dataverse-primary-name": "ben_name",
       "properties": {
+        "ben_accent": {
+          "type": "string",
+          "title": "Accent colour",
+          "x-ms-dataverse-attribute": "ben_accent",
+          "x-ms-dataverse-type": "StringType",
+          "x-ms-schema-name": "ben_accent",
+          "maxLength": 20
+        },
+        "ben_appname": {
+          "type": "string",
+          "title": "App name (branding)",
+          "x-ms-dataverse-attribute": "ben_appname",
+          "x-ms-dataverse-type": "StringType",
+          "x-ms-schema-name": "ben_appname",
+          "maxLength": 60
+        },
         "ben_departments": {
           "type": "string",
           "title": "Departments (JSON)",
@@ -17,6 +33,14 @@
           "x-ms-dataverse-type": "MemoType",
           "x-ms-schema-name": "ben_departments",
           "maxLength": 10000
+        },
+        "ben_logo": {
+          "type": "string",
+          "title": "Logo (data URI)",
+          "x-ms-dataverse-attribute": "ben_logo",
+          "x-ms-dataverse-type": "MemoType",
+          "x-ms-schema-name": "ben_logo",
+          "maxLength": 200000
         },
         "ben_ltksitesettingsid": {
           "type": "string",
@@ -45,6 +69,14 @@
           "x-ms-schema-name": "ben_protectedtimes",
           "maxLength": 10000
         },
+        "ben_rosterpatterns": {
+          "type": "string",
+          "title": "Roster Patterns (JSON)",
+          "x-ms-dataverse-attribute": "ben_rosterpatterns",
+          "x-ms-dataverse-type": "MemoType",
+          "x-ms-schema-name": "ben_rosterpatterns",
+          "maxLength": 10000
+        },
         "ben_site": {
           "type": "string",
           "title": "Site",
@@ -53,6 +85,14 @@
           "x-ms-schema-name": "ben_site",
           "required": true,
           "maxLength": 100
+        },
+        "ben_timezone": {
+          "type": "string",
+          "title": "Time zone (IANA)",
+          "x-ms-dataverse-attribute": "ben_timezone",
+          "x-ms-dataverse-type": "StringType",
+          "x-ms-schema-name": "ben_timezone",
+          "maxLength": 60
         },
         "createdby": {
           "type": "string",
