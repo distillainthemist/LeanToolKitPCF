@@ -63,7 +63,14 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: app/package-lock.json
+          cache-dependency-path: |
+            app/package-lock.json
+            package-lock.json
+
+      # root deps too: the repo tsconfig extends pcf-scripts, and vite's
+      # transform resolves it for the shared/ editor sources the app imports
+      - name: Install root dependencies
+        run: npm ci
 
       - name: Build app
         working-directory: app
