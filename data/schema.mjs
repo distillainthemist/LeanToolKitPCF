@@ -34,6 +34,7 @@ export const TABLES = [
     columns: {
       ben_boardid: { ...text(80), display: "Board Id", required: true },
       ben_boardkind: { ...text(20), display: "Board Kind" }, // meeting | project
+      ben_category: { ...text(100), display: "Meeting category" },
       ben_occurrencesettings: { ...memo(10000), display: "Occurrence Settings (JSON)" },
       ben_peoplejson: { ...memo(100000), display: "People (JSON)" },
       ben_manifestjson: { ...memo(1048576), display: "Manifest (JSON)" },
@@ -54,6 +55,8 @@ export const TABLES = [
       ben_when: { kind: "datetime", display: "When" },
       ben_status: { ...text(20), display: "Status" }, // open | closed
       ben_settingsjson: { ...memo(100000), display: "Settings Snapshot (JSON)" },
+      ben_isadhoc: { kind: "bool", display: "Ad hoc", default: false },
+      ben_manifestjson: { ...memo(100000), display: "Instance board override (JSON)" },
     },
   },
   {
@@ -130,6 +133,7 @@ export const TABLES = [
       ben_rosterpatterns: { ...memo(10000), display: "Roster Patterns (JSON)" },
       // app-level branding lives on the reserved "__app__" row
       ben_appname: { ...text(60), display: "App name (branding)" },
+      ben_meetingcategories: { ...memo(4000), display: "Meeting categories (JSON)" },
       ben_logo: { ...memo(200000), display: "Logo (data URI)" },
     },
     key: ["ben_site"],

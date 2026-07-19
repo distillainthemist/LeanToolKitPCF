@@ -92,7 +92,7 @@ function route(): void {
         cleanup = mountBoards(outlet);
       } else if (parts[0] === "wizard") {
         const { mountWizard } = await import("./screens/wizard");
-        cleanup = mountWizard(outlet);
+        cleanup = mountWizard(outlet, parts[1] ?? "");
       } else if (parts[0] === "people") {
         const { mountPeople } = await import("./screens/people");
         cleanup = mountPeople(outlet);

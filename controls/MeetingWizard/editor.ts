@@ -59,6 +59,8 @@ export class MeetingWizardView {
   private refreshGates: () => void = () => undefined;
   /** Named roster patterns per site (site settings library). */
   private rosterPatterns: Record<string, { name: string; pattern: string }[]> = {};
+  /** Admin-managed meeting categories ([] = field hidden). */
+  private meetingCategories: string[] = [];
 
   constructor(
     host: HTMLElement,
@@ -111,6 +113,13 @@ export class MeetingWizardView {
       this.readOnly = ro;
       this.render();
     }
+  }
+
+  /** Admin-managed meeting categories (empty = the field stays hidden). */
+  setMeetingCategories(categories: string[]): void {
+    if (JSON.stringify(categories) === JSON.stringify(this.meetingCategories)) return;
+    this.meetingCategories = categories;
+    this.render();
   }
 
   /** The site-settings roster-pattern library ({site: [{name, pattern}]}). */
@@ -348,6 +357,21 @@ export class MeetingWizardView {
       this.refreshGates();
     });
     body.appendChild(this.row("Meeting title", title, "Becomes the card title on the board."));
+
+    if (this.meetingCategories.length > 0) {
+      const cat = this.selectInput(
+        this.draft.meetingCategory,
+        [
+          { value: "", label: "\u2014" },
+          ...this.meetingCategories.map((c) => ({ value: c, label: c })),
+        ],
+        (v) => {
+          this.draft.meetingCategory = v;
+          this.commit();
+        }
+      );
+      body.appendChild(this.row("Category", cat, "How this meeting is classified."));
+    }
 
     const purpose = el("textarea", "ltk-mw-input ltk-mw-textarea") as HTMLTextAreaElement;
     purpose.value = this.draft.purpose;
@@ -791,6 +815,18 @@ export class MeetingWizardView {
         "Text fields entered on each meeting row in the scheduler."
       )
     );
+
+    const adj = el("input", "") as HTMLInputElement;
+    adj.type = "checkbox";
+    adj.checked = this.draft.instancesAdjustable;
+    adj.disabled = this.readOnly;
+    adj.addEventListener("change", () => {
+      this.draft.instancesAdjustable = adj.checked;
+      this.commit();
+    });
+    const wrap = el("label", "ltk-mw-help");
+    wrap.append(adj, " Participants can adjust individual meeting instances (add ad-hoc cards)");
+    body.appendChild(wrap);
   }
 
   private renderReview(body: HTMLElement): void {

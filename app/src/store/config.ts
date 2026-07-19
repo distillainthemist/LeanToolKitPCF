@@ -46,6 +46,25 @@ export async function saveBranding(b: Branding): Promise<void> {
   );
 }
 
+export async function meetingCategories(): Promise<string[]> {
+  const rows = await allWhere(Ben_ltksitesettingsesService.getAll, eq("ben_site", APP_ROW));
+  try {
+    const arr = JSON.parse(rows[0]?.ben_meetingcategories ?? "[]");
+    return Array.isArray(arr) ? arr.filter((v) => typeof v === "string" && v !== "") : [];
+  } catch {
+    return [];
+  }
+}
+
+export async function saveMeetingCategories(categories: string[]): Promise<void> {
+  await upsertWhere(
+    Ben_ltksitesettingsesService,
+    eq("ben_site", APP_ROW),
+    (row) => row.ben_ltksitesettingsid,
+    { ben_site: APP_ROW, ben_name: "App branding", ben_meetingcategories: JSON.stringify(categories) }
+  );
+}
+
 export interface SiteSettings {
   timezone: string;
   accent: string;

@@ -34,6 +34,37 @@
           "x-ms-read-only": true,
           "maxLength": 100
         },
+        "ben_isadhoc": {
+          "type": "string",
+          "title": "Ad hoc",
+          "x-ms-dataverse-attribute": "ben_isadhoc",
+          "x-ms-dataverse-type": "BooleanType",
+          "x-ms-schema-name": "ben_isadhoc",
+          "enum": [
+            "No",
+            "Yes"
+          ],
+          "x-ms-enum-values": [
+            0,
+            1
+          ],
+          "Color": [
+            null,
+            null
+          ],
+          "x-ms-optionsetmetadataid": "d2014f9d-a583-f111-ab0e-6045bd3fe940",
+          "x-ms-isGlobal": false,
+          "x-ms-optionsetdisplayname": "Ad hoc",
+          "x-ms-optionSetType": "Boolean"
+        },
+        "ben_isadhocname": {
+          "type": "string",
+          "title": "ben_isadhocname",
+          "x-ms-dataverse-attribute": "ben_isadhocname",
+          "x-ms-dataverse-type": "VirtualType",
+          "x-ms-schema-name": "ben_isadhocName",
+          "x-ms-read-only": true
+        },
         "ben_ltkboardinstanceid": {
           "type": "string",
           "title": "LTK Board Instance",
@@ -43,6 +74,14 @@
           "x-ms-dataverse-primary-id": true,
           "required": true,
           "x-ms-keyType": "primary"
+        },
+        "ben_manifestjson": {
+          "type": "string",
+          "title": "Instance board override (JSON)",
+          "x-ms-dataverse-attribute": "ben_manifestjson",
+          "x-ms-dataverse-type": "MemoType",
+          "x-ms-schema-name": "ben_manifestjson",
+          "maxLength": 100000
         },
         "ben_name": {
           "type": "string",

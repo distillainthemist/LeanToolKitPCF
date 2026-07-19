@@ -13,19 +13,52 @@ import { el } from "../../../shared/ui/dom";
 import { appTheme, editorHost } from "../cardHost";
 import { detectHost } from "../runtime";
 import { saveMeetingBoard } from "../store/boards";
-import { orgJson, rosterPatternLibrary } from "../store/config";
-import { listPeople } from "../store/people";
+import { meetingCategories, orgJson, rosterPatternLibrary } from "../store/config";
+import { listPeople, viewerPerson } from "../store/people";
+import { currentViewer } from "../runtime";
+import { getBoard } from "../store/boards";
 
 function mintBoardId(title: string): string {
   const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
   return `board-${slug || "meeting"}-${Math.random().toString(36).slice(2, 6)}`;
 }
 
-export function mountWizard(parent: HTMLElement): () => void {
+export function mountWizard(parent: HTMLElement, editBoardId = ""): () => void {
   const host = editorHost(parent);
   let view: MeetingWizardView | null = null;
   void (async () => {
     const hosted = await detectHost();
+    // creation is admin-gated; editing is open to admins AND the owner
+    let editRaw = "";
+    if (hosted) {
+      const viewer = currentViewer()!;
+      const me = await viewerPerson(viewer.objectId);
+      const isAdmin = me?.role === "superadmin" || me?.role === "siteadmin";
+      if (editBoardId !== "") {
+        const board = await getBoard(editBoardId);
+        if (!board) {
+          parent.appendChild(el("p", "app-missing", `Unknown board: ${editBoardId}`));
+          return;
+        }
+        editRaw = board.occurrenceSettingsRaw;
+        let ownerId = "";
+        try {
+          const blob = JSON.parse(editRaw) as { meeting?: { owner?: { whoId?: string } } };
+          ownerId = blob.meeting?.owner?.whoId ?? "";
+        } catch { /* no owner */ }
+        if (!isAdmin && ownerId !== viewer.objectId) {
+          parent.appendChild(
+            el("div", "app-board-note", "Only admins or the meeting owner can edit this meeting.")
+          );
+          return;
+        }
+      } else if (!isAdmin) {
+        parent.appendChild(
+          el("div", "app-board-note", "Creating meetings is for site and super admins — ask yours, or request a role in Settings.")
+        );
+        return;
+      }
+    }
     const org = hosted ? await orgJson() : "[]";
     const peopleRaw = hosted
       ? JSON.stringify(
@@ -45,7 +78,8 @@ export function mountWizard(parent: HTMLElement): () => void {
         }
         void (async () => {
           const blob = JSON.parse(outputJson) as { title?: string };
-          const boardId = mintBoardId(blob.title ?? "meeting");
+          const boardId =
+            editBoardId !== "" ? editBoardId : mintBoardId(blob.title ?? "meeting");
           await saveMeetingBoard(boardId, outputJson);
           window.location.hash = `#/board/${boardId}`;
         })();
@@ -54,9 +88,13 @@ export function mountWizard(parent: HTMLElement): () => void {
     view.setTheme(appTheme());
     view.setChrome("New meeting", "");
     view.setOrgTree(parseOrgTree(org));
-    if (hosted) view.setRosterPatterns(await rosterPatternLibrary());
+    if (hosted) {
+      view.setRosterPatterns(await rosterPatternLibrary());
+      view.setMeetingCategories(await meetingCategories());
+    }
     view.setPeople(parsePeople(peopleRaw));
-    view.setDraft(parseWizardDraft(""));
+    view.setDraft(parseWizardDraft(editRaw));
+    if (editBoardId !== "") view.setChrome("Edit meeting", "");
     if (!hosted) {
       parent.prepend(
         el("div", "app-board-note", "Demo mode — Create meeting logs instead of saving.")

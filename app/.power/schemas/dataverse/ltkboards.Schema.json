@@ -27,6 +27,14 @@
           "x-ms-schema-name": "ben_boardkind",
           "maxLength": 20
         },
+        "ben_category": {
+          "type": "string",
+          "title": "Meeting category",
+          "x-ms-dataverse-attribute": "ben_category",
+          "x-ms-dataverse-type": "StringType",
+          "x-ms-schema-name": "ben_category",
+          "maxLength": 100
+        },
         "ben_department": {
           "type": "string",
           "title": "Department",

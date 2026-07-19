@@ -16,7 +16,9 @@ export type Ben_ltkboardinstancesstatuscode = keyof typeof Ben_ltkboardinstances
 export interface Ben_ltkboardinstancesBase {
   "ben_Board@odata.bind"?: string;
   ben_boardid?: string;
+  ben_isadhoc?: boolean;
   ben_ltkboardinstanceid: string;
+  ben_manifestjson?: string;
   ben_name?: string;
   ben_settingsjson?: string;
   ben_status?: string;
@@ -31,6 +33,7 @@ export interface Ben_ltkboardinstancesBase {
 
 export interface Ben_ltkboardinstances extends Ben_ltkboardinstancesBase {
   ben_boardname?: string;
+  ben_isadhocname?: string;
   createdbyname?: string;
   createdbyyominame: string;
   createdon?: string;

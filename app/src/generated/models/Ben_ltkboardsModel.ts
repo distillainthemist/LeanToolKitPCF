@@ -16,6 +16,7 @@ export type Ben_ltkboardsstatuscode = keyof typeof Ben_ltkboardsstatuscode;
 export interface Ben_ltkboardsBase {
   ben_boardid: string;
   ben_boardkind?: string;
+  ben_category?: string;
   ben_department?: string;
   ben_istemplate?: boolean;
   ben_ltkboardid: string;

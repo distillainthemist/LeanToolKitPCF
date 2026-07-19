@@ -19,6 +19,7 @@ export interface Ben_ltksitesettingsesBase {
   ben_departments?: string;
   ben_logo?: string;
   ben_ltksitesettingsid: string;
+  ben_meetingcategories?: string;
   ben_name?: string;
   ben_protectedtimes?: string;
   ben_rosterpatterns?: string;

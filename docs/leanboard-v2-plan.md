@@ -85,7 +85,7 @@ upgrade for other orgs)
   name override, app accent. `appTheme()` + shell read the `__app__`
   row; precedence per challenge #3.
 
-### Slice 4 — Meetings admin (M)
+### Slice 4 — Meetings admin (M) — DONE 2026-07-20
 - Meeting categories: admin-managed list; wizard field; `ben_category`.
 - Creation gated to super/site admins; wizard entry moves to Settings
   → Boards & meetings.

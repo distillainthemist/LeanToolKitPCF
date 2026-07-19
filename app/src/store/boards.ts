@@ -37,6 +37,7 @@ export async function saveMeetingBoard(
       ben_boardid: boardId,
       ben_name: typeof blob.title === "string" ? blob.title : boardId,
       ben_boardkind: "meeting",
+      ben_category: typeof blob.meetingCategory === "string" ? blob.meetingCategory : "",
       ben_occurrencesettings: wizardBlobRaw,
       ben_peoplejson: JSON.stringify(participants),
       ben_site: typeof org.site === "string" ? org.site : "",
@@ -66,4 +67,27 @@ export async function saveOccurrenceSettings(
   settingsRaw: string
 ): Promise<void> {
   await Ben_ltkboardsService.update(boardGuid, { ben_occurrencesettings: settingsRaw });
+}
+
+/** Copy a board's design (settings + manifest) under a new board id. */
+export async function replicateBoard(
+  srcBoardId: string,
+  newTitle: string
+): Promise<string> {
+  const src = await getBoard(srcBoardId);
+  if (!src) throw new Error(`unknown board ${srcBoardId}`);
+  const slug = newTitle.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  const newBoardId = `board-${slug || "meeting"}-${Math.random().toString(36).slice(2, 6)}`;
+  let blobRaw = src.occurrenceSettingsRaw;
+  try {
+    const blob = JSON.parse(blobRaw) as Record<string, unknown>;
+    blob.title = newTitle;
+    blobRaw = JSON.stringify(blob);
+  } catch { /* keep raw */ }
+  await saveMeetingBoard(newBoardId, blobRaw);
+  const created = await getBoard(newBoardId);
+  if (created && src.manifestRaw.trim() !== "") {
+    await Ben_ltkboardsService.update(created.id, { ben_manifestjson: src.manifestRaw });
+  }
+  return newBoardId;
 }

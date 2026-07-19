@@ -52,6 +52,14 @@
           "required": true,
           "x-ms-keyType": "primary"
         },
+        "ben_meetingcategories": {
+          "type": "string",
+          "title": "Meeting categories (JSON)",
+          "x-ms-dataverse-attribute": "ben_meetingcategories",
+          "x-ms-dataverse-type": "MemoType",
+          "x-ms-schema-name": "ben_meetingcategories",
+          "maxLength": 4000
+        },
         "ben_name": {
           "type": "string",
           "title": "Name",

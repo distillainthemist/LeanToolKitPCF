@@ -73,6 +73,10 @@ export interface WizardDraft {
   rosterPattern: string; // e.g. 2D-2N-5O
   baseStartDate: string; // yyyy-mm-dd
   columns: string; // CSV of row-column labels
+  /** Admin-managed classification (NOT the cadence). */
+  meetingCategory: string;
+  /** Participants may adjust individual instances (instance composer). */
+  instancesAdjustable: boolean;
   /** Weekly topic rotation through the month: [1st..5th week]. */
   weekTopics: string[];
   /** Daily/shiftly topics keyed by weekday label ("Mon".."Sun"). */
@@ -98,6 +102,8 @@ export function emptyDraft(): WizardDraft {
     rosterPattern: "",
     baseStartDate: "",
     columns: "",
+    meetingCategory: "",
+    instancesAdjustable: false,
     weekTopics: [],
     dayTopics: {},
     participants: [],
@@ -106,7 +112,7 @@ export function emptyDraft(): WizardDraft {
   };
 }
 
-const MANAGED_TOP = ["cardType", "title", "config", "meeting"];
+const MANAGED_TOP = ["cardType", "title", "config", "meeting", "meetingCategory", "instancesAdjustable"];
 const MANAGED_CONFIG = [
   "category",
   "daysOfWeek",
@@ -139,6 +145,8 @@ export function parseWizardDraft(raw: string | null | undefined): WizardDraft {
     return draft;
   }
   draft.title = s(o.title);
+  draft.meetingCategory = s(o.meetingCategory);
+  draft.instancesAdjustable = o.instancesAdjustable === true;
   const config = (o.config ?? {}) as Record<string, unknown>;
   if (typeof config === "object" && !Array.isArray(config)) {
     const cat = s(config.category);
@@ -221,6 +229,8 @@ export function serializeWizardDraft(draft: WizardDraft): string {
 
   const out: Record<string, unknown> = { ...draft.extraTop, cardType: "MeetingScheduler" };
   if (draft.title !== "") out.title = draft.title;
+  if (draft.meetingCategory !== "") out.meetingCategory = draft.meetingCategory;
+  if (draft.instancesAdjustable) out.instancesAdjustable = true;
   out.config = config;
   const meeting = buildMeetingSection({
     purpose: draft.purpose,

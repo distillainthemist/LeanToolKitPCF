@@ -7,9 +7,12 @@
 
 import { clear, el } from "../../../shared/ui/dom";
 import { currentViewer, detectHost } from "../runtime";
+import { listBoards, replicateBoard } from "../store/boards";
 import {
   branding,
+  meetingCategories,
   orgJson,
+  saveMeetingCategories,
   protectedTimesJson,
   saveBranding,
   saveProtectedTimes,
@@ -56,6 +59,7 @@ export function mountSettings(parent: HTMLElement): () => void {
     if (isAdmin) {
       tabs.push({ key: "users", label: "Users", render: () => renderUsers(body, me) });
       tabs.push({ key: "org", label: "Organisation", render: () => renderOrg(body, me) });
+      tabs.push({ key: "boards", label: "Boards & meetings", render: () => renderBoardsAdmin(body, me) });
     }
     if (me.role === "superadmin") {
       tabs.push({ key: "brand", label: "Branding", render: () => renderBranding(body) });
@@ -570,4 +574,79 @@ async function renderBranding(body: HTMLElement): Promise<void> {
     row("", save),
     note
   );
+}
+
+// ---- Boards & meetings (admins): categories, create, edit, replicate ----
+
+async function renderBoardsAdmin(body: HTMLElement, me: RosterPerson): Promise<void> {
+  clear(body);
+  const isSuper = me.role === "superadmin";
+
+  // categories (super admins manage the app-wide list)
+  body.appendChild(sectionTitle("Meeting categories"));
+  let cats = await meetingCategories();
+  const catBox = el("div", "app-org-tree");
+  body.appendChild(catBox);
+  const drawCats = () => {
+    clear(catBox);
+    const rowEl = el("div", "app-org-row");
+    for (const c of cats) {
+      const chip = el("span", "app-btn", c);
+      if (isSuper) {
+        const x = removeBtn(() => {
+          cats = cats.filter((v) => v !== c);
+          void saveMeetingCategories(cats).then(drawCats);
+        });
+        chip.appendChild(x);
+      }
+      rowEl.appendChild(chip);
+    }
+    catBox.appendChild(rowEl);
+    if (isSuper) {
+      catBox.appendChild(
+        adder("Add category", (v) => {
+          if (!cats.includes(v)) {
+            cats.push(v);
+            void saveMeetingCategories(cats).then(drawCats);
+          }
+        })
+      );
+    } else if (cats.length === 0) {
+      catBox.appendChild(el("div", "app-settings-note", "No categories defined yet."));
+    }
+  };
+  drawCats();
+
+  // boards: create / edit / replicate / configure
+  body.appendChild(sectionTitle("Boards"));
+  const newBtn = el("a", "app-btn", "\uFF0B New meeting") as HTMLAnchorElement;
+  newBtn.href = "#/wizard";
+  body.appendChild(newBtn);
+
+  const list = el("div", "app-org-tree");
+  body.appendChild(list);
+  const boards = await listBoards();
+  for (const b of boards) {
+    const r = el("div", "app-org-row");
+    r.append(
+      el("span", "app-people-name", b.name),
+      el("span", "app-people-meta", [b.category, b.site, b.department].filter(Boolean).join(" \u00b7 "))
+    );
+    const open = el("a", "app-btn", "Open") as HTMLAnchorElement;
+    open.href = `#/board/${b.boardId}`;
+    const edit = el("a", "app-btn", "Edit meeting") as HTMLAnchorElement;
+    edit.href = `#/wizard/${b.boardId}`;
+    const setup = el("a", "app-btn", "Board setup") as HTMLAnchorElement;
+    setup.href = `#/setup/${b.boardId}`;
+    const rep = el("button", "app-btn", "Replicate") as HTMLButtonElement;
+    rep.addEventListener("click", () => {
+      const name = window.prompt(`Replicate "${b.name}" as:`, `${b.name} (copy)`);
+      if (!name || name.trim() === "") return;
+      void replicateBoard(b.boardId, name.trim()).then((newId) => {
+        window.location.hash = `#/wizard/${newId}`;
+      });
+    });
+    r.append(open, edit, setup, rep);
+    list.appendChild(r);
+  }
 }

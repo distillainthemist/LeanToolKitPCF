@@ -22,14 +22,6 @@
   "databaseReferences": {
     "default.cds": {
       "dataSources": {
-        "ltkboards": {
-          "entitySetName": "ben_ltkboards",
-          "logicalName": "ben_ltkboard"
-        },
-        "ltkboardinstances": {
-          "entitySetName": "ben_ltkboardinstances",
-          "logicalName": "ben_ltkboardinstance"
-        },
         "ltkcarddatas": {
           "entitySetName": "ben_ltkcarddatas",
           "logicalName": "ben_ltkcarddata"
@@ -53,6 +45,14 @@
         "ltksitesettings": {
           "entitySetName": "ben_ltksitesettingses",
           "logicalName": "ben_ltksitesettings"
+        },
+        "ltkboards": {
+          "entitySetName": "ben_ltkboards",
+          "logicalName": "ben_ltkboard"
+        },
+        "ltkboardinstances": {
+          "entitySetName": "ben_ltkboardinstances",
+          "logicalName": "ben_ltkboardinstance"
         }
       },
       "environmentVariableName": ""

@@ -15,6 +15,7 @@ export interface BoardSummary {
   boardId: string;
   name: string;
   kind: "meeting" | "project";
+  category: string;
   site: string;
   department: string;
   isTemplate: boolean;
@@ -29,6 +30,7 @@ export function boardFromRow(row: Ben_ltkboards): BoardSummary {
     boardId: row.ben_boardid,
     name: row.ben_name ?? row.ben_boardid,
     kind: row.ben_boardkind === "project" ? "project" : "meeting",
+    category: row.ben_category ?? "",
     site: row.ben_site ?? "",
     department: row.ben_department ?? "",
     isTemplate: row.ben_istemplate === true,
