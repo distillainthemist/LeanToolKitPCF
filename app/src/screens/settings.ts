@@ -32,6 +32,25 @@ import {
 const BOOTSTRAP_CODE = "Taiichi_Ohno_1943";
 const ROLES = ["user", "siteadmin", "superadmin"] as const;
 
+/** Friendly label + one-line description for each role. */
+const ROLE_META: Record<string, { label: string; blurb: string }> = {
+  user: {
+    label: "User",
+    blurb: "Runs meetings and manages their own actions. No admin settings.",
+  },
+  siteadmin: {
+    label: "Site admin",
+    blurb:
+      "Everything a user can do, plus manages their own site: its departments, meetings, boards and people.",
+  },
+  superadmin: {
+    label: "Super admin",
+    blurb:
+      "Full control across every site — users, roles, organisation, categories and app branding.",
+  },
+};
+const roleLabel = (role: string) => ROLE_META[role]?.label ?? role;
+
 export function mountSettings(parent: HTMLElement): () => void {
   void (async () => {
     const hosted = await detectHost();
@@ -193,12 +212,15 @@ async function renderUsers(body: HTMLElement, me: RosterPerson): Promise<void> {
     query = search.value.trim().toLowerCase();
     draw();
   });
-  const siteSel = labelledFilter("Any site", sites);
+  const siteSel = labelledFilter("Any site", sites.map((s) => ({ value: s, label: s })));
   siteSel.addEventListener("change", () => {
     siteFilter = siteSel.value;
     draw();
   });
-  const roleSel = labelledFilter("Any role", [...ROLES]);
+  const roleSel = labelledFilter(
+    "Any role",
+    ROLES.map((rk) => ({ value: rk, label: roleLabel(rk) }))
+  );
   roleSel.addEventListener("change", () => {
     roleFilter = roleSel.value;
     draw();
@@ -211,6 +233,7 @@ async function renderUsers(body: HTMLElement, me: RosterPerson): Promise<void> {
   body.appendChild(count);
   const list = el("div", "app-people-list");
   body.appendChild(list);
+  body.appendChild(roleLegend());
 
   const draw = () => {
     clear(list);
@@ -234,32 +257,80 @@ async function renderUsers(body: HTMLElement, me: RosterPerson): Promise<void> {
   draw();
 }
 
-/** A "— label —" default option followed by the real choices. */
-function labelledFilter(placeholder: string, options: string[]): HTMLSelectElement {
+/** A "Any …" default option followed by {value,label} choices. */
+function labelledFilter(
+  placeholder: string,
+  options: { value: string; label: string }[]
+): HTMLSelectElement {
   const s = el("select", "app-input") as HTMLSelectElement;
   const any = el("option", "", placeholder) as HTMLOptionElement;
   any.value = "";
   s.appendChild(any);
   for (const o of options) {
-    const opt = el("option", "", o) as HTMLOptionElement;
-    opt.value = o;
+    const opt = el("option", "", o.label) as HTMLOptionElement;
+    opt.value = o.value;
     s.appendChild(opt);
   }
   return s;
 }
 
-/** One roster row: name/meta + editable site + role (super admins). */
+/** Role picker with friendly labels (no blank option). */
+function roleSelect(value: string): HTMLSelectElement {
+  const s = el("select", "app-input") as HTMLSelectElement;
+  for (const rk of ROLES) {
+    const opt = el("option", "", roleLabel(rk)) as HTMLOptionElement;
+    opt.value = rk;
+    if (rk === value) opt.selected = true;
+    s.appendChild(opt);
+  }
+  return s;
+}
+
+/** A control preceded by a small caption ("Site", "Role"). */
+function labelledControl(label: string, control: HTMLElement): HTMLElement {
+  const wrap = el("label", "app-user-field");
+  wrap.append(el("span", "app-user-field-label", label), control);
+  return wrap;
+}
+
+/** The three role definitions, shown under the roster as a key. */
+function roleLegend(): HTMLElement {
+  const box = el("div", "app-role-legend");
+  box.appendChild(el("div", "app-user-field-label", "What the roles mean"));
+  for (const rk of ROLES) {
+    const item = el("div", "app-role-legend-item");
+    item.append(
+      el("span", `app-role-badge app-role-${rk}`, roleLabel(rk)),
+      el("span", "app-role-legend-blurb", ROLE_META[rk].blurb)
+    );
+    box.appendChild(item);
+  }
+  return box;
+}
+
+/** One roster row: name + role badge + email, with labelled site/role. */
 function userRow(
   p: RosterPerson,
   sites: string[],
   canEdit: boolean,
   me: RosterPerson
 ): HTMLElement {
-  const r = el("div", "app-settings-row");
-  r.append(
+  const r = el("div", "app-user-row");
+
+  const main = el("div", "app-user-main");
+  const nameLine = el("div", "app-user-nameline");
+  nameLine.append(
     el("span", "app-people-name", p.who),
-    el("span", "app-people-meta", [p.email, p.department].filter(Boolean).join(" · "))
+    el("span", `app-role-badge app-role-${p.role}`, roleLabel(p.role))
   );
+  main.append(
+    nameLine,
+    el("div", "app-user-email", p.email || "no email on file")
+  );
+  if (!p.active) main.classList.add("app-people-inactive");
+  r.appendChild(main);
+
+  const controls = el("div", "app-user-controls");
   // editable site (clearing department/area when the site changes so a
   // stale sub-placement can't outlive its site)
   const site = select(sites, p.site);
@@ -273,14 +344,23 @@ function userRow(
     p.site = site.value;
     void upsertPerson({ ...p });
   });
-  const role = select([...ROLES], p.role);
-  role.value = p.role;
+  const role = roleSelect(p.role);
   role.disabled = !canEdit || p.whoId === me.whoId; // no self-demotion footguns
   role.addEventListener("change", () => {
     p.role = role.value || "user";
+    // keep the badge in step without a full re-render
+    const badge = nameLine.querySelector(".app-role-badge");
+    if (badge) {
+      badge.textContent = roleLabel(p.role);
+      badge.className = `app-role-badge app-role-${p.role}`;
+    }
     void upsertPerson({ ...p });
   });
-  r.append(site, role);
+  controls.append(
+    labelledControl("Site", site),
+    labelledControl("Role", role)
+  );
+  r.appendChild(controls);
   return r;
 }
 
