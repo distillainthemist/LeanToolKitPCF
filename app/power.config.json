@@ -1,10 +1,10 @@
 {
   "version": "1.0",
   "appId": "82469410-d9ad-45cf-bf87-da62f880f4e3",
-  "appDisplayName": "LeanToolKit",
+  "appDisplayName": "LeanBoard",
   "region": "prod",
   "environmentId": "5636a57c-b563-ea93-9772-1c883cc88cc0",
-  "description": "Pechey Distilling lean meeting system",
+  "description": "Lean meeting and improvement board system",
   "buildPath": "dist",
   "buildEntryPoint": "index.html",
   "localAppUrl": "http://localhost:3000",

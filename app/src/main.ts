@@ -1,4 +1,4 @@
-// LeanToolKit app shell — vanilla TS, hash-routed. Screens mount the
+// LeanBoard app shell — vanilla TS, hash-routed. Screens mount the
 // toolkit's platform-free editor classes through CardHost; data comes
 // from the typed Dataverse store inside Power Apps, demo data on a bare
 // dev server.
@@ -9,7 +9,7 @@ import "./style.css";
 const app = document.querySelector<HTMLDivElement>("#app")!;
 
 const bar = el("header", "app-bar");
-const brand = el("span", "app-brand", "LeanToolKit");
+const brand = el("span", "app-brand", "LeanBoard");
 const nav = el("nav", "app-nav");
 const link = (label: string, hash: string) => {
   const a = el("a", "app-link", label) as HTMLAnchorElement;

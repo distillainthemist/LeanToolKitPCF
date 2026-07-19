@@ -6,7 +6,7 @@
 import { defaultTheme, Theme } from "../../shared/tokens";
 import { el } from "../../shared/ui/dom";
 
-/** The Pechey app theme, applied to every mounted editor. */
+/** The LeanBoard app theme, applied to every mounted editor. */
 export function appTheme(): Theme {
   const theme = defaultTheme();
   theme.accent = "#8b1e1e";

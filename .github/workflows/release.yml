@@ -94,7 +94,7 @@ jobs:
             fs.writeFileSync("ship/app/power.config.json", JSON.stringify(cfg, null, 2));
           '
           cp docs/deploy-to-new-org.md ship/app/INSTALL.md
-          (cd ship/app && zip -rq "../../dist/LeanToolKitApp_${TAG}.zip" .)
+          (cd ship/app && zip -rq "../../dist/LeanBoardApp_${TAG}.zip" .)
 
       - name: Check pipeline secrets
         id: secrets
@@ -118,7 +118,7 @@ jobs:
           pac solution online-version --solution-name LeanToolKitData \
             --solution-version "${TAG#v}"
           pac solution export --name LeanToolKitData --managed \
-            --path "dist/LeanToolKitData_${TAG}_managed.zip"
+            --path "dist/LeanBoard_${TAG}_managed.zip"
 
       - name: Attach board-app artifacts to the release
         uses: softprops/action-gh-release@v2

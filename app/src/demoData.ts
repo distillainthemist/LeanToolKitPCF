@@ -3,7 +3,7 @@
 // blobs, a roster, protected times, an actions rollup.
 
 export const PEOPLE = [
-  { whoId: "p0", who: "Ben O'Brien" },
+  { whoId: "p0", who: "Dana Field" },
   { whoId: "p1", who: "Sam Patel", crew: "A" },
   { whoId: "p2", who: "Jo Hughes", crew: "B" },
   { whoId: "p3", who: "Alex Reed", crew: "C" },
@@ -14,7 +14,7 @@ export const VIEWER_ID = "p0";
 
 export const ORG_TREE = [
   {
-    site: "Pechey Downs",
+    site: "Riverbend",
     departments: [
       { department: "Bottling", areas: ["Line 1", "Line 2"] },
       { department: "Distilling", areas: ["Stills", "Fermentation"] },
@@ -45,10 +45,10 @@ export const BOARDS = [
       },
       meeting: {
         purpose: "Shift handover: review the last shift, agree the top issue, assign actions.",
-        owner: { whoId: "p0", who: "Ben O'Brien" },
-        org: { site: "Pechey Downs", department: "Bottling", area: "Line 1" },
+        owner: { whoId: "p0", who: "Dana Field" },
+        org: { site: "Riverbend", department: "Bottling", area: "Line 1" },
         participants: [
-          { whoId: "p0", who: "Ben O'Brien" },
+          { whoId: "p0", who: "Dana Field" },
           { whoId: "p1", who: "Sam Patel", crew: "A" },
           { whoId: "p2", who: "Jo Hughes", crew: "B" },
         ],
@@ -71,10 +71,10 @@ export const BOARDS = [
       },
       meeting: {
         purpose: "Cross-department leadership alignment.",
-        owner: { whoId: "p0", who: "Ben O'Brien" },
-        org: { site: "Pechey Downs" },
+        owner: { whoId: "p0", who: "Dana Field" },
+        org: { site: "Riverbend" },
         participants: [
-          { whoId: "p0", who: "Ben O'Brien" },
+          { whoId: "p0", who: "Dana Field" },
           { whoId: "p3", who: "Alex Reed" },
         ],
       },
@@ -93,7 +93,7 @@ export const ACTIONS = [
     instanceId: "b-fish",
     issue: "Label misfeed root cause",
     description: "Confirm feeder alignment fix",
-    assignees: [{ whoId: "p0", who: "Ben O'Brien", done: false }],
+    assignees: [{ whoId: "p0", who: "Dana Field", done: false }],
     start: "",
     due: "2026-07-16",
     status: "open",
@@ -107,7 +107,7 @@ export const ACTIONS = [
     issue: "Order spare seals",
     description: "",
     assignees: [
-      { whoId: "p0", who: "Ben O'Brien", done: false },
+      { whoId: "p0", who: "Dana Field", done: false },
       { whoId: "p1", who: "Sam Patel", done: true },
     ],
     start: "",
