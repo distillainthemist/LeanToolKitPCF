@@ -2,7 +2,7 @@
 <manifest>
   <control namespace="BenOBrien"
            constructor="SkillsMatrix"
-           version="0.9.1"
+           version="0.10.0"
            display-name-key="Skills Matrix"
            description-key="LeanToolKit skills matrix — team members down the side, skills across the top, quarter-filled discs for proficiency (1 Learning … 4 Can teach). Skills carry a target level; cells below target get a gap ring and headers show coverage. Actions per person."
            control-type="standard">

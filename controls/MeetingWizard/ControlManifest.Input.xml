@@ -2,7 +2,7 @@
 <manifest>
   <control namespace="BenOBrien"
            constructor="MeetingWizard"
-           version="0.9.1"
+           version="0.10.0"
            display-name-key="Meeting Wizard"
            description-key="LeanToolKit meeting setup wizard — steps a maker through creating a meeting: title, purpose and owner; site / department / area from a supplied picklist tree; cadence; crews and roster; participants with crew linkage; meeting record columns; review. Emits a complete MeetingScheduler settings blob on Output and stamps Submitted At when Create meeting is pressed. A setup screen, not a board card."
            control-type="standard">
