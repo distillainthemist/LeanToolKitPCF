@@ -29,6 +29,8 @@ export async function upsertPerson(person: RosterPerson): Promise<void> {
       ben_crew: person.crew ?? "",
       ben_site: person.site,
       ben_department: person.department,
+      ben_area: person.area,
+      ben_role: person.role === "user" ? "" : person.role,
       ben_active: person.active,
     }
   );
@@ -60,4 +62,20 @@ export async function searchEntra(query: string): Promise<EntraHit[]> {
 export async function viewerPerson(entraObjectId: string): Promise<RosterPerson | null> {
   const rows = await allWhere(Ben_ltkpeoplesService.getAll, eq("ben_whoid", entraObjectId));
   return rows.length ? personFromRow(rows[0]) : null;
+}
+
+/** "user" | "siteadmin" | "superadmin" for the signed-in viewer. */
+export async function viewerRole(entraObjectId: string): Promise<string> {
+  const me = await viewerPerson(entraObjectId);
+  return me?.role ?? "user";
+}
+
+/** True once any super admin exists — closes the bootstrap-code window. */
+export async function superAdminExists(): Promise<boolean> {
+  const rows = await allWhere(
+    Ben_ltkpeoplesService.getAll,
+    eq("ben_role", "superadmin"),
+    ["ben_whoid"]
+  );
+  return rows.length > 0;
 }

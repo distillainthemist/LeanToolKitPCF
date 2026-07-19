@@ -18,9 +18,11 @@ const link = (label: string, hash: string) => {
   return a;
 };
 link("My day", "#/");
-link("Boards", "#/boards");
-link("New meeting", "#/wizard");
-link("People", "#/people");
+const gap = el("span", "app-bar-gap");
+const cog = el("a", "app-link app-link-cog", "\u2699 Settings") as HTMLAnchorElement;
+cog.href = "#/settings";
+nav.appendChild(gap);
+nav.appendChild(cog);
 bar.append(brand, nav);
 app.appendChild(bar);
 
@@ -63,6 +65,9 @@ function route(): void {
       } else if (parts[0] === "people") {
         const { mountPeople } = await import("./screens/people");
         cleanup = mountPeople(outlet);
+      } else if (parts[0] === "settings") {
+        const { mountSettings } = await import("./screens/settings");
+        cleanup = mountSettings(outlet);
       } else {
         const { mountHub } = await import("./screens/hub");
         cleanup = mountHub(outlet);

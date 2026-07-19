@@ -203,6 +203,9 @@ export interface RosterPerson {
   crew?: string;
   site: string;
   department: string;
+  area: string;
+  /** "user" (default) | "siteadmin" | "superadmin" */
+  role: string;
   active: boolean;
 }
 
@@ -214,6 +217,8 @@ export function personFromRow(row: Ben_ltkpeoples): RosterPerson {
     crew: row.ben_crew || undefined,
     site: row.ben_site ?? "",
     department: row.ben_department ?? "",
+    area: row.ben_area ?? "",
+    role: row.ben_role || "user",
     active: row.ben_active !== false,
   };
 }

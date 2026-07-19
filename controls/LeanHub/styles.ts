@@ -3,6 +3,14 @@
 // the settings forms.
 
 export const LEANHUB_CSS = `
+.ltk-lh-boards { display: flex; flex-direction: column; gap: 8px; padding: 12px; max-width: 860px; }
+.ltk-lh-boardrow { display: flex; align-items: center; gap: 12px; font: inherit; text-align: left;
+  background: var(--ltk-bg); border: 1px solid color-mix(in srgb, var(--ltk-fg) 14%, transparent);
+  border-radius: 8px; padding: 12px 14px; cursor: pointer; }
+.ltk-lh-boardrow:hover { border-color: var(--ltk-accent); }
+.ltk-lh-boardname { font-weight: 700; }
+.ltk-lh-boardmeta { font-size: 12.5px; opacity: 0.7; }
+
 /* ---- tabs ---- */
 .ltk-lh-tabs {
   display: flex;

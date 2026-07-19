@@ -41,6 +41,14 @@
           "x-ms-schema-name": "ben_activeName",
           "x-ms-read-only": true
         },
+        "ben_area": {
+          "type": "string",
+          "title": "Area",
+          "x-ms-dataverse-attribute": "ben_area",
+          "x-ms-dataverse-type": "StringType",
+          "x-ms-schema-name": "ben_area",
+          "maxLength": 100
+        },
         "ben_crew": {
           "type": "string",
           "title": "Crew",
@@ -83,6 +91,14 @@
           "x-ms-schema-name": "ben_name",
           "x-ms-dataverse-primary-name": true,
           "maxLength": 150
+        },
+        "ben_role": {
+          "type": "string",
+          "title": "Role (user|siteadmin|superadmin)",
+          "x-ms-dataverse-attribute": "ben_role",
+          "x-ms-dataverse-type": "StringType",
+          "x-ms-schema-name": "ben_role",
+          "maxLength": 20
         },
         "ben_site": {
           "type": "string",

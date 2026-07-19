@@ -15,11 +15,13 @@ export type Ben_ltkpeoplesstatuscode = keyof typeof Ben_ltkpeoplesstatuscode;
 
 export interface Ben_ltkpeoplesBase {
   ben_active?: boolean;
+  ben_area?: string;
   ben_crew?: string;
   ben_department?: string;
   ben_email?: string;
   ben_ltkpeopleid: string;
   ben_name?: string;
+  ben_role?: string;
   ben_site?: string;
   ben_whoid: string;
   importsequencenumber?: number;

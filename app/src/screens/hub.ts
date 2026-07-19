@@ -69,6 +69,8 @@ export function mountHub(parent: HTMLElement): () => void {
           email: viewer.email,
           site: "",
           department: "",
+          area: "",
+          role: "user",
           active: true,
         };
         await upsertPerson(me);
@@ -133,6 +135,28 @@ export function mountHub(parent: HTMLElement): () => void {
     view.setSourceLabels(sourceLabels);
     view.setCanEditSite(true);
     view.setPrefs(parsePrefs(prefsRaw));
+    view.setHideSettingsTab(true); // settings live behind the header cog now
+    if (hosted) {
+      const dir = (await listBoards()).map((b) => ({
+        boardId: b.boardId,
+        name: b.name,
+        meta: [b.site, b.department].filter(Boolean).join(" \u00b7 "),
+      }));
+      view.setBoards(dir, (boardId) => {
+        window.location.hash = `#/board/${boardId}`;
+      });
+      // first-access nudge: profile not yet placed in the org
+      const meNow = await viewerPerson(viewerId);
+      if (meNow && meNow.site === "") {
+        const note = el("div", "app-board-note");
+        note.append(
+          "Welcome! Set your site and department in ",
+          Object.assign(el("a", "", "Settings \u2192 My profile"), { href: "#/settings" }),
+          " so your meetings and actions find you."
+        );
+        parent.prepend(note);
+      }
+    }
   })();
 
   return () => view?.destroy();

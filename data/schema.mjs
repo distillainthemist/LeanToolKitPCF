@@ -154,6 +154,8 @@ export const TABLES = [
       ben_crew: { ...text(20), display: "Crew" },
       ben_site: { ...text(100), display: "Site" },
       ben_department: { ...text(100), display: "Department" },
+      ben_area: { ...text(100), display: "Area" },
+      ben_role: { ...text(20), display: "Role (user|siteadmin|superadmin)" },
       ben_active: { kind: "bool", display: "Active", default: true },
     },
     key: ["ben_whoid"],

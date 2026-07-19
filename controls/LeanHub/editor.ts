@@ -40,7 +40,7 @@ export interface LeanHubCallbacks {
   onProtected: (times: ProtectedTime[]) => void;
 }
 
-type Tab = "calendar" | "actions" | "settings";
+type Tab = "calendar" | "actions" | "boards" | "settings";
 
 const HOUR_PX = 44;
 const CHIP_H = 38;
@@ -63,6 +63,10 @@ export class LeanHubView {
   private readOnly = false;
 
   private tab: Tab = "calendar";
+  /** Board directory for the Boards tab; null = tab hidden. */
+  private boards: { boardId: string; name: string; meta: string }[] | null = null;
+  private onOpenBoard: ((boardId: string) => void) | null = null;
+  private hideSettingsTab = false;
   private anchor: Date = startOfDay(new Date());
   private scopeKind: ScopeKind = "person";
   private scopePerson = "";
@@ -150,6 +154,26 @@ export class LeanHubView {
     this.render();
   }
 
+  /** Supply the board directory (shows the Boards tab). */
+  setBoards(
+    boards: { boardId: string; name: string; meta: string }[],
+    onOpen: (boardId: string) => void
+  ): void {
+    this.onOpenBoard = onOpen;
+    if (JSON.stringify(boards) === JSON.stringify(this.boards)) return;
+    this.boards = boards;
+    this.render();
+  }
+
+  /** Hide the in-hub Settings tab (the app hosts settings itself). */
+  setHideSettingsTab(on: boolean): void {
+    if (this.hideSettingsTab !== on) {
+      this.hideSettingsTab = on;
+      if (this.tab === "settings") this.tab = "calendar";
+      this.render();
+    }
+  }
+
   setCanEditSite(on: boolean): void {
     if (this.canEditSite !== on) {
       this.canEditSite = on;
@@ -193,8 +217,9 @@ export class LeanHubView {
     const defs: { key: Tab; label: string }[] = [
       { key: "calendar", label: "Cadence" },
       { key: "actions", label: "Actions" },
-      { key: "settings", label: "Settings" },
     ];
+    if (this.boards !== null) defs.push({ key: "boards", label: "Boards" });
+    if (!this.hideSettingsTab) defs.push({ key: "settings", label: "Settings" });
     for (const t of defs) {
       const btn = el("button", "ltk-lh-tab", t.label) as HTMLButtonElement;
       btn.type = "button";
@@ -211,7 +236,25 @@ export class LeanHubView {
     this.root.appendChild(body);
     if (this.tab === "calendar") this.renderCalendar(body);
     else if (this.tab === "actions") this.renderActions(body);
+    else if (this.tab === "boards") this.renderBoards(body);
     else this.renderSettings(body);
+  }
+
+  private renderBoards(body: HTMLElement): void {
+    const wrap = el("div", "ltk-lh-boards");
+    body.appendChild(wrap);
+    if (!this.boards || this.boards.length === 0) {
+      wrap.appendChild(el("div", "ltk-lh-empty", "No boards yet."));
+      return;
+    }
+    for (const b of this.boards) {
+      const row = el("button", "ltk-lh-boardrow") as HTMLButtonElement;
+      row.type = "button";
+      row.appendChild(el("span", "ltk-lh-boardname", b.name));
+      if (b.meta !== "") row.appendChild(el("span", "ltk-lh-boardmeta", b.meta));
+      row.addEventListener("click", () => this.onOpenBoard?.(b.boardId));
+      wrap.appendChild(row);
+    }
   }
 
   // ---- calendar ----

@@ -68,6 +68,8 @@ export function mountPeople(parent: HTMLElement): () => void {
                 email: hit.mail,
                 site: "",
                 department: hit.department,
+                area: "",
+                role: "user",
                 active: true,
               });
               clear(hitsBox);
@@ -134,6 +136,8 @@ export function mountPeople(parent: HTMLElement): () => void {
           crew: crew.value.trim() || undefined,
           site: site.value.trim(),
           department: department.value.trim(),
+          area: "",
+          role: "user",
           active: true,
         });
         [name, email, crew, site, department].forEach((f) => (f.value = ""));
