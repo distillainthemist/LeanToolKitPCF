@@ -1,0 +1,27 @@
+name: Verify service principal
+
+# Health check for the release pipeline's credentials: authenticates
+# with the service principal and lists the LeanToolKitData solution.
+# Run it whenever secrets are rotated or exports start failing.
+on:
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Install pac
+        run: dotnet tool install --global Microsoft.PowerApps.CLI.Tool
+
+      - name: Authenticate and read the solution
+        run: |
+          pac auth create --applicationId "${{ secrets.PP_APP_ID }}" \
+            --clientSecret "${{ secrets.PP_CLIENT_SECRET }}" \
+            --tenant "${{ secrets.PP_TENANT_ID }}" \
+            --environment "${{ vars.PP_DEV_URL }}"
+          pac org who
+          pac solution list | grep LeanToolKitData
