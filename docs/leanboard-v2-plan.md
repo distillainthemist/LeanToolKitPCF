@@ -16,19 +16,20 @@ upgrade for other orgs)
 
 ## Design decisions & challenges
 
-1. **Admin-request code**: as written, `Taiichi_Ohno_1943` is a
-   permanent backdoor — the repo is public and the code ships in the
+1. **Admin-request code** (agreed with Ben 2026-07-19: one-time
+   bootstrap): as written it would be a permanent backdoor — the repo is public and the code ships in the
    client bundle, so anyone with app access could self-promote
    forever. **Decision: the code only works while the org has zero
    super admins** (first-run bootstrap). After that, promotion happens
    in user management only. Keeps the Ohno homage and the setup flow,
    closes the hole. (A client-side code can never be a real secret —
    this confines the exposure to the empty-org window.)
-2. **Removing Boards from the nav**: users still need a non-buried
-   path to their board (wallboards, shop-floor pull-up, no scheduled
-   chip). **Decision: header keeps a read-only Boards browse**; board
-   *management* (create/replicate/edit) moves into Settings. New
-   meeting + People leave the header as reviewed.
+2. **Removing Boards from the nav** (resolved with Ben 2026-07-19):
+   users still need a non-buried path to their board. **Decision:
+   Boards becomes a list view INSIDE My day** — its tabs become
+   Cadence / Actions / Boards (the Settings tab moves out to the cog).
+   The header trims to brand + Settings cog only. Board *management*
+   (create/replicate/edit) lives in Settings.
 3. **Accent colour is specified twice** (branding app-wide, site
    settings per-site). **Decision: precedence = site accent overrides
    app accent overrides default blue.** Site accent ships in the same
@@ -71,8 +72,8 @@ upgrade for other orgs)
   after viewer self-registration.
 - User management tab (super: roles + site assignment; site admin:
   view). Bootstrap code path per challenge #1.
-- Nav trim: remove New meeting + People from header; Boards becomes
-  browse-only (challenge #2).
+- Nav trim: header = brand + Settings cog; My day tabs = Cadence /
+  Actions / Boards (list view, challenge #2).
 
 ### Slice 3 — Organisation + branding (M/L)
 - Org hierarchy editor: sites → departments → areas as a navigable
