@@ -2,7 +2,7 @@
 <manifest>
   <control namespace="BenOBrien"
            constructor="Raci"
-           version="0.8.1"
+           version="0.9.0"
            display-name-key="RACI Matrix"
            description-key="LeanToolKit RACI matrix — deliverables down the side, roles across the top. Tap a cell to cycle Responsible / Accountable / Consulted / Informed; each row warns unless exactly one role is Accountable. Hold a deliverable to raise an action."
            control-type="standard">
