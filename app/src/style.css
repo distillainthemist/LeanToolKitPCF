@@ -130,6 +130,10 @@ body {
 }
 .app-board-left > .ltk-root, .app-board-right > .ltk-root { flex: 1; min-height: 0; }
 
+/* schedule collapsed — the board takes the full width */
+.app-board-solo { grid-template-columns: 1fr; }
+.app-board-solo .app-board-left { display: none; }
+
 /* composer (board setup) */
 .app-composer-split { grid-template-columns: 5fr minmax(340px, 3fr); }
 .app-composer-pane {

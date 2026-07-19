@@ -1,7 +1,8 @@
 // Board setup (composer) screen — BoardGrid in edit mode on the left
 // (add / drag / resize / nav order / column headings), CardSettings on
-// the right for the selected slot. Every change persists to the board's
-// manifest; the meeting board picks it up on next mount.
+// the right for the selected slot. Two targets share the editor: the
+// board's own manifest (board setup) and one instance's override
+// manifest (adjust this meeting — gated by the wizard's toggle).
 
 import { BoardGridView } from "../../../controls/BoardGrid/editor";
 import { BoardTile, parseColumns } from "../../../controls/BoardGrid/types";
@@ -17,12 +18,25 @@ import { appTheme } from "../cardHost";
 import { detectHost } from "../runtime";
 import { getBoard, listBoards, saveManifest } from "../store/boards";
 import { catalogSvgByType } from "../store/catalog";
+import { getInstance, saveInstanceManifest } from "../store/instances";
 import {
   BoardManifest,
   BoardSummary,
   ManifestSlot,
   parseManifest,
+  serializeManifest,
 } from "../store/mappers";
+
+/** What the composer edits and where its changes go. */
+interface ComposerTarget {
+  title: string;
+  manifest: BoardManifest;
+  doneHref: string;
+  persist: (manifest: BoardManifest) => Promise<void>;
+  /** Instance mode only: drop the override and return to the board. */
+  onReset?: () => Promise<void>;
+  removeLabel: string;
+}
 
 function mintCardId(cardType: string, taken: Set<string>): string {
   const stem = cardType.replace(/Card$/, "").toLowerCase() || "card";
@@ -66,7 +80,73 @@ export function mountComposer(parent: HTMLElement, boardId: string): () => void 
       parent.appendChild(el("p", "app-missing", `Unknown board: ${boardId}`));
       return;
     }
-    await renderComposer(parent, board, cleanups);
+    await renderComposer(
+      parent,
+      board,
+      {
+        title: `${board.name} — board setup`,
+        manifest: parseManifest(board.manifestRaw),
+        doneHref: `#/board/${board.boardId}`,
+        persist: (m) => saveManifest(board.id, m),
+        removeLabel: "Remove from board",
+      },
+      cleanups
+    );
+  })();
+  return () => cleanups.forEach((fn) => fn());
+}
+
+/**
+ * Adjust one meeting's board without touching the template: edits land
+ * in the instance's override manifest (`ben_manifestjson`), which the
+ * board screen prefers over the board's own when present.
+ */
+export function mountInstanceComposer(
+  parent: HTMLElement,
+  boardId: string,
+  instanceGuid: string
+): () => void {
+  const cleanups: Array<() => void> = [];
+  void (async () => {
+    const hosted = await detectHost();
+    if (!hosted) {
+      parent.appendChild(
+        el(
+          "div",
+          "app-board-note",
+          "Board setup needs the Power Apps host (Dataverse). Open the deployed app."
+        )
+      );
+      return;
+    }
+    const board = await getBoard(boardId);
+    const instance = await getInstance(instanceGuid);
+    if (!board || !instance) {
+      parent.appendChild(el("p", "app-missing", `Unknown board or meeting record.`));
+      return;
+    }
+    const doneHref = `#/board/${board.boardId}/${encodeURIComponent(
+      instance.when.slice(0, 16)
+    )}`;
+    await renderComposer(
+      parent,
+      board,
+      {
+        title: `${board.name} — this meeting only`,
+        // start from the override if one exists, else a copy of the board
+        manifest: instance.manifestRaw.trim().startsWith("{")
+          ? parseManifest(instance.manifestRaw)
+          : parseManifest(board.manifestRaw),
+        doneHref,
+        persist: (m) => saveInstanceManifest(instanceGuid, serializeManifest(m)),
+        onReset: async () => {
+          await saveInstanceManifest(instanceGuid, "");
+          window.location.hash = doneHref;
+        },
+        removeLabel: "Remove from this meeting",
+      },
+      cleanups
+    );
   })();
   return () => cleanups.forEach((fn) => fn());
 }
@@ -74,9 +154,10 @@ export function mountComposer(parent: HTMLElement, boardId: string): () => void 
 async function renderComposer(
   parent: HTMLElement,
   board: BoardSummary,
+  target: ComposerTarget,
   cleanups: Array<() => void>
 ): Promise<void> {
-  const manifest: BoardManifest = parseManifest(board.manifestRaw);
+  const manifest: BoardManifest = target.manifest;
   const catalogSvg = await catalogSvgByType();
 
   // link/rollup sources: every board's cards, from the boards list
@@ -95,7 +176,7 @@ async function renderComposer(
 
   // ---- chrome ----
   const bar = el("div", "app-board-toolbar");
-  const title = el("span", "app-board-title", `${board.name} — board setup`);
+  const title = el("span", "app-board-title", target.title);
   const status = el("span", "app-board-status", "");
   const colsSelect = el("select", "app-input") as HTMLSelectElement;
   for (let n = 1; n <= 6; n++) {
@@ -104,8 +185,14 @@ async function renderComposer(
     colsSelect.appendChild(opt);
   }
   const doneBtn = el("a", "app-btn", "Done") as HTMLAnchorElement;
-  doneBtn.href = `#/board/${board.boardId}`;
-  bar.append(title, status, el("span", "app-bar-gap"), colsSelect, doneBtn);
+  doneBtn.href = target.doneHref;
+  bar.append(title, status, el("span", "app-bar-gap"), colsSelect);
+  if (target.onReset) {
+    const resetBtn = el("button", "app-btn", "Reset to usual layout");
+    resetBtn.addEventListener("click", () => void target.onReset!());
+    bar.appendChild(resetBtn);
+  }
+  bar.appendChild(doneBtn);
   parent.appendChild(bar);
 
   const split = el("div", "app-board-split app-composer-split");
@@ -123,7 +210,7 @@ async function renderComposer(
     if (saveTimer !== null) clearTimeout(saveTimer);
   });
   const doSave = async () => {
-    await saveManifest(board.id, manifest);
+    await target.persist(manifest);
     status.textContent = `saved ${new Date().toLocaleTimeString()}`;
   };
   const save = (immediate = false) => {
@@ -236,7 +323,7 @@ async function renderComposer(
       el("span", "app-composer-panetitle", slot ? "Configure card" : "Add card")
     );
     if (slot) {
-      const remove = el("button", "app-btn app-btn-danger", "Remove from board");
+      const remove = el("button", "app-btn app-btn-danger", target.removeLabel);
       remove.addEventListener("click", () => {
         manifest.slots = manifest.slots.filter((s) => s.cardId !== slot.cardId);
         selectedCardId = null;

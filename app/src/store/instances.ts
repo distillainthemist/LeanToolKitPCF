@@ -22,6 +22,8 @@ export interface InstanceSummary {
   when: string; // ISO datetime
   status: "open" | "closed";
   isAdhoc: boolean;
+  /** Per-instance board override manifest ("" = use the board's own). */
+  manifestRaw: string;
 }
 
 function fromRow(row: Ben_ltkboardinstances): InstanceSummary {
@@ -31,6 +33,7 @@ function fromRow(row: Ben_ltkboardinstances): InstanceSummary {
     when: row.ben_when ?? "",
     status: row.ben_status === "closed" ? "closed" : "open",
     isAdhoc: row.ben_isadhoc === true,
+    manifestRaw: row.ben_manifestjson ?? "",
   };
 }
 
@@ -122,6 +125,16 @@ export async function createInstance(
     );
   }
   return instance;
+}
+
+/** Save (or clear, with "") the instance's board-override manifest. */
+export async function saveInstanceManifest(
+  instanceGuid: string,
+  manifestRaw: string
+): Promise<void> {
+  await Ben_ltkboardinstancesService.update(instanceGuid, {
+    ben_manifestjson: manifestRaw,
+  });
 }
 
 /** Close the meeting and stamp the shared-card SVG archive. */

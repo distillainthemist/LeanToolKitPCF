@@ -84,6 +84,9 @@ function route(): void {
       } else if (parts[0] === "setup" && parts[1]) {
         const { mountComposer } = await import("./screens/composer");
         cleanup = mountComposer(outlet, parts[1]);
+      } else if (parts[0] === "adjust" && parts[1] && parts[2]) {
+        const { mountInstanceComposer } = await import("./screens/composer");
+        cleanup = mountInstanceComposer(outlet, parts[1], parts[2]);
       } else if (parts[0] === "edit" && parts[1] && parts[2] && parts[3]) {
         const { mountCardEditor } = await import("./screens/cardEditor");
         cleanup = mountCardEditor(outlet, parts[1], parts[2], parts[3]);

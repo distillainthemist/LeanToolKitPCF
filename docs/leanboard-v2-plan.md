@@ -104,5 +104,19 @@ upgrade for other orgs)
   chain's "previous" pick? — **default yes** (carry follows the
   scheduled cadence), revisit if wrong in use.
 
+### Slice 6 — Instance composer (M) — DONE 2026-07-20
+- "Adjust this meeting" on the board toolbar (shown when the wizard's
+  "instances adjustable" toggle is on and the record is open) opens
+  the composer pointed at the instance: edits save to the instance's
+  `ben_manifestjson` override, never the board template.
+- Board + card editor prefer the override manifest when present;
+  status line shows "adjusted layout"; "Reset to usual layout" drops
+  the override. Cards added to one meeting get their blank data row
+  on first open.
+- Same drop: scheduler title bar follows the app/site accent (blob
+  theme still wins), a Hide/Show schedule toggle gives the board the
+  full width, and the create-record dialog reads like a person wrote
+  it.
+
 Order: 1 → 2 → 3 → 4 → 5. Slice 1 is independent; 3–5 depend on 2's
 settings shell and role model.

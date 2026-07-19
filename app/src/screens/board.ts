@@ -72,21 +72,38 @@ async function renderBoard(
   deepLinkIso: string,
   cleanups: Array<() => void>
 ): Promise<void> {
-  const manifest = parseManifest(board.manifestRaw);
+  const boardManifest = parseManifest(board.manifestRaw);
   const catalogSvg = await catalogSvgByType();
   let instances = await listInstances(board.boardId);
   let cardRows = await rowsForBoard(board.boardId);
   let current: InstanceSummary | null = null;
 
+  // an adjusted meeting renders its own override manifest instead
+  const activeManifest = () =>
+    current && current.manifestRaw.trim().startsWith("{")
+      ? parseManifest(current.manifestRaw)
+      : boardManifest;
+
   // layout: toolbar + (scheduler pane | tile grid)
   const bar = el("div", "app-board-toolbar");
   const title = el("span", "app-board-title", board.name);
   const status = el("span", "app-board-status", "");
+  const scheduleBtn = el("button", "app-btn", "Hide schedule") as HTMLButtonElement;
+  const adjustBtn = el("a", "app-btn", "Adjust this meeting") as HTMLAnchorElement;
+  adjustBtn.style.display = "none";
   const setupBtn = el("a", "app-btn", "Board setup") as HTMLAnchorElement;
   setupBtn.href = `#/setup/${board.boardId}`;
   const closeBtn = el("button", "app-btn", "Close meeting") as HTMLButtonElement;
   closeBtn.style.display = "none";
-  bar.append(title, status, el("span", "app-bar-gap"), setupBtn, closeBtn);
+  bar.append(
+    title,
+    status,
+    el("span", "app-bar-gap"),
+    scheduleBtn,
+    adjustBtn,
+    setupBtn,
+    closeBtn
+  );
   parent.appendChild(bar);
 
   const split = el("div", "app-board-split");
@@ -94,6 +111,15 @@ async function renderBoard(
   const leftHost = el("div", "app-board-left");
   const rightHost = el("div", "app-board-right");
   split.append(leftHost, rightHost);
+
+  // collapse the scheduler so the board takes the full width (starts
+  // visible each mount — it is the only way to pick an occurrence)
+  let scheduleHidden = false;
+  scheduleBtn.addEventListener("click", () => {
+    scheduleHidden = !scheduleHidden;
+    split.classList.toggle("app-board-solo", scheduleHidden);
+    scheduleBtn.textContent = scheduleHidden ? "Show schedule" : "Hide schedule";
+  });
 
   const gridView = new BoardGridView(rightHost, {
     onSelect: (e) => {
@@ -108,11 +134,18 @@ async function renderBoard(
 
   const renderTiles = () => {
     if (!current) return;
-    const tiles = joinTiles(manifest.slots, current.id, toLite(cardRows), catalogSvg);
-    gridView.setColumnTitles(manifest.columnTitles);
-    gridView.setTiles(tiles, parseColumns(manifest.grid, tiles));
-    status.textContent = `${current.when.slice(0, 16).replace("T", " ")} — ${current.status}`;
+    const m = activeManifest();
+    const adjusted = m !== boardManifest;
+    const tiles = joinTiles(m.slots, current.id, toLite(cardRows), catalogSvg);
+    gridView.setColumnTitles(m.columnTitles);
+    gridView.setTiles(tiles, parseColumns(m.grid, tiles));
+    status.textContent =
+      `${current.when.slice(0, 16).replace("T", " ")} — ${current.status}` +
+      (adjusted ? " · adjusted layout" : "");
     closeBtn.style.display = current.status === "open" ? "" : "none";
+    const canAdjust = instancesAdjustable && current.status === "open";
+    adjustBtn.style.display = canAdjust ? "" : "none";
+    adjustBtn.href = `#/adjust/${board.boardId}/${current.id}`;
   };
 
   closeBtn.addEventListener("click", () => {
@@ -133,6 +166,19 @@ async function renderBoard(
   const config = (blob.config ?? {}) as Record<string, unknown>;
   const s = (k: string) => String(config[k] ?? "");
   const today = startOfDay(new Date());
+  // wizard toggle: participants may adjust a single meeting's board
+  const instancesAdjustable = blob.instancesAdjustable === true;
+
+  /** "Tuesday 21 July at 06:00" from a scheduler iso. */
+  const friendlyWhen = (iso: string): string => {
+    const day = new Date(`${iso.slice(0, 10)}T00:00:00`).toLocaleDateString(undefined, {
+      weekday: "long",
+      day: "numeric",
+      month: "long",
+    });
+    const hhmm = iso.slice(11, 16);
+    return hhmm === "" ? day : `${day} at ${hhmm}`;
+  };
 
   // keep the selected occurrence in the URL (replaceState fires no
   // hashchange, so no remount) — card-editor back and browser back both
@@ -176,9 +222,9 @@ async function renderBoard(
       // inside the scheduler's themed root so the toolkit styles apply.
       const dlg = openDialog({
         host: (leftHost.querySelector(".ltk-root") as HTMLElement) ?? leftHost,
-        title: "Create meeting record?",
+        title: "Start this meeting?",
         buttons: [
-          { label: "Cancel", kind: "secondary", onClick: () => dlg.close() },
+          { label: "Not now", kind: "secondary", onClick: () => dlg.close() },
           {
             label: "Create record",
             kind: "primary",
@@ -193,7 +239,8 @@ async function renderBoard(
         el(
           "p",
           "",
-          `${inst.iso.slice(0, 10)} at ${inst.iso.slice(11, 16)} has no meeting record yet.`
+          `This meeting hasn't been opened yet. Create the record for ` +
+            `${friendlyWhen(inst.iso)} and the board will be ready to run.`
         )
       );
     },
@@ -233,11 +280,14 @@ async function renderBoard(
     );
   };
 
-  schedulerView.setTheme({
-    ...appTheme(),
-    titleBar:
-      String(((blob.theme ?? {}) as Record<string, unknown>).titlebar ?? "") || "#2563eb",
-  });
+  // the app accent is the default; a blob theme (if the board carries
+  // one) still wins so per-board colouring stays possible
+  const blobTitleBar = String(
+    ((blob.theme ?? {}) as Record<string, unknown>).titlebar ?? ""
+  ).trim();
+  const schedulerTheme = appTheme();
+  if (blobTitleBar !== "") schedulerTheme.titleBar = blobTitleBar;
+  schedulerView.setTheme(schedulerTheme);
   schedulerView.setChrome(String(blob.title ?? board.name), "");
   schedulerView.setMeetingInfo(parseMeetingInfo(blobRaw));
   schedulerView.setColumns(parseMeetingColumns(s("columns")));

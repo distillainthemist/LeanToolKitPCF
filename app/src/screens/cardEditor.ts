@@ -13,7 +13,13 @@ import { appTheme, editorHost } from "../cardHost";
 import { currentViewer, detectHost } from "../runtime";
 import { actionsForBoard, actionsForInstance, upsertActions } from "../store/actions";
 import { getBoard } from "../store/boards";
-import { instanceRow, liveRow, saveCard } from "../store/cards";
+import {
+  createInstanceRow,
+  ensureLiveRow,
+  instanceRow,
+  liveRow,
+  saveCard,
+} from "../store/cards";
 import { getInstance } from "../store/instances";
 import { parseManifest, slotLinkSource, slotPolicy } from "../store/mappers";
 import { listPeople } from "../store/people";
@@ -34,8 +40,17 @@ export function mountCardEditor(
       );
       return;
     }
-    const board = await getBoard(boardId);
-    const manifest = board ? parseManifest(board.manifestRaw) : null;
+    const [board, instance] = await Promise.all([
+      getBoard(boardId),
+      getInstance(instanceGuid),
+    ]);
+    // an adjusted meeting's cards live in its override manifest, not
+    // (necessarily) the board's own
+    const manifest = board
+      ? instance && instance.manifestRaw.trim().startsWith("{")
+        ? parseManifest(instance.manifestRaw)
+        : parseManifest(board.manifestRaw)
+      : null;
     const slot = manifest?.slots.find((x) => x.cardId === cardId);
     if (!board || !manifest || !slot) {
       parent.appendChild(el("p", "app-missing", `Unknown card ${cardId} on ${boardId}`));
@@ -51,11 +66,9 @@ export function mountCardEditor(
 
     // deep-link the back button to this card's occurrence so the board
     // reselects it (and its tiles) instead of remounting unselected
-    void getInstance(instanceGuid).then((instance) => {
-      if (instance && instance.when !== "") {
-        back.href = `#/board/${boardId}/${encodeURIComponent(instance.when.slice(0, 16))}`;
-      }
-    });
+    if (instance && instance.when !== "") {
+      back.href = `#/board/${boardId}/${encodeURIComponent(instance.when.slice(0, 16))}`;
+    }
 
     const surface = isActionSurface(slot);
     // rollup scope: an action surface reads its configured source board
@@ -72,6 +85,17 @@ export function mountCardEditor(
         policy === "shared"
           ? await liveRow(boardId, cardId)
           : await instanceRow(instanceGuid, cardId);
+      if (!row) {
+        // a card added to just this meeting ("Adjust this meeting") has
+        // no seeded row — create its blank document on first open
+        if (policy === "shared") {
+          await ensureLiveRow(boardId, cardId, slot.cardType);
+          row = await liveRow(boardId, cardId);
+        } else {
+          await createInstanceRow(instanceGuid, boardId, cardId, slot.cardType, "", "");
+          row = await instanceRow(instanceGuid, cardId);
+        }
+      }
       if (!row) {
         parent.appendChild(
           el("p", "app-missing", "No data row for this card yet — open the meeting first.")
