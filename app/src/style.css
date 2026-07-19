@@ -253,6 +253,8 @@ body {
 .app-settings-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .app-settings-label { width: 120px; font-size: 12.5px; color: #6d675c; font-weight: 600; }
 .app-settings-note { font-size: 12.5px; color: #6d675c; }
+.app-users-filters { gap: 8px; }
+.app-users-filters input[type="search"] { flex: 1; min-width: 180px; }
 
 .app-brand { display: flex; align-items: center; gap: 8px; }
 .app-logo { height: 26px; max-width: 120px; object-fit: contain; }

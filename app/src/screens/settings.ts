@@ -169,7 +169,7 @@ async function renderProfile(body: HTMLElement, me: RosterPerson): Promise<void>
   );
 }
 
-/** Users: role + site assignment (super admins edit; site admins view). */
+/** Users: search + site/role filters, role + site assignment. */
 async function renderUsers(body: HTMLElement, me: RosterPerson): Promise<void> {
   clear(body);
   const canEdit = me.role === "superadmin";
@@ -180,34 +180,108 @@ async function renderUsers(body: HTMLElement, me: RosterPerson): Promise<void> {
   }
   const sites = parseOrgTree(await orgJson()).map((s) => s.site);
   const people = await listPeople(true);
-  for (const p of people) {
-    const r = el("div", "app-settings-row");
-    r.append(
-      el("span", "app-people-name", p.who),
-      el("span", "app-people-meta", [p.email, p.department].filter(Boolean).join(" · "))
-    );
-    // editable site (clearing department/area when the site changes so a
-    // stale sub-placement can't outlive its site)
-    const site = select(sites, p.site);
-    site.value = p.site;
-    site.disabled = !canEdit;
-    site.addEventListener("change", () => {
-      const cleared = site.value === p.site ? p.department : "";
-      const clearedArea = site.value === p.site ? p.area : "";
-      p.site = site.value;
-      p.department = cleared;
-      p.area = clearedArea;
-      void upsertPerson({ ...p });
+
+  // --- filter bar: search, site, role ---
+  let query = "";
+  let siteFilter = "";
+  let roleFilter = "";
+
+  const search = el("input", "app-input") as HTMLInputElement;
+  search.type = "search";
+  search.placeholder = "Search name or email";
+  search.addEventListener("input", () => {
+    query = search.value.trim().toLowerCase();
+    draw();
+  });
+  const siteSel = labelledFilter("Any site", sites);
+  siteSel.addEventListener("change", () => {
+    siteFilter = siteSel.value;
+    draw();
+  });
+  const roleSel = labelledFilter("Any role", [...ROLES]);
+  roleSel.addEventListener("change", () => {
+    roleFilter = roleSel.value;
+    draw();
+  });
+  const bar = el("div", "app-settings-row app-users-filters");
+  bar.append(search, siteSel, roleSel);
+  body.appendChild(bar);
+
+  const count = el("div", "app-settings-note", "");
+  body.appendChild(count);
+  const list = el("div", "app-people-list");
+  body.appendChild(list);
+
+  const draw = () => {
+    clear(list);
+    const shown = people.filter((p) => {
+      if (siteFilter !== "" && p.site !== siteFilter) return false;
+      if (roleFilter !== "" && p.role !== roleFilter) return false;
+      if (query !== "") {
+        const hay = `${p.who} ${p.email}`.toLowerCase();
+        if (!hay.includes(query)) return false;
+      }
+      return true;
     });
-    const role = select([...ROLES], p.role);
-    role.value = p.role;
-    role.disabled = !canEdit || p.whoId === me.whoId; // no self-demotion footguns
-    role.addEventListener("change", () => {
-      void upsertPerson({ ...p, role: role.value || "user" });
-    });
-    r.append(site, role);
-    body.appendChild(r);
+    count.textContent = `${shown.length} of ${people.length} ${
+      people.length === 1 ? "person" : "people"
+    }`;
+    for (const p of shown) list.appendChild(userRow(p, sites, canEdit, me));
+    if (shown.length === 0) {
+      list.appendChild(el("div", "app-settings-note", "No users match those filters."));
+    }
+  };
+  draw();
+}
+
+/** A "— label —" default option followed by the real choices. */
+function labelledFilter(placeholder: string, options: string[]): HTMLSelectElement {
+  const s = el("select", "app-input") as HTMLSelectElement;
+  const any = el("option", "", placeholder) as HTMLOptionElement;
+  any.value = "";
+  s.appendChild(any);
+  for (const o of options) {
+    const opt = el("option", "", o) as HTMLOptionElement;
+    opt.value = o;
+    s.appendChild(opt);
   }
+  return s;
+}
+
+/** One roster row: name/meta + editable site + role (super admins). */
+function userRow(
+  p: RosterPerson,
+  sites: string[],
+  canEdit: boolean,
+  me: RosterPerson
+): HTMLElement {
+  const r = el("div", "app-settings-row");
+  r.append(
+    el("span", "app-people-name", p.who),
+    el("span", "app-people-meta", [p.email, p.department].filter(Boolean).join(" · "))
+  );
+  // editable site (clearing department/area when the site changes so a
+  // stale sub-placement can't outlive its site)
+  const site = select(sites, p.site);
+  site.value = p.site;
+  site.disabled = !canEdit;
+  site.addEventListener("change", () => {
+    if (site.value !== p.site) {
+      p.department = "";
+      p.area = "";
+    }
+    p.site = site.value;
+    void upsertPerson({ ...p });
+  });
+  const role = select([...ROLES], p.role);
+  role.value = p.role;
+  role.disabled = !canEdit || p.whoId === me.whoId; // no self-demotion footguns
+  role.addEventListener("change", () => {
+    p.role = role.value || "user";
+    void upsertPerson({ ...p });
+  });
+  r.append(site, role);
+  return r;
 }
 
 /** Request admin: the one-time bootstrap path (only while no super admin). */
