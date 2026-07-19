@@ -145,12 +145,21 @@ export function mountHub(parent: HTMLElement): () => void {
       view.setBoards(dir, (boardId) => {
         window.location.hash = `#/board/${boardId}`;
       });
-      // first-access nudge: profile not yet placed in the org
+      // first access: prompt the viewer to place themselves in the org
+      // (site drives meetings, actions and protected times). Modal on
+      // first visit; a lighter banner remains if they skip.
       const meNow = await viewerPerson(viewerId);
       if (meNow && meNow.site === "") {
+        const { promptForSite } = await import("./sitePrompt");
+        const saved = await promptForSite(meNow);
+        if (saved) {
+          // re-run the router so meetings/protected times pick up the site
+          window.dispatchEvent(new Event("hashchange"));
+          return;
+        }
         const note = el("div", "app-board-note");
         note.append(
-          "Welcome! Set your site and department in ",
+          "Set your site and department in ",
           Object.assign(el("a", "", "Settings \u2192 My profile"), { href: "#/settings" }),
           " so your meetings and actions find you."
         );

@@ -175,23 +175,37 @@ async function renderUsers(body: HTMLElement, me: RosterPerson): Promise<void> {
   const canEdit = me.role === "superadmin";
   if (!canEdit) {
     body.appendChild(
-      el("div", "app-settings-note", "Site admins can view the roster; role changes need a super admin.")
+      el("div", "app-settings-note", "Site admins can view the roster; role and site changes need a super admin.")
     );
   }
+  const sites = parseOrgTree(await orgJson()).map((s) => s.site);
   const people = await listPeople(true);
   for (const p of people) {
     const r = el("div", "app-settings-row");
     r.append(
       el("span", "app-people-name", p.who),
-      el("span", "app-people-meta", [p.email, p.site, p.department].filter(Boolean).join(" · "))
+      el("span", "app-people-meta", [p.email, p.department].filter(Boolean).join(" · "))
     );
+    // editable site (clearing department/area when the site changes so a
+    // stale sub-placement can't outlive its site)
+    const site = select(sites, p.site);
+    site.value = p.site;
+    site.disabled = !canEdit;
+    site.addEventListener("change", () => {
+      const cleared = site.value === p.site ? p.department : "";
+      const clearedArea = site.value === p.site ? p.area : "";
+      p.site = site.value;
+      p.department = cleared;
+      p.area = clearedArea;
+      void upsertPerson({ ...p });
+    });
     const role = select([...ROLES], p.role);
     role.value = p.role;
     role.disabled = !canEdit || p.whoId === me.whoId; // no self-demotion footguns
     role.addEventListener("change", () => {
       void upsertPerson({ ...p, role: role.value || "user" });
     });
-    r.appendChild(role);
+    r.append(site, role);
     body.appendChild(r);
   }
 }
