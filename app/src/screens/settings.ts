@@ -23,6 +23,8 @@ import {
 import { parseOrgTree } from "../../../shared/schema/meeting";
 import { RosterPerson } from "../store/mappers";
 import {
+  DirectoryProfile,
+  directoryProfile,
   listPeople,
   superAdminExists,
   upsertPerson,
@@ -200,14 +202,36 @@ async function renderUsers(body: HTMLElement, me: RosterPerson): Promise<void> {
   const sites = parseOrgTree(await orgJson()).map((s) => s.site);
   const people = await listPeople(true);
 
-  // --- filter bar: search, site, role ---
+  // directory reads (job title + account status) are lazy and cached, so
+  // re-filtering never refetches and large rosters aren't hit all at once
+  const dirResolved = new Map<string, DirectoryProfile>();
+  const dirInflight = new Map<string, Promise<DirectoryProfile>>();
+  const dir = {
+    get: (whoId: string) => dirResolved.get(whoId),
+    load: (whoId: string) => {
+      if (dirResolved.has(whoId)) return Promise.resolve(dirResolved.get(whoId)!);
+      let pr = dirInflight.get(whoId);
+      if (!pr) {
+        pr = directoryProfile(whoId).then((d) => {
+          dirResolved.set(whoId, d);
+          dirInflight.delete(whoId);
+          return d;
+        });
+        dirInflight.set(whoId, pr);
+      }
+      return pr;
+    },
+  };
+
+  // --- filter bar: search, site, role, status ---
   let query = "";
   let siteFilter = "";
   let roleFilter = "";
+  let statusFilter = "";
 
   const search = el("input", "app-input") as HTMLInputElement;
   search.type = "search";
-  search.placeholder = "Search name or email";
+  search.placeholder = "Search name, email or job title";
   search.addEventListener("input", () => {
     query = search.value.trim().toLowerCase();
     draw();
@@ -225,8 +249,16 @@ async function renderUsers(body: HTMLElement, me: RosterPerson): Promise<void> {
     roleFilter = roleSel.value;
     draw();
   });
+  const statusSel = labelledFilter("Any status", [
+    { value: "active", label: "Active" },
+    { value: "revoked", label: "Revoked" },
+  ]);
+  statusSel.addEventListener("change", () => {
+    statusFilter = statusSel.value;
+    draw();
+  });
   const bar = el("div", "app-settings-row app-users-filters");
-  bar.append(search, siteSel, roleSel);
+  bar.append(search, siteSel, roleSel, statusSel);
   body.appendChild(bar);
 
   const count = el("div", "app-settings-note", "");
@@ -240,21 +272,30 @@ async function renderUsers(body: HTMLElement, me: RosterPerson): Promise<void> {
     const shown = people.filter((p) => {
       if (siteFilter !== "" && p.site !== siteFilter) return false;
       if (roleFilter !== "" && p.role !== roleFilter) return false;
+      if (statusFilter === "active" && !p.active) return false;
+      if (statusFilter === "revoked" && p.active) return false;
       if (query !== "") {
-        const hay = `${p.who} ${p.email}`.toLowerCase();
+        const title = dir.get(p.whoId)?.jobTitle ?? "";
+        const hay = `${p.who} ${p.email} ${title}`.toLowerCase();
         if (!hay.includes(query)) return false;
       }
       return true;
     });
-    count.textContent = `${shown.length} of ${people.length} ${
-      people.length === 1 ? "person" : "people"
-    }`;
-    for (const p of shown) list.appendChild(userRow(p, sites, canEdit, me));
+    const revoked = people.filter((p) => !p.active).length;
+    count.textContent =
+      `${shown.length} of ${people.length} ${people.length === 1 ? "person" : "people"}` +
+      (revoked > 0 ? ` · ${revoked} revoked` : "");
+    for (const p of shown) list.appendChild(userRow(p, sites, canEdit, me, dir, draw));
     if (shown.length === 0) {
       list.appendChild(el("div", "app-settings-note", "No users match those filters."));
     }
   };
   draw();
+}
+
+interface DirectoryLookup {
+  get: (whoId: string) => DirectoryProfile | undefined;
+  load: (whoId: string) => Promise<DirectoryProfile>;
 }
 
 /** A "Any …" default option followed by {value,label} choices. */
@@ -308,27 +349,51 @@ function roleLegend(): HTMLElement {
   return box;
 }
 
-/** One roster row: name + role badge + email, with labelled site/role. */
+/** One roster row: identity + status, job title, and labelled controls. */
 function userRow(
   p: RosterPerson,
   sites: string[],
   canEdit: boolean,
-  me: RosterPerson
+  me: RosterPerson,
+  dir: DirectoryLookup,
+  onChanged: () => void
 ): HTMLElement {
   const r = el("div", "app-user-row");
+  if (!p.active) r.classList.add("app-user-revoked");
 
   const main = el("div", "app-user-main");
   const nameLine = el("div", "app-user-nameline");
-  nameLine.append(
-    el("span", "app-people-name", p.who),
-    el("span", `app-role-badge app-role-${p.role}`, roleLabel(p.role))
+  const roleBadge = el("span", `app-role-badge app-role-${p.role}`, roleLabel(p.role));
+  const statusBadge = el(
+    "span",
+    `app-status-badge app-status-${p.active ? "active" : "revoked"}`,
+    p.active ? "Active" : "Revoked"
   );
-  main.append(
-    nameLine,
-    el("div", "app-user-email", p.email || "no email on file")
-  );
-  if (!p.active) main.classList.add("app-people-inactive");
+  nameLine.append(el("span", "app-people-name", p.who), roleBadge, statusBadge);
+
+  // job title + directory account status, filled once the directory read
+  // resolves (Office 365 Users). A missing/disabled account is surfaced.
+  const titleLine = el("div", "app-user-title", "…");
+  const emailLine = el("div", "app-user-email", p.email || "no email on file");
+  main.append(nameLine, titleLine, emailLine);
   r.appendChild(main);
+
+  const paintDirectory = (d: DirectoryProfile) => {
+    if (!d.found) {
+      titleLine.textContent = "No directory account (removed from Entra)";
+      titleLine.classList.add("app-user-dirwarn");
+    } else if (!d.accountEnabled) {
+      titleLine.textContent =
+        (d.jobTitle ? `${d.jobTitle} · ` : "") + "Entra account disabled";
+      titleLine.classList.add("app-user-dirwarn");
+    } else {
+      titleLine.textContent = d.jobTitle || "No job title set";
+      titleLine.classList.toggle("app-settings-note", d.jobTitle === "");
+    }
+  };
+  const cached = dir.get(p.whoId);
+  if (cached) paintDirectory(cached);
+  else void dir.load(p.whoId).then(paintDirectory);
 
   const controls = el("div", "app-user-controls");
   // editable site (clearing department/area when the site changes so a
@@ -348,18 +413,27 @@ function userRow(
   role.disabled = !canEdit || p.whoId === me.whoId; // no self-demotion footguns
   role.addEventListener("change", () => {
     p.role = role.value || "user";
-    // keep the badge in step without a full re-render
-    const badge = nameLine.querySelector(".app-role-badge");
-    if (badge) {
-      badge.textContent = roleLabel(p.role);
-      badge.className = `app-role-badge app-role-${p.role}`;
-    }
+    roleBadge.textContent = roleLabel(p.role);
+    roleBadge.className = `app-role-badge app-role-${p.role}`;
     void upsertPerson({ ...p });
   });
-  controls.append(
-    labelledControl("Site", site),
-    labelledControl("Role", role)
-  );
+  controls.append(labelledControl("Site", site), labelledControl("Role", role));
+
+  // revoke / restore app access (removes them from meeting rosters and
+  // people pickers while keeping the row so it can be restored)
+  if (canEdit && p.whoId !== me.whoId) {
+    const access = el(
+      "button",
+      `app-btn ${p.active ? "app-btn-danger" : ""}`,
+      p.active ? "Revoke access" : "Restore access"
+    ) as HTMLButtonElement;
+    access.addEventListener("click", () => {
+      p.active = !p.active;
+      void upsertPerson({ ...p }).then(onChanged); // re-filter (status may change)
+    });
+    controls.append(labelledControl("Access", access));
+  }
+
   r.appendChild(controls);
   return r;
 }

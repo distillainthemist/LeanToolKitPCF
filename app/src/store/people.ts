@@ -58,6 +58,40 @@ export async function searchEntra(query: string): Promise<EntraHit[]> {
     }));
 }
 
+export interface DirectoryProfile {
+  jobTitle: string;
+  /** true if the Entra account is enabled; false if disabled/revoked. */
+  accountEnabled: boolean;
+  /** false if the directory has no such account (deleted/unknown). */
+  found: boolean;
+}
+
+/**
+ * Live directory read for one person (Office 365 Users, UserProfile V2 by
+ * object id). Surfaces job title and whether the Entra account still
+ * exists and is enabled — a disabled/missing account is a "revoked" user.
+ * Never throws: a missing account resolves to found:false.
+ */
+export async function directoryProfile(whoId: string): Promise<DirectoryProfile> {
+  const absent = { jobTitle: "", accountEnabled: false, found: false };
+  if (whoId.trim() === "") return absent;
+  try {
+    const res = await Office365UsersService.UserProfile_V2(
+      whoId,
+      "jobTitle,accountEnabled,displayName"
+    );
+    const u = res.data;
+    if (!u) return absent;
+    return {
+      jobTitle: u.jobTitle ?? "",
+      accountEnabled: u.accountEnabled !== false,
+      found: true,
+    };
+  } catch {
+    return absent;
+  }
+}
+
 /** The viewer's roster row, matched by Entra object id (whoId). */
 export async function viewerPerson(entraObjectId: string): Promise<RosterPerson | null> {
   const rows = await allWhere(Ben_ltkpeoplesService.getAll, eq("ben_whoid", entraObjectId));
