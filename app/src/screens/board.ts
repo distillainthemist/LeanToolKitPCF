@@ -153,6 +153,16 @@ async function renderBoard(
   };
 
   const schedulerView = new MeetingSchedulerView(leftHost, {
+    onAddAdhoc: (iso) => {
+      void (async () => {
+        current = await createInstance(board.boardId, `${iso}:00Z`, true);
+        instances = await listInstances(board.boardId);
+        cardRows = await rowsForBoard(board.boardId);
+        refreshScheduler();
+        rememberSelection();
+        renderTiles();
+      })();
+    },
     onSelect: (inst) => {
       const existing = instances.find((i) => i.when.startsWith(inst.iso));
       if (existing) {
@@ -192,7 +202,7 @@ async function renderBoard(
 
   const refreshScheduler = () => {
     const existingJson = JSON.stringify(
-      instances.map((i) => ({ date: i.when, recordId: i.id }))
+      instances.map((i) => ({ date: i.when, recordId: i.id, adhoc: i.isAdhoc }))
     );
     schedulerView.setInstances(
       generateInstances(

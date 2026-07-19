@@ -60,8 +60,11 @@ export interface MeetingColumn {
 export interface ExistingMeeting {
   date: string; // yyyy-mm-dd of the scheduled instance
   hour: number; // scheduled hour (locates the shift for shiftly)
+  minute: number; // scheduled minute (-1 when the record has no time)
   recordId: string;
   rescheduledTo: string; // "" when not rescheduled
+  /** Created outside the cadence — rendered as its own flagged row. */
+  adhoc: boolean;
   values: Record<string, string>; // stored custom-column values, by key
 }
 
@@ -74,6 +77,8 @@ export interface MeetingInstance {
   time: string; // "HH:MM"
   crew: string; // "" when no roster applies
   shift: "" | "day" | "night";
+  /** A record created outside the cadence (slice 5). */
+  adhoc: boolean;
   /** The rotation topic for this occurrence ("" = none configured). */
   topic: string;
   recordId: string; // "" when no record exists yet
@@ -326,6 +331,8 @@ export function parseExistingMeetings(raw: string | null | undefined): ExistingM
       out.push({
         date: isoLocal(date),
         hour: hm ? Math.max(0, Math.min(23, Number(hm[1]))) : -1,
+        minute: hm ? Math.max(0, Math.min(59, Number(hm[2]))) : -1,
+        adhoc: o.adhoc === true,
         recordId: String(o.recordId ?? o.id ?? "").trim(),
         rescheduledTo: String(o.rescheduledDate ?? o.rescheduledTo ?? "").trim(),
         values,
@@ -483,7 +490,7 @@ export function generateInstances(
   const out: MeetingInstance[] = [];
   const push = (date: Date, time: string, shift: "" | "day" | "night", crew: string) => {
     const dIso = isoLocal(date);
-    const rec = matchRecord(existing, dIso, shift);
+    const rec = matchRecord(existing.filter((e) => !e.adhoc), dIso, shift);
     const iso = `${dIso}T${time}`;
     const past = new Date(`${dIso}T${time}:00`) < now;
     out.push({
@@ -494,6 +501,7 @@ export function generateInstances(
       crew,
       shift,
       topic: topicFor(date),
+      adhoc: false,
       recordId: rec?.recordId ?? "",
       rescheduledTo: rec?.rescheduledTo ?? "",
       status: rec && rec.recordId !== "" ? "existing" : past ? "missing" : "planned",
@@ -524,6 +532,28 @@ export function generateInstances(
       inst.status !== "missing" ||
       new Date(`${inst.date}T${inst.time}:00`).getTime() >= staleCutoff
   );
+
+  // ad-hoc records render as their own rows, outside the cadence
+  for (const e of existing) {
+    if (!e.adhoc || e.recordId === "") continue;
+    const hh = e.hour >= 0 ? String(e.hour).padStart(2, "0") : "00";
+    const mm = e.minute >= 0 ? String(e.minute).padStart(2, "0") : "00";
+    const d = parseLocalDate(e.date);
+    visible.push({
+      iso: `${e.date}T${hh}:${mm}`,
+      date: e.date,
+      day: d ? DAY_LABELS[d.getDay()] : "",
+      time: `${hh}:${mm}`,
+      crew: "",
+      shift: "",
+      topic: "",
+      adhoc: true,
+      recordId: e.recordId,
+      rescheduledTo: e.rescheduledTo,
+      status: "existing",
+      values: e.values,
+    });
+  }
 
   visible.sort((a, b) => (a.iso < b.iso ? 1 : a.iso > b.iso ? -1 : 0)); // newest first
   return visible;

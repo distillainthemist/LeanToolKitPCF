@@ -97,7 +97,7 @@ upgrade for other orgs)
   stored in the blob; board screen honours it once the
   instance-composer exists (challenge #6).
 
-### Slice 5 — Scheduler: ad-hoc records (M)
+### Slice 5 — Scheduler: ad-hoc records (M) — DONE 2026-07-20
 - `ben_isadhoc`; MeetingScheduler gains "add ad-hoc meeting"
   (date/time picker) and an adhoc badge on rows; app creates the
   instance flagged adhoc. Adhoc instances excluded from the carry

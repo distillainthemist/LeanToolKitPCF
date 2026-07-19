@@ -2,6 +2,16 @@
 // Crew badge colours are set inline (Safari rule).
 
 export const MEETING_CSS = `
+.ltk-ms-adhoc { font-size: 10.5px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
+  background: color-mix(in srgb, var(--ltk-accent) 14%, transparent); color: var(--ltk-accent);
+  border: 1px solid var(--ltk-accent); border-radius: 999px; padding: 1px 7px; }
+.ltk-ms-adhocadd { display: flex; gap: 6px; align-items: center; padding: 4px 12px 8px; }
+.ltk-ms-adhocbtn { font: inherit; font-size: 12px; border: 1px solid color-mix(in srgb, var(--ltk-fg) 18%, transparent);
+  background: var(--ltk-bg); border-radius: 7px; padding: 4px 10px; cursor: pointer; }
+.ltk-ms-adhocbtn:hover { border-color: var(--ltk-accent); color: var(--ltk-accent); }
+.ltk-ms-adhocfield { font: inherit; font-size: 12px; border: 1px solid color-mix(in srgb, var(--ltk-fg) 18%, transparent);
+  border-radius: 7px; padding: 3px 6px; background: var(--ltk-bg); color: var(--ltk-fg); }
+
 /* ---- meeting identity strip (settingsJSON.meeting) ---- */
 .ltk-ms-meta {
   display: flex;

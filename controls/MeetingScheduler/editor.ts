@@ -17,6 +17,8 @@ export interface MeetingViewCallbacks {
   /** A row was selected (tapped) or its column values edited. `values` merges
    *  the record's stored values with the in-card edits. */
   onSelect: (instance: MeetingInstance, values: Record<string, string>) => void;
+  /** The maker added an ad-hoc meeting at `iso` (yyyy-mm-ddTHH:MM). */
+  onAddAdhoc?: (iso: string) => void;
 }
 
 const CREW_FALLBACKS = ["#2b88d8", "#107c10", "#f2c811", "#8764b8"];
@@ -37,6 +39,7 @@ export class MeetingSchedulerView {
   /** The settings blob's meeting section (owner, purpose, org, people). */
   private meetingInfo: MeetingInfo | null = null;
   private aboutOpen = false;
+  private adhocOpen = false;
 
   constructor(host: HTMLElement, private readonly cb: MeetingViewCallbacks) {
     ensureStylesheet("ltk-base-css", LTK_BASE_CSS);
@@ -114,6 +117,41 @@ export class MeetingSchedulerView {
     this.root.remove();
   }
 
+  private renderAdhocAdder(body: HTMLElement): void {
+    const wrap = el("div", "ltk-ms-adhocadd");
+    body.appendChild(wrap);
+    if (!this.adhocOpen) {
+      const open = el("button", "ltk-ms-adhocbtn", "\uFF0B Ad-hoc meeting") as HTMLButtonElement;
+      open.type = "button";
+      open.addEventListener("click", () => {
+        this.adhocOpen = true;
+        this.render();
+      });
+      wrap.appendChild(open);
+      return;
+    }
+    const date = el("input", "ltk-ms-adhocfield") as HTMLInputElement;
+    date.type = "date";
+    date.value = todayIso();
+    const time = el("input", "ltk-ms-adhocfield") as HTMLInputElement;
+    time.type = "time";
+    time.value = "09:00";
+    const add = el("button", "ltk-ms-adhocbtn", "Create") as HTMLButtonElement;
+    add.type = "button";
+    add.addEventListener("click", () => {
+      if (date.value === "" || time.value === "") return;
+      this.adhocOpen = false;
+      this.cb.onAddAdhoc?.(`${date.value}T${time.value}`);
+    });
+    const cancel = el("button", "ltk-ms-adhocbtn", "Cancel") as HTMLButtonElement;
+    cancel.type = "button";
+    cancel.addEventListener("click", () => {
+      this.adhocOpen = false;
+      this.render();
+    });
+    wrap.append(date, time, add, cancel);
+  }
+
   // ---- helpers ----
 
   /** The value to show for a column cell: an in-card edit over the record's. */
@@ -156,6 +194,8 @@ export class MeetingSchedulerView {
       renderGhost(body, lines.slice(0, 2));
       return;
     }
+
+    if (this.cb.onAddAdhoc && !this.readOnly) this.renderAdhocAdder(body);
 
     const today = todayIso();
     const list = el("div", "ltk-ms-list");
@@ -234,6 +274,7 @@ export class MeetingSchedulerView {
       el("span", "ltk-ms-row-date", this.prettyDate(inst)),
       el("span", "ltk-ms-row-time", inst.time)
     );
+    if (inst.adhoc) main.appendChild(el("span", "ltk-ms-adhoc", "ad-hoc"));
 
     if (inst.shift !== "") {
       main.appendChild(

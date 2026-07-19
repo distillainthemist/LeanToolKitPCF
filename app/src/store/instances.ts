@@ -21,6 +21,7 @@ export interface InstanceSummary {
   boardId: string;
   when: string; // ISO datetime
   status: "open" | "closed";
+  isAdhoc: boolean;
 }
 
 function fromRow(row: Ben_ltkboardinstances): InstanceSummary {
@@ -29,6 +30,7 @@ function fromRow(row: Ben_ltkboardinstances): InstanceSummary {
     boardId: row.ben_boardid ?? "",
     when: row.ben_when ?? "",
     status: row.ben_status === "closed" ? "closed" : "open",
+    isAdhoc: row.ben_isadhoc === true,
   };
 }
 
@@ -65,19 +67,24 @@ export async function instanceByWhen(
  */
 export async function createInstance(
   boardId: string,
-  whenIso: string
+  whenIso: string,
+  adhoc = false
 ): Promise<InstanceSummary> {
   const board = await getBoard(boardId);
   if (!board) throw new Error(`unknown board ${boardId}`);
   const manifest = parseManifest(board.manifestRaw);
 
-  const previous = (await listInstances(boardId)).find((i) => i.when < whenIso) ?? null;
+  // the carry chain follows the scheduled cadence — ad-hoc records are
+  // neither carry sources nor influenced by being newest
+  const previous =
+    (await listInstances(boardId)).find((i) => i.when < whenIso && !i.isAdhoc) ?? null;
 
   const created = await Ben_ltkboardinstancesService.create({
     ben_name: `${board.name} — ${whenIso.slice(0, 16).replace("T", " ")}`,
     ben_boardid: boardId,
     ben_when: whenIso,
     ben_status: "open",
+    ben_isadhoc: adhoc,
     ben_settingsjson: board.occurrenceSettingsRaw,
     "ben_Board@odata.bind": `/ben_ltkboards(${board.id})`,
   } as never);
