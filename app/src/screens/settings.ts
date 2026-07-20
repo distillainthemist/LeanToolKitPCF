@@ -8,13 +8,20 @@
 import { clear, el } from "../../../shared/ui/dom";
 import { setLeaveGuard } from "../navGuard";
 import { currentViewer, detectHost } from "../runtime";
-import { listBoards, replicateBoard } from "../store/boards";
+import {
+  listBoards,
+  renameBoardsDepartment,
+  renameBoardsSite,
+  replicateBoard,
+} from "../store/boards";
 import {
   APP_ROW,
   branding,
   companies,
   meetingCategories,
   orgJson,
+  renameCompany,
+  renameSiteRow,
   saveCompanies,
   saveMeetingCategories,
   protectedTimesJson,
@@ -744,13 +751,28 @@ async function renderOrg(
       groups.push({ company: "", sites: unassigned });
     }
     for (const g of groups) {
-      rail.appendChild(
+      const header = el("div", "app-org-company");
+      header.appendChild(
         el(
-          "div",
-          "app-org-company",
+          "span",
+          "",
           g.company === "" ? (companyList.length > 0 ? "No company" : "Sites") : g.company
         )
       );
+      if (isSuper && g.company !== "") {
+        header.appendChild(
+          editBtn("Rename company", () => {
+            const name = (window.prompt("Rename company:", g.company) ?? "").trim();
+            if (name === "" || name === g.company || companyList.includes(name)) return;
+            void (async () => {
+              if (!(await guardLeave())) return;
+              await renameCompany(g.company, name);
+              await renderOrg(body, me, ctx);
+            })();
+          })
+        );
+      }
+      rail.appendChild(header);
       for (const site of g.sites) {
         const item = el("button", "app-org-siteitem") as HTMLButtonElement;
         if (site === currentSite) item.classList.add("app-org-siteitem-on");
@@ -818,46 +840,108 @@ async function renderOrg(
     }
     const canEdit = editable.includes(currentSite);
 
-    // heading + company assignment
+    // heading: site name, rename (super), company placement
     const head = el("div", "app-org-panehead");
     head.appendChild(el("span", "app-profile-name", currentSite));
+    if (isSuper) {
+      head.appendChild(
+        editBtn("Rename site", () => {
+          const name = (window.prompt("Rename site:", currentSite) ?? "").trim();
+          if (name === "" || name === currentSite || name === APP_ROW || sites.includes(name))
+            return;
+          void (async () => {
+            if (!(await guardLeave())) return;
+            // cascade: settings row, board grouping, people placements
+            await renameSiteRow(currentSite, name);
+            await renameBoardsSite(currentSite, name);
+            for (const p of await listPeople(true)) {
+              if (p.site === currentSite) await upsertPerson({ ...p, site: name });
+            }
+            if (me.site === currentSite) me.site = name;
+            await renderOrg(body, me, ctx);
+          })();
+        })
+      );
+    }
     if (!canEdit) {
       head.appendChild(el("span", "app-status-badge app-status-revoked", "View only"));
     }
     pane.appendChild(head);
-    const companySel = labelledFilter(
-      "No company",
-      companyList.map((c) => ({ value: c, label: c }))
+    const companyMeta = el("div", "app-org-companymeta");
+    companyMeta.appendChild(
+      el("span", "app-field-hint", siteCompany[currentSite] || "No company")
     );
-    companySel.value = siteCompany[currentSite] ?? "";
-    companySel.disabled = !isSuper;
-    companySel.addEventListener("change", () => ctx.markDirty());
-    pane.appendChild(
-      field(
-        "Company",
-        companySel,
-        isSuper ? undefined : "Only super admins move sites between companies"
-      )
-    );
+    if (isSuper && companyList.length > 0) {
+      companyMeta.appendChild(
+        editBtn("Move to another company", () => {
+          const name = (
+            window.prompt(`Move ${currentSite} to company (${companyList.join(", ")}):`, siteCompany[currentSite] ?? "") ?? ""
+          ).trim();
+          if (name === "" || !companyList.includes(name)) return;
+          void (async () => {
+            if (!(await guardLeave())) return;
+            await saveSiteCompany(currentSite, name);
+            await renderOrg(body, me, ctx);
+          })();
+        })
+      );
+    }
+    pane.appendChild(companyMeta);
     const node = tree.find((s) => s.site === currentSite) ?? {
       site: currentSite,
       departments: [],
     };
     const s = await siteSettings(currentSite);
-    const times = JSON.parse(await protectedTimesJson(currentSite)) as {
-      label?: string;
+    interface ProtectedRow {
+      label: string;
       color?: string;
-      days?: string;
-      start?: string;
-      end?: string;
-    }[];
-    let patterns: { name: string; pattern: string }[] = [];
+      days: string; // "Mon,Tue" CSV; "" = every day
+      start: string;
+      end: string;
+    }
+    let times: ProtectedRow[] = [];
+    try {
+      const arr = JSON.parse(await protectedTimesJson(currentSite));
+      if (Array.isArray(arr)) {
+        times = arr.map((o: Record<string, unknown>) => ({
+          label: typeof o.label === "string" ? o.label : "",
+          color: typeof o.color === "string" ? o.color : undefined,
+          days: typeof o.days === "string" ? o.days : "",
+          start: typeof o.start === "string" ? o.start : "",
+          end: typeof o.end === "string" ? o.end : "",
+        }));
+      }
+    } catch { /* fresh */ }
+    interface RosterPatternRow {
+      name: string;
+      pattern: string;
+      baseDate: string; // YYYY-MM-DD the pattern anchors to
+      crews: string; // display CSV, stored as array
+      handovers: string; // shift start/handover times CSV, stored as array
+    }
+    let patterns: RosterPatternRow[] = [];
     try {
       const arr = JSON.parse(s.rosterPatternsJson || "[]");
-      if (Array.isArray(arr)) patterns = arr;
+      if (Array.isArray(arr)) {
+        patterns = arr.map((o: Record<string, unknown>) => ({
+          name: typeof o.name === "string" ? o.name : "",
+          pattern: typeof o.pattern === "string" ? o.pattern : "",
+          baseDate: typeof o.baseDate === "string" ? o.baseDate : "",
+          crews: Array.isArray(o.crews) ? o.crews.map(String).join(", ") : "",
+          handovers: Array.isArray(o.handovers) ? o.handovers.map(String).join(", ") : "",
+        }));
+      }
     } catch { /* fresh */ }
 
     // --- departments & areas (cards; drag handles reorder) ---
+    // renames wait for save with everything else, then cascade to the
+    // people and board rows that reference the old names
+    const pendingRenames: {
+      kind: "dept" | "area";
+      department: string;
+      oldName: string;
+      newName: string;
+    }[] = [];
     pane.appendChild(sectionTitle("Departments & areas"));
     const treeBox = el("div", "app-dept-list");
     pane.appendChild(treeBox);
@@ -879,6 +963,21 @@ async function renderOrg(
         head.appendChild(el("span", "app-dept-name", d.department));
         if (canEdit) {
           head.appendChild(
+            editBtn("Rename department", () => {
+              const name = (window.prompt("Rename department:", d.department) ?? "").trim();
+              if (name === "" || name === d.department) return;
+              if (node.departments.some((x) => x.department === name)) return;
+              pendingRenames.push({
+                kind: "dept",
+                department: name,
+                oldName: d.department,
+                newName: name,
+              });
+              d.department = name;
+              redraw();
+            })
+          );
+          head.appendChild(
             removeBtn(() => {
               node.departments = node.departments.filter((x) => x !== d);
               redraw();
@@ -899,6 +998,20 @@ async function renderOrg(
           }
           ar.appendChild(el("span", "app-area-name", a));
           if (canEdit) {
+            ar.appendChild(
+              editBtn("Rename area", () => {
+                const name = (window.prompt("Rename area:", a) ?? "").trim();
+                if (name === "" || name === a || d.areas.includes(name)) return;
+                pendingRenames.push({
+                  kind: "area",
+                  department: d.department,
+                  oldName: a,
+                  newName: name,
+                });
+                d.areas[ai] = name;
+                redraw();
+              })
+            );
             ar.appendChild(
               removeBtn(() => {
                 d.areas = d.areas.filter((x) => x !== a);
@@ -947,101 +1060,209 @@ async function renderOrg(
       field("Accent colour", accentGroup.el, "Overrides the app accent for this site")
     );
 
-    // --- roster patterns ---
+    // --- roster patterns (editable cards) ---
     pane.appendChild(sectionTitle("Shift roster patterns"));
-    const patBox = el("div", "app-org-tree");
+    const patBox = el("div", "app-dept-list");
     pane.appendChild(patBox);
+    const patInput = (
+      value: string,
+      placeholder: string,
+      apply: (v: string) => void
+    ): HTMLInputElement => {
+      const input = el("input", "app-input") as HTMLInputElement;
+      input.value = value;
+      input.placeholder = placeholder;
+      input.disabled = !canEdit;
+      input.addEventListener("input", () => {
+        apply(input.value);
+        ctx.markDirty();
+      });
+      return input;
+    };
     const drawPatterns = () => {
       clear(patBox);
       for (const pat of patterns) {
-        const r = el("div", "app-org-row");
-        r.append(
-          el("span", "app-org-site", pat.name),
-          el("span", "app-settings-note", pat.pattern)
+        const card = el("div", "app-dept-card");
+        const headRow = el("div", "app-dept-head");
+        headRow.appendChild(
+          patInput(pat.name, "Name (e.g. 4-crew rotating)", (v) => (pat.name = v))
         );
-        if (canEdit) r.appendChild(removeBtn(() => {
-          patterns = patterns.filter((x) => x !== pat);
-          drawPatterns();
+        if (canEdit) {
+          headRow.appendChild(
+            removeBtn(() => {
+              patterns = patterns.filter((x) => x !== pat);
+              drawPatterns();
+              ctx.markDirty();
+            })
+          );
+        }
+        card.appendChild(headRow);
+        const grid = el("div", "app-pattern-grid");
+        const baseDate = el("input", "app-input") as HTMLInputElement;
+        baseDate.type = "date";
+        baseDate.value = pat.baseDate;
+        baseDate.disabled = !canEdit;
+        baseDate.addEventListener("input", () => {
+          pat.baseDate = baseDate.value;
           ctx.markDirty();
-        }));
-        patBox.appendChild(r);
+        });
+        grid.append(
+          field("Pattern", patInput(pat.pattern, "e.g. 2D-2N-4O", (v) => (pat.pattern = v.toUpperCase()))),
+          field("Base date", baseDate, "Day 1 of the pattern for crew 1"),
+          field("Crews", patInput(pat.crews, "e.g. A, B, C, D", (v) => (pat.crews = v)), "In rotation order"),
+          field(
+            "Shift start / handover times",
+            patInput(pat.handovers, "e.g. 06:00, 18:00", (v) => (pat.handovers = v)),
+            "One per shift, comma-separated"
+          )
+        );
+        card.appendChild(grid);
+        patBox.appendChild(card);
+      }
+      if (patterns.length === 0) {
+        patBox.appendChild(el("div", "app-org-empty", "No patterns yet"));
       }
       if (canEdit) {
-        const name = el("input", "app-input") as HTMLInputElement;
-        name.placeholder = "Name (e.g. 4-crew rotating)";
-        const pattern = el("input", "app-input") as HTMLInputElement;
-        pattern.placeholder = "Pattern (e.g. 2D-2N-4O)";
-        const add = el("button", "app-btn", "\uFF0B") as HTMLButtonElement;
+        const add = el("button", "app-org-add", "\uFF0B Add roster pattern") as HTMLButtonElement;
         add.addEventListener("click", () => {
-          if (name.value.trim() === "" || pattern.value.trim() === "") return;
-          patterns.push({ name: name.value.trim(), pattern: pattern.value.trim().toUpperCase() });
+          patterns.push({ name: "", pattern: "", baseDate: "", crews: "", handovers: "" });
           drawPatterns();
           ctx.markDirty();
         });
-        const r = el("div", "app-org-row");
-        r.append(name, pattern, add);
-        patBox.appendChild(r);
+        patBox.appendChild(add);
       }
     };
     drawPatterns();
 
-    // --- protected times ---
+    // --- protected times (editable; days are a multi-select) ---
     pane.appendChild(sectionTitle("Protected times"));
-    const ptBox = el("div", "app-org-tree");
+    const ptBox = el("div", "app-dept-list");
     pane.appendChild(ptBox);
     const drawTimes = () => {
       clear(ptBox);
       for (const pt of times) {
-        const r = el("div", "app-org-row");
-        r.append(
-          el("span", "app-org-site", pt.label ?? ""),
-          el("span", "app-settings-note", `${pt.days ?? "all days"} ${pt.start ?? ""}\u2013${pt.end ?? ""}`)
-        );
-        if (canEdit) r.appendChild(removeBtn(() => {
-          times.splice(times.indexOf(pt), 1);
-          drawTimes();
-          ctx.markDirty();
-        }));
-        ptBox.appendChild(r);
-      }
-      if (canEdit) {
+        const card = el("div", "app-dept-card");
+        const headRow = el("div", "app-dept-head");
         const label = el("input", "app-input") as HTMLInputElement;
-        label.placeholder = "Label";
-        const days = el("input", "app-input") as HTMLInputElement;
-        days.placeholder = "Days (e.g. Mon-Fri)";
-        days.style.width = "120px";
+        label.value = pt.label;
+        label.placeholder = "Label (e.g. Morning handover)";
+        label.disabled = !canEdit;
+        label.addEventListener("input", () => {
+          pt.label = label.value;
+          ctx.markDirty();
+        });
+        headRow.appendChild(label);
+        if (canEdit) {
+          headRow.appendChild(
+            removeBtn(() => {
+              times.splice(times.indexOf(pt), 1);
+              drawTimes();
+              ctx.markDirty();
+            })
+          );
+        }
+        card.appendChild(headRow);
+        const timesRow = el("div", "app-timespan");
         const start = el("input", "app-input") as HTMLInputElement;
         start.type = "time";
+        start.value = pt.start;
+        start.disabled = !canEdit;
+        start.addEventListener("input", () => {
+          pt.start = start.value;
+          ctx.markDirty();
+        });
         const end = el("input", "app-input") as HTMLInputElement;
         end.type = "time";
-        const add = el("button", "app-btn", "\uFF0B") as HTMLButtonElement;
+        end.value = pt.end;
+        end.disabled = !canEdit;
+        end.addEventListener("input", () => {
+          pt.end = end.value;
+          ctx.markDirty();
+        });
+        timesRow.append(start, el("span", "app-field-hint", "to"), end);
+        card.append(
+          field(
+            "Days",
+            dayChips(pt.days, canEdit, (csv) => {
+              pt.days = csv;
+              ctx.markDirty();
+            }),
+            "None selected = every day"
+          ),
+          field("Between", timesRow)
+        );
+        ptBox.appendChild(card);
+      }
+      if (times.length === 0) {
+        ptBox.appendChild(el("div", "app-org-empty", "No protected times yet"));
+      }
+      if (canEdit) {
+        const add = el("button", "app-org-add", "\uFF0B Add protected time") as HTMLButtonElement;
         add.addEventListener("click", () => {
-          if (label.value.trim() === "" || start.value === "" || end.value === "") return;
-          times.push({ label: label.value.trim(), days: days.value.trim(), start: start.value, end: end.value });
+          times.push({ label: "", days: "", start: "", end: "" });
           drawTimes();
           ctx.markDirty();
         });
-        const r = el("div", "app-org-row");
-        r.append(label, days, start, end, add);
-        ptBox.appendChild(r);
+        ptBox.appendChild(add);
       }
     };
     drawTimes();
 
     // --- save (via the unsaved-changes bar) ---
     if (canEdit) {
+      const csv = (v: string) =>
+        v.split(",").map((x) => x.trim()).filter((x) => x !== "");
       ctx.registerSave(async () => {
         await saveSiteDepartments(currentSite, JSON.stringify(node.departments));
         await saveSiteSettings(currentSite, {
           timezone: tz.value.trim(),
           accent: accentGroup.value(),
-          rosterPatternsJson: JSON.stringify(patterns),
+          rosterPatternsJson: JSON.stringify(
+            patterns
+              .filter((p) => p.name.trim() !== "" || p.pattern.trim() !== "")
+              .map((p) => ({
+                name: p.name.trim(),
+                pattern: p.pattern.trim(),
+                baseDate: p.baseDate,
+                crews: csv(p.crews),
+                handovers: csv(p.handovers),
+              }))
+          ),
         });
-        await saveProtectedTimes(currentSite, JSON.stringify(times));
-        if (isSuper) {
-          await saveSiteCompany(currentSite, companySel.value);
-          siteCompany[currentSite] = companySel.value; // rail regroups on next paint
-          renderRail();
+        await saveProtectedTimes(
+          currentSite,
+          JSON.stringify(times.filter((t) => t.start !== "" && t.end !== ""))
+        );
+        // rename cascades: people (and boards, for departments) that
+        // reference the old names follow along
+        if (pendingRenames.length > 0) {
+          const roster = await listPeople(true);
+          for (const person of roster) {
+            if (person.site !== currentSite) continue;
+            const upd = { ...person };
+            let changed = false;
+            for (const rn of pendingRenames) {
+              if (rn.kind === "dept" && upd.department === rn.oldName) {
+                upd.department = rn.newName;
+                changed = true;
+              }
+              if (
+                rn.kind === "area" &&
+                upd.department === rn.department &&
+                upd.area === rn.oldName
+              ) {
+                upd.area = rn.newName;
+                changed = true;
+              }
+            }
+            if (changed) await upsertPerson(upd);
+          }
+          for (const rn of pendingRenames) {
+            if (rn.kind === "dept") {
+              await renameBoardsDepartment(currentSite, rn.oldName, rn.newName);
+            }
+          }
+          pendingRenames.length = 0;
         }
         ctx.markClean();
       });
@@ -1062,6 +1283,42 @@ function removeBtn(onClick: () => void): HTMLButtonElement {
   const b = el("button", "app-org-x", "\u00d7") as HTMLButtonElement;
   b.addEventListener("click", onClick);
   return b;
+}
+
+/** Small pencil button for rename/edit affordances. */
+function editBtn(title: string, onClick: () => void): HTMLButtonElement {
+  const b = el("button", "app-org-edit", "\u270e") as HTMLButtonElement;
+  b.type = "button";
+  b.title = title;
+  b.addEventListener("click", onClick);
+  return b;
+}
+
+/** Mon\u2013Sun toggle chips; emits a "Mon,Tue" CSV ("" = every day). */
+function dayChips(
+  csv: string,
+  enabled: boolean,
+  onChange: (csv: string) => void
+): HTMLElement {
+  const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+  const selected = new Set(
+    csv.split(",").map((v) => v.trim()).filter((v) => DAYS.includes(v))
+  );
+  const wrap = el("div", "app-day-chips");
+  for (const d of DAYS) {
+    const chip = el("button", "app-day-chip", d) as HTMLButtonElement;
+    chip.type = "button";
+    chip.disabled = !enabled;
+    if (selected.has(d)) chip.classList.add("app-day-chip-on");
+    chip.addEventListener("click", () => {
+      if (selected.has(d)) selected.delete(d);
+      else selected.add(d);
+      chip.classList.toggle("app-day-chip-on", selected.has(d));
+      onChange(DAYS.filter((x) => selected.has(x)).join(","));
+    });
+    wrap.appendChild(chip);
+  }
+  return wrap;
 }
 
 /**

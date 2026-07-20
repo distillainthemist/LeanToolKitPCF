@@ -69,6 +69,29 @@ export async function saveOccurrenceSettings(
   await Ben_ltkboardsService.update(boardGuid, { ben_occurrencesettings: settingsRaw });
 }
 
+/** Rename a site across every board's grouping column. */
+export async function renameBoardsSite(oldSite: string, newSite: string): Promise<void> {
+  const rows = await allWhere(Ben_ltkboardsService.getAll, eq("ben_site", oldSite));
+  for (const row of rows) {
+    await Ben_ltkboardsService.update(row.ben_ltkboardid, { ben_site: newSite });
+  }
+}
+
+/** Rename a department across the site's boards. */
+export async function renameBoardsDepartment(
+  site: string,
+  oldDept: string,
+  newDept: string
+): Promise<void> {
+  const rows = await allWhere(
+    Ben_ltkboardsService.getAll,
+    `${eq("ben_site", site)} and ${eq("ben_department", oldDept)}`
+  );
+  for (const row of rows) {
+    await Ben_ltkboardsService.update(row.ben_ltkboardid, { ben_department: newDept });
+  }
+}
+
 /** Copy a board's design (settings + manifest) under a new board id. */
 export async function replicateBoard(
   srcBoardId: string,

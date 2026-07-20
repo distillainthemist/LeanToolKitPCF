@@ -89,6 +89,31 @@ export async function siteCompanies(): Promise<Record<string, string>> {
   return out;
 }
 
+/** Rename a company: the app-row list plus every site assigned to it. */
+export async function renameCompany(oldName: string, newName: string): Promise<void> {
+  const list = await companies();
+  await saveCompanies(list.map((c) => (c === oldName ? newName : c)));
+  const rows = await allWhere(Ben_ltksitesettingsesService.getAll);
+  for (const r of rows) {
+    if (r.ben_site !== APP_ROW && (r.ben_company ?? "").trim() === oldName) {
+      await Ben_ltksitesettingsesService.update(r.ben_ltksitesettingsid, {
+        ben_company: newName,
+      });
+    }
+  }
+}
+
+/** Rename the site's settings row (key column + display name). */
+export async function renameSiteRow(oldSite: string, newSite: string): Promise<void> {
+  const rows = await allWhere(Ben_ltksitesettingsesService.getAll, eq("ben_site", oldSite));
+  if (rows[0]) {
+    await Ben_ltksitesettingsesService.update(rows[0].ben_ltksitesettingsid, {
+      ben_site: newSite,
+      ben_name: newSite,
+    });
+  }
+}
+
 export async function saveSiteCompany(site: string, company: string): Promise<void> {
   await upsertWhere(
     Ben_ltksitesettingsesService,
