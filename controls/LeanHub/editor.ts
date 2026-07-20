@@ -66,6 +66,9 @@ export class LeanHubView {
   /** Board directory for the Boards tab; null = tab hidden. */
   private boards: { boardId: string; name: string; meta: string }[] | null = null;
   private onOpenBoard: ((boardId: string) => void) | null = null;
+  private boardsLabel = "Boards";
+  /** boardId → accent colour (e.g. ritual-category colours). */
+  private boardColors: Record<string, string> = {};
   private hideSettingsTab = false;
   private anchor: Date = startOfDay(new Date());
   private scopeKind: ScopeKind = "person";
@@ -154,14 +157,25 @@ export class LeanHubView {
     this.render();
   }
 
-  /** Supply the board directory (shows the Boards tab). */
+  /** Supply the board directory (shows the tab; label defaults "Boards"). */
   setBoards(
     boards: { boardId: string; name: string; meta: string }[],
-    onOpen: (boardId: string) => void
+    onOpen: (boardId: string) => void,
+    label = "Boards"
   ): void {
     this.onOpenBoard = onOpen;
-    if (JSON.stringify(boards) === JSON.stringify(this.boards)) return;
+    const changed =
+      JSON.stringify(boards) !== JSON.stringify(this.boards) || label !== this.boardsLabel;
+    this.boardsLabel = label;
+    if (!changed) return;
     this.boards = boards;
+    this.render();
+  }
+
+  /** Per-board accent colours (calendar chips + directory rows). */
+  setBoardColors(map: Record<string, string>): void {
+    if (JSON.stringify(map) === JSON.stringify(this.boardColors)) return;
+    this.boardColors = map;
     this.render();
   }
 
@@ -218,7 +232,7 @@ export class LeanHubView {
       { key: "calendar", label: "Cadence" },
       { key: "actions", label: "Actions" },
     ];
-    if (this.boards !== null) defs.push({ key: "boards", label: "Boards" });
+    if (this.boards !== null) defs.push({ key: "boards", label: this.boardsLabel });
     if (!this.hideSettingsTab) defs.push({ key: "settings", label: "Settings" });
     for (const t of defs) {
       const btn = el("button", "ltk-lh-tab", t.label) as HTMLButtonElement;
@@ -250,6 +264,12 @@ export class LeanHubView {
     for (const b of this.boards) {
       const row = el("button", "ltk-lh-boardrow") as HTMLButtonElement;
       row.type = "button";
+      const color = this.boardColors[b.boardId] ?? "";
+      if (color !== "") {
+        const dot = el("span", "ltk-lh-boarddot");
+        dot.style.background = color;
+        row.appendChild(dot);
+      }
       row.appendChild(el("span", "ltk-lh-boardname", b.name));
       if (b.meta !== "") row.appendChild(el("span", "ltk-lh-boardmeta", b.meta));
       row.addEventListener("click", () => this.onOpenBoard?.(b.boardId));
@@ -430,7 +450,9 @@ export class LeanHubView {
           chip.style.height = `${CHIP_H}px`;
           chip.style.left = `${(100 / group.length) * lane}%`;
           chip.style.width = `calc(${100 / group.length}% - 4px)`;
-          if (inst.barColor !== "") chip.style.borderLeftColor = inst.barColor;
+          // explicit meeting theme wins; ritual-category colour is the default
+          const accent = inst.barColor !== "" ? inst.barColor : (this.boardColors[inst.boardId] ?? "");
+          if (accent !== "") chip.style.borderLeftColor = accent;
           const line1 = el("div", "ltk-lh-chip-title", inst.title);
           const meta: string[] = [inst.time];
           if (inst.shift !== "") meta.push(inst.shift === "day" ? "Day" : "Night");

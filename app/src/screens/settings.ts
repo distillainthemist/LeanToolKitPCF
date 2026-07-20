@@ -202,7 +202,7 @@ export function mountSettings(parent: HTMLElement): () => void {
     if (isAdmin) {
       tabs.push({ key: "users", label: "Users", render: () => renderUsers(body, me) });
       tabs.push({ key: "org", label: "Organisation", render: () => renderOrg(body, me, ctx) });
-      tabs.push({ key: "boards", label: "Boards & meetings", render: () => renderBoardsAdmin(body, me) });
+      tabs.push({ key: "boards", label: "Rituals", render: () => renderBoardsAdmin(body, me) });
     }
     if (me.role === "superadmin") {
       tabs.push({ key: "brand", label: "Branding", render: () => renderBranding(body, ctx) });
@@ -1665,12 +1665,18 @@ async function renderBranding(body: HTMLElement, ctx: DirtyCtx): Promise<void> {
 
 // ---- Boards & meetings (admins): categories, create, edit, replicate ----
 
+/** A colour-cycling default so new categories are born distinct. */
+const CATEGORY_PALETTE = [
+  "#2563eb", "#0b6b3a", "#b3261e", "#b45309", "#6d28d9", "#0e7490", "#be185d",
+];
+
 async function renderBoardsAdmin(body: HTMLElement, me: RosterPerson): Promise<void> {
   clear(body);
   const isSuper = me.role === "superadmin";
 
-  // categories (super admins manage the app-wide list)
-  body.appendChild(sectionTitle("Meeting categories"));
+  // ritual categories (super admins manage the app-wide list); each has
+  // a colour used to code rituals in the calendar and lists
+  body.appendChild(sectionTitle("Ritual categories"));
   let cats = await meetingCategories();
   const catBox = el("div", "app-org-tree");
   body.appendChild(catBox);
@@ -1678,7 +1684,17 @@ async function renderBoardsAdmin(body: HTMLElement, me: RosterPerson): Promise<v
     clear(catBox);
     const rowEl = el("div", "app-org-row");
     for (const c of cats) {
-      const chip = el("span", "app-btn", c);
+      const chip = el("span", "app-btn app-cat-chip");
+      const swatch = el("input", "app-color app-cat-swatch") as HTMLInputElement;
+      swatch.type = "color";
+      swatch.value = /^#[0-9a-fA-F]{6}$/.test(c.color) ? c.color : "#8a847a";
+      swatch.disabled = !isSuper;
+      swatch.title = "Category colour";
+      swatch.addEventListener("input", () => {
+        c.color = swatch.value;
+        void saveMeetingCategories(cats);
+      });
+      chip.append(swatch, document.createTextNode(c.name));
       if (isSuper) {
         const x = removeBtn(() => {
           cats = cats.filter((v) => v !== c);
@@ -1692,8 +1708,8 @@ async function renderBoardsAdmin(body: HTMLElement, me: RosterPerson): Promise<v
     if (isSuper) {
       catBox.appendChild(
         adder("Add category", (v) => {
-          if (!cats.includes(v)) {
-            cats.push(v);
+          if (!cats.some((c) => c.name === v)) {
+            cats.push({ name: v, color: CATEGORY_PALETTE[cats.length % CATEGORY_PALETTE.length] });
             void saveMeetingCategories(cats).then(drawCats);
           }
         })
@@ -1704,17 +1720,26 @@ async function renderBoardsAdmin(body: HTMLElement, me: RosterPerson): Promise<v
   };
   drawCats();
 
-  // boards: create / edit / replicate / configure
-  body.appendChild(sectionTitle("Boards"));
-  const newBtn = el("a", "app-btn", "\uFF0B New meeting") as HTMLAnchorElement;
+  // rituals: create / edit / replicate / configure
+  body.appendChild(sectionTitle("Rituals"));
+  const newBtn = el("a", "app-btn", "\uFF0B New ritual") as HTMLAnchorElement;
   newBtn.href = "#/wizard";
   body.appendChild(newBtn);
 
   const list = el("div", "app-org-tree");
   body.appendChild(list);
   const boards = await listBoards();
+  const colorByCategory = Object.fromEntries(
+    cats.filter((c) => c.color !== "").map((c) => [c.name, c.color])
+  );
   for (const b of boards) {
     const r = el("div", "app-org-row");
+    const catColor = colorByCategory[b.category] ?? "";
+    if (catColor !== "") {
+      const dot = el("span", "app-cat-dot");
+      dot.style.background = catColor;
+      r.appendChild(dot);
+    }
     r.append(
       el("span", "app-people-name", b.name),
       el("span", "app-people-meta", [b.category, b.site, b.department].filter(Boolean).join(" \u00b7 "))

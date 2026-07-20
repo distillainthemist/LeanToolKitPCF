@@ -9,6 +9,7 @@ export const LEANHUB_CSS = `
   border-radius: 8px; padding: 12px 14px; cursor: pointer; }
 .ltk-lh-boardrow:hover { border-color: var(--ltk-accent); }
 .ltk-lh-boardname { font-weight: 700; }
+.ltk-lh-boarddot { flex: 0 0 auto; width: 10px; height: 10px; border-radius: 50%; }
 .ltk-lh-boardmeta { font-size: 12.5px; opacity: 0.7; }
 
 /* ---- tabs ---- */

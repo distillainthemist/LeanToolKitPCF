@@ -198,6 +198,17 @@ body {
 .app-people-inactive .app-people-name { text-decoration: line-through; color: #6d675c; }
 .app-boards-row:hover { outline: 2px solid var(--app-accent); }
 
+/* ritual categories: coloured chips + list dots */
+.app-cat-chip { display: inline-flex; align-items: center; gap: 8px; cursor: default; }
+input[type="color"].app-cat-swatch {
+  width: 22px;
+  height: 22px;
+  min-height: 0;
+  padding: 2px;
+  border-radius: 6px;
+}
+.app-cat-dot { flex: 0 0 auto; width: 10px; height: 10px; border-radius: 50%; }
+
 /* primary button (accent-filled) */
 .app-btn-primary {
   background: var(--app-accent);

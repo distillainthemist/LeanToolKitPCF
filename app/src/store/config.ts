@@ -123,17 +123,32 @@ export async function saveSiteCompany(site: string, company: string): Promise<vo
   );
 }
 
-export async function meetingCategories(): Promise<string[]> {
+/** A ritual (meeting) category; colour codes it across calendar/lists. */
+export interface RitualCategory {
+  name: string;
+  color: string; // "#rrggbb" or "" (no colour)
+}
+
+export async function meetingCategories(): Promise<RitualCategory[]> {
   const rows = await allWhere(Ben_ltksitesettingsesService.getAll, eq("ben_site", APP_ROW));
   try {
     const arr = JSON.parse(rows[0]?.ben_meetingcategories ?? "[]");
-    return Array.isArray(arr) ? arr.filter((v) => typeof v === "string" && v !== "") : [];
+    if (!Array.isArray(arr)) return [];
+    const out: RitualCategory[] = [];
+    for (const item of arr) {
+      // pre-colour rows stored plain strings
+      if (typeof item === "string" && item !== "") out.push({ name: item, color: "" });
+      else if (item && typeof item === "object" && typeof item.name === "string" && item.name !== "") {
+        out.push({ name: item.name, color: typeof item.color === "string" ? item.color : "" });
+      }
+    }
+    return out;
   } catch {
     return [];
   }
 }
 
-export async function saveMeetingCategories(categories: string[]): Promise<void> {
+export async function saveMeetingCategories(categories: RitualCategory[]): Promise<void> {
   await upsertWhere(
     Ben_ltksitesettingsesService,
     eq("ben_site", APP_ROW),

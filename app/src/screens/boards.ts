@@ -9,14 +9,14 @@ export function mountBoards(parent: HTMLElement): () => void {
     const hosted = await detectHost();
     if (!hosted) {
       parent.appendChild(
-        el("div", "app-board-note", "The boards list needs the Power Apps host.")
+        el("div", "app-board-note", "The rituals list needs the Power Apps host.")
       );
       return;
     }
     const boards = await listBoards();
     if (boards.length === 0) {
       parent.appendChild(
-        el("div", "app-board-note", "No boards yet — create one with New meeting.")
+        el("div", "app-board-note", "No rituals yet — create one in Settings → Rituals.")
       );
       return;
     }

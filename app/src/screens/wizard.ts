@@ -92,7 +92,7 @@ export function mountWizard(parent: HTMLElement, editBoardId = ""): () => void {
     view.setOrgTree(parseOrgTree(org));
     if (hosted) {
       view.setRosterPatterns(await rosterPatternLibrary());
-      view.setMeetingCategories(await meetingCategories());
+      view.setMeetingCategories((await meetingCategories()).map((c) => c.name));
     }
     view.setPeople(parsePeople(peopleRaw));
     view.setDraft(parseWizardDraft(editRaw));

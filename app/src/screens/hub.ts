@@ -137,14 +137,32 @@ export function mountHub(parent: HTMLElement): () => void {
     view.setPrefs(parsePrefs(prefsRaw));
     view.setHideSettingsTab(true); // settings live behind the header cog now
     if (hosted) {
-      const dir = (await listBoards()).map((b) => ({
+      const { meetingCategories } = await import("../store/config");
+      const cats = await meetingCategories();
+      const colorByCategory = Object.fromEntries(
+        cats.filter((c) => c.color !== "").map((c) => [c.name, c.color])
+      );
+      const allBoards = await listBoards();
+      const dir = allBoards.map((b) => ({
         boardId: b.boardId,
         name: b.name,
-        meta: [b.site, b.department].filter(Boolean).join(" \u00b7 "),
+        meta: [b.category, b.site, b.department].filter(Boolean).join(" \u00b7 "),
       }));
-      view.setBoards(dir, (boardId) => {
-        window.location.hash = `#/board/${boardId}`;
-      });
+      view.setBoards(
+        dir,
+        (boardId) => {
+          window.location.hash = `#/board/${boardId}`;
+        },
+        "Rituals"
+      );
+      // ritual-category colours code the calendar chips + directory rows
+      view.setBoardColors(
+        Object.fromEntries(
+          allBoards
+            .filter((b) => (colorByCategory[b.category] ?? "") !== "")
+            .map((b) => [b.boardId, colorByCategory[b.category]])
+        )
+      );
       // first access: prompt the viewer to place themselves in the org
       // (site drives meetings, actions and protected times). Modal on
       // first visit; a lighter banner remains if they skip.
