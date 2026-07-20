@@ -2,7 +2,7 @@
 <manifest>
   <control namespace="BenOBrien"
            constructor="SqdpcCard"
-           version="0.10.1"
+           version="0.11.0"
            display-name-key="SQDPC Card"
            description-key="LeanToolKit SQDPC card — each dimension rendered as its month in the shape of its big letter, built from day tiles. Tap a tile to cycle the configured status codes; hold to raise an action; two-shift granularity splits tiles diagonally."
            control-type="standard">
