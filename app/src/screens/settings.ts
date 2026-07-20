@@ -10,15 +10,20 @@ import { setLeaveGuard } from "../navGuard";
 import { currentViewer, detectHost } from "../runtime";
 import { listBoards, replicateBoard } from "../store/boards";
 import {
+  APP_ROW,
   branding,
+  companies,
   meetingCategories,
   orgJson,
+  saveCompanies,
   saveMeetingCategories,
   protectedTimesJson,
   saveBranding,
   saveProtectedTimes,
+  saveSiteCompany,
   saveSiteDepartments,
   saveSiteSettings,
+  siteCompanies,
   siteSettings,
 } from "../store/config";
 import { parseOrgTree } from "../../../shared/schema/meeting";
@@ -690,10 +695,12 @@ async function renderOrg(
   const isSuper = me.role === "superadmin";
   const tree = parseOrgTree(await orgJson()) as OrgSiteNode[];
   const sites = tree.map((s) => s.site);
-  // site admins manage their own site only
+  const companyList = await companies();
+  const siteCompany = await siteCompanies();
+  // every admin sees the whole org; site admins edit their own site only
   const editable = isSuper ? sites : sites.filter((s) => s === me.site);
 
-  let currentSite = editable[0] ?? "";
+  let currentSite = editable[0] ?? sites[0] ?? "";
 
   // switching site (or adding one) discards the current site's edits \u2014
   // gate it through the same save/discard prompt as a tab switch
@@ -705,50 +712,133 @@ async function renderOrg(
     return true;
   };
 
-  const picker = el("div", "app-settings-row");
-  const siteSel = select(sites, currentSite);
-  siteSel.addEventListener("change", () => {
-    const target = siteSel.value;
+  // two panes: company \u2192 site browser on the left, site editor right
+  const split = el("div", "app-org-split");
+  const rail = el("div", "app-org-rail");
+  const pane = el("div", "app-org-pane");
+  split.append(rail, pane);
+  body.appendChild(split);
+
+  const selectSite = (site: string) => {
     void (async () => {
-      if (!(await guardLeave())) {
-        siteSel.value = currentSite; // stay put
-        return;
-      }
-      currentSite = target;
+      if (site === currentSite) return;
+      if (!(await guardLeave())) return;
+      currentSite = site;
+      renderRail();
       await renderSite();
     })();
-  });
-  picker.append(el("span", "app-settings-label", "Site"), siteSel);
-  if (isSuper) {
-    const newSite = el("input", "app-input") as HTMLInputElement;
-    newSite.placeholder = "New site name";
-    const addSite = el("button", "app-btn", "\uFF0B Add site") as HTMLButtonElement;
-    addSite.addEventListener("click", () => {
-      const name = newSite.value.trim();
-      if (name === "" || name === "__app__") return;
-      void (async () => {
-        if (!(await guardLeave())) return;
-        await saveSiteDepartments(name, "[]");
-        await renderOrg(body, me, ctx);
-      })();
-    });
-    picker.append(newSite, addSite);
-  }
-  body.appendChild(picker);
+  };
 
-  const siteBox = el("div", "app-settings-body");
-  siteBox.style.boxShadow = "none";
-  siteBox.style.padding = "0";
-  body.appendChild(siteBox);
+  const renderRail = () => {
+    clear(rail);
+    const groups: { company: string; sites: string[] }[] = companyList.map(
+      (c) => ({ company: c, sites: [] })
+    );
+    const unassigned: string[] = [];
+    for (const site of sites) {
+      const g = groups.find((x) => x.company === (siteCompany[site] ?? ""));
+      if (g) g.sites.push(site);
+      else unassigned.push(site);
+    }
+    if (unassigned.length > 0 || groups.length === 0) {
+      groups.push({ company: "", sites: unassigned });
+    }
+    for (const g of groups) {
+      rail.appendChild(
+        el(
+          "div",
+          "app-org-company",
+          g.company === "" ? (companyList.length > 0 ? "No company" : "Sites") : g.company
+        )
+      );
+      for (const site of g.sites) {
+        const item = el("button", "app-org-siteitem") as HTMLButtonElement;
+        if (site === currentSite) item.classList.add("app-org-siteitem-on");
+        const deptCount = tree.find((t) => t.site === site)?.departments.length ?? 0;
+        item.append(
+          el("span", "app-org-sitename", site),
+          el(
+            "span",
+            "app-org-sitemeta",
+            `${deptCount} department${deptCount === 1 ? "" : "s"}` +
+              (editable.includes(site) ? "" : " \u00B7 view only")
+          )
+        );
+        item.addEventListener("click", () => selectSite(site));
+        rail.appendChild(item);
+      }
+      if (g.sites.length === 0) {
+        rail.appendChild(el("div", "app-org-empty", "No sites yet"));
+      }
+      if (isSuper && g.company !== "") {
+        const addSite = el("button", "app-org-add", "\uFF0B Add site") as HTMLButtonElement;
+        addSite.addEventListener("click", () => {
+          const name = (window.prompt(`New site under ${g.company}:`) ?? "").trim();
+          if (name === "" || name === APP_ROW || sites.includes(name)) return;
+          void (async () => {
+            if (!(await guardLeave())) return;
+            await saveSiteDepartments(name, "[]");
+            await saveSiteCompany(name, g.company);
+            await renderOrg(body, me, ctx);
+          })();
+        });
+        rail.appendChild(addSite);
+      }
+    }
+    if (isSuper) {
+      const addCo = el("button", "app-org-add app-org-addco", "\uFF0B Add company") as HTMLButtonElement;
+      addCo.addEventListener("click", () => {
+        const name = (window.prompt("New company name:") ?? "").trim();
+        if (name === "" || companyList.includes(name)) return;
+        void (async () => {
+          if (!(await guardLeave())) return;
+          await saveCompanies([...companyList, name]);
+          await renderOrg(body, me, ctx);
+        })();
+      });
+      rail.appendChild(addCo);
+    }
+  };
+  renderRail();
 
   const renderSite = async () => {
-    clear(siteBox);
+    clear(pane);
     ctx.markClean(); // freshly loaded from the store
     if (currentSite === "") {
-      siteBox.appendChild(el("div", "app-settings-note", "Add a site to begin."));
+      pane.appendChild(
+        el(
+          "div",
+          "app-settings-note",
+          isSuper
+            ? "Add a company, then a site under it to begin."
+            : "No sites yet \u2014 ask a super admin to add one."
+        )
+      );
       return;
     }
     const canEdit = editable.includes(currentSite);
+
+    // heading + company assignment
+    const head = el("div", "app-org-panehead");
+    head.appendChild(el("span", "app-profile-name", currentSite));
+    if (!canEdit) {
+      head.appendChild(el("span", "app-status-badge app-status-revoked", "View only"));
+    }
+    pane.appendChild(head);
+    const companySel = labelledFilter(
+      "No company",
+      companyList.map((c) => ({ value: c, label: c }))
+    );
+    companySel.value = siteCompany[currentSite] ?? "";
+    companySel.disabled = !isSuper;
+    companySel.addEventListener("change", () => ctx.markDirty());
+    pane.appendChild(
+      field(
+        "Company",
+        companySel,
+        isSuper ? undefined : "Only super admins move sites between companies"
+      )
+    );
     const node = tree.find((s) => s.site === currentSite) ?? {
       site: currentSite,
       departments: [],
@@ -768,9 +858,9 @@ async function renderOrg(
     } catch { /* fresh */ }
 
     // --- departments & areas tree ---
-    siteBox.appendChild(sectionTitle("Departments & areas"));
+    pane.appendChild(sectionTitle("Departments & areas"));
     const treeBox = el("div", "app-org-tree");
-    siteBox.appendChild(treeBox);
+    pane.appendChild(treeBox);
     const drawTree = () => {
       clear(treeBox);
       for (const d of node.departments) {
@@ -813,7 +903,7 @@ async function renderOrg(
     drawTree();
 
     // --- site settings ---
-    siteBox.appendChild(sectionTitle("Site settings"));
+    pane.appendChild(sectionTitle("Site settings"));
     const tz = el("input", "app-input") as HTMLInputElement;
     tz.placeholder = "e.g. Australia/Brisbane";
     tz.value = s.timezone;
@@ -822,15 +912,15 @@ async function renderOrg(
     ensureTzDatalist();
     tz.addEventListener("input", () => ctx.markDirty());
     const accentGroup = accentToggle(s.accent, () => ctx.markDirty());
-    siteBox.append(
+    pane.append(
       field("Time zone", tz, "IANA zone — sets how occurrence times display"),
       field("Accent colour", accentGroup.el, "Overrides the app accent for this site")
     );
 
     // --- roster patterns ---
-    siteBox.appendChild(sectionTitle("Shift roster patterns"));
+    pane.appendChild(sectionTitle("Shift roster patterns"));
     const patBox = el("div", "app-org-tree");
-    siteBox.appendChild(patBox);
+    pane.appendChild(patBox);
     const drawPatterns = () => {
       clear(patBox);
       for (const pat of patterns) {
@@ -866,9 +956,9 @@ async function renderOrg(
     drawPatterns();
 
     // --- protected times ---
-    siteBox.appendChild(sectionTitle("Protected times"));
+    pane.appendChild(sectionTitle("Protected times"));
     const ptBox = el("div", "app-org-tree");
-    siteBox.appendChild(ptBox);
+    pane.appendChild(ptBox);
     const drawTimes = () => {
       clear(ptBox);
       for (const pt of times) {
@@ -918,10 +1008,15 @@ async function renderOrg(
           rosterPatternsJson: JSON.stringify(patterns),
         });
         await saveProtectedTimes(currentSite, JSON.stringify(times));
+        if (isSuper) {
+          await saveSiteCompany(currentSite, companySel.value);
+          siteCompany[currentSite] = companySel.value; // rail regroups on next paint
+          renderRail();
+        }
         ctx.markClean();
       });
     } else {
-      siteBox.appendChild(
+      pane.appendChild(
         el("div", "app-settings-note", "Read-only — this site is managed by its site admins.")
       );
     }

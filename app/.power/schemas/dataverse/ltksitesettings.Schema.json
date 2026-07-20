@@ -26,6 +26,22 @@
           "x-ms-schema-name": "ben_appname",
           "maxLength": 60
         },
+        "ben_companies": {
+          "type": "string",
+          "title": "Companies (JSON)",
+          "x-ms-dataverse-attribute": "ben_companies",
+          "x-ms-dataverse-type": "MemoType",
+          "x-ms-schema-name": "ben_companies",
+          "maxLength": 4000
+        },
+        "ben_company": {
+          "type": "string",
+          "title": "Company",
+          "x-ms-dataverse-attribute": "ben_company",
+          "x-ms-dataverse-type": "StringType",
+          "x-ms-schema-name": "ben_company",
+          "maxLength": 100
+        },
         "ben_departments": {
           "type": "string",
           "title": "Departments (JSON)",

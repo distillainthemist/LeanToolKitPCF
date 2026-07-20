@@ -46,6 +46,58 @@ export async function saveBranding(b: Branding): Promise<void> {
   );
 }
 
+/**
+ * The company level above sites (multi-site businesses). The canonical
+ * list lives on the app row; each site row carries its ben_company. A
+ * company mentioned on a site but missing from the list still shows.
+ */
+export async function companies(): Promise<string[]> {
+  const rows = await allWhere(Ben_ltksitesettingsesService.getAll);
+  const listed: string[] = (() => {
+    try {
+      const arr = JSON.parse(
+        rows.find((r) => r.ben_site === APP_ROW)?.ben_companies ?? "[]"
+      );
+      return Array.isArray(arr) ? arr.filter((v) => typeof v === "string" && v !== "") : [];
+    } catch {
+      return [];
+    }
+  })();
+  for (const r of rows) {
+    const c = (r.ben_company ?? "").trim();
+    if (r.ben_site !== APP_ROW && c !== "" && !listed.includes(c)) listed.push(c);
+  }
+  return listed;
+}
+
+export async function saveCompanies(list: string[]): Promise<void> {
+  await upsertWhere(
+    Ben_ltksitesettingsesService,
+    eq("ben_site", APP_ROW),
+    (row) => row.ben_ltksitesettingsid,
+    { ben_site: APP_ROW, ben_name: "App branding", ben_companies: JSON.stringify(list) }
+  );
+}
+
+/** {site → company} for every real site row. */
+export async function siteCompanies(): Promise<Record<string, string>> {
+  const rows = await allWhere(Ben_ltksitesettingsesService.getAll);
+  const out: Record<string, string> = {};
+  for (const r of rows) {
+    if (r.ben_site && r.ben_site !== APP_ROW) out[r.ben_site] = (r.ben_company ?? "").trim();
+  }
+  return out;
+}
+
+export async function saveSiteCompany(site: string, company: string): Promise<void> {
+  await upsertWhere(
+    Ben_ltksitesettingsesService,
+    eq("ben_site", site),
+    (row) => row.ben_ltksitesettingsid,
+    { ben_site: site, ben_name: site, ben_company: company }
+  );
+}
+
 export async function meetingCategories(): Promise<string[]> {
   const rows = await allWhere(Ben_ltksitesettingsesService.getAll, eq("ben_site", APP_ROW));
   try {

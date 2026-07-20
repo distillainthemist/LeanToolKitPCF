@@ -126,6 +126,7 @@ export const TABLES = [
     primaryNameMax: 100,
     columns: {
       ben_site: { ...text(100), display: "Site", required: true },
+      ben_company: { ...text(100), display: "Company" },
       ben_departments: { ...memo(10000), display: "Departments (JSON)" },
       ben_protectedtimes: { ...memo(10000), display: "Protected Times (JSON)" },
       ben_timezone: { ...text(60), display: "Time zone (IANA)" },
@@ -134,6 +135,7 @@ export const TABLES = [
       // app-level branding lives on the reserved "__app__" row
       ben_appname: { ...text(60), display: "App name (branding)" },
       ben_meetingcategories: { ...memo(4000), display: "Meeting categories (JSON)" },
+      ben_companies: { ...memo(4000), display: "Companies (JSON)" },
       ben_logo: { ...memo(200000), display: "Logo (data URI)" },
     },
     key: ["ben_site"],
