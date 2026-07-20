@@ -510,9 +510,50 @@ input[type="color"].app-color:disabled { opacity: 0.4; cursor: default; }
   .app-save-bar { flex-wrap: wrap; }
 }
 
-.app-org-tree { display: flex; flex-direction: column; gap: 4px; }
+.app-org-tree { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .app-org-site { font-weight: 700; }
 .app-org-dept { margin-left: 20px; }
 .app-org-area { margin-left: 40px; color: #6d675c; }
-.app-org-row { display: flex; align-items: center; gap: 8px; padding: 2px 0; }
+.app-org-row { display: flex; align-items: center; gap: 8px; padding: 2px 0; flex-wrap: wrap; }
+.app-org-row .app-input { flex: 1 1 130px; min-width: 0; }
+.app-org-row input[type="time"].app-input { flex: 0 1 auto; min-width: 90px; }
 .app-org-x { border: none; background: none; cursor: pointer; color: #b3261e; font-size: 14px; }
+
+/* departments & areas: cards with drag-to-reorder */
+.app-dept-list { display: flex; flex-direction: column; gap: 8px; max-width: 560px; }
+.app-dept-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: #fff;
+  border: 1px solid #eceae5;
+  border-radius: 10px;
+  padding: 9px 12px;
+}
+.app-dept-head { display: flex; align-items: center; gap: 8px; }
+.app-dept-name { flex: 1; font-weight: 700; font-size: 13.5px; }
+.app-area-list { display: flex; flex-direction: column; gap: 4px; }
+.app-area-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: 18px;
+  background: #faf9f7;
+  border: 1px solid #f1efec;
+  border-radius: 8px;
+  padding: 5px 9px;
+}
+.app-area-name { flex: 1; font-size: 13px; }
+.app-area-adder { margin-left: 18px; }
+.app-drag-handle {
+  cursor: grab;
+  color: #c4bfb5;
+  font-size: 12px;
+  user-select: none;
+  touch-action: none;
+  flex: 0 0 auto;
+}
+.app-drag-handle:hover { color: #6d675c; }
+.app-dragging { opacity: 0.45; }
+.app-drop-before { box-shadow: 0 -2px 0 0 var(--app-accent); }
+.app-drop-after { box-shadow: 0 2px 0 0 var(--app-accent); }

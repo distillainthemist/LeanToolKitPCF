@@ -857,47 +857,77 @@ async function renderOrg(
       if (Array.isArray(arr)) patterns = arr;
     } catch { /* fresh */ }
 
-    // --- departments & areas tree ---
+    // --- departments & areas (cards; drag handles reorder) ---
     pane.appendChild(sectionTitle("Departments & areas"));
-    const treeBox = el("div", "app-org-tree");
+    const treeBox = el("div", "app-dept-list");
     pane.appendChild(treeBox);
     const drawTree = () => {
       clear(treeBox);
-      for (const d of node.departments) {
-        const dr = el("div", "app-org-row app-org-dept");
-        dr.appendChild(el("span", "app-org-site", d.department));
-        if (canEdit) dr.appendChild(removeBtn(() => {
-          node.departments = node.departments.filter((x) => x !== d);
-          drawTree();
-          ctx.markDirty();
-        }));
-        treeBox.appendChild(dr);
-        for (const a of d.areas) {
-          const ar = el("div", "app-org-row app-org-area");
-          ar.appendChild(el("span", "", a));
-          if (canEdit) ar.appendChild(removeBtn(() => {
-            d.areas = d.areas.filter((x) => x !== a);
-            drawTree();
-            ctx.markDirty();
-          }));
-          treeBox.appendChild(ar);
+      const redraw = () => {
+        drawTree();
+        ctx.markDirty();
+      };
+      node.departments.forEach((d, di) => {
+        const card = el("div", "app-dept-card");
+        const head = el("div", "app-dept-head");
+        if (canEdit) {
+          const handle = el("span", "app-drag-handle", "⠿");
+          handle.title = "Drag to reorder";
+          head.appendChild(handle);
+          draggableRow(card, handle, "dept", di, node.departments, redraw);
+        }
+        head.appendChild(el("span", "app-dept-name", d.department));
+        if (canEdit) {
+          head.appendChild(
+            removeBtn(() => {
+              node.departments = node.departments.filter((x) => x !== d);
+              redraw();
+            })
+          );
+        }
+        card.appendChild(head);
+
+        const areaBox = el("div", "app-area-list");
+        card.appendChild(areaBox);
+        d.areas.forEach((a, ai) => {
+          const ar = el("div", "app-area-row");
+          if (canEdit) {
+            const handle = el("span", "app-drag-handle", "⠿");
+            handle.title = "Drag to reorder";
+            ar.appendChild(handle);
+            draggableRow(ar, handle, `area-${di}`, ai, d.areas, redraw);
+          }
+          ar.appendChild(el("span", "app-area-name", a));
+          if (canEdit) {
+            ar.appendChild(
+              removeBtn(() => {
+                d.areas = d.areas.filter((x) => x !== a);
+                redraw();
+              })
+            );
+          }
+          areaBox.appendChild(ar);
+        });
+        if (d.areas.length === 0) {
+          areaBox.appendChild(el("div", "app-org-empty", "No areas"));
         }
         if (canEdit) {
           const addA = adder("Add area", (v) => {
             d.areas.push(v);
-            drawTree();
-            ctx.markDirty();
+            redraw();
           });
-          addA.classList.add("app-org-area");
-          treeBox.appendChild(addA);
+          addA.classList.add("app-area-adder");
+          card.appendChild(addA);
         }
-      }
+        treeBox.appendChild(card);
+      });
       if (canEdit) {
-        treeBox.appendChild(adder("Add department", (v) => {
-          node.departments.push({ department: v, areas: [] });
-          drawTree();
-          ctx.markDirty();
-        }));
+        treeBox.appendChild(
+          adder("Add department", (v) => {
+            node.departments.push({ department: v, areas: [] });
+            redraw();
+          })
+        );
       }
     };
     drawTree();
@@ -1032,6 +1062,69 @@ function removeBtn(onClick: () => void): HTMLButtonElement {
   const b = el("button", "app-org-x", "\u00d7") as HTMLButtonElement;
   b.addEventListener("click", onClick);
   return b;
+}
+
+/**
+ * HTML5 drag-to-reorder for one list. The row only becomes draggable
+ * while the pointer is on its handle (so text/inputs inside stay
+ * selectable), `group` isolates lists from each other, and the drop
+ * reorders `list` in place before `onDone` repaints. Nested lists work
+ * because dragstart stops propagating at the row that owns it.
+ */
+let dragState: { group: string; index: number } | null = null;
+function draggableRow(
+  rowEl: HTMLElement,
+  handle: HTMLElement,
+  group: string,
+  index: number,
+  list: unknown[],
+  onDone: () => void
+): void {
+  handle.addEventListener("pointerdown", () => {
+    rowEl.draggable = true;
+  });
+  handle.addEventListener("pointerup", () => {
+    rowEl.draggable = false;
+  });
+  rowEl.addEventListener("dragstart", (e) => {
+    e.stopPropagation();
+    dragState = { group, index };
+    rowEl.classList.add("app-dragging");
+    e.dataTransfer?.setData("text/plain", group); // Firefox needs payload
+    if (e.dataTransfer) e.dataTransfer.effectAllowed = "move";
+  });
+  rowEl.addEventListener("dragend", () => {
+    dragState = null;
+    rowEl.draggable = false;
+    rowEl.classList.remove("app-dragging");
+  });
+  const clearMarks = () => rowEl.classList.remove("app-drop-before", "app-drop-after");
+  rowEl.addEventListener("dragover", (e) => {
+    if (dragState === null || dragState.group !== group || dragState.index === index) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const rect = rowEl.getBoundingClientRect();
+    const after = e.clientY > rect.top + rect.height / 2;
+    rowEl.classList.toggle("app-drop-after", after);
+    rowEl.classList.toggle("app-drop-before", !after);
+  });
+  rowEl.addEventListener("dragleave", clearMarks);
+  rowEl.addEventListener("drop", (e) => {
+    if (dragState === null || dragState.group !== group) return;
+    e.preventDefault();
+    e.stopPropagation();
+    clearMarks();
+    const rect = rowEl.getBoundingClientRect();
+    const after = e.clientY > rect.top + rect.height / 2;
+    const from = dragState.index;
+    let to = index + (after ? 1 : 0);
+    if (from < to) to -= 1;
+    dragState = null;
+    if (from === to) return;
+    const [moved] = list.splice(from, 1);
+    list.splice(to, 0, moved);
+    onDone();
+  });
 }
 
 function adder(placeholder: string, onAdd: (v: string) => void): HTMLElement {
