@@ -57,11 +57,15 @@ void (async () => {
       document.documentElement.style.setProperty("--app-accent", accent);
     }
     // view-as banner: a super admin previewing a lesser role always sees
-    // it flagged, with a one-click way back
+    // it flagged, with a one-click way back. NO page reloads here — a raw
+    // iframe reload loses the Power Apps host handshake (getContext never
+    // answers), so changes repaint the banner and re-route in place.
     if (me && me.role === "superadmin") {
       const { viewAsRole, setViewAsRole } = await import("./viewAs");
-      const emulated = viewAsRole();
-      if (emulated) {
+      const paintViewAs = () => {
+        document.querySelector(".app-viewas-banner")?.remove();
+        const emulated = viewAsRole();
+        if (!emulated) return;
         const banner = el("div", "app-viewas-banner");
         banner.append(
           el(
@@ -73,11 +77,14 @@ void (async () => {
         const exit = el("button", "app-btn app-viewas-exit", "Exit view as");
         exit.addEventListener("click", () => {
           setViewAsRole(null);
-          window.location.reload();
+          paintViewAs();
+          window.dispatchEvent(new Event("hashchange")); // re-route in place
         });
         banner.appendChild(exit);
         app.insertBefore(banner, outlet);
-      }
+      };
+      paintViewAs();
+      window.addEventListener("leanboard:viewas", paintViewAs);
     }
   } catch {
     /* branding is cosmetic — never block the shell */

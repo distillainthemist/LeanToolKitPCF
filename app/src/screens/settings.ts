@@ -117,8 +117,22 @@ export function mountSettings(parent: HTMLElement): () => void {
       }
       sel.value = viewAsRole() ?? "";
       sel.addEventListener("change", () => {
-        setViewAsRole((sel.value || null) as EmulatedRole | null);
-        window.location.reload();
+        void (async () => {
+          // switching role remounts the screen — same guard as leaving it
+          if (dirty) {
+            const choice = await promptUnsaved();
+            if (choice === "cancel") {
+              sel.value = viewAsRole() ?? "";
+              return;
+            }
+            if (choice === "save" && saveFn) await saveFn();
+          }
+          setViewAsRole((sel.value || null) as EmulatedRole | null);
+          // no reload — an iframe reload loses the Power Apps host
+          // handshake; repaint the shell banner and re-route in place
+          window.dispatchEvent(new Event("leanboard:viewas"));
+          window.dispatchEvent(new Event("hashchange"));
+        })();
       });
       const viewAsWrap = el("label", "app-viewas");
       viewAsWrap.append(el("span", "app-user-field-label", "View as"), sel);
