@@ -35,7 +35,8 @@ import {
   siteCompanies,
   siteSettings,
 } from "../store/config";
-import { parseOrgTree } from "../../../shared/schema/meeting";
+import { parseMeetingInfo, parseOrgTree } from "../../../shared/schema/meeting";
+import { parseCategory, parseDaysOfWeek } from "../../../shared/schema/recurrence";
 import { RosterPerson } from "../store/mappers";
 import {
   DirectoryProfile,
@@ -203,8 +204,10 @@ export function mountSettings(parent: HTMLElement, initialTab = ""): () => void 
     if (isAdmin) {
       tabs.push({ key: "users", label: "Users", render: () => renderUsers(body, me) });
       tabs.push({ key: "org", label: "Organisation", render: () => renderOrg(body, me, ctx) });
-      tabs.push({ key: "boards", label: "Rituals", render: () => renderBoardsAdmin(body, me) });
     }
+    // everyone gets Rituals — the tab scopes itself by role (site
+    // admins: their site; users: rituals they own)
+    tabs.push({ key: "boards", label: "Rituals", render: () => renderBoardsAdmin(body, me) });
     if (me.role === "superadmin") {
       tabs.push({ key: "brand", label: "Branding", render: () => renderBranding(body, ctx) });
     }
@@ -1576,101 +1579,235 @@ const CATEGORY_PALETTE = [
   "#2563eb", "#0b6b3a", "#b3261e", "#b45309", "#6d28d9", "#0e7490", "#be185d",
 ];
 
+const DAY_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+/** "Weekly \u00b7 Mon Wed \u00b7 06:00" from a ritual's occurrence blob. */
+function cadenceSummary(blobRaw: string): string {
+  try {
+    const blob = JSON.parse(blobRaw) as Record<string, unknown>;
+    const cfg = (blob.config ?? {}) as Record<string, unknown>;
+    const cat = parseCategory(String(cfg.category ?? ""));
+    const catLabel = cat.charAt(0).toUpperCase() + cat.slice(1);
+    const time = String(cfg.timeOfDay ?? "").trim();
+    if (cat === "shiftly") {
+      return ["Every shift", time !== "" ? `from ${time}` : ""].filter(Boolean).join(" \u00b7 ");
+    }
+    const days = parseDaysOfWeek(String(cfg.daysOfWeek ?? ""));
+    const dayStr =
+      days.length === 7 ? "every day" : days.map((i) => DAY_SHORT[i]).join(" ");
+    return [catLabel, dayStr, time].filter((v) => v !== "").join(" \u00b7 ");
+  } catch {
+    return "";
+  }
+}
+
 async function renderBoardsAdmin(body: HTMLElement, me: RosterPerson): Promise<void> {
   clear(body);
   const isSuper = me.role === "superadmin";
+  const isAdmin = isSuper || me.role === "siteadmin";
 
-  // ritual categories (super admins manage the app-wide list); each has
+  // ritual categories (admins see them; super admins manage) \u2014 each has
   // a colour used to code rituals in the calendar and lists
-  body.appendChild(sectionTitle("Ritual categories"));
   let cats = await meetingCategories();
-  const catBox = el("div", "app-org-tree");
-  body.appendChild(catBox);
-  const drawCats = () => {
-    clear(catBox);
-    const rowEl = el("div", "app-org-row");
-    for (const c of cats) {
-      const chip = el("span", "app-btn app-cat-chip");
-      const swatch = el("input", "app-color app-cat-swatch") as HTMLInputElement;
-      swatch.type = "color";
-      swatch.value = /^#[0-9a-fA-F]{6}$/.test(c.color) ? c.color : "#8a847a";
-      swatch.disabled = !isSuper;
-      swatch.title = "Category colour";
-      swatch.addEventListener("input", () => {
-        c.color = swatch.value;
-        void saveMeetingCategories(cats);
-      });
-      chip.append(swatch, document.createTextNode(c.name));
-      if (isSuper) {
-        const x = removeBtn(() => {
-          cats = cats.filter((v) => v !== c);
-          void saveMeetingCategories(cats).then(drawCats);
+  if (isAdmin) {
+    body.appendChild(sectionTitle("Ritual categories"));
+    const catBox = el("div", "app-org-tree");
+    body.appendChild(catBox);
+    const drawCats = () => {
+      clear(catBox);
+      const rowEl = el("div", "app-org-row");
+      for (const c of cats) {
+        const chip = el("span", "app-btn app-cat-chip");
+        const swatch = el("input", "app-color app-cat-swatch") as HTMLInputElement;
+        swatch.type = "color";
+        swatch.value = /^#[0-9a-fA-F]{6}$/.test(c.color) ? c.color : "#8a847a";
+        swatch.disabled = !isSuper;
+        swatch.title = "Category colour";
+        swatch.addEventListener("input", () => {
+          c.color = swatch.value;
+          void saveMeetingCategories(cats);
         });
-        chip.appendChild(x);
-      }
-      rowEl.appendChild(chip);
-    }
-    catBox.appendChild(rowEl);
-    if (isSuper) {
-      catBox.appendChild(
-        adder("Add category", (v) => {
-          if (!cats.some((c) => c.name === v)) {
-            cats.push({ name: v, color: CATEGORY_PALETTE[cats.length % CATEGORY_PALETTE.length] });
+        chip.append(swatch, document.createTextNode(c.name));
+        if (isSuper) {
+          const x = removeBtn(() => {
+            cats = cats.filter((v) => v !== c);
             void saveMeetingCategories(cats).then(drawCats);
-          }
-        })
-      );
-    } else if (cats.length === 0) {
-      catBox.appendChild(el("div", "app-settings-note", "No categories defined yet."));
-    }
-  };
-  drawCats();
+          });
+          chip.appendChild(x);
+        }
+        rowEl.appendChild(chip);
+      }
+      catBox.appendChild(rowEl);
+      if (isSuper) {
+        catBox.appendChild(
+          adder("Add category", (v) => {
+            if (!cats.some((c) => c.name === v)) {
+              cats.push({ name: v, color: CATEGORY_PALETTE[cats.length % CATEGORY_PALETTE.length] });
+              void saveMeetingCategories(cats).then(drawCats);
+            }
+          })
+        );
+      } else if (cats.length === 0) {
+        catBox.appendChild(el("div", "app-settings-note", "No categories defined yet."));
+      }
+    };
+    drawCats();
+  }
 
-  // rituals: create / edit / replicate / configure
+  // ---- rituals, scoped by role ----
   body.appendChild(sectionTitle("Rituals"));
-  const newBtn = el("a", "app-btn", "\uFF0B New ritual") as HTMLAnchorElement;
-  newBtn.href = "#/wizard";
-  body.appendChild(newBtn);
+  if (isAdmin) {
+    const newBtn = el("a", "app-btn", "\uFF0B New ritual") as HTMLAnchorElement;
+    newBtn.href = "#/wizard";
+    body.appendChild(newBtn);
+  }
 
-  const list = el("div", "app-org-tree");
-  body.appendChild(list);
-  const boards = await listBoards();
+  const roster = await listPeople(true);
+  const personBy = new Map(roster.map((p) => [p.whoId, p]));
   const colorByCategory = Object.fromEntries(
     cats.filter((c) => c.color !== "").map((c) => [c.name, c.color])
   );
-  for (const b of boards) {
-    const r = el("div", "app-org-row");
-    const catColor = colorByCategory[b.category] ?? "";
-    if (catColor !== "") {
-      const dot = el("span", "app-cat-dot");
-      dot.style.background = catColor;
-      r.appendChild(dot);
-    }
-    r.append(
-      el("span", "app-people-name", b.name),
-      el("span", "app-people-meta", [b.category, b.site, b.department].filter(Boolean).join(" \u00b7 "))
-    );
-    const open = el("a", "app-btn", "Open") as HTMLAnchorElement;
-    open.href = `#/board/${b.boardId}`;
-    // Edit meeting covers the board too (wizard step 7)
-    const edit = el("a", "app-btn", "Edit meeting") as HTMLAnchorElement;
-    edit.href = `#/wizard/${b.boardId}`;
-    const rep = el("button", "app-btn", "Replicate") as HTMLButtonElement;
-    rep.addEventListener("click", () => {
-      void (async () => {
-        const name = (
-          (await promptText({
-            title: `Replicate "${b.name}"`,
-            initial: `${b.name} (copy)`,
-            confirmLabel: "Replicate",
-          })) ?? ""
-        ).trim();
-        if (name === "") return;
-        const newId = await replicateBoard(b.boardId, name);
-        window.location.hash = `#/wizard/${newId}`;
-      })();
+
+  const all = await listBoards();
+  const withInfo = all.map((b) => ({
+    board: b,
+    owner: parseMeetingInfo(b.occurrenceSettingsRaw)?.owner ?? null,
+    cadence: cadenceSummary(b.occurrenceSettingsRaw),
+  }));
+  // super admins see everything; site admins their site; users what they own
+  const scoped = isSuper
+    ? withInfo
+    : isAdmin
+      ? withInfo.filter((x) => x.board.site === me.site)
+      : withInfo.filter((x) => x.owner?.whoId === me.whoId);
+  body.appendChild(
+    el(
+      "div",
+      "app-settings-note",
+      isSuper
+        ? "All rituals across every site."
+        : isAdmin
+          ? `Rituals at ${me.site || "your site"}.`
+          : "Rituals you own \u2014 you can adjust them; ask an admin to create a new one."
+    )
+  );
+
+  // ---- filters: title, category, site (super only) ----
+  let query = "";
+  let catFilter = "";
+  let siteFilter = "";
+  const filterBar = el("div", "app-settings-row app-users-filters");
+  const search = el("input", "app-input") as HTMLInputElement;
+  search.type = "search";
+  search.placeholder = "Search rituals";
+  search.addEventListener("input", () => {
+    query = search.value.trim().toLowerCase();
+    draw();
+  });
+  filterBar.appendChild(search);
+  const catSel = labelledFilter(
+    "Any category",
+    cats.map((c) => ({ value: c.name, label: c.name }))
+  );
+  catSel.addEventListener("change", () => {
+    catFilter = catSel.value;
+    draw();
+  });
+  filterBar.appendChild(catSel);
+  if (isSuper) {
+    const sites = [...new Set(all.map((b) => b.site).filter((s) => s !== ""))].sort();
+    const siteSel = labelledFilter("Any site", sites.map((s) => ({ value: s, label: s })));
+    siteSel.addEventListener("change", () => {
+      siteFilter = siteSel.value;
+      draw();
     });
-    r.append(open, edit, rep);
-    list.appendChild(r);
+    filterBar.appendChild(siteSel);
   }
+  body.appendChild(filterBar);
+
+  const count = el("div", "app-settings-note", "");
+  body.appendChild(count);
+  const grid = el("div", "app-ritual-grid");
+  body.appendChild(grid);
+
+  const draw = () => {
+    clear(grid);
+    const shown = scoped.filter((x) => {
+      if (catFilter !== "" && x.board.category !== catFilter) return false;
+      if (siteFilter !== "" && x.board.site !== siteFilter) return false;
+      if (query !== "" && !x.board.name.toLowerCase().includes(query)) return false;
+      return true;
+    });
+    count.textContent = `${shown.length} of ${scoped.length} ${scoped.length === 1 ? "ritual" : "rituals"}`;
+    if (shown.length === 0) {
+      grid.appendChild(el("div", "app-settings-note", "No rituals match."));
+      return;
+    }
+    for (const { board: b, owner, cadence } of shown) {
+      const card = el("div", "app-ritual-card");
+      const catColor = colorByCategory[b.category] ?? "";
+      if (catColor !== "") card.style.borderTopColor = catColor;
+
+      const titleRow = el("div", "app-ritual-title");
+      titleRow.appendChild(el("span", "", b.name));
+      if (b.category !== "") {
+        const chip = el("span", "app-ritual-cat", b.category);
+        if (catColor !== "") {
+          chip.style.background = catColor;
+          chip.style.color = "#fff";
+        }
+        titleRow.appendChild(chip);
+      }
+      card.appendChild(titleRow);
+      const place = [b.site, b.department].filter(Boolean).join(" \u00b7 ");
+      if (place !== "") card.appendChild(el("div", "app-ritual-meta", place));
+      if (cadence !== "") card.appendChild(el("div", "app-ritual-meta", cadence));
+
+      const ownerPerson = owner ? personBy.get(owner.whoId) : undefined;
+      const ownerLine = el("div", "app-ritual-owner");
+      ownerLine.append(
+        el("span", "app-user-field-label", "Owner"),
+        el(
+          "span",
+          "app-ritual-meta",
+          owner
+            ? `${ownerPerson?.who ?? owner.who}${ownerPerson?.email ? ` \u00b7 ${ownerPerson.email}` : ""}`
+            : "not set"
+        )
+      );
+      card.appendChild(ownerLine);
+
+      const actions = el("div", "app-ritual-actions");
+      const open = el("a", "app-btn", "Open") as HTMLAnchorElement;
+      open.href = `#/board/${b.boardId}`;
+      actions.appendChild(open);
+      if (isAdmin || owner?.whoId === me.whoId) {
+        // Edit meeting covers the board too (wizard step 7)
+        const edit = el("a", "app-btn", "Edit meeting") as HTMLAnchorElement;
+        edit.href = `#/wizard/${b.boardId}`;
+        actions.appendChild(edit);
+      }
+      if (isAdmin) {
+        const rep = el("button", "app-btn", "Replicate") as HTMLButtonElement;
+        rep.addEventListener("click", () => {
+          void (async () => {
+            const name = (
+              (await promptText({
+                title: `Replicate "${b.name}"`,
+                initial: `${b.name} (copy)`,
+                confirmLabel: "Replicate",
+              })) ?? ""
+            ).trim();
+            if (name === "") return;
+            const newId = await replicateBoard(b.boardId, name);
+            window.location.hash = `#/wizard/${newId}`;
+          })();
+        });
+        actions.appendChild(rep);
+      }
+      card.appendChild(actions);
+      grid.appendChild(card);
+    }
+  };
+  draw();
 }
