@@ -16,6 +16,8 @@ import { saveMeetingBoard } from "../store/boards";
 import { meetingCategories, orgJson, rosterPatternLibrary } from "../store/config";
 import { listPeople, viewerPerson } from "../store/people";
 import { currentViewer } from "../runtime";
+import { setLeaveGuard } from "../navGuard";
+import { promptUnsaved } from "../prompts";
 import { effectivePerson } from "../viewAs";
 import { getBoard } from "../store/boards";
 
@@ -68,10 +70,28 @@ export function mountWizard(parent: HTMLElement, editBoardId = ""): () => void {
         )
       : "[]";
 
-    let outputJson = "";
+    const editing = editBoardId !== "";
+    // hold the serialized draft from the start so an edit-mode save can
+    // never write an empty blob
+    let outputJson = editing ? serializeWizardDraft(parseWizardDraft(editRaw)) : "";
+    let dirty = false;
+
+    const doSave = async (): Promise<string> => {
+      const blob = JSON.parse(outputJson) as { title?: string };
+      const boardId = editing ? editBoardId : mintBoardId(blob.title ?? "meeting");
+      await saveMeetingBoard(boardId, outputJson);
+      dirty = false;
+      view?.setSubmitEnabled(!editing);
+      return boardId;
+    };
+
     view = new MeetingWizardView(host, {
       onChange: (draft) => {
         outputJson = serializeWizardDraft(draft);
+        if (!dirty) {
+          dirty = true;
+          if (editing) view?.setSubmitEnabled(true);
+        }
       },
       onSubmit: () => {
         if (!hosted) {
@@ -79,11 +99,9 @@ export function mountWizard(parent: HTMLElement, editBoardId = ""): () => void {
           return;
         }
         void (async () => {
-          const blob = JSON.parse(outputJson) as { title?: string };
-          const boardId =
-            editBoardId !== "" ? editBoardId : mintBoardId(blob.title ?? "meeting");
-          await saveMeetingBoard(boardId, outputJson);
-          window.location.hash = `#/board/${boardId}`;
+          const boardId = await doSave();
+          // a NEW ritual flows into step 2 — designing the meeting board
+          window.location.hash = editing ? `#/board/${boardId}` : `#/setup/${boardId}/new`;
         })();
       },
     });
@@ -96,12 +114,29 @@ export function mountWizard(parent: HTMLElement, editBoardId = ""): () => void {
     }
     view.setPeople(parsePeople(peopleRaw));
     view.setDraft(parseWizardDraft(editRaw));
-    if (editBoardId !== "") view.setChrome("Edit meeting", "");
+    if (editing) {
+      view.setChrome("Edit meeting", "");
+      view.setSubmitLabel("Save changes");
+      view.setSubmitEnabled(false); // until something changes
+      // leaving mid-edit with changes prompts save/discard/cancel
+      if (hosted) {
+        setLeaveGuard(async () => {
+          if (!dirty) return true;
+          const choice = await promptUnsaved();
+          if (choice === "cancel") return false;
+          if (choice === "save") await doSave();
+          return true;
+        });
+      }
+    }
     if (!hosted) {
       parent.prepend(
         el("div", "app-board-note", "Demo mode — Create meeting logs instead of saving.")
       );
     }
   })();
-  return () => view?.destroy();
+  return () => {
+    setLeaveGuard(null);
+    view?.destroy();
+  };
 }

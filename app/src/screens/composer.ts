@@ -61,7 +61,11 @@ function applyDraft(slot: ManifestSlot, draft: SettingsDraft): void {
   slot.settings = raw === "" ? {} : (JSON.parse(raw) as Record<string, unknown>);
 }
 
-export function mountComposer(parent: HTMLElement, boardId: string): () => void {
+export function mountComposer(
+  parent: HTMLElement,
+  boardId: string,
+  freshFromWizard = false
+): () => void {
   const cleanups: Array<() => void> = [];
   void (async () => {
     const hosted = await detectHost();
@@ -70,7 +74,7 @@ export function mountComposer(parent: HTMLElement, boardId: string): () => void 
         el(
           "div",
           "app-board-note",
-          "Board setup needs the Power Apps host (Dataverse). Open the deployed app."
+          "The meeting board editor needs the Power Apps host (Dataverse). Open the deployed app."
         )
       );
       return;
@@ -80,11 +84,20 @@ export function mountComposer(parent: HTMLElement, boardId: string): () => void 
       parent.appendChild(el("p", "app-missing", `Unknown board: ${boardId}`));
       return;
     }
+    if (freshFromWizard) {
+      parent.appendChild(
+        el(
+          "div",
+          "app-board-note",
+          "Step 2 of 2 — the meeting is saved. Shape its board: Agenda and Actions are already in place; add or arrange cards, then press Done."
+        )
+      );
+    }
     await renderComposer(
       parent,
       board,
       {
-        title: `${board.name} — board setup`,
+        title: `${board.name} — meeting board`,
         manifest: parseManifest(board.manifestRaw),
         doneHref: `#/board/${board.boardId}`,
         persist: (m) => saveManifest(board.id, m),

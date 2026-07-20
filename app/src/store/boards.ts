@@ -44,11 +44,32 @@ export async function saveMeetingBoard(
       ben_department: typeof org.department === "string" ? org.department : "",
     }
   );
-  // a fresh board starts with an empty grid — composed in BoardGrid edit mode
+  // a fresh meeting board starts double-column with Agenda + Actions —
+  // a working ritual even if the maker skips the board-design step
   const board = await getBoard(boardId);
   if (board && board.manifestRaw.trim() === "") {
+    const rand = () => Math.random().toString(36).slice(2, 6);
     await Ben_ltkboardsService.update(board.id, {
-      ben_manifestjson: JSON.stringify({ grid: "3", columnTitles: [], slots: [] }),
+      ben_manifestjson: JSON.stringify({
+        grid: "2",
+        columnTitles: [],
+        slots: [
+          {
+            pos: 1, w: 1, h: 1, nav: 1,
+            cardId: `agenda-${rand()}`,
+            cardType: "AgendaCard",
+            title: "Agenda",
+            settingsJSON: {},
+          },
+          {
+            pos: 2, w: 1, h: 1, nav: 2,
+            cardId: `actionboard-${rand()}`,
+            cardType: "ActionBoard",
+            title: "Actions",
+            settingsJSON: {},
+          },
+        ],
+      }),
     });
   }
 }

@@ -89,21 +89,14 @@ async function renderBoard(
   const title = el("span", "app-board-title", board.name);
   const status = el("span", "app-board-status", "");
   const scheduleBtn = el("button", "app-btn", "Hide schedule") as HTMLButtonElement;
+  // standard-board design lives in Settings → Rituals / the wizard's
+  // step 2; the operational board only offers per-meeting adjustment
+  // (and only when the ritual's toggle allows it)
   const adjustBtn = el("a", "app-btn", "Adjust this meeting") as HTMLAnchorElement;
   adjustBtn.style.display = "none";
-  const setupBtn = el("a", "app-btn", "Board setup") as HTMLAnchorElement;
-  setupBtn.href = `#/setup/${board.boardId}`;
   const closeBtn = el("button", "app-btn", "Close meeting") as HTMLButtonElement;
   closeBtn.style.display = "none";
-  bar.append(
-    title,
-    status,
-    el("span", "app-bar-gap"),
-    scheduleBtn,
-    adjustBtn,
-    setupBtn,
-    closeBtn
-  );
+  bar.append(title, status, el("span", "app-bar-gap"), scheduleBtn, adjustBtn, closeBtn);
   parent.appendChild(bar);
 
   const split = el("div", "app-board-split");

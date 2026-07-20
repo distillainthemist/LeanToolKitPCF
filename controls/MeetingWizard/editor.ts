@@ -51,6 +51,9 @@ export class MeetingWizardView {
   private lastPromptsRaw: string | null = null;
   private readOnly = false;
   private stepKey = "basics";
+  private submitLabel = "Create meeting";
+  private submitHostDisabled = false;
+  private submitBtn: HTMLButtonElement | null = null;
   /** Chips field to refocus after an add re-renders (typing flow). */
   private pendingFocus = "";
   /** The participants step's roster search, kept across renders. */
@@ -80,6 +83,26 @@ export class MeetingWizardView {
     this.stepKey = "basics";
     this.peopleQuery = "";
     this.render();
+  }
+
+  /** Submit button label ("Create meeting" / "Save changes"). */
+  setSubmitLabel(label: string): void {
+    if (label !== this.submitLabel) {
+      this.submitLabel = label;
+      this.render();
+    }
+  }
+
+  /**
+   * Enable/disable submit (edit mode keeps it off until a change).
+   * Updates the live button in place — no re-render, so focus survives.
+   */
+  setSubmitEnabled(on: boolean): void {
+    this.submitHostDisabled = !on;
+    if (this.submitBtn) {
+      this.submitBtn.disabled =
+        this.submitHostDisabled || this.readOnly || !this.canLeaveBasics();
+    }
   }
 
   setOrgTree(tree: OrgSite[]): void {
@@ -221,10 +244,11 @@ export class MeetingWizardView {
       });
       foot.appendChild(next);
     } else {
-      const create = el("button", "ltk-mw-btn ltk-mw-btn-primary", "Create meeting") as HTMLButtonElement;
+      const create = el("button", "ltk-mw-btn ltk-mw-btn-primary", this.submitLabel) as HTMLButtonElement;
       create.type = "button";
-      create.disabled = this.readOnly || !this.canLeaveBasics();
+      create.disabled = this.readOnly || !this.canLeaveBasics() || this.submitHostDisabled;
       create.addEventListener("click", () => this.cb.onSubmit());
+      this.submitBtn = create;
       foot.appendChild(create);
     }
     this.root.appendChild(foot);

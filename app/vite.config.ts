@@ -5,5 +5,7 @@ export default defineConfig({
   // serves the bundle from a deep path, so absolute /assets URLs 404
   // (symptom: blank app inside the host). Learned in the Phase 0 spike.
   base: "./",
-  server: { port: 5180, strictPort: true },
+  // fs.allow spans the monorepo root: app source imports ../controls and
+  // ../shared, and dev-time verification imports controls via /@fs/
+  server: { port: 5180, strictPort: true, fs: { allow: [".."] } },
 });

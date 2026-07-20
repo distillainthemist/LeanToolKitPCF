@@ -120,7 +120,7 @@ function route(): void {
         mount = () => mountBoard(outlet, parts[1], decodeURIComponent(parts[2] ?? ""));
       } else if (parts[0] === "setup" && parts[1]) {
         const { mountComposer } = await import("./screens/composer");
-        mount = () => mountComposer(outlet, parts[1]);
+        mount = () => mountComposer(outlet, parts[1], parts[2] === "new");
       } else if (parts[0] === "adjust" && parts[1] && parts[2]) {
         const { mountInstanceComposer } = await import("./screens/composer");
         mount = () => mountInstanceComposer(outlet, parts[1], parts[2]);
