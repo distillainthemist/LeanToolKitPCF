@@ -260,6 +260,41 @@ function row(label: string, control: HTMLElement): HTMLElement {
   return r;
 }
 
+/** A stacked form field: caption above the control, optional hint below. */
+function field(label: string, control: HTMLElement, hint?: string): HTMLElement {
+  const f = el("div", "app-field");
+  f.append(el("span", "app-field-label", label), control);
+  if (hint) f.appendChild(el("span", "app-field-hint", hint));
+  return f;
+}
+
+/**
+ * Accent picker: an "override" checkbox paired with a colour swatch. The
+ * swatch is disabled until the override is ticked; value() is "" when off.
+ */
+function accentToggle(
+  current: string,
+  onChange: () => void
+): { el: HTMLElement; value: () => string } {
+  const on = el("input") as HTMLInputElement;
+  on.type = "checkbox";
+  on.checked = current !== "";
+  const swatch = el("input", "app-color") as HTMLInputElement;
+  swatch.type = "color";
+  swatch.value = /^#[0-9a-fA-F]{6}$/.test(current) ? current : "#2563eb";
+  swatch.disabled = !on.checked;
+  const check = el("label", "app-check");
+  check.append(on, document.createTextNode("Override with"));
+  const wrap = el("div", "app-accent-group");
+  wrap.append(check, swatch);
+  on.addEventListener("change", () => {
+    swatch.disabled = !on.checked;
+    onChange();
+  });
+  swatch.addEventListener("input", () => onChange());
+  return { el: wrap, value: () => (on.checked ? swatch.value : "") };
+}
+
 function select(options: string[], value: string): HTMLSelectElement {
   const s = el("select", "app-input") as HTMLSelectElement;
   for (const o of ["", ...options.filter((v) => v !== "")]) {
@@ -317,8 +352,6 @@ async function renderProfile(
   });
   area.addEventListener("change", () => ctx.markDirty());
 
-  const save = el("button", "app-btn", "Save") as HTMLButtonElement;
-  const note = el("span", "app-settings-note", "");
   const doSave = async () => {
     await upsertPerson({
       ...me,
@@ -329,19 +362,27 @@ async function renderProfile(
     me.site = site.value;
     me.department = dept.value;
     me.area = area.value;
-    note.textContent = `saved ${new Date().toLocaleTimeString()}`;
     ctx.markClean();
   };
   ctx.registerSave(doSave);
-  save.addEventListener("click", () => void doSave());
+
+  const head = el("div", "app-profile-head");
+  head.append(
+    el("span", "app-profile-name", me.who),
+    el("span", `app-role-badge app-role-${me.role}`, roleLabel(me.role))
+  );
 
   body.append(
-    el("div", "app-settings-note", `${me.who} · ${me.email || "no email"} · role: ${me.role}`),
-    row("Site", site),
-    row("Department", dept),
-    row("Area", area),
-    row("", save),
-    note
+    head,
+    el("div", "app-field-hint", me.email || "no email on file"),
+    el(
+      "div",
+      "app-settings-note",
+      "Set where you sit so your meetings and actions find you — changes save from the bar above."
+    ),
+    field("Site", site),
+    field("Department", dept),
+    field("Area", area)
   );
 }
 
@@ -777,19 +818,14 @@ async function renderOrg(
     tz.placeholder = "e.g. Australia/Brisbane";
     tz.value = s.timezone;
     tz.setAttribute("list", "app-tz-list");
+    tz.disabled = !canEdit;
     ensureTzDatalist();
-    const accent = el("input", "app-input") as HTMLInputElement;
-    accent.type = "color";
-    accent.value = /^#[0-9a-fA-F]{6}$/.test(s.accent) ? s.accent : "#2563eb";
-    const accentOn = el("input", "") as HTMLInputElement;
-    accentOn.type = "checkbox";
-    accentOn.checked = s.accent !== "";
-    const accentWrap = el("span", "app-settings-row");
-    accentWrap.append(accentOn, accent, el("span", "app-settings-note", "override app accent"));
     tz.addEventListener("input", () => ctx.markDirty());
-    accent.addEventListener("input", () => ctx.markDirty());
-    accentOn.addEventListener("change", () => ctx.markDirty());
-    siteBox.append(row("Time zone", tz), row("Accent", accentWrap));
+    const accentGroup = accentToggle(s.accent, () => ctx.markDirty());
+    siteBox.append(
+      field("Time zone", tz, "IANA zone — sets how occurrence times display"),
+      field("Accent colour", accentGroup.el, "Overrides the app accent for this site")
+    );
 
     // --- roster patterns ---
     siteBox.appendChild(sectionTitle("Shift roster patterns"));
@@ -872,26 +908,18 @@ async function renderOrg(
     };
     drawTimes();
 
-    // --- save ---
+    // --- save (via the unsaved-changes bar) ---
     if (canEdit) {
-      const save = el("button", "app-btn", "Save site") as HTMLButtonElement;
-      const note = el("span", "app-settings-note", "");
-      const doSave = async () => {
+      ctx.registerSave(async () => {
         await saveSiteDepartments(currentSite, JSON.stringify(node.departments));
         await saveSiteSettings(currentSite, {
           timezone: tz.value.trim(),
-          accent: accentOn.checked ? accent.value : "",
+          accent: accentGroup.value(),
           rosterPatternsJson: JSON.stringify(patterns),
         });
         await saveProtectedTimes(currentSite, JSON.stringify(times));
-        note.textContent = `saved ${new Date().toLocaleTimeString()}`;
         ctx.markClean();
-      };
-      ctx.registerSave(doSave);
-      save.addEventListener("click", () => void doSave());
-      const r = el("div", "app-settings-row");
-      r.append(save, note);
-      siteBox.appendChild(r);
+      });
     } else {
       siteBox.appendChild(
         el("div", "app-settings-note", "Read-only — this site is managed by its site admins.")
@@ -902,10 +930,7 @@ async function renderOrg(
 }
 
 function sectionTitle(text: string): HTMLElement {
-  const t = el("div", "app-settings-label", text);
-  t.style.width = "auto";
-  t.style.marginTop = "12px";
-  return t;
+  return el("div", "app-section", text);
 }
 
 function removeBtn(onClick: () => void): HTMLButtonElement {
@@ -950,24 +975,15 @@ async function renderBranding(body: HTMLElement, ctx: DirtyCtx): Promise<void> {
   name.placeholder = "LeanBoard";
   name.value = b.appName;
   name.addEventListener("input", () => ctx.markDirty());
-  const accent = el("input", "app-input") as HTMLInputElement;
-  accent.type = "color";
-  accent.value = /^#[0-9a-fA-F]{6}$/.test(b.accent) ? b.accent : "#2563eb";
-  accent.addEventListener("input", () => ctx.markDirty());
-  const accentOn = el("input", "") as HTMLInputElement;
-  accentOn.type = "checkbox";
-  accentOn.checked = b.accent !== "";
-  accentOn.addEventListener("change", () => ctx.markDirty());
-  const accentWrap = el("span", "app-settings-row");
-  accentWrap.append(accentOn, accent, el("span", "app-settings-note", "override default blue"));
+  const accentGroup = accentToggle(b.accent, () => ctx.markDirty());
 
   let logo = b.logo;
-  const preview = el("img", "app-logo") as HTMLImageElement;
+  const preview = el("img", "app-logo app-logo-preview") as HTMLImageElement;
   if (logo !== "") preview.src = logo;
-  const file = el("input", "") as HTMLInputElement;
+  const file = el("input", "app-file") as HTMLInputElement;
   file.type = "file";
   file.accept = "image/png,image/svg+xml,image/jpeg";
-  const logoNote = el("span", "app-settings-note", "PNG/SVG, ≤150 KB");
+  const logoNote = el("span", "app-field-hint", "");
   file.addEventListener("change", () => {
     const f = file.files?.[0];
     if (!f) return;
@@ -984,37 +1000,35 @@ async function renderBranding(body: HTMLElement, ctx: DirtyCtx): Promise<void> {
     };
     reader.readAsDataURL(f);
   });
-  const clearLogo = el("button", "app-btn", "Remove logo") as HTMLButtonElement;
+  const clearLogo = el("button", "app-btn", "Remove") as HTMLButtonElement;
   clearLogo.addEventListener("click", () => {
     logo = "";
     preview.removeAttribute("src");
     logoNote.textContent = "logo removed";
     ctx.markDirty();
   });
-  const logoWrap = el("span", "app-settings-row");
-  logoWrap.append(file, clearLogo, preview, logoNote);
+  const logoWrap = el("div", "app-logo-row");
+  logoWrap.append(preview, file, clearLogo);
 
-  const save = el("button", "app-btn", "Save branding") as HTMLButtonElement;
-  const note = el("span", "app-settings-note", "");
-  const doSave = async () => {
+  ctx.registerSave(async () => {
     await saveBranding({
       appName: name.value.trim(),
       logo,
-      accent: accentOn.checked ? accent.value : "",
+      accent: accentGroup.value(),
     });
-    note.textContent = "saved — reload to see it applied";
     ctx.markClean();
-  };
-  ctx.registerSave(doSave);
-  save.addEventListener("click", () => void doSave());
+  });
 
   body.append(
-    el("div", "app-settings-note", "Applies to everyone; site accents override the app accent."),
-    row("App name", name),
-    row("Accent", accentWrap),
-    row("Logo", logoWrap),
-    row("", save),
-    note
+    el(
+      "div",
+      "app-settings-note",
+      "Applies to everyone; site accents override the app accent. Changes take effect after a reload."
+    ),
+    field("App name", name),
+    field("Accent colour", accentGroup.el, "Overrides the default blue"),
+    field("Logo", logoWrap, "PNG or SVG, ≤150 KB"),
+    logoNote
   );
 }
 

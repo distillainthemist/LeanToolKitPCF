@@ -273,7 +273,71 @@ body {
 .app-settings-body { display: flex; flex-direction: column; gap: 10px; background: #fff; border-radius: 8px; padding: 16px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); }
 .app-settings-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .app-settings-label { width: 120px; font-size: 12.5px; color: #6d675c; font-weight: 600; }
-.app-settings-note { font-size: 12.5px; color: #6d675c; }
+.app-settings-note { font-size: 12.5px; color: #6d675c; line-height: 1.5; }
+
+/* stacked form field: caption / control / hint */
+.app-field { display: flex; flex-direction: column; gap: 5px; max-width: 440px; }
+.app-field > .app-input { width: 100%; }
+.app-field-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #8a847a;
+}
+.app-field-hint { font-size: 12px; color: #8a847a; }
+
+/* section heading within a tab */
+.app-section {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #57534a;
+  margin-top: 8px;
+  padding-top: 14px;
+  border-top: 1px solid #eceae5;
+}
+.app-section:first-child { margin-top: 0; padding-top: 0; border-top: none; }
+
+/* profile identity header */
+.app-profile-head { display: flex; align-items: center; gap: 10px; }
+.app-profile-name { font-weight: 700; font-size: 15px; }
+
+/* colour swatch — sized so the swatch isn't cropped by input padding */
+input[type="color"].app-color {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 48px;
+  height: 34px;
+  min-height: 0;
+  padding: 3px;
+  border: 1px solid #d9d5cd;
+  border-radius: 8px;
+  background: #fff;
+  cursor: pointer;
+}
+input[type="color"].app-color::-webkit-color-swatch-wrapper { padding: 0; }
+input[type="color"].app-color::-webkit-color-swatch { border: none; border-radius: 5px; }
+input[type="color"].app-color:disabled { opacity: 0.4; cursor: default; }
+.app-accent-group { display: flex; align-items: center; gap: 12px; }
+.app-check { display: flex; align-items: center; gap: 7px; font-size: 13px; cursor: pointer; }
+.app-check input { width: 16px; height: 16px; accent-color: var(--app-accent); }
+
+/* branding logo row */
+.app-logo-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.app-logo-preview {
+  height: 40px;
+  max-width: 140px;
+  object-fit: contain;
+  border: 1px dashed #d9d5cd;
+  border-radius: 8px;
+  padding: 4px 8px;
+  background: #faf9f7;
+}
+.app-logo-preview:not([src]) { display: none; }
+.app-file { font-size: 12.5px; }
+
 .app-users-filters { gap: 8px; }
 .app-users-filters input[type="search"] { flex: 1; min-width: 180px; }
 
