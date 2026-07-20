@@ -249,6 +249,27 @@ body {
 .app-settings-tabs { display: flex; gap: 6px; }
 .app-settings-tab { font: inherit; font-size: 13px; border: 1px solid #d9d5cd; background: #fff; border-radius: 8px; padding: 6px 14px; cursor: pointer; }
 .app-settings-tab-on { background: var(--app-accent); border-color: var(--app-accent); color: #fff; }
+.app-settings-tab-dirty::after {
+  content: "●";
+  margin-left: 6px;
+  color: #d97706;
+  font-size: 10px;
+  vertical-align: middle;
+}
+
+/* unsaved-changes bar — prominent, sits between tabs and the tab body */
+.app-save-bar {
+  display: none;
+  align-items: center;
+  gap: 10px;
+  background: #fff7ed;
+  border: 1px solid #f6c98a;
+  border-left: 4px solid #d97706;
+  border-radius: 8px;
+  padding: 8px 12px;
+}
+.app-save-bar-on { display: flex; }
+.app-save-bar-msg { font-size: 13px; font-weight: 600; color: #92400e; }
 .app-settings-body { display: flex; flex-direction: column; gap: 10px; background: #fff; border-radius: 8px; padding: 16px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); }
 .app-settings-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .app-settings-label { width: 120px; font-size: 12.5px; color: #6d675c; font-weight: 600; }

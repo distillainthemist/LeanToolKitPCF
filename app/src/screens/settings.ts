@@ -53,7 +53,22 @@ const ROLE_META: Record<string, { label: string; blurb: string }> = {
 };
 const roleLabel = (role: string) => ROLE_META[role]?.label ?? role;
 
+/**
+ * Passed to the editable tabs so they can flag unsaved edits and expose a
+ * save. The orchestrator shows a prominent save bar while dirty and, on
+ * tab switch, prompts to save or discard rather than silently losing work.
+ */
+interface DirtyCtx {
+  markDirty: () => void;
+  markClean: () => void;
+  /** The current tab's save; re-registered whenever the tab re-renders. */
+  registerSave: (fn: () => Promise<void>) => void;
+  isDirty: () => boolean;
+  saveCurrent: () => Promise<void>;
+}
+
 export function mountSettings(parent: HTMLElement): () => void {
+  let cleanup: () => void = () => undefined;
   void (async () => {
     const hosted = await detectHost();
     if (!hosted) {
@@ -70,44 +85,159 @@ export function mountSettings(parent: HTMLElement): () => void {
     const wrap = el("div", "app-settings");
     parent.appendChild(wrap);
     const tabsBar = el("div", "app-settings-tabs");
+    const saveBar = el("div", "app-save-bar");
     const body = el("div", "app-settings-body");
-    wrap.append(tabsBar, body);
+    wrap.append(tabsBar, saveBar, body);
+
+    // ---- unsaved-changes tracking ----
+    let dirty = false;
+    let saveFn: (() => Promise<void>) | null = null;
+    const resetDirty = () => {
+      dirty = false;
+      saveFn = null;
+      paintSaveBar();
+    };
+    const ctx: DirtyCtx = {
+      markDirty: () => {
+        dirty = true;
+        paintSaveBar();
+      },
+      markClean: () => {
+        dirty = false;
+        paintSaveBar();
+      },
+      registerSave: (fn) => {
+        saveFn = fn;
+      },
+      isDirty: () => dirty,
+      saveCurrent: async () => {
+        if (saveFn) await saveFn();
+      },
+    };
+
+    const saveMsg = el("span", "app-save-bar-msg", "You have unsaved changes.");
+    const saveBtn = el("button", "app-btn app-btn-primary", "Save now") as HTMLButtonElement;
+    const discardBtn = el("button", "app-btn", "Discard") as HTMLButtonElement;
+    saveBar.append(saveMsg, el("span", "app-bar-gap"), discardBtn, saveBtn);
+    saveBtn.addEventListener("click", () => {
+      void (async () => {
+        if (saveFn) await saveFn();
+      })();
+    });
+    discardBtn.addEventListener("click", () => {
+      void (async () => {
+        resetDirty();
+        clear(body);
+        await tabByKey(current).render();
+      })();
+    });
+
+    const paintSaveBar = () => {
+      saveBar.classList.toggle("app-save-bar-on", dirty);
+      for (const btn of Array.from(tabsBar.querySelectorAll("button"))) {
+        btn.classList.toggle(
+          "app-settings-tab-dirty",
+          dirty && btn.dataset.key === current
+        );
+      }
+    };
 
     const isAdmin = me.role === "superadmin" || me.role === "siteadmin";
     const tabs: { key: string; label: string; render: () => Promise<void> }[] = [
-      { key: "profile", label: "My profile", render: () => renderProfile(body, me) },
+      { key: "profile", label: "My profile", render: () => renderProfile(body, me, ctx) },
     ];
     if (isAdmin) {
       tabs.push({ key: "users", label: "Users", render: () => renderUsers(body, me) });
-      tabs.push({ key: "org", label: "Organisation", render: () => renderOrg(body, me) });
+      tabs.push({ key: "org", label: "Organisation", render: () => renderOrg(body, me, ctx) });
       tabs.push({ key: "boards", label: "Boards & meetings", render: () => renderBoardsAdmin(body, me) });
     }
     if (me.role === "superadmin") {
-      tabs.push({ key: "brand", label: "Branding", render: () => renderBranding(body) });
+      tabs.push({ key: "brand", label: "Branding", render: () => renderBranding(body, ctx) });
     }
     if (!isAdmin) {
       tabs.push({ key: "request", label: "Request admin", render: () => renderRequest(body, me) });
     }
+    const tabByKey = (key: string) => tabs.find((t) => t.key === key) ?? tabs[0];
 
     let current = tabs[0].key;
+    const switchTo = async (key: string) => {
+      if (key === current) return;
+      if (dirty) {
+        const choice = await promptUnsaved();
+        if (choice === "cancel") return;
+        if (choice === "save" && saveFn) await saveFn();
+      }
+      resetDirty();
+      current = key;
+      renderTabs();
+      clear(body);
+      await tabByKey(key).render();
+    };
     const renderTabs = () => {
       clear(tabsBar);
       for (const t of tabs) {
         const btn = el("button", "app-settings-tab", t.label) as HTMLButtonElement;
+        btn.dataset.key = t.key;
         if (t.key === current) btn.classList.add("app-settings-tab-on");
-        btn.addEventListener("click", () => {
-          current = t.key;
-          renderTabs();
-          clear(body);
-          void t.render();
-        });
+        btn.addEventListener("click", () => void switchTo(t.key));
         tabsBar.appendChild(btn);
       }
+      paintSaveBar();
     };
     renderTabs();
-    void tabs[0].render();
+    await tabByKey(current).render();
+
+    // safety net for a full reload / tab close while dirty (best-effort;
+    // some hosts ignore beforeunload inside an iframe)
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (dirty) {
+        e.preventDefault();
+        e.returnValue = "";
+      }
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    cleanup = () => window.removeEventListener("beforeunload", onBeforeUnload);
   })();
-  return () => undefined;
+  return () => cleanup();
+}
+
+/** Save / Discard / Cancel prompt for leaving a tab with unsaved edits. */
+function promptUnsaved(): Promise<"save" | "discard" | "cancel"> {
+  return new Promise((resolve) => {
+    const overlay = el("div", "app-modal-overlay");
+    const box = el("div", "app-modal");
+    box.append(
+      el("div", "app-modal-title", "Unsaved changes"),
+      el(
+        "div",
+        "app-modal-note",
+        "You've made changes on this tab that haven't been saved. Save them before leaving, or discard them?"
+      )
+    );
+    const footer = el("div", "app-modal-footer");
+    const cancel = el("button", "app-link", "Cancel") as HTMLButtonElement;
+    const discard = el("button", "app-btn app-btn-danger", "Discard") as HTMLButtonElement;
+    const save = el("button", "app-btn app-btn-primary", "Save changes") as HTMLButtonElement;
+    footer.append(cancel, discard, save);
+    box.appendChild(footer);
+    const done = (r: "save" | "discard" | "cancel") => {
+      overlay.remove();
+      document.removeEventListener("keydown", onKey, true);
+      resolve(r);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        done("cancel");
+      }
+    };
+    cancel.addEventListener("click", () => done("cancel"));
+    discard.addEventListener("click", () => done("discard"));
+    save.addEventListener("click", () => done("save"));
+    overlay.appendChild(box);
+    document.body.appendChild(overlay);
+    document.addEventListener("keydown", onKey, true);
+  });
 }
 
 function row(label: string, control: HTMLElement): HTMLElement {
@@ -134,7 +264,11 @@ function select(options: string[], value: string): HTMLSelectElement {
 }
 
 /** My profile: site → department → area from the org tree. */
-async function renderProfile(body: HTMLElement, me: RosterPerson): Promise<void> {
+async function renderProfile(
+  body: HTMLElement,
+  me: RosterPerson,
+  ctx: DirtyCtx
+): Promise<void> {
   clear(body);
   const tree = parseOrgTree(await orgJson());
   const sites = tree.map((s) => s.site);
@@ -161,24 +295,31 @@ async function renderProfile(body: HTMLElement, me: RosterPerson): Promise<void>
   site.addEventListener("change", () => {
     rebuild(dept, deptsFor(site.value));
     rebuild(area, []);
+    ctx.markDirty();
   });
-  dept.addEventListener("change", () => rebuild(area, areasFor(site.value, dept.value)));
+  dept.addEventListener("change", () => {
+    rebuild(area, areasFor(site.value, dept.value));
+    ctx.markDirty();
+  });
+  area.addEventListener("change", () => ctx.markDirty());
 
   const save = el("button", "app-btn", "Save") as HTMLButtonElement;
   const note = el("span", "app-settings-note", "");
-  save.addEventListener("click", () => {
-    void upsertPerson({
+  const doSave = async () => {
+    await upsertPerson({
       ...me,
       site: site.value,
       department: dept.value,
       area: area.value,
-    }).then(() => {
-      me.site = site.value;
-      me.department = dept.value;
-      me.area = area.value;
-      note.textContent = `saved ${new Date().toLocaleTimeString()}`;
     });
-  });
+    me.site = site.value;
+    me.department = dept.value;
+    me.area = area.value;
+    note.textContent = `saved ${new Date().toLocaleTimeString()}`;
+    ctx.markClean();
+  };
+  ctx.registerSave(doSave);
+  save.addEventListener("click", () => void doSave());
 
   body.append(
     el("div", "app-settings-note", `${me.who} · ${me.email || "no email"} · role: ${me.role}`),
@@ -485,7 +626,11 @@ interface OrgSiteNode {
   departments: { department: string; areas: string[] }[];
 }
 
-async function renderOrg(body: HTMLElement, me: RosterPerson): Promise<void> {
+async function renderOrg(
+  body: HTMLElement,
+  me: RosterPerson,
+  ctx: DirtyCtx
+): Promise<void> {
   clear(body);
   const isSuper = me.role === "superadmin";
   const tree = parseOrgTree(await orgJson()) as OrgSiteNode[];
@@ -495,11 +640,28 @@ async function renderOrg(body: HTMLElement, me: RosterPerson): Promise<void> {
 
   let currentSite = editable[0] ?? "";
 
+  // switching site (or adding one) discards the current site's edits \u2014
+  // gate it through the same save/discard prompt as a tab switch
+  const guardLeave = async (): Promise<boolean> => {
+    if (!ctx.isDirty()) return true;
+    const choice = await promptUnsaved();
+    if (choice === "cancel") return false;
+    if (choice === "save") await ctx.saveCurrent();
+    return true;
+  };
+
   const picker = el("div", "app-settings-row");
   const siteSel = select(sites, currentSite);
   siteSel.addEventListener("change", () => {
-    currentSite = siteSel.value;
-    void renderSite();
+    const target = siteSel.value;
+    void (async () => {
+      if (!(await guardLeave())) {
+        siteSel.value = currentSite; // stay put
+        return;
+      }
+      currentSite = target;
+      await renderSite();
+    })();
   });
   picker.append(el("span", "app-settings-label", "Site"), siteSel);
   if (isSuper) {
@@ -509,7 +671,11 @@ async function renderOrg(body: HTMLElement, me: RosterPerson): Promise<void> {
     addSite.addEventListener("click", () => {
       const name = newSite.value.trim();
       if (name === "" || name === "__app__") return;
-      void saveSiteDepartments(name, "[]").then(() => renderOrg(body, me));
+      void (async () => {
+        if (!(await guardLeave())) return;
+        await saveSiteDepartments(name, "[]");
+        await renderOrg(body, me, ctx);
+      })();
     });
     picker.append(newSite, addSite);
   }
@@ -522,6 +688,7 @@ async function renderOrg(body: HTMLElement, me: RosterPerson): Promise<void> {
 
   const renderSite = async () => {
     clear(siteBox);
+    ctx.markClean(); // freshly loaded from the store
     if (currentSite === "") {
       siteBox.appendChild(el("div", "app-settings-note", "Add a site to begin."));
       return;
@@ -557,6 +724,7 @@ async function renderOrg(body: HTMLElement, me: RosterPerson): Promise<void> {
         if (canEdit) dr.appendChild(removeBtn(() => {
           node.departments = node.departments.filter((x) => x !== d);
           drawTree();
+          ctx.markDirty();
         }));
         treeBox.appendChild(dr);
         for (const a of d.areas) {
@@ -565,6 +733,7 @@ async function renderOrg(body: HTMLElement, me: RosterPerson): Promise<void> {
           if (canEdit) ar.appendChild(removeBtn(() => {
             d.areas = d.areas.filter((x) => x !== a);
             drawTree();
+            ctx.markDirty();
           }));
           treeBox.appendChild(ar);
         }
@@ -572,6 +741,7 @@ async function renderOrg(body: HTMLElement, me: RosterPerson): Promise<void> {
           const addA = adder("Add area", (v) => {
             d.areas.push(v);
             drawTree();
+            ctx.markDirty();
           });
           addA.classList.add("app-org-area");
           treeBox.appendChild(addA);
@@ -581,6 +751,7 @@ async function renderOrg(body: HTMLElement, me: RosterPerson): Promise<void> {
         treeBox.appendChild(adder("Add department", (v) => {
           node.departments.push({ department: v, areas: [] });
           drawTree();
+          ctx.markDirty();
         }));
       }
     };
@@ -601,6 +772,9 @@ async function renderOrg(body: HTMLElement, me: RosterPerson): Promise<void> {
     accentOn.checked = s.accent !== "";
     const accentWrap = el("span", "app-settings-row");
     accentWrap.append(accentOn, accent, el("span", "app-settings-note", "override app accent"));
+    tz.addEventListener("input", () => ctx.markDirty());
+    accent.addEventListener("input", () => ctx.markDirty());
+    accentOn.addEventListener("change", () => ctx.markDirty());
     siteBox.append(row("Time zone", tz), row("Accent", accentWrap));
 
     // --- roster patterns ---
@@ -618,6 +792,7 @@ async function renderOrg(body: HTMLElement, me: RosterPerson): Promise<void> {
         if (canEdit) r.appendChild(removeBtn(() => {
           patterns = patterns.filter((x) => x !== pat);
           drawPatterns();
+          ctx.markDirty();
         }));
         patBox.appendChild(r);
       }
@@ -631,6 +806,7 @@ async function renderOrg(body: HTMLElement, me: RosterPerson): Promise<void> {
           if (name.value.trim() === "" || pattern.value.trim() === "") return;
           patterns.push({ name: name.value.trim(), pattern: pattern.value.trim().toUpperCase() });
           drawPatterns();
+          ctx.markDirty();
         });
         const r = el("div", "app-org-row");
         r.append(name, pattern, add);
@@ -654,6 +830,7 @@ async function renderOrg(body: HTMLElement, me: RosterPerson): Promise<void> {
         if (canEdit) r.appendChild(removeBtn(() => {
           times.splice(times.indexOf(pt), 1);
           drawTimes();
+          ctx.markDirty();
         }));
         ptBox.appendChild(r);
       }
@@ -672,6 +849,7 @@ async function renderOrg(body: HTMLElement, me: RosterPerson): Promise<void> {
           if (label.value.trim() === "" || start.value === "" || end.value === "") return;
           times.push({ label: label.value.trim(), days: days.value.trim(), start: start.value, end: end.value });
           drawTimes();
+          ctx.markDirty();
         });
         const r = el("div", "app-org-row");
         r.append(label, days, start, end, add);
@@ -684,18 +862,19 @@ async function renderOrg(body: HTMLElement, me: RosterPerson): Promise<void> {
     if (canEdit) {
       const save = el("button", "app-btn", "Save site") as HTMLButtonElement;
       const note = el("span", "app-settings-note", "");
-      save.addEventListener("click", () => {
-        void (async () => {
-          await saveSiteDepartments(currentSite, JSON.stringify(node.departments));
-          await saveSiteSettings(currentSite, {
-            timezone: tz.value.trim(),
-            accent: accentOn.checked ? accent.value : "",
-            rosterPatternsJson: JSON.stringify(patterns),
-          });
-          await saveProtectedTimes(currentSite, JSON.stringify(times));
-          note.textContent = `saved ${new Date().toLocaleTimeString()}`;
-        })();
-      });
+      const doSave = async () => {
+        await saveSiteDepartments(currentSite, JSON.stringify(node.departments));
+        await saveSiteSettings(currentSite, {
+          timezone: tz.value.trim(),
+          accent: accentOn.checked ? accent.value : "",
+          rosterPatternsJson: JSON.stringify(patterns),
+        });
+        await saveProtectedTimes(currentSite, JSON.stringify(times));
+        note.textContent = `saved ${new Date().toLocaleTimeString()}`;
+        ctx.markClean();
+      };
+      ctx.registerSave(doSave);
+      save.addEventListener("click", () => void doSave());
       const r = el("div", "app-settings-row");
       r.append(save, note);
       siteBox.appendChild(r);
@@ -750,18 +929,21 @@ function ensureTzDatalist(): void {
 
 // ---- Branding (super admins) ----
 
-async function renderBranding(body: HTMLElement): Promise<void> {
+async function renderBranding(body: HTMLElement, ctx: DirtyCtx): Promise<void> {
   clear(body);
   const b = await branding();
   const name = el("input", "app-input") as HTMLInputElement;
   name.placeholder = "LeanBoard";
   name.value = b.appName;
+  name.addEventListener("input", () => ctx.markDirty());
   const accent = el("input", "app-input") as HTMLInputElement;
   accent.type = "color";
   accent.value = /^#[0-9a-fA-F]{6}$/.test(b.accent) ? b.accent : "#2563eb";
+  accent.addEventListener("input", () => ctx.markDirty());
   const accentOn = el("input", "") as HTMLInputElement;
   accentOn.type = "checkbox";
   accentOn.checked = b.accent !== "";
+  accentOn.addEventListener("change", () => ctx.markDirty());
   const accentWrap = el("span", "app-settings-row");
   accentWrap.append(accentOn, accent, el("span", "app-settings-note", "override default blue"));
 
@@ -784,6 +966,7 @@ async function renderBranding(body: HTMLElement): Promise<void> {
       logo = String(reader.result ?? "");
       preview.src = logo;
       logoNote.textContent = f.name;
+      ctx.markDirty();
     };
     reader.readAsDataURL(f);
   });
@@ -792,21 +975,24 @@ async function renderBranding(body: HTMLElement): Promise<void> {
     logo = "";
     preview.removeAttribute("src");
     logoNote.textContent = "logo removed";
+    ctx.markDirty();
   });
   const logoWrap = el("span", "app-settings-row");
   logoWrap.append(file, clearLogo, preview, logoNote);
 
   const save = el("button", "app-btn", "Save branding") as HTMLButtonElement;
   const note = el("span", "app-settings-note", "");
-  save.addEventListener("click", () => {
-    void saveBranding({
+  const doSave = async () => {
+    await saveBranding({
       appName: name.value.trim(),
       logo,
       accent: accentOn.checked ? accent.value : "",
-    }).then(() => {
-      note.textContent = "saved — reload to see it applied";
     });
-  });
+    note.textContent = "saved — reload to see it applied";
+    ctx.markClean();
+  };
+  ctx.registerSave(doSave);
+  save.addEventListener("click", () => void doSave());
 
   body.append(
     el("div", "app-settings-note", "Applies to everyone; site accents override the app accent."),
