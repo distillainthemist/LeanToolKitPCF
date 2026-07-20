@@ -92,7 +92,7 @@ Settings tab + hub tab labels (LeanHub label param), category
 {name,color} storage + swatch UI, colour propagation to hub calendar /
 rituals list (LeanHub color support), string sweep.
 
-### Slice R2 — Wizard flow (M)
+### Slice R2 — Wizard flow (M) — DONE 2026-07-20
 Default 2-column Agenda+Actions seed; submit → Meeting board step with
 step banner; composer retitle; edit mode = Save changes + disabled
 until dirty + leave-guard prompt; Board setup button removed from the
