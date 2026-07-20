@@ -87,7 +87,7 @@ challenges resolved and the slice plan. Follows the v2 plan's format.
 
 ## Slices
 
-### Slice R1 — Rituals rebrand + category colours (M)
+### Slice R1 — Rituals rebrand + category colours (M) — DONE 2026-07-20
 Settings tab + hub tab labels (LeanHub label param), category
 {name,color} storage + swatch UI, colour propagation to hub calendar /
 rituals list (LeanHub color support), string sweep.
