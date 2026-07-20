@@ -5,14 +5,19 @@ import { Ben_ltkboardsService } from "../generated/services/Ben_ltkboardsService
 import { allWhere, eq, firstWhere, upsertWhere } from "./dv";
 import { BoardManifest, BoardSummary, boardFromRow, serializeManifest } from "./mappers";
 
-export async function listBoards(): Promise<BoardSummary[]> {
+export async function listBoards(includeArchived = false): Promise<BoardSummary[]> {
   const rows = await allWhere(
     Ben_ltkboardsService.getAll,
-    "ben_istemplate ne true",
+    includeArchived ? "ben_istemplate ne true" : "ben_istemplate ne true and ben_isarchived ne true",
     undefined,
     ["ben_name asc"]
   );
   return rows.map(boardFromRow);
+}
+
+/** Archive (or restore) a ritual — archived boards leave every list. */
+export async function setBoardArchived(boardGuid: string, archived: boolean): Promise<void> {
+  await Ben_ltkboardsService.update(boardGuid, { ben_isarchived: archived });
 }
 
 export async function getBoard(boardId: string): Promise<BoardSummary | null> {

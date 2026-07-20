@@ -19,6 +19,7 @@ export interface BoardSummary {
   site: string;
   department: string;
   isTemplate: boolean;
+  isArchived: boolean;
   occurrenceSettingsRaw: string;
   manifestRaw: string;
   peopleRaw: string;
@@ -34,6 +35,7 @@ export function boardFromRow(row: Ben_ltkboards): BoardSummary {
     site: row.ben_site ?? "",
     department: row.ben_department ?? "",
     isTemplate: row.ben_istemplate === true,
+    isArchived: row.ben_isarchived === true,
     occurrenceSettingsRaw: row.ben_occurrencesettings ?? "",
     manifestRaw: row.ben_manifestjson ?? "",
     peopleRaw: row.ben_peoplejson ?? "",

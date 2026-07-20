@@ -30,7 +30,8 @@ export function mountCardEditor(
   parent: HTMLElement,
   boardId: string,
   instanceGuid: string,
-  cardId: string
+  cardId: string,
+  onClose?: () => void
 ): () => void {
   const cleanups: Array<() => void> = [];
   void (async () => {
@@ -62,7 +63,7 @@ export function mountCardEditor(
     }
 
     const bar = el("div", "app-board-toolbar");
-    const back = el("a", "app-btn", "‹ Back") as HTMLAnchorElement;
+    const back = el("a", "app-btn", onClose ? "‹ Done" : "‹ Back") as HTMLAnchorElement;
     back.href = `#/board/${boardId}`;
     const saved = el("span", "app-board-status", "");
     const heading =
@@ -76,10 +77,11 @@ export function mountCardEditor(
           "New meetings start from this unless they carry a previous meeting."
         )
       );
-      // came from a board designer (wizard step or settings) — return there
       back.addEventListener("click", (e) => {
         e.preventDefault();
-        window.history.back();
+        // overlay host closes in place; the route flavour walks back
+        if (onClose) onClose();
+        else window.history.back();
       });
     }
     parent.appendChild(bar);

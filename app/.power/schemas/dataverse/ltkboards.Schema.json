@@ -43,6 +43,37 @@
           "x-ms-schema-name": "ben_department",
           "maxLength": 100
         },
+        "ben_isarchived": {
+          "type": "string",
+          "title": "Archived",
+          "x-ms-dataverse-attribute": "ben_isarchived",
+          "x-ms-dataverse-type": "BooleanType",
+          "x-ms-schema-name": "ben_isarchived",
+          "enum": [
+            "No",
+            "Yes"
+          ],
+          "x-ms-enum-values": [
+            0,
+            1
+          ],
+          "Color": [
+            null,
+            null
+          ],
+          "x-ms-optionsetmetadataid": "538b4a27-2784-f111-ab0e-6045bd3fe940",
+          "x-ms-isGlobal": false,
+          "x-ms-optionsetdisplayname": "Archived",
+          "x-ms-optionSetType": "Boolean"
+        },
+        "ben_isarchivedname": {
+          "type": "string",
+          "title": "ben_isarchivedname",
+          "x-ms-dataverse-attribute": "ben_isarchivedname",
+          "x-ms-dataverse-type": "VirtualType",
+          "x-ms-schema-name": "ben_isarchivedName",
+          "x-ms-read-only": true
+        },
         "ben_istemplate": {
           "type": "string",
           "title": "Is Template",

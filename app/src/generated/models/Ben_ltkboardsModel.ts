@@ -18,6 +18,7 @@ export interface Ben_ltkboardsBase {
   ben_boardkind?: string;
   ben_category?: string;
   ben_department?: string;
+  ben_isarchived?: boolean;
   ben_istemplate?: boolean;
   ben_ltkboardid: string;
   ben_manifestjson?: string;
@@ -34,6 +35,7 @@ export interface Ben_ltkboardsBase {
 }
 
 export interface Ben_ltkboards extends Ben_ltkboardsBase {
+  ben_isarchivedname?: string;
   ben_istemplatename?: string;
   createdbyname?: string;
   createdbyyominame: string;

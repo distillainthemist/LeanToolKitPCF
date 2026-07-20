@@ -39,6 +39,7 @@ export const TABLES = [
       ben_peoplejson: { ...memo(100000), display: "People (JSON)" },
       ben_manifestjson: { ...memo(1048576), display: "Manifest (JSON)" },
       ben_istemplate: { kind: "bool", display: "Is Template" },
+      ben_isarchived: { kind: "bool", display: "Archived", default: false },
       ben_site: { ...text(100), display: "Site" },
       ben_department: { ...text(100), display: "Department" },
     },

@@ -15,6 +15,7 @@ import {
   renameBoardsDepartment,
   renameBoardsSite,
   replicateBoard,
+  setBoardArchived,
 } from "../store/boards";
 import {
   APP_ROW,
@@ -769,6 +770,7 @@ async function renderOrg(
 
   const renderRail = () => {
     clear(rail);
+    rail.appendChild(el("div", "app-org-railhead", "Select site"));
     const groups: { company: string; sites: string[] }[] = companyList.map(
       (c) => ({ company: c, sites: [] })
     );
@@ -945,13 +947,6 @@ async function renderOrg(
       head.appendChild(el("span", "app-status-badge app-status-revoked", "View only"));
     }
     pane.appendChild(head);
-    pane.appendChild(
-      el(
-        "div",
-        "app-field-hint",
-        siteCompany[currentSite] || "No company"
-      )
-    );
     const node = tree.find((s) => s.site === currentSite) ?? {
       site: currentSite,
       departments: [],
@@ -1668,7 +1663,7 @@ async function renderBoardsAdmin(body: HTMLElement, me: RosterPerson): Promise<v
     cats.filter((c) => c.color !== "").map((c) => [c.name, c.color])
   );
 
-  const all = await listBoards();
+  const all = await listBoards(true); // archived included; hidden below
   const withInfo = all.map((b) => ({
     board: b,
     owner: parseMeetingInfo(b.occurrenceSettingsRaw)?.owner ?? null,
@@ -1723,6 +1718,18 @@ async function renderBoardsAdmin(body: HTMLElement, me: RosterPerson): Promise<v
     });
     filterBar.appendChild(siteSel);
   }
+  let showArchived = false;
+  if (isAdmin) {
+    const archToggle = el("label", "app-check");
+    const box = el("input") as HTMLInputElement;
+    box.type = "checkbox";
+    box.addEventListener("change", () => {
+      showArchived = box.checked;
+      draw();
+    });
+    archToggle.append(box, document.createTextNode("Show archived"));
+    filterBar.appendChild(archToggle);
+  }
   body.appendChild(filterBar);
 
   const count = el("div", "app-settings-note", "");
@@ -1733,6 +1740,7 @@ async function renderBoardsAdmin(body: HTMLElement, me: RosterPerson): Promise<v
   const draw = () => {
     clear(grid);
     const shown = scoped.filter((x) => {
+      if (!showArchived && x.board.isArchived) return false;
       if (catFilter !== "" && x.board.category !== catFilter) return false;
       if (siteFilter !== "" && x.board.site !== siteFilter) return false;
       if (query !== "" && !x.board.name.toLowerCase().includes(query)) return false;
@@ -1750,6 +1758,9 @@ async function renderBoardsAdmin(body: HTMLElement, me: RosterPerson): Promise<v
 
       const titleRow = el("div", "app-ritual-title");
       titleRow.appendChild(el("span", "", b.name));
+      if (b.isArchived) {
+        titleRow.appendChild(el("span", "app-status-badge app-status-revoked", "Archived"));
+      }
       if (b.category !== "") {
         const chip = el("span", "app-ritual-cat", b.category);
         if (catColor !== "") {
@@ -1804,6 +1815,19 @@ async function renderBoardsAdmin(body: HTMLElement, me: RosterPerson): Promise<v
           })();
         });
         actions.appendChild(rep);
+        // archiving hides the ritual from every list (calendar, My day,
+        // rituals) but keeps its data; restore brings it straight back
+        const arch = el(
+          "button",
+          "app-btn",
+          b.isArchived ? "Restore" : "Archive"
+        ) as HTMLButtonElement;
+        arch.addEventListener("click", () => {
+          void setBoardArchived(b.id, !b.isArchived).then(() =>
+            renderBoardsAdmin(body, me)
+          );
+        });
+        actions.appendChild(arch);
       }
       card.appendChild(actions);
       grid.appendChild(card);

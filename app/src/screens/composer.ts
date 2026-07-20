@@ -40,6 +40,35 @@ interface ComposerTarget {
   removeLabel: string;
 }
 
+/**
+ * Full-screen overlay hosting the card editor bound to the card's LIVE
+ * (standard-content) row. An overlay rather than a route so the wizard's
+ * Meeting board step stays mounted underneath; edits autosave, Done or
+ * Escape closes.
+ */
+function openStandardContent(boardId: string, cardId: string): void {
+  const overlay = el("div", "app-content-overlay");
+  const panel = el("div", "app-content-panel");
+  overlay.appendChild(panel);
+  document.body.appendChild(overlay);
+  let cleanup: () => void = () => undefined;
+  const close = () => {
+    cleanup();
+    overlay.remove();
+    document.removeEventListener("keydown", onKey, true);
+  };
+  const onKey = (e: KeyboardEvent) => {
+    if (e.key === "Escape") {
+      e.stopPropagation();
+      close();
+    }
+  };
+  document.addEventListener("keydown", onKey, true);
+  void import("./cardEditor").then(({ mountCardEditor }) => {
+    cleanup = mountCardEditor(panel, boardId, "live", cardId, close);
+  });
+}
+
 function mintCardId(cardType: string, taken: Set<string>): string {
   const stem = cardType.replace(/Card$/, "").toLowerCase() || "card";
   for (;;) {
@@ -371,11 +400,14 @@ async function renderComposer(
     );
     if (slot && !isActionSurface(slot)) {
       // the card's standard document (e.g. the standing agenda): what a
-      // new meeting starts from when there's nothing to carry
-      const content = el("a", "app-btn", "Edit standard content") as HTMLAnchorElement;
-      content.href = `#/edit/${board.boardId}/live/${slot.cardId}`;
+      // new meeting starts from when there's nothing to carry. Opens as
+      // an overlay so a wizard-hosted designer never loses its step.
+      const content = el("button", "app-btn", "Edit standard content") as HTMLButtonElement;
       content.title =
         "The card's standard document — new meetings start from it unless they carry a previous meeting's content.";
+      content.addEventListener("click", () =>
+        openStandardContent(board.boardId, slot.cardId)
+      );
       head.appendChild(content);
     }
     if (slot) {
