@@ -92,11 +92,15 @@ void (async () => {
 })();
 
 let cleanup: () => void = () => undefined;
+// a route call is superseded when a newer one starts before its lazy
+// import resolves — the stale one must not mount (stacked screens)
+let routeToken = 0;
 
 // Screens load lazily: the shell paints before any store/SDK module
 // evaluates, and a screen that fails to load shows its error instead of
 // blanking the whole app (host-side failures stay debuggable).
 function route(): void {
+  const token = ++routeToken;
   cleanup();
   cleanup = () => undefined;
   setLeaveGuard(null); // the outgoing screen's guard never outlives it
@@ -110,35 +114,39 @@ function route(): void {
 
   void (async () => {
     try {
+      let mount: () => () => void;
       if (parts[0] === "board" && parts[1]) {
         const { mountBoard } = await import("./screens/board");
-        cleanup = mountBoard(outlet, parts[1], decodeURIComponent(parts[2] ?? ""));
+        mount = () => mountBoard(outlet, parts[1], decodeURIComponent(parts[2] ?? ""));
       } else if (parts[0] === "setup" && parts[1]) {
         const { mountComposer } = await import("./screens/composer");
-        cleanup = mountComposer(outlet, parts[1]);
+        mount = () => mountComposer(outlet, parts[1]);
       } else if (parts[0] === "adjust" && parts[1] && parts[2]) {
         const { mountInstanceComposer } = await import("./screens/composer");
-        cleanup = mountInstanceComposer(outlet, parts[1], parts[2]);
+        mount = () => mountInstanceComposer(outlet, parts[1], parts[2]);
       } else if (parts[0] === "edit" && parts[1] && parts[2] && parts[3]) {
         const { mountCardEditor } = await import("./screens/cardEditor");
-        cleanup = mountCardEditor(outlet, parts[1], parts[2], parts[3]);
+        mount = () => mountCardEditor(outlet, parts[1], parts[2], parts[3]);
       } else if (parts[0] === "boards") {
         const { mountBoards } = await import("./screens/boards");
-        cleanup = mountBoards(outlet);
+        mount = () => mountBoards(outlet);
       } else if (parts[0] === "wizard") {
         const { mountWizard } = await import("./screens/wizard");
-        cleanup = mountWizard(outlet, parts[1] ?? "");
+        mount = () => mountWizard(outlet, parts[1] ?? "");
       } else if (parts[0] === "people") {
         const { mountPeople } = await import("./screens/people");
-        cleanup = mountPeople(outlet);
+        mount = () => mountPeople(outlet);
       } else if (parts[0] === "settings") {
         const { mountSettings } = await import("./screens/settings");
-        cleanup = mountSettings(outlet);
+        mount = () => mountSettings(outlet);
       } else {
         const { mountHub } = await import("./screens/hub");
-        cleanup = mountHub(outlet);
+        mount = () => mountHub(outlet);
       }
+      if (token !== routeToken) return; // superseded — do not mount
+      cleanup = mount();
     } catch (err) {
+      if (token !== routeToken) return;
       const box = el("pre", "app-missing");
       box.textContent = `Screen failed to load:\n${err instanceof Error ? (err.stack ?? err.message) : String(err)}`;
       outlet.appendChild(box);
@@ -146,28 +154,35 @@ function route(): void {
   })();
 }
 
-// Hash routing with a leave-guard: when the current screen has registered
-// a guard and the hash changes to something new, we put the hash back,
-// ask the guard, and only navigate if it allows. A same-hash dispatch
-// (used to force a re-render) still routes. `navigating` suppresses the
-// hashchange from our own programmatic reverts.
+// Hash routing with a leave-guard. The guarded path never touches the
+// hash while deciding (each programmatic hash set queues its OWN
+// hashchange event — the old revert-then-proceed dance fired three
+// routes and stacked three screens). Only a refused guard reverts the
+// hash, and that one event is swallowed via `suppressNext`.
 let currentHash = window.location.hash || "#/";
-let navigating = false;
+let suppressNext = false;
+let guardBusy = false;
 
 async function onHashChange(): Promise<void> {
-  if (navigating) return;
+  if (suppressNext) {
+    suppressNext = false;
+    return;
+  }
   const target = window.location.hash || "#/";
-  const guard = getLeaveGuard();
-  if (guard && target !== currentHash) {
-    navigating = true;
-    window.location.hash = currentHash; // revert while we ask
-    navigating = false;
-    const ok = await guard();
-    if (!ok) return; // stay
-    setLeaveGuard(null);
-    navigating = true;
-    window.location.hash = target; // proceed
-    navigating = false;
+  if (target !== currentHash) {
+    const guard = getLeaveGuard();
+    if (guard) {
+      if (guardBusy) return; // one prompt at a time
+      guardBusy = true;
+      const ok = await guard();
+      guardBusy = false;
+      if (!ok) {
+        suppressNext = true;
+        window.location.hash = currentHash; // stay put
+        return;
+      }
+      setLeaveGuard(null);
+    }
   }
   currentHash = window.location.hash || "#/";
   route();
