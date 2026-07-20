@@ -107,9 +107,10 @@ function route(): void {
   const hash = window.location.hash || "#/";
   const parts = hash.slice(2).split("/").filter(Boolean); // drop "#/"
 
-  const inSettings = parts[0] === "settings";
-  modeLink.textContent = inSettings ? "⌂ Home" : "⚙ Settings";
-  modeLink.href = inSettings ? "#/" : "#/settings";
+  // Settings hides on the operational surfaces too — Home leads back
+  const showHome = ["settings", "board", "edit", "adjust"].includes(parts[0] ?? "");
+  modeLink.textContent = showHome ? "⌂ Home" : "⚙ Settings";
+  modeLink.href = showHome ? "#/" : "#/settings";
 
   void (async () => {
     try {

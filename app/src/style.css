@@ -25,14 +25,14 @@ body {
   display: flex;
   align-items: center;
   gap: 18px;
-  padding: 0 16px;
-  height: 44px;
+  padding: 0 18px;
+  height: 55px;
   background: #fff;
   color: #26241f;
   border-bottom: 1px solid #e5e2dc;
 }
 
-.app-brand { font-weight: 700; letter-spacing: 0.02em; cursor: pointer; }
+.app-brand { font-weight: 700; font-size: 17px; letter-spacing: 0.02em; cursor: pointer; }
 
 .app-nav { display: flex; gap: 4px; }
 
@@ -309,7 +309,7 @@ input[type="color"].app-cat-swatch {
 
 /* settings screen (v2) */
 .app-nav { flex: 1; }
-.app-link-cog { margin-left: auto; }
+.app-link-cog { margin-left: auto; font-size: 15.5px; padding: 8px 14px; }
 .app-settings { display: flex; flex-direction: column; gap: 12px; max-width: 900px; }
 .app-settings-tabs { display: flex; gap: 6px; }
 .app-settings-tab { font: inherit; font-size: 13px; border: 1px solid #d9d5cd; background: #fff; border-radius: 8px; padding: 6px 14px; cursor: pointer; }

@@ -84,17 +84,34 @@ export type CardMounter = (opts: CardMount) => () => void;
 
 // ---- shared plumbing ----
 
-/** Shared save plumbing: latest svg from onPngReady rides every save. */
-function saver(opts: CardMount) {
+/**
+ * Shared save plumbing: latest svg from onPngReady rides every save.
+ * Editors snapshot AFTER they emit the change, so a fresh svg arriving
+ * once the debounced save has fired would otherwise be lost (the tile
+ * stayed one edit behind) — it reschedules a save with the latest
+ * document instead.
+ */
+export function saver(opts: Pick<CardMount, "onSave">) {
   let svg = "";
+  let latestJson: string | null = null;
   let timer: ReturnType<typeof setTimeout> | null = null;
+  const fire = () => {
+    if (latestJson !== null) opts.onSave(latestJson, svg);
+  };
+  const schedule = () => {
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(fire, 400);
+  };
   return {
     onPng: (_uri: string, svgMarkup?: string) => {
-      if (svgMarkup) svg = svgMarkup;
+      if (svgMarkup && svgMarkup !== svg) {
+        svg = svgMarkup;
+        if (latestJson !== null) schedule(); // freshest snapshot always lands
+      }
     },
     save: (outputJson: string) => {
-      if (timer) clearTimeout(timer);
-      timer = setTimeout(() => opts.onSave(outputJson, svg), 400);
+      latestJson = outputJson;
+      schedule();
     },
   };
 }
