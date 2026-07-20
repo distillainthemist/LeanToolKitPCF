@@ -1073,7 +1073,7 @@ async function renderOrg(
       pattern: string;
       baseDate: string; // YYYY-MM-DD the pattern anchors to
       crews: string; // display CSV, stored as array
-      handovers: string; // shift start/handover times CSV, stored as array
+      dayStart: string; // day shift start "HH:MM"; nights assumed +12h
     }
     let patterns: RosterPatternRow[] = [];
     try {
@@ -1084,7 +1084,13 @@ async function renderOrg(
           pattern: typeof o.pattern === "string" ? o.pattern : "",
           baseDate: typeof o.baseDate === "string" ? o.baseDate : "",
           crews: Array.isArray(o.crews) ? o.crews.map(String).join(", ") : "",
-          handovers: Array.isArray(o.handovers) ? o.handovers.map(String).join(", ") : "",
+          dayStart:
+            typeof o.dayStart === "string"
+              ? o.dayStart
+              : // rows saved before dayStart existed kept handover times
+                Array.isArray(o.handovers) && typeof o.handovers[0] === "string"
+                ? o.handovers[0]
+                : "",
         }));
       }
     } catch { /* fresh */ }
@@ -1278,14 +1284,22 @@ async function renderOrg(
           pat.baseDate = baseDate.value;
           ctx.markDirty();
         });
+        const dayStart = el("input", "app-input") as HTMLInputElement;
+        dayStart.type = "time";
+        dayStart.value = pat.dayStart;
+        dayStart.disabled = !canEdit;
+        dayStart.addEventListener("input", () => {
+          pat.dayStart = dayStart.value;
+          ctx.markDirty();
+        });
         grid.append(
           field("Pattern", patInput(pat.pattern, "e.g. 2D-2N-4O", (v) => (pat.pattern = v.toUpperCase()))),
           field("Base date", baseDate, "Day 1 of the pattern for crew 1"),
           field("Crews", patInput(pat.crews, "e.g. A, B, C, D", (v) => (pat.crews = v)), "In rotation order"),
           field(
-            "Shift start / handover times",
-            patInput(pat.handovers, "e.g. 06:00, 18:00", (v) => (pat.handovers = v)),
-            "One per shift, comma-separated"
+            "Day shift start",
+            dayStart,
+            "Night shift (if the pattern has one) starts 12 hours later"
           )
         );
         card.appendChild(grid);
@@ -1297,7 +1311,7 @@ async function renderOrg(
       if (canEdit) {
         const add = el("button", "app-org-add", "\uFF0B Add roster pattern") as HTMLButtonElement;
         add.addEventListener("click", () => {
-          patterns.push({ name: "", pattern: "", baseDate: "", crews: "", handovers: "" });
+          patterns.push({ name: "", pattern: "", baseDate: "", crews: "", dayStart: "" });
           drawPatterns();
           ctx.markDirty();
         });
@@ -1397,7 +1411,7 @@ async function renderOrg(
                 pattern: p.pattern.trim(),
                 baseDate: p.baseDate,
                 crews: csv(p.crews),
-                handovers: csv(p.handovers),
+                dayStart: p.dayStart,
               }))
           ),
         });
