@@ -287,7 +287,7 @@ export class BoardGridView {
       const node = document.importNode(svg, true);
       node.setAttribute("width", "100%");
       node.setAttribute("height", "100%");
-      node.setAttribute("preserveAspectRatio", "xMidYMid meet");
+      node.setAttribute("preserveAspectRatio", "xMidYMin meet"); // top-aligned
       node.style.pointerEvents = "none";
       snap.appendChild(node);
       return;
@@ -319,7 +319,7 @@ export class BoardGridView {
       const k = Math.min(w / width, h / height);
       stage.style.transform = `scale(${k})`;
       stage.style.left = `${Math.max(0, (w - width * k) / 2)}px`;
-      stage.style.top = `${Math.max(0, (h - height * k) / 2)}px`;
+      stage.style.top = "0px"; // top-aligned, like the other snapshot paths
     };
     this.fitters.push(fit);
     fit();

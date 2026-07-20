@@ -87,12 +87,12 @@ export const BOARDGRID_CSS = `
   inset: 0;
   overflow: hidden;
   display: flex;
-  align-items: center;
+  align-items: flex-start; /* card content reads from the top of the slot */
   justify-content: center;
 }
 /* with a title bar, the snapshot sits below it rather than sliding under */
 .ltk-bg-haschip .ltk-bg-snap { top: 28px; }
-.ltk-bg-snap img { width: 100%; height: 100%; object-fit: contain; pointer-events: none; }
+.ltk-bg-snap img { width: 100%; height: 100%; object-fit: contain; object-position: center top; pointer-events: none; }
 .ltk-bg-snap .ltk-bg-nosnap {
   font-size: 12.5px;
   color: var(--ltk-muted);

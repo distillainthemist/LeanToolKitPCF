@@ -10,20 +10,19 @@ import "./style.css";
 const app = document.querySelector<HTMLDivElement>("#app")!;
 
 const bar = el("header", "app-bar");
+// the app title is the home affordance \u2014 no separate My day link
 const brand = el("span", "app-brand", "LeanBoard");
+brand.title = "Home";
+brand.addEventListener("click", () => {
+  window.location.hash = "#/";
+});
 const nav = el("nav", "app-nav");
-const link = (label: string, hash: string) => {
-  const a = el("a", "app-link", label) as HTMLAnchorElement;
-  a.href = hash;
-  nav.appendChild(a);
-  return a;
-};
-link("My day", "#/");
 const gap = el("span", "app-bar-gap");
-const cog = el("a", "app-link app-link-cog", "\u2699 Settings") as HTMLAnchorElement;
-cog.href = "#/settings";
+// one context button: Settings everywhere, Home while in Settings
+const modeLink = el("a", "app-link app-link-cog", "\u2699 Settings") as HTMLAnchorElement;
+modeLink.href = "#/settings";
 nav.appendChild(gap);
-nav.appendChild(cog);
+nav.appendChild(modeLink);
 bar.append(brand, nav);
 app.appendChild(bar);
 
@@ -108,9 +107,9 @@ function route(): void {
   const hash = window.location.hash || "#/";
   const parts = hash.slice(2).split("/").filter(Boolean); // drop "#/"
 
-  for (const a of Array.from(nav.querySelectorAll("a"))) {
-    a.classList.toggle("app-link-on", a.getAttribute("href") === hash);
-  }
+  const inSettings = parts[0] === "settings";
+  modeLink.textContent = inSettings ? "⌂ Home" : "⚙ Settings";
+  modeLink.href = inSettings ? "#/" : "#/settings";
 
   void (async () => {
     try {

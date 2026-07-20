@@ -18,6 +18,7 @@ import { clear, el } from "../../../shared/ui/dom";
 import { appTheme } from "../cardHost";
 import { detectHost } from "../runtime";
 import { getBoard, listBoards, saveManifest } from "../store/boards";
+import { rowsForBoard, toLite } from "../store/cards";
 import { catalogSvgByType } from "../store/catalog";
 import { getInstance, saveInstanceManifest } from "../store/instances";
 import { isActionSurface } from "../store/policies";
@@ -46,7 +47,11 @@ interface ComposerTarget {
  * Meeting board step stays mounted underneath; edits autosave, Done or
  * Escape closes.
  */
-function openStandardContent(boardId: string, cardId: string): void {
+function openStandardContent(
+  boardId: string,
+  cardId: string,
+  onClosed?: () => void
+): void {
   const overlay = el("div", "app-content-overlay");
   const panel = el("div", "app-content-panel");
   overlay.appendChild(panel);
@@ -56,6 +61,7 @@ function openStandardContent(boardId: string, cardId: string): void {
     cleanup();
     overlay.remove();
     document.removeEventListener("keydown", onKey, true);
+    onClosed?.();
   };
   const onKey = (e: KeyboardEvent) => {
     if (e.key === "Escape") {
@@ -234,6 +240,18 @@ async function renderComposer(
   const manifest: BoardManifest = target.manifest;
   const catalogSvg = await catalogSvgByType();
 
+  // standard-content snapshots: a card whose live (template) row has a
+  // tile SVG previews with it instead of the generic catalog art
+  let liveSvg: Record<string, string> = {};
+  const refreshLiveSvg = async () => {
+    const rows = await rowsForBoard(board.boardId);
+    liveSvg = {};
+    for (const r of toLite(rows)) {
+      if (r.instanceId === "" && r.tileSvg !== "") liveSvg[r.cardId] = r.tileSvg;
+    }
+  };
+  await refreshLiveSvg();
+
   // link/rollup sources: every board's cards, from the boards list
   const boardRefs: BoardRef[] = (await listBoards()).map((b) => ({
     boardId: b.boardId,
@@ -340,7 +358,7 @@ async function renderComposer(
         cardId: slot.cardId,
         cardType: slot.cardType,
         title: slot.title,
-        svg: catalogSvg[slot.cardType] ?? "",
+        svg: liveSvg[slot.cardId] ?? catalogSvg[slot.cardType] ?? "",
         w: slot.w,
         h: slot.h,
         barColor: typeof theme.titlebar === "string" ? theme.titlebar : "",
@@ -406,7 +424,9 @@ async function renderComposer(
       content.title =
         "The card's standard document — new meetings start from it unless they carry a previous meeting's content.";
       content.addEventListener("click", () =>
-        openStandardContent(board.boardId, slot.cardId)
+        openStandardContent(board.boardId, slot.cardId, () =>
+          void refreshLiveSvg().then(renderGrid)
+        )
       );
       head.appendChild(content);
     }

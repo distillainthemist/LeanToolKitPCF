@@ -32,7 +32,7 @@ body {
   border-bottom: 1px solid #e5e2dc;
 }
 
-.app-brand { font-weight: 700; letter-spacing: 0.02em; }
+.app-brand { font-weight: 700; letter-spacing: 0.02em; cursor: pointer; }
 
 .app-nav { display: flex; gap: 4px; }
 
