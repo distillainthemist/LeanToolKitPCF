@@ -6,6 +6,7 @@
 // boardId:cardId). Action surfaces (ActionBoard / EscalationViewer) have
 // no document row — the actions table IS their data.
 
+import { cardLabel } from "../../../controls/CardSettings/registry";
 import { initialsFor } from "../../../shared/schema/people";
 import { el } from "../../../shared/ui/dom";
 import { cardMounter, supportedCardTypes } from "../cardRegistry";
@@ -61,7 +62,7 @@ export function mountCardEditor(
     const back = el("a", "app-btn", "‹ Board") as HTMLAnchorElement;
     back.href = `#/board/${boardId}`;
     const saved = el("span", "app-board-status", "");
-    bar.append(back, el("span", "app-board-title", slot.title || slot.cardType), saved);
+    bar.append(back, el("span", "app-board-title", slot.title || cardLabel(slot.cardType)), saved);
     parent.appendChild(bar);
 
     // deep-link the back button to this card's occurrence so the board
@@ -147,7 +148,7 @@ export function mountCardEditor(
     cleanups.push(
       mounter({
         host,
-        title: slot.title || slot.cardType,
+        title: slot.title || cardLabel(slot.cardType),
         outputJson: row?.outputJson ?? "",
         people: roster.map((p) => ({
           whoId: p.whoId,
@@ -164,7 +165,7 @@ export function mountCardEditor(
           .filter((s) => !isActionSurface(s))
           .map((s) => ({
             instanceId: `${boardId}:${s.cardId}`,
-            label: s.title || s.cardType,
+            label: s.title || cardLabel(s.cardType),
           })),
         viewer: {
           whoId: viewer?.objectId ?? "",

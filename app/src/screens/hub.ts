@@ -3,6 +3,7 @@
 // times), with the viewer self-registering into LTK People on first
 // visit. Dev server (no host): demo data, writes logged.
 
+import { cardLabel } from "../../../controls/CardSettings/registry";
 import { LeanHubView } from "../../../controls/LeanHub/editor";
 import {
   parseHubMeetings,
@@ -87,7 +88,7 @@ export function mountHub(parent: HTMLElement): () => void {
         for (const slot of parseManifest(b.manifestRaw).slots) {
           // actions carry instanceId = boardId:cardId (the app's action key)
           sourceLabels[`${b.boardId}:${slot.cardId}`] =
-            `${b.name} · ${slot.title || slot.cardType}`;
+            `${b.name} · ${slot.title || cardLabel(slot.cardType)}`;
         }
       }
       const roster = await listPeople();

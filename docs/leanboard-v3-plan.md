@@ -98,7 +98,7 @@ step banner; composer retitle; edit mode = Save changes + disabled
 until dirty + leave-guard prompt; Board setup button removed from the
 board toolbar; promptUnsaved extracted to a shared module.
 
-### Slice R3 — Card picker + settings polish (M)
+### Slice R3 — Card picker + settings polish (M) — DONE 2026-07-20
 Grouped picker with display renames; MeetingScheduler hidden; label
 propagation app-wide; Theme section moved last.
 

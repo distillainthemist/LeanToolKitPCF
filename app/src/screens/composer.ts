@@ -7,6 +7,7 @@
 import { BoardGridView } from "../../../controls/BoardGrid/editor";
 import { BoardTile, parseColumns } from "../../../controls/BoardGrid/types";
 import { CardSettingsEditor } from "../../../controls/CardSettings/editor";
+import { cardLabel } from "../../../controls/CardSettings/registry";
 import {
   BoardRef,
   SettingsDraft,
@@ -378,7 +379,7 @@ async function renderComposer(
       },
     });
     editor.setTheme(appTheme());
-    editor.setChrome(slot ? slot.title || slot.cardType : "New card", "");
+    editor.setChrome(slot ? slot.title || cardLabel(slot.cardType) : "New card", "");
     editor.setBoards(sourceRefs());
     editor.setDraft(slot ? draftFromSlot(slot) : parseDraft(""), false);
     settings = editor;

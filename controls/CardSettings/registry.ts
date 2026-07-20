@@ -46,6 +46,10 @@ export interface CardSpec {
   /** Canonical id stamped into the blob as `cardType` — the control name. */
   type: string;
   label: string;
+  /** Picker group ("Rituals", "Performance", …). */
+  group: string;
+  /** Never offered in the picker (still resolvable for existing data). */
+  hidden?: boolean;
   description: string;
   /** Card-specific config keys (settings config:{...}). May be empty. */
   config: FieldSpec[];
@@ -53,6 +57,20 @@ export interface CardSpec {
   appBound: string[];
   /** Shown when a card keeps its interesting knobs in its DOCUMENT. */
   configNote?: string;
+}
+
+/** Picker group display order. */
+export const CARD_GROUPS = [
+  "Rituals",
+  "Action management",
+  "Performance",
+  "Problem solving",
+  "Project management",
+];
+
+/** Display label for a card type ("ActionBoard" → "Actions"). */
+export function cardLabel(type: string): string {
+  return cardSpec(type)?.label ?? type;
 }
 
 // ---- common section (identical for every card) ------------------------------
@@ -132,6 +150,7 @@ export const CARDS: CardSpec[] = [
   {
     type: "FiveWhys",
     label: "Five whys",
+    group: "Problem solving",
     description: "Linear why-chains from a problem statement, root causes flagged.",
     config: [],
     appBound: ["instanceId", "peopleJSON"],
@@ -140,6 +159,7 @@ export const CARDS: CardSpec[] = [
   {
     type: "Fishbone",
     label: "Fishbone",
+    group: "Problem solving",
     description: "Cause-and-effect diagram — causes on category bones.",
     config: [
       {
@@ -157,6 +177,7 @@ export const CARDS: CardSpec[] = [
   {
     type: "FaultTree",
     label: "Fault tree",
+    group: "Problem solving",
     description: "Top-down gated cause tree (AND/OR) under one top event.",
     config: [],
     appBound: ["instanceId", "peopleJSON"],
@@ -164,7 +185,8 @@ export const CARDS: CardSpec[] = [
   },
   {
     type: "ActionBoard",
-    label: "Action board",
+    label: "Actions",
+    group: "Action management",
     description: "Every action in one place — list, kanban or gantt.",
     config: [
       {
@@ -194,6 +216,7 @@ export const CARDS: CardSpec[] = [
   {
     type: "StatusTile",
     label: "Status tile",
+    group: "Performance",
     description: "One big tap-to-cycle state with a reason — a tier roll-up tile.",
     config: [
       {
@@ -210,6 +233,7 @@ export const CARDS: CardSpec[] = [
   {
     type: "ParetoCard",
     label: "Pareto",
+    group: "Performance",
     description: "Descending count bars with the cumulative % line.",
     config: [],
     appBound: ["instanceId"],
@@ -219,6 +243,7 @@ export const CARDS: CardSpec[] = [
   {
     type: "KpiTrendCard",
     label: "KPI trend",
+    group: "Performance",
     description: "Run chart with target and spec limits (USL/LSL).",
     config: [],
     appBound: ["instanceId"],
@@ -228,6 +253,7 @@ export const CARDS: CardSpec[] = [
   {
     type: "BenefitEffort",
     label: "Benefit – effort",
+    group: "Problem solving",
     description: "2×2 prioritisation canvas — quick wins to thankless.",
     config: [],
     appBound: ["instanceId", "peopleJSON"],
@@ -236,7 +262,8 @@ export const CARDS: CardSpec[] = [
   },
   {
     type: "RiskMatrix",
-    label: "Risk matrix",
+    label: "Risk management",
+    group: "Project management",
     description: "5×5 likelihood × consequence register, inherent → residual.",
     config: [],
     appBound: ["instanceId", "peopleJSON"],
@@ -244,7 +271,8 @@ export const CARDS: CardSpec[] = [
   },
   {
     type: "SqdpcCard",
-    label: "SQDPC board",
+    label: "SQDPC",
+    group: "Performance",
     description: "Letter-shaped month calendars rated per day (S, Q, D, P, C…).",
     config: [
       {
@@ -289,6 +317,7 @@ export const CARDS: CardSpec[] = [
   {
     type: "ConditionsCard",
     label: "Winning conditions",
+    group: "Performance",
     description: "Conditions rated good/issue over a rolling window ending today.",
     config: [
       {
@@ -334,6 +363,7 @@ export const CARDS: CardSpec[] = [
   {
     type: "AgendaCard",
     label: "Agenda",
+    group: "Rituals",
     description:
       "Runs a traditional meeting: checkable pre-work, the agenda running order (who, timing, links, actions per item) and a checkable outputs list.",
     config: [],
@@ -344,6 +374,7 @@ export const CARDS: CardSpec[] = [
   {
     type: "EmbedCard",
     label: "Embed",
+    group: "Performance",
     description:
       "An embedded page — a Power BI report or any https embed link — with a refresh button. Never reloads on resize.",
     config: [
@@ -381,6 +412,7 @@ export const CARDS: CardSpec[] = [
   {
     type: "CaptureCard",
     label: "Capture card",
+    group: "Rituals",
     description: "Typed capture grid — text/number/yes-no/list columns, free or fixed rows.",
     config: [
       {
@@ -404,6 +436,7 @@ export const CARDS: CardSpec[] = [
   {
     type: "HeatmapCard",
     label: "Heatmap",
+    group: "Performance",
     description: "Issues pinned onto an image (floor plan, machine photo…).",
     config: [
       {
@@ -419,6 +452,7 @@ export const CARDS: CardSpec[] = [
   {
     type: "ProcessMap",
     label: "Process map",
+    group: "Problem solving",
     description: "Flowchart, swimlane, SIPOC or value stream map (set by type).",
     config: [
       {
@@ -439,6 +473,7 @@ export const CARDS: CardSpec[] = [
   {
     type: "Raci",
     label: "RACI",
+    group: "Project management",
     description: "Deliverables × roles responsibility matrix.",
     config: [],
     appBound: ["instanceId", "peopleJSON"],
@@ -448,6 +483,7 @@ export const CARDS: CardSpec[] = [
   {
     type: "SkillsMatrix",
     label: "Skills matrix",
+    group: "Project management",
     description: "Skills (rows, by category) × people (columns), quadrant discs.",
     config: [],
     appBound: ["instanceId", "peopleJSON"],
@@ -457,6 +493,8 @@ export const CARDS: CardSpec[] = [
   {
     type: "MeetingScheduler",
     label: "Meeting scheduler",
+    group: "Rituals",
+    hidden: true,
     description: "Selectable meeting instances generated from a cadence.",
     config: [
       {
@@ -534,6 +572,7 @@ export const CARDS: CardSpec[] = [
   {
     type: "EscalationViewer",
     label: "Escalation viewer",
+    group: "Action management",
     description: "Actions escalated to this board, grouped by their source card.",
     config: [
       {

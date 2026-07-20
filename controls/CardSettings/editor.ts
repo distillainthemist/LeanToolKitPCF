@@ -8,7 +8,7 @@ import { LTK_BASE_CSS } from "../../shared/ui/baseCss";
 import { clear, el, ensureStylesheet } from "../../shared/ui/dom";
 import { parsePrompts, Prompts, renderTitleBar } from "../../shared/ui/chrome";
 import { fieldRow, sectionLabel, selectInput } from "../../shared/ui/dialog";
-import { CARDS, cardSpec, COMMON_FIELDS, THEME_FIELDS } from "./registry";
+import { CARD_GROUPS, CARDS, cardSpec, COMMON_FIELDS, THEME_FIELDS } from "./registry";
 import { renderField, renderPromptsField, FieldHost } from "./fields";
 import { BoardRef, SettingsDraft, ThemeDraft, emptyDraft } from "./types";
 import { CARDSETTINGS_CSS } from "./styles";
@@ -117,27 +117,40 @@ export class CardSettingsEditor {
       const q = this.search.trim().toLowerCase();
       const hits = CARDS.filter(
         (c) =>
-          q === "" ||
-          c.label.toLowerCase().includes(q) ||
-          c.description.toLowerCase().includes(q) ||
-          c.type.toLowerCase().includes(q)
+          !c.hidden &&
+          (q === "" ||
+            c.label.toLowerCase().includes(q) ||
+            c.description.toLowerCase().includes(q) ||
+            c.type.toLowerCase().includes(q) ||
+            c.group.toLowerCase().includes(q))
       );
       if (hits.length === 0) {
         grid.appendChild(el("div", "ltk-cs-empty", "No cards match."));
         return;
       }
-      for (const card of hits) {
-        const opt = el("button", "ltk-cs-cardopt");
-        opt.type = "button";
-        opt.disabled = this.readOnly;
-        opt.appendChild(el("span", "ltk-cs-cardopt-label", card.label));
-        opt.appendChild(el("span", "ltk-cs-cardopt-desc", card.description));
-        opt.addEventListener("click", () => {
-          this.draft.cardType = card.type;
-          this.commit();
-          this.render();
-        });
-        grid.appendChild(opt);
+      // grouped sections in canonical order; a group only shows when the
+      // search leaves it something to offer
+      const groups = [
+        ...CARD_GROUPS,
+        ...hits.map((c) => c.group).filter((g) => !CARD_GROUPS.includes(g)),
+      ];
+      for (const group of groups) {
+        const inGroup = hits.filter((c) => c.group === group);
+        if (inGroup.length === 0) continue;
+        grid.appendChild(el("div", "ltk-cs-group", group));
+        for (const card of inGroup) {
+          const opt = el("button", "ltk-cs-cardopt");
+          opt.type = "button";
+          opt.disabled = this.readOnly;
+          opt.appendChild(el("span", "ltk-cs-cardopt-label", card.label));
+          opt.appendChild(el("span", "ltk-cs-cardopt-desc", card.description));
+          opt.addEventListener("click", () => {
+            this.draft.cardType = card.type;
+            this.commit();
+            this.render();
+          });
+          grid.appendChild(opt);
+        }
       }
     };
     search.addEventListener("input", () => {
@@ -213,24 +226,6 @@ export class CardSettingsEditor {
     );
     body.appendChild(common);
 
-    // Theme (empty = inherit the card's defaults)
-    body.appendChild(sectionLabel("Theme"));
-    const themeGrid = el("div", "ltk-cs-grid");
-    for (const f of THEME_FIELDS) {
-      const key = f.key as keyof ThemeDraft;
-      themeGrid.appendChild(
-        renderField(
-          f,
-          () => this.draft.theme[key],
-          (v) => {
-            this.draft.theme[key] = typeof v === "string" ? v : "";
-          },
-          host
-        )
-      );
-    }
-    body.appendChild(themeGrid);
-
     // Card-specific configuration
     body.appendChild(sectionLabel("Configuration"));
     if (spec.config.length === 0) {
@@ -267,6 +262,24 @@ export class CardSettingsEditor {
       body.appendChild(sectionLabel("New meeting instance"));
       this.renderBoardSection(body);
     }
+
+    // Theme last — cosmetics after content (empty = inherit defaults)
+    body.appendChild(sectionLabel("Theme"));
+    const themeGrid = el("div", "ltk-cs-grid");
+    for (const f of THEME_FIELDS) {
+      const key = f.key as keyof ThemeDraft;
+      themeGrid.appendChild(
+        renderField(
+          f,
+          () => this.draft.theme[key],
+          (v) => {
+            this.draft.theme[key] = typeof v === "string" ? v : "";
+          },
+          host
+        )
+      );
+    }
+    body.appendChild(themeGrid);
 
     if (spec.appBound.length > 0) {
       body.appendChild(

@@ -30,6 +30,18 @@ export const CARDSETTINGS_CSS = `
   grid-template-columns: repeat(auto-fill, minmax(215px, 1fr));
   gap: 8px;
 }
+.ltk-cs-group {
+  grid-column: 1 / -1;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ltk-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-top: 6px;
+  padding-top: 8px;
+  border-top: 1px solid var(--ltk-hairline);
+}
+.ltk-cs-group:first-child { margin-top: 0; padding-top: 0; border-top: none; }
 .ltk-cs-cardopt {
   display: flex;
   flex-direction: column;
