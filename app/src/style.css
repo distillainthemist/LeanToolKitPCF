@@ -270,6 +270,27 @@ body {
 }
 .app-save-bar-on { display: flex; }
 .app-save-bar-msg { font-size: 13px; font-weight: 600; color: #92400e; }
+
+/* view-as (role emulation) */
+.app-settings-tabsrow { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.app-settings-tabsrow .app-settings-tabs { flex: 1; }
+.app-viewas { display: flex; align-items: center; gap: 7px; margin-left: auto; }
+.app-viewas-select { padding: 5px 8px; font-size: 12.5px; }
+.app-viewas-banner {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 8px 12px 0;
+  padding: 7px 12px;
+  background: #ede9fe;
+  border: 1px solid #c4b5fd;
+  border-left: 4px solid #7c3aed;
+  border-radius: 8px;
+}
+.app-viewas-msg { font-size: 12.5px; font-weight: 600; color: #5b21b6; }
+.app-viewas-exit { margin-left: auto; }
 .app-settings-body { display: flex; flex-direction: column; gap: 10px; background: #fff; border-radius: 8px; padding: 16px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); }
 .app-settings-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .app-settings-label { width: 120px; font-size: 12.5px; color: #6d675c; font-weight: 600; }

@@ -16,6 +16,7 @@ import { saveMeetingBoard } from "../store/boards";
 import { meetingCategories, orgJson, rosterPatternLibrary } from "../store/config";
 import { listPeople, viewerPerson } from "../store/people";
 import { currentViewer } from "../runtime";
+import { effectivePerson } from "../viewAs";
 import { getBoard } from "../store/boards";
 
 function mintBoardId(title: string): string {
@@ -32,7 +33,8 @@ export function mountWizard(parent: HTMLElement, editBoardId = ""): () => void {
     let editRaw = "";
     if (hosted) {
       const viewer = currentViewer()!;
-      const me = await viewerPerson(viewer.objectId);
+      const stored = await viewerPerson(viewer.objectId);
+      const me = stored ? effectivePerson(stored) : null; // honour view-as
       const isAdmin = me?.role === "superadmin" || me?.role === "siteadmin";
       if (editBoardId !== "") {
         const board = await getBoard(editBoardId);

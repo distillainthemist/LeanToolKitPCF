@@ -8,6 +8,7 @@
 import { clear, el } from "../../../shared/ui/dom";
 import { setLeaveGuard } from "../navGuard";
 import { currentViewer, detectHost } from "../runtime";
+import { EmulatedRole, effectivePerson, setViewAsRole, viewAsRole } from "../viewAs";
 import {
   listBoards,
   renameBoardsDepartment,
@@ -89,18 +90,43 @@ export function mountSettings(parent: HTMLElement): () => void {
       return;
     }
     const viewer = currentViewer()!;
-    const me = await viewerPerson(viewer.objectId);
-    if (!me) {
+    const stored = await viewerPerson(viewer.objectId);
+    if (!stored) {
       parent.appendChild(el("p", "app-missing", "Open My day once to register, then return."));
       return;
     }
+    // gate the whole screen on the effective role (view-as emulation)
+    const me = effectivePerson(stored);
 
     const wrap = el("div", "app-settings");
     parent.appendChild(wrap);
+    const tabsRow = el("div", "app-settings-tabsrow");
     const tabsBar = el("div", "app-settings-tabs");
+    tabsRow.appendChild(tabsBar);
+    // real super admins pick a role to preview; reload re-gates everything
+    if (stored.role === "superadmin") {
+      const sel = el("select", "app-input app-viewas-select") as HTMLSelectElement;
+      for (const [value, label] of [
+        ["", "Super admin (you)"],
+        ["siteadmin", "Site admin"],
+        ["user", "User"],
+      ]) {
+        const opt = el("option", "", label) as HTMLOptionElement;
+        opt.value = value;
+        sel.appendChild(opt);
+      }
+      sel.value = viewAsRole() ?? "";
+      sel.addEventListener("change", () => {
+        setViewAsRole((sel.value || null) as EmulatedRole | null);
+        window.location.reload();
+      });
+      const viewAsWrap = el("label", "app-viewas");
+      viewAsWrap.append(el("span", "app-user-field-label", "View as"), sel);
+      tabsRow.appendChild(viewAsWrap);
+    }
     const saveBar = el("div", "app-save-bar");
     const body = el("div", "app-settings-body");
-    wrap.append(tabsBar, saveBar, body);
+    wrap.append(tabsRow, saveBar, body);
 
     // ---- unsaved-changes tracking ----
     let dirty = false;
@@ -365,8 +391,11 @@ async function renderProfile(
   area.addEventListener("change", () => ctx.markDirty());
 
   const doSave = async () => {
+    // spread the STORED row, not `me` — under view-as, `me` carries the
+    // emulated role and must never be written back
+    const fresh = (await viewerPerson(me.whoId)) ?? me;
     await upsertPerson({
-      ...me,
+      ...fresh,
       site: site.value,
       department: dept.value,
       area: area.value,

@@ -56,6 +56,29 @@ void (async () => {
     if (/^#[0-9a-fA-F]{3,8}$/.test(accent)) {
       document.documentElement.style.setProperty("--app-accent", accent);
     }
+    // view-as banner: a super admin previewing a lesser role always sees
+    // it flagged, with a one-click way back
+    if (me && me.role === "superadmin") {
+      const { viewAsRole, setViewAsRole } = await import("./viewAs");
+      const emulated = viewAsRole();
+      if (emulated) {
+        const banner = el("div", "app-viewas-banner");
+        banner.append(
+          el(
+            "span",
+            "app-viewas-msg",
+            `Viewing as ${emulated === "siteadmin" ? "site admin" : "user"} — admin controls are hidden the way they are for that role.`
+          )
+        );
+        const exit = el("button", "app-btn app-viewas-exit", "Exit view as");
+        exit.addEventListener("click", () => {
+          setViewAsRole(null);
+          window.location.reload();
+        });
+        banner.appendChild(exit);
+        app.insertBefore(banner, outlet);
+      }
+    }
   } catch {
     /* branding is cosmetic — never block the shell */
   }
