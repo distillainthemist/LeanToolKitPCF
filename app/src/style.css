@@ -505,15 +505,15 @@ input[type="color"].app-color:disabled { opacity: 0.4; cursor: default; }
 /* narrow screens: stack the org browser above the editor */
 @media (max-width: 720px) {
   .app-org-split { grid-template-columns: 1fr; gap: 12px; }
-  .app-org-rail {
+  .app-org-rail { gap: 8px; padding: 8px; }
+  .app-org-group {
     flex-direction: row;
     flex-wrap: wrap;
     align-items: center;
     gap: 6px;
-    padding: 8px;
   }
-  .app-org-company { flex-basis: 100%; padding: 6px 4px 2px; }
-  .app-org-company:first-child { padding-top: 0; }
+  .app-org-company { flex-basis: 100%; padding: 4px 4px 0; }
+  .app-org-siterow > .app-org-edit { opacity: 1; }
   .app-org-siteitem {
     flex-direction: row;
     align-items: baseline;
@@ -525,7 +525,7 @@ input[type="color"].app-color:disabled { opacity: 0.4; cursor: default; }
   .app-org-siteitem-on { border-color: var(--app-accent); box-shadow: none; }
   .app-org-empty { padding: 0 4px; }
   .app-org-add { margin: 0; }
-  .app-org-addco { margin-top: 0; flex-basis: 100%; text-align: center; }
+  .app-org-addco { margin-top: 0; width: 100%; text-align: center; }
   .app-settings-tabs { flex-wrap: wrap; }
   .app-settings-body { padding: 12px; }
   .app-save-bar { flex-wrap: wrap; }
@@ -577,7 +577,14 @@ input[type="color"].app-color:disabled { opacity: 0.4; cursor: default; }
 }
 .app-org-edit:hover { color: var(--app-accent); }
 .app-org-company { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
-.app-org-companymeta { display: flex; align-items: center; gap: 4px; margin-top: -6px; }
+
+/* company group: header + its sites; also the drop target for moves */
+.app-org-group { display: flex; flex-direction: column; gap: 3px; border-radius: 8px; }
+.app-org-dropco { outline: 2px dashed var(--app-accent); outline-offset: 1px; background: #fff; }
+.app-org-siterow { display: flex; align-items: center; gap: 2px; }
+.app-org-siterow .app-org-siteitem { flex: 1; min-width: 0; }
+.app-org-siterow > .app-org-edit { opacity: 0; }
+.app-org-siterow:hover > .app-org-edit, .app-org-siterow:focus-within > .app-org-edit { opacity: 1; }
 
 /* roster pattern card internals */
 .app-pattern-grid {

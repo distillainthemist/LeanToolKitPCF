@@ -306,6 +306,63 @@ function promptUnsaved(): Promise<"save" | "discard" | "cancel"> {
   });
 }
 
+/**
+ * App-styled single-input dialog (replaces window.prompt, whose popups
+ * carry the browser's "An embedded page says…" chrome inside the host).
+ * Resolves the entered string, or null on cancel/Escape.
+ */
+function promptText(opts: {
+  title: string;
+  note?: string;
+  initial?: string;
+  placeholder?: string;
+  confirmLabel?: string;
+}): Promise<string | null> {
+  return new Promise((resolve) => {
+    const overlay = el("div", "app-modal-overlay");
+    const box = el("div", "app-modal");
+    box.appendChild(el("div", "app-modal-title", opts.title));
+    if (opts.note) box.appendChild(el("div", "app-modal-note", opts.note));
+    const input = el("input", "app-input") as HTMLInputElement;
+    input.value = opts.initial ?? "";
+    if (opts.placeholder) input.placeholder = opts.placeholder;
+    box.appendChild(input);
+    const footer = el("div", "app-modal-footer");
+    const cancel = el("button", "app-link", "Cancel") as HTMLButtonElement;
+    const ok = el(
+      "button",
+      "app-btn app-btn-primary",
+      opts.confirmLabel ?? "Save"
+    ) as HTMLButtonElement;
+    footer.append(cancel, ok);
+    box.appendChild(footer);
+    const done = (v: string | null) => {
+      overlay.remove();
+      document.removeEventListener("keydown", onKey, true);
+      resolve(v);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        done(null);
+      } else if (e.key === "Enter" && document.activeElement === input) {
+        e.stopPropagation();
+        done(input.value);
+      }
+    };
+    cancel.addEventListener("click", () => done(null));
+    ok.addEventListener("click", () => done(input.value));
+    overlay.addEventListener("click", (e) => {
+      if (e.target === overlay) done(null);
+    });
+    overlay.appendChild(box);
+    document.body.appendChild(overlay);
+    document.addEventListener("keydown", onKey, true);
+    input.focus();
+    input.select();
+  });
+}
+
 function row(label: string, control: HTMLElement): HTMLElement {
   const r = el("div", "app-settings-row");
   r.append(el("span", "app-settings-label", label), control);
@@ -779,6 +836,28 @@ async function renderOrg(
     })();
   };
 
+  // rail drag state: a site being moved between company groups
+  let draggingSite: string | null = null;
+
+  const renameSite = (site: string) => {
+    void (async () => {
+      const name = (
+        (await promptText({ title: "Rename site", initial: site, confirmLabel: "Rename" })) ??
+        ""
+      ).trim();
+      if (name === "" || name === site || name === APP_ROW || sites.includes(name)) return;
+      if (!(await guardLeave())) return;
+      // cascade: settings row, board grouping, people placements
+      await renameSiteRow(site, name);
+      await renameBoardsSite(site, name);
+      for (const p of await listPeople(true)) {
+        if (p.site === site) await upsertPerson({ ...p, site: name });
+      }
+      if (me.site === site) me.site = name;
+      await renderOrg(body, me, ctx);
+    })();
+  };
+
   const renderRail = () => {
     clear(rail);
     const groups: { company: string; sites: string[] }[] = companyList.map(
@@ -794,6 +873,7 @@ async function renderOrg(
       groups.push({ company: "", sites: unassigned });
     }
     for (const g of groups) {
+      const groupBox = el("div", "app-org-group");
       const header = el("div", "app-org-company");
       header.appendChild(
         el(
@@ -805,9 +885,15 @@ async function renderOrg(
       if (isSuper && g.company !== "") {
         header.appendChild(
           editBtn("Rename company", () => {
-            const name = (window.prompt("Rename company:", g.company) ?? "").trim();
-            if (name === "" || name === g.company || companyList.includes(name)) return;
             void (async () => {
+              const name = (
+                (await promptText({
+                  title: "Rename company",
+                  initial: g.company,
+                  confirmLabel: "Rename",
+                })) ?? ""
+              ).trim();
+              if (name === "" || name === g.company || companyList.includes(name)) return;
               if (!(await guardLeave())) return;
               await renameCompany(g.company, name);
               await renderOrg(body, me, ctx);
@@ -815,8 +901,38 @@ async function renderOrg(
           })
         );
       }
-      rail.appendChild(header);
+      groupBox.appendChild(header);
+
+      // whole group is a drop target: drop a site here to move it
+      if (isSuper) {
+        groupBox.addEventListener("dragover", (e) => {
+          if (draggingSite === null) return;
+          if ((siteCompany[draggingSite] ?? "") === g.company) return;
+          e.preventDefault();
+          groupBox.classList.add("app-org-dropco");
+        });
+        groupBox.addEventListener("dragleave", (e) => {
+          if (!groupBox.contains(e.relatedTarget as Node)) {
+            groupBox.classList.remove("app-org-dropco");
+          }
+        });
+        groupBox.addEventListener("drop", (e) => {
+          groupBox.classList.remove("app-org-dropco");
+          if (draggingSite === null) return;
+          e.preventDefault();
+          const site = draggingSite;
+          draggingSite = null;
+          if ((siteCompany[site] ?? "") === g.company) return;
+          void (async () => {
+            if (!(await guardLeave())) return;
+            await saveSiteCompany(site, g.company);
+            await renderOrg(body, me, ctx);
+          })();
+        });
+      }
+
       for (const site of g.sites) {
+        const siteRow = el("div", "app-org-siterow");
         const item = el("button", "app-org-siteitem") as HTMLButtonElement;
         if (site === currentSite) item.classList.add("app-org-siteitem-on");
         const deptCount = tree.find((t) => t.site === site)?.departments.length ?? 0;
@@ -830,32 +946,62 @@ async function renderOrg(
           )
         );
         item.addEventListener("click", () => selectSite(site));
-        rail.appendChild(item);
+        siteRow.appendChild(item);
+        if (isSuper) {
+          siteRow.appendChild(editBtn("Rename site", () => renameSite(site)));
+          siteRow.draggable = true;
+          siteRow.title = "Drag to another company to move";
+          siteRow.addEventListener("dragstart", (e) => {
+            draggingSite = site;
+            siteRow.classList.add("app-dragging");
+            e.dataTransfer?.setData("text/plain", site);
+            if (e.dataTransfer) e.dataTransfer.effectAllowed = "move";
+          });
+          siteRow.addEventListener("dragend", () => {
+            draggingSite = null;
+            siteRow.classList.remove("app-dragging");
+          });
+        }
+        groupBox.appendChild(siteRow);
       }
       if (g.sites.length === 0) {
-        rail.appendChild(el("div", "app-org-empty", "No sites yet"));
+        groupBox.appendChild(el("div", "app-org-empty", "No sites yet"));
       }
       if (isSuper && g.company !== "") {
         const addSite = el("button", "app-org-add", "\uFF0B Add site") as HTMLButtonElement;
         addSite.addEventListener("click", () => {
-          const name = (window.prompt(`New site under ${g.company}:`) ?? "").trim();
-          if (name === "" || name === APP_ROW || sites.includes(name)) return;
           void (async () => {
+            const name = (
+              (await promptText({
+                title: "Add site",
+                note: `Under ${g.company}.`,
+                placeholder: "Site name",
+                confirmLabel: "Add",
+              })) ?? ""
+            ).trim();
+            if (name === "" || name === APP_ROW || sites.includes(name)) return;
             if (!(await guardLeave())) return;
             await saveSiteDepartments(name, "[]");
             await saveSiteCompany(name, g.company);
             await renderOrg(body, me, ctx);
           })();
         });
-        rail.appendChild(addSite);
+        groupBox.appendChild(addSite);
       }
+      rail.appendChild(groupBox);
     }
     if (isSuper) {
       const addCo = el("button", "app-org-add app-org-addco", "\uFF0B Add company") as HTMLButtonElement;
       addCo.addEventListener("click", () => {
-        const name = (window.prompt("New company name:") ?? "").trim();
-        if (name === "" || companyList.includes(name)) return;
         void (async () => {
+          const name = (
+            (await promptText({
+              title: "Add company",
+              placeholder: "Company name",
+              confirmLabel: "Add",
+            })) ?? ""
+          ).trim();
+          if (name === "" || companyList.includes(name)) return;
           if (!(await guardLeave())) return;
           await saveCompanies([...companyList, name]);
           await renderOrg(body, me, ctx);
@@ -883,53 +1029,20 @@ async function renderOrg(
     }
     const canEdit = editable.includes(currentSite);
 
-    // heading: site name, rename (super), company placement
+    // heading: site name + company (rename and move live in the rail)
     const head = el("div", "app-org-panehead");
     head.appendChild(el("span", "app-profile-name", currentSite));
-    if (isSuper) {
-      head.appendChild(
-        editBtn("Rename site", () => {
-          const name = (window.prompt("Rename site:", currentSite) ?? "").trim();
-          if (name === "" || name === currentSite || name === APP_ROW || sites.includes(name))
-            return;
-          void (async () => {
-            if (!(await guardLeave())) return;
-            // cascade: settings row, board grouping, people placements
-            await renameSiteRow(currentSite, name);
-            await renameBoardsSite(currentSite, name);
-            for (const p of await listPeople(true)) {
-              if (p.site === currentSite) await upsertPerson({ ...p, site: name });
-            }
-            if (me.site === currentSite) me.site = name;
-            await renderOrg(body, me, ctx);
-          })();
-        })
-      );
-    }
     if (!canEdit) {
       head.appendChild(el("span", "app-status-badge app-status-revoked", "View only"));
     }
     pane.appendChild(head);
-    const companyMeta = el("div", "app-org-companymeta");
-    companyMeta.appendChild(
-      el("span", "app-field-hint", siteCompany[currentSite] || "No company")
+    pane.appendChild(
+      el(
+        "div",
+        "app-field-hint",
+        siteCompany[currentSite] || "No company"
+      )
     );
-    if (isSuper && companyList.length > 0) {
-      companyMeta.appendChild(
-        editBtn("Move to another company", () => {
-          const name = (
-            window.prompt(`Move ${currentSite} to company (${companyList.join(", ")}):`, siteCompany[currentSite] ?? "") ?? ""
-          ).trim();
-          if (name === "" || !companyList.includes(name)) return;
-          void (async () => {
-            if (!(await guardLeave())) return;
-            await saveSiteCompany(currentSite, name);
-            await renderOrg(body, me, ctx);
-          })();
-        })
-      );
-    }
-    pane.appendChild(companyMeta);
     const node = tree.find((s) => s.site === currentSite) ?? {
       site: currentSite,
       departments: [],
@@ -1007,17 +1120,25 @@ async function renderOrg(
         if (canEdit) {
           head.appendChild(
             editBtn("Rename department", () => {
-              const name = (window.prompt("Rename department:", d.department) ?? "").trim();
-              if (name === "" || name === d.department) return;
-              if (node.departments.some((x) => x.department === name)) return;
-              pendingRenames.push({
-                kind: "dept",
-                department: name,
-                oldName: d.department,
-                newName: name,
-              });
-              d.department = name;
-              redraw();
+              void (async () => {
+                const name = (
+                  (await promptText({
+                    title: "Rename department",
+                    initial: d.department,
+                    confirmLabel: "Rename",
+                  })) ?? ""
+                ).trim();
+                if (name === "" || name === d.department) return;
+                if (node.departments.some((x) => x.department === name)) return;
+                pendingRenames.push({
+                  kind: "dept",
+                  department: name,
+                  oldName: d.department,
+                  newName: name,
+                });
+                d.department = name;
+                redraw();
+              })();
             })
           );
           head.appendChild(
@@ -1043,16 +1164,24 @@ async function renderOrg(
           if (canEdit) {
             ar.appendChild(
               editBtn("Rename area", () => {
-                const name = (window.prompt("Rename area:", a) ?? "").trim();
-                if (name === "" || name === a || d.areas.includes(name)) return;
-                pendingRenames.push({
-                  kind: "area",
-                  department: d.department,
-                  oldName: a,
-                  newName: name,
-                });
-                d.areas[ai] = name;
-                redraw();
+                void (async () => {
+                  const name = (
+                    (await promptText({
+                      title: "Rename area",
+                      initial: a,
+                      confirmLabel: "Rename",
+                    })) ?? ""
+                  ).trim();
+                  if (name === "" || name === a || d.areas.includes(name)) return;
+                  pendingRenames.push({
+                    kind: "area",
+                    department: d.department,
+                    oldName: a,
+                    newName: name,
+                  });
+                  d.areas[ai] = name;
+                  redraw();
+                })();
               })
             );
             ar.appendChild(
@@ -1584,11 +1713,18 @@ async function renderBoardsAdmin(body: HTMLElement, me: RosterPerson): Promise<v
     setup.href = `#/setup/${b.boardId}`;
     const rep = el("button", "app-btn", "Replicate") as HTMLButtonElement;
     rep.addEventListener("click", () => {
-      const name = window.prompt(`Replicate "${b.name}" as:`, `${b.name} (copy)`);
-      if (!name || name.trim() === "") return;
-      void replicateBoard(b.boardId, name.trim()).then((newId) => {
+      void (async () => {
+        const name = (
+          (await promptText({
+            title: `Replicate "${b.name}"`,
+            initial: `${b.name} (copy)`,
+            confirmLabel: "Replicate",
+          })) ?? ""
+        ).trim();
+        if (name === "") return;
+        const newId = await replicateBoard(b.boardId, name);
         window.location.hash = `#/wizard/${newId}`;
-      });
+      })();
     });
     r.append(open, edit, setup, rep);
     list.appendChild(r);
