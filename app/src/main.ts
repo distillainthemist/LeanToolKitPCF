@@ -4,6 +4,7 @@
 // dev server.
 
 import { el, clear } from "../../shared/ui/dom";
+import { getLeaveGuard, setLeaveGuard } from "./navGuard";
 import "./style.css";
 
 const app = document.querySelector<HTMLDivElement>("#app")!;
@@ -68,6 +69,7 @@ let cleanup: () => void = () => undefined;
 function route(): void {
   cleanup();
   cleanup = () => undefined;
+  setLeaveGuard(null); // the outgoing screen's guard never outlives it
   clear(outlet);
   const hash = window.location.hash || "#/";
   const parts = hash.slice(2).split("/").filter(Boolean); // drop "#/"
@@ -114,5 +116,32 @@ function route(): void {
   })();
 }
 
-window.addEventListener("hashchange", route);
+// Hash routing with a leave-guard: when the current screen has registered
+// a guard and the hash changes to something new, we put the hash back,
+// ask the guard, and only navigate if it allows. A same-hash dispatch
+// (used to force a re-render) still routes. `navigating` suppresses the
+// hashchange from our own programmatic reverts.
+let currentHash = window.location.hash || "#/";
+let navigating = false;
+
+async function onHashChange(): Promise<void> {
+  if (navigating) return;
+  const target = window.location.hash || "#/";
+  const guard = getLeaveGuard();
+  if (guard && target !== currentHash) {
+    navigating = true;
+    window.location.hash = currentHash; // revert while we ask
+    navigating = false;
+    const ok = await guard();
+    if (!ok) return; // stay
+    setLeaveGuard(null);
+    navigating = true;
+    window.location.hash = target; // proceed
+    navigating = false;
+  }
+  currentHash = window.location.hash || "#/";
+  route();
+}
+
+window.addEventListener("hashchange", () => void onHashChange());
 route();

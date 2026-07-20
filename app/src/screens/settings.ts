@@ -6,6 +6,7 @@
 // only thing that makes it safe.
 
 import { clear, el } from "../../../shared/ui/dom";
+import { setLeaveGuard } from "../navGuard";
 import { currentViewer, detectHost } from "../runtime";
 import { listBoards, replicateBoard } from "../store/boards";
 import {
@@ -187,6 +188,16 @@ export function mountSettings(parent: HTMLElement): () => void {
     renderTabs();
     await tabByKey(current).render();
 
+    // leaving the whole Settings screen (header links, any route change)
+    // goes through the same save/discard prompt as a tab switch
+    setLeaveGuard(async () => {
+      if (!dirty) return true;
+      const choice = await promptUnsaved();
+      if (choice === "cancel") return false;
+      if (choice === "save" && saveFn) await saveFn();
+      return true;
+    });
+
     // safety net for a full reload / tab close while dirty (best-effort;
     // some hosts ignore beforeunload inside an iframe)
     const onBeforeUnload = (e: BeforeUnloadEvent) => {
@@ -196,7 +207,10 @@ export function mountSettings(parent: HTMLElement): () => void {
       }
     };
     window.addEventListener("beforeunload", onBeforeUnload);
-    cleanup = () => window.removeEventListener("beforeunload", onBeforeUnload);
+    cleanup = () => {
+      window.removeEventListener("beforeunload", onBeforeUnload);
+      setLeaveGuard(null);
+    };
   })();
   return () => cleanup();
 }
