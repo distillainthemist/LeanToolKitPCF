@@ -209,6 +209,15 @@ input[type="color"].app-cat-swatch {
 }
 .app-cat-dot { flex: 0 0 auto; width: 10px; height: 10px; border-radius: 50%; }
 
+/* board designer embedded in the wizard's Meeting board step */
+.app-wizard-designer {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  gap: 8px;
+}
+
 /* primary button (accent-filled) */
 .app-btn-primary {
   background: var(--app-accent);

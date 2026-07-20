@@ -138,7 +138,7 @@ function route(): void {
         mount = () => mountPeople(outlet);
       } else if (parts[0] === "settings") {
         const { mountSettings } = await import("./screens/settings");
-        mount = () => mountSettings(outlet);
+        mount = () => mountSettings(outlet, parts[1] ?? "");
       } else {
         const { mountHub } = await import("./screens/hub");
         mount = () => mountHub(outlet);

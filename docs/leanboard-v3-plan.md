@@ -104,3 +104,14 @@ propagation app-wide; Theme section moved last.
 
 Order: R1 → R2 → R3 (independent; R3 touches the same CardSettings
 surface R2's step-2 flow leans on, so it goes last).
+
+### Slice R4 — Wizard step 7 + unsaved bar (M) — DONE 2026-07-20
+Follow-up to R2/R3 after use: the board designer is now EMBEDDED as the
+wizard's final "Meeting board" step via a control-side slot
+(setBoardStep hands the app an empty host — the wizard stays free of
+board dependencies). Create mode saves the ritual on entering step 7
+(designer needs a real board; Agenda+Actions already seeded), Done
+returns to Settings → Rituals (#/settings/boards deep-link tab).
+Edit mode gets the Settings-style amber unsaved bar (Save now /
+Discard) plus the leave-guard prompt. The standalone composer remains
+for Settings → Meeting board and per-instance adjust.

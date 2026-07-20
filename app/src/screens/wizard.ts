@@ -1,6 +1,9 @@
-// New meeting screen — MeetingWizard mounted against the store: org tree
-// + roster in, and Create meeting saves the board (build-kit §6b) and
-// opens it.
+// Ritual wizard screen — MeetingWizard mounted against the store, with
+// the board designer embedded as its final "Meeting board" step. Create
+// mode saves the ritual on entering that step (so the designer has a
+// real board to edit — Agenda + Actions are already seeded); Done
+// returns to Settings → Rituals. Edit mode tracks unsaved changes with
+// the same amber bar + save/discard guard as Settings.
 
 import { MeetingWizardView } from "../../../controls/MeetingWizard/editor";
 import {
@@ -29,6 +32,7 @@ function mintBoardId(title: string): string {
 export function mountWizard(parent: HTMLElement, editBoardId = ""): () => void {
   const host = editorHost(parent);
   let view: MeetingWizardView | null = null;
+  let designerCleanup: (() => void) | null = null;
   void (async () => {
     const hosted = await detectHost();
     // creation is admin-gated; editing is open to admins AND the owner
@@ -71,42 +75,67 @@ export function mountWizard(parent: HTMLElement, editBoardId = ""): () => void {
       : "[]";
 
     const editing = editBoardId !== "";
-    // hold the serialized draft from the start so an edit-mode save can
-    // never write an empty blob
+    // the board this wizard is bound to; minted when create mode reaches
+    // the Meeting board step (that save also seeds Agenda + Actions)
+    let boardId = editBoardId;
     let outputJson = editing ? serializeWizardDraft(parseWizardDraft(editRaw)) : "";
+    let lastSavedRaw = editing ? editRaw : "";
     let dirty = false;
 
-    const doSave = async (): Promise<string> => {
-      const blob = JSON.parse(outputJson) as { title?: string };
-      const boardId = editing ? editBoardId : mintBoardId(blob.title ?? "meeting");
-      await saveMeetingBoard(boardId, outputJson);
-      dirty = false;
-      view?.setSubmitEnabled(!editing);
-      return boardId;
+    // ---- unsaved-changes bar (same look as Settings) ----
+    const saveBar = el("div", "app-save-bar");
+    const saveMsg = el("span", "app-save-bar-msg", "You have unsaved changes.");
+    const discardBtn = el("button", "app-btn", "Discard") as HTMLButtonElement;
+    const saveNowBtn = el("button", "app-btn app-btn-primary", "Save now") as HTMLButtonElement;
+    saveBar.append(saveMsg, el("span", "app-bar-gap"), discardBtn, saveNowBtn);
+    parent.insertBefore(saveBar, host);
+    const paintBar = () => {
+      // before the board exists nothing is saved yet — a bar would lie
+      saveBar.classList.toggle("app-save-bar-on", dirty && boardId !== "");
     };
+    const markDirty = () => {
+      if (!dirty) {
+        dirty = true;
+        paintBar();
+      }
+    };
+    const markClean = () => {
+      dirty = false;
+      paintBar();
+    };
+
+    const saveBlob = async (): Promise<void> => {
+      if (boardId === "") boardId = mintBoardId((JSON.parse(outputJson) as { title?: string }).title ?? "meeting");
+      await saveMeetingBoard(boardId, outputJson);
+      lastSavedRaw = outputJson;
+      markClean();
+    };
+    discardBtn.addEventListener("click", () => {
+      outputJson = lastSavedRaw === "" ? "" : serializeWizardDraft(parseWizardDraft(lastSavedRaw));
+      view?.setDraft(parseWizardDraft(lastSavedRaw));
+      markClean();
+    });
+    saveNowBtn.addEventListener("click", () => void saveBlob());
 
     view = new MeetingWizardView(host, {
       onChange: (draft) => {
         outputJson = serializeWizardDraft(draft);
-        if (!dirty) {
-          dirty = true;
-          if (editing) view?.setSubmitEnabled(true);
-        }
+        markDirty();
       },
       onSubmit: () => {
+        // Done: persist anything outstanding, back to Settings → Rituals
         if (!hosted) {
           console.log("demo: create meeting", outputJson);
           return;
         }
         void (async () => {
-          const boardId = await doSave();
-          // a NEW ritual flows into step 2 — designing the meeting board
-          window.location.hash = editing ? `#/board/${boardId}` : `#/setup/${boardId}/new`;
+          if (dirty || boardId === "") await saveBlob();
+          window.location.hash = "#/settings/boards";
         })();
       },
     });
     view.setTheme(appTheme());
-    view.setChrome("New meeting", "");
+    view.setChrome(editing ? "Edit meeting" : "New meeting", "");
     view.setOrgTree(parseOrgTree(org));
     if (hosted) {
       view.setRosterPatterns(await rosterPatternLibrary());
@@ -114,29 +143,59 @@ export function mountWizard(parent: HTMLElement, editBoardId = ""): () => void {
     }
     view.setPeople(parsePeople(peopleRaw));
     view.setDraft(parseWizardDraft(editRaw));
-    if (editing) {
-      view.setChrome("Edit meeting", "");
-      view.setSubmitLabel("Save changes");
-      view.setSubmitEnabled(false); // until something changes
-      // leaving mid-edit with changes prompts save/discard/cancel
-      if (hosted) {
-        setLeaveGuard(async () => {
-          if (!dirty) return true;
-          const choice = await promptUnsaved();
-          if (choice === "cancel") return false;
-          if (choice === "save") await doSave();
-          return true;
-        });
+    view.setSubmitLabel("Done");
+
+    // ---- the embedded Meeting board step ----
+    // The designer DOM is built once and re-attached on every wizard
+    // re-render, so board edits survive step navigation.
+    let designerDiv: HTMLDivElement | null = null;
+    view.setBoardStep((stepHost) => {
+      if (designerDiv) {
+        stepHost.appendChild(designerDiv);
+        return;
       }
+      designerDiv = document.createElement("div");
+      designerDiv.className = "app-wizard-designer";
+      stepHost.appendChild(designerDiv);
+      void (async () => {
+        if (!hosted) {
+          designerDiv!.appendChild(
+            el("div", "app-board-note", "The board designer needs the Power Apps host.")
+          );
+          return;
+        }
+        // create mode: reaching this step saves the ritual (seeding the
+        // default Agenda + Actions board) so there is a board to design
+        if (boardId === "") {
+          const note = el("div", "app-board-note", "Saving the meeting…");
+          designerDiv!.appendChild(note);
+          await saveBlob();
+          note.remove();
+        }
+        const { mountDesigner } = await import("./composer");
+        designerCleanup = await mountDesigner(designerDiv!, boardId);
+      })();
+    });
+
+    // leaving with unsaved meeting settings prompts save/discard/cancel
+    if (hosted) {
+      setLeaveGuard(async () => {
+        if (!dirty || boardId === "") return true; // nothing saved yet = classic wizard bail
+        const choice = await promptUnsaved();
+        if (choice === "cancel") return false;
+        if (choice === "save") await saveBlob();
+        return true;
+      });
     }
     if (!hosted) {
       parent.prepend(
-        el("div", "app-board-note", "Demo mode — Create meeting logs instead of saving.")
+        el("div", "app-board-note", "Demo mode — Done logs instead of saving.")
       );
     }
   })();
   return () => {
     setLeaveGuard(null);
+    designerCleanup?.();
     view?.destroy();
   };
 }

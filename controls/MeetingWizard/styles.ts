@@ -60,6 +60,15 @@ export const WIZARD_CSS = `
   flex-direction: column;
   gap: 14px;
 }
+/* the app-filled Meeting board step wants the full width + real height */
+.ltk-mw-form:has(> .ltk-mw-boardhost) { max-width: none; }
+.ltk-mw-boardhost {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  height: max(420px, 62vh);
+  min-height: 0;
+}
 .ltk-mw-row { display: flex; flex-direction: column; gap: 4px; }
 .ltk-mw-label {
   font-size: 11px;

@@ -111,6 +111,36 @@ export function mountComposer(
 }
 
 /**
+ * Chrome-less board designer for embedding (the wizard's Meeting board
+ * step): no title, no Done — the host owns navigation. Edits autosave
+ * to the board's manifest exactly like the standalone editor.
+ */
+export async function mountDesigner(
+  host: HTMLElement,
+  boardId: string
+): Promise<() => void> {
+  const cleanups: Array<() => void> = [];
+  const board = await getBoard(boardId);
+  if (!board) {
+    host.appendChild(el("p", "app-missing", `Unknown board: ${boardId}`));
+    return () => undefined;
+  }
+  await renderComposer(
+    host,
+    board,
+    {
+      title: "",
+      manifest: parseManifest(board.manifestRaw),
+      doneHref: "",
+      persist: (m) => saveManifest(board.id, m),
+      removeLabel: "Remove from board",
+    },
+    cleanups
+  );
+  return () => cleanups.forEach((fn) => fn());
+}
+
+/**
  * Adjust one meeting's board without touching the template: edits land
  * in the instance's override manifest (`ben_manifestjson`), which the
  * board screen prefers over the board's own when present.
@@ -188,9 +218,8 @@ async function renderComposer(
           })),
   }));
 
-  // ---- chrome ----
+  // ---- chrome (embedded mode: no title, no Done — the wizard hosts) ----
   const bar = el("div", "app-board-toolbar");
-  const title = el("span", "app-board-title", target.title);
   const status = el("span", "app-board-status", "");
   const colsSelect = el("select", "app-input") as HTMLSelectElement;
   for (let n = 1; n <= 6; n++) {
@@ -198,15 +227,18 @@ async function renderComposer(
     opt.value = String(n);
     colsSelect.appendChild(opt);
   }
-  const doneBtn = el("a", "app-btn", "Done") as HTMLAnchorElement;
-  doneBtn.href = target.doneHref;
-  bar.append(title, status, el("span", "app-bar-gap"), colsSelect);
+  if (target.title !== "") bar.appendChild(el("span", "app-board-title", target.title));
+  bar.append(status, el("span", "app-bar-gap"), colsSelect);
   if (target.onReset) {
     const resetBtn = el("button", "app-btn", "Reset to usual layout");
     resetBtn.addEventListener("click", () => void target.onReset!());
     bar.appendChild(resetBtn);
   }
-  bar.appendChild(doneBtn);
+  if (target.doneHref !== "") {
+    const doneBtn = el("a", "app-btn", "Done") as HTMLAnchorElement;
+    doneBtn.href = target.doneHref;
+    bar.appendChild(doneBtn);
+  }
   parent.appendChild(bar);
 
   const split = el("div", "app-board-split app-composer-split");

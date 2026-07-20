@@ -82,7 +82,7 @@ interface DirtyCtx {
   saveCurrent: () => Promise<void>;
 }
 
-export function mountSettings(parent: HTMLElement): () => void {
+export function mountSettings(parent: HTMLElement, initialTab = ""): () => void {
   let cleanup: () => void = () => undefined;
   void (async () => {
     const hosted = await detectHost();
@@ -213,7 +213,8 @@ export function mountSettings(parent: HTMLElement): () => void {
     }
     const tabByKey = (key: string) => tabs.find((t) => t.key === key) ?? tabs[0];
 
-    let current = tabs[0].key;
+    // deep-link support (#/settings/boards lands on the Rituals tab)
+    let current = tabs.some((t) => t.key === initialTab) ? initialTab : tabs[0].key;
     const switchTo = async (key: string) => {
       if (key === current) return;
       if (dirty) {

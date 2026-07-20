@@ -54,6 +54,7 @@ export class MeetingWizardView {
   private submitLabel = "Create meeting";
   private submitHostDisabled = false;
   private submitBtn: HTMLButtonElement | null = null;
+  private boardStepMount: ((host: HTMLElement) => void) | null = null;
   /** Chips field to refocus after an add re-renders (typing flow). */
   private pendingFocus = "";
   /** The participants step's roster search, kept across renders. */
@@ -82,6 +83,16 @@ export class MeetingWizardView {
     this.draft = draft;
     this.stepKey = "basics";
     this.peopleQuery = "";
+    this.render();
+  }
+
+  /**
+   * Add a final "Meeting board" step whose body the APP fills (it gets
+   * an empty host per render). null removes the step. The submit button
+   * always sits on the last step, so it moves onto this one.
+   */
+  setBoardStep(mount: ((host: HTMLElement) => void) | null): void {
+    this.boardStepMount = mount;
     this.render();
   }
 
@@ -172,7 +183,25 @@ export class MeetingWizardView {
       { key: "records", label: "Meeting records", render: (b) => this.renderRecords(b) },
       { key: "review", label: "Review", render: (b) => this.renderReview(b) }
     );
+    if (this.boardStepMount !== null) {
+      list.push({
+        key: "board",
+        label: "Meeting board",
+        render: (b) => this.renderBoardStep(b),
+      });
+    }
     return list;
+  }
+
+  /**
+   * Final "Meeting board" step: the wizard renders only the step chrome
+   * and hands an empty host to the app, which mounts its own board
+   * designer there. Keeps this control free of any board dependencies.
+   */
+  private renderBoardStep(body: HTMLElement): void {
+    const host = el("div", "ltk-mw-boardhost");
+    body.appendChild(host);
+    this.boardStepMount?.(host);
   }
 
   private commit(): void {
