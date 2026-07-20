@@ -20,6 +20,7 @@ import { detectHost } from "../runtime";
 import { getBoard, listBoards, saveManifest } from "../store/boards";
 import { catalogSvgByType } from "../store/catalog";
 import { getInstance, saveInstanceManifest } from "../store/instances";
+import { isActionSurface } from "../store/policies";
 import {
   BoardManifest,
   BoardSummary,
@@ -368,6 +369,15 @@ async function renderComposer(
     head.appendChild(
       el("span", "app-composer-panetitle", slot ? "Configure card" : "Add card")
     );
+    if (slot && !isActionSurface(slot)) {
+      // the card's standard document (e.g. the standing agenda): what a
+      // new meeting starts from when there's nothing to carry
+      const content = el("a", "app-btn", "Edit standard content") as HTMLAnchorElement;
+      content.href = `#/edit/${board.boardId}/live/${slot.cardId}`;
+      content.title =
+        "The card's standard document — new meetings start from it unless they carry a previous meeting's content.";
+      head.appendChild(content);
+    }
     if (slot) {
       const remove = el("button", "app-btn app-btn-danger", target.removeLabel);
       remove.addEventListener("click", () => {

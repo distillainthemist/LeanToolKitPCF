@@ -60,14 +60,24 @@ export const WIZARD_CSS = `
   flex-direction: column;
   gap: 14px;
 }
-/* the app-filled Meeting board step wants the full width + real height */
-.ltk-mw-form:has(> .ltk-mw-boardhost) { max-width: none; }
+/* the app-filled Meeting board step fills the wizard body: the body
+   stops scrolling and the host flexes to whatever height remains */
+.ltk-mw-body:has(.ltk-mw-boardhost) {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.ltk-mw-form:has(> .ltk-mw-boardhost) {
+  max-width: none;
+  flex: 1;
+  min-height: 0;
+}
 .ltk-mw-boardhost {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  height: max(420px, 62vh);
-  min-height: 0;
+  flex: 1;
+  min-height: 360px;
 }
 .ltk-mw-row { display: flex; flex-direction: column; gap: 4px; }
 .ltk-mw-label {

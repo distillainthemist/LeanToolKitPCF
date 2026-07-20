@@ -41,9 +41,12 @@ export function mountCardEditor(
       );
       return;
     }
+    // "live" = the card's standard content (template document), edited
+    // from the board designer rather than a meeting record
+    const isLive = instanceGuid === "live";
     const [board, instance] = await Promise.all([
       getBoard(boardId),
-      getInstance(instanceGuid),
+      isLive ? Promise.resolve(null) : getInstance(instanceGuid),
     ]);
     // an adjusted meeting's cards live in its override manifest, not
     // (necessarily) the board's own
@@ -59,10 +62,26 @@ export function mountCardEditor(
     }
 
     const bar = el("div", "app-board-toolbar");
-    const back = el("a", "app-btn", "‹ Board") as HTMLAnchorElement;
+    const back = el("a", "app-btn", "‹ Back") as HTMLAnchorElement;
     back.href = `#/board/${boardId}`;
     const saved = el("span", "app-board-status", "");
-    bar.append(back, el("span", "app-board-title", slot.title || cardLabel(slot.cardType)), saved);
+    const heading =
+      (slot.title || cardLabel(slot.cardType)) + (isLive ? " — standard content" : "");
+    bar.append(back, el("span", "app-board-title", heading), saved);
+    if (isLive) {
+      bar.appendChild(
+        el(
+          "span",
+          "app-settings-note",
+          "New meetings start from this unless they carry a previous meeting."
+        )
+      );
+      // came from a board designer (wizard step or settings) — return there
+      back.addEventListener("click", (e) => {
+        e.preventDefault();
+        window.history.back();
+      });
+    }
     parent.appendChild(bar);
 
     // deep-link the back button to this card's occurrence so the board
@@ -82,14 +101,15 @@ export function mountCardEditor(
     let row = null;
     if (!surface) {
       const policy = slotPolicy(slot);
-      row =
-        policy === "shared"
-          ? await liveRow(boardId, cardId)
-          : await instanceRow(instanceGuid, cardId);
+      // live mode and shared cards both bind the instance-less row
+      const bindLive = isLive || policy === "shared";
+      row = bindLive
+        ? await liveRow(boardId, cardId)
+        : await instanceRow(instanceGuid, cardId);
       if (!row) {
-        // a card added to just this meeting ("Adjust this meeting") has
-        // no seeded row — create its blank document on first open
-        if (policy === "shared") {
+        // no row yet (template never authored, or a card added to just
+        // this meeting) — create its blank document on first open
+        if (bindLive) {
           await ensureLiveRow(boardId, cardId, slot.cardType);
           row = await liveRow(boardId, cardId);
         } else {

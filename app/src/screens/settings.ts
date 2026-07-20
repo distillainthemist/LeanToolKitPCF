@@ -1652,10 +1652,9 @@ async function renderBoardsAdmin(body: HTMLElement, me: RosterPerson): Promise<v
     );
     const open = el("a", "app-btn", "Open") as HTMLAnchorElement;
     open.href = `#/board/${b.boardId}`;
+    // Edit meeting covers the board too (wizard step 7)
     const edit = el("a", "app-btn", "Edit meeting") as HTMLAnchorElement;
     edit.href = `#/wizard/${b.boardId}`;
-    const setup = el("a", "app-btn", "Meeting board") as HTMLAnchorElement;
-    setup.href = `#/setup/${b.boardId}`;
     const rep = el("button", "app-btn", "Replicate") as HTMLButtonElement;
     rep.addEventListener("click", () => {
       void (async () => {
@@ -1671,7 +1670,7 @@ async function renderBoardsAdmin(body: HTMLElement, me: RosterPerson): Promise<v
         window.location.hash = `#/wizard/${newId}`;
       })();
     });
-    r.append(open, edit, setup, rep);
+    r.append(open, edit, rep);
     list.appendChild(r);
   }
 }

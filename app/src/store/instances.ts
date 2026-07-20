@@ -115,6 +115,14 @@ export async function createInstance(
       // instance row when the source card is not shared
       outputJson = src?.outputJson ?? "";
     }
+    // standard content: the card's live (instance-less) row is its
+    // design-time template — the standard agenda etc. It seeds clear
+    // cards every meeting and carry cards that have nothing to carry.
+    if (outputJson === "" && !plan.linkSource) {
+      const template = await liveRow(boardId, plan.cardId);
+      outputJson = template?.outputJson ?? "";
+      if (tileSvg === "") tileSvg = template?.tileSvg ?? "";
+    }
     await createInstanceRow(
       instance.id,
       boardId,
