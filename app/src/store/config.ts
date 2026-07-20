@@ -189,12 +189,20 @@ export async function saveSiteSettings(site: string, s: SiteSettings): Promise<v
   );
 }
 
-/** Named roster patterns for every real site: {site: [{name, pattern}]}. */
+export interface SiteRosterPattern {
+  name: string;
+  pattern: string;
+  baseDate: string; // "" when the site admin hasn't set one
+  crews: string[];
+  dayStart: string;
+}
+
+/** Named roster patterns for every real site, with their full setup. */
 export async function rosterPatternLibrary(): Promise<
-  Record<string, { name: string; pattern: string }[]>
+  Record<string, SiteRosterPattern[]>
 > {
   const rows = await allWhere(Ben_ltksitesettingsesService.getAll);
-  const out: Record<string, { name: string; pattern: string }[]> = {};
+  const out: Record<string, SiteRosterPattern[]> = {};
   for (const r of rows) {
     if (r.ben_site === APP_ROW || !r.ben_site) continue;
     try {
@@ -202,7 +210,13 @@ export async function rosterPatternLibrary(): Promise<
       if (Array.isArray(arr) && arr.length > 0) {
         out[r.ben_site] = arr
           .filter((x) => x && typeof x.name === "string" && typeof x.pattern === "string")
-          .map((x) => ({ name: x.name, pattern: x.pattern }));
+          .map((x) => ({
+            name: x.name,
+            pattern: x.pattern,
+            baseDate: typeof x.baseDate === "string" ? x.baseDate : "",
+            crews: Array.isArray(x.crews) ? x.crews.map(String) : [],
+            dayStart: typeof x.dayStart === "string" ? x.dayStart : "",
+          }));
       }
     } catch {
       /* ignore malformed */

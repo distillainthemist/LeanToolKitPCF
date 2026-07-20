@@ -309,7 +309,15 @@ input[type="color"].app-cat-swatch {
 
 /* settings screen (v2) */
 .app-nav { flex: 1; }
-.app-link-cog { margin-left: auto; font-size: 15.5px; padding: 8px 14px; }
+.app-link-cog {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15.5px;
+  padding: 6px 14px;
+}
+.app-mode-icon { font-size: 23px; line-height: 1; }
 .app-settings { display: flex; flex-direction: column; gap: 12px; max-width: 900px; }
 .app-settings-tabs { display: flex; gap: 6px; }
 .app-settings-tab { font: inherit; font-size: 13px; border: 1px solid #d9d5cd; background: #fff; border-radius: 8px; padding: 6px 14px; cursor: pointer; }

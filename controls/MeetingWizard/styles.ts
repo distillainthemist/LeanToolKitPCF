@@ -87,6 +87,15 @@ export const WIZARD_CSS = `
   text-transform: uppercase;
   color: var(--ltk-muted);
 }
+.ltk-mw-error {
+  font-size: 13px;
+  color: #b3261e;
+  background: color-mix(in srgb, #b3261e 8%, var(--ltk-bg));
+  border: 1px solid color-mix(in srgb, #b3261e 35%, var(--ltk-bg));
+  border-radius: 6px;
+  padding: 8px 10px;
+  line-height: 1.45;
+}
 .ltk-mw-input {
   font: inherit;
   font-size: 13.5px;

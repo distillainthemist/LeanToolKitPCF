@@ -1,12 +1,13 @@
 // The MeetingWizard view — a stepper that walks a maker through setting up
-// a meeting: Basics → Organisation → Cadence → (Crews & roster) →
-// Participants → Meeting records → Review. Every edit commits the draft to
-// the wrapper (outputJSON follows live); the Review step's Create button
-// fires onSubmit so the app knows the maker finished.
+// a meeting: Basics → Organisation → Cadence → Participants →
+// Meeting records → Review. Every edit commits the draft to the wrapper
+// (outputJSON follows live); the Review step's Create button fires
+// onSubmit so the app knows the maker finished.
 //
 // Organisation is a cascading site → department → area picklist from the
-// orgJSON tree; free-text fallbacks appear when no tree is supplied. The
-// Crews & roster step exists only for rostered cadences (daily/shiftly).
+// orgJSON tree; free-text fallbacks appear when no tree is supplied.
+// Rostered cadences (daily/shiftly) pick one of the site's configured
+// rosters on the Cadence page — no custom roster entry.
 
 import { applyThemeVars, defaultTheme, Theme } from "../../shared/tokens";
 import { LTK_BASE_CSS } from "../../shared/ui/baseCss";
@@ -62,7 +63,10 @@ export class MeetingWizardView {
   /** Re-applies the basics gate to forward nav without a full re-render. */
   private refreshGates: () => void = () => undefined;
   /** Named roster patterns per site (site settings library). */
-  private rosterPatterns: Record<string, { name: string; pattern: string }[]> = {};
+  private rosterPatterns: Record<
+    string,
+    { name: string; pattern: string; baseDate?: string; crews?: string[]; dayStart?: string }[]
+  > = {};
   /** Admin-managed meeting categories ([] = field hidden). */
   private meetingCategories: string[] = [];
 
@@ -157,7 +161,12 @@ export class MeetingWizardView {
   }
 
   /** The site-settings roster-pattern library ({site: [{name, pattern}]}). */
-  setRosterPatterns(lib: Record<string, { name: string; pattern: string }[]>): void {
+  setRosterPatterns(
+    lib: Record<
+      string,
+      { name: string; pattern: string; baseDate?: string; crews?: string[]; dayStart?: string }[]
+    >
+  ): void {
     if (JSON.stringify(lib) === JSON.stringify(this.rosterPatterns)) return;
     this.rosterPatterns = lib;
     this.render();
@@ -175,9 +184,7 @@ export class MeetingWizardView {
       { key: "org", label: "Organisation", render: (b) => this.renderOrg(b) },
       { key: "cadence", label: "Cadence", render: (b) => this.renderCadence(b) },
     ];
-    if (isRostered(this.draft.category)) {
-      list.push({ key: "roster", label: "Crews & roster", render: (b) => this.renderRoster(b) });
-    }
+    // crews/roster fold into the Cadence page as one site-roster pick
     list.push(
       { key: "people", label: "Participants", render: (b) => this.renderPeople(b) },
       { key: "records", label: "Meeting records", render: (b) => this.renderRecords(b) },
@@ -558,6 +565,8 @@ export class MeetingWizardView {
         })
       )
     );
+    // rostered cadences pick one of the site's configured rosters here
+    if (isRostered(d.category)) this.renderRosterPick(body);
     if (hasWeekdays(d.category)) {
       // weekday toggles read better than a chips field for a fixed set;
       // weekly/fortnightly meetings run on exactly ONE day
@@ -675,49 +684,60 @@ export class MeetingWizardView {
     }
   }
 
-  private renderRoster(body: HTMLElement): void {
+  /**
+   * The single roster pick on the Cadence page: rostered cadences choose
+   * one of the SITE's configured rosters (no custom entry). Picking one
+   * applies its pattern, crews and anchor date to the draft.
+   */
+  private renderRosterPick(body: HTMLElement): void {
     const d = this.draft;
-    body.appendChild(
-      this.row(
-        "Crews",
-        this.chipsInput(d.crewList, (v) => (d.crewList = v), "A, B, C, D", "crews"),
-        "In roster order. Leave empty for no crew rotation."
-      )
-    );
-    // standard patterns from the site's library, custom as the fallback
     const sitePatterns = this.rosterPatterns[d.org.site] ?? [];
-    if (sitePatterns.length > 0 && !this.readOnly) {
-      const pick = el("select", "ltk-mw-input") as HTMLSelectElement;
-      const mk = (value: string, label: string) => {
-        const o = el("option", "", label) as HTMLOptionElement;
-        o.value = value;
-        pick.appendChild(o);
-      };
-      mk("", "Custom\u2026");
-      for (const sp of sitePatterns) mk(sp.pattern, `${sp.name} (${sp.pattern})`);
-      const match = sitePatterns.find((sp) => sp.pattern === d.rosterPattern);
-      pick.value = match ? match.pattern : "";
-      pick.addEventListener("change", () => {
-        if (pick.value !== "") {
-          d.rosterPattern = pick.value;
-          this.commit();
-          this.render();
-        }
-      });
-      body.appendChild(this.row("Standard pattern", pick, "From this site's settings."));
+    if (sitePatterns.length === 0) {
+      body.appendChild(
+        this.row(
+          "Shift roster",
+          el(
+            "div",
+            "ltk-mw-error",
+            `No shift rosters are set up for ${d.org.site || "this site"} yet — ` +
+              "a site admin can add one under Settings → Organisation → Shift roster patterns."
+          )
+        )
+      );
+      return;
     }
+    const pick = el("select", "ltk-mw-input") as HTMLSelectElement;
+    const mk = (value: string, label: string) => {
+      const o = el("option", "", label) as HTMLOptionElement;
+      o.value = value;
+      pick.appendChild(o);
+    };
+    mk("", "Select a roster…");
+    sitePatterns.forEach((sp, i) => mk(String(i), `${sp.name} (${sp.pattern})`));
+    const matchIdx = sitePatterns.findIndex((sp) => sp.pattern === d.rosterPattern);
+    if (matchIdx >= 0) {
+      pick.value = String(matchIdx);
+    } else if (d.rosterPattern !== "") {
+      // an older meeting saved a pattern the site no longer offers —
+      // keep it visible until a real roster is picked
+      mk("__current__", `Current (${d.rosterPattern})`);
+      pick.value = "__current__";
+    }
+    pick.disabled = this.readOnly;
+    pick.addEventListener("change", () => {
+      const sp = sitePatterns[Number(pick.value)];
+      if (!sp) return;
+      d.rosterPattern = sp.pattern;
+      if (sp.crews && sp.crews.length > 0) d.crewList = csvJoin(sp.crews);
+      if (sp.baseDate) d.baseStartDate = sp.baseDate;
+      this.commit();
+      this.render();
+    });
     body.appendChild(
       this.row(
-        "Roster pattern",
-        this.textInput(d.rosterPattern, (v) => (d.rosterPattern = v), "2D-2N-5O"),
-        "Blocks of Days / Nights / Off, cycled — e.g. 2D-2N-5O-2D-3N-4O."
-      )
-    );
-    body.appendChild(
-      this.row(
-        "First day shift",
-        this.textInput(d.baseStartDate, (v) => (d.baseStartDate = v), "", "date"),
-        "The date the FIRST crew starts its first day shift — anchors the whole rotation."
+        "Shift roster",
+        pick,
+        "From this site's settings — sets the rotation pattern, crews and anchor date."
       )
     );
   }

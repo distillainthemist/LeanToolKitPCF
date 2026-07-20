@@ -18,8 +18,11 @@ brand.addEventListener("click", () => {
 });
 const nav = el("nav", "app-nav");
 const gap = el("span", "app-bar-gap");
-// one context button: Settings everywhere, Home while in Settings
-const modeLink = el("a", "app-link app-link-cog", "\u2699 Settings") as HTMLAnchorElement;
+// one context button: Settings from the hub, Home everywhere else
+const modeLink = el("a", "app-link app-link-cog") as HTMLAnchorElement;
+const modeIcon = el("span", "app-mode-icon", "\u2699");
+const modeText = el("span", "", "Settings");
+modeLink.append(modeIcon, modeText);
 modeLink.href = "#/settings";
 nav.appendChild(gap);
 nav.appendChild(modeLink);
@@ -109,7 +112,8 @@ function route(): void {
 
   // Settings hides on the operational surfaces too — Home leads back
   const showHome = ["settings", "board", "edit", "adjust"].includes(parts[0] ?? "");
-  modeLink.textContent = showHome ? "⌂ Home" : "⚙ Settings";
+  modeIcon.textContent = showHome ? "⌂" : "⚙";
+  modeText.textContent = showHome ? "Home" : "Settings";
   modeLink.href = showHome ? "#/" : "#/settings";
 
   void (async () => {
