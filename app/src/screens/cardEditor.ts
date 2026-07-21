@@ -63,37 +63,7 @@ export function mountCardEditor(
       return;
     }
 
-    const bar = el("div", "app-board-toolbar");
-    const back = el("a", "app-btn", onClose ? "‹ Done" : "‹ Back") as HTMLAnchorElement;
-    back.href = `#/board/${boardId}`;
-    const saved = el("span", "app-board-status", "");
-    const heading =
-      (slot.title || cardLabel(slot.cardType)) + (isLive ? " — standard content" : "");
-    bar.append(back, el("span", "app-board-title", heading), saved);
-    if (isLive) {
-      bar.appendChild(
-        el(
-          "span",
-          "app-settings-note",
-          "New meetings start from this unless they carry a previous meeting."
-        )
-      );
-      back.addEventListener("click", (e) => {
-        e.preventDefault();
-        // overlay host closes in place; the route flavour walks back
-        if (onClose) onClose();
-        else window.history.back();
-      });
-    }
-    parent.appendChild(bar);
-
-    // deep-link the back button to this card's occurrence so the board
-    // reselects it (and its tiles) instead of remounting unselected
-    if (instance && instance.when !== "") {
-      back.href = `#/board/${boardId}/${encodeURIComponent(instance.when.slice(0, 16))}`;
-    }
-
-    // ---- meeting walk: rolling tabs + prev/next rails ----
+    // ---- meeting walk: rails to the top, tabs + Back inline ----
     // the sequence follows the board's nav order (unset cards trail in
     // layout order), so the tabs read as the meeting's running order
     const sequence = [...manifest.slots].sort((a, b) => {
@@ -111,28 +81,38 @@ export function mountCardEditor(
     };
     const editHref = (s: (typeof sequence)[number]) =>
       `#/edit/${boardId}/${instanceGuid}/${s.cardId}`;
-    if (walk) {
-      const strip = el("div", "app-card-tabs");
-      for (const s of sequence) {
-        const tab = el(
-          "a",
-          "app-card-tab",
-          s.title || cardLabel(s.cardType)
-        ) as HTMLAnchorElement;
-        const bg = slotBar(s);
-        tab.style.background = bg;
-        tab.style.color = textOn(bg);
-        tab.href = editHref(s);
-        if (s.cardId === cardId) tab.classList.add("app-card-tab-on");
-        strip.appendChild(tab);
+
+    const saved = el("span", "app-board-status", "");
+    const backHref =
+      instance && instance.when !== ""
+        ? `#/board/${boardId}/${encodeURIComponent(instance.when.slice(0, 16))}`
+        : `#/board/${boardId}`;
+
+    // non-walk flavours (standard content, overlay, single-card board)
+    // keep the classic toolbar; the walk view has no redundant top bar
+    if (!walk) {
+      const bar = el("div", "app-board-toolbar");
+      const back = el("a", "app-btn", onClose ? "‹ Done" : "‹ Back") as HTMLAnchorElement;
+      back.href = backHref;
+      const heading =
+        (slot.title || cardLabel(slot.cardType)) + (isLive ? " — standard content" : "");
+      bar.append(back, el("span", "app-board-title", heading), saved);
+      if (isLive) {
+        bar.appendChild(
+          el(
+            "span",
+            "app-settings-note",
+            "New meetings start from this unless they carry a previous meeting."
+          )
+        );
+        back.addEventListener("click", (e) => {
+          e.preventDefault();
+          // overlay host closes in place; the route flavour walks back
+          if (onClose) onClose();
+          else window.history.back();
+        });
       }
-      parent.appendChild(strip);
-      // roll the strip so the current card sits in view
-      requestAnimationFrame(() => {
-        strip
-          .querySelector(".app-card-tab-on")
-          ?.scrollIntoView({ block: "nearest", inline: "center" });
-      });
+      parent.appendChild(bar);
     }
 
     const surface = isActionSurface(slot);
@@ -208,7 +188,8 @@ export function mountCardEditor(
       }, 500);
     };
 
-    // full-height rails either side of the editor move through the walk
+    // full-height rails either side (stretching past the tabs to the
+    // top); between them a column of [tabs … saved · Back] + the editor
     let host: HTMLElement;
     if (walk) {
       const walkRow = el("div", "app-card-row");
@@ -228,7 +209,37 @@ export function mountCardEditor(
         return arrow;
       };
       walkRow.appendChild(rail(seqIdx > 0 ? sequence[seqIdx - 1] : null, "prev"));
-      host = editorHost(walkRow);
+
+      const mid = el("div", "app-card-mid");
+      walkRow.appendChild(mid);
+      const head = el("div", "app-card-head");
+      const strip = el("div", "app-card-tabs");
+      for (const s of sequence) {
+        const tab = el(
+          "a",
+          "app-card-tab",
+          s.title || cardLabel(s.cardType)
+        ) as HTMLAnchorElement;
+        const bg = slotBar(s);
+        tab.style.background = bg;
+        tab.style.color = textOn(bg);
+        tab.href = editHref(s);
+        if (s.cardId === cardId) tab.classList.add("app-card-tab-on");
+        strip.appendChild(tab);
+      }
+      const backBtn = el("a", "app-btn app-btn-primary app-card-back", "‹ Back") as HTMLAnchorElement;
+      backBtn.href = backHref;
+      backBtn.title = "Back to the board";
+      head.append(strip, saved, backBtn);
+      mid.appendChild(head);
+      // roll the strip so the current card sits in view
+      requestAnimationFrame(() => {
+        strip
+          .querySelector(".app-card-tab-on")
+          ?.scrollIntoView({ block: "nearest", inline: "center" });
+      });
+      host = editorHost(mid);
+
       walkRow.appendChild(
         rail(seqIdx >= 0 && seqIdx < sequence.length - 1 ? sequence[seqIdx + 1] : null, "next")
       );
