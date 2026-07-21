@@ -85,19 +85,14 @@ body {
 
 .app-missing { padding: 24px; }
 
-/* card editor meeting walk: full-height rails; tabs + Back inline */
-.app-card-mid {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
+/* card editor meeting walk: tabs + Back inline above; rails below */
 .app-card-head {
   flex: 0 0 auto;
   display: flex;
   align-items: center;
   gap: 10px;
+  /* rail width + row gap — keeps the tabs aligned with the editor */
+  padding: 0 50px;
 }
 .app-card-back {
   flex: 0 0 auto;

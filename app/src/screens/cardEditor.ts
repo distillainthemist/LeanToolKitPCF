@@ -208,10 +208,6 @@ export function mountCardEditor(
         }
         return arrow;
       };
-      walkRow.appendChild(rail(seqIdx > 0 ? sequence[seqIdx - 1] : null, "prev"));
-
-      const mid = el("div", "app-card-mid");
-      walkRow.appendChild(mid);
       const head = el("div", "app-card-head");
       const strip = el("div", "app-card-tabs");
       for (const s of sequence) {
@@ -231,15 +227,16 @@ export function mountCardEditor(
       backBtn.href = backHref;
       backBtn.title = "Back to the board";
       head.append(strip, saved, backBtn);
-      mid.appendChild(head);
+      // header above the rails; padding keeps it aligned with the editor
+      parent.insertBefore(head, walkRow);
       // roll the strip so the current card sits in view
       requestAnimationFrame(() => {
         strip
           .querySelector(".app-card-tab-on")
           ?.scrollIntoView({ block: "nearest", inline: "center" });
       });
-      host = editorHost(mid);
-
+      walkRow.appendChild(rail(seqIdx > 0 ? sequence[seqIdx - 1] : null, "prev"));
+      host = editorHost(walkRow);
       walkRow.appendChild(
         rail(seqIdx >= 0 && seqIdx < sequence.length - 1 ? sequence[seqIdx + 1] : null, "next")
       );
