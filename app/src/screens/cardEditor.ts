@@ -8,6 +8,7 @@
 
 import { cardLabel } from "../../../controls/CardSettings/registry";
 import { initialsFor } from "../../../shared/schema/people";
+import { textOn } from "../../../shared/tokens";
 import { el } from "../../../shared/ui/dom";
 import { cardMounter, supportedCardTypes } from "../cardRegistry";
 import { appTheme, editorHost } from "../cardHost";
@@ -92,6 +93,48 @@ export function mountCardEditor(
       back.href = `#/board/${boardId}/${encodeURIComponent(instance.when.slice(0, 16))}`;
     }
 
+    // ---- meeting walk: rolling tabs + prev/next rails ----
+    // the sequence follows the board's nav order (unset cards trail in
+    // layout order), so the tabs read as the meeting's running order
+    const sequence = [...manifest.slots].sort((a, b) => {
+      const ka = a.nav > 0 ? a.nav : 1000 + a.pos;
+      const kb = b.nav > 0 ? b.nav : 1000 + b.pos;
+      return ka - kb;
+    });
+    const seqIdx = sequence.findIndex((s) => s.cardId === cardId);
+    const walk = !isLive && sequence.length > 1;
+    const slotBar = (s: (typeof sequence)[number]): string => {
+      const theme = (s.settings.theme ?? {}) as Record<string, unknown>;
+      return typeof theme.titlebar === "string" && theme.titlebar !== ""
+        ? theme.titlebar
+        : appTheme().titleBar;
+    };
+    const editHref = (s: (typeof sequence)[number]) =>
+      `#/edit/${boardId}/${instanceGuid}/${s.cardId}`;
+    if (walk) {
+      const strip = el("div", "app-card-tabs");
+      for (const s of sequence) {
+        const tab = el(
+          "a",
+          "app-card-tab",
+          s.title || cardLabel(s.cardType)
+        ) as HTMLAnchorElement;
+        const bg = slotBar(s);
+        tab.style.background = bg;
+        tab.style.color = textOn(bg);
+        tab.href = editHref(s);
+        if (s.cardId === cardId) tab.classList.add("app-card-tab-on");
+        strip.appendChild(tab);
+      }
+      parent.appendChild(strip);
+      // roll the strip so the current card sits in view
+      requestAnimationFrame(() => {
+        strip
+          .querySelector(".app-card-tab-on")
+          ?.scrollIntoView({ block: "nearest", inline: "center" });
+      });
+    }
+
     const surface = isActionSurface(slot);
     // rollup scope: an action surface reads its configured source board
     // (empty = the board it sits on); a normal card reads its own actions
@@ -165,7 +208,33 @@ export function mountCardEditor(
       }, 500);
     };
 
-    const host = editorHost(parent);
+    // full-height rails either side of the editor move through the walk
+    let host: HTMLElement;
+    if (walk) {
+      const walkRow = el("div", "app-card-row");
+      parent.appendChild(walkRow);
+      const rail = (slot: (typeof sequence)[number] | null, dir: "prev" | "next") => {
+        const arrow = el(
+          "a",
+          `app-card-arrow`,
+          dir === "prev" ? "‹" : "›"
+        ) as HTMLAnchorElement;
+        if (slot) {
+          arrow.href = editHref(slot);
+          arrow.title = slot.title || cardLabel(slot.cardType);
+        } else {
+          arrow.classList.add("app-card-arrow-off");
+        }
+        return arrow;
+      };
+      walkRow.appendChild(rail(seqIdx > 0 ? sequence[seqIdx - 1] : null, "prev"));
+      host = editorHost(walkRow);
+      walkRow.appendChild(
+        rail(seqIdx >= 0 && seqIdx < sequence.length - 1 ? sequence[seqIdx + 1] : null, "next")
+      );
+    } else {
+      host = editorHost(parent);
+    }
     const rowGuid = row?.id ?? "";
     cleanups.push(
       mounter({
