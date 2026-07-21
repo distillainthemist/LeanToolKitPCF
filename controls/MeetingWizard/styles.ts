@@ -152,6 +152,11 @@ export const WIZARD_CSS = `
   padding: 4px 2px;
 }
 
+/* directory search (participants step) */
+.ltk-mw-dirrow { display: flex; gap: 6px; }
+.ltk-mw-dirrow .ltk-mw-input { flex: 1; min-width: 0; }
+.ltk-mw-dirrow .ltk-mw-btn { flex: 0 0 auto; }
+
 /* weekday toggles */
 .ltk-mw-days { display: flex; flex-wrap: wrap; gap: 6px; }
 .ltk-mw-day {

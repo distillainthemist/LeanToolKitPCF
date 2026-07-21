@@ -33,6 +33,9 @@ export interface MeetingWizardCallbacks {
   onChange: (draft: WizardDraft) => void;
   /** The Review step's Create button — the maker says the setup is done. */
   onSubmit: () => void;
+  /** A participant added from the DIRECTORY search (maybe not an app
+   * user yet) — the host registers them into its roster. */
+  onDirectoryAdd?: (person: Person) => void;
 }
 
 interface Step {
@@ -69,6 +72,8 @@ export class MeetingWizardView {
   > = {};
   /** Admin-managed meeting categories ([] = field hidden). */
   private meetingCategories: string[] = [];
+  /** Org-directory people search (e.g. Entra); null hides the section. */
+  private directorySearch: ((query: string) => Promise<Person[]>) | null = null;
 
   constructor(
     host: HTMLElement,
@@ -157,6 +162,16 @@ export class MeetingWizardView {
   setMeetingCategories(categories: string[]): void {
     if (JSON.stringify(categories) === JSON.stringify(this.meetingCategories)) return;
     this.meetingCategories = categories;
+    this.render();
+  }
+
+  /**
+   * Wire an org-directory search (e.g. Entra via Office 365 Users) so
+   * participants can be added even before they are app users. null (the
+   * default) hides the section.
+   */
+  setDirectorySearch(fn: ((query: string) => Promise<Person[]>) | null): void {
+    this.directorySearch = fn;
     this.render();
   }
 
@@ -841,6 +856,74 @@ export class MeetingWizardView {
       searchWrap.appendChild(el("label", "ltk-mw-label", "Add from the roster"));
       searchWrap.append(search, resultsBox, countNote);
       body.appendChild(searchWrap);
+    }
+
+    // org-directory search: adds people who may not be app users yet —
+    // the host registers them via onDirectoryAdd
+    if (this.directorySearch !== null && !this.readOnly) {
+      const dirWrap = el("div", "ltk-mw-row");
+      dirWrap.appendChild(el("label", "ltk-mw-label", "Add from the directory"));
+      const dirRow = el("div", "ltk-mw-dirrow");
+      const dirInput = el("input", "ltk-mw-input") as HTMLInputElement;
+      dirInput.type = "search";
+      dirInput.placeholder = "Name or email in your organisation…";
+      const dirBtn = el("button", "ltk-mw-btn", "Search") as HTMLButtonElement;
+      dirBtn.type = "button";
+      dirRow.append(dirInput, dirBtn);
+      const dirBox = el("div", "ltk-mw-people");
+      const dirNote = el("div", "ltk-mw-people-count");
+      dirWrap.append(dirRow, dirBox, dirNote);
+      body.appendChild(dirWrap);
+
+      const renderHits = (hits: Person[]) => {
+        clear(dirBox);
+        const fresh = hits.filter(
+          (p) => !d.participants.some((x) => x.whoId === p.whoId)
+        );
+        if (fresh.length === 0) {
+          dirNote.textContent = "No directory matches.";
+          return;
+        }
+        dirNote.textContent = "";
+        for (const p of fresh.slice(0, MAX_RESULTS)) {
+          const row = el("div", "ltk-mw-result");
+          row.appendChild(el("span", "ltk-mw-result-add", "＋"));
+          row.appendChild(el("span", "ltk-mw-person-name", p.who));
+          if (!this.people.some((x) => x.whoId === p.whoId)) {
+            row.appendChild(el("span", "ltk-mw-result-crew", "new to the app"));
+          }
+          row.addEventListener("click", () => {
+            d.participants.push({ whoId: p.whoId, who: p.who, crew: "" });
+            this.cb.onDirectoryAdd?.(p);
+            this.commit();
+            refreshSelected();
+            refreshResults();
+            renderHits(hits);
+          });
+          dirBox.appendChild(row);
+        }
+      };
+      const runSearch = () => {
+        const q = dirInput.value.trim();
+        if (q.length < 2) {
+          dirNote.textContent = "Type at least two characters.";
+          return;
+        }
+        dirNote.textContent = "Searching…";
+        clear(dirBox);
+        void this.directorySearch!(q)
+          .then(renderHits)
+          .catch(() => {
+            dirNote.textContent = "Directory search failed — try again.";
+          });
+      };
+      dirBtn.addEventListener("click", runSearch);
+      dirInput.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          runSearch();
+        }
+      });
     }
 
     if (!this.readOnly) {

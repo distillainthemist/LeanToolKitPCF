@@ -17,7 +17,7 @@ import { appTheme, editorHost } from "../cardHost";
 import { detectHost } from "../runtime";
 import { saveMeetingBoard } from "../store/boards";
 import { meetingCategories, orgJson, rosterPatternLibrary } from "../store/config";
-import { listPeople, viewerPerson } from "../store/people";
+import { listPeople, searchEntra, upsertPerson, viewerPerson } from "../store/people";
 import { currentViewer } from "../runtime";
 import { setLeaveGuard } from "../navGuard";
 import { promptUnsaved } from "../prompts";
@@ -117,10 +117,30 @@ export function mountWizard(parent: HTMLElement, editBoardId = ""): () => void {
     });
     saveNowBtn.addEventListener("click", () => void saveBlob());
 
+    // directory adds carry their Entra hit (email) for roster registration
+    const dirCache = new Map<string, { mail: string }>();
+
     view = new MeetingWizardView(host, {
       onChange: (draft) => {
         outputJson = serializeWizardDraft(draft);
         markDirty();
+      },
+      onDirectoryAdd: (p) => {
+        // register the invitee as an app person — but never overwrite
+        // someone who already has a roster row (site/role would reset)
+        void (async () => {
+          if (await viewerPerson(p.whoId)) return;
+          await upsertPerson({
+            whoId: p.whoId,
+            who: p.who,
+            email: dirCache.get(p.whoId)?.mail ?? "",
+            site: "",
+            department: "",
+            area: "",
+            role: "user",
+            active: true,
+          });
+        })();
       },
       onSubmit: () => {
         // Done: persist anything outstanding, back to Settings → Rituals
@@ -140,6 +160,16 @@ export function mountWizard(parent: HTMLElement, editBoardId = ""): () => void {
     if (hosted) {
       view.setRosterPatterns(await rosterPatternLibrary());
       view.setMeetingCategories((await meetingCategories()).map((c) => c.name));
+      // Entra search: invite anyone in the organisation, app user or not
+      view.setDirectorySearch(async (q) => {
+        const hits = await searchEntra(q);
+        for (const h of hits) dirCache.set(h.objectId, { mail: h.mail });
+        return hits.map((h) => ({
+          whoId: h.objectId,
+          who: h.displayName,
+          initials: "",
+        }));
+      });
     }
     view.setPeople(parsePeople(peopleRaw));
     view.setDraft(parseWizardDraft(editRaw));
