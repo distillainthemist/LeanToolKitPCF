@@ -122,9 +122,16 @@ body {
   min-width: 0;
   display: flex;
   gap: 6px;
-  overflow-x: auto;
+  overflow: hidden; /* windowed, never scrolls */
   padding: 2px 2px 0;
-  scrollbar-width: thin;
+}
+.app-card-tab-more {
+  flex: 0 0 auto;
+  align-self: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: #8a847a;
+  padding: 0 2px;
 }
 .app-card-tab {
   flex: 0 0 auto;
@@ -137,13 +144,7 @@ body {
   opacity: 0.5;
 }
 .app-card-tab:hover { opacity: 0.85; }
-.app-card-tab-on {
-  opacity: 1;
-  font-weight: 700;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
-  outline: 2px solid rgba(0, 0, 0, 0.18);
-  outline-offset: -2px;
-}
+.app-card-tab-on { opacity: 1; font-weight: 700; }
 .app-card-row {
   flex: 1;
   min-height: 0;
@@ -411,16 +412,19 @@ input[type="color"].app-cat-swatch {
   line-height: 1;
 }
 
-/* wizard cancel — top-right of the title bar, back to Rituals */
+/* wizard cancel — vertically centred in the title bar strip */
 .app-wizard-cancel {
   position: absolute;
-  top: 9px;
-  right: 12px;
+  top: 0;
+  right: 10px;
+  height: 38px; /* the .ltk-titlebar strip: 8+6 padding + 20px text */
+  display: flex;
+  align-items: center;
   z-index: 50;
   color: #fff;
   font-size: 19px;
   line-height: 1;
-  padding: 4px 8px;
+  padding: 0 8px;
   border-radius: 6px;
   text-decoration: none;
   opacity: 0.85;

@@ -282,7 +282,18 @@ export function mountCardEditor(
       };
       const head = el("div", "app-card-head");
       const strip = el("div", "app-card-tabs");
-      for (const s of sequence) {
+      // windowed, never scrolling: on big boards show the cards around
+      // the current one (± 3), with … hinting at the hidden ends
+      const WINDOW = 3;
+      let start = 0;
+      let end = sequence.length;
+      if (sequence.length > 2 * WINDOW + 1) {
+        start = Math.max(0, seqIdx - WINDOW);
+        end = Math.min(sequence.length, start + 2 * WINDOW + 1);
+        start = Math.max(0, end - (2 * WINDOW + 1));
+      }
+      if (start > 0) strip.appendChild(el("span", "app-card-tab-more", "…"));
+      for (const s of sequence.slice(start, end)) {
         const tab = el(
           "a",
           "app-card-tab",
@@ -295,6 +306,7 @@ export function mountCardEditor(
         if (s.cardId === cardId) tab.classList.add("app-card-tab-on");
         strip.appendChild(tab);
       }
+      if (end < sequence.length) strip.appendChild(el("span", "app-card-tab-more", "…"));
       const backBtn = el("a", "app-btn app-card-back", "‹ Back") as HTMLAnchorElement;
       backBtn.href = backHref;
       backBtn.title = "Back to the board";
@@ -311,12 +323,6 @@ export function mountCardEditor(
       head.appendChild(strip);
       // header above the rails; padding keeps it aligned with the editor
       parent.insertBefore(head, walkRow);
-      // roll the strip so the current card sits in view
-      requestAnimationFrame(() => {
-        strip
-          .querySelector(".app-card-tab-on")
-          ?.scrollIntoView({ block: "nearest", inline: "center" });
-      });
       walkRow.appendChild(rail(seqIdx > 0 ? sequence[seqIdx - 1] : null, "prev"));
       host = editorHost(walkRow);
       walkRow.appendChild(
