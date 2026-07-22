@@ -348,7 +348,7 @@ export class MeetingSchedulerView {
 
     if (inst.shift !== "") {
       main.appendChild(
-        el("span", "ltk-ms-row-shift", inst.shift === "day" ? "Day" : "Night ☾")
+        el("span", "ltk-ms-row-shift", inst.shift === "day" ? "Day ☀" : "Night ☾")
       );
     }
 
