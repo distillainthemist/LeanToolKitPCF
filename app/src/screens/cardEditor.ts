@@ -282,8 +282,9 @@ export function mountCardEditor(
       };
       const head = el("div", "app-card-head");
       const strip = el("div", "app-card-tabs");
-      // windowed, never scrolling: on big boards show the cards around
-      // the current one (± 3), with … hinting at the hidden ends
+      // windowed, never scrolling: on big boards the cards around the
+      // current one (± 3) show their titles; the rest stay visible as
+      // thin colour slivers (still clickable, title on hover)
       const WINDOW = 3;
       let start = 0;
       let end = sequence.length;
@@ -292,21 +293,19 @@ export function mountCardEditor(
         end = Math.min(sequence.length, start + 2 * WINDOW + 1);
         start = Math.max(0, end - (2 * WINDOW + 1));
       }
-      if (start > 0) strip.appendChild(el("span", "app-card-tab-more", "…"));
-      for (const s of sequence.slice(start, end)) {
-        const tab = el(
-          "a",
-          "app-card-tab",
-          s.title || cardLabel(s.cardType)
-        ) as HTMLAnchorElement;
+      sequence.forEach((s, i) => {
+        const wide = i >= start && i < end;
+        const label = s.title || cardLabel(s.cardType);
+        const tab = el("a", "app-card-tab", wide ? label : "") as HTMLAnchorElement;
         const bg = slotBar(s);
         tab.style.background = bg;
         tab.style.color = textOn(bg);
         tab.href = editHref(s);
+        tab.title = label;
+        if (!wide) tab.classList.add("app-card-tab-thin");
         if (s.cardId === cardId) tab.classList.add("app-card-tab-on");
         strip.appendChild(tab);
-      }
-      if (end < sequence.length) strip.appendChild(el("span", "app-card-tab-more", "…"));
+      });
       const backBtn = el("a", "app-btn app-card-back", "‹ Back") as HTMLAnchorElement;
       backBtn.href = backHref;
       backBtn.title = "Back to the board";
