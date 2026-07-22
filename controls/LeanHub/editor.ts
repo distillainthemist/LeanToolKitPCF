@@ -533,11 +533,14 @@ export class LeanHubView {
     const list = el("div", "ltk-lh-actions ltk-lh-myday-list");
     right.appendChild(list);
 
+    // unlike the Actions tab (which keeps ticked rows struck through for
+    // review), My day is a to-do view: a completed part disappears
     const mine = this.actions.filter(
       (a) =>
         a.status !== "done" &&
         a.status !== "cancelled" &&
-        (this.viewerId === "" || a.assignees.some((x) => x.whoId === this.viewerId))
+        (this.viewerId === "" || a.assignees.some((x) => x.whoId === this.viewerId)) &&
+        !(this.myPart(a)?.done ?? false)
     );
     const todayIso = isoLocal(today);
     const offset = (today.getDay() - this.prefs.weekStart + 7) % 7;
