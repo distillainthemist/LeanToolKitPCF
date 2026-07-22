@@ -1,5 +1,7 @@
-// The LeanHub view — a person's home in three tabs.
+// The LeanHub view — a person's home.
 //
+// My day: the viewer's rituals today (single-day grid) beside their
+// actions bucketed late / due today / due this week.
 // Calendar: day/week grid, meetings projected by the shared recurrence
 // engine and scoped to a person (crew-aware), area, department or site;
 // protected time zones render as coloured background bands behind the
@@ -40,7 +42,7 @@ export interface LeanHubCallbacks {
   onProtected: (times: ProtectedTime[]) => void;
 }
 
-type Tab = "calendar" | "actions" | "boards" | "settings";
+type Tab = "myday" | "calendar" | "actions" | "settings";
 
 const HOUR_PX = 44;
 const CHIP_H = 38;
@@ -62,8 +64,8 @@ export class LeanHubView {
   private lastPromptsRaw: string | null = null;
   private readOnly = false;
 
-  private tab: Tab = "calendar";
-  /** Board directory for the Boards tab; null = tab hidden. */
+  private tab: Tab = "myday";
+  /** Board directory for the Rituals view; null = option hidden. */
   private boards: { boardId: string; name: string; meta: string }[] | null = null;
   private onOpenBoard: ((boardId: string) => void) | null = null;
   private boardsLabel = "Boards";
@@ -75,7 +77,8 @@ export class LeanHubView {
   private scopePerson = "";
   private scopeOrg: OrgScope = { site: "", department: "", area: "" };
   private scopeTouched = false;
-  private view: "day" | "week" = "week";
+  /** Cadence view: day/week time grids, or the rituals directory. */
+  private view: "day" | "week" | "boards" = "week";
   /** Supplied org tree; empty = derive from the meetings at render. */
   private orgTree: OrgSite[] = [];
 
@@ -229,10 +232,10 @@ export class LeanHubView {
 
     const tabs = el("div", "ltk-lh-tabs");
     const defs: { key: Tab; label: string }[] = [
+      { key: "myday", label: "My day" },
       { key: "calendar", label: "Cadence" },
       { key: "actions", label: "Actions" },
     ];
-    if (this.boards !== null) defs.push({ key: "boards", label: this.boardsLabel });
     if (!this.hideSettingsTab) defs.push({ key: "settings", label: "Settings" });
     for (const t of defs) {
       const btn = el("button", "ltk-lh-tab", t.label) as HTMLButtonElement;
@@ -248,9 +251,9 @@ export class LeanHubView {
 
     const body = el("div", "ltk-lh-body");
     this.root.appendChild(body);
-    if (this.tab === "calendar") this.renderCalendar(body);
+    if (this.tab === "myday") this.renderMyDay(body);
+    else if (this.tab === "calendar") this.renderCalendar(body);
     else if (this.tab === "actions") this.renderActions(body);
-    else if (this.tab === "boards") this.renderBoards(body);
     else this.renderSettings(body);
   }
 
@@ -287,7 +290,29 @@ export class LeanHubView {
     return Array.from({ length: 7 }, (_, i) => new Date(start.getTime() + i * DAY_MS));
   }
 
+  /** The Cadence view picker: day/week grids plus the rituals directory. */
+  private viewSelect(): HTMLElement {
+    const opts = [
+      { value: "week", label: "Week view" },
+      { value: "day", label: "Day view" },
+    ];
+    if (this.boards !== null) opts.push({ value: "boards", label: this.boardsLabel });
+    return this.select(this.view, opts, (v) => {
+      this.view = v as "day" | "week" | "boards";
+      this.render();
+    });
+  }
+
   private renderCalendar(body: HTMLElement): void {
+    // rituals directory as a view format — no scope or date navigation
+    if (this.view === "boards") {
+      const bar = el("div", "ltk-lh-bar");
+      bar.appendChild(this.viewSelect());
+      body.appendChild(bar);
+      this.renderBoards(body);
+      return;
+    }
+
     const days = this.visibleDays();
     const from = days[0];
     const to = days[days.length - 1];
@@ -326,17 +351,7 @@ export class LeanHubView {
       }
     }
 
-    const viewBtn = el(
-      "button",
-      "ltk-lh-btn",
-      this.view === "week" ? "Day view" : "Week view"
-    ) as HTMLButtonElement;
-    viewBtn.type = "button";
-    viewBtn.addEventListener("click", () => {
-      this.view = this.view === "week" ? "day" : "week";
-      this.render();
-    });
-    bar.appendChild(viewBtn);
+    bar.appendChild(this.viewSelect());
 
     bar.appendChild(el("span", "ltk-lh-bar-gap"));
     const nav = (label: string, deltaDays: number | null) => {
@@ -373,6 +388,11 @@ export class LeanHubView {
         : meetingMatchesOrg(meeting, this.scopeOrg);
     });
 
+    body.appendChild(this.buildGrid(days, instances));
+  }
+
+  /** The day/week time grid (shared by Cadence and My day). */
+  private buildGrid(days: Date[], instances: HubInstance[]): HTMLElement {
     const { dayStart, dayEnd } = this.prefs;
     const gridH = (dayEnd - dayStart) * HOUR_PX;
     const grid = el("div", "ltk-lh-grid");
@@ -469,7 +489,99 @@ export class LeanHubView {
 
     const scroll = el("div", "ltk-lh-scroll");
     scroll.appendChild(grid);
-    body.appendChild(scroll);
+    return scroll;
+  }
+
+  // ---- my day ----
+
+  private renderMyDay(body: HTMLElement): void {
+    const today = startOfDay(new Date());
+    const wrap = el("div", "ltk-lh-myday");
+    body.appendChild(wrap);
+
+    // left: the signed-in viewer's rituals today on the day grid
+    const left = el("div", "ltk-lh-myday-col ltk-lh-myday-cal");
+    wrap.appendChild(left);
+    left.appendChild(
+      el(
+        "div",
+        "ltk-lh-myday-head",
+        `Today · ${DAY_LABELS[today.getDay()]} ${today.getDate()} ${MONTH_LABELS[today.getMonth()]}`
+      )
+    );
+    const byId = new Map(this.meetings.map((m) => [m.boardId, m]));
+    const instances = projectInstances(this.meetings, today, today).filter((inst) => {
+      const meeting = byId.get(inst.boardId);
+      return meeting ? instanceForPerson(meeting, inst, this.viewerId) : false;
+    });
+    left.appendChild(this.buildGrid([today], instances));
+
+    // right: my open actions bucketed late / due today / due this week
+    const right = el("div", "ltk-lh-myday-col");
+    wrap.appendChild(right);
+    right.appendChild(el("div", "ltk-lh-myday-head", "My actions"));
+    const list = el("div", "ltk-lh-actions ltk-lh-myday-list");
+    right.appendChild(list);
+
+    const mine = this.actions.filter(
+      (a) =>
+        a.status !== "done" &&
+        a.status !== "cancelled" &&
+        (this.viewerId === "" || a.assignees.some((x) => x.whoId === this.viewerId))
+    );
+    const todayIso = isoLocal(today);
+    const offset = (today.getDay() - this.prefs.weekStart + 7) % 7;
+    const weekEndIso = isoLocal(new Date(today.getTime() + (6 - offset) * DAY_MS));
+    const byDue = (a: LtkAction, b: LtkAction) =>
+      (a.due || "9999") < (b.due || "9999") ? -1 : 1;
+    const buckets = [
+      {
+        key: "late",
+        label: "Late",
+        items: mine.filter((a) => a.due !== "" && a.due < todayIso).sort(byDue),
+      },
+      {
+        key: "today",
+        label: "Due today",
+        items: mine.filter((a) => a.due === todayIso).sort(byDue),
+      },
+      {
+        key: "week",
+        label: "Due this week",
+        items: mine
+          .filter((a) => a.due > todayIso && a.due <= weekEndIso)
+          .sort(byDue),
+      },
+    ];
+    if (buckets.every((b) => b.items.length === 0)) {
+      renderGhost(list, [
+        "Nothing pressing",
+        "Actions due this week appear here.",
+      ]);
+    } else {
+      for (const b of buckets) {
+        const head = el("div", `ltk-lh-bucket ltk-lh-bucket-${b.key}`);
+        head.append(
+          el("span", "ltk-lh-bucket-label", b.label),
+          el("span", "ltk-lh-bucket-count", String(b.items.length))
+        );
+        list.appendChild(head);
+        if (b.items.length === 0) {
+          list.appendChild(el("div", "ltk-lh-bucket-none", "None"));
+        }
+        for (const action of b.items) list.appendChild(this.renderActionRow(action));
+      }
+    }
+    const shown = buckets.reduce((n, b) => n + b.items.length, 0);
+    if (mine.length > shown) {
+      list.appendChild(
+        el(
+          "div",
+          "ltk-lh-bucket-none",
+          `${mine.length - shown} more due later or without a due date — see Actions.`
+        )
+      );
+    }
   }
 
   // ---- actions ----

@@ -528,13 +528,23 @@ input[type="color"].app-cat-swatch {
   align-items: stretch;
   gap: 10px;
   flex-wrap: wrap;
-  background: #fff;
-  border-radius: 10px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
   padding: 0 10px;
+  border-bottom: 1px solid #eceae5;
 }
 .app-settings-tabsrow .app-settings-tabs { flex: 1; }
 .app-settings-tabsrow .app-viewas { align-self: center; }
+/* the single settings card: tabs row on top, body below, no gap */
+.app-settings-card {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+}
+.app-settings-card .app-settings-body { box-shadow: none; border-radius: 0; }
+.app-settings-card .app-save-bar { border-radius: 0; border-right: none; border-top: none; }
 .app-viewas { display: flex; align-items: center; gap: 7px; margin-left: auto; }
 .app-viewas-select { padding: 5px 8px; font-size: 12.5px; }
 .app-viewas-banner {

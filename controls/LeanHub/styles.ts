@@ -3,7 +3,7 @@
 // the settings forms.
 
 export const LEANHUB_CSS = `
-.ltk-lh-boards { display: flex; flex-direction: column; gap: 8px; padding: 12px; max-width: 860px; }
+.ltk-lh-boards { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding: 12px; max-width: 860px; }
 .ltk-lh-boardrow { display: flex; align-items: center; gap: 12px; font: inherit; text-align: left;
   background: var(--ltk-bg); border: 1px solid color-mix(in srgb, var(--ltk-fg) 14%, transparent);
   border-radius: 8px; padding: 12px 14px; cursor: pointer; }
@@ -163,6 +163,43 @@ export const LEANHUB_CSS = `
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* ---- my day ---- */
+.ltk-lh-myday {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(340px, 3fr) minmax(300px, 2fr);
+}
+.ltk-lh-myday-col { min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+.ltk-lh-myday-cal { border-right: 1px solid var(--ltk-hairline); }
+.ltk-lh-myday-head { flex: 0 0 auto; font-size: 14px; font-weight: 700; padding: 12px 14px 4px; }
+.ltk-lh-myday-list { max-width: none; }
+.ltk-lh-bucket { display: flex; align-items: center; gap: 8px; padding: 12px 2px 2px; }
+.ltk-lh-bucket-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ltk-muted);
+}
+.ltk-lh-bucket-count {
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 999px;
+  padding: 1px 7px;
+  background: color-mix(in srgb, var(--ltk-fg) 8%, transparent);
+  color: var(--ltk-muted);
+}
+.ltk-lh-bucket-late .ltk-lh-bucket-label { color: #d13438; }
+.ltk-lh-bucket-late .ltk-lh-bucket-count { background: #fdecec; color: #d13438; }
+.ltk-lh-bucket-today .ltk-lh-bucket-label { color: #b45309; }
+.ltk-lh-bucket-today .ltk-lh-bucket-count { background: #fef3e2; color: #b45309; }
+.ltk-lh-bucket-none { font-size: 12px; color: var(--ltk-muted); padding: 2px 2px 4px; }
+@media (max-width: 760px) {
+  .ltk-lh-myday { grid-template-columns: 1fr; }
+  .ltk-lh-myday-cal { border-right: none; border-bottom: 1px solid var(--ltk-hairline); }
 }
 
 /* ---- actions tab ---- */

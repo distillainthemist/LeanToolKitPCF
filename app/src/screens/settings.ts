@@ -143,7 +143,10 @@ export function mountSettings(parent: HTMLElement, initialTab = ""): () => void 
     }
     const saveBar = el("div", "app-save-bar");
     const body = el("div", "app-settings-body");
-    wrap.append(tabsRow, saveBar, body);
+    // one card: tabs flush on top of the body (same look as the hub)
+    const card = el("div", "app-settings-card");
+    card.append(tabsRow, saveBar, body);
+    wrap.appendChild(card);
 
     // ---- unsaved-changes tracking ----
     let dirty = false;
