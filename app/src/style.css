@@ -213,6 +213,49 @@ body {
   display: grid;
   grid-template-columns: minmax(320px, 2fr) 5fr;
   gap: 8px;
+  position: relative; /* the loading overlay anchors here */
+}
+
+/* loading state — spinner plus a random quote, tastefully muted */
+.app-loading {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 40px 24px;
+  text-align: center;
+}
+.app-loading-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  background: rgba(242, 241, 238, 0.9);
+  border-radius: 8px;
+}
+.app-loading-spinner {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 3px solid #e3e0da;
+  border-top-color: var(--app-accent);
+  animation: app-spin 0.9s linear infinite;
+}
+@keyframes app-spin {
+  to { transform: rotate(360deg); }
+}
+.app-loading-quote {
+  max-width: 460px;
+  font-size: 15px;
+  font-style: italic;
+  color: #57534a;
+  line-height: 1.55;
+}
+.app-loading-by {
+  font-size: 12.5px;
+  color: #8a847a;
 }
 .app-board-left, .app-board-right {
   position: relative; /* dialog overlays anchor here */

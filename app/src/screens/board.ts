@@ -24,6 +24,7 @@ import {
 import { parseMeetingInfo } from "../../../shared/schema/meeting";
 import { openDialog } from "../../../shared/ui/dialog";
 import { el } from "../../../shared/ui/dom";
+import { showLoading } from "../loading";
 import { appTheme } from "../cardHost";
 import { detectHost } from "../runtime";
 import { getBoard } from "../store/boards";
@@ -45,8 +46,13 @@ export function mountBoard(
 ): () => void {
   const cleanups: Array<() => void> = [];
   void (async () => {
+    // the board + calendar fetches take a moment on cold Dataverse —
+    // hold the screen with a spinner and a quote in the meantime
+    const stopLoading = showLoading(parent);
+    cleanups.push(stopLoading);
     const hosted = await detectHost();
     if (!hosted) {
+      stopLoading();
       parent.appendChild(
         el(
           "div",
@@ -58,10 +64,11 @@ export function mountBoard(
     }
     const board = await getBoard(boardId);
     if (!board) {
+      stopLoading();
       parent.appendChild(el("p", "app-missing", `Unknown board: ${boardId}`));
       return;
     }
-    await renderBoard(parent, board, iso, cleanups);
+    await renderBoard(parent, board, iso, cleanups, stopLoading);
   })();
   return () => cleanups.forEach((fn) => fn());
 }
@@ -70,12 +77,14 @@ async function renderBoard(
   parent: HTMLElement,
   board: BoardSummary,
   deepLinkIso: string,
-  cleanups: Array<() => void>
+  cleanups: Array<() => void>,
+  stopLoading: () => void
 ): Promise<void> {
   const boardManifest = parseManifest(board.manifestRaw);
   const catalogSvg = await catalogSvgByType();
   let instances = await listInstances(board.boardId);
   let cardRows = await rowsForBoard(board.boardId);
+  stopLoading(); // data is in — the layout below builds synchronously
   let current: InstanceSummary | null = null;
 
   // an adjusted meeting renders its own override manifest instead
@@ -182,25 +191,25 @@ async function renderBoard(
     window.history.replaceState(null, "", `#/board/${board.boardId}/${iso}`);
   };
 
-  const createAndSelect = async (whenIso: string) => {
-    current = await createInstance(board.boardId, whenIso);
-    instances = await listInstances(board.boardId);
-    cardRows = await rowsForBoard(board.boardId);
-    refreshScheduler();
-    rememberSelection();
-    renderTiles();
+  const createAndSelect = async (whenIso: string, adhoc = false) => {
+    // creating the record (plus its data-policy card rows) takes a
+    // moment — overlay the whole split with the spinner + quote
+    const stop = showLoading(split, true);
+    try {
+      current = await createInstance(board.boardId, whenIso, adhoc);
+      instances = await listInstances(board.boardId);
+      cardRows = await rowsForBoard(board.boardId);
+      refreshScheduler();
+      rememberSelection();
+      renderTiles();
+    } finally {
+      stop();
+    }
   };
 
   const schedulerView = new MeetingSchedulerView(leftHost, {
     onAddAdhoc: (iso) => {
-      void (async () => {
-        current = await createInstance(board.boardId, `${iso}:00Z`, true);
-        instances = await listInstances(board.boardId);
-        cardRows = await rowsForBoard(board.boardId);
-        refreshScheduler();
-        rememberSelection();
-        renderTiles();
-      })();
+      void createAndSelect(`${iso}:00Z`, true);
     },
     onSelect: (inst) => {
       const existing = instances.find((i) => i.when.startsWith(inst.iso));
