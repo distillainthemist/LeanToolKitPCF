@@ -37,11 +37,13 @@ import {
   VIEWER_ID,
 } from "../demoData";
 import { el } from "../../../shared/ui/dom";
+import { showLoading } from "../loading";
 
 export function mountHub(parent: HTMLElement): () => void {
   const host = editorHost(parent);
-  const note = el("div", "app-board-note", "Loading…");
-  parent.prepend(note);
+  // the My-day rollup pulls boards, roster, actions, org and prefs —
+  // hold the card with the spinner + quote until it's all in
+  const stopLoading = showLoading(host);
   let view: LeanHubView | null = null;
 
   void (async () => {
@@ -99,7 +101,6 @@ export function mountHub(parent: HTMLElement): () => void {
       orgRaw = await orgJson();
       protectedRaw = site !== "" ? await protectedTimesJson(site) : "[]";
       prefsRaw = await userPrefsJson(viewerId);
-      note.remove();
     } else {
       viewerId = VIEWER_ID;
       meetingsRaw = JSON.stringify(BOARDS);
@@ -108,8 +109,15 @@ export function mountHub(parent: HTMLElement): () => void {
       protectedRaw = JSON.stringify(PROTECTED_TIMES);
       actions = parseActionsJson(JSON.stringify(ACTIONS));
       sourceLabels = Object.fromEntries(ACTION_SOURCES.map((s) => [s.instanceId, s.label]));
-      note.textContent = "Demo mode — no Power Apps host; writes are logged, not saved.";
+      parent.prepend(
+        el(
+          "div",
+          "app-board-note",
+          "Demo mode — no Power Apps host; writes are logged, not saved."
+        )
+      );
     }
+    stopLoading();
 
     view = new LeanHubView(host, {
       onSelectMeeting: (inst) => {
