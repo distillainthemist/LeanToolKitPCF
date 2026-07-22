@@ -135,7 +135,8 @@ export function mountHub(parent: HTMLElement): () => void {
           : console.log("demo: protected", times),
     });
     view.setTheme(appTheme());
-    view.setChrome("My day", "");
+    // no title bar — the tabs are the hub's top edge
+    view.setChrome("", "");
     view.setMeetings(parseHubMeetings(meetingsRaw));
     view.setOrgTree(parseOrgTree(orgRaw));
     view.setPeople(parsePeople(peopleRaw), viewerId);

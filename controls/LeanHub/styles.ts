@@ -22,12 +22,12 @@ export const LEANHUB_CSS = `
 }
 .ltk-lh-tab {
   font: inherit;
-  font-size: 13px;
+  font-size: 15.5px;
   font-weight: 600;
   border: none;
   background: none;
   color: var(--ltk-muted);
-  padding: 10px 14px 8px;
+  padding: 12px 16px 10px;
   border-bottom: 2px solid transparent;
   cursor: pointer;
 }
