@@ -28,6 +28,7 @@ import { showLoading } from "../loading";
 import { appTheme } from "../cardHost";
 import { currentViewer, detectHost } from "../runtime";
 import { canViewBoard, getBoard } from "../store/boards";
+import { viewerPerson } from "../store/people";
 import { BoardSummary, parseManifest } from "../store/mappers";
 import { catalogSvgByType } from "../store/catalog";
 import { rowsForBoard, toLite } from "../store/cards";
@@ -307,6 +308,9 @@ async function renderBoard(
   schedulerView.setChrome(String(blob.title ?? board.name), "");
   schedulerView.setMeetingInfo(parseMeetingInfo(blobRaw));
   schedulerView.setColumns(parseMeetingColumns(s("columns")));
+  // the viewer's roster crew defaults the schedule to their own meetings
+  const viewerRow = await viewerPerson(currentViewer()?.objectId ?? "");
+  schedulerView.setViewerCrew(viewerRow?.crew ?? "");
   refreshScheduler();
   if (deepLinkIso !== "") schedulerView.selectByIso(deepLinkIso);
 }

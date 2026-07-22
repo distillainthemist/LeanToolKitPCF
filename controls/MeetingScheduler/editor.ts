@@ -40,6 +40,9 @@ export class MeetingSchedulerView {
   private meetingInfo: MeetingInfo | null = null;
   private aboutOpen = false;
   private adhocOpen = false;
+  /** The viewer's crew — when set, the list defaults to just that crew. */
+  private viewerCrew = "";
+  private crewFilterOn = true;
 
   constructor(host: HTMLElement, private readonly cb: MeetingViewCallbacks) {
     ensureStylesheet("ltk-base-css", LTK_BASE_CSS);
@@ -97,6 +100,34 @@ export class MeetingSchedulerView {
     this.render();
   }
 
+  /** The signed-in viewer's crew — defaults the list to that crew (with a
+   *  toggle to show every crew). "" disables the filter entirely. */
+  setViewerCrew(crew: string): void {
+    if (this.viewerCrew !== crew) {
+      this.viewerCrew = crew;
+      this.render();
+    }
+  }
+
+  /** Filtering is meaningful only when the viewer's crew is one of this
+   *  meeting's crews and the window actually has crew-tagged instances. */
+  private crewFilterAvailable(): boolean {
+    return (
+      this.viewerCrew !== "" &&
+      this.crews.some((c) => c.toLowerCase() === this.viewerCrew.toLowerCase()) &&
+      this.instances.some((i) => i.crew !== "")
+    );
+  }
+
+  private visibleInstances(): MeetingInstance[] {
+    if (!this.crewFilterOn || !this.crewFilterAvailable()) return this.instances;
+    const mine = this.viewerCrew.toLowerCase();
+    // crewless instances are for everyone — they stay
+    return this.instances.filter(
+      (i) => i.crew === "" || i.crew.toLowerCase() === mine
+    );
+  }
+
   /**
    * Programmatic selection (the selectIso deep-link): behaves exactly like
    * tapping the row — selects, renders, and emits through onSelect. Accepts
@@ -108,6 +139,10 @@ export class MeetingSchedulerView {
       this.instances.find((i) => i.iso === iso) ??
       this.instances.find((i) => i.date === iso);
     if (!target) return;
+    // a deep link may land on another crew's instance — unhide it
+    if (!this.visibleInstances().some((i) => i.iso === target.iso)) {
+      this.crewFilterOn = false;
+    }
     this.selectedIso = target.iso;
     this.render();
     this.cb.onSelect(target, this.mergedValues(target));
@@ -197,10 +232,45 @@ export class MeetingSchedulerView {
 
     if (this.cb.onAddAdhoc && !this.readOnly) this.renderAdhocAdder(body);
 
+    // crew filter strip — the viewer's crew by default, one tap for all
+    if (this.crewFilterAvailable()) {
+      const strip = el("div", "ltk-ms-crewfilter");
+      strip.appendChild(
+        el(
+          "span",
+          "ltk-ms-crewfilter-label",
+          this.crewFilterOn
+            ? `Showing Crew ${this.viewerCrew}`
+            : "Showing all crews"
+        )
+      );
+      const toggle = el("button", "ltk-ms-meta-toggle") as HTMLButtonElement;
+      toggle.type = "button";
+      toggle.textContent = this.crewFilterOn
+        ? "Show all crews"
+        : `Just Crew ${this.viewerCrew}`;
+      toggle.addEventListener("click", () => {
+        this.crewFilterOn = !this.crewFilterOn;
+        this.render();
+      });
+      strip.appendChild(toggle);
+      body.appendChild(strip);
+    }
+
     const today = todayIso();
+    const visible = this.visibleInstances();
     const list = el("div", "ltk-ms-list");
-    for (const inst of this.instances) {
+    for (const inst of visible) {
       list.appendChild(this.renderRow(inst, today));
+    }
+    if (visible.length === 0) {
+      list.appendChild(
+        el(
+          "div",
+          "ltk-ms-hint",
+          `No Crew ${this.viewerCrew} meetings in the window — show all crews above.`
+        )
+      );
     }
     body.appendChild(list);
 

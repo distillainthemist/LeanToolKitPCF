@@ -40,6 +40,17 @@ export const MEETING_CSS = `
   padding: 2px 4px;
 }
 .ltk-ms-meta-toggle:hover { color: var(--ltk-accent); }
+.ltk-ms-crewfilter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px 0;
+}
+.ltk-ms-crewfilter-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ltk-muted);
+}
 .ltk-ms-about {
   padding: 8px 12px;
   border-bottom: 1px solid var(--ltk-hairline);
