@@ -26,6 +26,7 @@ import {
   HubMeeting,
   HubPrefs,
   instanceForPerson,
+  meetingForPerson,
   meetingMatchesOrg,
   OrgScope,
   projectInstances,
@@ -260,11 +261,21 @@ export class LeanHubView {
   private renderBoards(body: HTMLElement): void {
     const wrap = el("div", "ltk-lh-boards");
     body.appendChild(wrap);
-    if (!this.boards || this.boards.length === 0) {
-      wrap.appendChild(el("div", "ltk-lh-empty", "No boards yet."));
+    // the active scope filters the directory; a board with no cadence
+    // identity can't be judged, so it stays visible
+    const byId = new Map(this.meetings.map((m) => [m.boardId, m]));
+    const boards = (this.boards ?? []).filter((b) => {
+      const meeting = byId.get(b.boardId);
+      if (!meeting) return true;
+      return this.scopeKind === "person"
+        ? meetingForPerson(meeting, this.scopePerson)
+        : meetingMatchesOrg(meeting, this.scopeOrg);
+    });
+    if (boards.length === 0) {
+      wrap.appendChild(el("div", "ltk-lh-empty", "No rituals match this scope."));
       return;
     }
-    for (const b of this.boards) {
+    for (const b of boards) {
       const row = el("button", "ltk-lh-boardrow") as HTMLButtonElement;
       row.type = "button";
       const color = this.boardColors[b.boardId] ?? "";
@@ -304,15 +315,6 @@ export class LeanHubView {
   }
 
   private renderCalendar(body: HTMLElement): void {
-    // rituals directory as a view format — no scope or date navigation
-    if (this.view === "boards") {
-      const bar = el("div", "ltk-lh-bar");
-      bar.appendChild(this.viewSelect());
-      body.appendChild(bar);
-      this.renderBoards(body);
-      return;
-    }
-
     const days = this.visibleDays();
     const from = days[0];
     const to = days[days.length - 1];
@@ -352,6 +354,14 @@ export class LeanHubView {
     }
 
     bar.appendChild(this.viewSelect());
+
+    // rituals directory as a view format — same person/org scoping as the
+    // time grids, just no date navigation
+    if (this.view === "boards") {
+      body.appendChild(bar);
+      this.renderBoards(body);
+      return;
+    }
 
     bar.appendChild(el("span", "ltk-lh-bar-gap"));
     const nav = (label: string, deltaDays: number | null) => {

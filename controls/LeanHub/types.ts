@@ -186,6 +186,16 @@ export function instanceForPerson(
 }
 
 /**
+ * Person scope at the meeting level (the rituals directory): the owner or
+ * any participant, crew regardless — a directory row is not an occurrence.
+ */
+export function meetingForPerson(meeting: HubMeeting, whoId: string): boolean {
+  if (whoId === "") return true;
+  if (meeting.info?.owner?.whoId === whoId) return true;
+  return meeting.info?.participants.some((x) => x.whoId === whoId) ?? false;
+}
+
+/**
  * Cascading org scope: each set level narrows — site alone shows the whole
  * site (department- and area-level meetings included); site + department
  * narrows to that department; area narrows further. All empty = everything.
