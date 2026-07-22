@@ -126,14 +126,18 @@ async function renderBoard(
   const rightHost = el("div", "app-board-right");
   split.append(leftHost, rightHost);
 
-  // collapse the scheduler so the board takes the full width (starts
-  // visible each mount — it is the only way to pick an occurrence)
-  let scheduleHidden = false;
-  scheduleBtn.addEventListener("click", () => {
-    scheduleHidden = !scheduleHidden;
-    split.classList.toggle("app-board-solo", scheduleHidden);
-    scheduleBtn.textContent = scheduleHidden ? "Show schedule" : "Hide schedule";
-  });
+  // collapse the scheduler so the board takes the full width. Arriving
+  // with a pre-selected occurrence (My day / Cadence deep link) starts
+  // collapsed — the meeting is the focus; otherwise it starts visible,
+  // as it is the only way to pick an occurrence.
+  let scheduleHidden = deepLinkIso !== "";
+  const setScheduleHidden = (on: boolean) => {
+    scheduleHidden = on;
+    split.classList.toggle("app-board-solo", on);
+    scheduleBtn.textContent = on ? "Show schedule" : "Hide schedule";
+  };
+  setScheduleHidden(scheduleHidden);
+  scheduleBtn.addEventListener("click", () => setScheduleHidden(!scheduleHidden));
 
   const gridView = new BoardGridView(rightHost, {
     onSelect: (e) => {
@@ -150,7 +154,14 @@ async function renderBoard(
     if (!current) return;
     const m = activeManifest();
     const adjusted = m !== boardManifest;
-    const tiles = joinTiles(m.slots, current.id, toLite(cardRows), catalogSvg);
+    // card title bars carry their theme colour; cards without one fall
+    // back to the meeting/app accent (same rule as the walk view's tabs)
+    const fallbackBar =
+      String(((blob.theme ?? {}) as Record<string, unknown>).titlebar ?? "").trim() ||
+      appTheme().titleBar;
+    const tiles = joinTiles(m.slots, current.id, toLite(cardRows), catalogSvg).map(
+      (t) => (t.barColor === "" ? { ...t, barColor: fallbackBar } : t)
+    );
     gridView.setColumnTitles(m.columnTitles);
     gridView.setTiles(tiles, parseColumns(m.grid, tiles));
     status.textContent =
@@ -233,7 +244,9 @@ async function renderBoard(
       }
       // no record yet: confirm before creating (accidental taps were a
       // real source of stray instances in the pilot). Host the dialog
-      // inside the scheduler's themed root so the toolkit styles apply.
+      // inside the scheduler's themed root so the toolkit styles apply —
+      // which must be visible (a hidden pane would swallow the dialog)
+      if (scheduleHidden) setScheduleHidden(false);
       const dlg = openDialog({
         host: (leftHost.querySelector(".ltk-root") as HTMLElement) ?? leftHost,
         title: "Start this meeting?",
