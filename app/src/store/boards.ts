@@ -25,6 +25,42 @@ export async function getBoard(boardId: string): Promise<BoardSummary | null> {
   return row ? boardFromRow(row) : null;
 }
 
+/**
+ * Confidential meetings (wizard Basics toggle) are viewable only by their
+ * owner and participants. Non-confidential boards are open to everyone;
+ * unparseable blobs stay open rather than locking anyone out.
+ */
+export function canViewBoard(occurrenceSettingsRaw: string, whoId: string): boolean {
+  const t = occurrenceSettingsRaw.trim();
+  if (!t.startsWith("{")) return true;
+  try {
+    const o = JSON.parse(t) as {
+      confidential?: unknown;
+      meeting?: {
+        owner?: { whoId?: string };
+        participants?: { whoId?: string }[];
+      };
+    };
+    if (o.confidential !== true) return true;
+    if (whoId === "") return false;
+    if (o.meeting?.owner?.whoId === whoId) return true;
+    return (o.meeting?.participants ?? []).some((p) => p.whoId === whoId);
+  } catch {
+    return true;
+  }
+}
+
+/** True when the blob marks the meeting confidential. */
+export function isConfidentialBoard(occurrenceSettingsRaw: string): boolean {
+  const t = occurrenceSettingsRaw.trim();
+  if (!t.startsWith("{")) return false;
+  try {
+    return (JSON.parse(t) as { confidential?: unknown }).confidential === true;
+  } catch {
+    return false;
+  }
+}
+
 /** Create (or update) a meeting board from the wizard's outputJSON. */
 export async function saveMeetingBoard(
   boardId: string,

@@ -26,8 +26,8 @@ import { openDialog } from "../../../shared/ui/dialog";
 import { el } from "../../../shared/ui/dom";
 import { showLoading } from "../loading";
 import { appTheme } from "../cardHost";
-import { detectHost } from "../runtime";
-import { getBoard } from "../store/boards";
+import { currentViewer, detectHost } from "../runtime";
+import { canViewBoard, getBoard } from "../store/boards";
 import { BoardSummary, parseManifest } from "../store/mappers";
 import { catalogSvgByType } from "../store/catalog";
 import { rowsForBoard, toLite } from "../store/cards";
@@ -66,6 +66,17 @@ export function mountBoard(
     if (!board) {
       stopLoading();
       parent.appendChild(el("p", "app-missing", `Unknown board: ${boardId}`));
+      return;
+    }
+    if (!canViewBoard(board.occurrenceSettingsRaw, currentViewer()?.objectId ?? "")) {
+      stopLoading();
+      parent.appendChild(
+        el(
+          "div",
+          "app-board-note",
+          "This meeting is confidential — only its owner and participants can view it."
+        )
+      );
       return;
     }
     await renderBoard(parent, board, iso, cleanups, stopLoading);

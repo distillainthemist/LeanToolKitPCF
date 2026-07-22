@@ -16,7 +16,7 @@ import { parsePeople } from "../../../shared/schema/people";
 import { appTheme, editorHost } from "../cardHost";
 import { currentViewer, detectHost } from "../runtime";
 import { actionsForViewer, upsertActions } from "../store/actions";
-import { listBoards } from "../store/boards";
+import { canViewBoard, listBoards } from "../store/boards";
 import { selfHealCatalog } from "../store/catalog";
 import {
   protectedTimesJson,
@@ -80,7 +80,10 @@ export function mountHub(parent: HTMLElement): () => void {
       }
       site = me.site;
 
-      const boards = await listBoards();
+      // confidential meetings exist only for their owner + participants
+      const boards = (await listBoards()).filter((b) =>
+        canViewBoard(b.occurrenceSettingsRaw, viewerId)
+      );
       meetingsRaw = JSON.stringify(
         boards
           .filter((b) => b.kind === "meeting" && b.occurrenceSettingsRaw.trim() !== "")
@@ -152,7 +155,9 @@ export function mountHub(parent: HTMLElement): () => void {
       const colorByCategory = Object.fromEntries(
         cats.filter((c) => c.color !== "").map((c) => [c.name, c.color])
       );
-      const allBoards = await listBoards();
+      const allBoards = (await listBoards()).filter((b) =>
+        canViewBoard(b.occurrenceSettingsRaw, viewerId)
+      );
       const dir = allBoards.map((b) => ({
         boardId: b.boardId,
         name: b.name,

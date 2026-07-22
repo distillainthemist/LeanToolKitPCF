@@ -78,6 +78,8 @@ export interface WizardDraft {
   meetingCategory: string;
   /** Participants may adjust individual instances (instance composer). */
   instancesAdjustable: boolean;
+  /** Only the owner and participants can view the meeting. */
+  confidential: boolean;
   /** Weekly topic rotation through the month: [1st..5th week]. */
   weekTopics: string[];
   /** Daily/shiftly topics keyed by weekday label ("Mon".."Sun"). */
@@ -106,6 +108,7 @@ export function emptyDraft(): WizardDraft {
     columns: "",
     meetingCategory: "",
     instancesAdjustable: false,
+    confidential: false,
     weekTopics: [],
     dayTopics: {},
     participants: [],
@@ -114,7 +117,7 @@ export function emptyDraft(): WizardDraft {
   };
 }
 
-const MANAGED_TOP = ["cardType", "title", "config", "meeting", "meetingCategory", "instancesAdjustable"];
+const MANAGED_TOP = ["cardType", "title", "config", "meeting", "meetingCategory", "instancesAdjustable", "confidential"];
 const MANAGED_CONFIG = [
   "category",
   "daysOfWeek",
@@ -150,6 +153,7 @@ export function parseWizardDraft(raw: string | null | undefined): WizardDraft {
   draft.title = s(o.title);
   draft.meetingCategory = s(o.meetingCategory);
   draft.instancesAdjustable = o.instancesAdjustable === true;
+  draft.confidential = o.confidential === true;
   const config = (o.config ?? {}) as Record<string, unknown>;
   if (typeof config === "object" && !Array.isArray(config)) {
     const cat = s(config.category);
@@ -238,6 +242,7 @@ export function serializeWizardDraft(draft: WizardDraft): string {
   if (draft.title !== "") out.title = draft.title;
   if (draft.meetingCategory !== "") out.meetingCategory = draft.meetingCategory;
   if (draft.instancesAdjustable) out.instancesAdjustable = true;
+  if (draft.confidential) out.confidential = true;
   out.config = config;
   const meeting = buildMeetingSection({
     purpose: draft.purpose,

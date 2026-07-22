@@ -27,7 +27,7 @@ import { cardMounter, supportedCardTypes } from "../cardRegistry";
 import { appTheme, editorHost } from "../cardHost";
 import { currentViewer, detectHost } from "../runtime";
 import { actionsForBoard, actionsForInstance, upsertActions } from "../store/actions";
-import { getBoard } from "../store/boards";
+import { canViewBoard, getBoard } from "../store/boards";
 import {
   createInstanceRow,
   ensureLiveRow,
@@ -132,6 +132,21 @@ export function mountCardEditor(
     const slot = manifest?.slots.find((x) => x.cardId === cardId);
     if (!board || !manifest || !slot) {
       parent.appendChild(el("p", "app-missing", `Unknown card ${cardId} on ${boardId}`));
+      return;
+    }
+    // meeting-record cards of a confidential meeting are for its owner and
+    // participants only (live/template editing stays with the designer)
+    if (
+      !isLive &&
+      !canViewBoard(board.occurrenceSettingsRaw, currentViewer()?.objectId ?? "")
+    ) {
+      parent.appendChild(
+        el(
+          "div",
+          "app-board-note",
+          "This meeting is confidential — only its owner and participants can view it."
+        )
+      );
       return;
     }
 

@@ -492,6 +492,21 @@ export class MeetingWizardView {
     body.appendChild(
       this.row("Owner", ownerWrap, "Pick from the roster, or type any name.")
     );
+
+    const conf = el("input", "") as HTMLInputElement;
+    conf.type = "checkbox";
+    conf.checked = this.draft.confidential;
+    conf.disabled = this.readOnly;
+    conf.addEventListener("change", () => {
+      this.draft.confidential = conf.checked;
+      this.commit();
+    });
+    const confWrap = el("label", "ltk-mw-help");
+    confWrap.append(
+      conf,
+      " Confidential — only the owner and participants can view this meeting"
+    );
+    body.appendChild(confWrap);
   }
 
   private renderOrg(body: HTMLElement): void {

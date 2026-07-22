@@ -11,6 +11,7 @@ import { promptText, promptUnsaved } from "../prompts";
 import { currentViewer, detectHost } from "../runtime";
 import { EmulatedRole, effectivePerson, setViewAsRole, viewAsRole } from "../viewAs";
 import {
+  isConfidentialBoard,
   listBoards,
   renameBoardsDepartment,
   renameBoardsSite,
@@ -1763,6 +1764,11 @@ async function renderBoardsAdmin(body: HTMLElement, me: RosterPerson): Promise<v
       titleRow.appendChild(el("span", "", b.name));
       if (b.isArchived) {
         titleRow.appendChild(el("span", "app-status-badge app-status-revoked", "Archived"));
+      }
+      // admins keep management visibility of confidential rituals; the
+      // meeting content itself stays owner/participant-only
+      if (isConfidentialBoard(b.occurrenceSettingsRaw)) {
+        titleRow.appendChild(el("span", "app-status-badge", "🔒 Confidential"));
       }
       if (b.category !== "") {
         const chip = el("span", "app-ritual-cat", b.category);
