@@ -350,11 +350,36 @@ function cycleLength(roster: RosterBlock[]): number {
   return roster.reduce((a, b) => a + b.len, 0);
 }
 
-/** Stagger between crews: the next crew starts days when the previous crew
- *  goes onto nights — i.e. the length of the pattern's first D block. */
+/** Stagger between crews of a single-day-block pattern: the next crew
+ *  starts days when the previous crew goes onto nights — i.e. the length
+ *  of the pattern's first D block. */
 function crewStagger(roster: RosterBlock[]): number {
   const firstD = roster.find((b) => b.type === "D");
   return firstD ? firstD.len : roster[0]?.len ?? 1;
+}
+
+/**
+ * When each crew joins the roster. Crew 1 starts the written sequence on
+ * the base date. A pattern with several sub-sequences (day block, night
+ * block, days off, then another day block…) staggers the next crews onto
+ * the LATER sub-sequences: crew 2 begins their own pattern on the date
+ * the second day block commences, crew 3 on the third, and so on. With
+ * more crews than day blocks the remainder wrap around with the classic
+ * first-block stagger (e.g. 2D-2N-4O across 4 crews → 0/2/4/6).
+ */
+function crewOffset(roster: RosterBlock[], idx: number): number {
+  if (idx === 0) return 0;
+  const dStarts: number[] = [];
+  let at = 0;
+  for (const b of roster) {
+    if (b.type === "D") dStarts.push(at);
+    at += b.len;
+  }
+  if (dStarts.length === 0) return idx * crewStagger(roster);
+  return (
+    dStarts[idx % dStarts.length] +
+    Math.floor(idx / dStarts.length) * crewStagger(roster)
+  );
 }
 
 /** What crew `idx` is doing on `date` under the roster. */
@@ -366,7 +391,7 @@ export function crewStateOn(
 ): "D" | "N" | "O" {
   const cycle = cycleLength(roster);
   if (cycle === 0) return "O";
-  let p = mod(daysBetween(baseStart, date) - idx * crewStagger(roster), cycle);
+  let p = mod(daysBetween(baseStart, date) - crewOffset(roster, idx), cycle);
   for (const block of roster) {
     if (p < block.len) return block.type;
     p -= block.len;

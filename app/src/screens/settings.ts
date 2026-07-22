@@ -405,7 +405,7 @@ export function openRosterPreview(pat: {
       el(
         "div",
         "app-modal-note",
-        "D = day shift, N = night shift, blank = off. Crew 1 starts the pattern on the base date; each next crew is staggered by the first day-block."
+        "D = day shift, N = night shift, blank = off. Crew 1 starts the sequence on the base date; crew 2 starts their pattern when the second day block commences, crew 3 on the third, and so on."
       )
     );
   }
