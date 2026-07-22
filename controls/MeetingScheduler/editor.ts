@@ -19,6 +19,10 @@ export interface MeetingViewCallbacks {
   onSelect: (instance: MeetingInstance, values: Record<string, string>) => void;
   /** The maker added an ad-hoc meeting at `iso` (yyyy-mm-ddTHH:MM). */
   onAddAdhoc?: (iso: string) => void;
+  /** The + on an uncreated row — create this meeting's record. */
+  onCreate?: (instance: MeetingInstance) => void;
+  /** A kebab menu action on a created row. */
+  onMenu?: (instance: MeetingInstance, action: "edit" | "reset" | "move") => void;
 }
 
 const CREW_FALLBACKS = ["#2b88d8", "#107c10", "#f2c811", "#8764b8"];
@@ -120,12 +124,13 @@ export class MeetingSchedulerView {
   }
 
   private visibleInstances(): MeetingInstance[] {
-    if (!this.crewFilterOn || !this.crewFilterAvailable()) return this.instances;
+    // past occurrences that never got a record are assumed not to have
+    // happened — they only add noise
+    const held = this.instances.filter((i) => i.status !== "missing");
+    if (!this.crewFilterOn || !this.crewFilterAvailable()) return held;
     const mine = this.viewerCrew.toLowerCase();
     // crewless instances are for everyone — they stay
-    return this.instances.filter(
-      (i) => i.crew === "" || i.crew.toLowerCase() === mine
-    );
+    return held.filter((i) => i.crew === "" || i.crew.toLowerCase() === mine);
   }
 
   /**
@@ -187,6 +192,41 @@ export class MeetingSchedulerView {
     wrap.append(date, time, add, cancel);
   }
 
+  /** The kebab's record operations, anchored under the button. */
+  private openRowMenu(inst: MeetingInstance, anchor: HTMLElement): void {
+    this.root.querySelector(".ltk-ms-menu")?.remove();
+    const menu = el("div", "ltk-ms-menu");
+    const items: { label: string; action: "edit" | "reset" | "move" }[] =
+      inst.closed
+        ? [{ label: "Edit meeting", action: "edit" }]
+        : [
+            { label: "Reset to newly created", action: "reset" },
+            { label: "Change date/time…", action: "move" },
+          ];
+    const close = () => {
+      menu.remove();
+      document.removeEventListener("pointerdown", onDown, true);
+    };
+    const onDown = (e: PointerEvent) => {
+      if (!menu.contains(e.target as Node)) close();
+    };
+    for (const item of items) {
+      const btn = el("button", "ltk-ms-menu-item", item.label) as HTMLButtonElement;
+      btn.type = "button";
+      btn.addEventListener("click", () => {
+        close();
+        this.cb.onMenu?.(inst, item.action);
+      });
+      menu.appendChild(btn);
+    }
+    const rootRect = this.root.getBoundingClientRect();
+    const a = anchor.getBoundingClientRect();
+    menu.style.left = `${a.left - rootRect.left}px`;
+    menu.style.top = `${a.bottom - rootRect.top + 4}px`;
+    this.root.appendChild(menu);
+    document.addEventListener("pointerdown", onDown, true);
+  }
+
   // ---- helpers ----
 
   /** The value to show for a column cell: an in-card edit over the record's. */
@@ -230,8 +270,6 @@ export class MeetingSchedulerView {
       return;
     }
 
-    if (this.cb.onAddAdhoc && !this.readOnly) this.renderAdhocAdder(body);
-
     // crew filter strip — the viewer's crew by default, one tap for all
     if (this.crewFilterAvailable()) {
       const strip = el("div", "ltk-ms-crewfilter");
@@ -274,9 +312,12 @@ export class MeetingSchedulerView {
     }
     body.appendChild(list);
 
-    body.appendChild(
-      el("div", "ltk-ms-hint", "Tap a meeting to open it — rows without a record create one.")
-    );
+    // footer: the ad-hoc adder lives at the bottom of the pane
+    if (this.cb.onAddAdhoc && !this.readOnly) {
+      const footer = el("div", "ltk-ms-footer");
+      this.renderAdhocAdder(footer);
+      body.appendChild(footer);
+    }
   }
 
   /**
@@ -340,6 +381,31 @@ export class MeetingSchedulerView {
 
     // identity line: tapping it selects/opens the meeting
     const main = el("div", "ltk-ms-row-main");
+    // leading control: + creates an uncreated current/future meeting;
+    // a created meeting gets a kebab of record-level operations
+    if (!this.readOnly) {
+      if (inst.recordId === "" && inst.status === "planned" && this.cb.onCreate) {
+        const add = el("button", "ltk-ms-lead ltk-ms-lead-add", "＋") as HTMLButtonElement;
+        add.type = "button";
+        add.title = "Create this meeting's record";
+        add.addEventListener("click", (e) => {
+          e.stopPropagation();
+          this.cb.onCreate!(inst);
+        });
+        main.appendChild(add);
+      } else if (inst.recordId !== "" && this.cb.onMenu) {
+        const kebab = el("button", "ltk-ms-lead", "⋮") as HTMLButtonElement;
+        kebab.type = "button";
+        kebab.title = "Meeting record options";
+        kebab.addEventListener("click", (e) => {
+          e.stopPropagation();
+          this.openRowMenu(inst, kebab);
+        });
+        main.appendChild(kebab);
+      } else {
+        main.appendChild(el("span", "ltk-ms-lead ltk-ms-lead-blank", ""));
+      }
+    }
     main.append(
       el("span", "ltk-ms-row-date", this.prettyDate(inst)),
       el("span", "ltk-ms-row-time", inst.time)

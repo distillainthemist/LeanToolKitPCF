@@ -210,7 +210,7 @@ body {
   min-height: 0;
   display: grid;
   /* board first; details & schedule pane on the right */
-  grid-template-columns: 5fr minmax(320px, 2fr);
+  grid-template-columns: 5fr minmax(380px, 2.4fr);
   gap: 8px;
   position: relative; /* the loading overlay anchors here */
 }

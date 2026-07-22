@@ -4,6 +4,7 @@
 
 import type { Ben_ltkboardinstances } from "../generated/models/Ben_ltkboardinstancesModel";
 import { Ben_ltkboardinstancesService } from "../generated/services/Ben_ltkboardinstancesService";
+import { Ben_ltkcarddatasService } from "../generated/services/Ben_ltkcarddatasService";
 import { getBoard } from "./boards";
 import {
   createInstanceRow,
@@ -93,8 +94,18 @@ export async function createInstance(
   } as never);
   const instance = created.data ? fromRow(created.data) : null;
   if (!instance) throw new Error("instance create returned no row");
+  await seedInstanceRows(boardId, manifest.slots, instance, previous);
+  return instance;
+}
 
-  for (const slot of manifest.slots) {
+/** Seed every slot's Card Data row per its policy (create + reset). */
+async function seedInstanceRows(
+  boardId: string,
+  slots: ReturnType<typeof parseManifest>["slots"],
+  instance: InstanceSummary,
+  previous: InstanceSummary | null
+): Promise<void> {
+  for (const slot of slots) {
     if (isActionSurface(slot)) continue; // live actions table, no document
     const plan = seedPlan(slot);
     if (plan.ensureLiveRow) {
@@ -132,7 +143,6 @@ export async function createInstance(
       tileSvg
     );
   }
-  return instance;
 }
 
 /** Save (or clear, with "") the instance's board-override manifest. */
@@ -154,4 +164,52 @@ export async function closeInstance(instance: InstanceSummary): Promise<void> {
   for (const cardId of archiveSlots(manifest.slots)) {
     await stampArchiveSvg(instance.id, instance.boardId, cardId);
   }
+}
+
+/** Reopen a closed meeting so its cards can be edited again. */
+export async function reopenInstance(instanceGuid: string): Promise<void> {
+  await Ben_ltkboardinstancesService.update(instanceGuid, { ben_status: "open" });
+}
+
+/**
+ * Reset a meeting back to its newly created state: delete the instance's
+ * Card Data rows and reseed them per the data policies (carry, standard
+ * content, links), exactly as createInstance would.
+ */
+export async function resetInstance(instance: InstanceSummary): Promise<void> {
+  const board = await getBoard(instance.boardId);
+  if (!board) throw new Error(`unknown board ${instance.boardId}`);
+  const rows = await allWhere(
+    Ben_ltkcarddatasService.getAll,
+    `_ben_instance_value eq ${instance.id}`
+  );
+  for (const row of rows) {
+    await Ben_ltkcarddatasService.delete(row.ben_ltkcarddataid);
+  }
+  const previous =
+    (await listInstances(instance.boardId)).find(
+      (i) => i.when < instance.when && !i.isAdhoc && i.id !== instance.id
+    ) ?? null;
+  await seedInstanceRows(
+    instance.boardId,
+    parseManifest(board.manifestRaw).slots,
+    instance,
+    previous
+  );
+  // a per-meeting adjusted layout resets along with the content
+  if (instance.manifestRaw.trim() !== "") {
+    await saveInstanceManifest(instance.id, "");
+  }
+}
+
+/** Move a meeting record to a new scheduled datetime. */
+export async function rescheduleInstance(
+  instance: InstanceSummary,
+  whenIso: string
+): Promise<void> {
+  const board = await getBoard(instance.boardId);
+  await Ben_ltkboardinstancesService.update(instance.id, {
+    ben_when: whenIso,
+    ben_name: `${board?.name ?? instance.boardId} — ${whenIso.slice(0, 16).replace("T", " ")}`,
+  });
 }

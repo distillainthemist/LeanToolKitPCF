@@ -5,7 +5,60 @@ export const MEETING_CSS = `
 .ltk-ms-adhoc { font-size: 10.5px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
   background: color-mix(in srgb, var(--ltk-accent) 14%, transparent); color: var(--ltk-accent);
   border: 1px solid var(--ltk-accent); border-radius: 999px; padding: 1px 7px; }
-.ltk-ms-adhocadd { display: flex; gap: 6px; align-items: center; padding: 4px 12px 8px; }
+.ltk-ms-adhocadd { display: flex; gap: 6px; align-items: center; }
+.ltk-ms-footer {
+  flex: 0 0 auto;
+  border-top: 1px solid var(--ltk-hairline);
+  padding: 8px 12px;
+}
+.ltk-ms-footer .ltk-ms-adhocadd { padding: 0; }
+.ltk-ms-footer .ltk-ms-adhocbtn:first-child { width: 100%; padding: 7px 10px; }
+
+/* row lead control: + on uncreated rows, kebab on created ones */
+.ltk-ms-lead {
+  flex: 0 0 auto;
+  width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font: inherit;
+  font-size: 14px;
+  line-height: 1;
+  color: var(--ltk-muted);
+  background: none;
+  border: 1px solid var(--ltk-hairline);
+  border-radius: 7px;
+  cursor: pointer;
+  padding: 0;
+}
+.ltk-ms-lead:hover { border-color: var(--ltk-accent); color: var(--ltk-accent); }
+.ltk-ms-lead-add { border-style: dashed; font-weight: 700; }
+.ltk-ms-lead-blank { border: none; cursor: default; }
+.ltk-ms-menu {
+  position: absolute;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  min-width: 190px;
+  background: var(--ltk-bg);
+  border: 1px solid var(--ltk-hairline);
+  border-radius: 8px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.16);
+  padding: 4px;
+}
+.ltk-ms-menu-item {
+  font: inherit;
+  font-size: 12.5px;
+  text-align: left;
+  border: none;
+  background: none;
+  color: var(--ltk-fg);
+  padding: 8px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.ltk-ms-menu-item:hover { background: color-mix(in srgb, var(--ltk-accent) 10%, transparent); }
 .ltk-ms-adhocbtn { font: inherit; font-size: 12px; border: 1px solid color-mix(in srgb, var(--ltk-fg) 18%, transparent);
   background: var(--ltk-bg); border-radius: 7px; padding: 4px 10px; cursor: pointer; }
 .ltk-ms-adhocbtn:hover { border-color: var(--ltk-accent); color: var(--ltk-accent); }

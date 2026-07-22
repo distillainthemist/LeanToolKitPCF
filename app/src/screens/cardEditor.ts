@@ -333,7 +333,10 @@ export function mountCardEditor(
       // the left, saved status and Back on the right
       const titleRow = el("div", "app-card-titlerow");
       titleRow.appendChild(el("span", "app-card-meeting", board.name));
-      const meta = occurrenceMeta(board, instance);
+      let meta = occurrenceMeta(board, instance);
+      if (instance?.status === "closed") {
+        meta = meta === "" ? "closed" : `${meta} · closed`;
+      }
       if (meta !== "") titleRow.appendChild(el("span", "app-card-meta", meta));
       titleRow.append(el("span", "app-bar-gap"), saved, backBtn);
       parent.insertBefore(titleRow, walkRow);
@@ -362,7 +365,8 @@ export function mountCardEditor(
           crew: p.crew,
         })),
         theme,
-        readOnly: false,
+        // a closed meeting presents its saved state — every card read-only
+        readOnly: instance?.status === "closed",
         settings: slot.settings,
         instanceKey,
         actions,

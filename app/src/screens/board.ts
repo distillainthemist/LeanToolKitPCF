@@ -34,9 +34,13 @@ import { BoardSummary, parseManifest } from "../store/mappers";
 import { catalogSvgByType } from "../store/catalog";
 import { rowsForBoard, toLite } from "../store/cards";
 import {
+  closeInstance,
   createInstance,
   InstanceSummary,
   listInstances,
+  reopenInstance,
+  rescheduleInstance,
+  resetInstance,
 } from "../store/instances";
 import { joinTiles } from "../store/tiles";
 
@@ -95,6 +99,13 @@ async function renderBoard(
   const boardManifest = parseManifest(board.manifestRaw);
   const catalogSvg = await catalogSvgByType();
   let instances = await listInstances(board.boardId);
+  // meetings auto-close once 24 hours past — SVGs archive, cards go
+  // read-only (the kebab's Edit meeting reopens one when needed)
+  const stale = instances.filter(
+    (i) => i.status === "open" && Date.parse(i.when) < Date.now() - 24 * 3_600_000
+  );
+  for (const s of stale) await closeInstance(s);
+  if (stale.length > 0) instances = await listInstances(board.boardId);
   let cardRows = await rowsForBoard(board.boardId);
   stopLoading(); // data is in — the layout below builds synchronously
   let current: InstanceSummary | null = null;
@@ -224,6 +235,98 @@ async function renderBoard(
     onAddAdhoc: (iso) => {
       void createAndSelect(`${iso}:00Z`, true);
     },
+    // the explicit + on an uncreated row — no confirmation needed
+    onCreate: (inst) => {
+      void createAndSelect(`${inst.iso}:00Z`);
+    },
+    onMenu: (inst, action) => {
+      const rec = instances.find((i) => i.id === inst.recordId);
+      if (!rec) return;
+      const dlgHost = (leftHost.querySelector(".ltk-root") as HTMLElement) ?? leftHost;
+      if (action === "edit") {
+        // a closed meeting reopens for editing (it re-closes on the next
+        // visit once it is 24h past — the edit window is deliberate)
+        void (async () => {
+          await reopenInstance(rec.id);
+          instances = await listInstances(board.boardId);
+          if (current?.id === rec.id) {
+            current = instances.find((i) => i.id === rec.id) ?? current;
+          }
+          refreshScheduler();
+          renderTiles();
+        })();
+      } else if (action === "reset") {
+        const dlg = openDialog({
+          host: dlgHost,
+          title: "Reset this meeting?",
+          buttons: [
+            { label: "Keep as is", kind: "secondary", onClick: () => dlg.close() },
+            {
+              label: "Reset meeting",
+              kind: "primary",
+              onClick: () => {
+                dlg.close();
+                void (async () => {
+                  const stop = showLoading(split, true);
+                  try {
+                    await resetInstance(rec);
+                    instances = await listInstances(board.boardId);
+                    cardRows = await rowsForBoard(board.boardId);
+                    if (current?.id === rec.id) {
+                      current = instances.find((i) => i.id === rec.id) ?? current;
+                    }
+                    refreshScheduler();
+                    renderTiles();
+                  } finally {
+                    stop();
+                  }
+                })();
+              },
+            },
+          ],
+        });
+        dlg.body.appendChild(
+          el(
+            "p",
+            "",
+            "All edits on this meeting's cards go back to the newly created state — standard content and carried items are reseeded."
+          )
+        );
+      } else {
+        const when = el("input", "ltk-ms-adhocfield") as HTMLInputElement;
+        when.type = "datetime-local";
+        when.value = inst.iso;
+        const dlg = openDialog({
+          host: dlgHost,
+          title: "Change date & time",
+          buttons: [
+            { label: "Cancel", kind: "secondary", onClick: () => dlg.close() },
+            {
+              label: "Move meeting",
+              kind: "primary",
+              onClick: () => {
+                if (when.value === "") return;
+                dlg.close();
+                void (async () => {
+                  await rescheduleInstance(rec, `${when.value.slice(0, 16)}:00Z`);
+                  instances = await listInstances(board.boardId);
+                  if (current?.id === rec.id) {
+                    current = instances.find((i) => i.id === rec.id) ?? current;
+                    rememberSelection();
+                    renderTiles();
+                  }
+                  refreshScheduler();
+                })();
+              },
+            },
+          ],
+        });
+        dlg.body.appendChild(
+          el("p", "", "Pick the new date and time for this meeting record.")
+        );
+        dlg.body.appendChild(when);
+      }
+    },
     onSelect: (inst) => {
       const existing = instances.find((i) => i.when.startsWith(inst.iso));
       if (existing) {
@@ -266,7 +369,12 @@ async function renderBoard(
 
   const refreshScheduler = () => {
     const existingJson = JSON.stringify(
-      instances.map((i) => ({ date: i.when, recordId: i.id, adhoc: i.isAdhoc }))
+      instances.map((i) => ({
+        date: i.when,
+        recordId: i.id,
+        adhoc: i.isAdhoc,
+        closed: i.status === "closed",
+      }))
     );
     // the window runs [today − daysPrior, today + daysAhead]: the engine
     // counts daysPrior back from finalDate, so the span widens by ahead

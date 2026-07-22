@@ -65,6 +65,8 @@ export interface ExistingMeeting {
   rescheduledTo: string; // "" when not rescheduled
   /** Created outside the cadence — rendered as its own flagged row. */
   adhoc: boolean;
+  /** The record is closed (read-only; the meeting has been held). */
+  closed: boolean;
   values: Record<string, string>; // stored custom-column values, by key
 }
 
@@ -79,6 +81,8 @@ export interface MeetingInstance {
   shift: "" | "day" | "night";
   /** A record created outside the cadence (slice 5). */
   adhoc: boolean;
+  /** The record is closed — held and archived, read-only. */
+  closed: boolean;
   /** The rotation topic for this occurrence ("" = none configured). */
   topic: string;
   recordId: string; // "" when no record exists yet
@@ -333,6 +337,7 @@ export function parseExistingMeetings(raw: string | null | undefined): ExistingM
         hour: hm ? Math.max(0, Math.min(23, Number(hm[1]))) : -1,
         minute: hm ? Math.max(0, Math.min(59, Number(hm[2]))) : -1,
         adhoc: o.adhoc === true,
+        closed: o.closed === true,
         recordId: String(o.recordId ?? o.id ?? "").trim(),
         rescheduledTo: String(o.rescheduledDate ?? o.rescheduledTo ?? "").trim(),
         values,
@@ -536,6 +541,7 @@ export function generateInstances(
       shift,
       topic: topicFor(date),
       adhoc: false,
+      closed: rec?.closed ?? false,
       recordId: rec?.recordId ?? "",
       rescheduledTo: rec?.rescheduledTo ?? "",
       status: rec && rec.recordId !== "" ? "existing" : past ? "missing" : "planned",
@@ -582,6 +588,7 @@ export function generateInstances(
       shift: "",
       topic: "",
       adhoc: true,
+      closed: e.closed,
       recordId: e.recordId,
       rescheduledTo: e.rescheduledTo,
       status: "existing",
