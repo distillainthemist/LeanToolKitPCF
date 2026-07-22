@@ -350,26 +350,39 @@ function cycleLength(roster: RosterBlock[]): number {
   return roster.reduce((a, b) => a + b.len, 0);
 }
 
+/** Block type at position `p` of the written cycle. */
+function stateAtPos(roster: RosterBlock[], p: number): "D" | "N" | "O" {
+  for (const block of roster) {
+    if (p < block.len) return block.type;
+    p -= block.len;
+  }
+  return "O";
+}
+
 /**
- * When each crew joins the roster: evenly through the cycle. Crew 1
- * starts the written sequence on the base date; each next crew starts
- * their own copy of the sequence cycle ÷ crews days later (rounded when
- * the cycle doesn't divide evenly). This is the standard continuous-
- * roster construction — a well-formed pattern then puts exactly one crew
- * on days and one on nights every day, each crew's first day staggered.
- * With the crew count unknown (0), fall back to the single-block classic:
- * stagger by the first day-block's length.
+ * When each crew joins the roster. The offsets are spread evenly through
+ * the cycle (cycle ÷ crews apart — the standard continuous-roster
+ * construction, so a well-formed pattern has exactly one crew on days and
+ * one on nights every day). They are then assigned to the LISTED crews in
+ * the order each offset first takes the day shift after the base date:
+ * crew 1 starts the sequence on the base date, crew 2 picks up days when
+ * crew 1's first day block ends, and so on — whatever the internal block
+ * structure. With the crew count unknown (0), fall back to the
+ * single-block classic: stagger by the first day-block's length.
  */
-function crewOffset(
-  roster: RosterBlock[],
-  idx: number,
-  crewCount: number
-): number {
+function crewOffsets(roster: RosterBlock[], crewCount: number): number[] {
   const cycle = cycleLength(roster);
-  if (cycle === 0 || idx === 0) return 0;
-  if (crewCount > 0) return Math.round((idx * cycle) / crewCount) % cycle;
-  const firstD = roster.find((b) => b.type === "D");
-  return idx * (firstD ? firstD.len : roster[0]?.len ?? 1);
+  const offs = Array.from(
+    { length: crewCount },
+    (_, i) => Math.round((i * cycle) / crewCount) % cycle
+  );
+  const firstDayShift = (o: number): number => {
+    for (let t = 0; t < cycle; t++) {
+      if (stateAtPos(roster, mod(t - o, cycle)) === "D") return t;
+    }
+    return cycle;
+  };
+  return offs.sort((a, b) => firstDayShift(a) - firstDayShift(b));
 }
 
 /** What crew `idx` (of `crewCount`) is doing on `date` under the roster. */
@@ -382,15 +395,15 @@ export function crewStateOn(
 ): "D" | "N" | "O" {
   const cycle = cycleLength(roster);
   if (cycle === 0) return "O";
-  let p = mod(
-    daysBetween(baseStart, date) - crewOffset(roster, idx, crewCount),
-    cycle
-  );
-  for (const block of roster) {
-    if (p < block.len) return block.type;
-    p -= block.len;
+  let offset: number;
+  if (crewCount > 0) {
+    const offs = crewOffsets(roster, crewCount);
+    offset = offs[Math.min(idx, offs.length - 1)] ?? 0;
+  } else {
+    const firstD = roster.find((b) => b.type === "D");
+    offset = idx * (firstD ? firstD.len : roster[0]?.len ?? 1);
   }
-  return "O";
+  return stateAtPos(roster, mod(daysBetween(baseStart, date) - offset, cycle));
 }
 
 /** The first-listed crew on day / night shift on `date` (or ""). */
