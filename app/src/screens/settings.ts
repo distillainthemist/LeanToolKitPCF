@@ -40,7 +40,14 @@ import {
   SiteRosterPattern,
 } from "../store/config";
 import { parseMeetingInfo, parseOrgTree } from "../../../shared/schema/meeting";
-import { parseCategory, parseDaysOfWeek } from "../../../shared/schema/recurrence";
+import {
+  crewStateOn,
+  parseCategory,
+  parseDaysOfWeek,
+  parseLocalDate,
+  parseRosterPattern,
+  startOfDay,
+} from "../../../shared/schema/recurrence";
 import { RosterPerson } from "../store/mappers";
 import {
   DirectoryProfile,
@@ -318,6 +325,109 @@ function accentToggle(
   });
   swatch.addEventListener("input", () => onChange());
   return { el: wrap, value: () => (on.checked ? swatch.value : "") };
+}
+
+/**
+ * Roster preview: a 28-day crew × day matrix (D/N/off) from today, computed
+ * with the same engine that schedules meetings — reads the card's CURRENT
+ * values so a pattern can be checked before saving.
+ */
+export function openRosterPreview(pat: {
+  name: string;
+  pattern: string;
+  baseDate: string;
+  crews: string;
+  dayStart: string;
+}): void {
+  const overlay = el("div", "app-modal-overlay");
+  const box = el("div", "app-modal app-modal-wide");
+  box.appendChild(
+    el("div", "app-modal-title", pat.name.trim() || "Roster preview")
+  );
+
+  const roster = parseRosterPattern(pat.pattern);
+  const crews = pat.crews.split(",").map((c) => c.trim()).filter((c) => c !== "");
+  const base = parseLocalDate(pat.baseDate);
+  const problems: string[] = [];
+  if (roster.length === 0) problems.push("a valid pattern (e.g. 2D-2N-4O)");
+  if (crews.length === 0) problems.push("at least one crew");
+  if (!base) problems.push("a base date");
+
+  if (problems.length > 0) {
+    box.appendChild(
+      el("div", "app-modal-note", `To preview, this pattern still needs ${problems.join(", ")}.`)
+    );
+  } else {
+    const dayStart = pat.dayStart || "06:00";
+    const nightStart = `${String((Number(dayStart.slice(0, 2)) + 12) % 24).padStart(2, "0")}${dayStart.slice(2)}`;
+    box.appendChild(
+      el(
+        "div",
+        "app-modal-note",
+        `Next 28 days from today — ${pat.pattern.toUpperCase()}, day shift ${dayStart}` +
+          (roster.some((b) => b.type === "N") ? `, night shift ${nightStart}` : "")
+      )
+    );
+    const today = startOfDay(new Date());
+    const days = Array.from(
+      { length: 28 },
+      (_, i) => new Date(today.getTime() + i * 86_400_000)
+    );
+    const wrap = el("div", "app-roster-preview");
+    const table = el("table");
+    const head = el("tr");
+    head.appendChild(el("th", "app-rp-crew", ""));
+    const DOW = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
+    for (const d of days) {
+      const th = el("th", "", `${DOW[d.getDay()]} ${d.getDate()}`);
+      if (d.getTime() === today.getTime()) th.classList.add("app-rp-today");
+      head.appendChild(th);
+    }
+    table.appendChild(head);
+    crews.forEach((crew, idx) => {
+      const tr = el("tr");
+      tr.appendChild(el("th", "app-rp-crew", crew));
+      for (const d of days) {
+        const state = crewStateOn(roster, base!, idx, d);
+        const td = el(
+          "td",
+          state === "D" ? "app-rp-d" : state === "N" ? "app-rp-n" : "app-rp-o",
+          state === "O" ? "" : state
+        );
+        if (d.getTime() === today.getTime()) td.classList.add("app-rp-today");
+        tr.appendChild(td);
+      }
+      table.appendChild(tr);
+    });
+    wrap.appendChild(table);
+    box.appendChild(wrap);
+    box.appendChild(
+      el(
+        "div",
+        "app-modal-note",
+        "D = day shift, N = night shift, blank = off. Crew 1 starts the pattern on the base date; each next crew is staggered by the first day-block."
+      )
+    );
+  }
+
+  const footer = el("div", "app-modal-footer");
+  const close = el("button", "app-btn app-btn-primary", "Close") as HTMLButtonElement;
+  footer.appendChild(close);
+  box.appendChild(footer);
+  const done = () => {
+    overlay.remove();
+    document.removeEventListener("keydown", onKey, true);
+  };
+  const onKey = (e: KeyboardEvent) => {
+    if (e.key === "Escape") {
+      e.stopPropagation();
+      done();
+    }
+  };
+  close.addEventListener("click", done);
+  overlay.appendChild(box);
+  document.body.appendChild(overlay);
+  document.addEventListener("keydown", onKey, true);
 }
 
 /** Union of crew names across a site's roster patterns, pattern order. */
@@ -1225,6 +1335,10 @@ async function renderOrg(
         headRow.appendChild(
           patInput(pat.name, "Name (e.g. 4-crew rotating)", (v) => (pat.name = v))
         );
+        const preview = el("button", "app-btn", "Preview") as HTMLButtonElement;
+        preview.title = "Check the next 28 days of this roster";
+        preview.addEventListener("click", () => openRosterPreview(pat));
+        headRow.appendChild(preview);
         if (canEdit) {
           headRow.appendChild(
             removeBtn(() => {

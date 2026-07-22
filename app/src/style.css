@@ -436,6 +436,24 @@ input[type="color"].app-cat-swatch {
   gap: 12px;
 }
 .app-modal-title { font-size: 17px; font-weight: 700; }
+.app-modal-wide { max-width: min(92vw, 1080px); }
+/* roster preview matrix: crews × next 28 days */
+.app-roster-preview { overflow-x: auto; }
+.app-roster-preview table { border-collapse: collapse; font-size: 11px; }
+.app-roster-preview th,
+.app-roster-preview td {
+  min-width: 27px;
+  padding: 4px 3px;
+  text-align: center;
+  border: 1px solid #eceae5;
+  font-weight: 600;
+}
+.app-roster-preview th { color: #6d675c; font-weight: 600; white-space: nowrap; }
+.app-rp-crew { text-align: left !important; padding: 4px 10px !important; font-weight: 700 !important; color: #26241f !important; }
+.app-rp-d { background: #fde68a; color: #713f12; }
+.app-rp-n { background: #312e81; color: #fff; }
+.app-rp-o { background: #f6f5f2; color: #c8c3b8; }
+.app-roster-preview .app-rp-today { box-shadow: inset 0 0 0 2px var(--app-accent); }
 .app-modal-note { font-size: 12.5px; color: #6d675c; line-height: 1.5; }
 .app-modal-footer {
   display: flex;
