@@ -26,6 +26,7 @@ import {
   orgJson,
   renameCompany,
   renameSiteRow,
+  rosterPatternLibrary,
   saveCompanies,
   saveMeetingCategories,
   protectedTimesJson,
@@ -36,6 +37,7 @@ import {
   saveSiteSettings,
   siteCompanies,
   siteSettings,
+  SiteRosterPattern,
 } from "../store/config";
 import { parseMeetingInfo, parseOrgTree } from "../../../shared/schema/meeting";
 import { parseCategory, parseDaysOfWeek } from "../../../shared/schema/recurrence";
@@ -318,6 +320,30 @@ function accentToggle(
   return { el: wrap, value: () => (on.checked ? swatch.value : "") };
 }
 
+/** Union of crew names across a site's roster patterns, pattern order. */
+function crewsForSite(
+  lib: Record<string, SiteRosterPattern[]>,
+  site: string
+): string[] {
+  const out: string[] = [];
+  for (const p of lib[site] ?? []) {
+    for (const c of p.crews) if (c !== "" && !out.includes(c)) out.push(c);
+  }
+  return out;
+}
+
+/** Swap a select's option list in place, keeping the value when it survives. */
+function rebuildSelect(sel: HTMLSelectElement, opts: string[]): void {
+  const v = sel.value;
+  sel.replaceChildren();
+  for (const o of ["", ...opts]) {
+    const opt = el("option", "", o === "" ? "—" : o) as HTMLOptionElement;
+    opt.value = o;
+    sel.appendChild(opt);
+  }
+  sel.value = opts.includes(v) ? v : "";
+}
+
 function select(options: string[], value: string): HTMLSelectElement {
   const s = el("select", "app-input") as HTMLSelectElement;
   for (const o of ["", ...options.filter((v) => v !== "")]) {
@@ -343,6 +369,7 @@ async function renderProfile(
 ): Promise<void> {
   clear(body);
   const tree = parseOrgTree(await orgJson());
+  const crewLib = await rosterPatternLibrary();
   const sites = tree.map((s) => s.site);
   const deptsFor = (site: string) =>
     tree.find((s) => s.site === site)?.departments.map((d) => d.department) ?? [];
@@ -354,6 +381,7 @@ async function renderProfile(
   const site = select(sites, me.site);
   const dept = select(deptsFor(me.site), me.department);
   const area = select(areasFor(me.site, me.department), me.area);
+  const crew = select(crewsForSite(crewLib, me.site), me.crew ?? "");
   const rebuild = (sel: HTMLSelectElement, opts: string[]) => {
     const v = sel.value;
     sel.replaceChildren();
@@ -367,6 +395,7 @@ async function renderProfile(
   site.addEventListener("change", () => {
     rebuild(dept, deptsFor(site.value));
     rebuild(area, []);
+    rebuild(crew, crewsForSite(crewLib, site.value)); // crews are per site
     ctx.markDirty();
   });
   dept.addEventListener("change", () => {
@@ -374,6 +403,7 @@ async function renderProfile(
     ctx.markDirty();
   });
   area.addEventListener("change", () => ctx.markDirty());
+  crew.addEventListener("change", () => ctx.markDirty());
 
   const doSave = async () => {
     // spread the STORED row, not `me` — under view-as, `me` carries the
@@ -384,10 +414,12 @@ async function renderProfile(
       site: site.value,
       department: dept.value,
       area: area.value,
+      crew: crew.value || undefined,
     });
     me.site = site.value;
     me.department = dept.value;
     me.area = area.value;
+    me.crew = crew.value || undefined;
     ctx.markClean();
   };
   ctx.registerSave(doSave);
@@ -408,7 +440,12 @@ async function renderProfile(
     ),
     field("Site", site),
     field("Department", dept),
-    field("Area", area)
+    field("Area", area),
+    field(
+      "Crew",
+      crew,
+      "From your site's roster patterns — crew-linked meetings only show when your crew is on shift."
+    )
   );
 }
 
@@ -422,6 +459,7 @@ async function renderUsers(body: HTMLElement, me: RosterPerson): Promise<void> {
     );
   }
   const sites = parseOrgTree(await orgJson()).map((s) => s.site);
+  const crewLib = await rosterPatternLibrary();
   const people = await listPeople(true);
 
   // directory reads (job title + account status) are lazy and cached, so
@@ -507,7 +545,7 @@ async function renderUsers(body: HTMLElement, me: RosterPerson): Promise<void> {
     count.textContent =
       `${shown.length} of ${people.length} ${people.length === 1 ? "person" : "people"}` +
       (revoked > 0 ? ` · ${revoked} revoked` : "");
-    for (const p of shown) list.appendChild(userRow(p, sites, canEdit, me, dir, draw));
+    for (const p of shown) list.appendChild(userRow(p, sites, crewLib, canEdit, me, dir, draw));
     if (shown.length === 0) {
       list.appendChild(el("div", "app-settings-note", "No users match those filters."));
     }
@@ -575,6 +613,7 @@ function roleLegend(): HTMLElement {
 function userRow(
   p: RosterPerson,
   sites: string[],
+  crewLib: Record<string, SiteRosterPattern[]>,
   canEdit: boolean,
   me: RosterPerson,
   dir: DirectoryLookup,
@@ -618,8 +657,15 @@ function userRow(
   else void dir.load(p.whoId).then(paintDirectory);
 
   const controls = el("div", "app-user-controls");
-  // editable site (clearing department/area when the site changes so a
-  // stale sub-placement can't outlive its site)
+  // crew: from the site's roster patterns; a site with none offers only —
+  const crew = select(crewsForSite(crewLib, p.site), p.crew ?? "");
+  crew.disabled = !canEdit;
+  crew.addEventListener("change", () => {
+    p.crew = crew.value || undefined;
+    void upsertPerson({ ...p });
+  });
+  // editable site (clearing department/area/crew when the site changes so
+  // a stale sub-placement can't outlive its site)
   const site = select(sites, p.site);
   site.value = p.site;
   site.disabled = !canEdit;
@@ -627,6 +673,8 @@ function userRow(
     if (site.value !== p.site) {
       p.department = "";
       p.area = "";
+      p.crew = undefined;
+      rebuildSelect(crew, crewsForSite(crewLib, site.value));
     }
     p.site = site.value;
     void upsertPerson({ ...p });
@@ -639,7 +687,11 @@ function userRow(
     roleBadge.className = `app-role-badge app-role-${p.role}`;
     void upsertPerson({ ...p });
   });
-  controls.append(labelledControl("Site", site), labelledControl("Role", role));
+  controls.append(
+    labelledControl("Site", site),
+    labelledControl("Crew", crew),
+    labelledControl("Role", role)
+  );
 
   // revoke / restore app access (removes them from meeting rosters and
   // people pickers while keeping the row so it can be restored)

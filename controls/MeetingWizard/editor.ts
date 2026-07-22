@@ -458,39 +458,103 @@ export class MeetingWizardView {
     });
     body.appendChild(this.row("Purpose", purpose));
 
-    // owner: type-ahead over the whole roster (works at org scale); an
-    // unmatched name becomes a free-text owner
-    const owner = el("input", "ltk-mw-input") as HTMLInputElement;
-    owner.type = "text";
-    owner.value = this.draft.owner?.who ?? "";
-    owner.placeholder = "Start typing a name…";
-    owner.disabled = this.readOnly;
-    owner.setAttribute("list", "ltk-mw-owner-list");
-    const suggestions = el("datalist") as HTMLDataListElement;
-    suggestions.id = "ltk-mw-owner-list";
-    for (const p of this.people) {
-      const option = el("option") as HTMLOptionElement;
-      option.value = p.who;
-      suggestions.appendChild(option);
-    }
-    owner.addEventListener("change", () => {
-      const name = owner.value.trim();
-      if (name === "") {
-        this.draft.owner = null;
-      } else {
-        const match = this.people.find(
-          (p) => p.who.toLowerCase() === name.toLowerCase()
-        );
-        this.draft.owner = match
-          ? { whoId: match.whoId, who: match.who, crew: "" }
-          : { whoId: name.toLowerCase().replace(/\s+/g, "-"), who: name, crew: "" };
-      }
-      this.commit();
-    });
+    // owner: a real identity picked from the roster or the org directory
+    // (never free text — confidentiality and person scoping must be able
+    // to recognise the owner)
     const ownerWrap = el("div");
-    ownerWrap.append(owner, suggestions);
+    const paintOwner = () => {
+      clear(ownerWrap);
+      if (this.draft.owner) {
+        const chip = el("div", "ltk-mw-person");
+        chip.appendChild(el("span", "ltk-mw-person-name", this.draft.owner.who));
+        if (!this.readOnly) {
+          const x = el("button", "ltk-mw-person-x", "×") as HTMLButtonElement;
+          x.type = "button";
+          x.title = "Change owner";
+          x.addEventListener("click", () => {
+            this.draft.owner = null;
+            this.commit();
+            paintOwner();
+          });
+          chip.appendChild(x);
+        }
+        ownerWrap.appendChild(chip);
+        return;
+      }
+      if (this.readOnly) {
+        ownerWrap.appendChild(el("div", "ltk-mw-help", "Not set."));
+        return;
+      }
+      const input = el("input", "ltk-mw-input") as HTMLInputElement;
+      input.type = "search";
+      input.placeholder =
+        this.directorySearch !== null
+          ? "Search the roster or directory…"
+          : "Search the roster…";
+      const box = el("div", "ltk-mw-people");
+      const note = el("div", "ltk-mw-people-count");
+      const pick = (p: Person, fromDirectory: boolean) => {
+        this.draft.owner = { whoId: p.whoId, who: p.who, crew: "" };
+        // a directory owner may not be an app user yet — register them
+        if (fromDirectory) this.cb.onDirectoryAdd?.(p);
+        this.commit();
+        paintOwner();
+      };
+      const resultRow = (p: Person, fromDirectory: boolean) => {
+        const row = el("div", "ltk-mw-result");
+        row.appendChild(el("span", "ltk-mw-result-add", "＋"));
+        row.appendChild(el("span", "ltk-mw-person-name", p.who));
+        if (fromDirectory && !this.people.some((x) => x.whoId === p.whoId)) {
+          row.appendChild(el("span", "ltk-mw-result-crew", "new to the app"));
+        }
+        row.addEventListener("click", () => pick(p, fromDirectory));
+        return row;
+      };
+      let dirTimer: ReturnType<typeof setTimeout> | null = null;
+      let dirSeq = 0;
+      const refresh = () => {
+        const q = input.value.trim().toLowerCase();
+        clear(box);
+        note.textContent = "";
+        if (dirTimer !== null) clearTimeout(dirTimer);
+        dirSeq++;
+        if (q === "") return;
+        const hits = this.people
+          .filter((p) => p.who.toLowerCase().includes(q))
+          .slice(0, 6);
+        for (const p of hits) box.appendChild(resultRow(p, false));
+        if (this.directorySearch !== null && q.length >= 2) {
+          // debounced so typing doesn't spam the directory connector
+          const mySeq = dirSeq;
+          dirTimer = setTimeout(() => {
+            void this.directorySearch!(input.value.trim())
+              .then((dirHits) => {
+                if (mySeq !== dirSeq) return; // superseded by newer input
+                for (const p of dirHits
+                  .filter((h) => !hits.some((x) => x.whoId === h.whoId))
+                  .slice(0, 6)) {
+                  box.appendChild(resultRow(p, true));
+                }
+                if (box.childElementCount === 0) note.textContent = "No matches.";
+              })
+              .catch(() => {
+                if (mySeq === dirSeq) note.textContent = "Directory search failed.";
+              });
+          }, 350);
+        } else if (hits.length === 0) {
+          note.textContent = "No roster match.";
+        }
+      };
+      input.addEventListener("input", refresh);
+      ownerWrap.append(input, box, note);
+    };
+    paintOwner();
     body.appendChild(
-      this.row("Owner", ownerWrap, "Pick from the roster, or type any name.")
+      this.row(
+        "Owner",
+        ownerWrap,
+        "Pick from the app's user list or the org directory."
+      )
     );
 
     const conf = el("input", "") as HTMLInputElement;
