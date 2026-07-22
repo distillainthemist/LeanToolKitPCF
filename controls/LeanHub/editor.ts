@@ -572,16 +572,14 @@ export class LeanHubView {
         "Actions due this week appear here.",
       ]);
     } else {
-      for (const b of buckets) {
+      // empty buckets stay hidden — only groups with work show
+      for (const b of buckets.filter((x) => x.items.length > 0)) {
         const head = el("div", `ltk-lh-bucket ltk-lh-bucket-${b.key}`);
         head.append(
           el("span", "ltk-lh-bucket-label", b.label),
           el("span", "ltk-lh-bucket-count", String(b.items.length))
         );
         list.appendChild(head);
-        if (b.items.length === 0) {
-          list.appendChild(el("div", "ltk-lh-bucket-none", "None"));
-        }
         for (const action of b.items) list.appendChild(this.renderActionRow(action));
       }
     }
