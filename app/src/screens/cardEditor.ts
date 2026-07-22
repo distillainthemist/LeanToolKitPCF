@@ -283,8 +283,8 @@ export function mountCardEditor(
       const head = el("div", "app-card-head");
       const strip = el("div", "app-card-tabs");
       // windowed, never scrolling: on big boards the cards around the
-      // current one (± 3) show their titles; the rest stay visible as
-      // thin colour slivers (still clickable, title on hover)
+      // current one (± 3) show their titles; the rest compress to their
+      // order number (still clickable, full title on hover)
       const WINDOW = 3;
       let start = 0;
       let end = sequence.length;
@@ -296,12 +296,16 @@ export function mountCardEditor(
       sequence.forEach((s, i) => {
         const wide = i >= start && i < end;
         const label = s.title || cardLabel(s.cardType);
-        const tab = el("a", "app-card-tab", wide ? label : "") as HTMLAnchorElement;
+        const tab = el(
+          "a",
+          "app-card-tab",
+          wide ? label : String(i + 1)
+        ) as HTMLAnchorElement;
         const bg = slotBar(s);
         tab.style.background = bg;
         tab.style.color = textOn(bg);
         tab.href = editHref(s);
-        tab.title = label;
+        tab.title = `${i + 1} · ${label}`;
         if (!wide) tab.classList.add("app-card-tab-thin");
         if (s.cardId === cardId) tab.classList.add("app-card-tab-on");
         strip.appendChild(tab);
