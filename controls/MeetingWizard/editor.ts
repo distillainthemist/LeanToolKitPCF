@@ -634,9 +634,16 @@ export class MeetingWizardView {
     );
     body.appendChild(
       this.row(
-        "Days shown",
+        "Past days shown",
         this.textInput(d.daysPrior, (v) => (d.daysPrior = v), "14", "number"),
-        "How many days of instances the scheduler lists. Empty = 14."
+        "How many past days of instances the scheduler lists. Empty = 14."
+      )
+    );
+    body.appendChild(
+      this.row(
+        "Future days shown",
+        this.textInput(d.daysAhead, (v) => (d.daysAhead = v), "0", "number"),
+        "How many upcoming days the scheduler also lists. Empty = none."
       )
     );
 

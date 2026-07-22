@@ -69,6 +69,7 @@ export interface WizardDraft {
   daysOfWeek: string; // CSV
   timeOfDay: string; // HH:MM
   daysPrior: string; // numeric text; "" = control default
+  daysAhead: string; // future days listed; "" = none
   crewList: string; // CSV, roster order
   rosterPattern: string; // e.g. 2D-2N-5O
   baseStartDate: string; // yyyy-mm-dd
@@ -98,6 +99,7 @@ export function emptyDraft(): WizardDraft {
     daysOfWeek: "",
     timeOfDay: "07:00",
     daysPrior: "",
+    daysAhead: "",
     crewList: "",
     rosterPattern: "",
     baseStartDate: "",
@@ -118,6 +120,7 @@ const MANAGED_CONFIG = [
   "daysOfWeek",
   "timeOfDay",
   "daysPrior",
+  "daysAhead",
   "crewList",
   "rosterPattern",
   "baseStartDate",
@@ -154,6 +157,7 @@ export function parseWizardDraft(raw: string | null | undefined): WizardDraft {
     draft.daysOfWeek = s(config.daysOfWeek);
     if (s(config.timeOfDay) !== "") draft.timeOfDay = s(config.timeOfDay);
     draft.daysPrior = s(config.daysPrior);
+    draft.daysAhead = s(config.daysAhead);
     draft.crewList = s(config.crewList);
     draft.rosterPattern = s(config.rosterPattern);
     draft.baseStartDate = s(config.baseStartDate);
@@ -200,6 +204,9 @@ export function serializeWizardDraft(draft: WizardDraft): string {
   if (draft.timeOfDay !== "") config.timeOfDay = draft.timeOfDay;
   if (draft.daysPrior !== "" && Number.isFinite(Number(draft.daysPrior))) {
     config.daysPrior = Math.max(1, Math.round(Number(draft.daysPrior)));
+  }
+  if (draft.daysAhead !== "" && Number.isFinite(Number(draft.daysAhead))) {
+    config.daysAhead = Math.max(0, Math.round(Number(draft.daysAhead)));
   }
   if (isRostered(draft.category)) {
     if (draft.crewList !== "") config.crewList = draft.crewList;

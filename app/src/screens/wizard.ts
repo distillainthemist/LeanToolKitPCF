@@ -31,6 +31,13 @@ function mintBoardId(title: string): string {
 
 export function mountWizard(parent: HTMLElement, editBoardId = ""): () => void {
   const host = editorHost(parent);
+  // cancel (top-right of the wizard's title bar) → back to Rituals;
+  // the leave guard still prompts if there are unsaved changes
+  host.style.position = "relative";
+  const cancel = el("a", "app-wizard-cancel", "✕") as HTMLAnchorElement;
+  cancel.href = "#/settings/boards";
+  cancel.title = "Cancel and return to Rituals";
+  host.appendChild(cancel);
   let view: MeetingWizardView | null = null;
   let designerCleanup: (() => void) | null = null;
   void (async () => {

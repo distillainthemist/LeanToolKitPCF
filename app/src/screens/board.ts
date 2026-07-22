@@ -244,11 +244,14 @@ async function renderBoard(
     const existingJson = JSON.stringify(
       instances.map((i) => ({ date: i.when, recordId: i.id, adhoc: i.isAdhoc }))
     );
+    // the window runs [today − daysPrior, today + daysAhead]: the engine
+    // counts daysPrior back from finalDate, so the span widens by ahead
+    const ahead = Math.max(0, Math.round(Number(config.daysAhead ?? 0)) || 0);
     schedulerView.setInstances(
       generateInstances(
         {
-          finalDate: today,
-          daysPrior: Number(config.daysPrior ?? 14),
+          finalDate: new Date(today.getTime() + ahead * 86_400_000),
+          daysPrior: Number(config.daysPrior ?? 14) + ahead,
           category: parseCategory(s("category")),
           daysOfWeek: parseDaysOfWeek(s("daysOfWeek")),
           timeOfDay: parseTimeOfDay(s("timeOfDay")),

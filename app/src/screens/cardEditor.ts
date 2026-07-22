@@ -8,6 +8,19 @@
 
 import { cardLabel } from "../../../controls/CardSettings/registry";
 import { initialsFor } from "../../../shared/schema/people";
+import {
+  generateInstances,
+  parseCategory,
+  parseCrews,
+  parseDaysOfWeek,
+  parseDayTopics,
+  parseExistingMeetings,
+  parseLocalDate,
+  parseRosterPattern,
+  parseTimeOfDay,
+  parseWeekTopics,
+  startOfDay,
+} from "../../../shared/schema/recurrence";
 import { textOn } from "../../../shared/tokens";
 import { el } from "../../../shared/ui/dom";
 import { cardMounter, supportedCardTypes } from "../cardRegistry";
@@ -26,6 +39,65 @@ import { getInstance } from "../store/instances";
 import { parseManifest, slotLinkSource, slotPolicy } from "../store/mappers";
 import { listPeople } from "../store/people";
 import { isActionSurface } from "../store/policies";
+
+/**
+ * "Tuesday 21 July · 06:00 · Day shift · Crew A" for the walk header —
+ * the shift/crew come from running the recurrence engine over just this
+ * occurrence. Decorative: any parse failure returns what it has.
+ */
+function occurrenceMeta(
+  board: { occurrenceSettingsRaw: string },
+  instance: { id: string; when: string; isAdhoc: boolean } | null
+): string {
+  if (!instance || instance.when === "") return "";
+  const parts: string[] = [];
+  const day = new Date(`${instance.when.slice(0, 10)}T00:00:00`);
+  parts.push(
+    `${day.toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" })} · ${instance.when.slice(11, 16)}`
+  );
+  try {
+    const blobRaw = board.occurrenceSettingsRaw;
+    const blob = blobRaw.trim().startsWith("{")
+      ? (JSON.parse(blobRaw) as Record<string, unknown>)
+      : {};
+    const config = (blob.config ?? {}) as Record<string, unknown>;
+    const s = (k: string) => String(config[k] ?? "");
+    const anchor = startOfDay(day);
+    const rows = generateInstances(
+      {
+        finalDate: anchor,
+        daysPrior: 1,
+        category: parseCategory(s("category")),
+        daysOfWeek: parseDaysOfWeek(s("daysOfWeek")),
+        timeOfDay: parseTimeOfDay(s("timeOfDay")),
+        crews: parseCrews(s("crewList")),
+        roster: parseRosterPattern(s("rosterPattern")),
+        baseStart: parseLocalDate(s("baseStartDate")) ?? anchor,
+        weekTopics: parseWeekTopics(
+          Array.isArray(config.weekTopics) ? JSON.stringify(config.weekTopics) : s("weekTopics")
+        ),
+        dayTopics: parseDayTopics(
+          config.dayTopics && typeof config.dayTopics === "object"
+            ? JSON.stringify(config.dayTopics)
+            : s("dayTopics")
+        ),
+      },
+      parseExistingMeetings(
+        JSON.stringify([{ date: instance.when, recordId: instance.id, adhoc: instance.isAdhoc }])
+      ),
+      new Date()
+    );
+    const mine = rows.find((r) => r.recordId === instance.id);
+    if (mine) {
+      if (mine.shift !== "") parts.push(mine.shift === "day" ? "Day shift" : "Night shift");
+      if (mine.crew !== "") parts.push(`Crew ${mine.crew}`);
+    }
+  } catch {
+    /* meta is decorative */
+  }
+  if (instance.isAdhoc) parts.push("ad hoc");
+  return parts.join(" · ");
+}
 
 export function mountCardEditor(
   parent: HTMLElement,
@@ -223,10 +295,20 @@ export function mountCardEditor(
         if (s.cardId === cardId) tab.classList.add("app-card-tab-on");
         strip.appendChild(tab);
       }
-      const backBtn = el("a", "app-btn app-btn-primary app-card-back", "‹ Back") as HTMLAnchorElement;
+      const backBtn = el("a", "app-btn app-card-back", "‹ Back") as HTMLAnchorElement;
       backBtn.href = backHref;
       backBtn.title = "Back to the board";
-      head.append(strip, saved, backBtn);
+
+      // title line above the tabs: meeting name + occurrence details on
+      // the left, saved status and Back on the right
+      const titleRow = el("div", "app-card-titlerow");
+      titleRow.appendChild(el("span", "app-card-meeting", board.name));
+      const meta = occurrenceMeta(board, instance);
+      if (meta !== "") titleRow.appendChild(el("span", "app-card-meta", meta));
+      titleRow.append(el("span", "app-bar-gap"), saved, backBtn);
+      parent.insertBefore(titleRow, walkRow);
+
+      head.appendChild(strip);
       // header above the rails; padding keeps it aligned with the editor
       parent.insertBefore(head, walkRow);
       // roll the strip so the current card sits in view
