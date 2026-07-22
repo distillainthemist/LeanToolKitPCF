@@ -115,6 +115,9 @@ function route(): void {
   modeIcon.textContent = showHome ? "⌂" : "⚙";
   modeText.textContent = showHome ? "Home" : "Settings";
   modeLink.href = showHome ? "#/" : "#/settings";
+  // the focused meeting view runs full-bleed — its own title row carries
+  // the meeting name and Back, so the app bar just costs height
+  bar.style.display = parts[0] === "edit" ? "none" : "";
 
   void (async () => {
     try {
