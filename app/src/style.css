@@ -182,18 +182,16 @@ body {
 .app-card-arrow-off { opacity: 0.25; pointer-events: none; }
 
 /* board screen */
+/* title line — no card chrome, same voice as the focused viewer */
 .app-board-toolbar {
   flex: 0 0 auto;
   display: flex;
   align-items: center;
   gap: 12px;
-  background: #fff;
-  border-radius: 8px;
-  padding: 8px 12px;
-  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.06);
+  flex-wrap: wrap;
 }
-.app-board-title { font-weight: 700; }
-.app-board-status { font-size: 12.5px; color: #6d675c; }
+.app-board-title { font-size: 19px; font-weight: 800; letter-spacing: 0.01em; }
+.app-board-status { font-size: 13px; color: #57534a; }
 .app-bar-gap { flex: 1; }
 .app-btn {
   font: inherit;
@@ -211,7 +209,8 @@ body {
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: minmax(320px, 2fr) 5fr;
+  /* board first; details & schedule pane on the right */
+  grid-template-columns: 5fr minmax(320px, 2fr);
   gap: 8px;
   position: relative; /* the loading overlay anchors here */
 }

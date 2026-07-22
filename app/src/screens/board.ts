@@ -28,12 +28,12 @@ import { showLoading } from "../loading";
 import { appTheme } from "../cardHost";
 import { currentViewer, detectHost } from "../runtime";
 import { canViewBoard, getBoard } from "../store/boards";
+import { meetingCategories } from "../store/config";
 import { viewerPerson } from "../store/people";
 import { BoardSummary, parseManifest } from "../store/mappers";
 import { catalogSvgByType } from "../store/catalog";
 import { rowsForBoard, toLite } from "../store/cards";
 import {
-  closeInstance,
   createInstance,
   InstanceSummary,
   listInstances,
@@ -105,26 +105,25 @@ async function renderBoard(
       ? parseManifest(current.manifestRaw)
       : boardManifest;
 
-  // layout: toolbar + (scheduler pane | tile grid)
+  // layout: title line + (tile grid | details & schedule pane)
   const bar = el("div", "app-board-toolbar");
   const title = el("span", "app-board-title", board.name);
   const status = el("span", "app-board-status", "");
-  const scheduleBtn = el("button", "app-btn", "Hide schedule") as HTMLButtonElement;
+  const scheduleBtn = el("button", "app-btn", "Hide details & schedule") as HTMLButtonElement;
   // standard-board design lives in Settings → Rituals / the wizard's
   // step 2; the operational board only offers per-meeting adjustment
   // (and only when the ritual's toggle allows it)
   const adjustBtn = el("a", "app-btn", "Adjust this meeting") as HTMLAnchorElement;
   adjustBtn.style.display = "none";
-  const closeBtn = el("button", "app-btn", "Close meeting") as HTMLButtonElement;
-  closeBtn.style.display = "none";
-  bar.append(title, status, el("span", "app-bar-gap"), scheduleBtn, adjustBtn, closeBtn);
+  bar.append(title, status, el("span", "app-bar-gap"), scheduleBtn, adjustBtn);
   parent.appendChild(bar);
 
   const split = el("div", "app-board-split");
   parent.appendChild(split);
   const leftHost = el("div", "app-board-left");
   const rightHost = el("div", "app-board-right");
-  split.append(leftHost, rightHost);
+  // board first, the details & schedule pane on the right
+  split.append(rightHost, leftHost);
 
   // collapse the scheduler so the board takes the full width. Arriving
   // with a pre-selected occurrence (My day / Cadence deep link) starts
@@ -134,7 +133,9 @@ async function renderBoard(
   const setScheduleHidden = (on: boolean) => {
     scheduleHidden = on;
     split.classList.toggle("app-board-solo", on);
-    scheduleBtn.textContent = on ? "Show schedule" : "Hide schedule";
+    scheduleBtn.textContent = on
+      ? "Show details & schedule"
+      : "Hide details & schedule";
   };
   setScheduleHidden(scheduleHidden);
   scheduleBtn.addEventListener("click", () => setScheduleHidden(!scheduleHidden));
@@ -167,21 +168,10 @@ async function renderBoard(
     status.textContent =
       `${current.when.slice(0, 16).replace("T", " ")} — ${current.status}` +
       (adjusted ? " · adjusted layout" : "");
-    closeBtn.style.display = current.status === "open" ? "" : "none";
     const canAdjust = instancesAdjustable && current.status === "open";
     adjustBtn.style.display = canAdjust ? "" : "none";
     adjustBtn.href = `#/adjust/${board.boardId}/${current.id}`;
   };
-
-  closeBtn.addEventListener("click", () => {
-    if (!current) return;
-    void (async () => {
-      await closeInstance(current!);
-      current = { ...current!, status: "closed" };
-      cardRows = await rowsForBoard(board.boardId); // archive svgs landed
-      renderTiles();
-    })();
-  });
 
   // ---- scheduler pane ----
   const blobRaw = board.occurrenceSettingsRaw;
@@ -310,15 +300,14 @@ async function renderBoard(
     );
   };
 
-  // the app accent is the default; a blob theme (if the board carries
-  // one) still wins so per-board colouring stays possible
-  const blobTitleBar = String(
-    ((blob.theme ?? {}) as Record<string, unknown>).titlebar ?? ""
-  ).trim();
+  // the pane's title bar takes the ritual-category colour; a meeting
+  // without a category stays white (the card's own background)
+  const cats = await meetingCategories();
+  const catColor = cats.find((c) => c.name === board.category)?.color ?? "";
   const schedulerTheme = appTheme();
-  if (blobTitleBar !== "") schedulerTheme.titleBar = blobTitleBar;
+  schedulerTheme.titleBar = catColor !== "" ? catColor : "#ffffff";
   schedulerView.setTheme(schedulerTheme);
-  schedulerView.setChrome(String(blob.title ?? board.name), "");
+  schedulerView.setChrome("Details & schedule", "");
   schedulerView.setMeetingInfo(parseMeetingInfo(blobRaw));
   schedulerView.setColumns(parseMeetingColumns(s("columns")));
   // the viewer's roster crew defaults the schedule to their own meetings
