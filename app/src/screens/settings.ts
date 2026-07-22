@@ -388,7 +388,7 @@ export function openRosterPreview(pat: {
       const tr = el("tr");
       tr.appendChild(el("th", "app-rp-crew", crew));
       for (const d of days) {
-        const state = crewStateOn(roster, base!, idx, d);
+        const state = crewStateOn(roster, base!, idx, d, crews.length);
         const td = el(
           "td",
           state === "D" ? "app-rp-d" : state === "N" ? "app-rp-n" : "app-rp-o",
@@ -405,7 +405,7 @@ export function openRosterPreview(pat: {
       el(
         "div",
         "app-modal-note",
-        "D = day shift, N = night shift, blank = off. Crew 1 starts the sequence on the base date; crew 2 starts their pattern when the second day block commences, crew 3 on the third, and so on."
+        "D = day shift, N = night shift, blank = off. Crew 1 starts the sequence on the base date; each next crew starts one equal share of the cycle later (cycle ÷ crews), so every crew's first day is staggered."
       )
     );
   }
