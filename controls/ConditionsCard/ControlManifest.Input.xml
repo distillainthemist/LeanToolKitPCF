@@ -2,7 +2,7 @@
 <manifest>
   <control namespace="BenOBrien"
            constructor="ConditionsCard"
-           version="0.11.3"
+           version="0.11.4"
            display-name-key="Conditions Card"
            description-key="LeanToolKit conditions card — a set of winning conditions rated good/issue over a rolling window ending today. Granularity picks the grain (day, weekday, week, or two shifts split diagonally). Hold a cell to raise an action."
            control-type="standard">

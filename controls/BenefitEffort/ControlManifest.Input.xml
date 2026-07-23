@@ -2,7 +2,7 @@
 <manifest>
   <control namespace="BenOBrien"
            constructor="BenefitEffort"
-           version="0.11.3"
+           version="0.11.4"
            display-name-key="Benefit - Effort"
            description-key="LeanToolKit benefit-effort matrix — drag candidate solutions on a 2x2 (benefit up, effort right); quick wins rise to the top left."
            control-type="standard">
