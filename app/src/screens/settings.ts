@@ -5,7 +5,9 @@
 // moment it ships in a client bundle, so the empty-org window is the
 // only thing that makes it safe.
 
+import { copyText } from "../../../shared/ui/clipboard";
 import { clear, el } from "../../../shared/ui/dom";
+import { boardHash, boardUrl } from "../links";
 import { setLeaveGuard } from "../navGuard";
 import { promptText, promptUnsaved } from "../prompts";
 import { currentViewer, detectHost } from "../runtime";
@@ -2601,8 +2603,29 @@ async function renderBoardsAdmin(body: HTMLElement, me: RosterPerson): Promise<v
 
       const actions = el("div", "app-ritual-actions");
       const open = el("a", "app-btn", "Open") as HTMLAnchorElement;
-      open.href = `#/board/${b.boardId}`;
+      open.href = boardHash(b.boardId);
       actions.appendChild(open);
+      // the same link, for pasting into a channel or a calendar invite
+      const copy = el("button", "app-btn", "Copy link") as HTMLButtonElement;
+      copy.title = "Copy a link that opens the latest meeting";
+      copy.addEventListener("click", () => {
+        const link = boardUrl(b.boardId);
+        void copyText(link).then((ok) => {
+          if (!ok) {
+            // the host refused the clipboard — hand over the raw URL
+            const box = el("input", "app-input app-ritual-link") as HTMLInputElement;
+            box.value = link;
+            box.readOnly = true;
+            copy.replaceWith(box);
+            box.select();
+            box.addEventListener("blur", () => box.replaceWith(copy));
+            return;
+          }
+          copy.textContent = "Copied";
+          window.setTimeout(() => (copy.textContent = "Copy link"), 1600);
+        });
+      });
+      actions.appendChild(copy);
       if (isAdmin || owner?.whoId === me.whoId) {
         // Edit meeting covers the board too (wizard step 7)
         const edit = el("a", "app-btn", "Edit meeting") as HTMLAnchorElement;

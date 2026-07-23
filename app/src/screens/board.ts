@@ -24,6 +24,7 @@ import {
 import { parseMeetingInfo } from "../../../shared/schema/meeting";
 import { openDialog } from "../../../shared/ui/dialog";
 import { el } from "../../../shared/ui/dom";
+import { LATEST, latestInstanceIso } from "../links";
 import { showLoading } from "../loading";
 import { appTheme } from "../cardHost";
 import { currentViewer, detectHost } from "../runtime";
@@ -121,6 +122,10 @@ async function renderBoard(
   );
   for (const s of stale) await closeInstance(s);
   if (stale.length > 0) instances = await listInstances(board.boardId);
+  // "#/board/<id>/latest" — a shared link resolves to the ritual's most
+  // recent meeting here, at open time, so the link never goes stale
+  const selectIso =
+    deepLinkIso === LATEST ? latestInstanceIso(instances) : deepLinkIso;
   let cardRows = await rowsForBoard(board.boardId);
   stopLoading(); // data is in — the layout below builds synchronously
   let current: InstanceSummary | null = null;
@@ -155,7 +160,7 @@ async function renderBoard(
   // with a pre-selected occurrence (My day / Cadence deep link) starts
   // collapsed — the meeting is the focus; otherwise it starts visible,
   // as it is the only way to pick an occurrence.
-  let scheduleHidden = deepLinkIso !== "";
+  let scheduleHidden = selectIso !== "";
   const setScheduleHidden = (on: boolean) => {
     scheduleHidden = on;
     split.classList.toggle("app-board-solo", on);
@@ -445,5 +450,10 @@ async function renderBoard(
   const viewerRow = await viewerPerson(currentViewer()?.objectId ?? "");
   schedulerView.setViewerCrew(viewerRow?.crew ?? "");
   refreshScheduler();
-  if (deepLinkIso !== "") schedulerView.selectByIso(deepLinkIso);
+  if (selectIso !== "") {
+    schedulerView.selectByIso(selectIso);
+    // a meeting older than the schedule window has no row to select — show
+    // the schedule rather than leaving the viewer on an empty board
+    if (!current) setScheduleHidden(false);
+  }
 }

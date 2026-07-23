@@ -14,6 +14,7 @@ import { LtkAction, parseActionsJson } from "../../../shared/schema/actions";
 import { parseOrgTree } from "../../../shared/schema/meeting";
 import { parsePeople } from "../../../shared/schema/people";
 import { appTheme, editorHost } from "../cardHost";
+import { boardHash, boardUrl } from "../links";
 import { currentViewer, detectHost } from "../runtime";
 import { actionsForViewer, upsertActions } from "../store/actions";
 import { canViewBoard, listBoards } from "../store/boards";
@@ -168,10 +169,12 @@ export function mountHub(parent: HTMLElement): () => void {
       view.setBoards(
         dir,
         (boardId) => {
-          window.location.hash = `#/board/${boardId}`;
+          window.location.hash = boardHash(boardId);
         },
         "Rituals"
       );
+      // each ritual carries a shareable link to its latest meeting
+      view.setBoardLink((boardId) => boardUrl(boardId));
       // ritual-category colours code the calendar chips + directory rows
       view.setBoardColors(
         Object.fromEntries(

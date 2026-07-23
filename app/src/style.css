@@ -392,6 +392,13 @@ input[type="color"].app-cat-swatch {
   padding-top: 6px;
 }
 
+/* clipboard refused: the ritual's link, selectable in place */
+.app-ritual-link {
+  flex: 1 1 200px;
+  min-width: 0;
+  font-size: 12px;
+}
+
 /* board designer embedded in the wizard's Meeting board step */
 .app-wizard-designer {
   display: flex;

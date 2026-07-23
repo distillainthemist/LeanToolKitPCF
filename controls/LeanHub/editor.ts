@@ -13,6 +13,7 @@
 
 import { applyThemeVars, defaultTheme, Theme } from "../../shared/tokens";
 import { LTK_BASE_CSS } from "../../shared/ui/baseCss";
+import { copyText } from "../../shared/ui/clipboard";
 import { clear, el, ensureStylesheet } from "../../shared/ui/dom";
 import { parsePrompts, Prompts, renderGhost, renderTitleBar } from "../../shared/ui/chrome";
 import { isOverdue, LtkAction, newAction } from "../../shared/schema/actions";
@@ -69,6 +70,7 @@ export class LeanHubView {
   /** Board directory for the Rituals view; null = option hidden. */
   private boards: { boardId: string; name: string; meta: string }[] | null = null;
   private onOpenBoard: ((boardId: string) => void) | null = null;
+  private boardLink: ((boardId: string) => string) | null = null;
   private boardsLabel = "Boards";
   /** boardId → accent colour (e.g. ritual-category colours). */
   private boardColors: Record<string, string> = {};
@@ -176,6 +178,16 @@ export class LeanHubView {
     this.render();
   }
 
+  /**
+   * Shareable link per board — supplying it adds a copy-link control to
+   * each directory row. Null hides the control.
+   */
+  setBoardLink(fn: ((boardId: string) => string) | null): void {
+    const had = this.boardLink !== null;
+    this.boardLink = fn;
+    if (had !== (fn !== null)) this.render();
+  }
+
   /** Per-board accent colours (calendar chips + directory rows). */
   setBoardColors(map: Record<string, string>): void {
     if (JSON.stringify(map) === JSON.stringify(this.boardColors)) return;
@@ -276,19 +288,51 @@ export class LeanHubView {
       return;
     }
     for (const b of boards) {
-      const row = el("button", "ltk-lh-boardrow") as HTMLButtonElement;
-      row.type = "button";
+      const row = el("div", "ltk-lh-boardrow");
+      const open = el("button", "ltk-lh-boardopen") as HTMLButtonElement;
+      open.type = "button";
       const color = this.boardColors[b.boardId] ?? "";
       if (color !== "") {
         const dot = el("span", "ltk-lh-boarddot");
         dot.style.background = color;
-        row.appendChild(dot);
+        open.appendChild(dot);
       }
-      row.appendChild(el("span", "ltk-lh-boardname", b.name));
-      if (b.meta !== "") row.appendChild(el("span", "ltk-lh-boardmeta", b.meta));
-      row.addEventListener("click", () => this.onOpenBoard?.(b.boardId));
+      open.appendChild(el("span", "ltk-lh-boardname", b.name));
+      if (b.meta !== "") open.appendChild(el("span", "ltk-lh-boardmeta", b.meta));
+      open.addEventListener("click", () => this.onOpenBoard?.(b.boardId));
+      row.appendChild(open);
+      const link = this.boardLink?.(b.boardId) ?? "";
+      if (link !== "") row.appendChild(this.copyLinkButton(link, row));
       wrap.appendChild(row);
     }
+  }
+
+  /** Copy this ritual's link — falls back to showing it when the host
+   *  refuses the clipboard, so the URL is always obtainable. */
+  private copyLinkButton(link: string, row: HTMLElement): HTMLElement {
+    const btn = el("button", "ltk-lh-boardlink", "Copy link") as HTMLButtonElement;
+    btn.type = "button";
+    btn.title = "Copy a link that opens the latest meeting";
+    btn.addEventListener("click", () => {
+      void copyText(link).then((ok) => {
+        if (!ok) {
+          const box = el("input", "ltk-lh-boardlinkbox") as HTMLInputElement;
+          box.value = link;
+          box.readOnly = true;
+          btn.replaceWith(box);
+          box.select();
+          box.addEventListener("blur", () => box.replaceWith(btn));
+          return;
+        }
+        btn.textContent = "Copied";
+        row.classList.add("ltk-lh-boardcopied");
+        window.setTimeout(() => {
+          btn.textContent = "Copy link";
+          row.classList.remove("ltk-lh-boardcopied");
+        }, 1600);
+      });
+    });
+    return btn;
   }
 
   // ---- calendar ----

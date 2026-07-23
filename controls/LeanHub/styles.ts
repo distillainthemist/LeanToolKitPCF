@@ -4,10 +4,19 @@
 
 export const LEANHUB_CSS = `
 .ltk-lh-boards { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding: 12px; max-width: 860px; }
-.ltk-lh-boardrow { display: flex; align-items: center; gap: 12px; font: inherit; text-align: left;
+.ltk-lh-boardrow { display: flex; align-items: center; gap: 10px; font: inherit; text-align: left;
   background: var(--ltk-bg); border: 1px solid color-mix(in srgb, var(--ltk-fg) 14%, transparent);
-  border-radius: 8px; padding: 12px 14px; cursor: pointer; }
-.ltk-lh-boardrow:hover { border-color: var(--ltk-accent); }
+  border-radius: 8px; padding: 0 10px 0 14px; }
+.ltk-lh-boardrow:hover, .ltk-lh-boardcopied { border-color: var(--ltk-accent); }
+.ltk-lh-boardopen { flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px;
+  font: inherit; color: inherit; text-align: left; background: none; border: 0;
+  padding: 12px 0; cursor: pointer; }
+.ltk-lh-boardlink { flex: 0 0 auto; font: inherit; font-size: 12.5px; color: inherit;
+  background: none; border: 1px solid color-mix(in srgb, var(--ltk-fg) 18%, transparent);
+  border-radius: 6px; padding: 4px 10px; cursor: pointer; opacity: 0.75; }
+.ltk-lh-boardlink:hover { opacity: 1; border-color: var(--ltk-accent); }
+.ltk-lh-boardlinkbox { flex: 0 0 auto; width: 220px; font: inherit; font-size: 12px;
+  border: 1px solid var(--ltk-accent); border-radius: 6px; padding: 4px 8px; }
 .ltk-lh-boardname { font-weight: 700; }
 .ltk-lh-boarddot { flex: 0 0 auto; width: 10px; height: 10px; border-radius: 50%; }
 .ltk-lh-boardmeta { font-size: 12.5px; opacity: 0.7; }
