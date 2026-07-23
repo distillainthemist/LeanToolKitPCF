@@ -20,7 +20,6 @@ export interface AccessGroup {
 export interface CandidateGroup {
   id: string;
   name: string;
-  kind: "security" | "m365";
 }
 
 // ---- configuration (stored on the app settings row) ----
@@ -61,17 +60,33 @@ class GraphError extends Error {
   }
 }
 
+const toB64 = (s: string) =>
+  btoa(String.fromCharCode(...new TextEncoder().encode(s)));
+
 async function graph(
   method: string,
   path: string,
   body?: unknown
 ): Promise<unknown> {
-  const res = await Office365GroupsService.HttpRequestV2(
-    `https://graph.microsoft.com/v1.0${path}`,
-    method,
-    body === undefined ? undefined : JSON.stringify(body),
-    body === undefined ? undefined : "application/json"
-  );
+  const uri = `https://graph.microsoft.com/v1.0${path}`;
+  const payload = body === undefined ? undefined : JSON.stringify(body);
+  const attempt = (content: string | undefined) =>
+    Office365GroupsService.HttpRequestV2(
+      uri,
+      method,
+      content,
+      payload === undefined ? undefined : "application/json"
+    );
+  let res = await attempt(payload);
+  // the connector declares Body as a BINARY string — some hosts deliver
+  // a raw string as an empty payload; base64 is the binary wire format
+  if (
+    !res.success &&
+    payload !== undefined &&
+    (res.error?.message ?? "").includes("Empty Payload")
+  ) {
+    res = await attempt(toB64(payload));
+  }
   if (!res.success) {
     const msg = res.error?.message ?? "Graph request failed";
     const m = /\b(\d{3})\b/.exec(msg);
@@ -93,55 +108,35 @@ function tolerate(err: unknown, alreadyOk: boolean): void {
 // ---- group discovery ----
 
 /**
- * Candidate access groups. The connector's Graph passthrough only
- * accepts /groups… paths (not /me/ownedObjects), so ownership cannot be
- * pre-filtered here — instead we list every security-enabled group in
- * the tenant (readable under the connector's delegated scope) plus the
- * admin's owned M365 groups, and verify ownership when one is picked
- * (isGroupOwner — /groups/{id}/owners IS an allowed path).
+ * Candidate access groups: pure SECURITY groups only (M365 groups don't
+ * work for app sharing). The connector's Graph passthrough only accepts
+ * /groups… paths (not /me/ownedObjects), so ownership cannot be
+ * pre-filtered here — every security group in the tenant lists, and
+ * ownership is verified when one is picked (isGroupOwner —
+ * /groups/{id}/owners IS an allowed path).
  */
 export async function listCandidateGroups(): Promise<CandidateGroup[]> {
-  const seen = new Map<string, CandidateGroup>();
-  try {
-    let path =
-      "/groups?$select=id,displayName,securityEnabled,groupTypes&$filter=securityEnabled eq true&$top=999";
-    while (path) {
-      const data = (await graph("GET", path)) as {
-        value?: {
-          id?: string;
-          displayName?: string;
-          groupTypes?: string[];
-        }[];
-        "@odata.nextLink"?: string;
-      };
-      for (const g of data.value ?? []) {
-        if (!g.id) continue;
-        seen.set(g.id, {
-          id: g.id,
-          name: g.displayName ?? g.id,
-          kind: (g.groupTypes ?? []).includes("Unified") ? "m365" : "security",
-        });
-      }
-      const next = data["@odata.nextLink"];
-      path = next ? next.replace("https://graph.microsoft.com/v1.0", "") : "";
+  const out: CandidateGroup[] = [];
+  let path =
+    "/groups?$select=id,displayName,securityEnabled,groupTypes&$filter=securityEnabled eq true&$top=999";
+  while (path) {
+    const data = (await graph("GET", path)) as {
+      value?: {
+        id?: string;
+        displayName?: string;
+        groupTypes?: string[];
+      }[];
+      "@odata.nextLink"?: string;
+    };
+    for (const g of data.value ?? []) {
+      // groupTypes "Unified" = an M365 group, even when security-enabled
+      if (!g.id || (g.groupTypes ?? []).includes("Unified")) continue;
+      out.push({ id: g.id, name: g.displayName ?? g.id });
     }
-  } catch {
-    /* passthrough refused — the owned unified groups below still list */
+    const next = data["@odata.nextLink"];
+    path = next ? next.replace("https://graph.microsoft.com/v1.0", "") : "";
   }
-  try {
-    const res = await Office365GroupsService.ListOwnedGroups_V3();
-    if (res.success) {
-      for (const g of res.data.value ?? []) {
-        if (g.id && !seen.has(g.id)) {
-          seen.set(g.id, { id: g.id, name: g.displayName ?? g.id, kind: "m365" });
-        }
-      }
-    }
-  } catch {
-    /* merge is best-effort */
-  }
-  if (seen.size === 0) throw new Error("could not list any groups");
-  return [...seen.values()].sort((a, b) => a.name.localeCompare(b.name));
+  return out.sort((a, b) => a.name.localeCompare(b.name));
 }
 
 /** Exact ownership check, run when a group is picked. */

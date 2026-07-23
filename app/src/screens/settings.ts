@@ -588,7 +588,7 @@ function pickOwnedGroup(viewerId: string): Promise<{ id: string; name: string } 
       el(
         "div",
         "app-modal-note",
-        "Security and Microsoft 365 groups. You must be an OWNER of the group you pick — that's checked when you select it. Members of the chosen group can open the app; the roster keeps it in sync."
+        "Security groups in your organisation (M365 groups can't gate app sharing). You must be an OWNER of the group you pick — that's checked when you select it. Members of the chosen group can open the app; the roster keeps it in sync."
       )
     );
     const search = el("input", "app-input") as HTMLInputElement;
@@ -610,7 +610,7 @@ function pickOwnedGroup(viewerId: string): Promise<{ id: string; name: string } 
     overlay.appendChild(box);
     document.body.appendChild(overlay);
 
-    let groups: { id: string; name: string; kind: "security" | "m365" }[] = [];
+    let groups: { id: string; name: string }[] = [];
     let checking = false;
     const pick = (g: { id: string; name: string }) => {
       if (checking) return;
@@ -642,13 +642,6 @@ function pickOwnedGroup(viewerId: string): Promise<{ id: string; name: string } 
         const rowBtn = el("button", "app-group-row") as HTMLButtonElement;
         rowBtn.type = "button";
         rowBtn.appendChild(el("span", "app-people-name", g.name));
-        rowBtn.appendChild(
-          el(
-            "span",
-            "app-status-badge",
-            g.kind === "security" ? "Security" : "Microsoft 365"
-          )
-        );
         rowBtn.addEventListener("click", () => pick(g));
         list.appendChild(rowBtn);
       }
