@@ -2,7 +2,7 @@
 <manifest>
   <control namespace="BenOBrien"
            constructor="MeetingScheduler"
-           version="0.11.2"
+           version="0.11.3"
            display-name-key="Meeting Scheduler"
            description-key="LeanToolKit meeting selector — generates the meeting instances for a cadence (annually … shiftly, with crew roster patterns like 2D-2N-5O), matches them to existing meeting records, flags past instances with no record, and emits the tapped row on Selected Meeting (JSON) so OnChange can open or create the record."
            control-type="standard">

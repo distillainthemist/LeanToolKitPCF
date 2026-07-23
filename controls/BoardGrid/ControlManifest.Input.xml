@@ -2,7 +2,7 @@
 <manifest>
   <control namespace="BenOBrien"
            constructor="BoardGrid"
-           version="0.11.2"
+           version="0.11.3"
            display-name-key="Board Grid"
            description-key="LeanToolKit board grid — the master-leanboard tile wall. Renders each card snapshot INLINE (WebKit-safe, so SVG tiles stay small), in a configurable grid. Read mode: tap a tile to open its card. Edit mode: tap a tile to configure it, tap an empty slot to add a card, drag tiles to swap positions."
            control-type="standard">
