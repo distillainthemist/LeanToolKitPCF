@@ -14,27 +14,31 @@ export const MEETING_CSS = `
 .ltk-ms-footer .ltk-ms-adhocadd { padding: 0; }
 .ltk-ms-footer .ltk-ms-adhocbtn:first-child { width: 100%; padding: 7px 10px; }
 
-/* row lead control: + on uncreated rows, kebab on created ones */
+/* row control on the right edge: + on uncreated rows, kebab on created
+   ones — borderless, full row height */
 .ltk-ms-lead {
   flex: 0 0 auto;
-  width: 26px;
-  height: 26px;
+  align-self: stretch;
+  width: 34px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   font: inherit;
-  font-size: 14px;
+  font-size: 16px;
   line-height: 1;
   color: var(--ltk-muted);
-  background: none;
-  border: 1px solid var(--ltk-hairline);
-  border-radius: 7px;
+  background: color-mix(in srgb, var(--ltk-fg) 3%, transparent);
+  border: none;
+  border-left: 1px solid var(--ltk-hairline);
   cursor: pointer;
   padding: 0;
 }
-.ltk-ms-lead:hover { border-color: var(--ltk-accent); color: var(--ltk-accent); }
-.ltk-ms-lead-add { border-style: dashed; font-weight: 700; }
-.ltk-ms-lead-blank { border: none; cursor: default; }
+.ltk-ms-lead:hover {
+  color: var(--ltk-accent);
+  background: color-mix(in srgb, var(--ltk-accent) 10%, transparent);
+}
+.ltk-ms-lead-add { font-weight: 700; }
+.ltk-ms-lock { flex: 0 0 auto; font-size: 12px; opacity: 0.8; }
 .ltk-ms-menu {
   position: absolute;
   z-index: 60;
@@ -155,12 +159,19 @@ export const MEETING_CSS = `
 /* ---- instance rows ---- */
 .ltk-ms-row {
   display: flex;
+  align-items: stretch;
+  border: 1px solid var(--ltk-hairline);
+  border-radius: 6px;
+  overflow: hidden; /* the right-edge control hugs the rounded corner */
+  transition: border-color 120ms ease, background 120ms ease;
+}
+.ltk-ms-row-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
   flex-direction: column;
   gap: 6px;
   padding: 7px 10px;
-  border: 1px solid var(--ltk-hairline);
-  border-radius: 6px;
-  transition: border-color 120ms ease, background 120ms ease;
 }
 .ltk-ms-row:hover { border-color: var(--ltk-accent); }
 .ltk-ms-row.ltk-ms-selected {

@@ -378,34 +378,12 @@ export class MeetingSchedulerView {
     const row = el("div", "ltk-ms-row");
     if (inst.date === today) row.classList.add("ltk-ms-today");
     if (inst.iso === this.selectedIso) row.classList.add("ltk-ms-selected");
+    // content column on the left; the row control rides the right edge
+    const content = el("div", "ltk-ms-row-content");
+    row.appendChild(content);
 
     // identity line: tapping it selects/opens the meeting
     const main = el("div", "ltk-ms-row-main");
-    // leading control: + creates an uncreated current/future meeting;
-    // a created meeting gets a kebab of record-level operations
-    if (!this.readOnly) {
-      if (inst.recordId === "" && inst.status === "planned" && this.cb.onCreate) {
-        const add = el("button", "ltk-ms-lead ltk-ms-lead-add", "＋") as HTMLButtonElement;
-        add.type = "button";
-        add.title = "Create this meeting's record";
-        add.addEventListener("click", (e) => {
-          e.stopPropagation();
-          this.cb.onCreate!(inst);
-        });
-        main.appendChild(add);
-      } else if (inst.recordId !== "" && this.cb.onMenu) {
-        const kebab = el("button", "ltk-ms-lead", "⋮") as HTMLButtonElement;
-        kebab.type = "button";
-        kebab.title = "Meeting record options";
-        kebab.addEventListener("click", (e) => {
-          e.stopPropagation();
-          this.openRowMenu(inst, kebab);
-        });
-        main.appendChild(kebab);
-      } else {
-        main.appendChild(el("span", "ltk-ms-lead ltk-ms-lead-blank", ""));
-      }
-    }
     main.append(
       el("span", "ltk-ms-row-date", this.prettyDate(inst)),
       el("span", "ltk-ms-row-time", inst.time)
@@ -451,12 +429,17 @@ export class MeetingSchedulerView {
       status.textContent = "○ Planned";
     }
     main.appendChild(status);
+    if (inst.closed) {
+      const lock = el("span", "ltk-ms-lock", "🔒");
+      lock.title = "Closed — read only (⋮ → Edit meeting to change it)";
+      main.appendChild(lock);
+    }
     main.addEventListener("click", () => {
       this.selectedIso = inst.iso;
       this.render();
       this.cb.onSelect(inst, this.mergedValues(inst));
     });
-    row.appendChild(main);
+    content.appendChild(main);
 
     // custom-column entry cells (topic, chair, notetaker…) — editing a value
     // emits the row so the app can persist it; it does not re-select/re-render
@@ -482,7 +465,31 @@ export class MeetingSchedulerView {
         cell.appendChild(input);
         cols.appendChild(cell);
       }
-      row.appendChild(cols);
+      content.appendChild(cols);
+    }
+
+    // row control on the right edge, full height: + creates an uncreated
+    // current/future meeting; a created one gets the record kebab
+    if (!this.readOnly) {
+      if (inst.recordId === "" && inst.status === "planned" && this.cb.onCreate) {
+        const add = el("button", "ltk-ms-lead ltk-ms-lead-add", "＋") as HTMLButtonElement;
+        add.type = "button";
+        add.title = "Create this meeting's record";
+        add.addEventListener("click", (e) => {
+          e.stopPropagation();
+          this.cb.onCreate!(inst);
+        });
+        row.appendChild(add);
+      } else if (inst.recordId !== "" && this.cb.onMenu) {
+        const kebab = el("button", "ltk-ms-lead", "⋮") as HTMLButtonElement;
+        kebab.type = "button";
+        kebab.title = "Meeting record options";
+        kebab.addEventListener("click", (e) => {
+          e.stopPropagation();
+          this.openRowMenu(inst, kebab);
+        });
+        row.appendChild(kebab);
+      }
     }
 
     return row;
