@@ -69,23 +69,26 @@ async function graph(
   body?: unknown
 ): Promise<unknown> {
   const uri = `https://graph.microsoft.com/v1.0${path}`;
-  const payload = body === undefined ? undefined : JSON.stringify(body);
-  const attempt = (content: string | undefined) =>
+  // The connector declares Body as `format: binary`. The SDK's executor
+  // base64-DECODES any STRING value to raw bytes and ships it as
+  // octet-stream — which mangles JSON. A non-string value skips that
+  // branch and is JSON.stringify'd verbatim, exactly what Graph needs —
+  // so the body object is passed through un-stringified (cast past the
+  // generated string signature). Base64 stays as a defensive fallback.
+  const attempt = (content: unknown) =>
     Office365GroupsService.HttpRequestV2(
       uri,
       method,
-      content,
-      payload === undefined ? undefined : "application/json"
+      content as string | undefined,
+      body === undefined ? undefined : "application/json"
     );
-  let res = await attempt(payload);
-  // the connector declares Body as a BINARY string — some hosts deliver
-  // a raw string as an empty payload; base64 is the binary wire format
+  let res = await attempt(body);
   if (
     !res.success &&
-    payload !== undefined &&
+    body !== undefined &&
     (res.error?.message ?? "").includes("Empty Payload")
   ) {
-    res = await attempt(toB64(payload));
+    res = await attempt(toB64(JSON.stringify(body)));
   }
   if (!res.success) {
     const msg = res.error?.message ?? "Graph request failed";
