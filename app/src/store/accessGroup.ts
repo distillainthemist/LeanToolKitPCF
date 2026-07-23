@@ -98,12 +98,20 @@ async function graph(
   return res.data;
 }
 
-/** "Already there" / "not there" are fine outcomes for sync operations. */
+/** "Already there" / "not there" are fine outcomes for sync operations.
+ *  Matched on Graph's error text — its bodies carry codes like
+ *  Request_BadRequest ("…already exist") and Request_ResourceNotFound
+ *  ("…does not exist…"), never the numeric HTTP status. */
 function tolerate(err: unknown, alreadyOk: boolean): void {
-  if (err instanceof GraphError) {
-    const msg = err.message.toLowerCase();
-    if (alreadyOk && (err.status === 400 || err.status === 409) && msg.includes("already exist")) return;
-    if (!alreadyOk && err.status === 404) return;
+  const msg = (err instanceof Error ? err.message : String(err)).toLowerCase();
+  if (alreadyOk && msg.includes("already exist")) return;
+  if (
+    !alreadyOk &&
+    (msg.includes("does not exist") ||
+      msg.includes("resourcenotfound") ||
+      msg.includes("not found"))
+  ) {
+    return;
   }
   throw err;
 }
