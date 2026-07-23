@@ -15,7 +15,6 @@ import { parsePeople } from "../../../shared/schema/people";
 import { el } from "../../../shared/ui/dom";
 import { appTheme, editorHost } from "../cardHost";
 import { detectHost } from "../runtime";
-import { syncPersonAccess } from "../store/accessGroup";
 import { saveMeetingBoard } from "../store/boards";
 import { meetingCategories, orgJson, rosterPatternLibrary } from "../store/config";
 import { listPeople, searchEntra, upsertPerson, viewerPerson } from "../store/people";
@@ -138,21 +137,19 @@ export function mountWizard(parent: HTMLElement, editBoardId = ""): () => void {
         // someone who already has a roster row (site/role would reset)
         void (async () => {
           if (await viewerPerson(p.whoId)) return;
-          const person = {
+          // joining the roster grants access — upsertPerson itself
+          // syncs the access group (an admin who isn't a group owner
+          // reconciles later via Sync now)
+          await upsertPerson({
             whoId: p.whoId,
             who: p.who,
             email: dirCache.get(p.whoId)?.mail ?? "",
             site: "",
             department: "",
             area: "",
-            role: "user" as const,
+            role: "user",
             active: true,
-          };
-          await upsertPerson(person);
-          // joining the roster grants access: into the group they go
-          await syncPersonAccess(person, currentViewer()?.objectId ?? "").catch(
-            () => undefined // an admin who isn't a group owner syncs later
-          );
+          });
         })();
       },
       onSubmit: () => {

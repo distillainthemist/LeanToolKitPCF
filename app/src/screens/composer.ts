@@ -21,6 +21,7 @@ import { getBoard, listBoards, saveManifest } from "../store/boards";
 import { rowsForBoard, toLite } from "../store/cards";
 import { catalogSvgByType } from "../store/catalog";
 import { getInstance, saveInstanceManifest } from "../store/instances";
+import { effectivelyClosed, relockOnLeave } from "../relock";
 import { isActionSurface } from "../store/policies";
 import {
   BoardManifest,
@@ -187,6 +188,10 @@ export function mountInstanceComposer(
   instanceGuid: string
 ): () => void {
   const cleanups: Array<() => void> = [];
+  // the adjust screen counts as "inside the meeting" for the re-lock
+  // rules — registered before any await so a mid-load departure (and a
+  // plain adjust → Home) still re-locks a reopened meeting
+  cleanups.push(() => relockOnLeave(boardId));
   void (async () => {
     const hosted = await detectHost();
     if (!hosted) {
@@ -203,6 +208,18 @@ export function mountInstanceComposer(
     const instance = await getInstance(instanceGuid);
     if (!board || !instance) {
       parent.appendChild(el("p", "app-missing", `Unknown board or meeting record.`));
+      return;
+    }
+    // a closed (or >24h unswept) meeting is immutable — a bookmarked
+    // #/adjust URL must not write an override onto the archived record
+    if (effectivelyClosed(instance)) {
+      parent.appendChild(
+        el(
+          "div",
+          "app-board-note",
+          "This meeting is closed — reopen it from the schedule (⋮ → Edit meeting) to adjust it."
+        )
+      );
       return;
     }
     const doneHref = `#/board/${board.boardId}/${encodeURIComponent(

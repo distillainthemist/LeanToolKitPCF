@@ -76,11 +76,9 @@ export function mountHub(parent: HTMLElement): () => void {
           role: "user",
           active: true,
         };
-        await upsertPerson(me);
-        // keep the access group the source of truth — best effort (the
+        // upsertPerson also fire-and-forgets the access-group sync (the
         // viewer is rarely a group owner; admins reconcile via Sync now)
-        const { syncPersonAccess } = await import("../store/accessGroup");
-        await syncPersonAccess(me, viewerId).catch(() => undefined);
+        await upsertPerson(me);
       }
       site = me.site;
 

@@ -28,7 +28,7 @@ import { appTheme, editorHost } from "../cardHost";
 import { currentViewer, detectHost } from "../runtime";
 import { actionsForBoard, actionsForInstance, upsertActions } from "../store/actions";
 import { canViewBoard, getBoard } from "../store/boards";
-import { relockOnLeave } from "../relock";
+import { effectivelyClosed, relockOnLeave } from "../relock";
 import {
   createInstanceRow,
   ensureLiveRow,
@@ -108,6 +108,9 @@ export function mountCardEditor(
   onClose?: () => void
 ): () => void {
   const cleanups: Array<() => void> = [];
+  // before any await — route() drains cleanups synchronously, so a
+  // mid-load departure must still re-lock a reopened meeting
+  if (instanceGuid !== "live") cleanups.push(() => relockOnLeave(boardId));
   void (async () => {
     const hosted = await detectHost();
     if (!hosted) {
@@ -135,9 +138,6 @@ export function mountCardEditor(
       parent.appendChild(el("p", "app-missing", `Unknown card ${cardId} on ${boardId}`));
       return;
     }
-    // leaving the meeting's screens from here (e.g. straight to Home)
-    // re-locks a past meeting that was reopened for editing
-    if (!isLive) cleanups.push(() => relockOnLeave(boardId));
     // meeting-record cards of a confidential meeting are for its owner and
     // participants only (live/template editing stays with the designer)
     if (
@@ -338,7 +338,7 @@ export function mountCardEditor(
       const titleRow = el("div", "app-card-titlerow");
       titleRow.appendChild(el("span", "app-card-meeting", board.name));
       let meta = occurrenceMeta(board, instance);
-      if (instance?.status === "closed") {
+      if (instance && effectivelyClosed(instance)) {
         meta = meta === "" ? "closed" : `${meta} · closed`;
       }
       if (meta !== "") titleRow.appendChild(el("span", "app-card-meta", meta));
@@ -369,8 +369,10 @@ export function mountCardEditor(
           crew: p.crew,
         })),
         theme,
-        // a closed meeting presents its saved state — every card read-only
-        readOnly: instance?.status === "closed",
+        // a closed meeting presents its saved state — every card
+        // read-only. Effective-closed also covers a >24h meeting whose
+        // board nobody has visited (status still "open", never swept).
+        readOnly: instance ? effectivelyClosed(instance) : false,
         settings: slot.settings,
         instanceKey,
         actions,

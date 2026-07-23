@@ -24,19 +24,29 @@ export interface CandidateGroup {
 
 // ---- configuration (stored on the app settings row) ----
 
-export async function accessGroup(): Promise<AccessGroup | null> {
-  const rows = await allWhere(
-    Ben_ltksitesettingsesService.getAll,
-    eq("ben_site", APP_ROW)
-  );
-  const raw = (rows[0]?.ben_accessgroup ?? "").trim();
-  if (!raw.startsWith("{")) return null;
-  try {
-    const o = JSON.parse(raw) as { id?: string; name?: string };
-    return o.id ? { id: o.id, name: o.name ?? "" } : null;
-  } catch {
-    return null;
-  }
+// cached: the value only changes through saveAccessGroup, and the sync
+// hook on every roster write would otherwise re-query the settings row
+// each time (usually just to learn no group is configured)
+let cachedGroup: Promise<AccessGroup | null> | null = null;
+
+export function accessGroup(): Promise<AccessGroup | null> {
+  cachedGroup ??= (async () => {
+    const rows = await allWhere(
+      Ben_ltksitesettingsesService.getAll,
+      eq("ben_site", APP_ROW)
+    );
+    const raw = (rows[0]?.ben_accessgroup ?? "").trim();
+    if (!raw.startsWith("{")) return null;
+    try {
+      const o = JSON.parse(raw) as { id?: string; name?: string };
+      return o.id ? { id: o.id, name: o.name ?? "" } : null;
+    } catch {
+      return null;
+    }
+  })();
+  // a failed read must not stick as the cached answer
+  cachedGroup.catch(() => (cachedGroup = null));
+  return cachedGroup;
 }
 
 export async function saveAccessGroup(group: AccessGroup | null): Promise<void> {
@@ -50,6 +60,7 @@ export async function saveAccessGroup(group: AccessGroup | null): Promise<void> 
       ben_accessgroup: group ? JSON.stringify(group) : "",
     }
   );
+  cachedGroup = Promise.resolve(group);
 }
 
 // ---- Graph passthrough ----
@@ -92,27 +103,36 @@ async function graph(
   }
   if (!res.success) {
     const msg = res.error?.message ?? "Graph request failed";
-    const m = /\b(\d{3})\b/.exec(msg);
-    throw new GraphError(msg, m ? Number(m[1]) : 0);
+    // the SDK's PowerDataRuntimeHttpError carries the real HTTP status
+    // when the runtime surfaces one (optional) — never scrape the text
+    const status = (res.error as { status?: number } | undefined)?.status ?? 0;
+    throw new GraphError(msg, status);
   }
   return res.data;
 }
 
-/** "Already there" / "not there" are fine outcomes for sync operations.
- *  Matched on Graph's error text — its bodies carry codes like
- *  Request_BadRequest ("…already exist") and Request_ResourceNotFound
- *  ("…does not exist…"), never the numeric HTTP status. */
-function tolerate(err: unknown, alreadyOk: boolean): void {
+/**
+ * "Already there" (adds) / "not there" (removes) are fine outcomes for
+ * sync operations. Matched on the SDK's HTTP status when present, else
+ * Graph's stable error codes/text. Remove-side tolerance additionally
+ * requires that the missing resource is NOT the group itself — a stale
+ * or deleted group id must fail loudly, not report success.
+ */
+function tolerate(err: unknown, alreadyOk: boolean, groupId: string): void {
   const msg = (err instanceof Error ? err.message : String(err)).toLowerCase();
-  if (alreadyOk && msg.includes("already exist")) return;
-  if (
-    !alreadyOk &&
-    (msg.includes("does not exist") ||
-      msg.includes("resourcenotfound") ||
-      msg.includes("not found"))
-  ) {
-    return;
+  const status = err instanceof GraphError ? err.status : 0;
+  if (alreadyOk) {
+    if (status === 409 || msg.includes("already exist")) return;
+    throw err;
   }
+  const notFound =
+    status === 404 ||
+    msg.includes("does not exist") ||
+    msg.includes("resourcenotfound") ||
+    msg.includes("not found");
+  // Graph's Request_ResourceNotFound names the missing object's id — if
+  // the GROUP id is what's missing, this is a configuration fault
+  if (notFound && !msg.includes(groupId.toLowerCase())) return;
   throw err;
 }
 
@@ -163,7 +183,7 @@ export async function addMember(groupId: string, entraId: string): Promise<void>
       "@odata.id": `https://graph.microsoft.com/v1.0/directoryObjects/${entraId}`,
     });
   } catch (err) {
-    tolerate(err, true);
+    tolerate(err, true, groupId);
   }
 }
 
@@ -173,7 +193,7 @@ export async function addOwner(groupId: string, entraId: string): Promise<void> 
       "@odata.id": `https://graph.microsoft.com/v1.0/directoryObjects/${entraId}`,
     });
   } catch (err) {
-    tolerate(err, true);
+    tolerate(err, true, groupId);
   }
 }
 
@@ -181,7 +201,7 @@ export async function removeMember(groupId: string, entraId: string): Promise<vo
   try {
     await graph("DELETE", `/groups/${groupId}/members/${entraId}/$ref`);
   } catch (err) {
-    tolerate(err, false);
+    tolerate(err, false, groupId);
   }
 }
 
@@ -189,7 +209,7 @@ export async function removeOwner(groupId: string, entraId: string): Promise<voi
   try {
     await graph("DELETE", `/groups/${groupId}/owners/${entraId}/$ref`);
   } catch (err) {
-    tolerate(err, false);
+    tolerate(err, false, groupId);
   }
 }
 
@@ -206,6 +226,22 @@ async function idSet(groupId: string, kind: "members" | "owners"): Promise<Set<s
     path = next ? next.replace("https://graph.microsoft.com/v1.0", "") : "";
   }
   return out;
+}
+
+/**
+ * Remove ownership with the last-owner guard: a group must never be
+ * left ownerless (Graph allows it for pure security groups). Throws a
+ * readable error instead, which the roster UI surfaces.
+ */
+async function removeOwnerGuarded(groupId: string, entraId: string): Promise<void> {
+  const owners = await idSet(groupId, "owners");
+  if (!owners.has(entraId)) return;
+  if (owners.size <= 1) {
+    throw new Error(
+      "that person is the access group's only owner — add another owner first"
+    );
+  }
+  await removeOwner(groupId, entraId);
 }
 
 // ---- roster-driven sync ----
@@ -227,7 +263,7 @@ export async function syncPersonAccess(
   if (!group) return;
   if (!p.active) {
     // revoked: out of the group entirely (ownership first)
-    if (p.whoId !== viewerId) await removeOwner(group.id, p.whoId);
+    if (p.whoId !== viewerId) await removeOwnerGuarded(group.id, p.whoId);
     await removeMember(group.id, p.whoId);
     return;
   }
@@ -236,7 +272,7 @@ export async function syncPersonAccess(
     await addOwner(group.id, p.whoId);
   } else if (p.whoId !== viewerId) {
     // demoted from admin: ownership goes, membership stays
-    await removeOwner(group.id, p.whoId);
+    await removeOwnerGuarded(group.id, p.whoId);
   }
 }
 
@@ -265,8 +301,10 @@ export async function syncAllAccess(
     membersRemoved: 0,
     ownersRemoved: 0,
   };
-  const members = await idSet(group.id, "members");
-  const owners = await idSet(group.id, "owners");
+  const [members, owners] = await Promise.all([
+    idSet(group.id, "members"),
+    idSet(group.id, "owners"),
+  ]);
   const guid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   const rows = people.filter((p) => guid.test(p.whoId));
   const active = rows.filter((p) => p.active);
@@ -279,6 +317,7 @@ export async function syncAllAccess(
     }
     if (wantOwner.has(p.whoId) && !owners.has(p.whoId)) {
       await addOwner(group.id, p.whoId);
+      owners.add(p.whoId); // keep the set live — the last-owner guard below counts it
       report.ownersAdded++;
     }
   }

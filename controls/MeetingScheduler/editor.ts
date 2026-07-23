@@ -139,6 +139,14 @@ export class MeetingSchedulerView {
    * a full iso ("yyyy-mm-ddTHH:MM") or a bare date (first instance that
    * day). Unknown values no-op.
    */
+  /** Drop the highlighted row (e.g. after its record moved elsewhere). */
+  clearSelection(): void {
+    if (this.selectedIso !== "") {
+      this.selectedIso = "";
+      this.render();
+    }
+  }
+
   selectByIso(iso: string): void {
     const target =
       this.instances.find((i) => i.iso === iso) ??
@@ -224,8 +232,14 @@ export class MeetingSchedulerView {
     const rootRect = this.root.getBoundingClientRect();
     const a = anchor.getBoundingClientRect();
     menu.style.right = `${Math.max(0, rootRect.right - a.right)}px`;
-    menu.style.top = `${a.bottom - rootRect.top + 4}px`;
     this.root.appendChild(menu);
+    // .ltk-root clips overflow, so a menu that would run past the pane's
+    // bottom flips to open upward from the anchor instead
+    let top = a.bottom - rootRect.top + 4;
+    if (top + menu.offsetHeight > this.root.clientHeight - 4) {
+      top = Math.max(4, a.top - rootRect.top - menu.offsetHeight - 4);
+    }
+    menu.style.top = `${top}px`;
     document.addEventListener("pointerdown", onDown, true);
   }
 

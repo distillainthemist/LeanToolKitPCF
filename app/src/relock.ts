@@ -8,7 +8,29 @@
 import { closeInstance, getInstance } from "./store/instances";
 
 const KEY = "leanboard.reopened";
-const STALE_MS = 24 * 3_600_000;
+/** Meetings lock this long after their scheduled time — the ONE copy of
+ *  the policy (the board sweep, read-only derivation and re-lock all
+ *  import it). */
+export const STALE_MS = 24 * 3_600_000;
+
+/**
+ * The product rule, derivable without a sweep: a meeting is read-only
+ * when its record says closed OR it is more than STALE_MS past — except
+ * the one meeting this session deliberately reopened for editing. Every
+ * surface (card editor, adjust screen) derives from this, so a cold
+ * deep link to a board nobody has visited (status still "open") is
+ * still locked.
+ */
+export function effectivelyClosed(inst: {
+  id: string;
+  status: string;
+  when: string;
+}): boolean {
+  if (inst.id === reopenedForEditId()) return false;
+  return (
+    inst.status === "closed" || Date.parse(inst.when) < Date.now() - STALE_MS
+  );
+}
 
 export function markReopenedForEdit(instanceId: string): void {
   sessionStorage.setItem(KEY, instanceId);

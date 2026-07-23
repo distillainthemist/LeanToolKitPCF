@@ -16,7 +16,6 @@ import {
   listCandidateGroups,
   saveAccessGroup,
   syncAllAccess,
-  syncPersonAccess,
   SyncReport,
 } from "../store/accessGroup";
 import {
@@ -578,8 +577,14 @@ function syncSummary(r: SyncReport): string {
   return bits.length > 0 ? `Synced — ${bits.join(" · ")}.` : "Everything already in sync.";
 }
 
-/** Pick a group (security or M365); ownership is verified on selection. */
-function pickOwnedGroup(viewerId: string): Promise<{ id: string; name: string } | null> {
+/** Pick a security group; ownership is verified on selection. The
+ *  overlay mounts under `host` (inside the routed outlet), so leaving
+ *  Settings tears it down with the screen instead of orphaning a
+ *  full-screen modal over the next page. */
+function pickOwnedGroup(
+  host: HTMLElement,
+  viewerId: string
+): Promise<{ id: string; name: string } | null> {
   return new Promise((resolve) => {
     const overlay = el("div", "app-modal-overlay");
     const box = el("div", "app-modal");
@@ -604,11 +609,22 @@ function pickOwnedGroup(viewerId: string): Promise<{ id: string; name: string } 
     box.appendChild(footer);
     const done = (r: { id: string; name: string } | null) => {
       overlay.remove();
+      document.removeEventListener("keydown", onKey, true);
       resolve(r);
     };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        done(null);
+      }
+    };
     cancel.addEventListener("click", () => done(null));
+    overlay.addEventListener("click", (e) => {
+      if (e.target === overlay) done(null);
+    });
+    document.addEventListener("keydown", onKey, true);
     overlay.appendChild(box);
-    document.body.appendChild(overlay);
+    host.appendChild(overlay);
 
     let groups: { id: string; name: string }[] = [];
     let checking = false;
@@ -681,14 +697,20 @@ function accessControlCard(me: RosterPerson, people: RosterPerson[]): HTMLElemen
   row.append(choose, sync, stop);
   card.append(line, row, note);
 
+  const errText = (err: unknown) =>
+    err instanceof Error ? err.message : String(err);
   const paint = async () => {
-    const g = await accessGroup();
-    sync.style.display = g ? "" : "none";
-    stop.style.display = g ? "" : "none";
-    choose.textContent = g ? "Change group…" : "Choose group…";
-    line.textContent = g
-      ? `Access group: ${g.name}. People added to the roster join it automatically; super and site admins also become owners.`
-      : "No access group configured — choose a Microsoft group you own to gate who can open the app.";
+    try {
+      const g = await accessGroup();
+      sync.style.display = g ? "" : "none";
+      stop.style.display = g ? "" : "none";
+      choose.textContent = g ? "Change group…" : "Choose group…";
+      line.textContent = g
+        ? `Access group: ${g.name}. People added to the roster join it automatically; super and site admins also become owners.`
+        : "No access group configured — choose a Microsoft group you own to gate who can open the app.";
+    } catch (err) {
+      line.textContent = `Couldn't read the access-group setting: ${errText(err)}`;
+    }
   };
 
   const runSync = async () => {
@@ -696,15 +718,20 @@ function accessControlCard(me: RosterPerson, people: RosterPerson[]): HTMLElemen
     try {
       note.textContent = syncSummary(await syncAllAccess(people, me.whoId));
     } catch (err) {
-      note.textContent = `Sync failed: ${err instanceof Error ? err.message : String(err)} — a group owner can retry.`;
+      note.textContent = `Sync failed: ${errText(err)} — a group owner can retry.`;
     }
   };
 
   choose.addEventListener("click", () => {
     void (async () => {
-      const g = await pickOwnedGroup(me.whoId);
+      const g = await pickOwnedGroup(card, me.whoId);
       if (!g) return;
-      await saveAccessGroup(g);
+      try {
+        await saveAccessGroup(g);
+      } catch (err) {
+        note.textContent = `Couldn't save the group choice: ${errText(err)}`;
+        return;
+      }
       await paint();
       await runSync();
     })();
@@ -712,8 +739,12 @@ function accessControlCard(me: RosterPerson, people: RosterPerson[]): HTMLElemen
   sync.addEventListener("click", () => void runSync());
   stop.addEventListener("click", () => {
     void (async () => {
-      await saveAccessGroup(null);
-      note.textContent = "The app no longer manages any group.";
+      try {
+        await saveAccessGroup(null);
+        note.textContent = "The app no longer manages any group.";
+      } catch (err) {
+        note.textContent = `Couldn't clear the setting: ${errText(err)}`;
+      }
       await paint();
     })();
   });
@@ -893,6 +924,7 @@ function userRow(
   onChanged: () => void
 ): HTMLElement {
   const r = el("div", "app-user-row");
+  r.dataset.whoid = p.whoId;
   if (!p.active) r.classList.add("app-user-revoked");
 
   const main = el("div", "app-user-main");
@@ -952,27 +984,32 @@ function userRow(
     p.site = site.value;
     void upsertPerson({ ...p });
   });
-  // access-group sync rides role/access changes; a failure never blocks
-  // the roster edit, it just points at the card's Sync now
-  const syncWarn = () => {
-    if (!r.querySelector(".app-user-syncwarn")) {
-      r.appendChild(
+  // access-group sync rides every roster write (inside upsertPerson); a
+  // failure never blocks the edit — it surfaces on the person's CURRENT
+  // row, which may be a fresh element if the list redrew meanwhile
+  const syncWarn = (err: unknown) => {
+    const live =
+      document.querySelector<HTMLElement>(
+        `.app-people-list [data-whoid="${CSS.escape(p.whoId)}"]`
+      ) ?? r;
+    if (!live.querySelector(".app-user-syncwarn")) {
+      const detail = err instanceof Error ? ` (${err.message.slice(0, 120)})` : "";
+      live.appendChild(
         el(
           "div",
           "app-settings-note app-user-syncwarn",
-          "Access-group sync failed — a group owner can run Sync now above."
+          `Access-group sync failed${detail} — a group owner can run Sync now above.`
         )
       );
     }
   };
-  const syncAccess = () => void syncPersonAccess(p, me.whoId).catch(syncWarn);
   const role = roleSelect(p.role);
   role.disabled = !canEdit || p.whoId === me.whoId; // no self-demotion footguns
   role.addEventListener("change", () => {
     p.role = role.value || "user";
     roleBadge.textContent = roleLabel(p.role);
     roleBadge.className = `app-role-badge app-role-${p.role}`;
-    void upsertPerson({ ...p }).then(syncAccess);
+    void upsertPerson({ ...p }, syncWarn);
   });
   controls.append(
     labelledControl("Site", site),
@@ -990,9 +1027,9 @@ function userRow(
     ) as HTMLButtonElement;
     access.addEventListener("click", () => {
       p.active = !p.active;
-      void upsertPerson({ ...p })
-        .then(syncAccess) // revoke leaves the group; restore rejoins it
-        .then(onChanged); // re-filter (status may change)
+      // revoke leaves the group / restore rejoins (inside upsertPerson);
+      // syncWarn re-finds the row the redraw below creates
+      void upsertPerson({ ...p }, syncWarn).then(onChanged);
     });
     controls.append(labelledControl("Access", access));
   }

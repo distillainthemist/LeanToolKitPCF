@@ -3,9 +3,16 @@
 // department enrichment, deactivate.
 
 import { clear, el } from "../../../shared/ui/dom";
-import { detectHost } from "../runtime";
+import { currentViewer, detectHost } from "../runtime";
 import { RosterPerson } from "../store/mappers";
-import { EntraHit, listPeople, searchEntra, upsertPerson } from "../store/people";
+import {
+  EntraHit,
+  listPeople,
+  searchEntra,
+  upsertPerson,
+  viewerPerson,
+} from "../store/people";
+import { effectivePerson } from "../viewAs";
 
 export function mountPeople(parent: HTMLElement): () => void {
   void (async () => {
@@ -13,6 +20,16 @@ export function mountPeople(parent: HTMLElement): () => void {
     if (!hosted) {
       parent.appendChild(
         el("div", "app-board-note", "People admin needs the Power Apps host.")
+      );
+      return;
+    }
+    // roster administration is an admin surface — this route has no UI
+    // link but must not be an unguarded back door for hand-typed hashes
+    const stored = await viewerPerson(currentViewer()?.objectId ?? "");
+    const me = stored ? effectivePerson(stored) : null;
+    if (me?.role !== "superadmin" && me?.role !== "siteadmin") {
+      parent.appendChild(
+        el("div", "app-board-note", "People admin is for site and super admins.")
       );
       return;
     }

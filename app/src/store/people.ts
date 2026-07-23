@@ -4,6 +4,8 @@
 
 import { Ben_ltkpeoplesService } from "../generated/services/Ben_ltkpeoplesService";
 import { Office365UsersService } from "../generated/services/Office365UsersService";
+import { currentViewer } from "../runtime";
+import { syncPersonAccess } from "./accessGroup";
 import { allWhere, eq, upsertWhere } from "./dv";
 import { personFromRow, RosterPerson } from "./mappers";
 
@@ -17,7 +19,16 @@ export async function listPeople(includeInactive = false): Promise<RosterPerson[
   return rows.map(personFromRow);
 }
 
-export async function upsertPerson(person: RosterPerson): Promise<void> {
+/**
+ * Write a roster row. Access-group membership follows EVERY roster
+ * write from here (not from individual call sites, which drift): the
+ * sync is fire-and-forget and can never fail the roster edit — pass
+ * `onAccessSyncError` where the UI should surface a failure.
+ */
+export async function upsertPerson(
+  person: RosterPerson,
+  onAccessSyncError?: (err: unknown) => void
+): Promise<void> {
   await upsertWhere(
     Ben_ltkpeoplesService,
     eq("ben_whoid", person.whoId),
@@ -34,6 +45,10 @@ export async function upsertPerson(person: RosterPerson): Promise<void> {
       ben_active: person.active,
     }
   );
+  void syncPersonAccess(person, currentViewer()?.objectId ?? "").catch((err) => {
+    console.warn("access-group sync failed", err);
+    onAccessSyncError?.(err);
+  });
 }
 
 export interface EntraHit {

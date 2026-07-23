@@ -29,7 +29,12 @@ import { appTheme } from "../cardHost";
 import { currentViewer, detectHost } from "../runtime";
 import { canViewBoard, getBoard } from "../store/boards";
 import { meetingCategories } from "../store/config";
-import { markReopenedForEdit, relockOnLeave, reopenedForEditId } from "../relock";
+import {
+  markReopenedForEdit,
+  relockOnLeave,
+  reopenedForEditId,
+  STALE_MS,
+} from "../relock";
 import { viewerPerson } from "../store/people";
 import { BoardSummary, parseManifest } from "../store/mappers";
 import { catalogSvgByType } from "../store/catalog";
@@ -51,6 +56,10 @@ export function mountBoard(
   iso: string
 ): () => void {
   const cleanups: Array<() => void> = [];
+  // registered BEFORE any await: route() drains cleanups synchronously,
+  // so a hook pushed after the data loads is skipped when the user
+  // navigates away mid-load — the re-lock must never be
+  cleanups.push(() => relockOnLeave(boardId));
   void (async () => {
     // the board + calendar fetches take a moment on cold Dataverse —
     // hold the screen with a spinner and a quote in the meantime
@@ -100,21 +109,20 @@ async function renderBoard(
   const boardManifest = parseManifest(board.manifestRaw);
   const catalogSvg = await catalogSvgByType();
   let instances = await listInstances(board.boardId);
-  // meetings auto-close once 24 hours past — SVGs archive, cards go
+  // meetings auto-close once STALE_MS past — SVGs archive, cards go
   // read-only. A meeting reopened for editing this session is spared so
   // walking its cards and returning doesn't re-lock it mid-edit.
+  const reopened = reopenedForEditId();
   const stale = instances.filter(
     (i) =>
       i.status === "open" &&
-      Date.parse(i.when) < Date.now() - 24 * 3_600_000 &&
-      i.id !== reopenedForEditId()
+      Date.parse(i.when) < Date.now() - STALE_MS &&
+      i.id !== reopened
   );
   for (const s of stale) await closeInstance(s);
   if (stale.length > 0) instances = await listInstances(board.boardId);
   let cardRows = await rowsForBoard(board.boardId);
   stopLoading(); // data is in — the layout below builds synchronously
-  // leaving the meeting's screens re-locks a meeting opened for editing
-  cleanups.push(() => relockOnLeave(board.boardId));
   let current: InstanceSummary | null = null;
 
   // an adjusted meeting renders its own override manifest instead
@@ -316,7 +324,8 @@ async function renderBoard(
                 if (when.value === "") return;
                 dlg.close();
                 void (async () => {
-                  await rescheduleInstance(rec, `${when.value.slice(0, 16)}:00Z`);
+                  const newIso = when.value.slice(0, 16);
+                  await rescheduleInstance(rec, `${newIso}:00Z`);
                   instances = await listInstances(board.boardId);
                   if (current?.id === rec.id) {
                     current = instances.find((i) => i.id === rec.id) ?? current;
@@ -324,6 +333,12 @@ async function renderBoard(
                     renderTiles();
                   }
                   refreshScheduler();
+                  // the vacated cadence slot regenerates with the OLD iso,
+                  // so the stale highlight must move to the record's new
+                  // home (one tap on the old slot would otherwise offer to
+                  // create a duplicate record)
+                  schedulerView.clearSelection();
+                  schedulerView.selectByIso(newIso);
                 })();
               },
             },
