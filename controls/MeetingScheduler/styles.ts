@@ -158,6 +158,9 @@ export const MEETING_CSS = `
 
 /* ---- instance rows ---- */
 .ltk-ms-row {
+  /* never shrink in the scrolling list — overflow:hidden would otherwise
+     let flex squash rows and clip their entry fields */
+  flex: 0 0 auto;
   display: flex;
   align-items: stretch;
   border: 1px solid var(--ltk-hairline);

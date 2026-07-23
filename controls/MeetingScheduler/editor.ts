@@ -219,9 +219,11 @@ export class MeetingSchedulerView {
       });
       menu.appendChild(btn);
     }
+    // right-align to the kebab (it rides the row's right edge, so a
+    // left-anchored menu would run off the pane)
     const rootRect = this.root.getBoundingClientRect();
     const a = anchor.getBoundingClientRect();
-    menu.style.left = `${a.left - rootRect.left}px`;
+    menu.style.right = `${Math.max(0, rootRect.right - a.right)}px`;
     menu.style.top = `${a.bottom - rootRect.top + 4}px`;
     this.root.appendChild(menu);
     document.addEventListener("pointerdown", onDown, true);
