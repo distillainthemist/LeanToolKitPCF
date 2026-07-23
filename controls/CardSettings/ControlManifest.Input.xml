@@ -2,7 +2,7 @@
 <manifest>
   <control namespace="BenOBrien"
            constructor="CardSettings"
-           version="0.11.5"
+           version="0.11.6"
            display-name-key="Card Settings"
            description-key="LeanToolKit settings composer — pick a card type (or load an existing settingsJSON to edit), fill in common, theme and card-specific configuration with typed fields, and emit a complete settingsJSON (stamped with cardType) ready to store against the card row."
            control-type="standard">

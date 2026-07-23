@@ -2,7 +2,7 @@
 <manifest>
   <control namespace="BenOBrien"
            constructor="ProcessMap"
-           version="0.11.5"
+           version="0.11.6"
            display-name-key="Process Map"
            description-key="LeanToolKit process map — simple flowchart, swimlane map, SIPOC or value stream map (set via Map Type). Palette drag-and-drop, connectors, post-it notes, pan/zoom, colour coding, VSM data boxes + lead-time ladder; kaizen bursts raise actions."
            control-type="standard">
