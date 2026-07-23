@@ -61,6 +61,7 @@ import {
   DirectoryProfile,
   directoryProfile,
   listPeople,
+  searchEntra,
   superAdminExists,
   upsertPerson,
   viewerPerson,
@@ -574,6 +575,11 @@ function syncSummary(r: SyncReport): string {
   if (r.ownersAdded > 0) bits.push(`${r.ownersAdded} owner${r.ownersAdded === 1 ? "" : "s"}`);
   if (r.membersRemoved > 0) bits.push(`removed ${r.membersRemoved}`);
   if (r.ownersRemoved > 0) bits.push(`ownership removed from ${r.ownersRemoved}`);
+  if (r.newcomers.length > 0) {
+    bits.push(
+      `brought ${r.newcomers.length} group member${r.newcomers.length === 1 ? "" : "s"} onto the roster`
+    );
+  }
   return bits.length > 0 ? `Synced — ${bits.join(" · ")}.` : "Everything already in sync.";
 }
 
@@ -685,7 +691,11 @@ function pickOwnedGroup(
 }
 
 /** Access-control card: the Entra group the roster keeps in sync. */
-function accessControlCard(me: RosterPerson, people: RosterPerson[]): HTMLElement {
+function accessControlCard(
+  me: RosterPerson,
+  getPeople: () => RosterPerson[],
+  onRosterChanged: () => void
+): HTMLElement {
   const card = el("div", "app-access-card");
   card.appendChild(el("div", "app-section", "Access control"));
   const line = el("div", "app-settings-note", "Loading access group…");
@@ -714,9 +724,24 @@ function accessControlCard(me: RosterPerson, people: RosterPerson[]): HTMLElemen
   };
 
   const runSync = async () => {
-    note.textContent = "Syncing the roster into the group…";
+    note.textContent = "Syncing the roster and the group…";
     try {
-      note.textContent = syncSummary(await syncAllAccess(people, me.whoId));
+      const r = await syncAllAccess(getPeople(), me.whoId);
+      // two-way: members added directly in Entra join the roster too
+      for (const m of r.newcomers) {
+        await upsertPerson({
+          whoId: m.id,
+          who: m.name,
+          email: m.email,
+          site: "",
+          department: "",
+          area: "",
+          role: "user",
+          active: true,
+        });
+      }
+      note.textContent = syncSummary(r);
+      if (r.newcomers.length > 0) onRosterChanged(); // show the new rows
     } catch (err) {
       note.textContent = `Sync failed: ${errText(err)} — a group owner can retry.`;
     }
@@ -752,6 +777,91 @@ function accessControlCard(me: RosterPerson, people: RosterPerson[]): HTMLElemen
   return card;
 }
 
+/**
+ * Add people proactively from the org directory (Entra search) — no
+ * need to wait for a meeting invite. New people land as active users
+ * with no site; upsertPerson also syncs them into the access group.
+ */
+function directoryAddCard(
+  getPeople: () => RosterPerson[],
+  onAdded: () => void
+): HTMLElement {
+  const card = el("div", "app-access-card");
+  card.appendChild(el("div", "app-section", "Add people"));
+  const row = el("div", "app-settings-row");
+  const query = el("input", "app-input") as HTMLInputElement;
+  query.type = "search";
+  query.placeholder = "Search the directory (name or email)…";
+  query.style.flex = "1";
+  const go = el("button", "app-btn", "Search") as HTMLButtonElement;
+  row.append(query, go);
+  const hits = el("div", "app-group-list");
+  const note = el("div", "app-field-hint", "");
+  card.append(row, hits, note);
+
+  const runSearch = () => {
+    const q = query.value.trim();
+    if (q.length < 2) {
+      note.textContent = "Type at least two characters.";
+      return;
+    }
+    note.textContent = "Searching…";
+    clear(hits);
+    void searchEntra(q)
+      .then((found) => {
+        note.textContent = found.length === 0 ? "No directory matches." : "";
+        const known = new Set(getPeople().map((p) => p.whoId));
+        for (const hit of found) {
+          const r = el("div", "app-group-row");
+          r.appendChild(el("span", "app-people-name", hit.displayName));
+          r.appendChild(
+            el(
+              "span",
+              "app-user-email",
+              [hit.mail, hit.department].filter(Boolean).join(" · ")
+            )
+          );
+          if (known.has(hit.objectId)) {
+            r.appendChild(el("span", "app-status-badge", "on the roster"));
+          } else {
+            const add = el("button", "app-btn", "＋ Add") as HTMLButtonElement;
+            add.addEventListener("click", () => {
+              add.disabled = true;
+              add.textContent = "Adding…";
+              void upsertPerson({
+                whoId: hit.objectId,
+                who: hit.displayName,
+                email: hit.mail,
+                site: "",
+                department: "",
+                area: "",
+                role: "user",
+                active: true,
+              }).then(() => {
+                add.textContent = "Added";
+                note.textContent = `${hit.displayName} is on the roster — set their site and crew below.`;
+                onAdded();
+              });
+            });
+            r.appendChild(add);
+          }
+          hits.appendChild(r);
+        }
+      })
+      .catch((err) => {
+        note.textContent = `Search failed: ${err instanceof Error ? err.message : String(err)}`;
+      });
+  };
+  go.addEventListener("click", runSearch);
+  query.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      runSearch();
+    }
+  });
+  return card;
+}
+
 /** Users: search + site/role filters, role + site assignment. */
 async function renderUsers(body: HTMLElement, me: RosterPerson): Promise<void> {
   clear(body);
@@ -763,8 +873,19 @@ async function renderUsers(body: HTMLElement, me: RosterPerson): Promise<void> {
   }
   const sites = parseOrgTree(await orgJson()).map((s) => s.site);
   const crewLib = await rosterPatternLibrary();
-  const people = await listPeople(true);
-  if (canEdit) body.appendChild(accessControlCard(me, people));
+  let people = await listPeople(true);
+  // reload the roster and repaint the list in place (keeps the cards'
+  // own notes — e.g. the sync summary — on screen)
+  const reloadPeople = async () => {
+    people = await listPeople(true);
+    draw();
+  };
+  if (canEdit) {
+    body.appendChild(
+      accessControlCard(me, () => people, () => void reloadPeople())
+    );
+    body.appendChild(directoryAddCard(() => people, () => void reloadPeople()));
+  }
 
   // directory reads (job title + account status) are lazy and cached, so
   // re-filtering never refetches and large rosters aren't hit all at once
@@ -962,9 +1083,12 @@ function userRow(
   else void dir.load(p.whoId).then(paintDirectory);
 
   const controls = el("div", "app-user-controls");
+  // a revoked person's placement and role are frozen — restore access
+  // first, then edit (prevents silent changes to someone locked out)
+  const editable = canEdit && p.active;
   // crew: from the site's roster patterns; a site with none offers only —
   const crew = select(crewsForSite(crewLib, p.site), p.crew ?? "");
-  crew.disabled = !canEdit;
+  crew.disabled = !editable;
   crew.addEventListener("change", () => {
     p.crew = crew.value || undefined;
     void upsertPerson({ ...p });
@@ -973,7 +1097,7 @@ function userRow(
   // a stale sub-placement can't outlive its site)
   const site = select(sites, p.site);
   site.value = p.site;
-  site.disabled = !canEdit;
+  site.disabled = !editable;
   site.addEventListener("change", () => {
     if (site.value !== p.site) {
       p.department = "";
@@ -1004,7 +1128,7 @@ function userRow(
     }
   };
   const role = roleSelect(p.role);
-  role.disabled = !canEdit || p.whoId === me.whoId; // no self-demotion footguns
+  role.disabled = !editable || p.whoId === me.whoId; // no self-demotion footguns
   role.addEventListener("change", () => {
     p.role = role.value || "user";
     roleBadge.textContent = roleLabel(p.role);

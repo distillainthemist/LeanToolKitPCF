@@ -228,6 +228,41 @@ async function idSet(groupId: string, kind: "members" | "owners"): Promise<Set<s
   return out;
 }
 
+export interface GroupMember {
+  id: string;
+  name: string;
+  email: string;
+}
+
+/** The group's USER members with identity (the microsoft.graph.user cast
+ *  skips nested groups/service principals). */
+async function memberProfiles(groupId: string): Promise<GroupMember[]> {
+  const out: GroupMember[] = [];
+  let path = `/groups/${groupId}/members/microsoft.graph.user?$select=id,displayName,mail,userPrincipalName&$top=999`;
+  while (path) {
+    const data = (await graph("GET", path)) as {
+      value?: {
+        id?: string;
+        displayName?: string;
+        mail?: string;
+        userPrincipalName?: string;
+      }[];
+      "@odata.nextLink"?: string;
+    };
+    for (const v of data.value ?? []) {
+      if (!v.id) continue;
+      out.push({
+        id: v.id,
+        name: v.displayName ?? v.userPrincipalName ?? v.id,
+        email: v.mail ?? v.userPrincipalName ?? "",
+      });
+    }
+    const next = data["@odata.nextLink"];
+    path = next ? next.replace("https://graph.microsoft.com/v1.0", "") : "";
+  }
+  return out;
+}
+
 /**
  * Remove ownership with the last-owner guard: a group must never be
  * left ownerless (Graph allows it for pure security groups). Throws a
@@ -281,13 +316,18 @@ export interface SyncReport {
   ownersAdded: number;
   membersRemoved: number;
   ownersRemoved: number;
+  /** Group members with no roster row — the caller registers them (the
+   *  store stays acyclic: this module must not import people.ts). */
+  newcomers: GroupMember[];
 }
 
 /**
  * Reconcile the whole roster against the group (the Sync now button,
  * and the adoption path when a group is first configured). Only rows
  * with real Entra ids sync; the signed-in admin's ownership and the
- * last owner are never removed.
+ * last owner are never removed. Sync is two-way for membership: group
+ * members added directly in Entra come back as `newcomers` for the
+ * caller to bring onto the roster.
  */
 export async function syncAllAccess(
   people: RosterPerson[],
@@ -300,11 +340,18 @@ export async function syncAllAccess(
     ownersAdded: 0,
     membersRemoved: 0,
     ownersRemoved: 0,
+    newcomers: [],
   };
-  const [members, owners] = await Promise.all([
-    idSet(group.id, "members"),
+  const [memberList, owners] = await Promise.all([
+    memberProfiles(group.id),
     idSet(group.id, "owners"),
   ]);
+  const members = new Set(memberList.map((m) => m.id));
+  // group members added directly in Entra, unknown to the roster —
+  // includes nobody with an existing row (active OR revoked, so a
+  // revoked person re-added to the group by hand doesn't resurrect)
+  const known = new Set(people.map((p) => p.whoId));
+  report.newcomers = memberList.filter((m) => !known.has(m.id));
   const guid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   const rows = people.filter((p) => guid.test(p.whoId));
   const active = rows.filter((p) => p.active);
