@@ -6,6 +6,7 @@
 
 import { applyThemeVars, defaultTheme, textOn, Theme } from "../../shared/tokens";
 import { LTK_BASE_CSS } from "../../shared/ui/baseCss";
+import { copyText } from "../../shared/ui/clipboard";
 import { clear, el, ensureStylesheet } from "../../shared/ui/dom";
 import { parsePrompts, Prompts, renderGhost, renderTitleBar } from "../../shared/ui/chrome";
 import { todayIso } from "../../shared/schema/id";
@@ -23,6 +24,13 @@ export interface MeetingViewCallbacks {
   onCreate?: (instance: MeetingInstance) => void;
   /** A kebab menu action on a created row. */
   onMenu?: (instance: MeetingInstance, action: "edit" | "reset" | "move") => void;
+}
+
+interface MenuItem {
+  label: string;
+  run: (menu: HTMLElement) => void;
+  /** Leave the menu up after the pick (it reports the result itself). */
+  keepOpen?: boolean;
 }
 
 const CREW_FALLBACKS = ["#2b88d8", "#107c10", "#f2c811", "#8764b8"];
@@ -47,6 +55,9 @@ export class MeetingSchedulerView {
   /** The viewer's crew — when set, the list defaults to just that crew. */
   private viewerCrew = "";
   private crewFilterOn = true;
+  /** Shareable URL for the selection, supplied by the wrapper ("" hides
+   *  the copy-link option). */
+  private meetingLink = "";
 
   constructor(host: HTMLElement, private readonly cb: MeetingViewCallbacks) {
     ensureStylesheet("ltk-base-css", LTK_BASE_CSS);
@@ -96,6 +107,13 @@ export class MeetingSchedulerView {
       this.readOnly = ro;
       this.render();
     }
+  }
+
+  /** The link the pane menu copies — the selected meeting when there is
+   *  one, else the ritual. "" drops the option. */
+  setMeetingLink(url: string): void {
+    // no re-render: the menu reads this when it opens
+    this.meetingLink = url;
   }
 
   setMeetingInfo(info: MeetingInfo | null): void {
@@ -165,19 +183,11 @@ export class MeetingSchedulerView {
     this.root.remove();
   }
 
+  /** The ad-hoc date/time strip, opened from the pane menu. */
   private renderAdhocAdder(body: HTMLElement): void {
     const wrap = el("div", "ltk-ms-adhocadd");
     body.appendChild(wrap);
-    if (!this.adhocOpen) {
-      const open = el("button", "ltk-ms-adhocbtn", "\uFF0B Ad-hoc meeting") as HTMLButtonElement;
-      open.type = "button";
-      open.addEventListener("click", () => {
-        this.adhocOpen = true;
-        this.render();
-      });
-      wrap.appendChild(open);
-      return;
-    }
+    wrap.appendChild(el("span", "ltk-ms-adhoclabel", "Ad-hoc meeting"));
     const date = el("input", "ltk-ms-adhocfield") as HTMLInputElement;
     date.type = "date";
     date.value = todayIso();
@@ -202,8 +212,6 @@ export class MeetingSchedulerView {
 
   /** The kebab's record operations, anchored under the button. */
   private openRowMenu(inst: MeetingInstance, anchor: HTMLElement): void {
-    this.root.querySelector(".ltk-ms-menu")?.remove();
-    const menu = el("div", "ltk-ms-menu");
     const items: { label: string; action: "edit" | "reset" | "move" }[] =
       inst.closed
         ? [{ label: "Edit meeting", action: "edit" }]
@@ -211,6 +219,66 @@ export class MeetingSchedulerView {
             { label: "Reset to newly created", action: "reset" },
             { label: "Change date/time…", action: "move" },
           ];
+    this.openMenu(
+      anchor,
+      items.map((item) => ({
+        label: item.label,
+        run: () => this.cb.onMenu?.(inst, item.action),
+      }))
+    );
+  }
+
+  /**
+   * The pane's own kebab, on the title bar: pane-level operations rather
+   * than a single record's.
+   */
+  private openPaneMenu(anchor: HTMLElement): void {
+    const items: MenuItem[] = [];
+    if (this.cb.onAddAdhoc && !this.readOnly) {
+      items.push({
+        label: "＋ Ad-hoc meeting",
+        run: () => {
+          this.adhocOpen = true;
+          this.render();
+        },
+      });
+    }
+    if (this.meetingLink !== "") {
+      items.push({
+        label: this.selectedIso !== "" ? "Copy link to this meeting" : "Copy ritual link",
+        // the menu becomes the copy's receipt, so it stays open
+        keepOpen: true,
+        run: (menu) => this.copyLinkInto(menu),
+      });
+    }
+    this.openMenu(anchor, items);
+  }
+
+  /** Copy the link, reporting inside the menu (which stays open for it). */
+  private copyLinkInto(menu: HTMLElement): void {
+    void copyText(this.meetingLink).then((ok) => {
+      clear(menu);
+      if (ok) {
+        menu.appendChild(el("div", "ltk-ms-menu-note", "Link copied"));
+        window.setTimeout(() => menu.remove(), 1200);
+        return;
+      }
+      // the host refused the clipboard — hand over the raw URL instead
+      menu.appendChild(el("div", "ltk-ms-menu-note", "Copy this link:"));
+      const box = el("input", "ltk-ms-menu-link") as HTMLInputElement;
+      box.value = this.meetingLink;
+      box.readOnly = true;
+      menu.appendChild(box);
+      box.select();
+    });
+  }
+
+  /** Shared popup menu: right-aligned under `anchor`, flipping up when it
+   *  would run past the pane's clipped bottom edge. */
+  private openMenu(anchor: HTMLElement, items: MenuItem[]): void {
+    this.root.querySelector(".ltk-ms-menu")?.remove();
+    if (items.length === 0) return;
+    const menu = el("div", "ltk-ms-menu");
     const close = () => {
       menu.remove();
       document.removeEventListener("pointerdown", onDown, true);
@@ -222,8 +290,8 @@ export class MeetingSchedulerView {
       const btn = el("button", "ltk-ms-menu-item", item.label) as HTMLButtonElement;
       btn.type = "button";
       btn.addEventListener("click", () => {
-        close();
-        this.cb.onMenu?.(inst, item.action);
+        if (!item.keepOpen) close();
+        item.run(menu);
       });
       menu.appendChild(btn);
     }
@@ -272,11 +340,29 @@ export class MeetingSchedulerView {
   private render(): void {
     clear(this.root);
     applyThemeVars(this.root, this.theme);
-    renderTitleBar(this.root, this.cardTitle, this.prompts);
+    const bar = renderTitleBar(this.root, this.cardTitle, this.prompts);
+    // pane-level operations (ad-hoc meeting, copy link) hang off the
+    // title row rather than a footer button
+    if (bar && ((this.cb.onAddAdhoc && !this.readOnly) || this.meetingLink !== "")) {
+      const kebab = el("button", "ltk-ms-titlekebab", "⋮") as HTMLButtonElement;
+      kebab.type = "button";
+      kebab.title = "Schedule options";
+      kebab.setAttribute("aria-label", "Schedule options");
+      kebab.addEventListener("click", (e) => {
+        e.stopPropagation();
+        this.openPaneMenu(kebab);
+      });
+      bar.appendChild(kebab);
+    }
     this.renderMeetingInfo();
 
     const body = el("div", "ltk-ms-body");
     this.root.appendChild(body);
+
+    // the ad-hoc form opens in place, under the title, where the menu is
+    if (this.adhocOpen && this.cb.onAddAdhoc && !this.readOnly) {
+      this.renderAdhocAdder(body);
+    }
 
     if (this.instances.length === 0) {
       const lines = this.prompts.general.length
@@ -327,13 +413,6 @@ export class MeetingSchedulerView {
       );
     }
     body.appendChild(list);
-
-    // footer: the ad-hoc adder lives at the bottom of the pane
-    if (this.cb.onAddAdhoc && !this.readOnly) {
-      const footer = el("div", "ltk-ms-footer");
-      this.renderAdhocAdder(footer);
-      body.appendChild(footer);
-    }
   }
 
   /**

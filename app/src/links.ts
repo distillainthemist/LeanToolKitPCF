@@ -31,28 +31,34 @@ export const LATEST = "latest";
 /** Player query parameter naming the ritual to open on launch. */
 export const LAUNCH_PARAM = "ritual";
 
+/** Player query parameter pinning one occurrence ("yyyy-mm-ddTHH:MM"). */
+export const AT_PARAM = "at";
+
 /** Where the Power Apps player lives (commercial cloud, region "prod"). */
 const PLAYER = "https://apps.powerapps.com/play";
 
-export function boardHash(boardId: string): string {
-  return `#/board/${boardId}/${LATEST}`;
+/** Route for a ritual: one occurrence when `iso` is given, else its latest. */
+export function boardHash(boardId: string, iso = ""): string {
+  const at = iso === "" ? LATEST : encodeURIComponent(iso);
+  return `#/board/${boardId}/${at}`;
 }
 
 /** The absolute URL to paste elsewhere. */
-export function boardUrl(boardId: string): string {
+export function boardUrl(boardId: string, iso = ""): string {
   if (!host || host.appId === "" || host.environmentId === "") {
     // dev server (or the context never answered): the page's own URL is
     // the only honest link we can offer
-    return `${window.location.href.split("#")[0]}${boardHash(boardId)}`;
+    return `${window.location.href.split("#")[0]}${boardHash(boardId, iso)}`;
   }
   const q = new URLSearchParams();
   if (host.tenantId !== "") q.set("tenantId", host.tenantId);
   q.set(LAUNCH_PARAM, boardId);
+  if (iso !== "") q.set(AT_PARAM, iso);
   // the fragment is ignored by the player but honoured by any host that
   // does forward it, and it makes the link readable
   return (
     `${PLAYER}/e/${host.environmentId}/app/${host.appId}?${q.toString()}` +
-    boardHash(boardId)
+    boardHash(boardId, iso)
   );
 }
 
@@ -63,14 +69,16 @@ export function boardUrl(boardId: string): string {
  */
 export function launchTarget(): string {
   const params = host?.queryParams ?? {};
-  const named = Object.entries(params).find(
-    ([key]) => key.toLowerCase() === LAUNCH_PARAM
-  );
   const search = typeof window === "undefined" ? "" : window.location.search;
-  const boardId =
-    (named?.[1] ?? "").trim() ||
-    (new URLSearchParams(search).get(LAUNCH_PARAM) ?? "").trim();
-  return boardId === "" ? "" : boardHash(boardId);
+  const query = new URLSearchParams(search);
+  const param = (name: string): string => {
+    const named = Object.entries(params).find(
+      ([key]) => key.toLowerCase() === name
+    );
+    return ((named?.[1] ?? "").trim() || (query.get(name) ?? "").trim());
+  };
+  const boardId = param(LAUNCH_PARAM);
+  return boardId === "" ? "" : boardHash(boardId, param(AT_PARAM));
 }
 
 /**

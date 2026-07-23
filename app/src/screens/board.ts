@@ -24,7 +24,7 @@ import {
 import { parseMeetingInfo } from "../../../shared/schema/meeting";
 import { openDialog } from "../../../shared/ui/dialog";
 import { el } from "../../../shared/ui/dom";
-import { LATEST, latestInstanceIso } from "../links";
+import { boardUrl, LATEST, latestInstanceIso } from "../links";
 import { showLoading } from "../loading";
 import { appTheme } from "../cardHost";
 import { currentViewer, detectHost } from "../runtime";
@@ -161,6 +161,9 @@ async function renderBoard(
   // collapsed — the meeting is the focus; otherwise it starts visible,
   // as it is the only way to pick an occurrence.
   let scheduleHidden = selectIso !== "";
+  // a meeting created because the viewer arrived on a link to it returns
+  // them to the board alone — the schedule was only opened to confirm
+  let reHideAfterCreate = false;
   const setScheduleHidden = (on: boolean) => {
     scheduleHidden = on;
     split.classList.toggle("app-board-solo", on);
@@ -169,7 +172,10 @@ async function renderBoard(
       : "Hide details & schedule";
   };
   setScheduleHidden(scheduleHidden);
-  scheduleBtn.addEventListener("click", () => setScheduleHidden(!scheduleHidden));
+  scheduleBtn.addEventListener("click", () => {
+    reHideAfterCreate = false; // the viewer is driving the pane now
+    setScheduleHidden(!scheduleHidden);
+  });
 
   const gridView = new BoardGridView(rightHost, {
     onSelect: (e) => {
@@ -233,6 +239,8 @@ async function renderBoard(
     if (!current) return;
     const iso = encodeURIComponent(current.when.slice(0, 16));
     window.history.replaceState(null, "", `#/board/${board.boardId}/${iso}`);
+    // the pane menu's copy-link follows the selection
+    schedulerView.setMeetingLink(boardUrl(board.boardId, current.when.slice(0, 16)));
   };
 
   const createAndSelect = async (whenIso: string, adhoc = false) => {
@@ -246,6 +254,10 @@ async function renderBoard(
       refreshScheduler();
       rememberSelection();
       renderTiles();
+      if (reHideAfterCreate) {
+        reHideAfterCreate = false;
+        setScheduleHidden(true);
+      }
     } finally {
       stop();
     }
@@ -367,12 +379,22 @@ async function renderBoard(
       // real source of stray instances in the pilot). Host the dialog
       // inside the scheduler's themed root so the toolkit styles apply —
       // which must be visible (a hidden pane would swallow the dialog)
-      if (scheduleHidden) setScheduleHidden(false);
+      if (scheduleHidden) {
+        setScheduleHidden(false);
+        reHideAfterCreate = true; // opened only to confirm the creation
+      }
       const dlg = openDialog({
         host: (leftHost.querySelector(".ltk-root") as HTMLElement) ?? leftHost,
         title: "Start this meeting?",
         buttons: [
-          { label: "Not now", kind: "secondary", onClick: () => dlg.close() },
+          {
+            label: "Not now",
+            kind: "secondary",
+            onClick: () => {
+              reHideAfterCreate = false; // they stay with the schedule up
+              dlg.close();
+            },
+          },
           {
             label: "Create record",
             kind: "primary",
@@ -444,6 +466,8 @@ async function renderBoard(
   schedulerTheme.titleBar = catColor !== "" ? catColor : "#ffffff";
   schedulerView.setTheme(schedulerTheme);
   schedulerView.setChrome("Details & schedule", "");
+  // no selection yet: the pane menu offers the ritual's own link
+  schedulerView.setMeetingLink(boardUrl(board.boardId));
   schedulerView.setMeetingInfo(parseMeetingInfo(blobRaw));
   schedulerView.setColumns(parseMeetingColumns(s("columns")));
   // the viewer's roster crew defaults the schedule to their own meetings
