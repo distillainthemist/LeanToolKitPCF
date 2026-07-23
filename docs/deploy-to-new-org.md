@@ -32,8 +32,14 @@ the portal add is the one-time bridge.
    the spot if none exists — it powers Entra people search).
 3. **Assign the "LeanBoard User" security role** to everyone who will
    use the app (Power Platform admin centre → environment → Users, or
-   better: map an Entra security group to a Dataverse group team and
-   give the team the role — then app access is just group membership).
+   better: map an Entra group to a Dataverse group team and give the
+   team the role — then app access is just group membership). The app
+   can then manage that group's membership itself: a super admin picks
+   a Microsoft group they own under Settings → Users → Access control
+   (security or security-enabled M365), and from then on people added
+   to the roster join the group automatically, super/site admins also
+   become owners, revoking removes them, and Sync now reconciles. The
+   group-team mapping and app sharing remain this one-time admin step.
    The app runs in each user's own security context, so without the
    role every Dataverse call fails. The role grants create/read/write/
    append on the eight app tables at organisation level, plus delete

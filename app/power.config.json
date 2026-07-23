@@ -17,6 +17,14 @@
         "office365users"
       ],
       "dataSets": {}
+    },
+    "78f9d472-4f53-45c0-91ab-4b257f7b84d5": {
+      "id": "/providers/Microsoft.PowerApps/apis/shared_office365groups",
+      "displayName": "Office 365 Groups",
+      "dataSources": [
+        "office365groups"
+      ],
+      "dataSets": {}
     }
   },
   "databaseReferences": {

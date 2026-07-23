@@ -15,6 +15,7 @@ export type Ben_ltksitesettingsesstatuscode = keyof typeof Ben_ltksitesettingses
 
 export interface Ben_ltksitesettingsesBase {
   ben_accent?: string;
+  ben_accessgroup?: string;
   ben_appname?: string;
   ben_companies?: string;
   ben_company?: string;

@@ -11,6 +11,14 @@ import { promptText, promptUnsaved } from "../prompts";
 import { currentViewer, detectHost } from "../runtime";
 import { EmulatedRole, effectivePerson, setViewAsRole, viewAsRole } from "../viewAs";
 import {
+  accessGroup,
+  listOwnedGroups,
+  saveAccessGroup,
+  syncAllAccess,
+  syncPersonAccess,
+  SyncReport,
+} from "../store/accessGroup";
+import {
   isConfidentialBoard,
   listBoards,
   renameBoardsDepartment,
@@ -559,6 +567,142 @@ async function renderProfile(
   );
 }
 
+/** "added 3 members · 1 owner · removed 2" (or "everything in sync"). */
+function syncSummary(r: SyncReport): string {
+  const bits: string[] = [];
+  if (r.membersAdded > 0) bits.push(`added ${r.membersAdded} member${r.membersAdded === 1 ? "" : "s"}`);
+  if (r.ownersAdded > 0) bits.push(`${r.ownersAdded} owner${r.ownersAdded === 1 ? "" : "s"}`);
+  if (r.membersRemoved > 0) bits.push(`removed ${r.membersRemoved}`);
+  if (r.ownersRemoved > 0) bits.push(`ownership removed from ${r.ownersRemoved}`);
+  return bits.length > 0 ? `Synced — ${bits.join(" · ")}.` : "Everything already in sync.";
+}
+
+/** Pick one of the groups the signed-in admin owns (app-styled modal). */
+function pickOwnedGroup(): Promise<{ id: string; name: string } | null> {
+  return new Promise((resolve) => {
+    const overlay = el("div", "app-modal-overlay");
+    const box = el("div", "app-modal");
+    box.appendChild(el("div", "app-modal-title", "Choose the access group"));
+    box.appendChild(
+      el(
+        "div",
+        "app-modal-note",
+        "Groups you own in Microsoft Entra. Members of the chosen group can open the app; the roster keeps it in sync."
+      )
+    );
+    const search = el("input", "app-input") as HTMLInputElement;
+    search.type = "search";
+    search.placeholder = "Filter groups…";
+    const list = el("div", "app-group-list");
+    list.appendChild(el("div", "app-settings-note", "Loading groups you own…"));
+    box.append(search, list);
+    const footer = el("div", "app-modal-footer");
+    const cancel = el("button", "app-link", "Cancel") as HTMLButtonElement;
+    footer.appendChild(cancel);
+    box.appendChild(footer);
+    const done = (r: { id: string; name: string } | null) => {
+      overlay.remove();
+      resolve(r);
+    };
+    cancel.addEventListener("click", () => done(null));
+    overlay.appendChild(box);
+    document.body.appendChild(overlay);
+
+    let groups: { id: string; name: string; securityEnabled: boolean }[] = [];
+    const paint = () => {
+      clear(list);
+      const q = search.value.trim().toLowerCase();
+      const shown = groups.filter((g) => q === "" || g.name.toLowerCase().includes(q));
+      if (shown.length === 0) {
+        list.appendChild(el("div", "app-settings-note", "No owned groups match."));
+        return;
+      }
+      for (const g of shown.slice(0, 30)) {
+        const rowBtn = el("button", "app-group-row") as HTMLButtonElement;
+        rowBtn.type = "button";
+        rowBtn.appendChild(el("span", "app-people-name", g.name));
+        if (g.securityEnabled) {
+          rowBtn.appendChild(el("span", "app-status-badge", "security-enabled"));
+        }
+        rowBtn.addEventListener("click", () => done({ id: g.id, name: g.name }));
+        list.appendChild(rowBtn);
+      }
+      if (shown.length > 30) {
+        list.appendChild(el("div", "app-settings-note", `Showing 30 of ${shown.length} — keep typing.`));
+      }
+    };
+    search.addEventListener("input", paint);
+    void listOwnedGroups()
+      .then((g) => {
+        groups = g;
+        paint();
+      })
+      .catch((err) => {
+        clear(list);
+        list.appendChild(
+          el(
+            "div",
+            "app-settings-note",
+            `Couldn't list your groups: ${err instanceof Error ? err.message : String(err)}`
+          )
+        );
+      });
+  });
+}
+
+/** Access-control card: the Entra group the roster keeps in sync. */
+function accessControlCard(me: RosterPerson, people: RosterPerson[]): HTMLElement {
+  const card = el("div", "app-access-card");
+  card.appendChild(el("div", "app-section", "Access control"));
+  const line = el("div", "app-settings-note", "Loading access group…");
+  const row = el("div", "app-settings-row");
+  const note = el("div", "app-field-hint", "");
+  const choose = el("button", "app-btn", "Choose group…") as HTMLButtonElement;
+  const sync = el("button", "app-btn", "Sync now") as HTMLButtonElement;
+  const stop = el("button", "app-btn", "Stop managing") as HTMLButtonElement;
+  row.append(choose, sync, stop);
+  card.append(line, row, note);
+
+  const paint = async () => {
+    const g = await accessGroup();
+    sync.style.display = g ? "" : "none";
+    stop.style.display = g ? "" : "none";
+    choose.textContent = g ? "Change group…" : "Choose group…";
+    line.textContent = g
+      ? `Access group: ${g.name}. People added to the roster join it automatically; super and site admins also become owners.`
+      : "No access group configured — choose a Microsoft group you own to gate who can open the app.";
+  };
+
+  const runSync = async () => {
+    note.textContent = "Syncing the roster into the group…";
+    try {
+      note.textContent = syncSummary(await syncAllAccess(people, me.whoId));
+    } catch (err) {
+      note.textContent = `Sync failed: ${err instanceof Error ? err.message : String(err)} — a group owner can retry.`;
+    }
+  };
+
+  choose.addEventListener("click", () => {
+    void (async () => {
+      const g = await pickOwnedGroup();
+      if (!g) return;
+      await saveAccessGroup(g);
+      await paint();
+      await runSync();
+    })();
+  });
+  sync.addEventListener("click", () => void runSync());
+  stop.addEventListener("click", () => {
+    void (async () => {
+      await saveAccessGroup(null);
+      note.textContent = "The app no longer manages any group.";
+      await paint();
+    })();
+  });
+  void paint();
+  return card;
+}
+
 /** Users: search + site/role filters, role + site assignment. */
 async function renderUsers(body: HTMLElement, me: RosterPerson): Promise<void> {
   clear(body);
@@ -571,6 +715,7 @@ async function renderUsers(body: HTMLElement, me: RosterPerson): Promise<void> {
   const sites = parseOrgTree(await orgJson()).map((s) => s.site);
   const crewLib = await rosterPatternLibrary();
   const people = await listPeople(true);
+  if (canEdit) body.appendChild(accessControlCard(me, people));
 
   // directory reads (job title + account status) are lazy and cached, so
   // re-filtering never refetches and large rosters aren't hit all at once
@@ -789,13 +934,27 @@ function userRow(
     p.site = site.value;
     void upsertPerson({ ...p });
   });
+  // access-group sync rides role/access changes; a failure never blocks
+  // the roster edit, it just points at the card's Sync now
+  const syncWarn = () => {
+    if (!r.querySelector(".app-user-syncwarn")) {
+      r.appendChild(
+        el(
+          "div",
+          "app-settings-note app-user-syncwarn",
+          "Access-group sync failed — a group owner can run Sync now above."
+        )
+      );
+    }
+  };
+  const syncAccess = () => void syncPersonAccess(p, me.whoId).catch(syncWarn);
   const role = roleSelect(p.role);
   role.disabled = !canEdit || p.whoId === me.whoId; // no self-demotion footguns
   role.addEventListener("change", () => {
     p.role = role.value || "user";
     roleBadge.textContent = roleLabel(p.role);
     roleBadge.className = `app-role-badge app-role-${p.role}`;
-    void upsertPerson({ ...p });
+    void upsertPerson({ ...p }).then(syncAccess);
   });
   controls.append(
     labelledControl("Site", site),
@@ -813,7 +972,9 @@ function userRow(
     ) as HTMLButtonElement;
     access.addEventListener("click", () => {
       p.active = !p.active;
-      void upsertPerson({ ...p }).then(onChanged); // re-filter (status may change)
+      void upsertPerson({ ...p })
+        .then(syncAccess) // revoke leaves the group; restore rejoins it
+        .then(onChanged); // re-filter (status may change)
     });
     controls.append(labelledControl("Access", access));
   }

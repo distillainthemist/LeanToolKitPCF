@@ -18,6 +18,14 @@
           "x-ms-schema-name": "ben_accent",
           "maxLength": 20
         },
+        "ben_accessgroup": {
+          "type": "string",
+          "title": "Access group (JSON)",
+          "x-ms-dataverse-attribute": "ben_accessgroup",
+          "x-ms-dataverse-type": "MemoType",
+          "x-ms-schema-name": "ben_accessgroup",
+          "maxLength": 2000
+        },
         "ben_appname": {
           "type": "string",
           "title": "App name (branding)",

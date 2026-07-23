@@ -539,6 +539,38 @@ input[type="color"].app-cat-swatch {
 .app-save-bar-on { display: flex; }
 .app-save-bar-msg { font-size: 13px; font-weight: 600; color: #92400e; }
 
+/* access-control group card + owned-group picker */
+.app-access-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: #fff;
+  border-radius: 8px;
+  padding: 12px 16px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+}
+.app-group-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 300px;
+  overflow-y: auto;
+  margin-top: 8px;
+}
+.app-group-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font: inherit;
+  text-align: left;
+  background: #fff;
+  border: 1px solid #eceae5;
+  border-radius: 8px;
+  padding: 9px 12px;
+  cursor: pointer;
+}
+.app-group-row:hover { border-color: var(--app-accent); }
+
 /* view-as (role emulation) */
 .app-settings-tabsrow {
   display: flex;
