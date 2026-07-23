@@ -17,10 +17,10 @@ export interface AccessGroup {
   name: string;
 }
 
-export interface OwnedGroup {
+export interface CandidateGroup {
   id: string;
   name: string;
-  securityEnabled: boolean;
+  kind: "security" | "m365";
 }
 
 // ---- configuration (stored on the app settings row) ----
@@ -93,36 +93,60 @@ function tolerate(err: unknown, alreadyOk: boolean): void {
 // ---- group discovery ----
 
 /**
- * Groups the signed-in admin OWNS. Tries the Graph path first (covers
- * pure security groups); falls back to the connector's owned-groups
- * action (unified groups) when the passthrough refuses the path.
+ * Candidate access groups. The connector's Graph passthrough only
+ * accepts /groups… paths (not /me/ownedObjects), so ownership cannot be
+ * pre-filtered here — instead we list every security-enabled group in
+ * the tenant (readable under the connector's delegated scope) plus the
+ * admin's owned M365 groups, and verify ownership when one is picked
+ * (isGroupOwner — /groups/{id}/owners IS an allowed path).
  */
-export async function listOwnedGroups(): Promise<OwnedGroup[]> {
+export async function listCandidateGroups(): Promise<CandidateGroup[]> {
+  const seen = new Map<string, CandidateGroup>();
   try {
-    const data = (await graph(
-      "GET",
-      "/me/ownedObjects/microsoft.graph.group?$select=id,displayName,securityEnabled&$top=999"
-    )) as { value?: { id?: string; displayName?: string; securityEnabled?: boolean }[] };
-    return (data.value ?? [])
-      .filter((g) => g.id)
-      .map((g) => ({
-        id: g.id!,
-        name: g.displayName ?? g.id!,
-        securityEnabled: g.securityEnabled === true,
-      }))
-      .sort((a, b) => a.name.localeCompare(b.name));
+    let path =
+      "/groups?$select=id,displayName,securityEnabled,groupTypes&$filter=securityEnabled eq true&$top=999";
+    while (path) {
+      const data = (await graph("GET", path)) as {
+        value?: {
+          id?: string;
+          displayName?: string;
+          groupTypes?: string[];
+        }[];
+        "@odata.nextLink"?: string;
+      };
+      for (const g of data.value ?? []) {
+        if (!g.id) continue;
+        seen.set(g.id, {
+          id: g.id,
+          name: g.displayName ?? g.id,
+          kind: (g.groupTypes ?? []).includes("Unified") ? "m365" : "security",
+        });
+      }
+      const next = data["@odata.nextLink"];
+      path = next ? next.replace("https://graph.microsoft.com/v1.0", "") : "";
+    }
   } catch {
-    const res = await Office365GroupsService.ListOwnedGroups_V3();
-    if (!res.success) throw res.error ?? new Error("could not list owned groups");
-    return (res.data.value ?? [])
-      .filter((g) => g.id)
-      .map((g) => ({
-        id: g.id!,
-        name: g.displayName ?? g.id!,
-        securityEnabled: (g as { securityEnabled?: boolean }).securityEnabled === true,
-      }))
-      .sort((a, b) => a.name.localeCompare(b.name));
+    /* passthrough refused — the owned unified groups below still list */
   }
+  try {
+    const res = await Office365GroupsService.ListOwnedGroups_V3();
+    if (res.success) {
+      for (const g of res.data.value ?? []) {
+        if (g.id && !seen.has(g.id)) {
+          seen.set(g.id, { id: g.id, name: g.displayName ?? g.id, kind: "m365" });
+        }
+      }
+    }
+  } catch {
+    /* merge is best-effort */
+  }
+  if (seen.size === 0) throw new Error("could not list any groups");
+  return [...seen.values()].sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/** Exact ownership check, run when a group is picked. */
+export async function isGroupOwner(groupId: string, viewerId: string): Promise<boolean> {
+  return (await idSet(groupId, "owners")).has(viewerId);
 }
 
 // ---- membership operations (all tolerate already/absent states) ----

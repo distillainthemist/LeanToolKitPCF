@@ -12,7 +12,8 @@ import { currentViewer, detectHost } from "../runtime";
 import { EmulatedRole, effectivePerson, setViewAsRole, viewAsRole } from "../viewAs";
 import {
   accessGroup,
-  listOwnedGroups,
+  isGroupOwner,
+  listCandidateGroups,
   saveAccessGroup,
   syncAllAccess,
   syncPersonAccess,
@@ -577,8 +578,8 @@ function syncSummary(r: SyncReport): string {
   return bits.length > 0 ? `Synced — ${bits.join(" · ")}.` : "Everything already in sync.";
 }
 
-/** Pick one of the groups the signed-in admin owns (app-styled modal). */
-function pickOwnedGroup(): Promise<{ id: string; name: string } | null> {
+/** Pick a group (security or M365); ownership is verified on selection. */
+function pickOwnedGroup(viewerId: string): Promise<{ id: string; name: string } | null> {
   return new Promise((resolve) => {
     const overlay = el("div", "app-modal-overlay");
     const box = el("div", "app-modal");
@@ -587,15 +588,16 @@ function pickOwnedGroup(): Promise<{ id: string; name: string } | null> {
       el(
         "div",
         "app-modal-note",
-        "Groups you own in Microsoft Entra. Members of the chosen group can open the app; the roster keeps it in sync."
+        "Security and Microsoft 365 groups. You must be an OWNER of the group you pick — that's checked when you select it. Members of the chosen group can open the app; the roster keeps it in sync."
       )
     );
     const search = el("input", "app-input") as HTMLInputElement;
     search.type = "search";
     search.placeholder = "Filter groups…";
     const list = el("div", "app-group-list");
-    list.appendChild(el("div", "app-settings-note", "Loading groups you own…"));
-    box.append(search, list);
+    list.appendChild(el("div", "app-settings-note", "Loading groups…"));
+    const status = el("div", "app-settings-note", "");
+    box.append(search, list, status);
     const footer = el("div", "app-modal-footer");
     const cancel = el("button", "app-link", "Cancel") as HTMLButtonElement;
     footer.appendChild(cancel);
@@ -608,23 +610,46 @@ function pickOwnedGroup(): Promise<{ id: string; name: string } | null> {
     overlay.appendChild(box);
     document.body.appendChild(overlay);
 
-    let groups: { id: string; name: string; securityEnabled: boolean }[] = [];
+    let groups: { id: string; name: string; kind: "security" | "m365" }[] = [];
+    let checking = false;
+    const pick = (g: { id: string; name: string }) => {
+      if (checking) return;
+      checking = true;
+      status.textContent = `Checking you own ${g.name}…`;
+      void isGroupOwner(g.id, viewerId)
+        .then((owner) => {
+          if (owner) {
+            done({ id: g.id, name: g.name });
+          } else {
+            checking = false;
+            status.textContent = `You're not an owner of ${g.name} — pick a group you own.`;
+          }
+        })
+        .catch((err) => {
+          checking = false;
+          status.textContent = `Couldn't check ownership: ${err instanceof Error ? err.message : String(err)}`;
+        });
+    };
     const paint = () => {
       clear(list);
       const q = search.value.trim().toLowerCase();
       const shown = groups.filter((g) => q === "" || g.name.toLowerCase().includes(q));
       if (shown.length === 0) {
-        list.appendChild(el("div", "app-settings-note", "No owned groups match."));
+        list.appendChild(el("div", "app-settings-note", "No groups match."));
         return;
       }
       for (const g of shown.slice(0, 30)) {
         const rowBtn = el("button", "app-group-row") as HTMLButtonElement;
         rowBtn.type = "button";
         rowBtn.appendChild(el("span", "app-people-name", g.name));
-        if (g.securityEnabled) {
-          rowBtn.appendChild(el("span", "app-status-badge", "security-enabled"));
-        }
-        rowBtn.addEventListener("click", () => done({ id: g.id, name: g.name }));
+        rowBtn.appendChild(
+          el(
+            "span",
+            "app-status-badge",
+            g.kind === "security" ? "Security" : "Microsoft 365"
+          )
+        );
+        rowBtn.addEventListener("click", () => pick(g));
         list.appendChild(rowBtn);
       }
       if (shown.length > 30) {
@@ -632,7 +657,7 @@ function pickOwnedGroup(): Promise<{ id: string; name: string } | null> {
       }
     };
     search.addEventListener("input", paint);
-    void listOwnedGroups()
+    void listCandidateGroups()
       .then((g) => {
         groups = g;
         paint();
@@ -643,7 +668,7 @@ function pickOwnedGroup(): Promise<{ id: string; name: string } | null> {
           el(
             "div",
             "app-settings-note",
-            `Couldn't list your groups: ${err instanceof Error ? err.message : String(err)}`
+            `Couldn't list groups: ${err instanceof Error ? err.message : String(err)}`
           )
         );
       });
@@ -684,7 +709,7 @@ function accessControlCard(me: RosterPerson, people: RosterPerson[]): HTMLElemen
 
   choose.addEventListener("click", () => {
     void (async () => {
-      const g = await pickOwnedGroup();
+      const g = await pickOwnedGroup(me.whoId);
       if (!g) return;
       await saveAccessGroup(g);
       await paint();
