@@ -3,6 +3,7 @@
 // on a bare dev server there is no host, and the app runs in demo mode.
 
 import { getContext } from "@microsoft/power-apps/app";
+import { setAppHost } from "./links";
 
 export interface Viewer {
   objectId: string;
@@ -22,6 +23,13 @@ export async function detectHost(): Promise<boolean> {
     ]);
     const user = context.user;
     if (user?.objectId) {
+      // the shareable-link builder needs the app's own identity
+      setAppHost({
+        appId: context.app?.appId ?? "",
+        environmentId: context.app?.environmentId ?? "",
+        tenantId: user.tenantId ?? "",
+        queryParams: context.app?.queryParams ?? {},
+      });
       viewer = {
         objectId: user.objectId,
         name: user.fullName ?? user.userPrincipalName ?? "Me",

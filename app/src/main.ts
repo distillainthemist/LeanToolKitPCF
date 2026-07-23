@@ -38,6 +38,13 @@ void (async () => {
   try {
     const { detectHost, currentViewer } = await import("./runtime");
     if (!(await detectHost())) return;
+    // a shared ritual link arrives as a player launch parameter — honour
+    // it once, and only when the app opened on its landing route
+    const { launchTarget } = await import("./links");
+    const target = launchTarget();
+    if (target !== "" && (window.location.hash === "" || window.location.hash === "#/")) {
+      window.location.hash = target;
+    }
     const { branding, siteSettings } = await import("./store/config");
     const { viewerPerson } = await import("./store/people");
     const b = await branding();
