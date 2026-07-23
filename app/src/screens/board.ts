@@ -29,6 +29,7 @@ import { appTheme } from "../cardHost";
 import { currentViewer, detectHost } from "../runtime";
 import { canViewBoard, getBoard } from "../store/boards";
 import { meetingCategories } from "../store/config";
+import { markReopenedForEdit, relockOnLeave, reopenedForEditId } from "../relock";
 import { viewerPerson } from "../store/people";
 import { BoardSummary, parseManifest } from "../store/mappers";
 import { catalogSvgByType } from "../store/catalog";
@@ -100,14 +101,20 @@ async function renderBoard(
   const catalogSvg = await catalogSvgByType();
   let instances = await listInstances(board.boardId);
   // meetings auto-close once 24 hours past — SVGs archive, cards go
-  // read-only (the kebab's Edit meeting reopens one when needed)
+  // read-only. A meeting reopened for editing this session is spared so
+  // walking its cards and returning doesn't re-lock it mid-edit.
   const stale = instances.filter(
-    (i) => i.status === "open" && Date.parse(i.when) < Date.now() - 24 * 3_600_000
+    (i) =>
+      i.status === "open" &&
+      Date.parse(i.when) < Date.now() - 24 * 3_600_000 &&
+      i.id !== reopenedForEditId()
   );
   for (const s of stale) await closeInstance(s);
   if (stale.length > 0) instances = await listInstances(board.boardId);
   let cardRows = await rowsForBoard(board.boardId);
   stopLoading(); // data is in — the layout below builds synchronously
+  // leaving the meeting's screens re-locks a meeting opened for editing
+  cleanups.push(() => relockOnLeave(board.boardId));
   let current: InstanceSummary | null = null;
 
   // an adjusted meeting renders its own override manifest instead
@@ -244,10 +251,11 @@ async function renderBoard(
       if (!rec) return;
       const dlgHost = (leftHost.querySelector(".ltk-root") as HTMLElement) ?? leftHost;
       if (action === "edit") {
-        // a closed meeting reopens for editing (it re-closes on the next
-        // visit once it is 24h past — the edit window is deliberate)
+        // a closed meeting reopens for editing; leaving this meeting's
+        // screens (Home, Settings, another board) locks it again
         void (async () => {
           await reopenInstance(rec.id);
+          markReopenedForEdit(rec.id);
           instances = await listInstances(board.boardId);
           if (current?.id === rec.id) {
             current = instances.find((i) => i.id === rec.id) ?? current;

@@ -28,6 +28,7 @@ import { appTheme, editorHost } from "../cardHost";
 import { currentViewer, detectHost } from "../runtime";
 import { actionsForBoard, actionsForInstance, upsertActions } from "../store/actions";
 import { canViewBoard, getBoard } from "../store/boards";
+import { relockOnLeave } from "../relock";
 import {
   createInstanceRow,
   ensureLiveRow,
@@ -134,6 +135,9 @@ export function mountCardEditor(
       parent.appendChild(el("p", "app-missing", `Unknown card ${cardId} on ${boardId}`));
       return;
     }
+    // leaving the meeting's screens from here (e.g. straight to Home)
+    // re-locks a past meeting that was reopened for editing
+    if (!isLive) cleanups.push(() => relockOnLeave(boardId));
     // meeting-record cards of a confidential meeting are for its owner and
     // participants only (live/template editing stays with the designer)
     if (
