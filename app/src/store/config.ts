@@ -101,6 +101,113 @@ export async function renameCompany(oldName: string, newName: string): Promise<v
       });
     }
   }
+  // the company's owner travels with the rename
+  const owners = await companyOwners();
+  if (owners[oldName]) {
+    const next = { ...owners, [newName]: owners[oldName] };
+    delete next[oldName];
+    await saveCompanyOwners(next);
+  }
+}
+
+// ---- org owners (a person responsible for each org level) ----
+
+/** A lightweight person reference — a real Entra identity. */
+export interface PersonRef {
+  whoId: string;
+  who: string;
+}
+
+/** Per-site owners: the site itself, departments by name, areas by
+ *  "department/area". Company owners live on the APP_ROW. */
+export interface SiteOwners {
+  site?: PersonRef;
+  departments: Record<string, PersonRef>;
+  areas: Record<string, PersonRef>;
+}
+
+const parseRef = (v: unknown): PersonRef | undefined => {
+  const o = v as { whoId?: unknown; who?: unknown } | null;
+  return o && typeof o.whoId === "string" && o.whoId !== ""
+    ? { whoId: o.whoId, who: typeof o.who === "string" ? o.who : "" }
+    : undefined;
+};
+
+function parseSiteOwners(raw: string): SiteOwners {
+  const out: SiteOwners = { departments: {}, areas: {} };
+  if (!raw.trim().startsWith("{")) return out;
+  try {
+    const o = JSON.parse(raw) as Record<string, unknown>;
+    out.site = parseRef(o.site);
+    for (const [k, v] of Object.entries((o.departments as object) ?? {})) {
+      const ref = parseRef(v);
+      if (ref) out.departments[k] = ref;
+    }
+    for (const [k, v] of Object.entries((o.areas as object) ?? {})) {
+      const ref = parseRef(v);
+      if (ref) out.areas[k] = ref;
+    }
+  } catch {
+    /* fresh */
+  }
+  return out;
+}
+
+export async function siteOwners(site: string): Promise<SiteOwners> {
+  const rows = await allWhere(Ben_ltksitesettingsesService.getAll, eq("ben_site", site));
+  return parseSiteOwners(rows[0]?.ben_orgowners ?? "");
+}
+
+/** Owners for every real site in one read (the org tree needs them all). */
+export async function allSiteOwners(): Promise<Record<string, SiteOwners>> {
+  const rows = await allWhere(Ben_ltksitesettingsesService.getAll);
+  const out: Record<string, SiteOwners> = {};
+  for (const r of rows) {
+    if (r.ben_site && r.ben_site !== APP_ROW) {
+      out[r.ben_site] = parseSiteOwners(r.ben_orgowners ?? "");
+    }
+  }
+  return out;
+}
+
+export async function saveSiteOwners(site: string, owners: SiteOwners): Promise<void> {
+  await upsertWhere(
+    Ben_ltksitesettingsesService,
+    eq("ben_site", site),
+    (row) => row.ben_ltksitesettingsid,
+    { ben_site: site, ben_name: site, ben_orgowners: JSON.stringify(owners) }
+  );
+}
+
+/** Company owners, keyed by company name (stored on the APP_ROW). */
+export async function companyOwners(): Promise<Record<string, PersonRef>> {
+  const rows = await allWhere(Ben_ltksitesettingsesService.getAll, eq("ben_site", APP_ROW));
+  const out: Record<string, PersonRef> = {};
+  const raw = rows[0]?.ben_orgowners ?? "";
+  if (!raw.trim().startsWith("{")) return out;
+  try {
+    const o = JSON.parse(raw) as { companies?: Record<string, unknown> };
+    for (const [k, v] of Object.entries(o.companies ?? {})) {
+      const ref = parseRef(v);
+      if (ref) out[k] = ref;
+    }
+  } catch {
+    /* fresh */
+  }
+  return out;
+}
+
+export async function saveCompanyOwners(map: Record<string, PersonRef>): Promise<void> {
+  await upsertWhere(
+    Ben_ltksitesettingsesService,
+    eq("ben_site", APP_ROW),
+    (row) => row.ben_ltksitesettingsid,
+    {
+      ben_site: APP_ROW,
+      ben_name: "App branding",
+      ben_orgowners: JSON.stringify({ companies: map }),
+    }
+  );
 }
 
 /** Rename the site's settings row (key column + display name). */

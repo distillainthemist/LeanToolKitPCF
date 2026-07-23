@@ -27,21 +27,26 @@ import {
   setBoardArchived,
 } from "../store/boards";
 import {
+  allSiteOwners,
   APP_ROW,
   branding,
   companies,
+  companyOwners,
   meetingCategories,
   orgJson,
+  PersonRef,
   renameCompany,
   renameSiteRow,
   rosterPatternLibrary,
   saveCompanies,
+  saveCompanyOwners,
   saveMeetingCategories,
   protectedTimesJson,
   saveBranding,
   saveProtectedTimes,
   saveSiteCompany,
   saveSiteDepartments,
+  saveSiteOwners,
   saveSiteSettings,
   siteCompanies,
   siteSettings,
@@ -227,6 +232,11 @@ export function mountSettings(parent: HTMLElement, initialTab = ""): () => void 
     if (isAdmin) {
       tabs.push({ key: "users", label: "Users", render: () => renderUsers(body, me) });
       tabs.push({ key: "org", label: "Organisation", render: () => renderOrg(body, me, ctx) });
+      tabs.push({
+        key: "cadence",
+        label: "Site cadence",
+        render: () => renderSiteCadence(body, me, ctx),
+      });
     }
     // everyone gets Rituals — the tab scopes itself by role (site
     // admins: their site; users: rituals they own)
@@ -1209,6 +1219,171 @@ interface OrgSiteNode {
   departments: { department: string; areas: string[] }[];
 }
 
+/** Owner-picker result: set a person, clear the owner, or cancel. */
+type PickPersonResult =
+  | { action: "set"; person: PersonRef }
+  | { action: "clear" }
+  | null;
+
+/**
+ * Choose a person for an org-level owner: the app's user list first,
+ * with a directory search for anyone not on the roster yet (picking a
+ * directory hit registers them as an app user, like the wizard does).
+ */
+function pickPerson(host: HTMLElement, allowClear: boolean): Promise<PickPersonResult> {
+  return new Promise((resolve) => {
+    const overlay = el("div", "app-modal-overlay");
+    const box = el("div", "app-modal");
+    box.appendChild(el("div", "app-modal-title", "Choose an owner"));
+    box.appendChild(
+      el(
+        "div",
+        "app-modal-note",
+        "Pick from the app's users, or search the whole directory below."
+      )
+    );
+    const filter = el("input", "app-input") as HTMLInputElement;
+    filter.type = "search";
+    filter.placeholder = "Filter users\u2026";
+    const list = el("div", "app-group-list");
+    list.appendChild(el("div", "app-settings-note", "Loading users\u2026"));
+    box.append(filter, list);
+
+    const dirRow = el("div", "app-settings-row");
+    const dirQuery = el("input", "app-input") as HTMLInputElement;
+    dirQuery.type = "search";
+    dirQuery.placeholder = "Search the directory (name or email)\u2026";
+    dirQuery.style.flex = "1";
+    const dirGo = el("button", "app-btn", "Search") as HTMLButtonElement;
+    dirRow.append(dirQuery, dirGo);
+    const dirList = el("div", "app-group-list");
+    const note = el("div", "app-field-hint", "");
+    box.append(dirRow, dirList, note);
+
+    const footer = el("div", "app-modal-footer");
+    const cancel = el("button", "app-link", "Cancel") as HTMLButtonElement;
+    footer.appendChild(cancel);
+    if (allowClear) {
+      const clearBtn = el("button", "app-btn", "Clear owner") as HTMLButtonElement;
+      clearBtn.addEventListener("click", () => done({ action: "clear" }));
+      footer.appendChild(clearBtn);
+    }
+    box.appendChild(footer);
+
+    const done = (r: PickPersonResult) => {
+      overlay.remove();
+      document.removeEventListener("keydown", onKey, true);
+      resolve(r);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        done(null);
+      }
+    };
+    cancel.addEventListener("click", () => done(null));
+    overlay.addEventListener("click", (e) => {
+      if (e.target === overlay) done(null);
+    });
+    document.addEventListener("keydown", onKey, true);
+    overlay.appendChild(box);
+    host.appendChild(overlay);
+
+    let roster: RosterPerson[] = [];
+    const paintRoster = () => {
+      clear(list);
+      const q = filter.value.trim().toLowerCase();
+      const shown = roster.filter(
+        (p) => q === "" || `${p.who} ${p.email}`.toLowerCase().includes(q)
+      );
+      for (const p of shown.slice(0, 20)) {
+        const row = el("button", "app-group-row") as HTMLButtonElement;
+        row.type = "button";
+        row.appendChild(el("span", "app-people-name", p.who));
+        row.appendChild(
+          el("span", "app-user-email", [p.email, p.site].filter(Boolean).join(" \u00b7 "))
+        );
+        row.addEventListener("click", () =>
+          done({ action: "set", person: { whoId: p.whoId, who: p.who } })
+        );
+        list.appendChild(row);
+      }
+      if (shown.length === 0) {
+        list.appendChild(el("div", "app-settings-note", "No users match \u2014 try the directory below."));
+      } else if (shown.length > 20) {
+        list.appendChild(el("div", "app-settings-note", `Showing 20 of ${shown.length} \u2014 keep typing.`));
+      }
+    };
+    filter.addEventListener("input", paintRoster);
+    void listPeople()
+      .then((p) => {
+        roster = p;
+        paintRoster();
+      })
+      .catch(() => {
+        clear(list);
+        list.appendChild(el("div", "app-settings-note", "Couldn't load the user list."));
+      });
+
+    const runDirSearch = () => {
+      const q = dirQuery.value.trim();
+      if (q.length < 2) {
+        note.textContent = "Type at least two characters.";
+        return;
+      }
+      note.textContent = "Searching\u2026";
+      clear(dirList);
+      void searchEntra(q)
+        .then((hits) => {
+          note.textContent = hits.length === 0 ? "No directory matches." : "";
+          for (const hit of hits) {
+            const row = el("button", "app-group-row") as HTMLButtonElement;
+            row.type = "button";
+            row.appendChild(el("span", "app-people-name", hit.displayName));
+            row.appendChild(el("span", "app-user-email", hit.mail));
+            const known = roster.some((p) => p.whoId === hit.objectId);
+            if (!known) row.appendChild(el("span", "app-status-badge", "new to the app"));
+            row.addEventListener("click", () => {
+              void (async () => {
+                if (!known) {
+                  // owners need real app identities \u2014 register them
+                  await upsertPerson({
+                    whoId: hit.objectId,
+                    who: hit.displayName,
+                    email: hit.mail,
+                    site: "",
+                    department: "",
+                    area: "",
+                    role: "user",
+                    active: true,
+                  });
+                }
+                done({ action: "set", person: { whoId: hit.objectId, who: hit.displayName } });
+              })();
+            });
+            dirList.appendChild(row);
+          }
+        })
+        .catch((err) => {
+          note.textContent = `Search failed: ${err instanceof Error ? err.message : String(err)}`;
+        });
+    };
+    dirGo.addEventListener("click", runDirSearch);
+    dirQuery.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        runDirSearch();
+      }
+    });
+  });
+}
+
+/**
+ * Organisation \u2014 one hierarchical list, company \u2192 site \u2192 department \u2192
+ * area, each level carrying an optional owner. Structure edits (add /
+ * rename / reorder / drag site between companies) work as before; site
+ * cadence (rosters, protected times) lives on its own tab now.
+ */
 async function renderOrg(
   body: HTMLElement,
   me: RosterPerson,
@@ -1220,13 +1395,21 @@ async function renderOrg(
   const sites = tree.map((s) => s.site);
   const companyList = await companies();
   const siteCompany = await siteCompanies();
-  // every admin sees the whole org; site admins edit their own site only
-  const editable = isSuper ? sites : sites.filter((s) => s === me.site);
+  const ownersBySite = await allSiteOwners();
+  const coOwners = await companyOwners();
+  for (const s of sites) ownersBySite[s] ??= { departments: {}, areas: {} };
+  const editableSites = isSuper ? sites : sites.filter((s) => s === me.site);
 
-  let currentSite = editable[0] ?? sites[0] ?? "";
+  const touched = new Set<string>();
+  let coOwnersTouched = false;
+  const pendingRenames: {
+    site: string;
+    kind: "dept" | "area";
+    department: string;
+    oldName: string;
+    newName: string;
+  }[] = [];
 
-  // switching site (or adding one) discards the current site's edits \u2014
-  // gate it through the same save/discard prompt as a tab switch
   const guardLeave = async (): Promise<boolean> => {
     if (!ctx.isDirty()) return true;
     const choice = await promptUnsaved();
@@ -1235,25 +1418,51 @@ async function renderOrg(
     return true;
   };
 
-  // two panes: company \u2192 site browser on the left, site editor right
-  const split = el("div", "app-org-split");
-  const rail = el("div", "app-org-rail");
-  const pane = el("div", "app-org-pane");
-  split.append(rail, pane);
-  body.appendChild(split);
+  body.appendChild(
+    el(
+      "div",
+      "app-settings-note",
+      "The whole organisation, top to bottom \u2014 every level can carry an owner." +
+        (isSuper ? "" : " You can edit your own site; the rest is view only.")
+    )
+  );
+  const treeBox = el("div", "app-org-tree");
+  body.appendChild(treeBox);
 
-  const selectSite = (site: string) => {
-    void (async () => {
-      if (site === currentSite) return;
-      if (!(await guardLeave())) return;
-      currentSite = site;
-      renderRail();
-      await renderSite();
-    })();
+  let draggingSite: string | null = null;
+
+  const ownerChip = (
+    current: PersonRef | undefined,
+    canEdit: boolean,
+    apply: (p: PersonRef | null) => void
+  ): HTMLElement => {
+    const chip = el(
+      "button",
+      "app-owner" + (current ? "" : " app-owner-none"),
+      current ? `Owner \u00b7 ${current.who}` : "\uFF0B Owner"
+    ) as HTMLButtonElement;
+    chip.type = "button";
+    chip.disabled = !canEdit;
+    chip.title = canEdit
+      ? current
+        ? `Owner: ${current.who} \u2014 click to change`
+        : "Set an owner"
+      : current
+        ? `Owner: ${current.who}`
+        : "";
+    chip.addEventListener("click", () => {
+      void (async () => {
+        const res = await pickPerson(body, current !== undefined);
+        if (res === null) return;
+        apply(res.action === "set" ? res.person : null);
+        ctx.markDirty();
+        draw();
+      })();
+    });
+    return chip;
   };
 
-  // rail drag state: a site being moved between company groups
-  let draggingSite: string | null = null;
+  // ---- immediate structural flows (guarded; full re-render) ----
 
   const renameSite = (site: string) => {
     void (async () => {
@@ -1263,8 +1472,7 @@ async function renderOrg(
       ).trim();
       if (name === "" || name === site || name === APP_ROW || sites.includes(name)) return;
       if (!(await guardLeave())) return;
-      // cascade: settings row, board grouping, people placements
-      await renameSiteRow(site, name);
+      await renameSiteRow(site, name); // the owners column travels with the row
       await renameBoardsSite(site, name);
       for (const p of await listPeople(true)) {
         if (p.site === site) await upsertPerson({ ...p, site: name });
@@ -1274,12 +1482,251 @@ async function renderOrg(
     })();
   };
 
-  const renderRail = () => {
-    clear(rail);
-    rail.appendChild(el("div", "app-org-railhead", "Select site"));
-    const groups: { company: string; sites: string[] }[] = companyList.map(
-      (c) => ({ company: c, sites: [] })
+  const renameCompanyFlow = (company: string) => {
+    void (async () => {
+      const name = (
+        (await promptText({ title: "Rename company", initial: company, confirmLabel: "Rename" })) ??
+        ""
+      ).trim();
+      if (name === "" || name === company || companyList.includes(name)) return;
+      if (!(await guardLeave())) return;
+      await renameCompany(company, name); // moves the owner key too
+      await renderOrg(body, me, ctx);
+    })();
+  };
+
+  const addSiteFlow = (company: string) => {
+    void (async () => {
+      const name = (
+        (await promptText({
+          title: "Add site",
+          note: `Under ${company}.`,
+          placeholder: "Site name",
+          confirmLabel: "Add",
+        })) ?? ""
+      ).trim();
+      if (name === "" || name === APP_ROW || sites.includes(name)) return;
+      if (!(await guardLeave())) return;
+      await saveSiteDepartments(name, "[]");
+      await saveSiteCompany(name, company);
+      await renderOrg(body, me, ctx);
+    })();
+  };
+
+  const addCompanyFlow = () => {
+    void (async () => {
+      const name = (
+        (await promptText({ title: "Add company", placeholder: "Company name", confirmLabel: "Add" })) ??
+        ""
+      ).trim();
+      if (name === "" || companyList.includes(name)) return;
+      if (!(await guardLeave())) return;
+      await saveCompanies([...companyList, name]);
+      await renderOrg(body, me, ctx);
+    })();
+  };
+
+  // ---- deferred renames (cascade to people/boards at save) ----
+
+  const renameDept = (
+    site: string,
+    node: OrgSiteNode,
+    d: OrgSiteNode["departments"][number],
+    redraw: () => void
+  ) => {
+    void (async () => {
+      const name = (
+        (await promptText({ title: "Rename department", initial: d.department, confirmLabel: "Rename" })) ??
+        ""
+      ).trim();
+      if (name === "" || name === d.department) return;
+      if (node.departments.some((x) => x.department === name)) return;
+      pendingRenames.push({
+        site,
+        kind: "dept",
+        department: name,
+        oldName: d.department,
+        newName: name,
+      });
+      const owners = ownersBySite[site];
+      if (owners.departments[d.department]) {
+        owners.departments[name] = owners.departments[d.department];
+        delete owners.departments[d.department];
+      }
+      for (const k of Object.keys(owners.areas)) {
+        if (k.startsWith(`${d.department}/`)) {
+          owners.areas[`${name}/${k.slice(d.department.length + 1)}`] = owners.areas[k];
+          delete owners.areas[k];
+        }
+      }
+      d.department = name;
+      redraw();
+    })();
+  };
+
+  const renameArea = (
+    site: string,
+    d: OrgSiteNode["departments"][number],
+    ai: number,
+    redraw: () => void
+  ) => {
+    void (async () => {
+      const a = d.areas[ai];
+      const name = (
+        (await promptText({ title: "Rename area", initial: a, confirmLabel: "Rename" })) ?? ""
+      ).trim();
+      if (name === "" || name === a || d.areas.includes(name)) return;
+      pendingRenames.push({
+        site,
+        kind: "area",
+        department: d.department,
+        oldName: a,
+        newName: name,
+      });
+      const owners = ownersBySite[site];
+      const oldKey = `${d.department}/${a}`;
+      if (owners.areas[oldKey]) {
+        owners.areas[`${d.department}/${name}`] = owners.areas[oldKey];
+        delete owners.areas[oldKey];
+      }
+      d.areas[ai] = name;
+      redraw();
+    })();
+  };
+
+  // ---- the hierarchy ----
+
+  const siteCard = (site: string): HTMLElement => {
+    const canEdit = editableSites.includes(site);
+    const node = tree.find((t) => t.site === site)!;
+    const owners = ownersBySite[site];
+    const card = el("div", "app-site-card");
+    const head = el("div", "app-site-head");
+    if (isSuper) {
+      card.draggable = true;
+      card.title = "Drag to another company to move";
+      card.addEventListener("dragstart", (e) => {
+        draggingSite = site;
+        card.classList.add("app-dragging");
+        e.dataTransfer?.setData("text/plain", site);
+        if (e.dataTransfer) e.dataTransfer.effectAllowed = "move";
+      });
+      card.addEventListener("dragend", () => {
+        draggingSite = null;
+        card.classList.remove("app-dragging");
+      });
+      const handle = el("span", "app-drag-handle", "⠿");
+      handle.title = "Drag to another company";
+      head.appendChild(handle);
+    }
+    head.appendChild(el("span", "app-site-name", site));
+    if (isSuper) head.appendChild(editBtn("Rename site", () => renameSite(site)));
+    head.appendChild(
+      ownerChip(owners.site, canEdit, (p) => {
+        owners.site = p ?? undefined;
+        touched.add(site);
+      })
     );
+    if (!canEdit) head.appendChild(el("span", "app-status-badge", "view only"));
+    card.appendChild(head);
+
+    const deptList = el("div", "app-dept-list");
+    card.appendChild(deptList);
+    const redraw = () => {
+      touched.add(site);
+      ctx.markDirty();
+      draw();
+    };
+    node.departments.forEach((d, di) => {
+      const dc = el("div", "app-dept-card");
+      const dh = el("div", "app-dept-head");
+      if (canEdit) {
+        const handle = el("span", "app-drag-handle", "⠿");
+        handle.title = "Drag to reorder";
+        dh.appendChild(handle);
+        draggableRow(dc, handle, `dept-${site}`, di, node.departments, redraw);
+      }
+      dh.appendChild(el("span", "app-dept-name", d.department));
+      if (canEdit) dh.appendChild(editBtn("Rename department", () => renameDept(site, node, d, redraw)));
+      dh.appendChild(
+        ownerChip(owners.departments[d.department], canEdit, (p) => {
+          if (p) owners.departments[d.department] = p;
+          else delete owners.departments[d.department];
+          touched.add(site);
+        })
+      );
+      if (canEdit) {
+        dh.appendChild(
+          removeBtn(() => {
+            node.departments = node.departments.filter((x) => x !== d);
+            delete owners.departments[d.department];
+            for (const k of Object.keys(owners.areas)) {
+              if (k.startsWith(`${d.department}/`)) delete owners.areas[k];
+            }
+            redraw();
+          })
+        );
+      }
+      dc.appendChild(dh);
+      const areaBox = el("div", "app-area-list");
+      dc.appendChild(areaBox);
+      d.areas.forEach((a, ai) => {
+        const ar = el("div", "app-area-row");
+        if (canEdit) {
+          const handle = el("span", "app-drag-handle", "⠿");
+          handle.title = "Drag to reorder";
+          ar.appendChild(handle);
+          draggableRow(ar, handle, `area-${site}-${di}`, ai, d.areas, redraw);
+        }
+        ar.appendChild(el("span", "app-area-name", a));
+        if (canEdit) ar.appendChild(editBtn("Rename area", () => renameArea(site, d, ai, redraw)));
+        ar.appendChild(
+          ownerChip(owners.areas[`${d.department}/${a}`], canEdit, (p) => {
+            const key = `${d.department}/${a}`;
+            if (p) owners.areas[key] = p;
+            else delete owners.areas[key];
+            touched.add(site);
+          })
+        );
+        if (canEdit) {
+          ar.appendChild(
+            removeBtn(() => {
+              d.areas = d.areas.filter((x) => x !== a);
+              delete owners.areas[`${d.department}/${a}`];
+              redraw();
+            })
+          );
+        }
+        areaBox.appendChild(ar);
+      });
+      if (d.areas.length === 0) areaBox.appendChild(el("div", "app-org-empty", "No areas"));
+      if (canEdit) {
+        const addA = adder("Add area", (v) => {
+          d.areas.push(v);
+          redraw();
+        });
+        addA.classList.add("app-area-adder");
+        dc.appendChild(addA);
+      }
+      deptList.appendChild(dc);
+    });
+    if (canEdit) {
+      deptList.appendChild(
+        adder("Add department", (v) => {
+          node.departments.push({ department: v, areas: [] });
+          redraw();
+        })
+      );
+    }
+    return card;
+  };
+
+  const draw = () => {
+    clear(treeBox);
+    const groups: { company: string; sites: string[] }[] = companyList.map((c) => ({
+      company: c,
+      sites: [],
+    }));
     const unassigned: string[] = [];
     for (const site of sites) {
       const g = groups.find((x) => x.company === (siteCompany[site] ?? ""));
@@ -1290,51 +1737,45 @@ async function renderOrg(
       groups.push({ company: "", sites: unassigned });
     }
     for (const g of groups) {
-      const groupBox = el("div", "app-org-group");
-      const header = el("div", "app-org-company");
-      header.appendChild(
+      const co = el("div", "app-co-card");
+      const coHead = el("div", "app-co-head");
+      coHead.appendChild(
         el(
           "span",
-          "",
+          "app-co-name",
           g.company === "" ? (companyList.length > 0 ? "No company" : "Sites") : g.company
         )
       );
-      if (isSuper && g.company !== "") {
-        header.appendChild(
-          editBtn("Rename company", () => {
-            void (async () => {
-              const name = (
-                (await promptText({
-                  title: "Rename company",
-                  initial: g.company,
-                  confirmLabel: "Rename",
-                })) ?? ""
-              ).trim();
-              if (name === "" || name === g.company || companyList.includes(name)) return;
-              if (!(await guardLeave())) return;
-              await renameCompany(g.company, name);
-              await renderOrg(body, me, ctx);
-            })();
+      if (g.company !== "") {
+        if (isSuper) coHead.appendChild(editBtn("Rename company", () => renameCompanyFlow(g.company)));
+        coHead.appendChild(
+          ownerChip(coOwners[g.company], isSuper, (p) => {
+            if (p) coOwners[g.company] = p;
+            else delete coOwners[g.company];
+            coOwnersTouched = true;
           })
         );
       }
-      groupBox.appendChild(header);
+      coHead.appendChild(el("span", "app-bar-gap"));
+      if (isSuper && g.company !== "") {
+        const addSite = el("button", "app-btn", "\uFF0B Add site") as HTMLButtonElement;
+        addSite.addEventListener("click", () => addSiteFlow(g.company));
+        coHead.appendChild(addSite);
+      }
+      co.appendChild(coHead);
 
-      // whole group is a drop target: drop a site here to move it
       if (isSuper) {
-        groupBox.addEventListener("dragover", (e) => {
+        co.addEventListener("dragover", (e) => {
           if (draggingSite === null) return;
           if ((siteCompany[draggingSite] ?? "") === g.company) return;
           e.preventDefault();
-          groupBox.classList.add("app-org-dropco");
+          co.classList.add("app-org-dropco");
         });
-        groupBox.addEventListener("dragleave", (e) => {
-          if (!groupBox.contains(e.relatedTarget as Node)) {
-            groupBox.classList.remove("app-org-dropco");
-          }
+        co.addEventListener("dragleave", (e) => {
+          if (!co.contains(e.relatedTarget as Node)) co.classList.remove("app-org-dropco");
         });
-        groupBox.addEventListener("drop", (e) => {
-          groupBox.classList.remove("app-org-dropco");
+        co.addEventListener("drop", (e) => {
+          co.classList.remove("app-org-dropco");
           if (draggingSite === null) return;
           e.preventDefault();
           const site = draggingSite;
@@ -1348,116 +1789,126 @@ async function renderOrg(
         });
       }
 
-      for (const site of g.sites) {
-        const siteRow = el("div", "app-org-siterow");
-        const item = el("button", "app-org-siteitem") as HTMLButtonElement;
-        if (site === currentSite) item.classList.add("app-org-siteitem-on");
-        const deptCount = tree.find((t) => t.site === site)?.departments.length ?? 0;
-        item.append(
-          el("span", "app-org-sitename", site),
-          el(
-            "span",
-            "app-org-sitemeta",
-            `${deptCount} department${deptCount === 1 ? "" : "s"}` +
-              (editable.includes(site) ? "" : " \u00B7 view only")
-          )
-        );
-        item.addEventListener("click", () => selectSite(site));
-        siteRow.appendChild(item);
-        if (isSuper) {
-          siteRow.appendChild(editBtn("Rename site", () => renameSite(site)));
-          siteRow.draggable = true;
-          siteRow.title = "Drag to another company to move";
-          siteRow.addEventListener("dragstart", (e) => {
-            draggingSite = site;
-            siteRow.classList.add("app-dragging");
-            e.dataTransfer?.setData("text/plain", site);
-            if (e.dataTransfer) e.dataTransfer.effectAllowed = "move";
-          });
-          siteRow.addEventListener("dragend", () => {
-            draggingSite = null;
-            siteRow.classList.remove("app-dragging");
-          });
-        }
-        groupBox.appendChild(siteRow);
-      }
-      if (g.sites.length === 0) {
-        groupBox.appendChild(el("div", "app-org-empty", "No sites yet"));
-      }
-      if (isSuper && g.company !== "") {
-        const addSite = el("button", "app-org-add", "\uFF0B Add site") as HTMLButtonElement;
-        addSite.addEventListener("click", () => {
-          void (async () => {
-            const name = (
-              (await promptText({
-                title: "Add site",
-                note: `Under ${g.company}.`,
-                placeholder: "Site name",
-                confirmLabel: "Add",
-              })) ?? ""
-            ).trim();
-            if (name === "" || name === APP_ROW || sites.includes(name)) return;
-            if (!(await guardLeave())) return;
-            await saveSiteDepartments(name, "[]");
-            await saveSiteCompany(name, g.company);
-            await renderOrg(body, me, ctx);
-          })();
-        });
-        groupBox.appendChild(addSite);
-      }
-      rail.appendChild(groupBox);
+      for (const site of g.sites) co.appendChild(siteCard(site));
+      if (g.sites.length === 0) co.appendChild(el("div", "app-org-empty", "No sites yet"));
+      treeBox.appendChild(co);
     }
     if (isSuper) {
       const addCo = el("button", "app-org-add app-org-addco", "\uFF0B Add company") as HTMLButtonElement;
-      addCo.addEventListener("click", () => {
-        void (async () => {
-          const name = (
-            (await promptText({
-              title: "Add company",
-              placeholder: "Company name",
-              confirmLabel: "Add",
-            })) ?? ""
-          ).trim();
-          if (name === "" || companyList.includes(name)) return;
-          if (!(await guardLeave())) return;
-          await saveCompanies([...companyList, name]);
-          await renderOrg(body, me, ctx);
-        })();
-      });
-      rail.appendChild(addCo);
+      addCo.addEventListener("click", addCompanyFlow);
+      treeBox.appendChild(addCo);
     }
   };
-  renderRail();
+  draw();
 
-  const renderSite = async () => {
+  // ---- save (via the unsaved-changes bar) ----
+  ctx.registerSave(async () => {
+    for (const site of touched) {
+      const node = tree.find((t) => t.site === site);
+      if (!node) continue;
+      await saveSiteDepartments(site, JSON.stringify(node.departments));
+      await saveSiteOwners(site, ownersBySite[site]);
+    }
+    if (coOwnersTouched) await saveCompanyOwners(coOwners);
+    if (pendingRenames.length > 0) {
+      const roster = await listPeople(true);
+      for (const person of roster) {
+        const upd = { ...person };
+        let changed = false;
+        for (const rn of pendingRenames) {
+          if (person.site !== rn.site) continue;
+          if (rn.kind === "dept" && upd.department === rn.oldName) {
+            upd.department = rn.newName;
+            changed = true;
+          }
+          if (
+            rn.kind === "area" &&
+            upd.department === rn.department &&
+            upd.area === rn.oldName
+          ) {
+            upd.area = rn.newName;
+            changed = true;
+          }
+        }
+        if (changed) await upsertPerson(upd);
+      }
+      for (const rn of pendingRenames) {
+        if (rn.kind === "dept") {
+          await renameBoardsDepartment(rn.site, rn.oldName, rn.newName);
+        }
+      }
+      pendingRenames.length = 0;
+    }
+    touched.clear();
+    coOwnersTouched = false;
+    ctx.markClean();
+  });
+}
+
+/**
+ * Site cadence \u2014 per-site operating rhythm: time zone and accent,
+ * shift roster patterns, protected times. Super admins pick the site;
+ * site admins land on their own.
+ */
+async function renderSiteCadence(
+  body: HTMLElement,
+  me: RosterPerson,
+  ctx: DirtyCtx
+): Promise<void> {
+  clear(body);
+  const isSuper = me.role === "superadmin";
+  const tree = parseOrgTree(await orgJson()) as OrgSiteNode[];
+  const sites = tree.map((s) => s.site);
+  const mySites = isSuper ? sites : sites.filter((s) => s === me.site);
+  if (sites.length === 0) {
+    body.appendChild(
+      el("div", "app-settings-note", "No sites yet \u2014 add one under Organisation first.")
+    );
+    return;
+  }
+  let currentSite = mySites[0] ?? sites[0];
+
+  const guardLeave = async (): Promise<boolean> => {
+    if (!ctx.isDirty()) return true;
+    const choice = await promptUnsaved();
+    if (choice === "cancel") return false;
+    if (choice === "save") await ctx.saveCurrent();
+    return true;
+  };
+
+  const bar = el("div", "app-settings-row");
+  body.appendChild(bar);
+  const pane = el("div", "app-cadence-pane");
+  body.appendChild(pane);
+
+  if (isSuper && sites.length > 1) {
+    const sel = select(sites, currentSite);
+    sel.value = currentSite;
+    sel.addEventListener("change", () => {
+      void (async () => {
+        if (sel.value === "" || sel.value === currentSite) {
+          sel.value = currentSite;
+          return;
+        }
+        if (!(await guardLeave())) {
+          sel.value = currentSite;
+          return;
+        }
+        currentSite = sel.value;
+        await renderPane();
+      })();
+    });
+    bar.append(el("span", "app-user-field-label", "Site"), sel);
+  } else {
+    bar.appendChild(el("span", "app-profile-name", currentSite));
+  }
+
+  const renderPane = async () => {
     clear(pane);
-    ctx.markClean(); // freshly loaded from the store
-    if (currentSite === "") {
-      pane.appendChild(
-        el(
-          "div",
-          "app-settings-note",
-          isSuper
-            ? "Add a company, then a site under it to begin."
-            : "No sites yet \u2014 ask a super admin to add one."
-        )
-      );
-      return;
-    }
-    const canEdit = editable.includes(currentSite);
-
-    // heading: site name + company (rename and move live in the rail)
-    const head = el("div", "app-org-panehead");
-    head.appendChild(el("span", "app-profile-name", currentSite));
-    if (!canEdit) {
-      head.appendChild(el("span", "app-status-badge app-status-revoked", "View only"));
-    }
-    pane.appendChild(head);
-    const node = tree.find((s) => s.site === currentSite) ?? {
-      site: currentSite,
-      departments: [],
-    };
+    ctx.markClean();
+    const canEdit = mySites.includes(currentSite);
     const s = await siteSettings(currentSite);
+
     interface ProtectedRow {
       label: string;
       color?: string;
@@ -1477,11 +1928,13 @@ async function renderOrg(
           end: typeof o.end === "string" ? o.end : "",
         }));
       }
-    } catch { /* fresh */ }
+    } catch {
+      /* fresh */
+    }
     interface RosterPatternRow {
       name: string;
       pattern: string;
-      baseDate: string; // YYYY-MM-DD the pattern anchors to
+      baseDate: string;
       crews: string; // display CSV, stored as array
       dayStart: string; // day shift start "HH:MM"; nights assumed +12h
     }
@@ -1497,141 +1950,14 @@ async function renderOrg(
           dayStart:
             typeof o.dayStart === "string"
               ? o.dayStart
-              : // rows saved before dayStart existed kept handover times
-                Array.isArray(o.handovers) && typeof o.handovers[0] === "string"
+              : Array.isArray(o.handovers) && typeof o.handovers[0] === "string"
                 ? o.handovers[0]
                 : "",
         }));
       }
-    } catch { /* fresh */ }
-
-    // --- departments & areas (cards; drag handles reorder) ---
-    // renames wait for save with everything else, then cascade to the
-    // people and board rows that reference the old names
-    const pendingRenames: {
-      kind: "dept" | "area";
-      department: string;
-      oldName: string;
-      newName: string;
-    }[] = [];
-    pane.appendChild(sectionTitle("Departments & areas"));
-    const treeBox = el("div", "app-dept-list");
-    pane.appendChild(treeBox);
-    const drawTree = () => {
-      clear(treeBox);
-      const redraw = () => {
-        drawTree();
-        ctx.markDirty();
-      };
-      node.departments.forEach((d, di) => {
-        const card = el("div", "app-dept-card");
-        const head = el("div", "app-dept-head");
-        if (canEdit) {
-          const handle = el("span", "app-drag-handle", "⠿");
-          handle.title = "Drag to reorder";
-          head.appendChild(handle);
-          draggableRow(card, handle, "dept", di, node.departments, redraw);
-        }
-        head.appendChild(el("span", "app-dept-name", d.department));
-        if (canEdit) {
-          head.appendChild(
-            editBtn("Rename department", () => {
-              void (async () => {
-                const name = (
-                  (await promptText({
-                    title: "Rename department",
-                    initial: d.department,
-                    confirmLabel: "Rename",
-                  })) ?? ""
-                ).trim();
-                if (name === "" || name === d.department) return;
-                if (node.departments.some((x) => x.department === name)) return;
-                pendingRenames.push({
-                  kind: "dept",
-                  department: name,
-                  oldName: d.department,
-                  newName: name,
-                });
-                d.department = name;
-                redraw();
-              })();
-            })
-          );
-          head.appendChild(
-            removeBtn(() => {
-              node.departments = node.departments.filter((x) => x !== d);
-              redraw();
-            })
-          );
-        }
-        card.appendChild(head);
-
-        const areaBox = el("div", "app-area-list");
-        card.appendChild(areaBox);
-        d.areas.forEach((a, ai) => {
-          const ar = el("div", "app-area-row");
-          if (canEdit) {
-            const handle = el("span", "app-drag-handle", "⠿");
-            handle.title = "Drag to reorder";
-            ar.appendChild(handle);
-            draggableRow(ar, handle, `area-${di}`, ai, d.areas, redraw);
-          }
-          ar.appendChild(el("span", "app-area-name", a));
-          if (canEdit) {
-            ar.appendChild(
-              editBtn("Rename area", () => {
-                void (async () => {
-                  const name = (
-                    (await promptText({
-                      title: "Rename area",
-                      initial: a,
-                      confirmLabel: "Rename",
-                    })) ?? ""
-                  ).trim();
-                  if (name === "" || name === a || d.areas.includes(name)) return;
-                  pendingRenames.push({
-                    kind: "area",
-                    department: d.department,
-                    oldName: a,
-                    newName: name,
-                  });
-                  d.areas[ai] = name;
-                  redraw();
-                })();
-              })
-            );
-            ar.appendChild(
-              removeBtn(() => {
-                d.areas = d.areas.filter((x) => x !== a);
-                redraw();
-              })
-            );
-          }
-          areaBox.appendChild(ar);
-        });
-        if (d.areas.length === 0) {
-          areaBox.appendChild(el("div", "app-org-empty", "No areas"));
-        }
-        if (canEdit) {
-          const addA = adder("Add area", (v) => {
-            d.areas.push(v);
-            redraw();
-          });
-          addA.classList.add("app-area-adder");
-          card.appendChild(addA);
-        }
-        treeBox.appendChild(card);
-      });
-      if (canEdit) {
-        treeBox.appendChild(
-          adder("Add department", (v) => {
-            node.departments.push({ department: v, areas: [] });
-            redraw();
-          })
-        );
-      }
-    };
-    drawTree();
+    } catch {
+      /* fresh */
+    }
 
     // --- site settings ---
     pane.appendChild(sectionTitle("Site settings"));
@@ -1644,7 +1970,7 @@ async function renderOrg(
     tz.addEventListener("input", () => ctx.markDirty());
     const accentGroup = accentToggle(s.accent, () => ctx.markDirty());
     pane.append(
-      field("Time zone", tz, "IANA zone — sets how occurrence times display"),
+      field("Time zone", tz, "IANA zone \u2014 sets how occurrence times display"),
       field("Accent colour", accentGroup.el, "Overrides the app accent for this site")
     );
 
@@ -1707,7 +2033,10 @@ async function renderOrg(
           ctx.markDirty();
         });
         grid.append(
-          field("Pattern", patInput(pat.pattern, "e.g. 2D-2N-4O", (v) => (pat.pattern = v.toUpperCase()))),
+          field(
+            "Pattern",
+            patInput(pat.pattern, "e.g. 2D-2N-4O", (v) => (pat.pattern = v.toUpperCase()))
+          ),
           field("Base date", baseDate, "Day 1 of the pattern for crew 1"),
           field("Crews", patInput(pat.crews, "e.g. A, B, C, D", (v) => (pat.crews = v)), "In rotation order"),
           field(
@@ -1808,12 +2137,10 @@ async function renderOrg(
     };
     drawTimes();
 
-    // --- save (via the unsaved-changes bar) ---
     if (canEdit) {
       const csv = (v: string) =>
         v.split(",").map((x) => x.trim()).filter((x) => x !== "");
       ctx.registerSave(async () => {
-        await saveSiteDepartments(currentSite, JSON.stringify(node.departments));
         await saveSiteSettings(currentSite, {
           timezone: tz.value.trim(),
           accent: accentGroup.value(),
@@ -1833,46 +2160,15 @@ async function renderOrg(
           currentSite,
           JSON.stringify(times.filter((t) => t.start !== "" && t.end !== ""))
         );
-        // rename cascades: people (and boards, for departments) that
-        // reference the old names follow along
-        if (pendingRenames.length > 0) {
-          const roster = await listPeople(true);
-          for (const person of roster) {
-            if (person.site !== currentSite) continue;
-            const upd = { ...person };
-            let changed = false;
-            for (const rn of pendingRenames) {
-              if (rn.kind === "dept" && upd.department === rn.oldName) {
-                upd.department = rn.newName;
-                changed = true;
-              }
-              if (
-                rn.kind === "area" &&
-                upd.department === rn.department &&
-                upd.area === rn.oldName
-              ) {
-                upd.area = rn.newName;
-                changed = true;
-              }
-            }
-            if (changed) await upsertPerson(upd);
-          }
-          for (const rn of pendingRenames) {
-            if (rn.kind === "dept") {
-              await renameBoardsDepartment(currentSite, rn.oldName, rn.newName);
-            }
-          }
-          pendingRenames.length = 0;
-        }
         ctx.markClean();
       });
     } else {
       pane.appendChild(
-        el("div", "app-settings-note", "Read-only — this site is managed by its site admins.")
+        el("div", "app-settings-note", "Read-only \u2014 this site is managed by its site admins.")
       );
     }
   };
-  await renderSite();
+  await renderPane();
 }
 
 function sectionTitle(text: string): HTMLElement {

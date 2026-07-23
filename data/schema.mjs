@@ -138,6 +138,7 @@ export const TABLES = [
       ben_meetingcategories: { ...memo(4000), display: "Meeting categories (JSON)" },
       ben_companies: { ...memo(4000), display: "Companies (JSON)" },
       ben_accessgroup: { ...memo(2000), display: "Access group (JSON)" },
+      ben_orgowners: { ...memo(20000), display: "Org owners (JSON)" },
       ben_logo: { ...memo(200000), display: "Logo (data URI)" },
     },
     key: ["ben_site"],

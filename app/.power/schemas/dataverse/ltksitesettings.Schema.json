@@ -93,6 +93,14 @@
           "x-ms-dataverse-primary-name": true,
           "maxLength": 100
         },
+        "ben_orgowners": {
+          "type": "string",
+          "title": "Org owners (JSON)",
+          "x-ms-dataverse-attribute": "ben_orgowners",
+          "x-ms-dataverse-type": "MemoType",
+          "x-ms-schema-name": "ben_orgowners",
+          "maxLength": 20000
+        },
         "ben_protectedtimes": {
           "type": "string",
           "title": "Protected Times (JSON)",
