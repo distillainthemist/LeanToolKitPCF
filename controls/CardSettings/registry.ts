@@ -245,7 +245,16 @@ export const CARDS: CardSpec[] = [
     label: "KPI trend",
     group: "Performance",
     description: "Run chart with target and spec limits (USL/LSL).",
-    config: [],
+    config: [
+      {
+        key: "kpiWindowDays",
+        label: "Window (days)",
+        kind: "text",
+        help:
+          "How many trailing days of readings the chart shows, ending on the meeting's date. Default 91 (13 weeks). Older readings stay stored and reportable.",
+        placeholder: "91",
+      },
+    ],
     appBound: ["instanceId"],
     configNote:
       "Target, unit and spec limits live in the card's document — set them in the card's kebab dialog.",

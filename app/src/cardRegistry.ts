@@ -33,11 +33,15 @@ import {
 } from "../../controls/ConditionsCard/types";
 import { applySeries, hasAnySeries, listSeries } from "./store/series";
 import {
+  cellsFromPoints,
   cellsFromRatings,
+  diffPoints,
   diffRatings,
   instanceDay,
   monthWindow,
+  pointsFromCells,
   ratingsFromCells,
+  trailingWindow,
 } from "./store/seriesMap";
 import { FiveWhysEditor } from "../../controls/FiveWhys/editor";
 import { parseFiveWhys, serializeFiveWhys } from "../../controls/FiveWhys/types";
@@ -201,10 +205,12 @@ const REGISTRY: Record<string, CardMounter> = {
     const day = instanceDay(opts.instanceWhen);
     const window = monthWindow(day);
     let lastMap: Record<string, string> = {};
+    let edited = false;
     const env = parseSqdpc("").envelope;
     env.data.month = day.slice(0, 7);
     const editor = new SqdpcEditor(opts.host, {
       onChange: (env2, actions) => {
+        edited = true;
         const { put, del } = diffRatings(lastMap, env2.data.ratings);
         lastMap = { ...env2.data.ratings };
         void applySeries(opts.boardId, opts.cardId, put, del).catch((err) =>
@@ -242,6 +248,7 @@ const REGISTRY: Record<string, CardMounter> = {
             cells = await listSeries(opts.boardId, opts.cardId, window.from, window.to);
           }
         }
+        if (edited) return; // never overwrite an edit that beat the load
         lastMap = ratingsFromCells(cells);
         env.data.ratings = { ...lastMap };
         editor.setEnvelope(env, opts.actions);
@@ -267,9 +274,11 @@ const REGISTRY: Record<string, CardMounter> = {
     const periods = buildPeriods(gran, asOf);
     const window = { from: periods[0].key, to: periods[periods.length - 1].key };
     let lastMap: Record<string, string> = {};
+    let edited = false;
     const env = parseConditions("").envelope;
     const editor = new ConditionsEditor(opts.host, {
       onChange: (env2, actions) => {
+        edited = true;
         const { put, del } = diffRatings(lastMap, env2.data.ratings as Record<string, string>);
         lastMap = { ...(env2.data.ratings as Record<string, string>) };
         void applySeries(opts.boardId, opts.cardId, put, del).catch((err) =>
@@ -298,6 +307,7 @@ const REGISTRY: Record<string, CardMounter> = {
             cells = await listSeries(opts.boardId, opts.cardId, window.from, window.to);
           }
         }
+        if (edited) return; // never overwrite an edit that beat the load
         lastMap = ratingsFromCells(cells);
         (env.data as { ratings: Record<string, string> }).ratings = { ...lastMap };
         editor.setEnvelope(env, opts.actions);
@@ -447,10 +457,34 @@ const REGISTRY: Record<string, CardMounter> = {
   },
 
   // ---- envelope-only cards ----
+  // Series card: readings live in the Card Series table keyed by point id
+  // (per-reading actions keep their linkage), windowed to the trailing
+  // kpiWindowDays ending on the meeting's date. Target/spec/unit stay in
+  // the document, which also carries the tile svg.
   KpiTrendCard: (opts) => {
     const s = saver(opts);
+    const day = instanceDay(opts.instanceWhen);
+    const cfgDays = Math.round(Number(cfgStr(opts, "kpiWindowDays")));
+    const window = trailingWindow(
+      day,
+      Number.isFinite(cfgDays) && cfgDays >= 7 && cfgDays <= 1000 ? cfgDays : 91
+    );
+    const env = parseKpiTrend(opts.outputJson).envelope; // target/usl/lsl/unit
+    // baseline [] — an edit that beats the row load then writes EVERY point,
+    // which is itself the migration; the load guard below won't clobber it
+    let lastPoints: typeof env.data.points = [];
+    let edited = false;
     const editor = new KpiTrendEditor(opts.host, {
-      onChange: (env) => s.save(serializeKpiTrend(env)),
+      onChange: (env2) => {
+        edited = true;
+        const { put, del } = diffPoints(lastPoints, env2.data.points);
+        lastPoints = env2.data.points.map((p) => ({ ...p }));
+        void applySeries(opts.boardId, opts.cardId, put, del).catch((err) =>
+          console.warn("kpi series save failed", err)
+        );
+        // the doc keeps target/spec/unit + tile svg; points live in rows
+        s.save(serializeKpiTrend({ ...env2, data: { ...env2.data, points: [] } }));
+      },
       onPngReady: s.onPng,
       onActions: (actions) => opts.onActions(stamped(opts, actions)),
     });
@@ -460,7 +494,26 @@ const REGISTRY: Record<string, CardMounter> = {
     editor.setPeople(opts.people);
     editor.setActions(opts.actions);
     editor.setCanRaise(!actionsOff(opts));
-    editor.setEnvelope(parseKpiTrend(opts.outputJson).envelope);
+    editor.setEnvelope(env);
+    void (async () => {
+      try {
+        let cells = await listSeries(opts.boardId, opts.cardId, window.from, window.to);
+        if (cells.length === 0 && !(await hasAnySeries(opts.boardId, opts.cardId))) {
+          const seed = cellsFromPoints(env.data.points);
+          if (seed.length > 0) {
+            await applySeries(opts.boardId, opts.cardId, seed);
+            cells = await listSeries(opts.boardId, opts.cardId, window.from, window.to);
+          }
+        }
+        if (edited) return; // never overwrite an edit that beat the load
+        const points = pointsFromCells(cells);
+        lastPoints = points.map((p) => ({ ...p }));
+        env.data.points = points;
+        editor.setEnvelope(env);
+      } catch (err) {
+        console.warn("kpi series load failed", err);
+      }
+    })();
     return () => opts.host.replaceChildren();
   },
   StatusTile: (opts) => {

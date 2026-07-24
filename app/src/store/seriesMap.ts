@@ -99,3 +99,71 @@ export function monthWindow(day: string): { from: string; to: string } {
   const mm = day.slice(5, 7);
   return { from: `${day.slice(0, 4)}-${mm}-01`, to: `${day.slice(0, 4)}-${mm}-${String(last).padStart(2, "0")}` };
 }
+
+// ---- KPI trend (points keyed by stable point id) ----
+
+export interface SeriesPoint {
+  id: string;
+  date: string; // yyyy-mm-dd
+  value: number;
+}
+
+/** Points → cells: serieskey = the point's id (keeps per-point action
+ *  linkage), value = the number as text. */
+export function cellsFromPoints(points: SeriesPoint[]): SeriesCell[] {
+  return points
+    .filter((p) => p.id !== "" && DATE_RE.test(p.date) && Number.isFinite(p.value))
+    .map((p) => ({ key: p.id, date: p.date, shift: WHOLE_DAY, value: String(p.value) }));
+}
+
+/** Cells → points, date-sorted; non-numeric values skipped. */
+export function pointsFromCells(cells: SeriesCell[]): SeriesPoint[] {
+  const out: SeriesPoint[] = [];
+  for (const c of cells) {
+    const value = Number(c.value);
+    if (c.key !== "" && Number.isFinite(value)) {
+      out.push({ id: c.key, date: c.date, value });
+    }
+  }
+  out.sort((a, b) => (a.date < b.date ? -1 : 1));
+  return out;
+}
+
+/**
+ * The write set after a points edit, matched by id. A changed value
+ * upserts in place; a changed DATE deletes the old row and writes a new
+ * one (the date is part of the row key); a removed id deletes.
+ */
+export function diffPoints(
+  prev: SeriesPoint[],
+  next: SeriesPoint[]
+): { put: SeriesCell[]; del: SeriesCell[] } {
+  const before = new Map(prev.map((p) => [p.id, p]));
+  const put: SeriesCell[] = [];
+  const del: SeriesCell[] = [];
+  for (const p of next) {
+    if (p.id === "" || !DATE_RE.test(p.date) || !Number.isFinite(p.value)) continue;
+    const old = before.get(p.id);
+    before.delete(p.id);
+    if (old && old.date === p.date && old.value === p.value) continue;
+    if (old && old.date !== p.date) {
+      del.push({ key: p.id, date: old.date, shift: WHOLE_DAY, value: "" });
+    }
+    put.push({ key: p.id, date: p.date, shift: WHOLE_DAY, value: String(p.value) });
+  }
+  for (const old of before.values()) {
+    del.push({ key: old.id, date: old.date, shift: WHOLE_DAY, value: "" });
+  }
+  return { put, del };
+}
+
+/** Inclusive trailing window of `days` ending on `day`. */
+export function trailingWindow(day: string, days: number): { from: string; to: string } {
+  const d = new Date(`${day}T00:00:00`);
+  const from = new Date(d.getTime() - (Math.max(1, days) - 1) * 86_400_000);
+  const p = (v: number) => String(v).padStart(2, "0");
+  return {
+    from: `${from.getFullYear()}-${p(from.getMonth() + 1)}-${p(from.getDate())}`,
+    to: day,
+  };
+}

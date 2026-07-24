@@ -89,3 +89,81 @@ describe("windows", () => {
     expect(monthWindow("2026-02-10")).toEqual({ from: "2026-02-01", to: "2026-02-28" });
   });
 });
+
+import {
+  cellsFromPoints,
+  diffPoints,
+  pointsFromCells,
+  trailingWindow,
+} from "../store/seriesMap";
+
+describe("KPI points ↔ cells", () => {
+  it("round-trips and date-sorts", () => {
+    const cells = cellsFromPoints([
+      { id: "k2", date: "2026-07-20", value: 95 },
+      { id: "k1", date: "2026-07-10", value: 92.5 },
+    ]);
+    expect(pointsFromCells(cells)).toEqual([
+      { id: "k1", date: "2026-07-10", value: 92.5 },
+      { id: "k2", date: "2026-07-20", value: 95 },
+    ]);
+  });
+
+  it("skips junk points and non-numeric cells", () => {
+    expect(cellsFromPoints([{ id: "", date: "2026-07-10", value: 1 }])).toEqual([]);
+    expect(
+      pointsFromCells([{ key: "k1", date: "2026-07-10", shift: "-", value: "abc" }])
+    ).toEqual([]);
+  });
+});
+
+describe("diffPoints", () => {
+  const prev = [
+    { id: "k1", date: "2026-07-10", value: 92 },
+    { id: "k2", date: "2026-07-11", value: 95 },
+    { id: "k3", date: "2026-07-12", value: 97 },
+  ];
+
+  it("upserts a changed value in place", () => {
+    const { put, del } = diffPoints(prev, [
+      { ...prev[0], value: 93 },
+      prev[1],
+      prev[2],
+    ]);
+    expect(put).toEqual([{ key: "k1", date: "2026-07-10", shift: "-", value: "93" }]);
+    expect(del).toEqual([]);
+  });
+
+  it("a changed date deletes the old row and writes the new", () => {
+    const { put, del } = diffPoints(prev, [
+      { ...prev[0], date: "2026-07-09" },
+      prev[1],
+      prev[2],
+    ]);
+    expect(del).toEqual([{ key: "k1", date: "2026-07-10", shift: "-", value: "" }]);
+    expect(put).toEqual([{ key: "k1", date: "2026-07-09", shift: "-", value: "92" }]);
+  });
+
+  it("a removed point deletes; a new one puts", () => {
+    const { put, del } = diffPoints(prev, [
+      prev[0],
+      prev[2],
+      { id: "k4", date: "2026-07-13", value: 99 },
+    ]);
+    expect(del).toEqual([{ key: "k2", date: "2026-07-11", shift: "-", value: "" }]);
+    expect(put).toEqual([{ key: "k4", date: "2026-07-13", shift: "-", value: "99" }]);
+  });
+
+  it("empty baseline puts everything (the migration-by-edit path)", () => {
+    const { put, del } = diffPoints([], prev);
+    expect(put).toHaveLength(3);
+    expect(del).toEqual([]);
+  });
+});
+
+describe("trailingWindow", () => {
+  it("spans N days inclusive ending on the day", () => {
+    expect(trailingWindow("2026-07-23", 7)).toEqual({ from: "2026-07-17", to: "2026-07-23" });
+    expect(trailingWindow("2026-03-05", 91)).toEqual({ from: "2025-12-05", to: "2026-03-05" });
+  });
+});
