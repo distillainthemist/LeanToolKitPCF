@@ -3,7 +3,7 @@
 // lost to the debounce (the standard-content tile lagged one edit).
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { saver } from "../../cardRegistry";
+import { saver } from "../../saver";
 
 describe("saver", () => {
   beforeEach(() => vi.useFakeTimers());

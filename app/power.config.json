@@ -61,6 +61,10 @@
         "ltkboardinstances": {
           "entitySetName": "ben_ltkboardinstances",
           "logicalName": "ben_ltkboardinstance"
+        },
+        "ltkcardseries": {
+          "entitySetName": "ben_ltkcardserieses",
+          "logicalName": "ben_ltkcardseries"
         }
       },
       "environmentVariableName": ""

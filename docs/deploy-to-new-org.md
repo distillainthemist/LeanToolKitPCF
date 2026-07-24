@@ -43,8 +43,9 @@ the portal add is the one-time bridge.
    group-team mapping and app sharing remain this one-time admin step.
    The app runs in each user's own security context, so without the
    role every Dataverse call fails. The role grants create/read/write/
-   append on the eight app tables at organisation level, plus delete
-   on Card Data only (the reset-meeting feature reseeds those rows).
+   append on the nine app tables at organisation level, plus delete on
+   Card Data (the reset-meeting feature reseeds those rows) and on Card
+   Series (unsetting a rating deletes its row).
    App-level roles (super admin / site admin / user) and meeting
    confidentiality are enforced by the app on top of this — the
    Dataverse role is deliberately flat.

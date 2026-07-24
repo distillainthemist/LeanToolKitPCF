@@ -28,15 +28,21 @@ One row per datum, upserted by alternate key.
 | --- | --- | --- |
 | `ben_boardid` | text 80 | the board |
 | `ben_cardid` | text 80 | the slot |
-| `ben_serieskey` | text 120 | datum key within the card (see per-card keys) |
-| `ben_date` | dateonly | temporal index — every read is a date-range filter |
+| `ben_serieskey` | text 120 | datum key within the card — purely the entity (dimension, condition, point id) |
+| `ben_date` | dateonly (TimeZoneIndependent) | the operational day — every read is a date-range filter |
+| `ben_shift` | text 4 | `"-"` whole-day/week grain, `"D"` / `"N"` at shift grain — the rated half-day, promoted from the old `\|D`/`\|N` key suffix so reporting gets a real slicer column. `"-"` (not blank) because Dataverse stores `""` as null, and null key columns break alternate-key upserts |
 | `ben_value` | text 400 | the datum (status code, rating, number, state) |
 | `ben_valuejson` | memo 4000 | optional richer payload (future-proofing) |
 | `ben_who` | text 80 | who wrote it (Entra objectId) — audit + reporting |
 
-Alternate key: `(ben_boardid, ben_cardid, ben_serieskey, ben_date)` —
-within the 900-byte key limit at these sizes. Primary name is a readable
-`<cardid> <serieskey> <date>`.
+Alternate key: `(ben_boardid, ben_cardid, ben_serieskey, ben_date,
+ben_shift)` — within the 900-byte key limit at these sizes. Primary name is
+a readable `<cardid> <serieskey> <date>`. Shifts are deliberately NOT a
+datetime: a night shift spans midnight and its clock-times are site/roster
+config, so a shift is modelled as a named half of an operational day; the
+date-only column is timezone-independent, so days never shuffle in clients
+or Power BI. The meeting's window is unaffected by shift — D/N only selects
+which half-cells exist within it.
 
 **Security role**: "LeanBoard User" gains Create/Read/Write/Append/AppendTo
 (org) + **Delete** on this table only (unsetting a rating deletes its row,
@@ -50,8 +56,8 @@ drives every read; a live/tile context uses today.
 
 | Card | Window shown | Series key | Value |
 | --- | --- | --- | --- |
-| SQDPC | the instance's calendar month | `<dimension>` or `<dimension>\|D` / `\|N` | status code |
-| Conditions | 7 periods ending on the instance date (existing grain config) | `<condition>` (+ `\|D`/`\|N` at shift grain) | `good` / `issue` |
+| SQDPC | the instance's calendar month | `<dimension>` (shift half in `ben_shift`) | status code |
+| Conditions | 7 periods ending on the instance date (existing grain config) | `<condition>` (shift half in `ben_shift`) | `good` / `issue` |
 | KPI trend | trailing N days ending on the instance date (new config `kpiWindowDays`, default 91) | the reading's point id | the number |
 | Pareto | trailing N days (new config `paretoWindowDays`, default 30) | `count\|<categoryId>` | that **day's** count for the category |
 | Status tile | n/a — log only (see below) | `state` | the day's end state |

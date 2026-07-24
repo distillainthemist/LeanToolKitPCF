@@ -9,13 +9,36 @@ import { LtkAction } from "../../shared/schema/actions";
 import { Person } from "../../shared/schema/people";
 import { openActionManager } from "../../shared/ui/actionUi";
 import { Theme } from "../../shared/tokens";
+import { saver } from "./saver";
 
 import { KpiTrendEditor } from "../../controls/KpiTrendCard/editor";
 import { parseKpiTrend, serializeKpiTrend } from "../../controls/KpiTrendCard/types";
 import { SqdpcEditor } from "../../controls/SqdpcCard/editor";
-import { parseSqdpc, serializeSqdpc } from "../../controls/SqdpcCard/types";
+import {
+  Granularity as SqdpcGranularity,
+  parseDimensions,
+  parseSqdpc,
+  parseStatusCodes,
+  parseSubtitles,
+  serializeSqdpc,
+} from "../../controls/SqdpcCard/types";
 import { ConditionsEditor } from "../../controls/ConditionsCard/editor";
-import { parseConditions, serializeConditions } from "../../controls/ConditionsCard/types";
+import {
+  buildPeriods,
+  Granularity as ConditionsGranularity,
+  parseAsOf,
+  parseConditions,
+  parseConditionsInput,
+  serializeConditions,
+} from "../../controls/ConditionsCard/types";
+import { applySeries, hasAnySeries, listSeries } from "./store/series";
+import {
+  cellsFromRatings,
+  diffRatings,
+  instanceDay,
+  monthWindow,
+  ratingsFromCells,
+} from "./store/seriesMap";
 import { FiveWhysEditor } from "../../controls/FiveWhys/editor";
 import { parseFiveWhys, serializeFiveWhys } from "../../controls/FiveWhys/types";
 import { FaultTreeEditor } from "../../controls/FaultTree/editor";
@@ -67,6 +90,9 @@ import { MapMode, parseProcessMap, serializeProcessMap } from "../../controls/Pr
 export interface CardMount {
   host: HTMLElement;
   title: string;
+  /** The slot's identity — series cards key their table rows by these. */
+  boardId: string;
+  cardId: string;
   outputJson: string;
   people: Person[];
   theme: Theme;
@@ -75,6 +101,9 @@ export interface CardMount {
   settings: Record<string, unknown>;
   /** This card's action-channel identity — stamped on new actions. */
   instanceKey: string;
+  /** The meeting instance's scheduled datetime ("" = live/template) —
+   *  series cards derive their data window from it. */
+  instanceWhen: string;
   /** The card's current actions from the central table. */
   actions: LtkAction[];
   /** Board cards offered as escalation sources ({instanceKey, label}). */
@@ -90,38 +119,6 @@ export interface CardMount {
 export type CardMounter = (opts: CardMount) => () => void;
 
 // ---- shared plumbing ----
-
-/**
- * Shared save plumbing: latest svg from onPngReady rides every save.
- * Editors snapshot AFTER they emit the change, so a fresh svg arriving
- * once the debounced save has fired would otherwise be lost (the tile
- * stayed one edit behind) — it reschedules a save with the latest
- * document instead.
- */
-export function saver(opts: Pick<CardMount, "onSave">) {
-  let svg = "";
-  let latestJson: string | null = null;
-  let timer: ReturnType<typeof setTimeout> | null = null;
-  const fire = () => {
-    if (latestJson !== null) opts.onSave(latestJson, svg);
-  };
-  const schedule = () => {
-    if (timer) clearTimeout(timer);
-    timer = setTimeout(fire, 400);
-  };
-  return {
-    onPng: (_uri: string, svgMarkup?: string) => {
-      if (svgMarkup && svgMarkup !== svg) {
-        svg = svgMarkup;
-        if (latestJson !== null) schedule(); // freshest snapshot always lands
-      }
-    },
-    save: (outputJson: string) => {
-      latestJson = outputJson;
-      schedule();
-    },
-  };
-}
 
 function config(opts: CardMount): Record<string, unknown> {
   const c = opts.settings.config;
@@ -196,11 +193,24 @@ function elementActions(
 
 const REGISTRY: Record<string, CardMounter> = {
   // ---- envelope + actions cards ----
+  // Series card: ratings live in the Card Series table; the month shown is
+  // the MEETING's month (fixes month-rollover), the document only carries
+  // the tile svg + one-time migration source.
   SqdpcCard: (opts) => {
     const s = saver(opts);
+    const day = instanceDay(opts.instanceWhen);
+    const window = monthWindow(day);
+    let lastMap: Record<string, string> = {};
+    const env = parseSqdpc("").envelope;
+    env.data.month = day.slice(0, 7);
     const editor = new SqdpcEditor(opts.host, {
-      onChange: (env, actions) => {
-        s.save(serializeSqdpc(env));
+      onChange: (env2, actions) => {
+        const { put, del } = diffRatings(lastMap, env2.data.ratings);
+        lastMap = { ...env2.data.ratings };
+        void applySeries(opts.boardId, opts.cardId, put, del).catch((err) =>
+          console.warn("sqdpc series save failed", err)
+        );
+        s.save(serializeSqdpc({ ...env2, data: { ...env2.data, ratings: {} } }));
         opts.onActions(stamped(opts, actions));
       },
       onPngReady: s.onPng,
@@ -209,14 +219,64 @@ const REGISTRY: Record<string, CardMounter> = {
     editor.setChrome(opts.title, promptsRaw(opts));
     editor.setPeople(opts.people);
     editor.setReadOnly(opts.readOnly);
-    editor.setEnvelope(parseSqdpc(opts.outputJson).envelope, opts.actions);
+    const sqGranRaw = cfgStr(opts, "granularity");
+    const sqDims = parseDimensions(cfgStr(opts, "dimensions"));
+    editor.setOptions({
+      granularity: (["day", "weekday", "shift2"] as const).includes(sqGranRaw as never)
+        ? (sqGranRaw as SqdpcGranularity)
+        : "day",
+      dimensions: sqDims,
+      subtitles: parseSubtitles(cfgStr(opts, "subtitles"), sqDims),
+      codes: parseStatusCodes(cfgStr(opts, "statusCodes")),
+      disableActions: actionsOff(opts),
+    });
+    editor.setEnvelope(env, opts.actions);
+    void (async () => {
+      try {
+        let cells = await listSeries(opts.boardId, opts.cardId, window.from, window.to);
+        if (cells.length === 0 && !(await hasAnySeries(opts.boardId, opts.cardId))) {
+          const legacy = parseSqdpc(opts.outputJson).envelope.data.ratings;
+          const seed = cellsFromRatings(legacy);
+          if (seed.length > 0) {
+            await applySeries(opts.boardId, opts.cardId, seed);
+            cells = await listSeries(opts.boardId, opts.cardId, window.from, window.to);
+          }
+        }
+        lastMap = ratingsFromCells(cells);
+        env.data.ratings = { ...lastMap };
+        editor.setEnvelope(env, opts.actions);
+      } catch (err) {
+        console.warn("sqdpc series load failed", err);
+      }
+    })();
     return () => opts.host.replaceChildren();
   },
+  // Series card: ratings live in the Card Series table, windowed to the
+  // meeting instance's date. The document is kept only as the tile-svg
+  // carrier (and the one-time migration source); ratings no longer grow it.
   ConditionsCard: (opts) => {
     const s = saver(opts);
+    const granRaw = cfgStr(opts, "granularity");
+    const gran: ConditionsGranularity = (
+      ["day", "weekday", "week", "shift"] as const
+    ).includes(granRaw as never)
+      ? (granRaw as ConditionsGranularity)
+      : "day";
+    const conditions = parseConditionsInput(cfgStr(opts, "conditions"));
+    const asOf = parseAsOf(instanceDay(opts.instanceWhen));
+    const periods = buildPeriods(gran, asOf);
+    const window = { from: periods[0].key, to: periods[periods.length - 1].key };
+    let lastMap: Record<string, string> = {};
+    const env = parseConditions("").envelope;
     const editor = new ConditionsEditor(opts.host, {
-      onChange: (env, actions) => {
-        s.save(serializeConditions(env));
+      onChange: (env2, actions) => {
+        const { put, del } = diffRatings(lastMap, env2.data.ratings as Record<string, string>);
+        lastMap = { ...(env2.data.ratings as Record<string, string>) };
+        void applySeries(opts.boardId, opts.cardId, put, del).catch((err) =>
+          console.warn("conditions series save failed", err)
+        );
+        // tiny doc save carries the fresh tile svg; ratings stay in rows
+        s.save(serializeConditions({ ...env2, data: { ratings: {} } }));
         opts.onActions(stamped(opts, actions));
       },
       onPngReady: s.onPng,
@@ -224,7 +284,27 @@ const REGISTRY: Record<string, CardMounter> = {
     editor.setTheme(opts.theme);
     editor.setChrome(opts.title, promptsRaw(opts));
     editor.setReadOnly(opts.readOnly);
-    editor.setEnvelope(parseConditions(opts.outputJson).envelope, opts.actions);
+    editor.setOptions({ granularity: gran, conditions, asOf });
+    editor.setEnvelope(env, opts.actions);
+    void (async () => {
+      try {
+        let cells = await listSeries(opts.boardId, opts.cardId, window.from, window.to);
+        if (cells.length === 0 && !(await hasAnySeries(opts.boardId, opts.cardId))) {
+          // one-time migration: decompose the legacy document into rows
+          const legacy = parseConditions(opts.outputJson).envelope.data.ratings;
+          const seed = cellsFromRatings(legacy as Record<string, string>);
+          if (seed.length > 0) {
+            await applySeries(opts.boardId, opts.cardId, seed);
+            cells = await listSeries(opts.boardId, opts.cardId, window.from, window.to);
+          }
+        }
+        lastMap = ratingsFromCells(cells);
+        (env.data as { ratings: Record<string, string> }).ratings = { ...lastMap };
+        editor.setEnvelope(env, opts.actions);
+      } catch (err) {
+        console.warn("conditions series load failed", err);
+      }
+    })();
     return () => opts.host.replaceChildren();
   },
   FiveWhys: (opts) => {

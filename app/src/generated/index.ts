@@ -9,6 +9,7 @@ export * as Ben_ltkboardinstancesModel from './models/Ben_ltkboardinstancesModel
 export * as Ben_ltkboardsModel from './models/Ben_ltkboardsModel';
 export * as Ben_ltkcardcatalogsModel from './models/Ben_ltkcardcatalogsModel';
 export * as Ben_ltkcarddatasModel from './models/Ben_ltkcarddatasModel';
+export * as Ben_ltkcardseriesesModel from './models/Ben_ltkcardseriesesModel';
 export * as Ben_ltkpeoplesModel from './models/Ben_ltkpeoplesModel';
 export * as Ben_ltksitesettingsesModel from './models/Ben_ltksitesettingsesModel';
 export * as Ben_ltkuserprefsesModel from './models/Ben_ltkuserprefsesModel';
@@ -22,6 +23,7 @@ export * from './services/Ben_ltkboardinstancesService';
 export * from './services/Ben_ltkboardsService';
 export * from './services/Ben_ltkcardcatalogsService';
 export * from './services/Ben_ltkcarddatasService';
+export * from './services/Ben_ltkcardseriesesService';
 export * from './services/Ben_ltkpeoplesService';
 export * from './services/Ben_ltksitesettingsesService';
 export * from './services/Ben_ltkuserprefsesService';

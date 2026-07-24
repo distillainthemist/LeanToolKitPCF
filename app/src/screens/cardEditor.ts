@@ -362,6 +362,8 @@ export function mountCardEditor(
       mounter({
         host,
         title: slot.title || cardLabel(slot.cardType),
+        boardId,
+        cardId,
         outputJson: row?.outputJson ?? "",
         // assignee chips: the meeting's own people (owner + participants)
         // up front, the rest of the roster behind the search box. A board
@@ -383,6 +385,7 @@ export function mountCardEditor(
         readOnly: instance ? effectivelyClosed(instance) : false,
         settings: slot.settings,
         instanceKey,
+        instanceWhen: instance?.when ?? "",
         actions,
         sources: manifest.slots
           .filter((s) => !isActionSurface(s))

@@ -144,6 +144,30 @@ export const TABLES = [
     key: ["ben_site"],
   },
   {
+    // Rolling time-keyed card data (series cards: Conditions, SQDPC, KPI,
+    // Pareto day-counts, StatusTile log). One row per datum; cards read a
+    // date window derived from the meeting instance. See
+    // docs/leanboard-card-series-plan.md.
+    schema: "ben_LTKCardSeries",
+    logical: "ben_ltkcardseries",
+    display: "LTK Card Series",
+    plural: "LTK Card Series",
+    primaryNameMax: 200,
+    columns: {
+      ben_boardid: { ...text(80), display: "Board Id", required: true },
+      ben_cardid: { ...text(80), display: "Card Id", required: true },
+      ben_serieskey: { ...text(120), display: "Series Key", required: true },
+      ben_date: { kind: "dateonly", display: "Date" },
+      // "-" whole day/week, "D"/"N" shift halves. A sentinel, not blank:
+      // Dataverse stores "" as null and null key columns break upserts.
+      ben_shift: { ...text(4), display: "Shift (D/N, - = whole day)", required: true },
+      ben_value: { ...text(400), display: "Value" },
+      ben_valuejson: { ...memo(4000), display: "Value (JSON)" },
+      ben_who: { ...text(80), display: "Who (Entra object id)" },
+    },
+    key: ["ben_boardid", "ben_cardid", "ben_serieskey", "ben_date", "ben_shift"],
+  },
+  {
     schema: "ben_LTKUserPrefs",
     logical: "ben_ltkuserprefs",
     display: "LTK User Prefs",

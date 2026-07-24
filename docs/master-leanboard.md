@@ -191,6 +191,16 @@ ActionBoard / EscalationViewer slots ignore `policy` (they render the actions
 table live); `board.source.boardId` overrides *which board's* actions they
 roll up — empty means this board.
 
+**Series cards** (Conditions, SQDPC; KPI/Pareto/StatusTile to follow) also
+ignore `policy` for their data: ratings live in the **LTK Card Series**
+table — one row per `(boardId, cardId, seriesKey, date, shift)` datum,
+shift `-`/`D`/`N` — and each meeting reads the window derived from its own
+scheduled date (SQDPC: the instance's month; Conditions: the 7 periods
+ending on the instance date). The card document remains only as the
+tile-svg carrier; close-time SVG stamping is unchanged. Legacy documents
+self-heal into rows on first open. See
+[leanboard-card-series-plan.md](leanboard-card-series-plan.md).
+
 ---
 
 ## Tile defaults
