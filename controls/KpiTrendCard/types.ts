@@ -2,6 +2,7 @@
 // (a reference goal line) and optional specification limits (USL/LSL). A
 // reading is flagged red only when it falls outside the spec limits.
 
+import { newId } from "../../shared/schema/id";
 import {
   Envelope,
   ParsedEnvelope,
@@ -12,6 +13,7 @@ import {
 export const SCHEMA_ID = "ltk/kpitrend@1";
 
 export interface KpiPoint {
+  id: string; // stable across value/date edits — actions hang off it
   date: string; // yyyy-mm-dd
   value: number;
 }
@@ -43,10 +45,14 @@ function parseData(data: unknown): KpiTrendData {
   if (Array.isArray(d.points)) {
     for (const raw of d.points) {
       if (!raw || typeof raw !== "object") continue;
-      const o = raw as { date?: unknown; value?: unknown };
+      const o = raw as { id?: unknown; date?: unknown; value?: unknown };
       const value = Number(o.value);
       if (typeof o.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(o.date) && Number.isFinite(value)) {
-        points.push({ date: o.date, value });
+        points.push({
+          id: typeof o.id === "string" && o.id !== "" ? o.id : newId("k"),
+          date: o.date,
+          value,
+        });
       }
     }
   }

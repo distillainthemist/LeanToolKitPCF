@@ -13,7 +13,7 @@ import { openActionManager } from "../../shared/ui/actionUi";
 import { LtkAction } from "../../shared/schema/actions";
 import { Person } from "../../shared/schema/people";
 import { htmlToPng, saveSvg, SnapshotScheduler } from "../../shared/export/png";
-import { nowIso, todayIso } from "../../shared/schema/id";
+import { newId, nowIso, todayIso } from "../../shared/schema/id";
 import { KpiPoint, KpiTrendEnvelope, SCHEMA_ID } from "./types";
 import { KPITREND_CSS } from "./styles";
 
@@ -107,23 +107,25 @@ export class KpiTrendEditor {
     this.root.remove();
   }
 
-  /** Live (open) card-level actions — the kebab badge count. */
-  private openActionCount(): number {
+  /** Live (open) actions for a source — "" is the card bucket, a point id
+   *  is that reading's. Drives the kebab and per-dot badges. */
+  private openFor(sourceId: string): number {
     return this.actions.filter(
       (a) =>
-        a.context.sourceId === "" &&
+        a.context.sourceId === sourceId &&
         a.status !== "cancelled" &&
         a.status !== "done"
     ).length;
   }
 
-  private manageActions(): void {
+  /** The actions surface for a source (card-level or one reading). */
+  private manage(sourceId: string, label: string): void {
     openActionManager({
       host: this.root,
       actions: this.actions,
       source: "kpitrend",
-      sourceId: "",
-      seedIssue: this.cardTitle,
+      sourceId,
+      seedIssue: label,
       people: this.people,
       doneColor: this.goodColor(),
       readOnly: this.readOnly,
@@ -164,9 +166,9 @@ export class KpiTrendEditor {
     applyThemeVars(this.root, this.theme);
     renderTitleBar(this.root, this.cardTitle, this.prompts);
     if (!this.readOnly) {
-      const n = this.openActionCount();
+      const n = this.openFor("");
       renderKebab(this.root, [
-        { label: n > 0 ? `Actions (${n})…` : "Raise action…", onClick: () => this.manageActions() },
+        { label: n > 0 ? `Actions (${n})…` : "Raise action…", onClick: () => this.manage("", this.cardTitle) },
         { label: "Target & spec limits", onClick: () => this.editSettings() },
         { label: "Download PNG", onClick: () => this.downloadPng() },
         { label: "Download SVG", onClick: () => this.downloadSvg() },
@@ -357,10 +359,24 @@ export class KpiTrendEditor {
       (dot as SVGElement & { style: CSSStyleDeclaration }).style.fill = oos
         ? this.badColor()
         : this.theme.foreground;
+      const nAct = this.openFor(pt.id);
       const tip = svgEl("title", {});
       tip.textContent =
-        `${pt.date}: ${pt.value}` + (oos ? " — out of spec" : "");
+        `${pt.date}: ${pt.value}` +
+        (oos ? " — out of spec" : "") +
+        (nAct > 0 ? ` — ${nAct} open action${nAct === 1 ? "" : "s"}` : "");
       dot.appendChild(tip);
+      // a reading with open actions gets an accent ring
+      if (nAct > 0) {
+        const ring = svgEl("circle", {
+          cx: x(i), cy: y(pt.value), r: (oos ? 7 : 5) + 3,
+          fill: "none", "stroke-width": 2,
+        });
+        (ring as SVGElement & { style: CSSStyleDeclaration }).style.stroke =
+          this.theme.accent;
+        (ring as SVGElement & { style: CSSStyleDeclaration }).style.pointerEvents = "none";
+        svg.appendChild(ring);
+      }
       if (!this.readOnly) {
         dot.addEventListener("click", () => this.editPoint(pt));
       }
@@ -411,11 +427,14 @@ export class KpiTrendEditor {
           point.date = date.value;
           point.value = v;
         } else {
-          // one reading per date — a re-entry replaces
-          this.env.data.points = this.env.data.points.filter(
-            (p) => p.date !== date.value
-          );
-          this.env.data.points.push({ date: date.value, value: v });
+          // one reading per date — a re-entry updates in place (keeping its
+          // id, so any actions on it survive) rather than replacing
+          const existing = this.env.data.points.find((p) => p.date === date.value);
+          if (existing) {
+            existing.value = v;
+          } else {
+            this.env.data.points.push({ id: newId("k"), date: date.value, value: v });
+          }
         }
         dlg.close();
         this.commit();
@@ -432,6 +451,24 @@ export class KpiTrendEditor {
     const valueRow = fieldRow("Value", value);
     valueRow.classList.add("ltk-field-half");
     dlg.body.appendChild(valueRow);
+    // per-reading actions (existing readings only)
+    if (point && !this.readOnly) {
+      const n = this.openFor(point.id);
+      const actBtn = el(
+        "button",
+        "ltk-btn ltk-btn-secondary",
+        n > 0 ? `Actions (${n})…` : "＋ Raise action on this reading"
+      );
+      (actBtn as HTMLButtonElement).type = "button";
+      actBtn.addEventListener("click", () => {
+        dlg.close();
+        this.manage(
+          point.id,
+          `${point.date}: ${point.value}${this.env.data.unit ? " " + this.env.data.unit : ""}`
+        );
+      });
+      dlg.body.appendChild(actBtn);
+    }
     value.focus();
   }
 

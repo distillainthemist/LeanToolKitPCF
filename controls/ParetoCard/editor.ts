@@ -106,23 +106,25 @@ export class ParetoEditor {
     this.root.remove();
   }
 
-  /** Live (open) card-level actions — the kebab badge count. */
-  private openActionCount(): number {
+  /** Live (open) actions for a source — "" is the card bucket, an item id
+   *  is that bar's. Drives the kebab and per-bar badges. */
+  private openFor(sourceId: string): number {
     return this.actions.filter(
       (a) =>
-        a.context.sourceId === "" &&
+        a.context.sourceId === sourceId &&
         a.status !== "cancelled" &&
         a.status !== "done"
     ).length;
   }
 
-  private manageActions(): void {
+  /** The actions surface for a source (card-level or one bar). */
+  private manage(sourceId: string, label: string): void {
     openActionManager({
       host: this.root,
       actions: this.actions,
       source: "pareto",
-      sourceId: "",
-      seedIssue: this.cardTitle,
+      sourceId,
+      seedIssue: label,
       people: this.people,
       doneColor: this.theme.legend[1] ?? "#107c10",
       readOnly: this.readOnly,
@@ -146,9 +148,9 @@ export class ParetoEditor {
     applyThemeVars(this.root, this.theme);
     renderTitleBar(this.root, this.cardTitle, this.prompts);
     if (!this.readOnly) {
-      const n = this.openActionCount();
+      const n = this.openFor("");
       renderKebab(this.root, [
-        { label: n > 0 ? `Actions (${n})…` : "Raise action…", onClick: () => this.manageActions() },
+        { label: n > 0 ? `Actions (${n})…` : "Raise action…", onClick: () => this.manage("", this.cardTitle) },
         { label: "Download PNG", onClick: () => this.downloadPng() },
         { label: "Download SVG", onClick: () => this.downloadSvg() },
       ]);
@@ -287,6 +289,23 @@ export class ParetoEditor {
       });
       value.textContent = String(item.count);
       svg.appendChild(value);
+
+      // open-action badge on the bar's top-right corner
+      const nAct = this.openFor(item.id);
+      if (nAct > 0) {
+        const bx = cx + barW / 2;
+        const badge = svgEl("circle", {
+          cx: bx, cy: y, r: 8, class: "ltk-pa-actbadge",
+        });
+        (badge as SVGElement & { style: CSSStyleDeclaration }).style.fill =
+          this.theme.accent;
+        svg.appendChild(badge);
+        const bt = svgEl("text", {
+          x: bx, y: y + 3.5, "text-anchor": "middle", class: "ltk-pa-actbadge-t",
+        });
+        bt.textContent = String(nAct);
+        svg.appendChild(bt);
+      }
 
       // label under the bar: wraps to multiple lines and scales its font
       // down so the whole text shows without truncation (tap to edit)
@@ -434,6 +453,21 @@ export class ParetoEditor {
     const countRow = fieldRow("Count", count);
     countRow.classList.add("ltk-field-half");
     dlg.body.appendChild(countRow);
+    // per-category actions (existing items only)
+    if (item && !this.readOnly) {
+      const n = this.openFor(item.id);
+      const actBtn = el(
+        "button",
+        "ltk-btn ltk-btn-secondary",
+        n > 0 ? `Actions (${n})…` : "＋ Raise action on this category"
+      );
+      (actBtn as HTMLButtonElement).type = "button";
+      actBtn.addEventListener("click", () => {
+        dlg.close();
+        this.manage(item.id, item.label);
+      });
+      dlg.body.appendChild(actBtn);
+    }
     label.focus();
   }
 
