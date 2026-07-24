@@ -28,6 +28,36 @@ A url is recognised as Power BI when its host is `powerbi.com` /
 `*.powerbi.com` (also `.powerbi.cn`, `.powerbigov.us`). Parameters already in
 the pasted link are respected — the toggles only set their own keys.
 
+## "This content is blocked" / a blank frame — two barriers
+
+An embed only appears if it clears **both** of these. They are independent,
+and neither can be worked around from app code — an iframe cannot override
+either one.
+
+**1. The environment's code-app CSP (`frame-src`) must allow the domain.**
+Power Apps **code apps** ship a strict Content-Security-Policy whose default
+`frame-src` is `'self'` — so by default the app can only frame
+`apps.powerapps.com`, and every external embed shows *"This content is
+blocked. Contact the site owner to fix the issue."* This is set per
+**environment**, not per app, and only an environment admin can change it:
+
+> Power Platform Admin Center → **Environments** → *(the environment)* →
+> **Settings** → **Product** → **Privacy + Security** → **Content security
+> policy** → **App** tab → `frame-src` → add the origin(s) → **Save**.
+
+For Power BI add `https://app.powerbi.com` (and `https://ms-pbi.pbi.microsoft.com`).
+For any other site add its exact origin. See Microsoft's
+[Configure CSP for Code Apps](https://learn.microsoft.com/en-us/power-apps/developer/code-apps/how-to/content-security-policy).
+
+**2. The target site must not forbid framing.** A page that sends
+`X-Frame-Options: DENY`/`SAMEORIGIN` or CSP `frame-ancestors 'none'` refuses
+to be framed by anyone, and only *that site's* owner can change it. Most
+public marketing sites do this (e.g. `www.pecheydistilling.com.au` sends
+`frame-ancestors 'none'`), so they can never be embedded — the card's
+**↗ open-in-new-tab** button is the answer for those. Power BI **secure
+embed** links deliberately allow Microsoft/Power Apps hosts, so they pass
+barrier 2 and only need barrier 1 lifted.
+
 ## Which Power BI link to use
 
 | Link type | Behaviour |

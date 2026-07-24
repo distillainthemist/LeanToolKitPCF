@@ -51,6 +51,16 @@ the portal add is the one-time bridge.
 4. Share the LeanBoard app with users. On first open each user
    approves the connection once; the card catalog self-seeds; People
    admin builds the roster.
+5. **(Only if boards use Embed cards)** Allowlist the embedded domains
+   in the environment's **code-app CSP**. Code apps default `frame-src`
+   to `'self'`, so every external embed shows *"This content is
+   blocked"* until the admin adds the origin: Admin Center →
+   Environments → *(env)* → Settings → Product → Privacy + Security →
+   Content security policy → **App** tab → `frame-src` → add e.g.
+   `https://app.powerbi.com` (+ `https://ms-pbi.pbi.microsoft.com` for
+   Power BI). Per environment, admin-only. See
+   [docs/controls/EmbedCard.md](controls/EmbedCard.md) for the two
+   framing barriers.
 
 Updates are the same import — managed upgrades apply tables, the role
 and the app in place, and all data (boards, meetings, cards, actions,

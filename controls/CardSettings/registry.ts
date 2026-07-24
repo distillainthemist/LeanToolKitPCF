@@ -383,7 +383,9 @@ export const CARDS: CardSpec[] = [
         label: "Embed URL",
         kind: "text",
         help:
-          "A Power BI embed link (File > Embed report) or any https url that allows framing.",
+          "A Power BI secure-embed link (File > Embed report) or any https url that allows framing. " +
+          "\"This content is blocked\" means the domain isn't in the environment's code-app CSP frame-src — " +
+          "an admin adds it (e.g. https://app.powerbi.com). Sites that forbid framing can't embed; use Open in new tab.",
         placeholder: "https://app.powerbi.com/reportEmbed?reportId=...",
       },
       {
