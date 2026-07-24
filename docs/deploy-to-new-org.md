@@ -56,11 +56,21 @@ the portal add is the one-time bridge.
    to `'self'`, so every external embed shows *"This content is
    blocked"* until the admin adds the origin: Admin Center →
    Environments → *(env)* → Settings → Product → Privacy + Security →
-   Content security policy → **App** tab → `frame-src` → add e.g.
-   `https://app.powerbi.com` (+ `https://ms-pbi.pbi.microsoft.com` for
-   Power BI). Per environment, admin-only. See
-   [docs/controls/EmbedCard.md](controls/EmbedCard.md) for the two
-   framing barriers.
+   Content security policy → **App** tab → `frame-src` → add the
+   origins for whatever you embed. Per environment, admin-only:
+
+   | Embedding | Add to `frame-src` |
+   | --- | --- |
+   | Power BI reports | `https://app.powerbi.com` `https://ms-pbi.pbi.microsoft.com` |
+   | SharePoint / OneDrive Office docs | `https://<tenant>.sharepoint.com` `https://<tenant>-my.sharepoint.com` |
+   | Public Office files (view.officeapps) | `https://view.officeapps.live.com` |
+   | Another Power App | `https://apps.powerapps.com` |
+
+   For an embedded **Power App**, the inner app must also allow being
+   framed by this one — a code app's `frame-ancestors` already includes
+   `https://*.powerapps.com`, so no change is usually needed; same-tenant
+   users only. See [docs/controls/EmbedCard.md](controls/EmbedCard.md)
+   for the two framing barriers.
 
 Updates are the same import — managed upgrades apply tables, the role
 and the app in place, and all data (boards, meetings, cards, actions,

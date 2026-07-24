@@ -14,7 +14,7 @@ value.
 
 | Input | Settings key | Notes |
 | --- | --- | --- |
-| `embedUrl` | `config.embedUrl` | The page to embed. http/https only — a schemeless url is treated as https; any other scheme (e.g. `javascript:`) is refused and the empty state shows instead. |
+| `embedUrl` | `config.embedUrl` | The page to embed. **You can paste a whole `<iframe …>` snippet** — the `src` is lifted out and `&amp;`-decoded (so the output of any *File → Share → Embed* button works as-is). http/https only — a schemeless url is treated as https; any other scheme (e.g. `javascript:`) is refused and the empty state shows instead. |
 | `refreshTrigger` | — | Reloads the frame whenever the value **changes** (e.g. `Set(varRefresh, Text(Now()))`), same convention as `resetTrigger` elsewhere. |
 | `hideFilterPane` | `config.hideFilterPane` | Power BI links only: appends `filterPaneEnabled=false`. Ignored for other urls. |
 | `hidePageNav` | `config.hidePageNav` | Power BI links only: appends `navContentPaneEnabled=false`. Ignored for other urls. |
@@ -57,6 +57,51 @@ public marketing sites do this (e.g. `www.pecheydistilling.com.au` sends
 **↗ open-in-new-tab** button is the answer for those. Power BI **secure
 embed** links deliberately allow Microsoft/Power Apps hosts, so they pass
 barrier 2 and only need barrier 1 lifted.
+
+## Office documents (Excel / Word / PowerPoint)
+
+Put the file in **SharePoint or OneDrive for Business**, open it in the
+browser, and use **File → Share → Embed** — copy the whole `<iframe>` code
+it gives you and paste it into the card. Viewers see it in place, signed in
+with their own M365 account, and the file's own permissions are respected.
+Allowlist your tenant host in `frame-src` (e.g.
+`https://pecheydistilling.sharepoint.com`, and the `-my` host for OneDrive).
+
+The card also rewrites a classic `…/_layouts/15/Doc.aspx?sourcedoc=…` link
+to its read-only embed view (`action=embedview`) automatically. It does
+**not** try to convert a modern short share link (`/:x:/r/…`) — that form
+lacks the `UniqueId` the embed url needs, so use the *File → Share → Embed*
+snippet for those. (Microsoft has reported `action=embedview` sometimes
+still prompting a one-off sign-in inside the frame; the Embed snippet is the
+most reliable path.)
+
+`https://view.officeapps.live.com/op/embed.aspx?src=…` renders Office files
+too, but only when the source file is at a **public, unauthenticated** url —
+it can't reach tenant-protected storage. Use it only for genuinely public
+documents.
+
+## Embedding another Power App
+
+Point the card at the app's play url:
+
+- Code app: `https://apps.powerapps.com/play/e/{environmentId}/app/{appId}?tenantId={tenantId}`
+- Canvas app: `https://apps.powerapps.com/play/{appId}?tenantId={tenantId}&source=iframe`
+
+Two requirements, both admin-side:
+
+1. Add `https://apps.powerapps.com` to this environment's code-app
+   `frame-src` (barrier 1, as for any embed).
+2. The **embedded** app must permit being framed by this app's origin —
+   a code app's `frame-ancestors` defaults to `'self' https://*.powerapps.com`,
+   so an apps.powerapps.com-hosted app is already allowed; a stricter inner
+   CSP would need the origin added.
+
+Caveats worth knowing: iframe embedding of Power Apps is **same-tenant users
+only** (guests get a sign-in wall), and nesting one Power App inside another
+is **not an officially supported pattern** — it works through the two
+barriers above but may hit nested-auth edge cases, so test the specific pair
+before relying on it. When in doubt, the **↗ open-in-new-tab** button gives a
+clean full-screen launch instead.
 
 ## Which Power BI link to use
 

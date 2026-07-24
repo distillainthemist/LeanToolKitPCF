@@ -18,17 +18,80 @@ export interface EmbedOptions {
   pageName: string;
 }
 
+/** Decode the few HTML entities that appear inside an iframe `src`
+ *  attribute — every Embed button encodes `&` as `&amp;`. */
+function decodeEntities(s: string): string {
+  return s
+    .replace(/&amp;/gi, "&")
+    .replace(/&#0*38;/g, "&")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#0*34;/g, '"');
+}
+
 /**
- * Normalise an embed url: trims, requires http(s) — anything without a
- * scheme is treated as https, anything with another scheme (e.g.
- * javascript:) is rejected. Returns "" when unusable.
+ * Pull the `src` out of a pasted `<iframe …>` snippet. The official
+ * "Embed" button on SharePoint, Office, Power BI and Power Apps all hand
+ * back a full iframe tag, and pasting the whole thing is the natural
+ * thing to do — so accept it and lift out the url. Anything that isn't an
+ * iframe snippet is returned unchanged.
+ */
+export function extractIframeSrc(raw: string): string {
+  const t = raw.trim();
+  if (!/^<iframe[\s>]/i.test(t)) return raw;
+  const m = t.match(/\bsrc\s*=\s*["']([^"']+)["']/i);
+  return m ? decodeEntities(m[1]) : raw;
+}
+
+/**
+ * Normalise an embed url: lifts the src out of a pasted iframe snippet,
+ * trims, requires http(s) — anything without a scheme is treated as
+ * https, anything with another scheme (e.g. javascript:) is rejected.
+ * Returns "" when unusable.
  */
 export function safeEmbedUrl(raw: string): string {
-  const t = raw.trim();
+  const t = extractIframeSrc(raw).trim();
   if (t === "") return "";
   if (/^https?:\/\//i.test(t)) return t;
   if (/^[a-z][a-z0-9+.-]*:/i.test(t)) return ""; // some other scheme — reject
   return `https://${t}`;
+}
+
+/** True when the url points at SharePoint Online / OneDrive for Business
+ *  (any national cloud). */
+export function isSharePointUrl(url: string): boolean {
+  try {
+    const host = new URL(url).hostname.toLowerCase();
+    return (
+      host.endsWith(".sharepoint.com") ||
+      host.endsWith(".sharepoint.cn") ||
+      host.endsWith(".sharepoint.us") ||
+      host.endsWith(".sharepoint-mil.us")
+    );
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * A SharePoint/OneDrive document link in its read-only embed form. Only
+ * the classic `…/Doc.aspx?sourcedoc={id}` link is rewritten (its `action`
+ * becomes `embedview`); an already-embed `embed.aspx` url and the modern
+ * short share links (`/:x:/r/…`) pass through untouched — the latter can't
+ * be converted client-side (the embed form needs a UniqueId the link
+ * doesn't carry; use the file's File → Share → Embed snippet instead).
+ */
+export function sharePointEmbedUrl(base: string): string {
+  try {
+    const u = new URL(base);
+    if (/\/embed\.aspx$/i.test(u.pathname)) return base;
+    if (/\/doc\.aspx$/i.test(u.pathname) && u.searchParams.has("sourcedoc")) {
+      u.searchParams.set("action", "embedview");
+      return u.toString();
+    }
+    return base;
+  } catch {
+    return base;
+  }
 }
 
 /** True when the url points at the Power BI service (any national cloud). */
@@ -55,6 +118,7 @@ export function isPowerBiUrl(url: string): boolean {
 export function buildEmbedUrl(opts: EmbedOptions): string {
   const base = safeEmbedUrl(opts.url);
   if (base === "") return "";
+  if (isSharePointUrl(base)) return sharePointEmbedUrl(base);
   if (!isPowerBiUrl(base)) return base;
   if (!opts.hideFilterPane && !opts.hidePageNav && opts.pageName.trim() === "") {
     return base;
