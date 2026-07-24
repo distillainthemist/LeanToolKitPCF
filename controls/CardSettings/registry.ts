@@ -409,6 +409,14 @@ export const CARDS: CardSpec[] = [
           "Power BI links only: open on this page (the ReportSection id from the page url).",
         placeholder: "ReportSection1a2b3c",
       },
+      {
+        key: "commentaryHeadings",
+        label: "Commentary headings",
+        kind: "multiline",
+        help:
+          "One heading per line. When set, a commentary pane appears beside the embed with a rich-text note under each heading, plus the card's actions. Leave empty for no pane (actions then live on an Actions chip).",
+        placeholder: "Observations\nDecisions",
+      },
     ],
     appBound: [],
   },
@@ -628,6 +636,9 @@ const ACTION_CAPABLE = new Set([
   "ProcessMap",
   "HeatmapCard",
   "AgendaCard",
+  "KpiTrendCard",
+  "ParetoCard",
+  "EmbedCard",
 ]);
 for (const card of CARDS) {
   if (ACTION_CAPABLE.has(card.type)) card.config.push(DISABLE_ACTIONS_FIELD);

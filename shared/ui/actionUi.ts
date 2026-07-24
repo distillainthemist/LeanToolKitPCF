@@ -391,6 +391,9 @@ export interface ActionManagerOptions {
   people: Person[];
   doneColor: string;
   readOnly?: boolean;
+  /** The card's "Disable actions" setting: existing actions stay listed,
+   *  completable and editable, but nothing new can be raised. */
+  canRaise?: boolean;
   title?: string;
   /** Persist + refresh after any change (raise / edit / complete / cancel). */
   onChanged: () => void;
@@ -404,6 +407,7 @@ export interface ActionManagerOptions {
  * Pareto) alike — sourceId "" is the card bucket.
  */
 export function openActionManager(o: ActionManagerOptions): void {
+  const canRaise = (o.canRaise ?? true) && !o.readOnly;
   const live = o.actions.filter(
     (a) => a.context.sourceId === o.sourceId && a.status !== "cancelled"
   );
@@ -421,14 +425,14 @@ export function openActionManager(o: ActionManagerOptions): void {
       },
     });
   };
-  if (live.length === 0 && !o.readOnly) {
+  if (live.length === 0 && canRaise) {
     raise();
     return;
   }
   const dlg = openDialog({
     host: o.host,
     title: o.title ?? "Actions",
-    buttons: o.readOnly
+    buttons: !canRaise
       ? [{ label: "Close", kind: "secondary", onClick: () => dlg.close() }]
       : [
           { label: "Close", kind: "secondary", onClick: () => dlg.close() },

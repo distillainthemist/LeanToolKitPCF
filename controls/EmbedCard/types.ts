@@ -3,10 +3,18 @@
 // page-navigation panes can be hidden and a report page pre-selected via
 // query parameters.
 //
-// This card has NO document: nothing is edited, so there is no outputJSON,
-// no actions channel and no envelope. It also has no snapshot outputs — a
-// cross-origin iframe cannot be captured, and a blank rectangle would be a
-// decoy.
+// The card's document is the optional commentary pane (ltk/embednotes@1):
+// rich-text notes keyed by the configured headings. With no headings
+// configured there is no pane and nothing is edited. There are still no
+// snapshot outputs — a cross-origin iframe cannot be captured, and a blank
+// rectangle would be a decoy.
+
+import {
+  Envelope,
+  ParsedEnvelope,
+  parseEnvelope,
+  serializeEnvelope,
+} from "../../shared/schema/envelope";
 
 export interface EmbedOptions {
   url: string;
@@ -134,4 +142,78 @@ export function buildEmbedUrl(opts: EmbedOptions): string {
   } catch {
     return base;
   }
+}
+
+// ---- the commentary document ----
+
+export const NOTES_SCHEMA_ID = "ltk/embednotes@1";
+
+export interface EmbedNotesData {
+  /** Sanitized rich-text html, keyed by heading. Keys for headings no
+   *  longer configured are kept — renaming a heading back restores its
+   *  note instead of silently losing it. */
+  notes: Record<string, string>;
+}
+
+export type EmbedNotesEnvelope = Envelope<EmbedNotesData>;
+
+function parseNotesData(data: unknown): EmbedNotesData {
+  if (!data || typeof data !== "object") return { notes: {} };
+  const d = data as { notes?: unknown };
+  const notes: Record<string, string> = {};
+  if (d.notes && typeof d.notes === "object") {
+    for (const [k, v] of Object.entries(d.notes as Record<string, unknown>)) {
+      if (typeof v === "string" && k.trim() !== "") {
+        notes[k] = sanitizeRichHtml(v);
+      }
+    }
+  }
+  return { notes };
+}
+
+export function parseEmbedNotes(
+  raw: string | null | undefined
+): ParsedEnvelope<EmbedNotesData> {
+  return parseEnvelope(raw, NOTES_SCHEMA_ID, parseNotesData);
+}
+
+export function serializeEmbedNotes(env: EmbedNotesEnvelope): string {
+  return serializeEnvelope(env);
+}
+
+/** The configured commentary headings: one per line, trimmed, deduped.
+ *  An empty result means the pane is off. */
+export function parseHeadings(raw: string): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const line of raw.split(/\r?\n/)) {
+    const h = line.trim();
+    if (h === "" || seen.has(h.toLowerCase())) continue;
+    seen.add(h.toLowerCase());
+    out.push(h);
+  }
+  return out;
+}
+
+// Tags the note editor's own toolbar produces (plus the wrapping the
+// browser inserts on Enter). Nothing else survives, and no attributes ever
+// do — pasted markup collapses to plain text with basic emphasis.
+const RICH_TAGS = new Set([
+  "b", "strong", "i", "em", "u", "ul", "ol", "li", "br", "p", "div",
+]);
+
+/**
+ * Sanitize rich-text html to the whitelist above: allowed tags are re-emitted
+ * bare (attributes dropped), everything else is stripped (its text content
+ * remains). Applied on both save and render, so a stored document can never
+ * inject markup.
+ */
+export function sanitizeRichHtml(html: string): string {
+  return html.replace(/<[^>]*>?/g, (tag) => {
+    const m = tag.match(/^<(\/?)([a-zA-Z0-9]+)/);
+    if (!m) return ""; // malformed / comment / stray "<"
+    const name = m[2].toLowerCase();
+    if (!RICH_TAGS.has(name)) return "";
+    return name === "br" && m[1] === "" ? "<br>" : `<${m[1]}${name}>`;
+  });
 }

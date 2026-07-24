@@ -47,7 +47,12 @@ import { ActionBoardEditor } from "../../controls/ActionBoard/editor";
 import { EscalationViewerEditor } from "../../controls/EscalationViewer/editor";
 import { parseSources } from "../../controls/EscalationViewer/types";
 import { EmbedView } from "../../controls/EmbedCard/editor";
-import { buildEmbedUrl } from "../../controls/EmbedCard/types";
+import {
+  buildEmbedUrl,
+  parseEmbedNotes,
+  parseHeadings,
+  serializeEmbedNotes,
+} from "../../controls/EmbedCard/types";
 import { FishboneEditor } from "../../controls/Fishbone/editor";
 import { FishboneModel } from "../../controls/Fishbone/model";
 import {
@@ -183,6 +188,7 @@ function elementActions(
         people: opts.people,
         doneColor,
         readOnly: opts.readOnly,
+        canRaise: !actionsOff(opts),
         onChanged: commit,
       }),
   };
@@ -373,6 +379,7 @@ const REGISTRY: Record<string, CardMounter> = {
     editor.setReadOnly(opts.readOnly);
     editor.setPeople(opts.people);
     editor.setActions(opts.actions);
+    editor.setCanRaise(!actionsOff(opts));
     editor.setEnvelope(parseKpiTrend(opts.outputJson).envelope);
     return () => opts.host.replaceChildren();
   },
@@ -401,6 +408,7 @@ const REGISTRY: Record<string, CardMounter> = {
     editor.setReadOnly(opts.readOnly);
     editor.setPeople(opts.people);
     editor.setActions(opts.actions);
+    editor.setCanRaise(!actionsOff(opts));
     editor.setEnvelope(parsePareto(opts.outputJson).envelope);
     return () => opts.host.replaceChildren();
   },
@@ -482,7 +490,7 @@ const REGISTRY: Record<string, CardMounter> = {
         ),
       getActionBadge: mgr.badge,
     });
-    editor.setDisableActions(opts.readOnly);
+    editor.setDisableActions(opts.readOnly || actionsOff(opts));
     editor.setModel(modelOf());
     return () => opts.host.replaceChildren();
   },
@@ -555,10 +563,26 @@ const REGISTRY: Record<string, CardMounter> = {
 
   // ---- display-only ----
   EmbedCard: (opts) => {
-    const view = new EmbedView(opts.host);
+    const s = saver(opts);
+    // the commentary document (heading → rich-text note); "" parses to an
+    // empty envelope, so pre-commentary cards need no migration
+    const env = parseEmbedNotes(opts.outputJson).envelope;
+    const view = new EmbedView(opts.host, {
+      onNotes: (notes) => {
+        env.data.notes = notes;
+        env.meta.updated = new Date().toISOString();
+        s.save(serializeEmbedNotes(env));
+      },
+      onActions: (actions) => opts.onActions(stamped(opts, actions)),
+    });
     view.setTheme(opts.theme);
     view.setChrome(opts.title, promptsRaw(opts));
     view.setReadOnly(opts.readOnly);
+    view.setPeople(opts.people);
+    view.setActions(opts.actions);
+    view.setCanRaise(!actionsOff(opts));
+    view.setCommentary(parseHeadings(cfgStr(opts, "commentaryHeadings")));
+    view.setNotes(env.data.notes);
     // the settings key is "embedUrl" (see CardSettings/registry.ts); route
     // through buildEmbedUrl so it is normalised and the Power BI pane
     // toggles / page selection are applied

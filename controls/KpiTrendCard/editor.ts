@@ -43,6 +43,7 @@ export class KpiTrendEditor {
   private readOnly = false;
   private people: Person[] = [];
   private actions: LtkAction[] = [];
+  private canRaise = true;
   private readonly png: SnapshotScheduler;
 
   constructor(
@@ -102,6 +103,14 @@ export class KpiTrendEditor {
     this.render();
   }
 
+  /** The card's "Disable actions" setting (raise hidden, existing stay). */
+  setCanRaise(on: boolean): void {
+    if (this.canRaise !== on) {
+      this.canRaise = on;
+      this.render();
+    }
+  }
+
   destroy(): void {
     this.png.cancel();
     this.root.remove();
@@ -129,6 +138,7 @@ export class KpiTrendEditor {
       people: this.people,
       doneColor: this.goodColor(),
       readOnly: this.readOnly,
+      canRaise: this.canRaise,
       onChanged: () => {
         this.cb.onActions?.(this.actions);
         this.render();
@@ -167,12 +177,19 @@ export class KpiTrendEditor {
     renderTitleBar(this.root, this.cardTitle, this.prompts);
     if (!this.readOnly) {
       const n = this.openFor("");
-      renderKebab(this.root, [
-        { label: n > 0 ? `Actions (${n})…` : "Raise action…", onClick: () => this.manage("", this.cardTitle) },
+      const items = [];
+      if (n > 0 || this.canRaise) {
+        items.push({
+          label: n > 0 ? `Actions (${n})…` : "Raise action…",
+          onClick: () => this.manage("", this.cardTitle),
+        });
+      }
+      items.push(
         { label: "Target & spec limits", onClick: () => this.editSettings() },
         { label: "Download PNG", onClick: () => this.downloadPng() },
-        { label: "Download SVG", onClick: () => this.downloadSvg() },
-      ]);
+        { label: "Download SVG", onClick: () => this.downloadSvg() }
+      );
+      renderKebab(this.root, items);
     }
 
     const body = el("div", "ltk-kt-body");
@@ -452,7 +469,7 @@ export class KpiTrendEditor {
     valueRow.classList.add("ltk-field-half");
     dlg.body.appendChild(valueRow);
     // per-reading actions (existing readings only)
-    if (point && !this.readOnly) {
+    if (point && !this.readOnly && (this.canRaise || this.openFor(point.id) > 0)) {
       const n = this.openFor(point.id);
       const actBtn = el(
         "button",

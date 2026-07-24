@@ -6,9 +6,12 @@ theme changes or unrelated re-renders; it only navigates when the embed url
 genuinely changes, when ⟳ is pressed, or when **Refresh Trigger** changes
 value.
 
-- **Schema id:** — (display-only: no document)
-- **Document:** ✖ · **Actions:** ✖ · **Snapshots:** ✖ (a cross-origin iframe
-  cannot be captured, so `pngExport`/`svgExport` are deliberately absent)
+- **Schema id:** `ltk/embednotes@1` (only when commentary headings are
+  configured — otherwise nothing is edited and no document is written)
+- **Document:** optional (the commentary notes) · **Actions:** ✔ (code app;
+  card-level, on the pane or an Actions chip) · **Snapshots:** ✖ (a
+  cross-origin iframe cannot be captured, so `pngExport`/`svgExport` are
+  deliberately absent)
 
 ## Inputs
 
@@ -19,7 +22,9 @@ value.
 | `hideFilterPane` | `config.hideFilterPane` | Power BI links only: appends `filterPaneEnabled=false`. Ignored for other urls. |
 | `hidePageNav` | `config.hidePageNav` | Power BI links only: appends `navContentPaneEnabled=false`. Ignored for other urls. |
 | `pageName` | `config.pageName` | Power BI links only: opens the report on this page (the `ReportSection…` id visible in the page url). |
-| `readOnly` | `readOnly` | Hides the refresh button. The embedded page itself is unaffected. |
+| `commentaryHeadings` | `config.commentaryHeadings` | One heading per line. When set, a commentary pane appears beside the embed: a rich-text note (bold / italic / bullets) under each heading plus the card's actions list. Empty = no pane. |
+| `disableActions` | `config.disableActions` | Hides the raise-action affordances; existing actions stay visible and completable. |
+| `readOnly` | `readOnly` | Hides the refresh button and makes the commentary pane read-only. The embedded page itself is unaffected. |
 
 Plus the standard chrome/styling surface (`cardTitle`, `prompts` as the
 empty-state text, theme colours, font, `settingsJSON`).
@@ -121,7 +126,18 @@ currently stands in the Power BI service**:
   dataset refresh from Power Automate, then pulse `refreshTrigger` when it
   completes.
 
-## No outputs
+## Commentary & actions
 
-This card emits nothing: no `outputJSON`, no actions channel, no snapshots.
-It is a display surface — pair it with capture cards on the same board.
+With **Commentary headings** configured, a 300px pane appears beside the
+frame: a rich-text note (bold / italic / bullet list, sanitized to that
+whitelist — pasted markup is scrubbed before it touches the page) under each
+heading, and the card's actions listed at the bottom with **＋ Add action**.
+Notes are stored per heading in the card document; a heading removed from
+config keeps its note in the document, so renaming it back restores the text.
+
+Without headings the embed stays full width and actions ride an **Actions**
+chip beside ⟳/↗ (hidden when there are none and raising is disabled).
+Actions are card-level, land in the central actions table like every other
+card's, and use the participants-first assignee picker. In a closed meeting
+the pane is read-only. There are still no snapshot outputs — the board tile
+stays the catalog art.
