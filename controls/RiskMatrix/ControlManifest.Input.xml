@@ -2,7 +2,7 @@
 <manifest>
   <control namespace="BenOBrien"
            constructor="RiskMatrix"
-           version="0.11.7"
+           version="0.11.8"
            display-name-key="Risk Matrix"
            description-key="LeanToolKit 5x5 risk matrix — risks rated likelihood x consequence with banded tints, optional post-control rating, and treatment actions."
            control-type="standard">
