@@ -43,6 +43,7 @@ export class ParetoEditor {
   private people: Person[] = [];
   private actions: LtkAction[] = [];
   private canRaise = true;
+  private countNote = "";
   private readonly png: SnapshotScheduler;
 
   constructor(
@@ -108,6 +109,12 @@ export class ParetoEditor {
       this.canRaise = on;
       this.render();
     }
+  }
+
+  /** Small muted note under the edit dialog's Count field (the series
+   *  wrapper explains that an edited total lands on the meeting's day). */
+  setCountNote(note: string): void {
+    this.countNote = note;
   }
 
   destroy(): void {
@@ -470,6 +477,10 @@ export class ParetoEditor {
     const countRow = fieldRow("Count", count);
     countRow.classList.add("ltk-field-half");
     dlg.body.appendChild(countRow);
+    if (this.countNote !== "") {
+      const note = el("div", "ltk-pa-countnote", this.countNote);
+      dlg.body.appendChild(note);
+    }
     // per-category actions (existing items only)
     if (item && !this.readOnly && (this.canRaise || this.openFor(item.id) > 0)) {
       const n = this.openFor(item.id);

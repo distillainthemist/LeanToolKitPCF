@@ -18,6 +18,7 @@ export const PARETO_CSS = `
 .ltk-pa-labelclick:hover { fill: var(--ltk-fg); text-decoration: underline; }
 .ltk-pa-value { font-size: 11px; font-weight: 600; fill: var(--ltk-fg); }
 .ltk-pa-actbadge { pointer-events: none; }
+.ltk-pa-countnote { font-size: 12px; color: var(--ltk-muted); margin-top: -6px; }
 .ltk-pa-actbadge-t { font-size: 10px; font-weight: 700; fill: #fff; pointer-events: none; }
 .ltk-pa-inc { cursor: pointer; }
 .ltk-pa-inc-circle { fill: var(--ltk-bg); stroke: var(--ltk-hairline); stroke-width: 1.5; }

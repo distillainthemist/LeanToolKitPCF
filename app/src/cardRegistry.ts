@@ -35,12 +35,14 @@ import { applySeries, hasAnySeries, listSeries } from "./store/series";
 import {
   cellsFromPoints,
   cellsFromRatings,
+  diffParetoItems,
   diffPoints,
   diffRatings,
   instanceDay,
   monthWindow,
   pointsFromCells,
   ratingsFromCells,
+  sumsByKey,
   trailingWindow,
 } from "./store/seriesMap";
 import { FiveWhysEditor } from "../../controls/FiveWhys/editor";
@@ -518,21 +520,76 @@ const REGISTRY: Record<string, CardMounter> = {
   },
   StatusTile: (opts) => {
     const s = saver(opts);
+    const states = parseStates(cfgStr(opts, "states"));
+    const parsed = parseStatusTile(opts.outputJson).envelope;
+    // additive status log: every state change also upserts a day-grain
+    // series row (key "state", the meeting's day, value = the label) so
+    // status-over-time is reportable. The card's own behaviour — document
+    // state + reason, carry/shared snapshots — is unchanged.
+    let lastStateIndex = parsed.data.stateIndex;
     const editor = new StatusTileEditor(opts.host, {
-      onChange: (env) => s.save(serializeStatusTile(env)),
+      onChange: (env) => {
+        if (env.data.stateIndex !== lastStateIndex) {
+          lastStateIndex = env.data.stateIndex;
+          const label = states[env.data.stateIndex] ?? String(env.data.stateIndex);
+          void applySeries(opts.boardId, opts.cardId, [
+            { key: "state", date: instanceDay(opts.instanceWhen), shift: "-", value: label },
+          ]).catch((err) => console.warn("status log failed", err));
+        }
+        s.save(serializeStatusTile(env));
+      },
       onPngReady: s.onPng,
     });
     editor.setTheme(opts.theme);
     editor.setChrome(opts.title, promptsRaw(opts));
     editor.setReadOnly(opts.readOnly);
-    editor.setStates(parseStates(cfgStr(opts, "states")));
-    editor.setEnvelope(parseStatusTile(opts.outputJson).envelope);
+    editor.setStates(states);
+    editor.setEnvelope(parsed);
     return () => opts.host.replaceChildren();
   },
+  // Series card: the bars sum each category's DAILY count rows over the
+  // trailing paretoWindowDays ending on the meeting's date. Category
+  // definitions stay in the document (counts stored as 0 there); a ＋1 or
+  // an edited total lands as a delta on the meeting-day row.
   ParetoCard: (opts) => {
     const s = saver(opts);
+    const day = instanceDay(opts.instanceWhen);
+    const cfgDays = Math.round(Number(cfgStr(opts, "paretoWindowDays")));
+    const window = trailingWindow(
+      day,
+      Number.isFinite(cfgDays) && cfgDays >= 1 && cfgDays <= 1000 ? cfgDays : 30
+    );
+    const env = parsePareto(opts.outputJson).envelope; // definitions + unit
+    let lastItems: typeof env.data.items = [];
+    let edited = false;
+    // the meeting-day row per category (deltas apply against these)
+    const todayValue: Record<string, number> = {};
     const editor = new ParetoEditor(opts.host, {
-      onChange: (env) => s.save(serializePareto(env)),
+      onChange: (env2) => {
+        edited = true;
+        const { deltas } = diffParetoItems(lastItems, env2.data.items);
+        lastItems = env2.data.items.map((i) => ({ ...i }));
+        const put = Object.entries(deltas).map(([id, delta]) => {
+          const next = Math.max(0, (todayValue[id] ?? 0) + delta);
+          todayValue[id] = next;
+          return { key: id, date: day, shift: "-", value: String(next) };
+        });
+        if (put.length > 0) {
+          void applySeries(opts.boardId, opts.cardId, put).catch((err) =>
+            console.warn("pareto series save failed", err)
+          );
+        }
+        // the doc keeps definitions (counts zeroed) + unit + tile svg
+        s.save(
+          serializePareto({
+            ...env2,
+            data: {
+              ...env2.data,
+              items: env2.data.items.map((i) => ({ ...i, count: 0 })),
+            },
+          })
+        );
+      },
       onPngReady: s.onPng,
       onActions: (actions) => opts.onActions(stamped(opts, actions)),
     });
@@ -542,7 +599,35 @@ const REGISTRY: Record<string, CardMounter> = {
     editor.setPeople(opts.people);
     editor.setActions(opts.actions);
     editor.setCanRaise(!actionsOff(opts));
-    editor.setEnvelope(parsePareto(opts.outputJson).envelope);
+    editor.setCountNote(
+      `Count = the ${window.from} – ${window.to} total; a change lands on ${day}.`
+    );
+    editor.setEnvelope(env);
+    void (async () => {
+      try {
+        let cells = await listSeries(opts.boardId, opts.cardId, window.from, window.to);
+        if (cells.length === 0 && !(await hasAnySeries(opts.boardId, opts.cardId))) {
+          // one-time migration: legacy totals become the meeting day's rows
+          const seed = env.data.items
+            .filter((i) => i.count > 0)
+            .map((i) => ({ key: i.id, date: day, shift: "-", value: String(i.count) }));
+          if (seed.length > 0) {
+            await applySeries(opts.boardId, opts.cardId, seed);
+            cells = await listSeries(opts.boardId, opts.cardId, window.from, window.to);
+          }
+        }
+        if (edited) return; // never overwrite an edit that beat the load
+        const sums = sumsByKey(cells);
+        for (const c of cells) {
+          if (c.date === day) todayValue[c.key] = Number(c.value) || 0;
+        }
+        env.data.items = env.data.items.map((i) => ({ ...i, count: sums[i.id] ?? 0 }));
+        lastItems = env.data.items.map((i) => ({ ...i }));
+        editor.setEnvelope(env);
+      } catch (err) {
+        console.warn("pareto series load failed", err);
+      }
+    })();
     return () => opts.host.replaceChildren();
   },
   CaptureCard: (opts) => {

@@ -167,3 +167,42 @@ describe("trailingWindow", () => {
     expect(trailingWindow("2026-03-05", 91)).toEqual({ from: "2025-12-05", to: "2026-03-05" });
   });
 });
+
+import { diffParetoItems, sumsByKey } from "../store/seriesMap";
+
+describe("Pareto helpers", () => {
+  it("sums day rows per category over the window", () => {
+    expect(
+      sumsByKey([
+        { key: "p1", date: "2026-07-20", shift: "-", value: "3" },
+        { key: "p1", date: "2026-07-22", shift: "-", value: "2" },
+        { key: "p2", date: "2026-07-22", shift: "-", value: "4" },
+        { key: "p3", date: "2026-07-22", shift: "-", value: "junk" },
+      ])
+    ).toEqual({ p1: 5, p2: 4 });
+  });
+
+  it("splits an edit into definition changes and count deltas", () => {
+    const prev = [
+      { id: "p1", label: "Seal wear", count: 5 },
+      { id: "p2", label: "Blockage", count: 4 },
+    ];
+    // +1 tally on p1, p2 renamed, p3 added with 2
+    const { defsChanged, deltas } = diffParetoItems(prev, [
+      { id: "p1", label: "Seal wear", count: 6 },
+      { id: "p2", label: "Line blockage", count: 4 },
+      { id: "p3", label: "Operator", count: 2 },
+    ]);
+    expect(defsChanged).toBe(true);
+    expect(deltas).toEqual({ p1: 1, p3: 2 });
+  });
+
+  it("pure tally is deltas only; removal is defs only", () => {
+    const prev = [{ id: "p1", label: "A", count: 5 }];
+    expect(diffParetoItems(prev, [{ id: "p1", label: "A", count: 6 }])).toEqual({
+      defsChanged: false,
+      deltas: { p1: 1 },
+    });
+    expect(diffParetoItems(prev, [])).toEqual({ defsChanged: true, deltas: {} });
+  });
+});

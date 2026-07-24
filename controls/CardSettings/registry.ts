@@ -235,10 +235,19 @@ export const CARDS: CardSpec[] = [
     label: "Pareto",
     group: "Performance",
     description: "Descending count bars with the cumulative % line.",
-    config: [],
+    config: [
+      {
+        key: "paretoWindowDays",
+        label: "Window (days)",
+        kind: "text",
+        help:
+          "The bars sum each category's daily counts over this many trailing days, ending on the meeting's date. Default 30. ＋1 tallies land on the meeting's day; older days stay stored and reportable.",
+        placeholder: "30",
+      },
+    ],
     appBound: ["instanceId"],
     configNote:
-      "The categories and counts live in the card's document, edited in the card itself.",
+      "The categories live in the card's document; counts are daily rows summed over the window.",
   },
   {
     type: "KpiTrendCard",

@@ -167,3 +167,44 @@ export function trailingWindow(day: string, days: number): { from: string; to: s
     to: day,
   };
 }
+
+// ---- Pareto (day-count rows summed over the window) ----
+
+export interface ParetoItemLike {
+  id: string;
+  label: string;
+  count: number;
+}
+
+/** Window sums per category id. */
+export function sumsByKey(cells: SeriesCell[]): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const c of cells) {
+    const n = Number(c.value);
+    if (c.key !== "" && Number.isFinite(n)) out[c.key] = (out[c.key] ?? 0) + n;
+  }
+  return out;
+}
+
+/**
+ * A Pareto edit split into its two halves: definition changes (labels,
+ * added/removed categories — the document's business) and count deltas per
+ * id (the series' business: the delta lands on the meeting-day row).
+ */
+export function diffParetoItems(
+  prev: ParetoItemLike[],
+  next: ParetoItemLike[]
+): { defsChanged: boolean; deltas: Record<string, number> } {
+  const before = new Map(prev.map((p) => [p.id, p]));
+  const deltas: Record<string, number> = {};
+  let defsChanged = false;
+  for (const item of next) {
+    const old = before.get(item.id);
+    before.delete(item.id);
+    if (!old || old.label !== item.label) defsChanged = true;
+    const delta = item.count - (old?.count ?? 0);
+    if (delta !== 0) deltas[item.id] = delta;
+  }
+  if (before.size > 0) defsChanged = true; // removals
+  return { defsChanged, deltas };
+}
