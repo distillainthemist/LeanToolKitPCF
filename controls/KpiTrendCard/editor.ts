@@ -9,6 +9,9 @@ import { clear, el, ensureStylesheet, svgEl } from "../../shared/ui/dom";
 import { fieldRow, openDialog, sectionLabel, textInput } from "../../shared/ui/dialog";
 import { parsePrompts, Prompts, renderGhost, renderTitleBar } from "../../shared/ui/chrome";
 import { renderKebab } from "../../shared/ui/menu";
+import { openActionManager } from "../../shared/ui/actionUi";
+import { LtkAction } from "../../shared/schema/actions";
+import { Person } from "../../shared/schema/people";
 import { htmlToPng, saveSvg, SnapshotScheduler } from "../../shared/export/png";
 import { nowIso, todayIso } from "../../shared/schema/id";
 import { KpiPoint, KpiTrendEnvelope, SCHEMA_ID } from "./types";
@@ -26,6 +29,8 @@ const DEFAULT_GHOST = [
 export interface KpiTrendEditorCallbacks {
   onChange: (env: KpiTrendEnvelope) => void;
   onPngReady?: (dataUri: string, svgMarkup?: string) => void;
+  /** The full card-level action set on every change (already scoped). */
+  onActions?: (actions: LtkAction[]) => void;
 }
 
 export class KpiTrendEditor {
@@ -36,6 +41,8 @@ export class KpiTrendEditor {
   private prompts: Prompts = { general: [], fields: {} };
   private lastPromptsRaw: string | null = null;
   private readOnly = false;
+  private people: Person[] = [];
+  private actions: LtkAction[] = [];
   private readonly png: SnapshotScheduler;
 
   constructor(
@@ -84,9 +91,47 @@ export class KpiTrendEditor {
     }
   }
 
+  /** The roster for the action assignee picker. */
+  setPeople(people: Person[]): void {
+    this.people = people;
+  }
+
+  /** This card's actions from the central table (drives the badge). */
+  setActions(actions: LtkAction[]): void {
+    this.actions = actions;
+    this.render();
+  }
+
   destroy(): void {
     this.png.cancel();
     this.root.remove();
+  }
+
+  /** Live (open) card-level actions — the kebab badge count. */
+  private openActionCount(): number {
+    return this.actions.filter(
+      (a) =>
+        a.context.sourceId === "" &&
+        a.status !== "cancelled" &&
+        a.status !== "done"
+    ).length;
+  }
+
+  private manageActions(): void {
+    openActionManager({
+      host: this.root,
+      actions: this.actions,
+      source: "kpitrend",
+      sourceId: "",
+      seedIssue: this.cardTitle,
+      people: this.people,
+      doneColor: this.goodColor(),
+      readOnly: this.readOnly,
+      onChanged: () => {
+        this.cb.onActions?.(this.actions);
+        this.render();
+      },
+    });
   }
 
   // ---- theming ----
@@ -119,7 +164,9 @@ export class KpiTrendEditor {
     applyThemeVars(this.root, this.theme);
     renderTitleBar(this.root, this.cardTitle, this.prompts);
     if (!this.readOnly) {
+      const n = this.openActionCount();
       renderKebab(this.root, [
+        { label: n > 0 ? `Actions (${n})…` : "Raise action…", onClick: () => this.manageActions() },
         { label: "Target & spec limits", onClick: () => this.editSettings() },
         { label: "Download PNG", onClick: () => this.downloadPng() },
         { label: "Download SVG", onClick: () => this.downloadSvg() },

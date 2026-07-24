@@ -7,7 +7,7 @@
 // actions are never hard-deleted (the danger button cancels); Done/Due/
 // Overdue are capitalised; circle colours are set inline (Safari rule).
 
-import { isOverdue, LtkAction } from "../schema/actions";
+import { isOverdue, LtkAction, newAction } from "../schema/actions";
 import { Person } from "../schema/people";
 import { textOn } from "../tokens";
 import { el } from "./dom";
@@ -375,4 +375,89 @@ export function openActionDialog(o: ActionDialogOptions): void {
   if (!o.isNew) dlg.body.appendChild(doneChk.wrap);
   dlg.body.appendChild(escChk.wrap);
   form.focus();
+}
+
+export interface ActionManagerOptions {
+  host: HTMLElement;
+  /** The card's action set — mutated in place (new pushed, edits applied). */
+  actions: LtkAction[];
+  /** Component kind stamped on new actions ("fishbone", "kpitrend"…). */
+  source: string;
+  /** The element the actions hang off — a cause / node id, "" for card-level. */
+  sourceId: string;
+  /** Prefill for a new action's issue (e.g. the cause text / node label). */
+  seedIssue?: string;
+  hint?: string;
+  people: Person[];
+  doneColor: string;
+  readOnly?: boolean;
+  title?: string;
+  /** Persist + refresh after any change (raise / edit / complete / cancel). */
+  onChanged: () => void;
+}
+
+/**
+ * The shared "actions for X" surface: lists this source's live actions with a
+ * complete circle and edit, plus a Raise button. When there are none (and the
+ * card is editable) it goes straight to the raise dialog. Used for per-element
+ * actions (Fishbone causes, Process-map nodes) and card-level ones (KPI trend,
+ * Pareto) alike — sourceId "" is the card bucket.
+ */
+export function openActionManager(o: ActionManagerOptions): void {
+  const live = o.actions.filter(
+    (a) => a.context.sourceId === o.sourceId && a.status !== "cancelled"
+  );
+  const raise = () => {
+    const action = newAction({ source: o.source, sourceId: o.sourceId, hint: o.hint });
+    if (o.seedIssue) action.issue = o.seedIssue;
+    openActionDialog({
+      host: o.host,
+      action,
+      people: o.people,
+      isNew: true,
+      onCommit: () => {
+        o.actions.push(action);
+        o.onChanged();
+      },
+    });
+  };
+  if (live.length === 0 && !o.readOnly) {
+    raise();
+    return;
+  }
+  const dlg = openDialog({
+    host: o.host,
+    title: o.title ?? "Actions",
+    buttons: o.readOnly
+      ? [{ label: "Close", kind: "secondary", onClick: () => dlg.close() }]
+      : [
+          { label: "Close", kind: "secondary", onClick: () => dlg.close() },
+          {
+            label: "＋ Raise action",
+            kind: "primary",
+            onClick: () => {
+              dlg.close();
+              raise();
+            },
+          },
+        ],
+  });
+  dlg.body.appendChild(sectionLabel(`Actions (${live.length})`));
+  for (const a of live) {
+    dlg.body.appendChild(
+      actionRow(a, {
+        doneColor: o.doneColor,
+        readOnly: o.readOnly,
+        onChanged: () => o.onChanged(),
+        onEdit: (act) =>
+          openActionDialog({
+            host: o.host,
+            action: act,
+            people: o.people,
+            isNew: false,
+            onCommit: () => o.onChanged(),
+          }),
+      })
+    );
+  }
 }

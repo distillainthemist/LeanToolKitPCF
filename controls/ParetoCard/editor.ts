@@ -7,6 +7,9 @@ import { clear, el, ensureStylesheet, svgEl } from "../../shared/ui/dom";
 import { fieldRow, openDialog, textInput } from "../../shared/ui/dialog";
 import { parsePrompts, Prompts, renderGhost, renderTitleBar, hintFor } from "../../shared/ui/chrome";
 import { renderKebab } from "../../shared/ui/menu";
+import { openActionManager } from "../../shared/ui/actionUi";
+import { LtkAction } from "../../shared/schema/actions";
+import { Person } from "../../shared/schema/people";
 import { htmlToPng, saveSvg, SnapshotScheduler } from "../../shared/export/png";
 import { newId, nowIso } from "../../shared/schema/id";
 import { ParetoEnvelope, ParetoItem, SCHEMA_ID } from "./types";
@@ -25,6 +28,8 @@ const DEFAULT_GHOST = [
 export interface ParetoEditorCallbacks {
   onChange: (env: ParetoEnvelope) => void;
   onPngReady?: (dataUri: string, svgMarkup?: string) => void;
+  /** The full card-level action set on every change (already scoped). */
+  onActions?: (actions: LtkAction[]) => void;
 }
 
 export class ParetoEditor {
@@ -35,6 +40,8 @@ export class ParetoEditor {
   private prompts: Prompts = { general: [], fields: {} };
   private lastPromptsRaw: string | null = null;
   private readOnly = false;
+  private people: Person[] = [];
+  private actions: LtkAction[] = [];
   private readonly png: SnapshotScheduler;
 
   constructor(
@@ -83,9 +90,47 @@ export class ParetoEditor {
     }
   }
 
+  /** The roster for the action assignee picker. */
+  setPeople(people: Person[]): void {
+    this.people = people;
+  }
+
+  /** This card's actions from the central table (drives the badge). */
+  setActions(actions: LtkAction[]): void {
+    this.actions = actions;
+    this.render();
+  }
+
   destroy(): void {
     this.png.cancel();
     this.root.remove();
+  }
+
+  /** Live (open) card-level actions — the kebab badge count. */
+  private openActionCount(): number {
+    return this.actions.filter(
+      (a) =>
+        a.context.sourceId === "" &&
+        a.status !== "cancelled" &&
+        a.status !== "done"
+    ).length;
+  }
+
+  private manageActions(): void {
+    openActionManager({
+      host: this.root,
+      actions: this.actions,
+      source: "pareto",
+      sourceId: "",
+      seedIssue: this.cardTitle,
+      people: this.people,
+      doneColor: this.theme.legend[1] ?? "#107c10",
+      readOnly: this.readOnly,
+      onChanged: () => {
+        this.cb.onActions?.(this.actions);
+        this.render();
+      },
+    });
   }
 
   private render(): void {
@@ -101,7 +146,9 @@ export class ParetoEditor {
     applyThemeVars(this.root, this.theme);
     renderTitleBar(this.root, this.cardTitle, this.prompts);
     if (!this.readOnly) {
+      const n = this.openActionCount();
       renderKebab(this.root, [
+        { label: n > 0 ? `Actions (${n})…` : "Raise action…", onClick: () => this.manageActions() },
         { label: "Download PNG", onClick: () => this.downloadPng() },
         { label: "Download SVG", onClick: () => this.downloadSvg() },
       ]);

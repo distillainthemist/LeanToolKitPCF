@@ -7,6 +7,7 @@
 
 import { LtkAction } from "../../shared/schema/actions";
 import { Person } from "../../shared/schema/people";
+import { openActionManager } from "../../shared/ui/actionUi";
 import { Theme } from "../../shared/tokens";
 
 import { KpiTrendEditor } from "../../controls/KpiTrendCard/editor";
@@ -143,6 +144,48 @@ function stamped(opts: CardMount, actions: LtkAction[]): LtkAction[] {
   return actions.map((a) =>
     a.instanceId === "" ? { ...a, instanceId: opts.instanceKey } : a
   );
+}
+
+/**
+ * Per-element action management for the SVG editors (Fishbone causes,
+ * Process-map nodes) — the manage/raise dialog reached through their
+ * onManageActions callback, plus a live open-action badge count. Actions
+ * persist through onActions and the editor's badges refresh via `refresh`.
+ */
+function elementActions(
+  opts: CardMount,
+  source: string,
+  host: HTMLElement,
+  refresh: () => void
+) {
+  const actions = opts.actions.slice();
+  const doneColor = opts.theme.legend[1] ?? "#107c10";
+  const commit = () => {
+    opts.onActions(stamped(opts, actions));
+    refresh();
+  };
+  return {
+    badge: (sourceId: string) =>
+      actions.filter(
+        (a) =>
+          a.context.sourceId === sourceId &&
+          a.status !== "cancelled" &&
+          a.status !== "done"
+      ).length,
+    manage: (sourceId: string, label: string) =>
+      openActionManager({
+        host,
+        actions,
+        source,
+        sourceId,
+        seedIssue: label,
+        hint: source === "processmap" ? "kaizen" : undefined,
+        people: opts.people,
+        doneColor,
+        readOnly: opts.readOnly,
+        onChanged: commit,
+      }),
+  };
 }
 
 const REGISTRY: Record<string, CardMounter> = {
@@ -323,10 +366,13 @@ const REGISTRY: Record<string, CardMounter> = {
     const editor = new KpiTrendEditor(opts.host, {
       onChange: (env) => s.save(serializeKpiTrend(env)),
       onPngReady: s.onPng,
+      onActions: (actions) => opts.onActions(stamped(opts, actions)),
     });
     editor.setTheme(opts.theme);
     editor.setChrome(opts.title, promptsRaw(opts));
     editor.setReadOnly(opts.readOnly);
+    editor.setPeople(opts.people);
+    editor.setActions(opts.actions);
     editor.setEnvelope(parseKpiTrend(opts.outputJson).envelope);
     return () => opts.host.replaceChildren();
   },
@@ -348,10 +394,13 @@ const REGISTRY: Record<string, CardMounter> = {
     const editor = new ParetoEditor(opts.host, {
       onChange: (env) => s.save(serializePareto(env)),
       onPngReady: s.onPng,
+      onActions: (actions) => opts.onActions(stamped(opts, actions)),
     });
     editor.setTheme(opts.theme);
     editor.setChrome(opts.title, promptsRaw(opts));
     editor.setReadOnly(opts.readOnly);
+    editor.setPeople(opts.people);
+    editor.setActions(opts.actions);
     editor.setEnvelope(parsePareto(opts.outputJson).envelope);
     return () => opts.host.replaceChildren();
   },
@@ -383,6 +432,21 @@ const REGISTRY: Record<string, CardMounter> = {
       parseCategoriesSetting(cfgStr(opts, "categories"))
     );
     const env = parsed.envelope;
+    // the model handed to the editor, rebuilt to refresh cause badges
+    const modelOf = (): FishboneModel => ({
+      problem: env.data.problem,
+      categories: env.data.categories.slice(),
+      causes: env.data.causes.map((c) => ({
+        id: c.id,
+        category: c.category !== "" ? c.category : env.data.categories[0] ?? "",
+        text: c.text,
+        votes: c.votes,
+        status: c.status,
+      })),
+    });
+    const mgr = elementActions(opts, "fishbone", opts.host, () =>
+      editor.setModel(modelOf())
+    );
     const editor = new FishboneEditor(opts.host as HTMLDivElement, {
       onChange: (model: FishboneModel) => {
         const byId = new Map(env.data.causes.map((c) => [c.id, c]));
@@ -410,19 +474,16 @@ const REGISTRY: Record<string, CardMounter> = {
         s.save(serializeFishbone(env));
       },
       onPngReady: s.onPng,
+      // raise / manage actions on a cause (the editor's cause dialog)
+      onManageActions: (causeId) =>
+        mgr.manage(
+          causeId,
+          env.data.causes.find((c) => c.id === causeId)?.text ?? ""
+        ),
+      getActionBadge: mgr.badge,
     });
-    editor.setDisableActions(true); // raise flow lives in the PCF wrapper
-    editor.setModel({
-      problem: env.data.problem,
-      categories: env.data.categories.slice(),
-      causes: env.data.causes.map((c) => ({
-        id: c.id,
-        category: c.category !== "" ? c.category : env.data.categories[0] ?? "",
-        text: c.text,
-        votes: c.votes,
-        status: c.status,
-      })),
-    });
+    editor.setDisableActions(opts.readOnly);
+    editor.setModel(modelOf());
     return () => opts.host.replaceChildren();
   },
   ProcessMap: (opts) => {
@@ -433,6 +494,9 @@ const REGISTRY: Record<string, CardMounter> = {
       : "simple";
     const parsed = parseProcessMap(opts.outputJson, mode);
     const env = parsed.envelope;
+    const mgr = elementActions(opts, "processmap", opts.host, () =>
+      editor.setModel(env.data)
+    );
     const editor = new ProcessMapEditor(opts.host as HTMLDivElement, {
       onChange: (model) => {
         env.data = model;
@@ -441,6 +505,13 @@ const REGISTRY: Record<string, CardMounter> = {
       },
       onPngReady: s.onPng,
       dialogHost: opts.host,
+      // raise / manage actions on a kaizen node
+      onManageActions: (nodeId) =>
+        mgr.manage(
+          nodeId,
+          env.data.nodes.find((n) => n.id === nodeId)?.label ?? ""
+        ),
+      getActionBadge: mgr.badge,
     });
     if (mapType !== "") editor.setMode(mode);
     editor.setReadOnly(opts.readOnly);
