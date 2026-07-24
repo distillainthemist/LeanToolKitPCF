@@ -47,40 +47,87 @@ export function buildActionForm(
   const currentWho = initial?.assignees[0];
 
   // single assignee: chips act as a radio group when a people list is
-  // supplied, one free-text name otherwise
+  // supplied, one free-text name otherwise. People flagged `secondary`
+  // (the wider roster behind a meeting's own participants) stay off the
+  // chip grid until found through the search box below it.
+  const primary = people.filter((p) => p.secondary !== true);
+  const secondary = people.filter((p) => p.secondary === true);
   const whoWrap = people.length > 0 ? checklist() : el("div");
   const checks: { box: HTMLInputElement; wrap: HTMLElement; person: Person }[] = [];
   let freeWho: HTMLInputElement | null = null;
-  if (people.length > 0) {
-    for (const person of people) {
-      const item = checkItem(person.who);
-      if (
-        currentWho &&
-        (currentWho.whoId === person.whoId || currentWho.who === person.who)
-      ) {
-        item.box.checked = true;
-        item.wrap.classList.add("ltk-check-on");
-      }
-      item.box.addEventListener("change", () => {
-        if (!item.box.checked) return;
-        for (const other of checks) {
-          if (other.box !== item.box && other.box.checked) {
-            other.box.checked = false;
-            other.wrap.classList.remove("ltk-check-on");
-          }
+  const isCurrent = (person: Person) =>
+    currentWho !== undefined &&
+    (currentWho.whoId === person.whoId || currentWho.who === person.who);
+  const addChip = (person: Person, checked: boolean) => {
+    const item = checkItem(person.who);
+    if (checked) {
+      item.box.checked = true;
+      item.wrap.classList.add("ltk-check-on");
+    }
+    item.box.addEventListener("change", () => {
+      if (!item.box.checked) return;
+      for (const other of checks) {
+        if (other.box !== item.box && other.box.checked) {
+          other.box.checked = false;
+          other.wrap.classList.remove("ltk-check-on");
         }
-      });
-      whoWrap.appendChild(item.wrap);
-      checks.push({ box: item.box, wrap: item.wrap, person });
+      }
+    });
+    whoWrap.appendChild(item.wrap);
+    checks.push({ box: item.box, wrap: item.wrap, person });
+  };
+  if (people.length > 0) {
+    for (const person of primary) addChip(person, isCurrent(person));
+    // an existing assignee from the wider roster starts pinned + selected
+    if (!checks.some((c) => c.box.checked)) {
+      const held = secondary.find(isCurrent);
+      if (held) addChip(held, true);
     }
   } else {
     freeWho = textInput(currentWho?.who ?? "", { placeholder: "Who" });
     whoWrap.appendChild(freeWho);
   }
 
+  // the wider-roster search: typing filters, picking a match pins the
+  // person as a normal (selected) chip above
+  let searchWrap: HTMLElement | null = null;
+  if (secondary.length > 0) {
+    searchWrap = el("div", "ltk-who-search");
+    const query = textInput("", { placeholder: "Search everyone…" });
+    const results = el("div", "ltk-who-results");
+    const renderResults = () => {
+      while (results.firstChild) results.removeChild(results.firstChild);
+      const q = query.value.trim().toLowerCase();
+      if (q === "") return;
+      const pinned = new Set(checks.map((c) => c.person.whoId));
+      const matches = secondary
+        .filter((p) => !pinned.has(p.whoId) && p.who.toLowerCase().includes(q))
+        .slice(0, 8);
+      for (const person of matches) {
+        const hit = el("button", "ltk-check ltk-who-hit", person.who);
+        (hit as HTMLButtonElement).type = "button";
+        hit.addEventListener("click", () => {
+          for (const other of checks) {
+            if (other.box.checked) {
+              other.box.checked = false;
+              other.wrap.classList.remove("ltk-check-on");
+            }
+          }
+          addChip(person, true);
+          query.value = "";
+          renderResults();
+        });
+        results.appendChild(hit);
+      }
+    };
+    query.addEventListener("input", renderResults);
+    searchWrap.append(query, results);
+  }
+
   wrap.appendChild(fieldRow("Action", desc));
   wrap.appendChild(sectionLabel("Who"));
   wrap.appendChild(whoWrap);
+  if (searchWrap) wrap.appendChild(searchWrap);
   const dates = el("div");
   dates.style.display = "flex";
   dates.style.gap = "12px";

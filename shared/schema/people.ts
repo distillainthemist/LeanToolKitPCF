@@ -9,6 +9,10 @@ export interface Person {
   initials: string;
   colour?: string;
   crew?: string;
+  /** Not shown as an assignee chip up front — reachable via the "search
+   *  everyone" box in the action form (the wider roster behind a
+   *  meeting's own participants). */
+  secondary?: boolean;
 }
 
 export function initialsFor(name: string): string {
@@ -55,10 +59,51 @@ export function parsePeople(raw: string | null | undefined): Person[] {
             : initialsFor(who),
         colour: typeof p.colour === "string" ? p.colour : undefined,
         crew,
+        secondary: p.secondary === true ? true : undefined,
       });
     }
     return out;
   } catch {
     return [];
   }
+}
+
+/** A name-bearing person reference (meeting participant / roster row). */
+export interface PersonLike {
+  whoId: string;
+  who: string;
+  crew?: string;
+}
+
+/**
+ * The assignee list for a meeting's action forms: the meeting's own people
+ * (owner first, then participants) as up-front chips, with the rest of the
+ * app roster behind the search box (`secondary`). A meeting with no people
+ * of its own falls back to the whole roster up front — exactly the old
+ * behaviour. Deduped by whoId (the meeting entry wins).
+ */
+export function assigneePeople(
+  meetingPeople: PersonLike[],
+  roster: PersonLike[]
+): Person[] {
+  const toPerson = (p: PersonLike, secondary: boolean): Person => ({
+    whoId: p.whoId,
+    who: p.who,
+    initials: initialsFor(p.who),
+    crew: p.crew !== undefined && p.crew !== "" ? p.crew : undefined,
+    secondary: secondary ? true : undefined,
+  });
+  const seen = new Set<string>();
+  const primary: Person[] = [];
+  for (const p of meetingPeople) {
+    if (p.who.trim() === "" || seen.has(p.whoId)) continue;
+    seen.add(p.whoId);
+    primary.push(toPerson(p, false));
+  }
+  if (primary.length === 0) return roster.map((p) => toPerson(p, false));
+  const rest = roster
+    .filter((p) => !seen.has(p.whoId))
+    .sort((a, b) => a.who.localeCompare(b.who))
+    .map((p) => toPerson(p, true));
+  return [...primary, ...rest];
 }

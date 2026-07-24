@@ -131,6 +131,13 @@ export const LTK_BASE_CSS = `
   width: 16px; height: 16px; margin: 0; flex: 0 0 auto; cursor: pointer;
 }
 .ltk-check-on { border-color: var(--ltk-accent); background: var(--ltk-hairline); }
+
+/* wider-roster assignee search (under the participant chips) */
+.ltk-who-search { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
+.ltk-who-results {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px;
+}
+.ltk-who-hit { font: inherit; background: var(--ltk-bg); color: var(--ltk-fg); text-align: left; }
 .ltk-input {
   font: inherit; font-size: 14px; color: var(--ltk-fg);
   background: var(--ltk-bg); border: 1px solid var(--ltk-hairline);

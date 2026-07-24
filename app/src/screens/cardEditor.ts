@@ -7,7 +7,8 @@
 // no document row — the actions table IS their data.
 
 import { cardLabel } from "../../../controls/CardSettings/registry";
-import { initialsFor } from "../../../shared/schema/people";
+import { assigneePeople } from "../../../shared/schema/people";
+import { parseMeetingInfo } from "../../../shared/schema/meeting";
 import {
   generateInstances,
   parseCategory,
@@ -362,12 +363,19 @@ export function mountCardEditor(
         host,
         title: slot.title || cardLabel(slot.cardType),
         outputJson: row?.outputJson ?? "",
-        people: roster.map((p) => ({
-          whoId: p.whoId,
-          who: p.who,
-          initials: initialsFor(p.who),
-          crew: p.crew,
-        })),
+        // assignee chips: the meeting's own people (owner + participants)
+        // up front, the rest of the roster behind the search box. A board
+        // with no meeting section keeps the full roster as chips.
+        people: assigneePeople(
+          (() => {
+            const info = parseMeetingInfo(board.occurrenceSettingsRaw);
+            return [
+              ...(info?.owner ? [info.owner] : []),
+              ...(info?.participants ?? []),
+            ];
+          })(),
+          roster
+        ),
         theme,
         // a closed meeting presents its saved state — every card
         // read-only. Effective-closed also covers a >24h meeting whose
