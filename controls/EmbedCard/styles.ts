@@ -36,6 +36,25 @@ export const EMBED_CSS = `
 .ltk-em-notitle .ltk-em-refresh { right: 8px; opacity: 0.85; }
 .ltk-em-refresh:disabled { opacity: 0.4; cursor: default; }
 
+/* open-in-new-tab: sits just left of refresh, same chip styling */
+.ltk-em-open {
+  position: absolute;
+  top: 8px;
+  right: 68px; /* left of the refresh chip */
+  z-index: 3;
+  border: 1px solid var(--ltk-hairline);
+  background: var(--ltk-bg);
+  color: var(--ltk-muted);
+  border-radius: 6px;
+  font-size: 15px;
+  line-height: 1;
+  padding: 5px 9px;
+  cursor: pointer;
+  text-decoration: none;
+}
+.ltk-em-open:hover { color: var(--ltk-accent); border-color: var(--ltk-accent); }
+.ltk-em-notitle .ltk-em-open { right: 42px; opacity: 0.85; }
+
 /* loading veil: covers the frame while a (re)load is in flight */
 .ltk-em-loading {
   position: absolute;

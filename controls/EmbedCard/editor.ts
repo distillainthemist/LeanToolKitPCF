@@ -20,6 +20,7 @@ export class EmbedView {
   private readonly frame: HTMLIFrameElement;
   private readonly veil: HTMLElement;
   private readonly refreshBtn: HTMLButtonElement;
+  private readonly openBtn: HTMLAnchorElement;
 
   private theme: Theme = defaultTheme();
   private cardTitle = "";
@@ -54,6 +55,16 @@ export class EmbedView {
     this.refreshBtn.title = "Refresh";
     this.refreshBtn.addEventListener("click", () => this.refresh());
     this.root.appendChild(this.refreshBtn);
+
+    // many pages forbid framing (X-Frame-Options / frame-ancestors) — the
+    // frame then shows the browser's refusal. This always-there escape
+    // hatch opens the page in a real tab, so the card is useful regardless.
+    this.openBtn = el("a", "ltk-em-open", "↗") as HTMLAnchorElement;
+    this.openBtn.target = "_blank";
+    this.openBtn.rel = "noopener noreferrer";
+    this.openBtn.title = "Open in a new tab";
+    this.openBtn.style.display = "none";
+    this.root.appendChild(this.openBtn);
 
     applyThemeVars(this.root, this.theme);
     this.paintGhost();
@@ -99,12 +110,16 @@ export class EmbedView {
       this.ghost.style.display = "";
       this.veil.classList.remove("ltk-em-on");
       this.frame.removeAttribute("src");
+      this.openBtn.style.display = "none";
+      this.openBtn.removeAttribute("href");
       return;
     }
     this.ghost.style.display = "none";
     this.frame.style.display = "";
     this.veil.classList.add("ltk-em-on");
     this.frame.src = url;
+    this.openBtn.href = url;
+    this.openBtn.style.display = "";
   }
 
   /** Reload the frame against the same url (the ⟳ button / refreshTrigger). */
@@ -126,7 +141,10 @@ export class EmbedView {
     const lines =
       prompts.general.length > 0
         ? prompts.general
-        : ["Nothing to show yet", "Set Embed URL to a Power BI embed link or any https page"];
+        : [
+            "Nothing to show yet",
+            "Set Embed URL to a Power BI embed link or any https page that allows framing",
+          ];
     for (const line of lines) {
       this.ghost.appendChild(el("div", "ltk-ghost-line", line));
     }

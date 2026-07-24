@@ -46,6 +46,7 @@ import { ActionBoardEditor } from "../../controls/ActionBoard/editor";
 import { EscalationViewerEditor } from "../../controls/EscalationViewer/editor";
 import { parseSources } from "../../controls/EscalationViewer/types";
 import { EmbedView } from "../../controls/EmbedCard/editor";
+import { buildEmbedUrl } from "../../controls/EmbedCard/types";
 import { FishboneEditor } from "../../controls/Fishbone/editor";
 import { FishboneModel } from "../../controls/Fishbone/model";
 import {
@@ -487,7 +488,17 @@ const REGISTRY: Record<string, CardMounter> = {
     view.setTheme(opts.theme);
     view.setChrome(opts.title, promptsRaw(opts));
     view.setReadOnly(opts.readOnly);
-    view.setUrl(cfgStr(opts, "url"));
+    // the settings key is "embedUrl" (see CardSettings/registry.ts); route
+    // through buildEmbedUrl so it is normalised and the Power BI pane
+    // toggles / page selection are applied
+    view.setUrl(
+      buildEmbedUrl({
+        url: cfgStr(opts, "embedUrl"),
+        hideFilterPane: config(opts).hideFilterPane === true,
+        hidePageNav: config(opts).hidePageNav === true,
+        pageName: cfgStr(opts, "pageName"),
+      })
+    );
     return () => opts.host.replaceChildren();
   },
 };
