@@ -24,6 +24,9 @@ import {
   cellPos,
   isImageUri,
   layoutBoard,
+  LIVE_TILE_H,
+  LIVE_TILE_W,
+  LiveTileRenderer,
   PlacedTile,
   sanitizeSvg,
 } from "./types";
@@ -69,6 +72,9 @@ export class BoardGridView {
   private lastPromptsRaw: string | null = null;
   /** Per-tile rescale callbacks (CSS-transform fitting), rebuilt each render. */
   private fitters: (() => void)[] = [];
+  /** App-supplied live-tile renderer (see setLiveRenderer). */
+  private live: LiveTileRenderer | null = null;
+  private liveTeardowns: (() => void)[] = [];
   private resizeObserver: ResizeObserver | null = null;
 
   constructor(
@@ -139,14 +145,45 @@ export class BoardGridView {
     this.render();
   }
 
+  /**
+   * Render tiles LIVE instead of from their stored snapshots: the host mounts
+   * a real (display-only) card into each slot's stage, at LIVE_TILE_W ×
+   * LIVE_TILE_H, and the same transform-scale fit applies.
+   *
+   * The renderer is supplied by the host rather than imported, because
+   * BoardGrid is a platform-free card like any other and must not depend on
+   * the app's registry. null restores stored-snapshot rendering, which is
+   * what makes the two directly comparable.
+   */
+  setLiveRenderer(fn: LiveTileRenderer | null): void {
+    if (this.live === fn) return;
+    this.live = fn;
+    this.render();
+  }
+
+  /** Unmount every live card. Called before each re-render and on destroy —
+   *  without it, re-rendering would leak an editor per tile per render. */
+  private clearLive(): void {
+    for (const teardown of this.liveTeardowns) {
+      try {
+        teardown();
+      } catch (err) {
+        console.warn("live tile teardown failed", err);
+      }
+    }
+    this.liveTeardowns = [];
+  }
+
   destroy(): void {
     if (this.resizeObserver) this.resizeObserver.disconnect();
+    this.clearLive();
     this.root.remove();
   }
 
   // ---- rendering ----
 
   private render(): void {
+    this.clearLive(); // the DOM below is about to be discarded
     clear(this.root);
     applyThemeVars(this.root, this.theme);
     renderTitleBar(this.root, this.cardTitle, this.prompts);
@@ -257,7 +294,40 @@ export class BoardGridView {
    * viewport scaling to foreignObject content — <img> AND inline). Pure svgs
    * scale inline; data: URIs go through an <img>.
    */
+  /**
+   * Mount a live card into the slot, staged and fitted exactly like a stored
+   * snapshot so the two paths are visually comparable. Cards whose live tile
+   * cannot work (EmbedCard: a cross-origin iframe) still fall back to their
+   * stored svg via renderSnapshot.
+   */
+  private renderLive(snap: HTMLElement, tile: BoardTile): void {
+    const stage = el("div", "ltk-bg-stage");
+    stage.style.width = `${LIVE_TILE_W}px`;
+    stage.style.height = `${LIVE_TILE_H}px`;
+    stage.style.background = this.theme.background;
+    snap.appendChild(stage);
+
+    const teardown = this.live!(stage, tile);
+    this.liveTeardowns.push(teardown);
+
+    const fit = () => {
+      const w = snap.clientWidth;
+      const h = snap.clientHeight;
+      if (w <= 0 || h <= 0) return;
+      const k = Math.min(w / LIVE_TILE_W, h / LIVE_TILE_H);
+      stage.style.transform = `scale(${k})`;
+      stage.style.left = `${Math.max(0, (w - LIVE_TILE_W * k) / 2)}px`;
+      stage.style.top = "0px";
+    };
+    this.fitters.push(fit);
+    fit();
+  }
+
   private renderSnapshot(snap: HTMLElement, tile: BoardTile): void {
+    if (this.live) {
+      this.renderLive(snap, tile);
+      return;
+    }
     const raw = tile.svg.trim();
     if (raw === "") {
       snap.appendChild(el("div", "ltk-bg-nosnap", tile.cardType || "Card"));

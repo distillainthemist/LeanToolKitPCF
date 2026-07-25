@@ -5,7 +5,7 @@
 // server shows a banner.
 
 import { BoardGridView } from "../../../controls/BoardGrid/editor";
-import { parseColumns } from "../../../controls/BoardGrid/types";
+import { BoardTile, parseColumns } from "../../../controls/BoardGrid/types";
 import { MeetingSchedulerView } from "../../../controls/MeetingScheduler/editor";
 import {
   generateInstances,
@@ -40,6 +40,9 @@ import { viewerPerson } from "../store/people";
 import { BoardSummary, parseManifest } from "../store/mappers";
 import { catalogSvgByType } from "../store/catalog";
 import { rowsForBoard, toLite } from "../store/cards";
+import { actionsForBoard } from "../store/actions";
+import { mountTile } from "../cardRegistry";
+import { LtkAction } from "../../../shared/schema/actions";
 import {
   closeInstance,
   createInstance,
@@ -50,6 +53,9 @@ import {
   resetInstance,
 } from "../store/instances";
 import { joinTiles } from "../store/tiles";
+
+/** Remembers the live-tiles comparison toggle per browser. */
+const LIVE_TILES_KEY = "ltk.liveTiles";
 
 export function mountBoard(
   parent: HTMLElement,
@@ -146,7 +152,13 @@ async function renderBoard(
   // (and only when the ritual's toggle allows it)
   const adjustBtn = el("a", "app-btn", "Adjust this meeting") as HTMLAnchorElement;
   adjustBtn.style.display = "none";
-  bar.append(title, status, el("span", "app-bar-gap"), scheduleBtn, adjustBtn);
+  // Comparison scaffolding for the live-tiles work: flips the wall between
+  // stored snapshots and live cards so the two can be judged side by side on
+  // real boards. Off by default and remembered per browser. Temporary — it
+  // goes away when live becomes the default
+  // (docs/leanboard-live-tiles-plan.md, phases 4-5).
+  const liveBtn = el("button", "app-btn", "") as HTMLButtonElement;
+  bar.append(title, status, el("span", "app-bar-gap"), liveBtn, scheduleBtn, adjustBtn);
   parent.appendChild(bar);
 
   const split = el("div", "app-board-split");
@@ -187,6 +199,58 @@ async function renderBoard(
   });
   gridView.setTheme(appTheme());
   cleanups.push(() => gridView.destroy());
+
+  // ---- live tiles (see docs/leanboard-live-tiles-plan.md) ----
+  // Mount the real card, display-only, instead of painting its stored svg.
+  // Everything it needs comes from data the board already has: the manifest
+  // slot for settings, the joined card row for the document. Actions are the
+  // one extra read, and only when live is on — phase 3 batches it.
+  let boardActions: LtkAction[] = [];
+  const liveRenderer = (host: HTMLElement, tile: BoardTile): (() => void) => {
+    const slot = activeManifest().slots.find((s) => s.cardId === tile.cardId);
+    if (!slot) return () => undefined;
+    const instanceKey = `${board.boardId}:${tile.cardId}`;
+    const row =
+      cardRows.find((r) => r.cardId === tile.cardId && r.instanceId === current?.id) ??
+      cardRows.find((r) => r.cardId === tile.cardId && r.instanceId === "");
+    const theme = appTheme();
+    const themeCfg = (slot.settings.theme ?? {}) as Record<string, unknown>;
+    if (typeof themeCfg.titlebar === "string") theme.titleBar = themeCfg.titlebar;
+    const teardown = mountTile(tile.cardType, {
+      host,
+      title: slot.title,
+      boardId: board.boardId,
+      cardId: tile.cardId,
+      outputJson: row?.outputJson ?? "",
+      theme,
+      settings: slot.settings,
+      instanceKey,
+      instanceWhen: current?.when ?? "",
+      actions: boardActions.filter((a) => a.instanceId === instanceKey),
+    });
+    return teardown ?? (() => undefined);
+  };
+
+  const liveOn = () => localStorage.getItem(LIVE_TILES_KEY) === "1";
+  const applyLiveMode = () => {
+    const on = liveOn();
+    liveBtn.textContent = on ? "Tiles: live" : "Tiles: stored";
+    gridView.setLiveRenderer(on ? liveRenderer : null);
+  };
+  liveBtn.addEventListener("click", () => {
+    localStorage.setItem(LIVE_TILES_KEY, liveOn() ? "0" : "1");
+    void refreshBoardActions().then(applyLiveMode);
+  });
+
+  async function refreshBoardActions(): Promise<void> {
+    if (!liveOn()) return;
+    try {
+      boardActions = await actionsForBoard(board.boardId);
+    } catch (err) {
+      console.warn("live tiles: board actions unavailable", err);
+      boardActions = [];
+    }
+  }
 
   const renderTiles = () => {
     if (!current) return;
@@ -480,4 +544,7 @@ async function renderBoard(
     // the schedule rather than leaving the viewer on an empty board
     if (!current) setScheduleHidden(false);
   }
+  // last, so the tiles it re-renders are the ones the selection settled on
+  await refreshBoardActions();
+  applyLiveMode();
 }

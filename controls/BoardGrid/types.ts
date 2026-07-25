@@ -24,6 +24,21 @@ export interface BoardTile {
   nav: number;
 }
 
+/**
+ * Logical size a LIVE tile is mounted at before the fit transform scales it.
+ * Fixed rather than measured so every card lays out identically whatever the
+ * slot's shape — the same role the captured viewBox plays for a snapshot.
+ */
+export const LIVE_TILE_W = 640;
+export const LIVE_TILE_H = 420;
+
+/**
+ * Mounts a display-only card into `host` (already sized LIVE_TILE_W ×
+ * LIVE_TILE_H) and returns its teardown. Supplied by the host app — see
+ * BoardGridEditor.setLiveRenderer.
+ */
+export type LiveTileRenderer = (host: HTMLElement, tile: BoardTile) => () => void;
+
 /** One tile resolved onto the grid: 0-based anchor cell + effective span. */
 export interface PlacedTile {
   tile: BoardTile;

@@ -1,0 +1,100 @@
+<!doctype html>
+<!-- Live-tiles plan, phase 2 verification. The SAME board rendered twice:
+     left from stored snapshots (today's path), right with live cards. The
+     acceptance test is that they match card for card, at several grid widths.
+
+       cd app && npm run dev  →  http://localhost:5180/board-live.html
+
+     Dev-server only: vite builds index.html alone. -->
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Board: stored vs live</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 14px; background: #f0efea; }
+    h2 { font-size: 15px; margin: 0 0 6px; }
+    .row { display: flex; gap: 14px; align-items: flex-start; }
+    .pane { flex: 1; min-width: 0; }
+    .grid { height: 560px; background: #fff; border: 1px solid #d5d1c8; }
+    #stats { background: #fff; border: 1px solid #d5d1c8; padding: 8px 12px; margin-bottom: 10px; font-size: 13px; }
+    button { font: inherit; padding: 5px 10px; margin-right: 6px; }
+  </style>
+</head>
+<body>
+  <div id="stats">…</div>
+  <div>
+    <span>columns:</span>
+    <button data-cols="2">2</button><button data-cols="3">3</button><button data-cols="4">4</button>
+  </div>
+  <div class="row">
+    <div class="pane"><h2>stored snapshots (today)</h2><div class="grid" id="a"></div></div>
+    <div class="pane"><h2>live cards</h2><div class="grid" id="b"></div></div>
+  </div>
+
+  <script type="module">
+    import tileDefaults from "../tools/tile-defaults.json";
+    import { BoardGridView } from "../controls/BoardGrid/editor";
+    import { defaultTheme } from "../shared/tokens";
+    import { mountTile } from "./src/cardRegistry.ts";
+
+    const theme = defaultTheme();
+    // a representative board: a spread of card families, not just the easy ones
+    const TYPES = ["SqdpcCard", "FiveWhys", "RiskMatrix", "KpiTrendCard",
+                   "Fishbone", "ParetoCard", "Raci", "ProcessMap"];
+
+    const tiles = TYPES.map((type, i) => ({
+      pos: i + 1, w: 1, h: 1, nav: i + 1,
+      cardId: "c-" + type, cardType: type, title: type,
+      svg: tileDefaults.tiles[type] ?? "",
+      barColor: "#8b1e1e",
+    }));
+
+    const mk = (hostId) => {
+      const v = new BoardGridView(document.getElementById(hostId), {
+        onSelect: () => {}, onLayout: () => {},
+      });
+      v.setTheme(theme);
+      return v;
+    };
+
+    const stored = mk("a");
+    const live = mk("b");
+
+    live.setLiveRenderer((host, tile) =>
+      mountTile(tile.cardType, {
+        host, title: tile.title,
+        boardId: "harness", cardId: tile.cardId, outputJson: "",
+        theme, settings: {}, instanceKey: "harness:" + tile.cardId,
+        instanceWhen: "", actions: [],
+      }) ?? (() => {})
+    );
+
+    let cols = 4;
+    const draw = () => {
+      const t0 = performance.now();
+      stored.setTiles(tiles, cols);
+      const tStored = performance.now() - t0;
+      const t1 = performance.now();
+      live.setTiles(tiles, cols);
+      const tLive = performance.now() - t1;
+
+      // a live tile must actually contain a mounted card, not an empty stage
+      const liveStages = document.querySelectorAll("#b .ltk-bg-stage");
+      const filled = [...liveStages].filter((s) => s.children.length > 0).length;
+      const storedStages = document.querySelectorAll("#a .ltk-bg-stage, #a .ltk-bg-snap svg").length;
+      document.getElementById("stats").textContent =
+        `${cols} columns · ${tiles.length} cards — stored ${tStored.toFixed(1)}ms, ` +
+        `live ${tLive.toFixed(1)}ms · live stages filled ${filled}/${liveStages.length}` +
+        ` · stored stages ${storedStages}` +
+        ` · visible titlebars inside live tiles: ${
+          [...document.querySelectorAll("#b .ltk-bg-stage .ltk-titlebar")]
+            .filter((e) => e.checkVisibility()).length || "none"}`;
+    };
+    draw();
+
+    for (const b of document.querySelectorAll("button[data-cols]")) {
+      b.addEventListener("click", () => { cols = Number(b.dataset.cols); draw(); });
+    }
+  </script>
+</body>
+</html>

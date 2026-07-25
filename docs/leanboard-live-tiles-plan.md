@@ -138,18 +138,45 @@ Two things the audit taught, both worth keeping:
 Not needed after all: fit-to-content on mount. Fishbone already fits its
 viewBox to content, and ProcessMap's `setModel(data, true)` requests a fit.
 
-### Phase 2 — live tiles for the current instance  *(the visible change)*
+### Phase 2 — live tiles for the current instance — ✅ **DONE 2026-07-25**
 
-BoardGrid gains a live mode: instead of `renderSnapshot()` staging serialised
-`foreignObject` children, each slot gets a real host div at logical size
-(640×420) with the existing `transform: scale()` fit. The board screen mounts
-tile-mode cards into them.
+`BoardGridEditor.setLiveRenderer(fn | null)`. When set, each slot stages a
+host at `LIVE_TILE_W × LIVE_TILE_H` (640×420) and the host mounts a card into
+it; the existing `transform: scale()` fit is reused unchanged, so live and
+stored tiles are laid out by the same code. `null` restores stored rendering,
+which is what makes them directly comparable.
 
-Feature-flag it (board setting or app config) so it can ship dark and be
-compared side by side with stored tiles.
+The renderer is **supplied by the app, not imported** — BoardGrid is a
+platform-free card like any other and must not depend on the app's registry.
+`app/src/screens/board.ts` provides it, deriving each card's data from what
+the board already holds (manifest slot → settings/title, joined card row →
+document). Board actions are the one extra read, and only when live is on.
 
-Verify: a board renders identically live vs from its stored tiles, card for
-card, at several grid sizes.
+`clearLive()` runs before every re-render and on destroy. Without it each
+re-render would leak an editor per tile; verified stable at 8 stages / 8 card
+roots across six consecutive re-renders.
+
+**Flag:** a `Tiles: stored ⇄ live` button in the board toolbar, remembered in
+`localStorage` under `ltk.liveTiles`, default **stored**. Deliberately visible
+rather than dark, because the point of this phase is judging the two against
+each other on real boards. It goes away when live becomes the default.
+
+**Verification: `app/board-live.html`** renders the same eight-card board both
+ways, side by side. At 2, 3 and 4 columns: 8/8 live stages filled, slot
+geometry byte-identical between the two grids, and zero visible titlebars
+inside live tiles (the duplication phase 1 guarded against).
+
+**Live is FASTER than stored** — 10.8 ms vs 21.4 ms for eight cards, and phase
+0's 2× penalty does not survive contact with the real stored path. Phase 0
+compared mounting against a simplified staging routine; BoardGrid's actual
+`renderSnapshot` also runs `DOMParser`, `sanitizeSvg` and `importNode` per
+tile, and that costs more than constructing the editors. Combined with the
+24.5 KB per card that no longer has to be fetched, the CPU argument against
+live tiles is now gone in both directions.
+
+One expected difference in the harness: ProcessMap's stored default tile is
+seeded with a three-node flow, while its live tile has no document and shows
+the empty state. That is the seed doing its job, not a rendering fault.
 
 ### Phase 3 — series windowing  *(the cost)*
 
