@@ -312,6 +312,16 @@ export class BoardGridView {
     }
     snap.appendChild(stage);
 
+    // The snapshot captures the whole card INCLUDING its title bar, but the
+    // tile draws its own — so the title appeared twice. Drop the captured
+    // chrome; the card's flex column then redistributes that space to its
+    // body. Doing this here rather than at capture time also fixes every
+    // tile svg already stored, and leaves the card's own PNG/SVG downloads
+    // with their title intact.
+    for (const bar of Array.from(stage.querySelectorAll(".ltk-titlebar"))) {
+      bar.remove();
+    }
+
     const fit = () => {
       const w = snap.clientWidth;
       const h = snap.clientHeight;

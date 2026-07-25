@@ -18,6 +18,10 @@ export const SQDPC_CSS = `
   min-height: 0;
   display: flex;
   align-items: stretch;
+  /* centred so a card showing fewer dimensions than the width allows (one
+     safety cross, say) sits in the middle instead of hard against the left —
+     applies to the focused view and the captured svg alike */
+  justify-content: center;
   gap: 20px;
   flex-wrap: wrap;
 }
