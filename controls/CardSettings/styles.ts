@@ -300,8 +300,7 @@ export const CARDSETTINGS_CSS = `
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--ltk-muted);
-  padding-top: 6px;
-  border-top: 1px solid var(--ltk-hairline);
+  padding-top: 4px;
 }
 
 /* ---- per-field explanations, behind an icon ---- */

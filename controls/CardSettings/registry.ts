@@ -6,8 +6,9 @@
 // Keys deliberately NOT offered for editing (app-bound at runtime, not
 // design-time settings): instanceId (card identity), peopleJSON (live people
 // list), existingMeetingsJSON (live meeting records), viewerName/viewerId
-// (User() of the person looking). They are listed in `appBound` so the UI can
-// say so.
+// (User() of the person looking). They are recorded in `appBound` for
+// maintainers — the properties pane does not show them, since a maker cannot
+// act on them.
 
 export type FieldKind =
   | "text" // single-line text
@@ -38,6 +39,9 @@ export interface FieldSpec {
   key: string;
   label: string;
   kind: FieldKind;
+  /** Heading above the control. Booleans need it — their label sits INSIDE
+   *  the checkbox, so without this they render under a blank heading. */
+  heading?: string;
   help?: string;
   placeholder?: string;
   options?: { value: string; label: string }[]; // enum
@@ -60,8 +64,6 @@ export interface CardSpec {
   config: FieldSpec[];
   /** Runtime-bound config keys the app supplies live (not edited here). */
   appBound: string[];
-  /** Shown when a card keeps its interesting knobs in its DOCUMENT. */
-  configNote?: string;
   /**
    * Data policies this card offers in the composer's "New meeting instance"
    * section. Absent for action surfaces (source picker instead), for
@@ -146,8 +148,10 @@ export const COMMON_FIELDS: FieldSpec[] = [
   {
     key: "readOnly",
     label: "Read only",
+    heading: "Display mode",
     kind: "boolean",
-    help: "Display mode — disables all editing in the card.",
+    // the heading already says "Display mode"; the help explains the effect
+    help: "Nobody can change this card during a meeting — it shows its content and nothing else.",
   },
 ];
 
@@ -170,9 +174,6 @@ export const THEME_FIELDS: FieldSpec[] = [
 
 // ---- per-card specs ----------------------------------------------------------
 
-const DOC_NOTE_RCA =
-  "The problem, causes and votes live in the card's document (inputJSON), edited in the card itself.";
-
 export const CARDS: CardSpec[] = [
   {
     type: "FiveWhys",
@@ -188,7 +189,6 @@ export const CARDS: CardSpec[] = [
       },
     ],
     appBound: ["instanceId", "peopleJSON"],
-    configNote: DOC_NOTE_RCA,
     policies: ["clear", "carry", "shared"],
     defaultPolicy: "carry",
   },
@@ -208,7 +208,6 @@ export const CARDS: CardSpec[] = [
       },
     ],
     appBound: ["instanceId", "peopleJSON"],
-    configNote: DOC_NOTE_RCA,
     policies: ["clear", "carry", "shared"],
     defaultPolicy: "carry",
   },
@@ -226,7 +225,6 @@ export const CARDS: CardSpec[] = [
       },
     ],
     appBound: ["instanceId", "peopleJSON"],
-    configNote: DOC_NOTE_RCA,
     policies: ["clear", "carry", "shared"],
     defaultPolicy: "carry",
   },
@@ -313,8 +311,6 @@ export const CARDS: CardSpec[] = [
       },
     ],
     appBound: ["instanceId"],
-    configNote:
-      "The categories live in the card's document; counts are daily rows summed over the window.",
     seriesBacked: true,
   },
   {
@@ -361,8 +357,6 @@ export const CARDS: CardSpec[] = [
       },
     ],
     appBound: ["instanceId"],
-    configNote:
-      "Readings are captured in the card itself. A card that set its target or limits in-card before they moved here keeps those values until you set them above.",
     seriesBacked: true,
   },
   {
@@ -401,8 +395,6 @@ export const CARDS: CardSpec[] = [
       },
     ],
     appBound: ["instanceId", "peopleJSON"],
-    configNote:
-      "The ideas themselves live in the card's document. A card that renamed quadrants via prompt hints keeps those names until the labels above are set.",
     policies: ["clear", "carry", "shared"],
     defaultPolicy: "carry",
   },
@@ -413,7 +405,6 @@ export const CARDS: CardSpec[] = [
     description: "5×5 likelihood × consequence register, inherent → residual.",
     config: [],
     appBound: ["instanceId", "peopleJSON"],
-    configNote: "The risks live in the card's document, edited in the card itself.",
     // a register: there is ONE truth. clear would silently empty it each meeting
     policies: ["carry", "shared"],
     defaultPolicy: "shared",
@@ -527,8 +518,6 @@ export const CARDS: CardSpec[] = [
       "Runs a traditional meeting: checkable pre-work, the agenda running order (who, timing, links, actions per item) and a checkable outputs list.",
     config: [],
     appBound: ["instanceId", "peopleJSON"],
-    configNote:
-      "The pre-work, agenda items and outputs live in the card DOCUMENT (Input / Output JSON), edited in the card itself — not in settings.",
     // the ritual: each meeting starts from the standard agenda; carrying a
     // ticked pre-work list defeats it
     policies: ["clear", "carry", "shared"],
@@ -670,8 +659,6 @@ export const CARDS: CardSpec[] = [
     description: "Deliverables × roles responsibility matrix.",
     config: [],
     appBound: ["instanceId", "peopleJSON"],
-    configNote:
-      "Roles and deliverables live in the card's document, editable in-card.",
     policies: ["carry", "shared"],
     defaultPolicy: "shared",
   },
@@ -682,8 +669,6 @@ export const CARDS: CardSpec[] = [
     description: "Skills (rows, by category) × people (columns), quadrant discs.",
     config: [],
     appBound: ["instanceId", "peopleJSON"],
-    configNote:
-      "Categories, skills and targets live in the card's document, editable in-card.",
     policies: ["carry", "shared"],
     defaultPolicy: "shared",
   },
@@ -785,8 +770,6 @@ export const CARDS: CardSpec[] = [
       },
     ],
     appBound: [],
-    configNote:
-      "Pick the source in the Source section below. The linked card renders live and read-only with the source's own settings; closing a meeting archives an image of what it showed.",
     // no policy choice: the card has no document of its own (policies: []
     // renders an explanatory note instead of the picker)
     policies: [],

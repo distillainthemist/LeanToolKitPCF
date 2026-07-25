@@ -240,6 +240,10 @@ export function mountSettings(parent: HTMLElement, initialTab = ""): () => void 
     const tabs: { key: string; label: string; render: () => Promise<void> }[] = [
       { key: "profile", label: "My profile", render: () => renderProfile(body, me, ctx) },
     ];
+    // Rituals comes second, ahead of the admin tabs: it is the one everybody
+    // uses (the tab scopes itself by role — site admins see their site's,
+    // users see the rituals they own)
+    tabs.push({ key: "boards", label: "Rituals", render: () => renderBoardsAdmin(body, me) });
     if (isAdmin) {
       tabs.push({ key: "users", label: "Users", render: () => renderUsers(body, me) });
       tabs.push({ key: "org", label: "Organisation", render: () => renderOrg(body, me, ctx) });
@@ -249,9 +253,6 @@ export function mountSettings(parent: HTMLElement, initialTab = ""): () => void 
         render: () => renderSiteCadence(body, me, ctx),
       });
     }
-    // everyone gets Rituals — the tab scopes itself by role (site
-    // admins: their site; users: rituals they own)
-    tabs.push({ key: "boards", label: "Rituals", render: () => renderBoardsAdmin(body, me) });
     if (me.role === "superadmin") {
       tabs.push({ key: "brand", label: "Branding", render: () => renderBranding(body, ctx) });
     }

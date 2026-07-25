@@ -187,8 +187,9 @@ function booleanEditor(spec: FieldSpec, get: Get, set: Set, host: FieldHost): HT
     set(item.box.checked ? true : undefined);
     host.onChanged();
   });
-  // a checkbox carries its own label, so the info icon rides beside it
+  // the checkbox carries its own text, so any heading is a separate line
   const field = el("div", "ltk-cs-field");
+  if (spec.heading) field.appendChild(labelRow(spec.heading));
   const row = el("div", "ltk-cs-checkrow");
   row.appendChild(item.wrap);
   if (spec.help) row.appendChild(infoIcon(spec.help));

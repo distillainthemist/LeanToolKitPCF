@@ -565,6 +565,69 @@
         r4 === "Archive this Embed card?");
     }
 
+    // ---- 15. the pane says only what a maker can act on ----
+    {
+      // a card with a real choice shows the group; one without hides it
+      const shape = async (type) => {
+        const { result } = await withStudio(type, {}, async () => {
+          const props = q(".app-studio-props");
+          return {
+            subLabels: [...props.querySelectorAll(".ltk-cs-sublabel")].map((l) => l.textContent),
+            headings: [...props.querySelectorAll(".ltk-cs-field-label")]
+              .map((l) => l.textContent.replace("ⓘ", "").trim()),
+            notes: [...props.querySelectorAll(".ltk-cs-note")].map((n) => n.textContent),
+            appBound: props.querySelectorAll(".ltk-cs-appbound").length,
+          };
+        });
+        return result;
+      };
+
+      const fiveWhys = await shape("FiveWhys");
+      report("a card with a real choice keeps New meeting instance",
+        `${fiveWhys.subLabels.join(",")} → ${fiveWhys.headings.at(-1)}`,
+        fiveWhys.subLabels.includes("New meeting instance") &&
+        fiveWhys.headings.includes("Each new meeting"));
+
+      for (const type of ["SqdpcCard", "LinkCard"]) {
+        const r = await shape(type);
+        report(`${type}: no choice to make, so the group is hidden outright`,
+          r.subLabels.length ? r.subLabels.join(",") : "(hidden)",
+          r.subLabels.length === 0 && r.notes.length === 0);
+      }
+
+      const actions = await shape("ActionBoard");
+      report("an action surface keeps its roll-up picker",
+        actions.headings.at(-1) ?? "(none)",
+        actions.headings.includes("Actions from board"));
+
+      report("the read-only checkbox has a heading",
+        fiveWhys.headings.includes("Display mode") ? "Display mode" : "(none)",
+        fiveWhys.headings.includes("Display mode"));
+
+      // nothing explanatory is left printed on the Common tab
+      report("no explanatory paragraphs remain beside the settings",
+        `${fiveWhys.notes.length} notes, ${fiveWhys.appBound} app-bound blocks`,
+        fiveWhys.notes.length === 0 && fiveWhys.appBound === 0);
+
+      // …and the Card specific tab of a card that only has the shared
+      // actions toggle shows that control, with nothing explaining it away
+      // (every card has at least one setting, since action-capable cards all
+      // get "Disable actions" — so the empty-state note is a fallback only)
+      const { result: risk } = await withStudio("RiskMatrix", {}, async () => {
+        [...document.querySelectorAll(".ltk-cs-tab")]
+          .find((t) => t.textContent === "Card specific").click();
+        await wait(40);
+        return {
+          notes: [...document.querySelectorAll(".ltk-cs-note")].map((n) => n.textContent),
+          checks: [...document.querySelectorAll(".ltk-cs-tabbody .ltk-check-label, .ltk-cs-tabbody label")]
+            .map((l) => l.textContent.trim()).filter(Boolean),
+        };
+      });
+      report("a minimal card shows its one control and no prose",
+        `${risk.checks.join(", ") || "(none)"} · ${risk.notes.length} notes`,
+        risk.notes.length === 0 && risk.checks.some((c) => c.includes("Disable actions")));
+    }
+
     document.getElementById("summary").innerHTML = bad === 0
       ? `<p class="ok">ALL PASS</p>` : `<p class="bad">${bad} FAILURES</p>`;
 

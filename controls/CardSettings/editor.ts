@@ -15,7 +15,7 @@ import { applyThemeVars, defaultTheme, Theme } from "../../shared/tokens";
 import { LTK_BASE_CSS } from "../../shared/ui/baseCss";
 import { clear, el, ensureStylesheet } from "../../shared/ui/dom";
 import { parsePrompts, Prompts, renderTitleBar } from "../../shared/ui/chrome";
-import { fieldRow, sectionLabel, selectInput } from "../../shared/ui/dialog";
+import { sectionLabel, selectInput } from "../../shared/ui/dialog";
 import {
   CARD_GROUPS,
   CARDS,
@@ -26,7 +26,7 @@ import {
   policyOnPick,
   THEME_FIELDS,
 } from "./registry";
-import { renderField, renderPromptsField, FieldHost } from "./fields";
+import { renderField, renderPromptsField, FieldHost, labelRow } from "./fields";
 import { BoardRef, SettingsDraft, ThemeDraft, emptyDraft } from "./types";
 import { CARDSETTINGS_CSS } from "./styles";
 
@@ -284,8 +284,11 @@ export class CardSettingsEditor {
         )
       );
       sec.appendChild(grid);
-      // the per-card data policy lives here too (composer mode only)
-      if (this.boards !== null) {
+      // the per-card data policy lives here too (composer mode only) —
+      // but only when this card HAS a choice to make: a series card, an
+      // action surface or a linked card would otherwise show a heading over
+      // a paragraph explaining why there is nothing to set
+      if (this.boards !== null && this.boardSectionKind() !== "none") {
         sec.appendChild(subLabel("New meeting instance"));
         this.renderBoardSection(sec);
       }
@@ -295,15 +298,10 @@ export class CardSettingsEditor {
     const fillConfig = (sec: HTMLElement): void => {
       if (spec.config.length === 0) {
         sec.appendChild(
-          el(
-            "div",
-            "ltk-cs-note",
-            spec.configNote ?? "This card has no card-specific settings."
-          )
+          el("div", "ltk-cs-note", "This card has no settings of its own.")
         );
         return;
       }
-      if (spec.configNote) sec.appendChild(el("div", "ltk-cs-note", spec.configNote));
       const cfgGrid = el("div", "ltk-cs-grid");
       for (const f of spec.config) {
         cfgGrid.appendChild(
@@ -350,24 +348,41 @@ export class CardSettingsEditor {
     }
     body.append(bar, pane);
     tabs.find((t) => t.name === this.tab)!.fill(pane);
-
-    if (spec.appBound.length > 0) {
-      body.appendChild(
-        el(
-          "div",
-          "ltk-cs-appbound",
-          `Bound by the app at runtime (not set here): ${spec.appBound.join(", ")}.`
-        )
-      );
-    }
   }
 
   /**
-   * The Board section (only when a boards manifest is supplied): edits the
-   * blob's `board` key — read by the BOARD APP at instance creation, ignored
-   * by the cards themselves. Action surfaces (ActionBoard/EscalationViewer)
-   * have no document to seed, so they get a rollup-source picker instead of
-   * a data policy.
+   * What, if anything, the "New meeting instance" group has to offer:
+   *
+   *   "policy"  a real choice of what each meeting starts from
+   *   "source"  an action surface's roll-up board picker
+   *   "none"    nothing — a series card, or a card with no document of its
+   *             own. The group is then hidden entirely rather than shown as
+   *             a heading over a paragraph explaining why it is empty.
+   */
+  private boardSectionKind(): "policy" | "source" | "none" {
+    if (
+      this.draft.cardType === "ActionBoard" ||
+      this.draft.cardType === "EscalationViewer"
+    ) {
+      return "source";
+    }
+    const spec = cardSpec(this.draft.cardType);
+    if (spec?.seriesBacked) return "none";
+    if (spec && spec.policies !== undefined && spec.policies.length === 0) return "none";
+    return "policy";
+  }
+
+  /** One labelled control in the pane's own field styling, explanation on ⓘ. */
+  private field(label: string, control: HTMLElement, help?: string): HTMLElement {
+    const field = el("div", "ltk-cs-field");
+    field.append(labelRow(label, help), control);
+    return field;
+  }
+
+  /**
+   * The "New meeting instance" group (composer mode only): edits the blob's
+   * `board` key — read by the BOARD APP at instance creation, ignored by the
+   * cards themselves. Only rendered when boardSectionKind() is not "none".
    */
   private renderBoardSection(body: HTMLElement): void {
     const boards = this.boards ?? [];
@@ -380,11 +395,7 @@ export class CardSettingsEditor {
       ...boards.map((ref) => ({ value: ref.boardId, label: ref.name })),
     ];
 
-    const isActionSurface =
-      this.draft.cardType === "ActionBoard" ||
-      this.draft.cardType === "EscalationViewer";
-
-    if (isActionSurface) {
+    if (this.boardSectionKind() === "source") {
       const src = selectInput(b.sourceBoardId, boardOptions("This board"));
       src.disabled = this.readOnly;
       src.addEventListener("change", () => {
@@ -393,43 +404,17 @@ export class CardSettingsEditor {
         b.policy = "";
         this.commit();
       });
-      grid.appendChild(fieldRow("Actions from board", src));
-      body.appendChild(
-        el(
-          "div",
-          "ltk-cs-note",
-          "Rolls up every action on the chosen board (empty = the board this card sits on)."
+      grid.appendChild(
+        this.field(
+          "Actions from board",
+          src,
+          "Rolls up every action on the chosen board. Leave it on This board to show only this board's own actions."
         )
       );
       return;
     }
 
     const spec = cardSpec(this.draft.cardType);
-    if (spec?.seriesBacked) {
-      body.appendChild(
-        el(
-          "div",
-          "ltk-cs-note",
-          "No choice needed — this card's data is a dated series: every " +
-            "meeting shows its own window of the same data, and closing a " +
-            "meeting archives the card's image."
-        )
-      );
-      return;
-    }
-    // a no-document card (LinkCard): nothing to seed, nothing to choose
-    if (spec && spec.policies !== undefined && spec.policies.length === 0) {
-      body.appendChild(
-        el(
-          "div",
-          "ltk-cs-note",
-          "No choice needed — this card has no content of its own. Closing a " +
-            "meeting archives an image of what the linked card showed."
-        )
-      );
-      return;
-    }
-
     const POLICY_LABELS: Record<string, string> = {
       clear: "Clear — start each instance from the standard content",
       carry: "Carry — copy the previous instance",
@@ -455,13 +440,13 @@ export class CardSettingsEditor {
       b.policy = policy.value as SettingsDraft["board"]["policy"];
       this.commit();
     });
-    grid.appendChild(fieldRow("This card, each new instance", policy));
-    body.appendChild(
-      el(
-        "div",
-        "ltk-cs-note",
-        "Per card, applied when a meeting instance is created. Carry keeps a snapshot per meeting; " +
-          "Shared edits one running document (each meeting still archives its tile image at close)."
+    grid.appendChild(
+      this.field(
+        "Each new meeting",
+        policy,
+        "What this card starts from when a meeting is created. Carry keeps a " +
+          "snapshot per meeting; Shared edits one running document, and every " +
+          "meeting still archives a picture of it at close."
       )
     );
   }
@@ -492,7 +477,9 @@ export class CardSettingsEditor {
       this.commit();
       this.render(); // repopulate the card picker
     });
-    grid.appendChild(fieldRow("Source board", srcBoard));
+    grid.appendChild(
+      this.field("Source board", srcBoard, "The board holding the card to show.")
+    );
 
     const chosen = boards.find((ref) => ref.boardId === curBoard);
     const linkable = (chosen?.cards ?? []).filter(
@@ -510,12 +497,12 @@ export class CardSettingsEditor {
       cfg.sourceCardId = srcCard.value;
       this.commit();
     });
-    grid.appendChild(fieldRow("Source card", srcCard));
-    body.appendChild(
-      el(
-        "div",
-        "ltk-cs-note",
-        "Embeds, action boards and other linked cards can't be sources. The card renders with the source's own settings."
+    grid.appendChild(
+      this.field(
+        "Source card",
+        srcCard,
+        "Shown live and read-only, with the source card's own settings. " +
+          "Embeds, action boards and other linked cards cannot be sources."
       )
     );
   }
