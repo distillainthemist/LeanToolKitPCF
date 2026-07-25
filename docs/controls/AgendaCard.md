@@ -16,7 +16,7 @@ their title and open the url in a new tab. A who can be picked from
 `peopleJSON` or typed free-text.
 
 - **Schema id:** `ltk/agenda@1`
-- **Document:** yes · **Actions:** yes · **Snapshots:** `pngExport`, `svgExport`
+- **Document:** yes · **Actions:** yes · **Snapshots:** SVG tile
 
 See the [shared envelope](README.md#the-envelope-outputjson) and
 [actions channel](README.md#the-actions-channel-actionsoutputjson).

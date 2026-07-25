@@ -5,7 +5,7 @@ columns; each cell cycles R / A / C / I. It warns unless exactly one role is
 Accountable per row. Roles, tasks and assignments are all editable in-card.
 
 - **Schema id:** `ltk/raci@1`
-- **Document:** yes · **Actions:** yes · **Snapshots:** `pngExport`, `svgExport`
+- **Document:** yes · **Actions:** yes · **Snapshots:** SVG tile
 
 See the [shared envelope](README.md#the-envelope-outputjson) and
 [actions channel](README.md#the-actions-channel-actionsoutputjson).

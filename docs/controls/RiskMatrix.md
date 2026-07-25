@@ -6,7 +6,7 @@ a fixed lookup (not a raw score band). An optional post-control (residual) ratin
 shows the movement. Treatments are canonical actions.
 
 - **Schema id:** `ltk/riskmatrix@1`
-- **Document:** yes · **Actions:** yes · **Snapshots:** `pngExport`, `svgExport`
+- **Document:** yes · **Actions:** yes · **Snapshots:** SVG tile
 
 See the [shared envelope](README.md#the-envelope-outputjson) and
 [actions channel](README.md#the-actions-channel-actionsoutputjson).

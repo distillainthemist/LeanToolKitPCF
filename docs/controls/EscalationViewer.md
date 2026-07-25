@@ -7,7 +7,7 @@ receiving board acknowledge, comment, restatus or reassign. Edits are written
 back on `actionsOutputJSON`.
 
 - **Schema id:** none (no document) · **Actions:** yes ·
-  **Snapshots:** `pngExport`, `svgExport`
+  **Snapshots:** SVG tile
 
 See the [actions channel](README.md#the-actions-channel-actionsoutputjson) for
 the `LtkAction` shape.

@@ -7,7 +7,7 @@ multi-select, option icons, and two-layer dependent picklists. Rows are free
 the "simple capture card".
 
 - **Schema id:** `ltk/capture@1`
-- **Document:** yes · **Actions:** ✖ · **Snapshots:** `pngExport`, `svgExport`
+- **Document:** yes · **Actions:** ✖ · **Snapshots:** SVG tile
 
 See the [shared envelope](README.md#the-envelope-outputjson).
 

@@ -6,7 +6,7 @@ quick wins (high benefit, low effort) rise to the top-left. A follow-up action
 can be captured against any idea.
 
 - **Schema id:** `ltk/benefiteffort@1`
-- **Document:** yes · **Actions:** yes · **Snapshots:** `pngExport`, `svgExport`
+- **Document:** yes · **Actions:** yes · **Snapshots:** SVG tile
 
 See the [shared envelope](README.md#the-envelope-outputjson) and
 [actions channel](README.md#the-actions-channel-actionsoutputjson).

@@ -1,15 +1,20 @@
 # Master Leanboard — design of record
 
-The master leanboard is a **canvas-app board engine** over the LeanToolKit
-controls: a configurable grid of cards that runs either a **meeting board**
-(a new instance per occurrence) or a **problem-solving / project board** (one
-living instance). This page records the reviewed architecture, the data
-model, the Power Fx recipes and the phased plan.
+The master leanboard is a board engine over the LeanToolKit cards: a
+configurable grid that runs either a **meeting board** (a new instance per
+occurrence) or a **problem-solving / project board** (one living instance).
+This page records the reviewed architecture, the data model and the phased
+plan.
 
-Status: **Phases 1–2 done** (data model designed; PCF enhancements shipped in
-v0.4.0). Phase 0 spike kit and the Phase 3 build recipe are ready — see
-[board-app-build.md](board-app-build.md); the spikes need a run on the
-target devices, then the board app is a paste-job from that page.
+> **Read this for the data model and the board manifest**, which remain the
+> design of record. The board shipped as a **code app**, not a canvas app —
+> so the *Power Fx recipes* and *PCF enhancements* sections below are
+> historical: they describe canvas wiring and manifest properties that no
+> longer exist ([leanboard-pcf-retirement-plan.md](leanboard-pcf-retirement-plan.md)).
+> The equivalents live in `app/src` — see
+> [code-app-plan.md](code-app-plan.md) and
+> [code-app-build.md](code-app-build.md).
+
 Related: [Actions in Dataverse](actions-dataverse.md) ·
 [Controls reference](controls/README.md)
 
@@ -257,7 +262,10 @@ svg: Coalesce(row.ben_tilesvg,
 
 ---
 
-## Power Fx recipes
+## Power Fx recipes  *(historical — canvas era)*
+
+> The code app implements these in `app/src/store`; the recipes below are
+> kept for the policy logic they spell out, not as a build path.
 
 ### Create a meeting instance (apply the policies)
 
@@ -332,7 +340,10 @@ Filter('LTK Actions',
 
 ---
 
-## PCF enhancements (Phase 2, shipped with this design)
+## PCF enhancements  *(historical — canvas era)*
+
+> These describe manifest inputs on the retired PCF wrappers. The
+> capabilities themselves live on in the card editors and card settings.
 
 1. **CardSettings — board composer mode.** New optional input
    `boardsManifestJSON` (`[{boardId, name, cards:[{cardId, cardType, title}]}]`

@@ -5,7 +5,7 @@ columns. Each cell holds a proficiency level 1–4, drawn as a quarter-filled
 disc. Skills carry a target level; cells below target get a gap ring.
 
 - **Schema id:** `ltk/skills@1`
-- **Document:** yes · **Actions:** yes · **Snapshots:** `pngExport`, `svgExport`
+- **Document:** yes · **Actions:** yes · **Snapshots:** SVG tile
 
 See the [shared envelope](README.md#the-envelope-outputjson) and
 [actions channel](README.md#the-actions-channel-actionsoutputjson).

@@ -693,8 +693,9 @@ const REGISTRY: Record<string, CardMounter> = {
     return () => opts.host.replaceChildren();
   },
 
-  // ---- model-based editors (document only in the app for now — their
-  // action affordances live in the PCF wrappers and arrive later) ----
+  // ---- model-based editors (a bare model rather than an envelope; actions
+  // hang off model nodes, so they arrive via onManageActions/getActionBadge
+  // rather than the envelope's action channel) ----
   Fishbone: (opts) => {
     const s = saver(opts);
     const parsed = parseFishbone(

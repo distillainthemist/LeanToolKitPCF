@@ -5,7 +5,7 @@ cascade (e.g. a tier-2 board showing one tile per tier-1 board). State labels
 come from the `states` input; colours from `legendColors`.
 
 - **Schema id:** `ltk/statustile@1`
-- **Document:** yes · **Actions:** ✖ · **Snapshots:** `pngExport`, `svgExport`
+- **Document:** yes · **Actions:** ✖ · **Snapshots:** SVG tile
 
 See the [shared envelope](README.md#the-envelope-outputjson).
 

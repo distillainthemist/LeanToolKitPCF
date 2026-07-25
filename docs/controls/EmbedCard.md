@@ -8,10 +8,9 @@ value.
 
 - **Schema id:** `ltk/embednotes@1` (only when commentary headings are
   configured — otherwise nothing is edited and no document is written)
-- **Document:** optional (the commentary notes) · **Actions:** ✔ (code app;
-  card-level, on the pane or an Actions chip) · **Snapshots:** ✖ (a
-  cross-origin iframe cannot be captured, so `pngExport`/`svgExport` are
-  deliberately absent)
+- **Document:** optional (the commentary notes) · **Actions:** ✔ (card-level,
+  on the pane or an Actions chip) · **Snapshots:** ✖ (a cross-origin iframe
+  cannot be captured, so no tile is emitted)
 
 ## Inputs
 

@@ -1,7 +1,7 @@
 // Base stylesheet for the shared UI kit (dialogs, fields, title bar, kebab,
 // ghost states). Written once against the --ltk-* variables that
-// applyThemeVars() sets on each control's root, and bundled into the JS
-// because canvas apps sometimes fail to load a separate css resource.
+// applyThemeVars() sets on each card's root, and bundled into the JS so the
+// styles travel with the card — snapshots inline this same string.
 
 export const LTK_BASE_CSS = `
 .ltk-root {

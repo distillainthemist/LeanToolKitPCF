@@ -5,7 +5,7 @@ status or by issue) or **gantt** (start→due bars), selected by the `view`
 setting. The actions channel *is* its data — it has no document of its own.
 
 - **Schema id:** none (no document)
-- **Document:** ✖ · **Actions:** yes · **Snapshots:** `pngExport`, `svgExport`
+- **Document:** ✖ · **Actions:** yes · **Snapshots:** SVG tile
 
 See the [actions channel](README.md#the-actions-channel-actionsoutputjson) for
 the `LtkAction` shape.

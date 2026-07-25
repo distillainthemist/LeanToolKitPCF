@@ -5,7 +5,7 @@ optional specification limits (USL/LSL). A reading is flagged red only when it
 falls outside the spec limits.
 
 - **Schema id:** `ltk/kpitrend@1`
-- **Document:** yes · **Actions:** ✖ · **Snapshots:** `pngExport`, `svgExport`
+- **Document:** yes · **Actions:** ✔ · **Snapshots:** SVG tile
 
 See the [shared envelope](README.md#the-envelope-outputjson).
 
@@ -37,4 +37,9 @@ Output always uses the canonical `usl` / `lsl` names.
 
 ## actionsOutputJSON
 
-**Not emitted.** KpiTrendCard is document-only, with no actions channel.
+Emitted on the standard actions channel, with `context.source` = `kpitrend`.
+Two scopes share it:
+
+- **card-level** — `context.sourceId` is `""`; raised from the kebab.
+- **per-reading** — `context.sourceId` is the point's id; raised from a dot on
+  the chart, which carries a badge of its open actions.

@@ -1,7 +1,6 @@
-// Stylesheet for the Fishbone control, bundled into the JS and injected at
-// runtime. Canvas apps sometimes fail to load a PCF's separate CSS resource
-// (it works in the harness and model-driven apps), so shipping the styles
-// inside the bundle guarantees hover states, cursors and typography everywhere.
+// Stylesheet for the Fishbone card, bundled into the JS and injected at
+// runtime, so hover states, cursors and typography travel with the card —
+// including into the snapshot, which inlines this same string.
 
 export const FISHBONE_CSS = `
 .fb-root {

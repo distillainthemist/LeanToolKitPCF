@@ -23,11 +23,10 @@ import { FISHBONE_CSS } from "./styles";
 const STYLE_TAG_ID = "pech-fishbone-styles";
 
 /**
- * Inject the stylesheet from the bundle. Canvas apps sometimes fail to load a
- * PCF's separate CSS resource, which silently kills hover states and cursor
- * affordances — bundling the CSS makes the control self-sufficient in every
- * host. Idempotent across multiple control instances; updates the tag when a
- * newer bundle loads.
+ * Inject the stylesheet from the bundle. Carrying the CSS in the JS keeps a
+ * card self-sufficient wherever it is mounted — including inside a snapshot,
+ * which inlines the same string. Idempotent across multiple instances;
+ * updates the tag when a newer bundle loads.
  */
 function ensureStylesInjected(doc: Document): void {
   let tag = doc.getElementById(STYLE_TAG_ID) as HTMLStyleElement | null;

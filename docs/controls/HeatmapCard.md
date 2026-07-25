@@ -6,7 +6,7 @@ normalised 0..1 relative to the image. The background image comes from the
 `image` input, not the document.
 
 - **Schema id:** `ltk/heatmap@1`
-- **Document:** yes · **Actions:** yes · **Snapshots:** `pngExport`, `svgExport`
+- **Document:** yes · **Actions:** yes · **Snapshots:** SVG tile
 
 See the [shared envelope](README.md#the-envelope-outputjson) and
 [actions channel](README.md#the-actions-channel-actionsoutputjson).

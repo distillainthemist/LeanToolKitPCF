@@ -5,7 +5,7 @@ ingests a Fishbone / FiveWhys vote export directly (a `causes` array of
 `{ text, votes }`) and converts it to items.
 
 - **Schema id:** `ltk/pareto@1`
-- **Document:** yes · **Actions:** ✖ · **Snapshots:** `pngExport`, `svgExport`
+- **Document:** yes · **Actions:** ✔ · **Snapshots:** SVG tile
 
 See the [shared envelope](README.md#the-envelope-outputjson).
 
@@ -33,4 +33,9 @@ canonical `items`.
 
 ## actionsOutputJSON
 
-**Not emitted.** ParetoCard is document-only, with no actions channel.
+Emitted on the standard actions channel, with `context.source` = `pareto`.
+Two scopes share it:
+
+- **card-level** — `context.sourceId` is `""`; raised from the kebab.
+- **per-bar** — `context.sourceId` is the category's id; raised from a bar,
+  which carries a badge of its open actions.

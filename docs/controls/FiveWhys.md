@@ -5,7 +5,7 @@ them. Each chain starts at a top-level cause and follows `parentId` links; the
 answer at the end of a chain is flagged as a root cause.
 
 - **Schema id:** `ltk/fivewhys@1`
-- **Document:** yes · **Actions:** yes · **Snapshots:** `pngExport`, `svgExport`
+- **Document:** yes · **Actions:** yes · **Snapshots:** SVG tile
 
 See the [shared envelope](README.md#the-envelope-outputjson) and
 [actions channel](README.md#the-actions-channel-actionsoutputjson) for the

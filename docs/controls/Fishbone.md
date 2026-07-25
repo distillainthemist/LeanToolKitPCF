@@ -6,7 +6,7 @@ status, dragged between bones, with action capture on any cause. The bones
 to the classic 6M set.
 
 - **Schema id:** `ltk/fishbone@1`
-- **Document:** yes · **Actions:** yes · **Snapshots:** `pngExport`, `svgExport`
+- **Document:** yes · **Actions:** yes · **Snapshots:** SVG tile
 
 See the [shared envelope](README.md#the-envelope-outputjson) and
 [actions channel](README.md#the-actions-channel-actionsoutputjson).

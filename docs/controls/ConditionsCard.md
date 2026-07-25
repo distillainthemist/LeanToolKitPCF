@@ -6,7 +6,7 @@ review. Granularity is day, weekday, week, or two shifts. Long-press a cell to
 raise an action.
 
 - **Schema id:** `ltk/conditions@1`
-- **Document:** yes · **Actions:** yes · **Snapshots:** `pngExport`, `svgExport`
+- **Document:** yes · **Actions:** yes · **Snapshots:** SVG tile
 
 See the [shared envelope](README.md#the-envelope-outputjson) and
 [actions channel](README.md#the-actions-channel-actionsoutputjson).

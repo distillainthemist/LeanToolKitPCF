@@ -107,17 +107,20 @@ themselves.
 
 ---
 
-## Snapshot outputs (`pngExport` / `svgExport`)
+## Snapshots
 
-Most controls also expose two read-only snapshot outputs, refreshed after every
-change:
+Most cards emit a snapshot after every change (debounced): the rendered card
+as **SVG markup**. The board stores it as that card's tile and renders it
+inline, which keeps a tile around 15–50 KB and sidesteps the WebKit bug that
+mis-scales `foreignObject` SVGs inside `<img>`.
 
-- **`pngExport`** — the rendered card as a PNG **data URI**.
-- **`svgExport`** — the rendered card as **SVG markup**.
+A PNG is produced only on demand, by the kebab's **Download PNG** — nothing on
+the edit path rasterises (see
+[the retirement plan's phase 3](../leanboard-pcf-retirement-plan.md)).
 
-Bind either to an Image control to show a card read-only, or to compose several
-cards onto one board. Both are present on every control **except** MeetingScheduler
-and CardSettings (which are a selector and a form, not display tiles).
+Snapshots are present on every card **except** MeetingScheduler and
+CardSettings (a selector and a form, not display tiles) and EmbedCard (a
+cross-origin iframe cannot be captured).
 
 ---
 
@@ -132,11 +135,11 @@ and CardSettings (which are a selector and a form, not display tiles).
 | [SqdpcCard](SqdpcCard.md) | `ltk/sqdpc@1` | ✅ | ✅ | `sqdpc` |
 | [ConditionsCard](ConditionsCard.md) | `ltk/conditions@1` | ✅ | ✅ | `conditions` |
 | [AgendaCard](AgendaCard.md) | `ltk/agenda@1` | ✅ | ✅ | `agenda` |
-| [EmbedCard](EmbedCard.md) | — | ✖ (display-only) | ✖ | — |
+| [EmbedCard](EmbedCard.md) | — | optional (commentary notes) | ✅ | `embed` |
 | [BoardGrid](BoardGrid.md) | — | ✖ (board tile wall) | ✖ | — |
 | [StatusTile](StatusTile.md) | `ltk/statustile@1` | ✅ | ✖ | — |
-| [KpiTrendCard](KpiTrendCard.md) | `ltk/kpitrend@1` | ✅ | ✖ | — |
-| [ParetoCard](ParetoCard.md) | `ltk/pareto@1` | ✅ | ✖ | — |
+| [KpiTrendCard](KpiTrendCard.md) | `ltk/kpitrend@1` | ✅ | ✅ | `kpitrend` |
+| [ParetoCard](ParetoCard.md) | `ltk/pareto@1` | ✅ | ✅ | `pareto` |
 | [BenefitEffort](BenefitEffort.md) | `ltk/benefiteffort@1` | ✅ | ✅ | `benefiteffort` |
 | [RiskMatrix](RiskMatrix.md) | `ltk/riskmatrix@1` | ✅ | ✅ | `riskmatrix` |
 | [Raci](Raci.md) | `ltk/raci@1` | ✅ | ✅ | `raci` |

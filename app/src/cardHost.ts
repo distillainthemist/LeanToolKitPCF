@@ -1,7 +1,7 @@
-// CardHost — what the PCF wrappers do, minus the string channels. Screens
-// instantiate an editor class into a host div, call its setters with real
-// objects, and wire callbacks straight to the store. This module carries
-// the shared bits: the app theme and the screen container.
+// CardHost — how a card gets onto a screen. Screens instantiate an editor
+// class into a host div, call its setters with real objects, and wire
+// callbacks straight to the store. This module carries the shared bits:
+// the app theme and the screen container.
 
 import { defaultTheme, Theme } from "../../shared/tokens";
 import { el } from "../../shared/ui/dom";

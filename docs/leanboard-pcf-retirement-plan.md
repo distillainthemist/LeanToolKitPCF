@@ -194,7 +194,44 @@ Verify: tile SVGs still land on save (board + composer Save-card path),
 Download PNG still rasterises, and a quick before/after timing on an SQDPC
 edit (performance.now around the snapshot) to confirm the win.
 
-## Phase 4 — single-owner simplifications  *(per-card, opportunistic)*
+## Phase 4 — single-owner simplifications — ✅ **DONE 2026-07-25**
+
+- **KPI trend**: `editSettings()` and the `spec === null` kebab branch are
+  gone; `spec` is now a plain `KpiSpec` (all-empty by default) and `setSpec`
+  takes a non-null spec. The blank-field → document fallback stays, as legacy
+  data. Verified in the harness: with a settings spec the target line, spec
+  bands, unit and red out-of-spec reading all render and the kebab shows only
+  Raise action / Download PNG / Download SVG; with **no** `setSpec` call at
+  all, a document-only card still renders its unit and USL/LSL.
+- **Series editors**: nothing to remove — their comments already described the
+  document as tile-carrier + migration source, with no dual-ownership left.
+- **Stale host references** fixed rather than left to mislead: `cardHost.ts`
+  and `cardRegistry.ts` both described the PCF wrappers, and the latter
+  claimed the model-based editors' "action affordances live in the PCF
+  wrappers and arrive later" — wrong twice over, since Fishbone and ProcessMap
+  now wire `onManageActions`/`getActionBadge`. The CSS-bundling rationale in
+  Fishbone and `baseCss.ts` cited canvas apps failing to load a PCF's CSS
+  resource; bundling still earns its keep (snapshots inline the same string),
+  so the behaviour stands and only the reason is restated.
+- **Card docs**: every page advertised `**Snapshots:** pngExport, svgExport`,
+  which were manifest outputs — now "SVG tile", with the shared section in
+  `docs/controls/README.md` rewritten around tiles + on-demand Download PNG.
+  Two pages were **factually wrong**: KpiTrendCard and ParetoCard both said
+  "Actions ✖ … no actions channel" despite having gained card-level *and*
+  per-point/per-bar actions; both pages and the index table are corrected,
+  with `context.source` values (`kpitrend`, `pareto`, `embed`) checked against
+  the editors rather than assumed. EmbedCard's index row also still said
+  document-/action-free.
+- **master-leanboard.md**: header now points readers at the data model and
+  board manifest as current, and the *Power Fx recipes* and *PCF enhancements*
+  sections are marked historical.
+
+Deliberately not done: the reference docs still use the channel names
+`outputJSON` / `actionsOutputJSON`. Those began as manifest properties but
+remain the names of the JSON contracts actually stored, so renaming them
+would cost accuracy rather than buy it.
+
+Original scope, for reference:
 
 - KPI trend: delete `editSettings()` and the `spec === null` kebab branch;
   `setSpec` becomes mandatory (keep the blank-field → document fallback —

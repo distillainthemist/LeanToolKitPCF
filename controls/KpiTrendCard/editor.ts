@@ -6,7 +6,7 @@
 import { applyThemeVars, defaultTheme, Theme } from "../../shared/tokens";
 import { LTK_BASE_CSS } from "../../shared/ui/baseCss";
 import { clear, el, ensureStylesheet, svgEl } from "../../shared/ui/dom";
-import { fieldRow, openDialog, sectionLabel, textInput } from "../../shared/ui/dialog";
+import { fieldRow, openDialog, textInput } from "../../shared/ui/dialog";
 import { parsePrompts, Prompts, renderGhost, renderTitleBar } from "../../shared/ui/chrome";
 import { renderKebab } from "../../shared/ui/menu";
 import { openActionManager } from "../../shared/ui/actionUi";
@@ -27,11 +27,10 @@ const DEFAULT_GHOST = [
 ];
 
 /**
- * Target / spec limits / unit supplied by the HOST rather than the card's
- * own document. The code app sources these from card settings (so they sit
- * with the rest of the card's configuration instead of behind the kebab);
- * a blank field falls back to the document, which keeps cards that set
- * them in-card before the move working untouched.
+ * Target / spec limits / unit, sourced from the card's settings so they sit
+ * with the rest of its configuration. A blank field falls back to the card's
+ * own document, which keeps cards configured in-card before the settings
+ * move rendering correctly.
  */
 export interface KpiSpec {
   target: number | null;
@@ -58,9 +57,9 @@ export class KpiTrendEditor {
   private people: Person[] = [];
   private actions: LtkAction[] = [];
   private canRaise = true;
-  /** Host-supplied spec (see KpiSpec); null = the document owns it and the
-   *  kebab offers the in-card dialog (the PCF path). */
-  private spec: KpiSpec | null = null;
+  /** Host-supplied spec (see KpiSpec) — card settings are the only place
+   *  these are set; blank fields fall back to the document. */
+  private spec: KpiSpec = { target: null, usl: null, lsl: null, unit: "" };
   private readonly snapshots: SnapshotScheduler;
 
   constructor(
@@ -120,25 +119,21 @@ export class KpiTrendEditor {
     this.render();
   }
 
-  /**
-   * Target / spec limits / unit from the host's settings. Supplying a spec
-   * (even an all-empty one) hands ownership to the host and drops the
-   * in-card "Target & spec limits" dialog from the kebab. null restores the
-   * document-owned behaviour.
-   */
-  setSpec(spec: KpiSpec | null): void {
+  /** Target / spec limits / unit from the card's settings. */
+  setSpec(spec: KpiSpec): void {
     if (JSON.stringify(spec) === JSON.stringify(this.spec)) return;
     this.spec = spec;
     this.render();
     this.snapshots.schedule();
   }
 
-  /** The values actually drawn: host spec first, document as the fallback. */
+  /**
+   * The values actually drawn: settings first, document as the fallback.
+   * The fallback is for cards configured in-card before the settings move —
+   * legacy data, not a second owner.
+   */
   private effectiveSpec(): KpiSpec {
     const d = this.env.data;
-    if (this.spec === null) {
-      return { target: d.target, usl: d.usl, lsl: d.lsl, unit: d.unit };
-    }
     return {
       target: this.spec.target ?? d.target,
       usl: this.spec.usl ?? d.usl,
@@ -227,11 +222,6 @@ export class KpiTrendEditor {
           label: n > 0 ? `Actions (${n})…` : "Raise action…",
           onClick: () => this.manage("", this.cardTitle),
         });
-      }
-      // when the host owns the spec (code app: card settings) the in-card
-      // dialog would be a second, conflicting place to set the same thing
-      if (this.spec === null) {
-        items.push({ label: "Target & spec limits", onClick: () => this.editSettings() });
       }
       items.push(
         { label: "Download PNG", onClick: () => this.downloadPng() },
@@ -537,55 +527,6 @@ export class KpiTrendEditor {
       dlg.body.appendChild(actBtn);
     }
     value.focus();
-  }
-
-  private editSettings(): void {
-    const numInput = (v: number | null, placeholder: string) =>
-      textInput(v === null ? "" : String(v), { type: "number", placeholder });
-    const target = numInput(this.env.data.target, "No target");
-    const unit = textInput(this.env.data.unit, { placeholder: "e.g. %, units/hr" });
-    const usl = numInput(this.env.data.usl, "None");
-    const lsl = numInput(this.env.data.lsl, "None");
-
-    const readNum = (input: HTMLInputElement): number | null => {
-      const n = Number(input.value);
-      return input.value.trim() !== "" && Number.isFinite(n) ? n : null;
-    };
-
-    const dlg = openDialog({
-      host: this.root,
-      title: "Target & spec limits",
-      buttons: [
-        { label: "Cancel", kind: "secondary", onClick: () => dlg.close() },
-        {
-          label: "Save",
-          kind: "primary",
-          onClick: () => {
-            this.env.data.target = readNum(target);
-            this.env.data.unit = unit.value.trim();
-            this.env.data.usl = readNum(usl);
-            this.env.data.lsl = readNum(lsl);
-            dlg.close();
-            this.commit();
-          },
-        },
-      ],
-    });
-    const row = (a: HTMLElement, b: HTMLElement) => {
-      const r = el("div");
-      r.style.display = "flex";
-      r.style.gap = "12px";
-      a.classList.add("ltk-field-half");
-      b.classList.add("ltk-field-half");
-      r.append(a, b);
-      return r;
-    };
-    dlg.body.appendChild(row(fieldRow("Target", target), fieldRow("Unit", unit)));
-    dlg.body.appendChild(sectionLabel("Specification limits (optional)"));
-    dlg.body.appendChild(
-      row(fieldRow("Upper (USL)", usl), fieldRow("Lower (LSL)", lsl))
-    );
-    target.focus();
   }
 
   // ---- snapshot + downloads ----

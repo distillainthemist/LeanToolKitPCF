@@ -5,7 +5,7 @@ actions on them. Nodes form an arbitrary tree via `parentId`; each node carries
 an AND/OR gate describing how its children combine.
 
 - **Schema id:** `ltk/faulttree@1`
-- **Document:** yes · **Actions:** yes · **Snapshots:** `pngExport`, `svgExport`
+- **Document:** yes · **Actions:** yes · **Snapshots:** SVG tile
 
 See the [shared envelope](README.md#the-envelope-outputjson) and
 [actions channel](README.md#the-actions-channel-actionsoutputjson).
