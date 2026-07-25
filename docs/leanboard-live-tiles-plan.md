@@ -249,25 +249,74 @@ renderer is unchanged — so actions fetched *after* the first render would
 never reach the tiles, and every live tile would sit there showing none. The
 fetch now completes before the first tile is drawn.
 
-### Phase 5 — retire the defaults pipeline  *(the payoff)*
+### Phase 5 — narrow the defaults pipeline  *(re-scoped 2026-07-25)*
 
-Delete `tools/tile-defaults.json`, the generator, the write endpoint,
-`selfHealCatalog()`, `catalogSvgByType()` and `ben_defaultsvg` usage, and mount
-live empty cards in the composer's picker too. The Card Catalog table keeps its
-type/label/description columns; only the art goes.
+The original phase 5 was "delete the defaults pipeline", on the premise that
+an unopened card would render its own empty state. **Phase 4 killed that
+premise**: the archive split makes the stored path permanent, not
+transitional. Closed meetings always render stamped snapshots, and the toggle
+can drop any board back to stored — so a never-opened card in either case
+still reaches the catalog default. Re-scoped below into three steps, ordered
+by how much judgment each needs.
 
-Do this **last**, and only once phases 2–4 are proven hosted — until then the
-defaults are the fallback.
+Two measurements drive the new shape:
 
-> **Revised 2026-07-25 — phase 5 can no longer be a full retirement.** The
-> archive split (phase 4) means the stored path is permanent, not
-> transitional: closed meetings always render stamped snapshots, and the
-> toggle can drop any board back to stored. A never-opened card on an
-> archived meeting therefore still needs its catalog default. What phase 5
-> *can* do is narrow the pipeline's job — defaults stop being what most
-> people see, so staleness stops mattering much — but `tile-defaults.json`,
-> `selfHealCatalog()` and `ben_defaultsvg` all survive. Re-scope before
-> starting it.
+- **`tools/tile-defaults.json` is 290 KB, and 96% of the `catalog` chunk
+  (309 KB) shipped to every user.** It is imported *only* by
+  `selfHealCatalog()`, which only needs it when `APP_VERSION` has moved — so
+  almost every app open downloads it and never touches it.
+- **The Card Catalog table's only app-side consumer is the art.**
+  `catalogSvgByType()` selects `ben_cardtype` + `ben_defaultsvg` and nothing
+  else reads the table; the `ben_label` / `ben_description` columns the heal
+  writes are never read back. The composer's palette comes from the
+  CardSettings registry in code, not from Dataverse.
+
+#### 5a — lazy-load the defaults  *(pure win, no behaviour change)*
+
+Move the `tile-defaults.json` import inside the heal branch of
+`selfHealCatalog()` as a dynamic `await import(...)`, so vite emits it as its
+own chunk and only the app opens that actually heal ever fetch it.
+
+**~290 KB off the initial bundle for every user, with identical behaviour.**
+Nothing else changes; the defaults, the generator and the archive fallback all
+stay exactly as they are. Verify by checking the built chunk list and that a
+version bump still heals.
+
+#### 5b — live art in the composer picker  *(small, better fidelity)*
+
+The board composer previews card types with catalog art. Now that tile mode
+exists, it can mount live empty cards instead — always current, and one fewer
+caller of `catalogSvgByType()`. Purely an improvement: the picker is a
+"what does this card look like" affordance, which is exactly what an empty
+live card *is*.
+
+#### 5c — drop the stored art entirely  *(needs a decision, not just work)*
+
+Only after 5a and 5b, and only if the answer to this is yes:
+
+> When a past meeting is reopened and a card was never used, should it show
+> that card's pretty empty state, or say plainly that nothing was recorded?
+
+BoardGrid already degrades to a **typed placeholder** (the card-type name) when
+a tile's svg is empty, so dropping the art is graceful, not blank. Arguments
+both ways, honestly:
+
+- **For dropping:** it retires `tile-defaults.json`, the generator page, the
+  dev-server write endpoint, `app/src/tools/tileDefaults.ts`, `ben_defaultsvg`
+  and `catalogSvgByType()` — and, since the art is the table's only reader,
+  raises the question of whether the Card Catalog table earns its keep at all
+  (`master-leanboard.md` calls it the composer's palette source; the code has
+  not used it that way for some time — **reconcile the doc either way**).
+- **Against:** an archived board of typed placeholders reads as broken to
+  someone who does not know the convention, where empty-state art reads as
+  "this card was here and unused". For a record people revisit months later,
+  that distinction may be worth 290 KB — which 5a has already stopped
+  charging everyone anyway.
+
+My recommendation: **do 5a and 5b; leave 5c until an archived board with
+unused cards has actually been looked at.** 5a removes the cost that made
+this urgent, which turns 5c from a performance fix into a presentation
+preference — and that is Ben's call, not a refactor.
 
 ### Phase 6 — preloaded embeds — ✅ **DONE 2026-07-25** *(cost bounding outstanding)*
 
