@@ -274,7 +274,16 @@ async function renderComposer(
     colsSelect.appendChild(opt);
   }
   if (target.title !== "") bar.appendChild(el("span", "app-board-title", target.title));
-  bar.append(status, el("span", "app-bar-gap"), colsSelect);
+  // archived cards are only reachable through ＋ Add card, so the count is
+  // what tells a maker they are there at all
+  const archivedCount = el("span", "app-board-archcount", "");
+  const paintArchivedCount = () => {
+    const n = instanceMode ? 0 : manifest.archivedSlots.length;
+    archivedCount.textContent = n === 0 ? "" : `${n} archived`;
+    archivedCount.title =
+      n === 0 ? "" : "Put one back from ＋ Add card → Archived";
+  };
+  bar.append(status, archivedCount, el("span", "app-bar-gap"), colsSelect);
   if (target.onReset) {
     const resetBtn = el("button", "app-btn", "Reset to usual layout");
     resetBtn.addEventListener("click", () => void target.onReset!());
@@ -382,8 +391,32 @@ async function renderComposer(
 
   // ---- the studio ----
 
+  /**
+   * A copy source: its slot (settings to clone) and its standard content.
+   * Read on demand — only when a maker actually picks one to copy.
+   */
+  const loadCopySource = async (
+    srcBoardId: string,
+    srcCardId: string
+  ): Promise<{ slot: ManifestSlot; outputJson: string } | null> => {
+    const slot =
+      srcBoardId === board.boardId
+        ? manifest.slots.find((s) => s.cardId === srcCardId)
+        : parseManifest((await getBoard(srcBoardId))?.manifestRaw ?? "").slots.find(
+            (s) => s.cardId === srcCardId
+          );
+    if (!slot) return null;
+    const outputJson =
+      srcBoardId === board.boardId
+        ? (liveDoc[srcCardId] ?? "")
+        : ((await rowsForBoard(srcBoardId)).find(
+            (r) => r.cardId === srcCardId && r.instanceId === ""
+          )?.outputJson ?? "");
+    return { slot, outputJson };
+  };
+
   /** Open one card. The studio owns its own Save/Cancel. */
-  const openStudio = async (slot: ManifestSlot, isNew: boolean) => {
+  const openStudio = async (slot: ManifestSlot, isNew: boolean, seedDoc?: string) => {
     const result = await openCardStudio({
       boardId: board.boardId,
       slot,
@@ -391,8 +424,10 @@ async function renderComposer(
       isNew,
       mode: instanceMode ? "instance" : "board",
       // the composer already holds every card's document, so the studio
-      // opens on it with no further read
-      standardDoc: instanceMode ? undefined : (liveDoc[slot.cardId] ?? ""),
+      // opens on it with no further read; a copy brings its source's
+      // content instead, which Save must write even if untouched
+      standardDoc: instanceMode ? undefined : (seedDoc ?? liveDoc[slot.cardId] ?? ""),
+      seedDoc: seedDoc !== undefined,
       instanceDoc: instanceMode ? (instDoc[slot.cardId] ?? "") : undefined,
       persist: async () => {
         await target.persist(manifest);
@@ -404,6 +439,7 @@ async function renderComposer(
             manifest.slots = manifest.slots.filter((s) => s.cardId !== slot.cardId);
             manifest.archivedSlots.push(slot);
             await target.persist(manifest);
+            paintArchivedCount();
             status.textContent = `archived ${new Date().toLocaleTimeString()}`;
           },
     });
@@ -422,27 +458,106 @@ async function renderComposer(
     renderGrid();
   };
 
+  /** A cardId nothing on this board is using, live or archived. */
+  const freshCardId = (cardType: string): string =>
+    mintCardId(
+      cardType,
+      new Set([
+        ...manifest.slots.map((s) => s.cardId),
+        ...manifest.archivedSlots.map((s) => s.cardId),
+      ])
+    );
+
   const addCard = async (pos: number) => {
-    const picked = await openCardPicker({ catalogSvg });
+    const picked = await openCardPicker({
+      catalogSvg,
+      // archive is a board-template concept: adjusting one meeting neither
+      // archives nor restores
+      archived: instanceMode
+        ? []
+        : manifest.archivedSlots.map((slot) => ({
+            slot,
+            svg: liveSvg[slot.cardId] ?? "",
+          })),
+      copySources: boardRefs.map((ref) =>
+        ref.boardId === board.boardId
+          ? {
+              ...ref,
+              cards: manifest.slots.map((s) => ({
+                cardId: s.cardId,
+                cardType: s.cardType,
+                title: s.title,
+              })),
+            }
+          : ref
+      ),
+      onDeleteArchived: async (cardId) => {
+        manifest.archivedSlots = manifest.archivedSlots.filter((s) => s.cardId !== cardId);
+        await target.persist(manifest);
+        paintArchivedCount();
+        status.textContent = `deleted ${new Date().toLocaleTimeString()}`;
+      },
+    });
     if (!picked) return;
-    const slot: ManifestSlot = {
-      pos,
-      w: 1,
-      h: 1,
-      nav: 0,
-      cardId: mintCardId(picked.cardType, new Set(manifest.slots.map((s) => s.cardId))),
-      cardType: picked.cardType,
-      title: "",
-      // the type's default data policy, stamped on creation only — an
-      // existing slot with no stored policy keeps the runtime default
-      settings: (() => {
-        const policy = policyOnPick(picked.cardType, "");
-        return policy === "" ? {} : { board: { policy } };
-      })(),
-    };
+
+    // --- restore: the slot comes back whole, so there is nothing to configure
+    if (picked.kind === "archived") {
+      const idx = manifest.archivedSlots.findIndex((s) => s.cardId === picked.cardId);
+      if (idx < 0) return;
+      const [slot] = manifest.archivedSlots.splice(idx, 1);
+      slot.pos = pos;
+      manifest.slots.push(slot);
+      await target.persist(manifest);
+      paintArchivedCount();
+      status.textContent = `restored ${new Date().toLocaleTimeString()}`;
+      renderGrid();
+      return;
+    }
+
+    // --- new, or a copy of an existing card ---
+    let slot: ManifestSlot;
+    let seedDoc: string | undefined;
+    if (picked.kind === "copy") {
+      const src = await loadCopySource(picked.boardId, picked.cardId);
+      if (!src) {
+        status.textContent = "that card could not be read";
+        return;
+      }
+      slot = {
+        pos,
+        w: 1,
+        h: 1,
+        nav: 0,
+        cardId: freshCardId(src.slot.cardType),
+        cardType: src.slot.cardType,
+        // copying within a board would otherwise produce two identical titles
+        title:
+          picked.boardId === board.boardId && src.slot.title !== ""
+            ? `${src.slot.title} (copy)`
+            : src.slot.title,
+        settings: JSON.parse(JSON.stringify(src.slot.settings)) as Record<string, unknown>,
+      };
+      if (picked.withContent) seedDoc = src.outputJson;
+    } else {
+      slot = {
+        pos,
+        w: 1,
+        h: 1,
+        nav: 0,
+        cardId: freshCardId(picked.cardType),
+        cardType: picked.cardType,
+        title: "",
+        // the type's default data policy, stamped on creation only — an
+        // existing slot with no stored policy keeps the runtime default
+        settings: (() => {
+          const policy = policyOnPick(picked.cardType, "");
+          return policy === "" ? {} : { board: { policy } };
+        })(),
+      };
+    }
     manifest.slots.push(slot);
     renderGrid(); // show it while the studio is open
-    const result = await openStudio(slot, true);
+    const result = await openStudio(slot, true, seedDoc);
     if (result === "cancelled") {
       // nothing was ever persisted — drop it again
       manifest.slots = manifest.slots.filter((s) => s !== slot);
@@ -451,4 +566,5 @@ async function renderComposer(
   };
 
   renderGrid();
+  paintArchivedCount();
 }

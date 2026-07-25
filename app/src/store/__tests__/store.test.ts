@@ -257,3 +257,32 @@ describe("archived slots (card-studio plan, phase 0)", () => {
     expect(archiveSlots(m.slots).map((a) => a.cardId)).not.toContain("old-1");
   });
 });
+
+describe("closing a meeting freezes its board composition (card-studio phase 3)", () => {
+  // A closed meeting with no override of its own re-renders from the board's
+  // CURRENT manifest, so archiving a card used to retro-remove it from every
+  // past meeting. closeInstance now snapshots the composition; these cover
+  // the pure part of that decision.
+  const board = parseManifest(manifestRaw);
+
+  it("the snapshot carries the live slots but not the archive list", () => {
+    const withArchive = {
+      ...board,
+      archivedSlots: [
+        { pos: 9, w: 1, h: 1, nav: 0, cardId: "old", cardType: "Fishbone", title: "", settings: {} },
+      ],
+    };
+    const frozen = parseManifest(
+      serializeManifest({ ...withArchive, archivedSlots: [] })
+    );
+    expect(frozen.slots.map((s) => s.cardId)).toEqual(board.slots.map((s) => s.cardId));
+    expect(frozen.archivedSlots).toEqual([]);
+  });
+
+  it("a frozen manifest still renders the same tiles later", () => {
+    // the whole point: what the meeting showed survives a later board edit
+    const frozen = parseManifest(serializeManifest(board));
+    const catalog = { Fishbone: "<svg fish/>" };
+    expect(joinTiles(frozen.slots, "inst", [], catalog)).toHaveLength(board.slots.length);
+  });
+});

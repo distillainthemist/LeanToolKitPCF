@@ -300,6 +300,43 @@ editability (closed meetings are already immutable).
 Recommended, but called out separately because it changes what past meetings
 display and is not strictly part of the studio work.
 
+**Done 2026-07-26 — and it stopped being optional.** Phase 3 is what makes
+archiving a card easy, so without the snapshot this phase would have shipped
+a feature that silently rewrites history. `closeInstance()` now freezes the
+board composition onto any instance that has no override of its own
+(`archivedSlots` excluded — the archive list is design-time only).
+
+Consequence worth knowing: reopening a closed meeting and adjusting it now
+edits that frozen layout rather than re-inheriting the board's current one.
+That is the right behaviour for a meeting that has already happened, but it
+is a change.
+
+### Phase 3 as built
+
+The picker gained its other two sources behind tabs (Archived only appears
+when there is something in it, with a count). Restore puts the slot back
+whole — same `cardId`, so its rows, actions and series reconnect — into the
+cell that was clicked, and returns straight to the grid. Copy reads its
+source on demand (only once a maker actually picks one), mints a fresh
+`cardId`, clones the settings, titles a same-board copy "X (copy)", and
+opens the studio so the copy is reviewed before it is committed.
+
+That last part needed one addition to the studio: `seedDoc`. A copied
+document has never been stored, so it must be written on Save even if the
+maker never touches the card — otherwise the copy would arrive empty. The
+harness covers both directions: a seeded card writes on an untouched Save, an
+unseeded one still writes nothing.
+
+Permanent delete removes the slot from `archivedSlots` only; the confirm says
+plainly that the card's saved content — including the images past meetings
+archived — stays in the database. The composer's toolbar shows an "N
+archived" count, since the archive is otherwise only reachable from inside
+＋ Add card.
+
+Proof: `app/card-studio.html` — 26 checks ALL PASS (six new for the picker's
+archived/copy sources and delete, two for the seeded-document rule), plus 201
+unit tests including the frozen-manifest cases.
+
 ---
 
 ## Phase 4 — Seamless-UX enhancements (proposed)
@@ -365,6 +402,6 @@ Beyond the four asks:
 - [x] Phase 0 — contracts (designTime, standardContent classifier, archivedSlots) — DONE 2026-07-26
 - [x] Phase 1 — the card studio overlay — DONE 2026-07-26 (built + verified in isolation; wired up in phase 2)
 - [x] Phase 2 — composer integration — DONE 2026-07-26
-- [ ] Phase 3 — add / archive / duplicate flow (+ optional close-time manifest snapshot)
+- [x] Phase 3 — add / archive / duplicate flow (+ the close-time manifest snapshot) — DONE 2026-07-26
 - [ ] Phase 4 — enhancements + polish
 - [ ] Phase 5 — docs (master-leanboard.md), release, deploy

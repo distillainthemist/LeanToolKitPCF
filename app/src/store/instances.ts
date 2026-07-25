@@ -14,7 +14,7 @@ import {
   stampArchiveSvg,
 } from "./cards";
 import { allWhere, eq, firstWhere } from "./dv";
-import { parseManifest } from "./mappers";
+import { parseManifest, serializeManifest } from "./mappers";
 import { archiveSlots, isActionSurface, isLinkCard, seedPlan } from "./policies";
 
 export interface InstanceSummary {
@@ -156,7 +156,19 @@ export async function saveInstanceManifest(
   });
 }
 
-/** Close the meeting and stamp the shared-card SVG archive. */
+/**
+ * Close the meeting: stamp the shared-card SVG archive, and FREEZE the board
+ * composition onto the instance.
+ *
+ * A closed meeting with no override of its own re-renders from the board's
+ * CURRENT manifest, so taking a card off the board (archiving it, or moving
+ * it) silently rewrote what every past meeting appeared to have shown — the
+ * tile images survived in their rows with nothing left to display them. That
+ * contradicts the rule the rest of the archive keeps: a closed meeting shows
+ * what it showed. Snapshotting the manifest at close costs a few KB per
+ * instance and makes the record whole. (The archive list itself is a
+ * design-time concept, so it is not part of the snapshot.)
+ */
 export async function closeInstance(instance: InstanceSummary): Promise<void> {
   await Ben_ltkboardinstancesService.update(instance.id, { ben_status: "closed" });
   const board = await getBoard(instance.boardId);
@@ -164,6 +176,12 @@ export async function closeInstance(instance: InstanceSummary): Promise<void> {
   const manifest = parseManifest(board.manifestRaw);
   for (const stamp of archiveSlots(manifest.slots)) {
     await stampArchiveSvg(instance.id, instance.boardId, stamp.cardId, stamp.from);
+  }
+  if (instance.manifestRaw.trim() === "") {
+    await saveInstanceManifest(
+      instance.id,
+      serializeManifest({ ...manifest, archivedSlots: [] })
+    );
   }
 }
 

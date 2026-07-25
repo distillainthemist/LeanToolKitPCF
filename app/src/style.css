@@ -1323,3 +1323,78 @@ input[type="color"].app-color:disabled { opacity: 0.4; cursor: default; }
 /* the composer grid now fills the width the settings pane used to take */
 .app-composer-grid { flex: 1; min-height: 0; display: flex; }
 .app-composer-grid > * { flex: 1; min-width: 0; }
+
+/* picker: source tabs, archived entries, copy controls */
+.app-picker-tabs { display: flex; gap: 4px; flex: none; }
+.app-picker-tab {
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: none;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #6b6b6b;
+  padding: 5px 10px;
+  cursor: pointer;
+}
+.app-picker-tab:hover { color: var(--app-accent, #2563eb); }
+.app-picker-tab-on {
+  background: #fff;
+  border-color: #d5d1c8;
+  color: #2b2b2b;
+}
+.app-picker-note {
+  font-size: 12px;
+  color: #6b6b6b;
+  line-height: 1.4;
+  margin-bottom: 10px;
+}
+.app-picker-opt-arch { padding: 0; overflow: hidden; }
+.app-picker-pickbtn {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 8px 4px;
+  background: none;
+  border: 0;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  width: 100%;
+}
+.app-picker-del {
+  align-self: flex-end;
+  margin: 0 8px 8px;
+  border: 1px solid #d5d1c8;
+  border-radius: 6px;
+  background: none;
+  font: inherit;
+  font-size: 11.5px;
+  color: #6b6b6b;
+  padding: 2px 9px;
+  cursor: pointer;
+}
+.app-picker-del:hover { color: #a02832; border-color: #a02832; }
+.app-picker-copybar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+.app-picker-copylabel {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #6b6b6b;
+}
+.app-picker-copybar select { max-width: 280px; }
+.app-picker-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  color: #2b2b2b;
+}
+.app-board-archcount { font-size: 12px; color: #6b6b6b; }

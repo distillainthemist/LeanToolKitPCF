@@ -53,6 +53,9 @@
       cardId: `c-${cardType.toLowerCase()}`, cardType, title: "", settings,
     });
     const q = (sel) => document.querySelector(sel);
+    /** Dismiss an open picker the way a user would (its promise resolves null). */
+    const escapePicker = () =>
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
 
     /** Open the studio, run `body`, then make sure it is closed. */
     async function withStudio(cardType, settings, body) {
@@ -234,9 +237,17 @@
     }
 
     // ---- 9. phase 2: the add picker ----
+    const ART = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><rect width="10" height="10" fill="#123456"/></svg>';
+    const pickerOpts = (over = {}) => ({
+      catalogSvg: { FiveWhys: ART },
+      archived: [],
+      copySources: [],
+      onDeleteArchived: async () => {},
+      ...over,
+    });
     {
       const { openCardPicker } = await import("./src/screens/cardPicker.ts");
-      const pick = openCardPicker({ catalogSvg: { FiveWhys: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><rect width="10" height="10" fill="#123456"/></svg>' } });
+      const pick = openCardPicker(pickerOpts());
       await wait(80);
       const optCount = document.querySelectorAll(".app-picker-opt").length;
       const artCount = document.querySelectorAll(".app-picker-art svg").length;
@@ -257,6 +268,132 @@
       report("picking resolves the chosen type", JSON.stringify(picked),
         picked?.kind === "new" && picked.cardType === "ParetoCard" &&
         !document.querySelector(".app-picker-overlay"));
+    }
+
+    // ---- 10. phase 3: archived + copy sources ----
+    {
+      const { openCardPicker } = await import("./src/screens/cardPicker.ts");
+      const archSlot = {
+        pos: 4, w: 1, h: 1, nav: 0, cardId: "old-pareto",
+        cardType: "ParetoCard", title: "Retired pareto", settings: { config: { unit: "defects" } },
+      };
+
+      // (a) with nothing archived, the tab is not offered at all
+      let pick = openCardPicker(pickerOpts());
+      await wait(60);
+      const tabsPlain = [...document.querySelectorAll(".app-picker-tab")].map((t) => t.textContent);
+      escapePicker();
+      await pick;
+      report("no Archived tab when nothing is archived", tabsPlain.join(" | "),
+        tabsPlain.length === 2 && !tabsPlain.some((t) => t.startsWith("Archived")));
+
+      // (b) with an archived card, the tab appears with a count and restores
+      pick = openCardPicker(pickerOpts({ archived: [{ slot: archSlot, svg: ART }] }));
+      await wait(60);
+      const tabs = [...document.querySelectorAll(".app-picker-tab")];
+      const archTab = tabs.find((t) => t.textContent.startsWith("Archived"));
+      report("Archived tab shows the count", archTab?.textContent ?? "(missing)",
+        archTab?.textContent === "Archived (1)");
+      archTab.click();
+      await wait(40);
+      const entryLabel = document.querySelector(".app-picker-opt-arch .app-picker-opt-label")?.textContent;
+      document.querySelector(".app-picker-pickbtn").click();
+      const restored = await pick;
+      report("restoring returns the archived cardId",
+        `${entryLabel} → ${JSON.stringify(restored)}`,
+        entryLabel === "Retired pareto" && restored?.kind === "archived" &&
+        restored.cardId === "old-pareto");
+
+      // (c) permanent delete calls back and empties the tab
+      const deleted = [];
+      pick = openCardPicker(pickerOpts({
+        archived: [{ slot: archSlot, svg: ART }],
+        onDeleteArchived: async (id) => { deleted.push(id); },
+      }));
+      await wait(60);
+      [...document.querySelectorAll(".app-picker-tab")].find((t) => t.textContent.startsWith("Archived")).click();
+      await wait(40);
+      const realConfirm = window.confirm;
+      window.confirm = () => true;
+      document.querySelector(".app-picker-del").click();
+      await wait(60);
+      window.confirm = realConfirm;
+      const tabsAfter = [...document.querySelectorAll(".app-picker-tab")].map((t) => t.textContent);
+      escapePicker();
+      await pick;
+      report("permanent delete removes it and drops the tab",
+        `deleted ${JSON.stringify(deleted)} · tabs ${tabsAfter.join("|")}`,
+        deleted.length === 1 && deleted[0] === "old-pareto" &&
+        !tabsAfter.some((t) => t.startsWith("Archived")));
+
+      // (d) copy: board picker + content toggle, returning a full reference
+      pick = openCardPicker(pickerOpts({
+        copySources: [
+          { boardId: "b-this", name: "This board", cards: [
+            { cardId: "risk-1", cardType: "RiskMatrix", title: "Site risks" },
+          ] },
+          { boardId: "b-other", name: "Other board", cards: [
+            { cardId: "sq-1", cardType: "SqdpcCard", title: "Line SQDPC" },
+          ] },
+        ],
+      }));
+      await wait(60);
+      [...document.querySelectorAll(".app-picker-tab")].find((t) => t.textContent === "Copy existing").click();
+      await wait(40);
+      const boardSel = document.querySelector(".app-picker-copybar select");
+      const checked = document.querySelector(".app-picker-check input").checked;
+      boardSel.value = "b-other";
+      boardSel.dispatchEvent(new Event("change", { bubbles: true }));
+      await wait(40);
+      const cardLabels = [...document.querySelectorAll(".app-picker-opt-label")].map((l) => l.textContent);
+      document.querySelector(".app-picker-opt").click();
+      const copied = await pick;
+      report("copy defaults to bringing the content", `checked:${checked}`, checked === true);
+      report("copy returns the chosen board + card",
+        `${cardLabels.join(",")} → ${JSON.stringify(copied)}`,
+        copied?.kind === "copy" && copied.boardId === "b-other" &&
+        copied.cardId === "sq-1" && copied.withContent === true);
+    }
+
+    // ---- 11. phase 3: a copied document is written even if untouched ----
+    // A seeded save reaches the live-row WRITE, which needs the Power Apps
+    // host — so offline it parks at "Saving…" and never resolves. What this
+    // asserts is the part that is decidable here: the seed made Save treat
+    // the document as pending, rather than skipping it as untouched.
+    {
+      const calls = { persist: 0 };
+      const seeded = openCardStudio({
+        boardId: "b-test", slot: slotFor("FiveWhys"), boards: [],
+        standardDoc: '{"seeded":true}', seedDoc: true,
+        persist: async () => { calls.persist++; },
+      });
+      await wait(60);
+      // save WITHOUT touching anything: the copied content must still count
+      [...document.querySelectorAll(".app-studio-foot .app-btn")]
+        .find((b) => b.textContent === "Save").click();
+      await wait(200);
+      const btn = [...document.querySelectorAll(".app-studio-foot .app-btn")]
+        .find((b) => b.textContent.startsWith("Sav"));
+      report("a seeded (copied) document is written on an untouched Save",
+        `persist ${calls.persist}× · then ${btn?.textContent ?? "closed"}`,
+        calls.persist === 1 && btn?.textContent === "Saving…");
+      q(".app-studio-overlay")?.remove();
+      void seeded;
+
+      // and the control: with no seed, an untouched Save writes no document
+      // at all, so it closes immediately even with no host
+      const plain = { persist: 0 };
+      const done = openCardStudio({
+        boardId: "b-test", slot: slotFor("FiveWhys"), boards: [], standardDoc: "",
+        persist: async () => { plain.persist++; },
+      });
+      await wait(60);
+      [...document.querySelectorAll(".app-studio-foot .app-btn")]
+        .find((b) => b.textContent === "Save").click();
+      const outcome = await done;
+      report("an untouched card writes no document (closes with no row write)",
+        `${outcome} · persist ${plain.persist}×`,
+        outcome === "saved" && plain.persist === 1);
     }
 
     document.getElementById("summary").innerHTML = bad === 0

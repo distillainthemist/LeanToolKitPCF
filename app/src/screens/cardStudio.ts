@@ -64,6 +64,12 @@ export interface StudioOptions {
    * edit can never be saved over content that had not loaded yet.
    */
   standardDoc?: string;
+  /**
+   * `standardDoc` is NEW content that has never been stored — a copied card's
+   * starting point. It must be written on Save even if the maker never
+   * touches the card, so it counts as pending from the outset.
+   */
+  seedDoc?: boolean;
   /** Persist the manifest. Called after the slot is updated, before close. */
   persist: (slot: ManifestSlot) => Promise<void>;
   /** Board mode only: move this card to the manifest's archive. */
@@ -106,7 +112,8 @@ export function openCardStudio(opts: StudioOptions): Promise<StudioResult> {
 
     // ---- buffers (nothing here reaches the store until Save) ----
     const draft = draftFromSlot(opts.slot);
-    let pendingDoc: string | null = null; // null = the document was never edited
+    // null = the document was never edited, so Save leaves the row alone
+    let pendingDoc: string | null = opts.seedDoc ? (opts.standardDoc ?? "") : null;
     let pendingSvg = "";
     let dirty = false;
     let saving = false;
