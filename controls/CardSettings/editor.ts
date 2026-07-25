@@ -207,23 +207,12 @@ export class CardSettingsEditor {
     const spec = cardSpec(this.draft.cardType);
     if (!spec) return;
 
+    // A card's TYPE is chosen once, when it is added, and never changes:
+    // the config keys and the document schema are both type-specific, so
+    // switching would strip the configuration and orphan the content.
     const head = el("div", "ltk-cs-chosen");
     head.appendChild(el("span", "ltk-cs-chosen-label", spec.label));
     head.appendChild(el("span", "ltk-cs-chosen-desc", spec.description));
-    if (!this.typeLocked && !this.readOnly) {
-      const change = el("button", "ltk-cs-change", "Change card type");
-      change.type = "button";
-      change.title =
-        "Title, prompts and theme carry over; card-specific configuration does not.";
-      change.addEventListener("click", () => {
-        this.draft.cardType = "";
-        this.draft.config = {}; // config keys don't transfer between cards
-        this.search = "";
-        this.commit();
-        this.render();
-      });
-      head.appendChild(change);
-    }
     body.appendChild(head);
 
     const host: FieldHost = {

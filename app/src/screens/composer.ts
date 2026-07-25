@@ -1,31 +1,32 @@
-// Board setup (composer) screen — BoardGrid in edit mode on the left
-// (add / drag / resize / nav order / column headings), CardSettings on
-// the right for the selected slot. Two targets share the editor: the
-// board's own manifest (board setup) and one instance's override
-// manifest (adjust this meeting — gated by the wizard's toggle).
+// Board setup (composer) screen — BoardGrid in edit mode, full width: add /
+// drag / resize / nav order / column headings. Tapping a tile opens the CARD
+// STUDIO (screens/cardStudio.ts), which owns everything about one card —
+// its live standard content, its properties, and its Cancel/Save.
+//
+// The composer used to carry a settings pane on the right and launch a
+// separate standard-content screen; both are now the studio's two panes
+// (docs/leanboard-card-studio-plan.md).
+//
+// Two targets share this editor: the board's own manifest (board setup) and
+// one instance's override manifest (adjust this meeting).
 
 import { BoardGridView } from "../../../controls/BoardGrid/editor";
 import { BoardTile, parseColumns } from "../../../controls/BoardGrid/types";
-import { CardSettingsEditor } from "../../../controls/CardSettings/editor";
-import { cardLabel } from "../../../controls/CardSettings/registry";
-import {
-  BoardRef,
-  SettingsDraft,
-  parseDraft,
-  serializeDraft,
-} from "../../../controls/CardSettings/types";
+import { BoardRef } from "../../../controls/CardSettings/types";
+import { policyOnPick } from "../../../controls/CardSettings/registry";
 import { paletteMap, titleStripColor } from "../../../shared/palette";
-import { clear, el } from "../../../shared/ui/dom";
+import { el } from "../../../shared/ui/dom";
 import { appTheme } from "../cardHost";
 import { detectHost } from "../runtime";
 import { getBoard, listBoards, saveManifest } from "../store/boards";
 import { appPalettes } from "../store/config";
-import { ensureLiveRow, liveRow, rowsForBoard, saveCard, toLite } from "../store/cards";
+import { rowsForBoard } from "../store/cards";
 import { catalogSvgByType } from "../store/catalog";
 import { mountTile } from "../cardRegistry";
 import { getInstance, saveInstanceManifest } from "../store/instances";
 import { effectivelyClosed, relockOnLeave } from "../relock";
-import { isActionSurface } from "../store/policies";
+import { openCardPicker } from "./cardPicker";
+import { openCardStudio } from "./cardStudio";
 import {
   BoardManifest,
   BoardSummary,
@@ -42,109 +43,8 @@ interface ComposerTarget {
   persist: (manifest: BoardManifest) => Promise<void>;
   /** Instance mode only: drop the override and return to the board. */
   onReset?: () => Promise<void>;
-  removeLabel: string;
-}
-
-/**
- * Full-screen overlay hosting the card editor bound to the card's LIVE
- * (standard-content) row. An overlay rather than a route so the wizard's
- * Meeting board step stays mounted underneath; edits autosave, Done or
- * Escape closes.
- */
-function openStandardContent(
-  boardId: string,
-  cardId: string,
-  onClosed?: () => void
-): void {
-  const overlay = el("div", "app-content-overlay");
-  const panel = el("div", "app-content-panel");
-  overlay.appendChild(panel);
-  document.body.appendChild(overlay);
-  let cleanup: () => void = () => undefined;
-  const close = () => {
-    cleanup();
-    overlay.remove();
-    document.removeEventListener("keydown", onKey, true);
-    onClosed?.();
-  };
-  const onKey = (e: KeyboardEvent) => {
-    if (e.key === "Escape") {
-      e.stopPropagation();
-      close();
-    }
-  };
-  document.addEventListener("keydown", onKey, true);
-  void import("./cardEditor").then(({ mountCardEditor }) => {
-    cleanup = mountCardEditor(panel, boardId, "live", cardId, close);
-  });
-}
-
-/**
- * Re-render a card offscreen with its CURRENT settings and standard
- * document, and store the snapshot on its live row — the board tile then
- * reflects a settings change (dimensions, status codes, conditions…),
- * which editing settings alone never did: tiles only refreshed when the
- * card's CONTENT was edited. Resolves false when the card produces no
- * snapshot (EmbedCard) or renders nothing in time.
- */
-async function regenerateTile(
-  boardId: string,
-  slot: ManifestSlot,
-  theme: ReturnType<typeof appTheme>,
-  palette: Record<string, string>
-): Promise<boolean> {
-  const { cardMounter } = await import("../cardRegistry");
-  const mounter = cardMounter(slot.cardType);
-  if (!mounter) return false;
-  await ensureLiveRow(boardId, slot.cardId, slot.cardType);
-  const row = await liveRow(boardId, slot.cardId);
-  if (!row) return false;
-
-  // offscreen but laid out — a display:none host has no size, so the
-  // editors' snapshot would come out empty
-  const host = el("div");
-  host.style.cssText =
-    "position:fixed; left:-10000px; top:0; width:640px; height:420px; display:flex;";
-  document.body.appendChild(host);
-
-  let unmount: () => void = () => undefined;
-  try {
-    const svg = await new Promise<string>((resolve) => {
-      // snapshots land in ~1s locally; allow plenty of headroom on a slow
-      // device rather than silently skipping the refresh
-      const timer = setTimeout(() => resolve(""), 8000);
-      unmount = mounter({
-        host,
-        title: slot.title || cardLabel(slot.cardType),
-        boardId,
-        cardId: slot.cardId,
-        outputJson: row.outputJson,
-        people: [],
-        theme,
-        palette,
-        readOnly: true, // a clean tile: no affordances, no edits
-        settings: slot.settings,
-        instanceKey: "",
-        instanceWhen: "",
-        actions: [],
-        sources: [],
-        viewer: { whoId: "", who: "" },
-        onSave: () => undefined,
-        onTile: (tileSvg) => {
-          if (tileSvg.trim() === "") return;
-          clearTimeout(timer);
-          resolve(tileSvg);
-        },
-        onActions: () => undefined,
-      });
-    });
-    if (svg === "") return false;
-    await saveCard(row.id, row.outputJson, svg);
-    return true;
-  } finally {
-    unmount();
-    host.remove();
-  }
+  /** Instance mode: that meeting's record, so the studio previews its content. */
+  instanceGuid?: string;
 }
 
 function mintCardId(cardType: string, taken: Set<string>): string {
@@ -153,21 +53,6 @@ function mintCardId(cardType: string, taken: Set<string>): string {
     const id = `${stem}-${Math.random().toString(36).slice(2, 6)}`;
     if (!taken.has(id)) return id;
   }
-}
-
-/** The slot's settings blob as a CardSettings draft (title/type included). */
-function draftFromSlot(slot: ManifestSlot): SettingsDraft {
-  return parseDraft(
-    JSON.stringify({ ...slot.settings, cardType: slot.cardType, title: slot.title })
-  );
-}
-
-/** Fold an edited draft back into its slot (settings stay sparse). */
-function applyDraft(slot: ManifestSlot, draft: SettingsDraft): void {
-  slot.cardType = draft.cardType;
-  slot.title = draft.title.trim();
-  const raw = serializeDraft(draft);
-  slot.settings = raw === "" ? {} : (JSON.parse(raw) as Record<string, unknown>);
 }
 
 export function mountComposer(
@@ -210,7 +95,6 @@ export function mountComposer(
         manifest: parseManifest(board.manifestRaw),
         doneHref: `#/board/${board.boardId}`,
         persist: (m) => saveManifest(board.id, m),
-        removeLabel: "Remove from board",
       },
       cleanups
     );
@@ -241,7 +125,6 @@ export async function mountDesigner(
       manifest: parseManifest(board.manifestRaw),
       doneHref: "",
       persist: (m) => saveManifest(board.id, m),
-      removeLabel: "Remove from board",
     },
     cleanups
   );
@@ -311,7 +194,7 @@ export function mountInstanceComposer(
           await saveInstanceManifest(instanceGuid, "");
           window.location.hash = doneHref;
         },
-        removeLabel: "Remove from this meeting",
+        instanceGuid,
       },
       cleanups
     );
@@ -326,30 +209,34 @@ async function renderComposer(
   cleanups: Array<() => void>
 ): Promise<void> {
   const manifest: BoardManifest = target.manifest;
+  const instanceMode = target.instanceGuid !== undefined;
   const catalogSvg = await catalogSvgByType();
-  // the app palettes: paletteColor/titleColor selects in the settings pane,
-  // and resolution for live previews / tile refreshes
   const palettes = await appPalettes();
   const paletteColors = paletteMap(palettes.states);
   const titleColors = paletteMap(palettes.titles);
 
-  // standard-content snapshots: a card whose live (template) row has a
-  // tile SVG previews with it instead of the generic catalog art. Kept as
-  // the fallback for when live previews are unavailable.
+  // Per-card documents and snapshots, from one read of the board's rows:
+  //   liveDoc  — the standard-content (template) row, what the studio edits
+  //   liveSvg  — its snapshot, the composer's tile fallback
+  //   instDoc  — instance mode: that meeting's own content, previewed
   let liveSvg: Record<string, string> = {};
-  /** The live (template) row's document per card — what a live preview renders. */
   let liveDoc: Record<string, string> = {};
-  const refreshLiveSvg = async () => {
+  let instDoc: Record<string, string> = {};
+  const refreshRows = async () => {
     const rows = await rowsForBoard(board.boardId);
     liveSvg = {};
     liveDoc = {};
+    instDoc = {};
     for (const r of rows) {
-      if (r.instanceId !== "") continue;
-      if (r.tileSvg !== "") liveSvg[r.cardId] = r.tileSvg;
-      liveDoc[r.cardId] = r.outputJson;
+      if (r.instanceId === "") {
+        if (r.tileSvg !== "") liveSvg[r.cardId] = r.tileSvg;
+        liveDoc[r.cardId] = r.outputJson;
+      } else if (r.instanceId === target.instanceGuid) {
+        instDoc[r.cardId] = r.outputJson;
+      }
     }
   };
-  await refreshLiveSvg();
+  await refreshRows();
 
   // link/rollup sources: every board's cards, from the boards list
   const boardRefs: BoardRef[] = (await listBoards()).map((b) => ({
@@ -357,13 +244,25 @@ async function renderComposer(
     name: b.name,
     cards:
       b.boardId === board.boardId
-        ? [] // filled per render so freshly added cards appear
+        ? [] // filled per open so freshly added cards appear
         : parseManifest(b.manifestRaw).slots.map((s) => ({
             cardId: s.cardId,
             cardType: s.cardType,
             title: s.title,
           })),
   }));
+  /** Board refs with THIS board's current cards folded in (minus `exclude`). */
+  const sourceRefs = (exclude: string): BoardRef[] =>
+    boardRefs.map((ref) =>
+      ref.boardId === board.boardId
+        ? {
+            ...ref,
+            cards: manifest.slots
+              .filter((s) => s.cardId !== exclude)
+              .map((s) => ({ cardId: s.cardId, cardType: s.cardType, title: s.title })),
+          }
+        : ref
+    );
 
   // ---- chrome (embedded mode: no title, no Done — the wizard hosts) ----
   const bar = el("div", "app-board-toolbar");
@@ -388,59 +287,26 @@ async function renderComposer(
   }
   parent.appendChild(bar);
 
-  const split = el("div", "app-board-split app-composer-split");
-  parent.appendChild(split);
-  const leftHost = el("div", "app-board-left");
-  const rightHost = el("div", "app-board-right");
-  split.append(leftHost, rightHost);
+  const gridHost = el("div", "app-composer-grid");
+  parent.appendChild(gridHost);
 
-  const pane = el("div", "app-composer-pane");
-  rightHost.appendChild(pane);
-
-  // ---- persistence (debounced; layout events save immediately) ----
-  let saveTimer: ReturnType<typeof setTimeout> | null = null;
-  // leaving with a debounced save still pending must FLUSH it, not cancel
-  // it — route teardown drains cleanups synchronously, so an edit made in
-  // the last 600ms before Done/Home was silently discarded.
-  cleanups.push(() => {
-    if (saveTimer === null) return;
-    clearTimeout(saveTimer);
-    saveTimer = null;
-    void doSave().catch((err) => console.warn("composer flush save failed", err));
-  });
+  // ---- persistence ----
+  // Card edits are a transaction now (the studio's Save), so the only thing
+  // saved from here is LAYOUT: moves, resizes, nav order, column headings and
+  // the column count. Those are immediate — there is nothing to cancel.
   const doSave = async () => {
     await target.persist(manifest);
     status.textContent = `saved ${new Date().toLocaleTimeString()}`;
   };
-  const save = (immediate = false) => {
-    if (saveTimer !== null) clearTimeout(saveTimer);
-    if (immediate) {
-      saveTimer = null;
-      void doSave();
-      return;
-    }
-    saveTimer = setTimeout(() => {
-      saveTimer = null;
-      void doSave();
-    }, 600);
+  const save = () => {
+    void doSave().catch((err) => console.warn("composer save failed", err));
   };
 
   // ---- the grid (edit mode) ----
-  let selectedCardId: string | null = null;
-  /** Cell chosen via "+ Add card" for the next new slot; 0 = next free. */
-  let pendingPos = 0;
-
-  const gridView = new BoardGridView(leftHost, {
+  const gridView = new BoardGridView(gridHost, {
     onSelect: (e) => {
-      if (e.action === "add") {
-        selectedCardId = null;
-        pendingPos = e.pos;
-        renderPane();
-      } else if (e.action === "configure") {
-        selectedCardId = e.cardId;
-        pendingPos = 0;
-        renderPane();
-      }
+      if (e.action === "add") void addCard(e.pos);
+      else if (e.action === "configure") void editCard(e.cardId);
     },
     onLayout: (slots, columnTitles) => {
       for (const placed of slots) {
@@ -452,7 +318,7 @@ async function renderComposer(
         slot.nav = placed.nav;
       }
       manifest.columnTitles = columnTitles;
-      save(true);
+      save();
     },
   });
   gridView.setTheme(appTheme());
@@ -475,7 +341,8 @@ async function renderComposer(
         title: slot.title,
         boardId: board.boardId,
         cardId: tile.cardId,
-        outputJson: liveDoc[tile.cardId] ?? "",
+        outputJson: (instanceMode ? instDoc[tile.cardId] : undefined) ??
+          liveDoc[tile.cardId] ?? "",
         theme,
         palette: paletteColors,
         settings: slot.settings,
@@ -513,140 +380,75 @@ async function renderComposer(
     save();
   });
 
-  // ---- the settings pane ----
-  let settings: CardSettingsEditor | null = null;
-  cleanups.push(() => settings?.destroy());
+  // ---- the studio ----
 
-  const sourceRefs = (): BoardRef[] =>
-    boardRefs.map((ref) =>
-      ref.boardId === board.boardId
-        ? {
-            ...ref,
-            cards: manifest.slots
-              .filter((s) => s.cardId !== selectedCardId)
-              .map((s) => ({ cardId: s.cardId, cardType: s.cardType, title: s.title })),
-          }
-        : ref
-    );
-
-  const renderPane = () => {
-    settings?.destroy();
-    settings = null;
-    clear(pane);
-
-    const slot = manifest.slots.find((s) => s.cardId === selectedCardId) ?? null;
-    if (!slot && pendingPos === 0) {
-      pane.appendChild(
-        el(
-          "div",
-          "app-composer-hint",
-          "Tap ＋ Add card on an empty cell to add a card, or ✎ on a tile to configure it."
-        )
-      );
-      return;
-    }
-
-    const head = el("div", "app-composer-panebar");
-    head.appendChild(
-      el("span", "app-composer-panetitle", slot ? "Configure card" : "Add card")
-    );
-    if (slot) {
-      // settings auto-save, but an explicit save is the moment to also
-      // re-render the tile against the new settings (a settings change
-      // produces no document edit, so the tile would otherwise stay stale)
-      const saveBtn = el("button", "app-btn app-btn-primary", "Save card") as HTMLButtonElement;
-      saveBtn.title = "Save this card's settings and refresh its tile preview";
-      saveBtn.addEventListener("click", () => {
-        const busyLabel = "Saving…";
-        if (saveBtn.textContent === busyLabel) return;
-        saveBtn.textContent = busyLabel;
-        saveBtn.disabled = true;
-        save(true); // flush the manifest first — the tile renders from it
-        void (async () => {
-          let refreshed = false;
-          try {
-            refreshed = await regenerateTile(board.boardId, slot, appTheme(), paletteColors);
-            if (refreshed) {
-              await refreshLiveSvg();
-              renderGrid();
-            }
-          } catch (err) {
-            console.warn("tile refresh failed", err);
-          } finally {
-            saveBtn.disabled = false;
-            saveBtn.textContent = "Save card";
-            status.textContent = refreshed
-              ? `saved · tile refreshed ${new Date().toLocaleTimeString()}`
-              : `saved ${new Date().toLocaleTimeString()}`;
-          }
-        })();
-      });
-      head.appendChild(saveBtn);
-    }
-    if (slot && !isActionSurface(slot)) {
-      // the card's standard document (e.g. the standing agenda): what a
-      // new meeting starts from when there's nothing to carry. Opens as
-      // an overlay so a wizard-hosted designer never loses its step.
-      const content = el("button", "app-btn", "Edit standard content") as HTMLButtonElement;
-      content.title =
-        "The card's standard document — new meetings start from it unless they carry a previous meeting's content.";
-      content.addEventListener("click", () =>
-        openStandardContent(board.boardId, slot.cardId, () =>
-          void refreshLiveSvg().then(renderGrid)
-        )
-      );
-      head.appendChild(content);
-    }
-    if (slot) {
-      const remove = el("button", "app-btn app-btn-danger", target.removeLabel);
-      remove.addEventListener("click", () => {
-        manifest.slots = manifest.slots.filter((s) => s.cardId !== slot.cardId);
-        selectedCardId = null;
-        renderGrid();
-        renderPane();
-        save(true);
-      });
-      head.appendChild(remove);
-    }
-    pane.appendChild(head);
-
-    const host = el("div", "app-composer-settings");
-    pane.appendChild(host);
-    const editor = new CardSettingsEditor(host, {
-      onChange: (draft) => {
-        let target = manifest.slots.find((s) => s.cardId === selectedCardId);
-        if (!target) {
-          if (draft.cardType === "") return; // still on the picker
-          target = {
-            pos: pendingPos,
-            w: 1,
-            h: 1,
-            nav: 0,
-            cardId: mintCardId(
-              draft.cardType,
-              new Set(manifest.slots.map((s) => s.cardId))
-            ),
-            cardType: draft.cardType,
-            title: "",
-            settings: {},
-          };
-          manifest.slots.push(target);
-          selectedCardId = target.cardId;
-          pendingPos = 0;
-        }
-        applyDraft(target, draft);
-        renderGrid();
-        save();
+  /** Open one card. The studio owns its own Save/Cancel. */
+  const openStudio = async (slot: ManifestSlot, isNew: boolean) => {
+    const result = await openCardStudio({
+      boardId: board.boardId,
+      slot,
+      boards: sourceRefs(slot.cardId),
+      isNew,
+      mode: instanceMode ? "instance" : "board",
+      // the composer already holds every card's document, so the studio
+      // opens on it with no further read
+      standardDoc: instanceMode ? undefined : (liveDoc[slot.cardId] ?? ""),
+      instanceDoc: instanceMode ? (instDoc[slot.cardId] ?? "") : undefined,
+      persist: async () => {
+        await target.persist(manifest);
+        status.textContent = `saved ${new Date().toLocaleTimeString()}`;
       },
+      onArchive: instanceMode
+        ? undefined
+        : async () => {
+            manifest.slots = manifest.slots.filter((s) => s.cardId !== slot.cardId);
+            manifest.archivedSlots.push(slot);
+            await target.persist(manifest);
+            status.textContent = `archived ${new Date().toLocaleTimeString()}`;
+          },
     });
-    editor.setTheme(appTheme());
-    editor.setPalettes(palettes.states, palettes.titles);
-    editor.setChrome(slot ? slot.title || cardLabel(slot.cardType) : "New card", "");
-    editor.setBoards(sourceRefs());
-    editor.setDraft(slot ? draftFromSlot(slot) : parseDraft(""), false);
-    settings = editor;
+    if (result === "saved") {
+      // the studio wrote this card's document + snapshot; pick them up so
+      // the tile reflects the edit
+      await refreshRows();
+    }
+    return result;
+  };
+
+  const editCard = async (cardId: string) => {
+    const slot = manifest.slots.find((s) => s.cardId === cardId);
+    if (!slot) return;
+    await openStudio(slot, false);
+    renderGrid();
+  };
+
+  const addCard = async (pos: number) => {
+    const picked = await openCardPicker({ catalogSvg });
+    if (!picked) return;
+    const slot: ManifestSlot = {
+      pos,
+      w: 1,
+      h: 1,
+      nav: 0,
+      cardId: mintCardId(picked.cardType, new Set(manifest.slots.map((s) => s.cardId))),
+      cardType: picked.cardType,
+      title: "",
+      // the type's default data policy, stamped on creation only — an
+      // existing slot with no stored policy keeps the runtime default
+      settings: (() => {
+        const policy = policyOnPick(picked.cardType, "");
+        return policy === "" ? {} : { board: { policy } };
+      })(),
+    };
+    manifest.slots.push(slot);
+    renderGrid(); // show it while the studio is open
+    const result = await openStudio(slot, true);
+    if (result === "cancelled") {
+      // nothing was ever persisted — drop it again
+      manifest.slots = manifest.slots.filter((s) => s !== slot);
+    }
+    renderGrid();
   };
 
   renderGrid();
-  renderPane();
 }

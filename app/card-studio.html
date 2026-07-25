@@ -190,6 +190,75 @@
         `changed:${result.changed} title-in-card:${result.has}`, result.has);
     }
 
+    // ---- 8. phase 2: the tile has no ✎, and tapping it configures ----
+    {
+      const { BoardGridView } = await import("../controls/BoardGrid/editor.ts");
+      const host = document.createElement("div");
+      host.style.cssText = "position:fixed;left:-4000px;top:0;width:900px;height:600px";
+      document.body.appendChild(host);
+      const events = [];
+      const grid = new BoardGridView(host, {
+        onSelect: (e) => events.push(e),
+        onLayout: () => {},
+      });
+      grid.setEditMode(true);
+      grid.setTiles(
+        [{ pos: 1, w: 1, h: 1, nav: 1, cardId: "c1", cardType: "FiveWhys", title: "Top issue", svg: "", barColor: "" }],
+        3
+      );
+      await wait(50);
+      const editBtns = host.querySelectorAll(".ltk-bg-editbtn").length;
+      report("no ✎ button on the tile", `${editBtns} found`, editBtns === 0);
+
+      const tile = host.querySelector(".ltk-bg-tile");
+      const opts = { bubbles: true, clientX: 100, clientY: 100, button: 0, pointerType: "mouse", pointerId: 1 };
+      tile.dispatchEvent(new PointerEvent("pointerdown", opts));
+      document.dispatchEvent(new PointerEvent("pointerup", opts));
+      await wait(50);
+      report("tapping the tile fires configure",
+        events.map((e) => e.action).join(",") || "(none)",
+        events.some((e) => e.action === "configure" && e.cardId === "c1"));
+
+      // the nav-order input must NOT be swallowed by the tap handler
+      const nav = host.querySelector(".ltk-bg-nav");
+      events.length = 0;
+      nav.dispatchEvent(new PointerEvent("pointerdown", opts));
+      document.dispatchEvent(new PointerEvent("pointerup", opts));
+      await wait(50);
+      report("the nav-order field still takes its own clicks",
+        events.length ? events.map((e) => e.action).join(",") : "no configure fired",
+        events.length === 0);
+
+      grid.destroy();
+      host.remove();
+    }
+
+    // ---- 9. phase 2: the add picker ----
+    {
+      const { openCardPicker } = await import("./src/screens/cardPicker.ts");
+      const pick = openCardPicker({ catalogSvg: { FiveWhys: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><rect width="10" height="10" fill="#123456"/></svg>' } });
+      await wait(80);
+      const optCount = document.querySelectorAll(".app-picker-opt").length;
+      const artCount = document.querySelectorAll(".app-picker-art svg").length;
+      report("picker lists the visible catalogue with art",
+        `${optCount} cards, ${artCount} with art`,
+        optCount === CARDS.filter((c) => !c.hidden).length && artCount === 1);
+
+      // search narrows it
+      const search = document.querySelector(".app-picker-search");
+      search.value = "pareto";
+      search.dispatchEvent(new Event("input", { bubbles: true }));
+      await wait(30);
+      const narrowed = document.querySelectorAll(".app-picker-opt").length;
+      report("search narrows the picker", `${narrowed} match "pareto"`, narrowed === 1);
+
+      document.querySelector(".app-picker-opt").click();
+      const picked = await pick;
+      report("picking resolves the chosen type", JSON.stringify(picked),
+        picked?.kind === "new" && picked.cardType === "ParetoCard" &&
+        !document.querySelector(".app-picker-overlay"));
+    }
+
     document.getElementById("summary").innerHTML = bad === 0
       ? `<p class="ok">ALL PASS</p>` : `<p class="bad">${bad} FAILURES</p>`;
 

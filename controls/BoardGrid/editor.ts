@@ -1,6 +1,6 @@
 // The BoardGrid view — the master-leanboard tile wall. Read mode: tap a
-// tile to open its card (the app navigates). Edit mode: tap a tile (or its
-// ✎ button) to configure it, tap an empty cell to add a card, drag a tile
+// tile to open its card (the app navigates). Edit mode: tap a tile to
+// configure it, tap an empty cell to add a card, drag a tile
 // onto another cell to move/swap, drag the ⤡ corner handle to stretch a
 // tile across multiple cells (the new layout is emitted for the app to
 // persist). The grid is columns-wide only — rows derive from the content,
@@ -453,23 +453,8 @@ export class BoardGridView {
         // read mode: show the flow position quietly
         chip.appendChild(el("span", "ltk-bg-navtag", String(tile.nav)));
       }
-      if (canEdit) {
-        const edit = el("button", "ltk-bg-editbtn") as HTMLButtonElement;
-        edit.type = "button";
-        edit.textContent = "✎";
-        edit.title = "Configure this card";
-        edit.addEventListener("click", (e) => {
-          e.stopPropagation();
-          this.cb.onSelect({
-            action: "configure",
-            pos: anchorPos,
-            cardId: tile.cardId,
-            cardType: tile.cardType,
-            title: tile.title,
-          });
-        });
-        chip.appendChild(edit);
-      }
+      // no ✎ button: tapping the tile itself configures it (see below), so
+      // the chip stays clean — just the title and the nav-order field
       card.appendChild(chip);
       card.classList.add("ltk-bg-haschip"); // snap insets below the bar
     }

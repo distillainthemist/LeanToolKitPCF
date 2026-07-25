@@ -195,6 +195,31 @@ visual confirmation of the side-by-side layout and the <900px stacking.
 5. Save/refresh: `renderGrid()` after a studio save uses the returned snapshot
    — no re-fetch round trip.
 
+**Done 2026-07-26.** The composer is now grid + toolbar only: the ✎ button,
+the settings pane, "Edit standard content", "Save card", "Remove from board"
+and the offscreen `regenerateTile()` are all gone, replaced by tap-a-tile →
+studio. Layout (moves, resizes, nav order, column headings, column count) is
+the only thing it still saves directly — there is nothing to cancel about a
+drag. `policyOnPick` moved here, since the composer now mints the slots.
+
+The add flow needed a picker of its own once the settings pane went, so
+**`screens/cardPicker.ts`** landed early (it was phase 3 work): an overlay
+showing each card's real tile art, grouped and searchable. Its result is a
+union — `{kind:"new"}` today — so phase 3 adds `"archived"` and `"copy"`
+without touching a call site.
+
+Archive is wired now too (the studio's button moves the slot into
+`archivedSlots` and persists). **Restore arrives in phase 3** — until then an
+archived card is safely stored but not reachable from the UI.
+
+Dead CSS went with the surfaces it styled: `.app-content-overlay/panel`, the
+five `.app-composer-*` pane rules, `.ltk-bg-editbtn`.
+
+Proof: `app/card-studio.html` — 18 checks ALL PASS, including the three that
+matter for this phase: no ✎ on the tile, **tapping the tile fires configure**
+(now the only path in), and the nav-order field still takes its own clicks
+rather than being swallowed by the tap handler.
+
 ---
 
 ## Phase 3 — Add, archive, duplicate
@@ -339,7 +364,7 @@ Beyond the four asks:
 
 - [x] Phase 0 — contracts (designTime, standardContent classifier, archivedSlots) — DONE 2026-07-26
 - [x] Phase 1 — the card studio overlay — DONE 2026-07-26 (built + verified in isolation; wired up in phase 2)
-- [ ] Phase 2 — composer integration (✎ removal, pane removal, no type change)
+- [x] Phase 2 — composer integration — DONE 2026-07-26
 - [ ] Phase 3 — add / archive / duplicate flow (+ optional close-time manifest snapshot)
 - [ ] Phase 4 — enhancements + polish
 - [ ] Phase 5 — docs (master-leanboard.md), release, deploy

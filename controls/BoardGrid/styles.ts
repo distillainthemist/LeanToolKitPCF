@@ -180,19 +180,6 @@ export const BOARDGRID_CSS = `
   padding: 0 4px;
   opacity: 0.75;
 }
-.ltk-bg-editbtn {
-  flex: none;
-  pointer-events: auto;
-  border: 1px solid var(--ltk-hairline);
-  background: var(--ltk-bg);
-  color: var(--ltk-muted);
-  border-radius: 6px;
-  font-size: 13px;
-  line-height: 1;
-  padding: 3px 8px;
-  cursor: pointer;
-}
-.ltk-bg-editbtn:hover { color: var(--ltk-accent); border-color: var(--ltk-accent); }
 
 /* empty slot */
 .ltk-bg-empty {
