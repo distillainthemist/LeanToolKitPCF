@@ -270,6 +270,31 @@ export const CARDS: CardSpec[] = [
     description: "Run chart with target and spec limits (USL/LSL).",
     config: [
       {
+        key: "target",
+        label: "Target",
+        kind: "number",
+        help: "The goal line drawn across the chart. Empty = no target line.",
+      },
+      {
+        key: "unit",
+        label: "Unit",
+        kind: "text",
+        help: "Shown after the latest value and the target.",
+        placeholder: "e.g. %, units/hr",
+      },
+      {
+        key: "usl",
+        label: "Upper spec limit",
+        kind: "number",
+        help: "A reading above this is flagged out of spec (red). Empty = none.",
+      },
+      {
+        key: "lsl",
+        label: "Lower spec limit",
+        kind: "number",
+        help: "A reading below this is flagged out of spec (red). Empty = none.",
+      },
+      {
         key: "kpiWindowDays",
         label: "Window (days)",
         kind: "text",
@@ -280,7 +305,7 @@ export const CARDS: CardSpec[] = [
     ],
     appBound: ["instanceId"],
     configNote:
-      "Target, unit and spec limits live in the card's document — set them in the card's kebab dialog.",
+      "Readings are captured in the card itself. A card that set its target or limits in-card before they moved here keeps those values until you set them above.",
   },
   {
     type: "BenefitEffort",

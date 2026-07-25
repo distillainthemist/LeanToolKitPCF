@@ -153,6 +153,14 @@ function cfgRaw(opts: CardMount, key: string): string {
   return JSON.stringify(v);
 }
 
+/** A numeric config value; null when unset or unusable (the "number" field
+ *  kind stores a real number, and blank clears the key entirely). */
+function cfgNum(opts: CardMount, key: string): number | null {
+  const v = config(opts)[key];
+  const n = typeof v === "number" ? v : typeof v === "string" ? Number(v) : NaN;
+  return Number.isFinite(n) ? n : null;
+}
+
 /** The slot's prompts as the raw string the editors' setChrome expects. */
 function promptsRaw(opts: CardMount): string {
   const p = opts.settings.prompts;
@@ -523,6 +531,15 @@ const REGISTRY: Record<string, CardMounter> = {
     editor.setPeople(opts.people);
     editor.setActions(opts.actions);
     editor.setCanRaise(!actionsOff(opts));
+    // target / limits / unit live in card settings (the kebab dialog was
+    // easy to miss, especially in the focused view); a blank field falls
+    // back to whatever the card's own document already held
+    editor.setSpec({
+      target: cfgNum(opts, "target"),
+      usl: cfgNum(opts, "usl"),
+      lsl: cfgNum(opts, "lsl"),
+      unit: cfgStr(opts, "unit"),
+    });
     editor.setEnvelope(env);
     void (async () => {
       try {

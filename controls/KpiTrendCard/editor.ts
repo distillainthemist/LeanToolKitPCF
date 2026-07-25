@@ -26,6 +26,20 @@ const DEFAULT_GHOST = [
   "Add a value each day/week and watch the trend against target.",
 ];
 
+/**
+ * Target / spec limits / unit supplied by the HOST rather than the card's
+ * own document. The code app sources these from card settings (so they sit
+ * with the rest of the card's configuration instead of behind the kebab);
+ * a blank field falls back to the document, which keeps cards that set
+ * them in-card before the move working untouched.
+ */
+export interface KpiSpec {
+  target: number | null;
+  usl: number | null;
+  lsl: number | null;
+  unit: string;
+}
+
 export interface KpiTrendEditorCallbacks {
   onChange: (env: KpiTrendEnvelope) => void;
   onPngReady?: (dataUri: string, svgMarkup?: string) => void;
@@ -44,6 +58,9 @@ export class KpiTrendEditor {
   private people: Person[] = [];
   private actions: LtkAction[] = [];
   private canRaise = true;
+  /** Host-supplied spec (see KpiSpec); null = the document owns it and the
+   *  kebab offers the in-card dialog (the PCF path). */
+  private spec: KpiSpec | null = null;
   private readonly png: SnapshotScheduler;
 
   constructor(
@@ -103,6 +120,33 @@ export class KpiTrendEditor {
     this.render();
   }
 
+  /**
+   * Target / spec limits / unit from the host's settings. Supplying a spec
+   * (even an all-empty one) hands ownership to the host and drops the
+   * in-card "Target & spec limits" dialog from the kebab. null restores the
+   * document-owned behaviour.
+   */
+  setSpec(spec: KpiSpec | null): void {
+    if (JSON.stringify(spec) === JSON.stringify(this.spec)) return;
+    this.spec = spec;
+    this.render();
+    this.png.schedule();
+  }
+
+  /** The values actually drawn: host spec first, document as the fallback. */
+  private effectiveSpec(): KpiSpec {
+    const d = this.env.data;
+    if (this.spec === null) {
+      return { target: d.target, usl: d.usl, lsl: d.lsl, unit: d.unit };
+    }
+    return {
+      target: this.spec.target ?? d.target,
+      usl: this.spec.usl ?? d.usl,
+      lsl: this.spec.lsl ?? d.lsl,
+      unit: this.spec.unit !== "" ? this.spec.unit : d.unit,
+    };
+  }
+
   /** The card's "Disable actions" setting (raise hidden, existing stay). */
   setCanRaise(on: boolean): void {
     if (this.canRaise !== on) {
@@ -157,7 +201,7 @@ export class KpiTrendEditor {
 
   /** Does `value` fall outside a set specification limit (> USL or < LSL)? */
   private outOfSpec(value: number): boolean {
-    const { usl, lsl } = this.env.data;
+    const { usl, lsl } = this.effectiveSpec();
     return (usl !== null && value > usl) || (lsl !== null && value < lsl);
   }
 
@@ -184,8 +228,12 @@ export class KpiTrendEditor {
           onClick: () => this.manage("", this.cardTitle),
         });
       }
+      // when the host owns the spec (code app: card settings) the in-card
+      // dialog would be a second, conflicting place to set the same thing
+      if (this.spec === null) {
+        items.push({ label: "Target & spec limits", onClick: () => this.editSettings() });
+      }
       items.push(
-        { label: "Target & spec limits", onClick: () => this.editSettings() },
         { label: "Download PNG", onClick: () => this.downloadPng() },
         { label: "Download SVG", onClick: () => this.downloadSvg() }
       );
@@ -195,7 +243,8 @@ export class KpiTrendEditor {
     const body = el("div", "ltk-kt-body");
     this.root.appendChild(body);
 
-    const { points, target, unit } = this.env.data;
+    const { points } = this.env.data;
+    const { target, unit } = this.effectiveSpec();
     if (points.length === 0) {
       const lines = this.prompts.general.length
         ? this.prompts.general
@@ -247,7 +296,8 @@ export class KpiTrendEditor {
       viewBox: `0 0 ${VB_W} ${VB_H}`,
       preserveAspectRatio: "xMidYMid meet",
     });
-    const { points, target, usl, lsl } = this.env.data;
+    const { points } = this.env.data;
+    const { target, usl, lsl } = this.effectiveSpec();
     const plotW = VB_W - M.left - M.right;
     const plotH = VB_H - M.top - M.bottom;
 
@@ -481,7 +531,7 @@ export class KpiTrendEditor {
         dlg.close();
         this.manage(
           point.id,
-          `${point.date}: ${point.value}${this.env.data.unit ? " " + this.env.data.unit : ""}`
+          `${point.date}: ${point.value}${this.effectiveSpec().unit ? " " + this.effectiveSpec().unit : ""}`
         );
       });
       dlg.body.appendChild(actBtn);
