@@ -21,8 +21,11 @@ import {
   COLOR_PRESETS,
 } from "./types";
 import { SVG_NS, nodeBox, buildSymbol, buildLabel } from "./shapes";
-import { textOn } from "../../shared/tokens";
+import { applyThemeVars, textOn, Theme } from "../../shared/tokens";
 import { fieldRow, openDialog, selectInput, textInput } from "../../shared/ui/dialog";
+import { parsePrompts, Prompts, renderTitleBar } from "../../shared/ui/chrome";
+import { ensureStylesheet } from "../../shared/ui/dom";
+import { LTK_BASE_CSS } from "../../shared/ui/baseCss";
 import { PROCESS_MAP_CSS } from "./styles";
 
 interface Viewport {
@@ -94,6 +97,11 @@ export class ProcessMapEditor {
   private hint!: HTMLDivElement;
   private roBadge!: HTMLDivElement;
   private dlgHost?: HTMLElement;
+  private main: HTMLDivElement | null = null;
+  private titleBar: HTMLElement | null = null;
+  private cardTitle = "";
+  private prompts: Prompts = { general: [], fields: {} };
+  private lastPromptsRaw: string | null = null;
 
   private model: PmModel = emptyModel();
   private needsFit = false;
@@ -132,6 +140,7 @@ export class ProcessMapEditor {
     this.onManageActions = opts.onManageActions;
     this.getActionBadge = opts.getActionBadge;
     this.dlgHost = opts.dialogHost;
+    ensureStylesheet("ltk-base-css", LTK_BASE_CSS); // the shared title bar
     this.root = document.createElement("div");
     this.root.className = "pm-root";
     const styleEl = document.createElement("style");
@@ -158,6 +167,44 @@ export class ProcessMapEditor {
 
   getModel(): PmModel {
     return this.model;
+  }
+
+  /**
+   * The app theme, as --ltk-* custom properties on this card's root.
+   * PROCESS_MAP_CSS resolves 43 colours through those variables and nothing
+   * else ever set them here, so they fell back to the SVG defaults — most
+   * visibly `.pm-shape { fill: var(--ltk-bg) }`, which rendered process
+   * steps and palette swatches solid BLACK. (Exports were unaffected:
+   * buildExportSvg writes concrete colours.)
+   */
+  setTheme(theme: Theme): void {
+    applyThemeVars(this.root, theme);
+  }
+
+  /**
+   * Card title + prompts, same channel every other card takes. Without it
+   * the focused view showed no title at all. The bar sits above the stage
+   * inside .pm-main (so it clears the palette); the exported SVG is built
+   * from the model, so snapshots are unaffected.
+   */
+  setChrome(cardTitle: string, promptsRaw: string): void {
+    if (cardTitle === this.cardTitle && promptsRaw === this.lastPromptsRaw) return;
+    this.cardTitle = cardTitle;
+    this.lastPromptsRaw = promptsRaw;
+    this.prompts = parsePrompts(promptsRaw);
+    this.renderChrome();
+  }
+
+  private renderChrome(): void {
+    if (!this.main) return;
+    if (this.titleBar) {
+      this.titleBar.remove();
+      this.titleBar = null;
+    }
+    // renderTitleBar appends; the bar belongs above the stage
+    const bar = renderTitleBar(this.main, this.cardTitle, this.prompts);
+    if (bar) this.main.insertBefore(bar, this.main.firstChild);
+    this.titleBar = bar;
   }
 
   setReadOnly(ro: boolean): void {
@@ -274,6 +321,8 @@ export class ProcessMapEditor {
     const main = document.createElement("div");
     main.className = "pm-main";
     main.appendChild(this.stage);
+    this.main = main;
+    this.renderChrome();
 
     this.root.appendChild(this.palette);
     this.root.appendChild(main);

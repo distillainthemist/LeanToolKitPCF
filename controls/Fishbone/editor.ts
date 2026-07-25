@@ -18,6 +18,9 @@ import {
   newId,
 } from "./model";
 import { mix as mixHex, textOn } from "../../shared/tokens";
+import { LTK_BASE_CSS } from "../../shared/ui/baseCss";
+import { ensureStylesheet } from "../../shared/ui/dom";
+import { parsePrompts, Prompts, renderTitleBar } from "../../shared/ui/chrome";
 import { FISHBONE_CSS } from "./styles";
 
 const STYLE_TAG_ID = "pech-fishbone-styles";
@@ -109,6 +112,10 @@ export class FishboneEditor {
 
   private model: FishboneModel = emptyModel();
   private style: StyleConfig = defaultStyle();
+  private cardTitle = "";
+  private prompts: Prompts = { general: [], fields: {} };
+  private lastPromptsRaw: string | null = null;
+  private titleBar: HTMLElement | null = null;
   private readOnly = false;
   private disableActions = false; // hide the raise-action affordance
   private onChange: (model: FishboneModel) => void;
@@ -136,6 +143,7 @@ export class FishboneEditor {
     this.onManageActions = opts.onManageActions;
     this.getActionBadge = opts.getActionBadge;
     ensureStylesInjected(container.ownerDocument || document);
+    ensureStylesheet("ltk-base-css", LTK_BASE_CSS); // the shared title bar
     this.root = document.createElement("div");
     this.root.className = "fb-root";
     container.appendChild(this.root);
@@ -149,6 +157,31 @@ export class FishboneEditor {
   setModel(model: FishboneModel): void {
     this.model = model;
     this.render();
+  }
+
+  /**
+   * Card title + prompts, same channel every other card takes. Without it
+   * the focused view showed no title at all — the diagram sits in an <svg>
+   * and this bar is plain HTML above it, so snapshots (which clone the svg)
+   * are unaffected.
+   */
+  setChrome(cardTitle: string, promptsRaw: string): void {
+    if (cardTitle === this.cardTitle && promptsRaw === this.lastPromptsRaw) return;
+    this.cardTitle = cardTitle;
+    this.lastPromptsRaw = promptsRaw;
+    this.prompts = parsePrompts(promptsRaw);
+    this.renderChrome();
+  }
+
+  private renderChrome(): void {
+    if (this.titleBar) {
+      this.titleBar.remove();
+      this.titleBar = null;
+    }
+    // renderTitleBar appends; the bar belongs above the stage
+    const bar = renderTitleBar(this.root, this.cardTitle, this.prompts);
+    if (bar) this.root.insertBefore(bar, this.root.firstChild);
+    this.titleBar = bar;
   }
 
   getModel(): FishboneModel {

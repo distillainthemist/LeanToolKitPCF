@@ -753,6 +753,7 @@ const REGISTRY: Record<string, CardMounter> = {
         ),
       getActionBadge: mgr.badge,
     });
+    editor.setChrome(opts.title, promptsRaw(opts));
     // a closed meeting locks the diagram itself, not just its actions
     editor.setReadOnly(opts.readOnly);
     editor.setDisableActions(opts.readOnly || actionsOff(opts));
@@ -786,6 +787,8 @@ const REGISTRY: Record<string, CardMounter> = {
         ),
       getActionBadge: mgr.badge,
     });
+    editor.setTheme(opts.theme);
+    editor.setChrome(opts.title, promptsRaw(opts));
     if (mapType !== "") editor.setMode(mode);
     editor.setReadOnly(opts.readOnly);
     editor.setModel(env.data, true);
