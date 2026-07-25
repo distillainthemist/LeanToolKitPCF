@@ -54,3 +54,41 @@ describe("card mounters apply what their editors support", () => {
     }
   }
 });
+
+// ---- persistent embed frames ----
+//
+// The same class of bug, one level up: EmbedCard yields its iframe whenever
+// the host passes onEmbedFrame, and BOTH screens that mount cards must pass
+// it. The board did and the card editor did not — so an embed preloaded
+// warm on the wall built a second, cold iframe the moment it was opened,
+// repeating the Power BI autoAuth handshake. Nothing failed; it was just
+// slow, and the import sat in the file unused because the app's tsconfig
+// deliberately leaves noUnusedLocals off.
+
+import boardSrc from "../screens/board.ts?raw";
+import cardEditorSrc from "../screens/cardEditor.ts?raw";
+
+describe("persistent embed frames are wired on every screen that mounts cards", () => {
+  const screens: [string, string][] = [
+    ["board", boardSrc],
+    ["cardEditor", cardEditorSrc],
+  ];
+
+  for (const [name, src] of screens) {
+    it(`${name} passes onEmbedFrame`, () => {
+      expect(src).toContain("onEmbedFrame:");
+    });
+
+    it(`${name} acquires and places under a frameKey`, () => {
+      expect(src).toContain("acquireFrame(");
+      expect(src).toContain("placeFrame(");
+      expect(src).toContain("frameKey(");
+    });
+  }
+
+  it("the EmbedCard mounter only yields its frame when the host asks", () => {
+    // without the hook the card must keep loading its own iframe, so a
+    // screen that has not been wired still works (just not warm)
+    expect(mounterBodies().EmbedCard).toContain("opts.onEmbedFrame");
+  });
+});

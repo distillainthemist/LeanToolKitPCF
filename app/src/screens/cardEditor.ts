@@ -405,8 +405,19 @@ export function mountCardEditor(
           });
         },
         onActions: pushActions,
+        // Adopt the frame the board already loaded rather than building our
+        // own: the same element keeps its document, so opening an embed
+        // costs nothing — no reload, and no repeat of the Power BI autoAuth
+        // handshake. If the board never loaded one (a deep link straight to
+        // the card), acquireFrame creates it here instead.
+        onEmbedFrame: (slot, url) => {
+          const key = frameKey(boardId, cardId);
+          acquireFrame(key, url);
+          placeFrame(key, slot);
+        },
       })
     );
+    cleanups.push(() => parkAllFrames());
   })();
   return () => cleanups.forEach((fn) => fn());
 }
