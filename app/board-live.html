@@ -25,6 +25,8 @@
   <div>
     <span>columns:</span>
     <button data-cols="2">2</button><button data-cols="3">3</button><button data-cols="4">4</button>
+    <span style="margin-left:14px">right pane:</span>
+    <button id="mode-live">live (open meeting)</button><button id="mode-archive">archive (closed meeting)</button>
   </div>
   <div class="row">
     <div class="pane"><h2>stored snapshots (today)</h2><div class="grid" id="a"></div></div>
@@ -60,14 +62,23 @@
     const stored = mk("a");
     const live = mk("b");
 
-    live.setLiveRenderer((host, tile) =>
+    // the archive split: a closed meeting passes null, so BoardGrid takes the
+    // untouched stored path. Proving it here means the right pane must become
+    // markup-identical to the left, not merely similar.
+    const renderer = (host, tile) =>
       mountTile(tile.cardType, {
         host, title: tile.title,
         boardId: "harness", cardId: tile.cardId, outputJson: "",
         theme, settings: {}, instanceKey: "harness:" + tile.cardId,
         instanceWhen: "", actions: [],
-      }) ?? (() => {})
-    );
+      }) ?? (() => {});
+    const setMode = (mode) => {
+      live.setLiveRenderer(mode === "live" ? renderer : null);
+      draw();
+    };
+    document.getElementById("mode-live").onclick = () => setMode("live");
+    document.getElementById("mode-archive").onclick = () => setMode("archive");
+    window.__setMode = setMode;
 
     let cols = 4;
     const draw = () => {
@@ -90,7 +101,7 @@
           [...document.querySelectorAll("#b .ltk-bg-stage .ltk-titlebar")]
             .filter((e) => e.checkVisibility()).length || "none"}`;
     };
-    draw();
+    setMode("live");
 
     for (const b of document.querySelectorAll("button[data-cols]")) {
       b.addEventListener("click", () => { cols = Number(b.dataset.cols); draw(); });

@@ -10,7 +10,7 @@ import {
   slotPolicy,
 } from "../mappers";
 import { archiveSlots, seedPlan } from "../policies";
-import { joinTiles } from "../tiles";
+import { joinTiles, liveTilesEnabled } from "../tiles";
 import type { LtkAction } from "../../../../shared/schema/actions";
 
 const manifestRaw = JSON.stringify({
@@ -113,5 +113,27 @@ describe("action row mapping", () => {
     });
     expect(back.assignees).toEqual(action.assignees);
     expect(back.comments).toEqual(action.comments);
+  });
+});
+
+describe("liveTilesEnabled — the archive split", () => {
+  it("renders the open meeting live when the flag is on", () => {
+    expect(liveTilesEnabled(true, "open")).toBe(true);
+  });
+
+  it("NEVER renders a closed meeting live, flag or not", () => {
+    // closeInstance() stamps each card's snapshot onto the instance row so a
+    // past meeting shows what it showed then; live rendering would replace
+    // that record with today's data
+    expect(liveTilesEnabled(true, "closed")).toBe(false);
+    expect(liveTilesEnabled(false, "closed")).toBe(false);
+  });
+
+  it("stays off when the flag is off", () => {
+    expect(liveTilesEnabled(false, "open")).toBe(false);
+  });
+
+  it("stays off with no instance selected", () => {
+    expect(liveTilesEnabled(true, undefined)).toBe(false);
   });
 });

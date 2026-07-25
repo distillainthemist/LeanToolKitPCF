@@ -210,11 +210,39 @@ Phase 0's escape hatch (mount only on-screen tiles) was **not needed**: the
 CPU comparison inverted in phase 2, and the network cost is now one query for
 the whole board.
 
-### Phase 4 — archive split  *(the correctness guarantee)*
+### Phase 4 — archive split — ✅ **DONE 2026-07-25**
 
-Current instance → live. Past instance → stored tile. `stampArchiveSvg()` and
-the per-save snapshot are untouched. A past board must render byte-identically
-to today's behaviour — that is the acceptance test.
+The rule is `liveTilesEnabled(flagOn, instanceStatus)` in `store/tiles.ts` —
+pure, so the correctness guarantee is pinned by tests rather than buried in a
+render condition:
+
+> **open meeting → live (if the flag is on); closed → the archive. Always.**
+
+`closeInstance()` stamps each card's snapshot onto the instance row precisely
+so a past meeting shows what it showed then. Rendering a closed meeting live
+would replace that record with today's data — and worse, a later styling
+change would retroactively alter what past meetings appear to have said. The
+flag cannot override this: `liveTilesEnabled(true, "closed")` is `false`.
+
+`renderTiles()` re-evaluates on every instance change, so selecting a past
+meeting drops to the archive and returning to the open one restores live.
+`stampArchiveSvg()` and the per-save snapshot are untouched.
+
+**Acceptance test — proven, not argued.** `app/board-live.html` gained a
+live/archive switch. With the right pane in archive mode its markup is
+**character-identical** to the stored pane (136,246 chars each); in live mode
+they differ, as they must. Passing `null` puts BoardGrid back on the untouched
+`renderSnapshot` path, so "renders exactly as today" is true by construction
+*and* by measurement.
+
+The button says so too: a closed meeting reads **"Tiles: archived"** with a
+tooltip explaining why, rather than silently ignoring the toggle.
+
+One ordering bug found and fixed while wiring this: the live renderer reads
+`boardActions` as it mounts, and `setLiveRenderer` is a no-op when the
+renderer is unchanged — so actions fetched *after* the first render would
+never reach the tiles, and every live tile would sit there showing none. The
+fetch now completes before the first tile is drawn.
 
 ### Phase 5 — retire the defaults pipeline  *(the payoff)*
 

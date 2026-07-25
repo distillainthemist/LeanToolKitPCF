@@ -52,7 +52,7 @@ import {
   rescheduleInstance,
   resetInstance,
 } from "../store/instances";
-import { joinTiles } from "../store/tiles";
+import { joinTiles, liveTilesEnabled } from "../store/tiles";
 
 /** Remembers the live-tiles comparison toggle per browser. */
 const LIVE_TILES_KEY = "ltk.liveTiles";
@@ -233,8 +233,19 @@ async function renderBoard(
 
   const liveOn = () => localStorage.getItem(LIVE_TILES_KEY) === "1";
   const applyLiveMode = () => {
-    const on = liveOn();
-    liveBtn.textContent = on ? "Tiles: live" : "Tiles: stored";
+    const wanted = liveOn();
+    const on = liveTilesEnabled(wanted, current?.status);
+    // a closed meeting always renders its stamped archive, flag or not —
+    // saying so on the button, rather than silently ignoring the toggle
+    liveBtn.textContent = on
+      ? "Tiles: live"
+      : wanted && current?.status === "closed"
+        ? "Tiles: archived"
+        : "Tiles: stored";
+    liveBtn.title =
+      wanted && !on && current?.status === "closed"
+        ? "This meeting is closed — its tiles are the snapshots stamped when it closed"
+        : "";
     gridView.setLiveRenderer(on ? liveRenderer : null);
   };
   liveBtn.addEventListener("click", () => {
@@ -251,6 +262,12 @@ async function renderBoard(
       boardActions = [];
     }
   }
+
+  // BEFORE any tile is drawn: the live renderer reads boardActions as it
+  // mounts, and setLiveRenderer is a no-op when the renderer is unchanged —
+  // so actions arriving later would not re-render, and every live tile would
+  // sit there showing none.
+  await refreshBoardActions();
 
   const renderTiles = () => {
     if (!current) return;
@@ -272,6 +289,8 @@ async function renderBoard(
     const canAdjust = instancesAdjustable && current.status === "open";
     adjustBtn.style.display = canAdjust ? "" : "none";
     adjustBtn.href = `#/adjust/${board.boardId}/${current.id}`;
+    // the selected meeting decides live vs archive, so re-evaluate here
+    applyLiveMode();
   };
 
   // ---- scheduler pane ----
@@ -544,7 +563,5 @@ async function renderBoard(
     // the schedule rather than leaving the viewer on an empty board
     if (!current) setScheduleHidden(false);
   }
-  // last, so the tiles it re-renders are the ones the selection settled on
-  await refreshBoardActions();
-  applyLiveMode();
+  applyLiveMode(); // covers the no-instance-selected case
 }

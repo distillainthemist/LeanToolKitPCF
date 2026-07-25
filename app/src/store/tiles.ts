@@ -43,3 +43,24 @@ export function joinTiles(
     };
   });
 }
+
+/**
+ * Whether a board should render LIVE tiles rather than its stored snapshots.
+ *
+ * Live rendering shows the data as it is NOW. That is right for the meeting
+ * in progress and wrong for one that has finished: closeInstance() stamps
+ * each card's snapshot onto the instance row precisely so that reopening a
+ * past meeting shows what it showed at the time. Rendering a closed meeting
+ * live would silently replace that record with today's numbers — and worse,
+ * a future styling change would retroactively alter what past meetings
+ * appear to have said.
+ *
+ * So: open meeting → live (subject to the flag); closed → the archive.
+ * A board with no instance selected has nothing to render live either.
+ */
+export function liveTilesEnabled(
+  flagOn: boolean,
+  instanceStatus: "open" | "closed" | undefined
+): boolean {
+  return flagOn && instanceStatus === "open";
+}
