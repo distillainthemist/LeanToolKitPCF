@@ -5,7 +5,13 @@
 // moment it ships in a client bundle, so the empty-org window is the
 // only thing that makes it safe.
 
-import { mintPaletteKey, parsePalette, serializePalette } from "../../../shared/palette";
+import {
+  defaultPalette,
+  defaultTitlePalette,
+  mintPaletteKey,
+  parsePalette,
+  serializePalette,
+} from "../../../shared/palette";
 import { copyText } from "../../../shared/ui/clipboard";
 import { clear, el } from "../../../shared/ui/dom";
 import { boardHash, boardUrl } from "../links";
@@ -32,9 +38,9 @@ import {
 import {
   allSiteOwners,
   APP_ROW,
-  appStatePaletteJson,
+  appPalettesJson,
   branding,
-  saveAppStatePalette,
+  saveAppPalettes,
   companies,
   companyOwners,
   meetingCategories,
@@ -2317,82 +2323,96 @@ function ensureTzDatalist(): void {
 async function renderBranding(body: HTMLElement, ctx: DirtyCtx): Promise<void> {
   clear(body);
   const b = await branding();
-  const paletteJson = await appStatePaletteJson();
+  const paletteJson = await appPalettesJson();
   const name = el("input", "app-input") as HTMLInputElement;
   name.placeholder = "LeanBoard";
   name.value = b.appName;
   name.addEventListener("input", () => ctx.markDirty());
   const accentGroup = accentToggle(b.accent, () => ctx.markDirty());
 
-  // --- state palette (named colours cards select from; app-level because
-  // status colours are semantics — "good" means the same thing everywhere) ---
-  let paletteRows = parsePalette(paletteJson);
-  // sparse: only persist once someone actually customises the palette
-  let paletteTouched = paletteJson.trim() !== "";
-  const palBox = el("div", "app-dept-list");
+  // --- palettes (named colours cards select from; app-level: state colours
+  // are semantics, title strips are brand association — both one truth) ---
   const HEX6 = /^#[0-9a-fA-F]{6}$/;
-  const drawPalette = () => {
-    clear(palBox);
-    for (const entry of paletteRows) {
-      const row = el("div", "app-palette-row");
-      const swatch = el("input", "app-palette-swatch") as HTMLInputElement;
-      swatch.type = "color";
-      swatch.value = HEX6.test(entry.color) ? entry.color : "#808080";
-      swatch.title = entry.color;
-      swatch.addEventListener("input", () => {
-        entry.color = swatch.value;
+  /** One editable palette list. Sparse: json() is "" until customised. */
+  const paletteBlock = (
+    initialJson: string,
+    defaults: () => ReturnType<typeof parsePalette>
+  ) => {
+    let rows = parsePalette(initialJson, defaults);
+    let touched = initialJson.trim() !== "";
+    const box = el("div", "app-dept-list");
+    const draw = () => {
+      clear(box);
+      for (const entry of rows) {
+        const row = el("div", "app-palette-row");
+        const swatch = el("input", "app-palette-swatch") as HTMLInputElement;
+        swatch.type = "color";
+        swatch.value = HEX6.test(entry.color) ? entry.color : "#808080";
         swatch.title = entry.color;
-        paletteTouched = true;
+        swatch.addEventListener("input", () => {
+          entry.color = swatch.value;
+          swatch.title = entry.color;
+          touched = true;
+          ctx.markDirty();
+        });
+        const label = el("input", "app-input") as HTMLInputElement;
+        label.value = entry.label;
+        label.placeholder = "Name";
+        label.addEventListener("input", () => {
+          entry.label = label.value;
+          touched = true;
+          ctx.markDirty();
+        });
+        row.append(swatch, label, el("span", "app-field-hint", entry.key));
+        const x = el("button", "app-btn app-palette-x", "×") as HTMLButtonElement;
+        x.title = "Remove — cards using this colour fall back to their defaults";
+        x.addEventListener("click", () => {
+          rows = rows.filter((e) => e !== entry);
+          touched = true;
+          draw();
+          ctx.markDirty();
+        });
+        row.appendChild(x);
+        box.appendChild(row);
+      }
+      const actions = el("div", "app-palette-actions");
+      const add = el("button", "app-org-add", "＋ Add colour") as HTMLButtonElement;
+      add.addEventListener("click", () => {
+        const taken = new Set(rows.map((e) => e.key));
+        const n = rows.length + 1;
+        rows.push({
+          key: mintPaletteKey(`colour ${n}`, taken),
+          label: `Colour ${n}`,
+          color: "#808080",
+        });
+        touched = true;
+        draw();
+        ctx.markDirty();
+        const inputs = box.querySelectorAll<HTMLInputElement>(".app-input");
+        inputs[inputs.length - 1]?.select();
+      });
+      const reset = el("button", "app-btn", "Reset to defaults") as HTMLButtonElement;
+      reset.title = "Back to the toolkit set; nothing custom is kept";
+      reset.addEventListener("click", () => {
+        rows = parsePalette("", defaults);
+        touched = false;
+        draw();
         ctx.markDirty();
       });
-      const label = el("input", "app-input") as HTMLInputElement;
-      label.value = entry.label;
-      label.placeholder = "Name";
-      label.addEventListener("input", () => {
-        entry.label = label.value;
-        paletteTouched = true;
-        ctx.markDirty();
-      });
-      row.append(swatch, label, el("span", "app-field-hint", entry.key));
-      const x = el("button", "app-btn app-palette-x", "×") as HTMLButtonElement;
-      x.title = "Remove — cards using this colour fall back to their defaults";
-      x.addEventListener("click", () => {
-        paletteRows = paletteRows.filter((e) => e !== entry);
-        paletteTouched = true;
-        drawPalette();
-        ctx.markDirty();
-      });
-      row.appendChild(x);
-      palBox.appendChild(row);
-    }
-    const actions = el("div", "app-palette-actions");
-    const add = el("button", "app-org-add", "＋ Add colour") as HTMLButtonElement;
-    add.addEventListener("click", () => {
-      const taken = new Set(paletteRows.map((e) => e.key));
-      const n = paletteRows.length + 1;
-      paletteRows.push({
-        key: mintPaletteKey(`colour ${n}`, taken),
-        label: `Colour ${n}`,
-        color: "#808080",
-      });
-      paletteTouched = true;
-      drawPalette();
-      ctx.markDirty();
-      const inputs = palBox.querySelectorAll<HTMLInputElement>(".app-input");
-      inputs[inputs.length - 1]?.select();
-    });
-    const reset = el("button", "app-btn", "Reset to defaults") as HTMLButtonElement;
-    reset.title = "Back to the toolkit set; nothing custom is kept";
-    reset.addEventListener("click", () => {
-      paletteRows = parsePalette("");
-      paletteTouched = false;
-      drawPalette();
-      ctx.markDirty();
-    });
-    actions.append(add, reset);
-    palBox.appendChild(actions);
+      actions.append(add, reset);
+      box.appendChild(actions);
+    };
+    draw();
+    return {
+      box,
+      json: () =>
+        touched
+          ? serializePalette(rows.filter((e) => e.label.trim() !== "" && e.color !== ""))
+          : "",
+    };
   };
-  drawPalette();
+  const statePal = paletteBlock(paletteJson.states, defaultPalette);
+  const titlePal = paletteBlock(paletteJson.titles, defaultTitlePalette);
 
   let logo = b.logo;
   const preview = el("img", "app-logo app-logo-preview") as HTMLImageElement;
@@ -2433,13 +2453,7 @@ async function renderBranding(body: HTMLElement, ctx: DirtyCtx): Promise<void> {
       logo,
       accent: accentGroup.value(),
     });
-    await saveAppStatePalette(
-      paletteTouched
-        ? serializePalette(
-            paletteRows.filter((e) => e.label.trim() !== "" && e.color !== "")
-          )
-        : ""
-    );
+    await saveAppPalettes(statePal.json(), titlePal.json());
     ctx.markClean();
   });
 
@@ -2461,7 +2475,16 @@ async function renderBranding(body: HTMLElement, ctx: DirtyCtx): Promise<void> {
         "Cards store the NAME, so recolouring here restyles every board. " +
         "Removing a colour is safe — cards using it fall back to their defaults."
     ),
-    palBox
+    statePal.box,
+    sectionTitle("Title strip palette"),
+    el(
+      "div",
+      "app-settings-note",
+      "Association colours for card title strips — one colour across related cards groups " +
+        "them on a board. Kept separate from the state palette so recolouring a status " +
+        "never repaints title bars."
+    ),
+    titlePal.box
   );
 }
 

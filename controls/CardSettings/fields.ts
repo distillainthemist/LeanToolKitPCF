@@ -14,6 +14,8 @@ export interface FieldHost {
   readOnly: boolean;
   /** The app state palette — feeds paletteColor selects. */
   palette: PaletteEntry[];
+  /** The app title-strip palette — feeds titleColor selects. */
+  titlePalette: PaletteEntry[];
   onChanged: () => void;
 }
 
@@ -229,16 +231,17 @@ function colorControl(
  */
 function paletteControl(
   initial: string,
-  host: FieldHost,
+  entries: PaletteEntry[],
+  readOnly: boolean,
   onSet: (v: string) => void
 ): HTMLElement {
   const wrap = el("span", "ltk-cs-palette");
   const sel = el("select", "ltk-input ltk-cs-cell") as HTMLSelectElement;
   const options = [
     { value: "", label: "Default" },
-    ...host.palette.map((p) => ({ value: p.key, label: p.label })),
+    ...entries.map((p) => ({ value: p.key, label: p.label })),
   ];
-  if (initial !== "" && !host.palette.some((p) => p.key === initial)) {
+  if (initial !== "" && !entries.some((p) => p.key === initial)) {
     options.push({ value: initial, label: `${initial} (custom)` });
   }
   for (const o of options) {
@@ -247,10 +250,10 @@ function paletteControl(
     sel.appendChild(opt);
   }
   sel.value = initial;
-  sel.disabled = host.readOnly;
+  sel.disabled = readOnly;
   const swatch = el("span", "ltk-cs-palswatch");
   const paint = () => {
-    const color = resolvePaletteColor(paletteMap(host.palette), sel.value, "");
+    const color = resolvePaletteColor(paletteMap(entries), sel.value, "");
     swatch.style.background = color === "" ? "transparent" : color;
     swatch.classList.toggle("ltk-cs-palswatch-unset", color === "");
   };
@@ -261,6 +264,15 @@ function paletteControl(
   paint();
   wrap.append(sel, swatch);
   return wrap;
+}
+
+/** Title-strip selection: the same select, over the TITLE palette. */
+function titleColorEditor(spec: FieldSpec, get: Get, set: Set, host: FieldHost): HTMLElement {
+  const control = paletteControl(asString(get()), host.titlePalette, host.readOnly, (v) => {
+    set(v === "" ? undefined : v);
+    host.onChanged();
+  });
+  return fieldWrap(spec, control);
 }
 
 function colorEditor(spec: FieldSpec, get: Get, set: Set, host: FieldHost): HTMLElement {
@@ -387,7 +399,7 @@ function objectListEditor(spec: FieldSpec, get: Get, set: Set, host: FieldHost):
           );
         } else if (f.kind === "paletteColor") {
           td.appendChild(
-            paletteControl(row[f.key] ?? "", host, (v) => {
+            paletteControl(row[f.key] ?? "", host.palette, host.readOnly, (v) => {
               row[f.key] = v;
               push();
             })
@@ -611,6 +623,8 @@ export function renderField(
       return chipsEditor(spec, get, set, host);
     case "color":
       return colorEditor(spec, get, set, host);
+    case "titleColor":
+      return titleColorEditor(spec, get, set, host);
     case "colorList":
       return colorListEditor(spec, get, set, host);
     case "objectList":

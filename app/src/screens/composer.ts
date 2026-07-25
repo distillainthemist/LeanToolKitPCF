@@ -14,12 +14,12 @@ import {
   parseDraft,
   serializeDraft,
 } from "../../../controls/CardSettings/types";
-import { paletteMap } from "../../../shared/palette";
+import { paletteMap, titleStripColor } from "../../../shared/palette";
 import { clear, el } from "../../../shared/ui/dom";
 import { appTheme } from "../cardHost";
 import { detectHost } from "../runtime";
 import { getBoard, listBoards, saveManifest } from "../store/boards";
-import { appStatePalette } from "../store/config";
+import { appPalettes } from "../store/config";
 import { ensureLiveRow, liveRow, rowsForBoard, saveCard, toLite } from "../store/cards";
 import { catalogSvgByType } from "../store/catalog";
 import { mountTile } from "../cardRegistry";
@@ -327,10 +327,11 @@ async function renderComposer(
 ): Promise<void> {
   const manifest: BoardManifest = target.manifest;
   const catalogSvg = await catalogSvgByType();
-  // the app state palette: paletteColor selects in the settings pane, and
-  // resolution for live previews / tile refreshes
-  const palette = await appStatePalette();
-  const paletteColors = paletteMap(palette);
+  // the app palettes: paletteColor/titleColor selects in the settings pane,
+  // and resolution for live previews / tile refreshes
+  const palettes = await appPalettes();
+  const paletteColors = paletteMap(palettes.states);
+  const titleColors = paletteMap(palettes.titles);
 
   // standard-content snapshots: a card whose live (template) row has a
   // tile SVG previews with it instead of the generic catalog art. Kept as
@@ -466,8 +467,8 @@ async function renderComposer(
     const slot = manifest.slots.find((sl) => sl.cardId === tile.cardId);
     if (!slot) return () => undefined;
     const theme = appTheme();
-    const themeCfg = (slot.settings.theme ?? {}) as Record<string, unknown>;
-    if (typeof themeCfg.titlebar === "string") theme.titleBar = themeCfg.titlebar;
+    const strip = titleStripColor(slot.settings, titleColors);
+    if (strip !== "") theme.titleBar = strip;
     return (
       mountTile(tile.cardType, {
         host,
@@ -487,20 +488,17 @@ async function renderComposer(
   cleanups.push(() => gridView.destroy());
 
   const previewTiles = (): BoardTile[] =>
-    manifest.slots.map((slot) => {
-      const theme = (slot.settings.theme ?? {}) as Record<string, unknown>;
-      return {
-        pos: slot.pos,
-        cardId: slot.cardId,
-        cardType: slot.cardType,
-        title: slot.title,
-        svg: liveSvg[slot.cardId] ?? catalogSvg[slot.cardType] ?? "",
-        w: slot.w,
-        h: slot.h,
-        barColor: typeof theme.titlebar === "string" ? theme.titlebar : "",
-        nav: slot.nav,
-      };
-    });
+    manifest.slots.map((slot) => ({
+      pos: slot.pos,
+      cardId: slot.cardId,
+      cardType: slot.cardType,
+      title: slot.title,
+      svg: liveSvg[slot.cardId] ?? catalogSvg[slot.cardType] ?? "",
+      w: slot.w,
+      h: slot.h,
+      barColor: titleStripColor(slot.settings, titleColors),
+      nav: slot.nav,
+    }));
 
   const renderGrid = () => {
     const tiles = previewTiles();
@@ -642,7 +640,7 @@ async function renderComposer(
       },
     });
     editor.setTheme(appTheme());
-    editor.setPalette(palette);
+    editor.setPalettes(palettes.states, palettes.titles);
     editor.setChrome(slot ? slot.title || cardLabel(slot.cardType) : "New card", "");
     editor.setBoards(sourceRefs());
     editor.setDraft(slot ? draftFromSlot(slot) : parseDraft(""), false);

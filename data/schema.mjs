@@ -135,6 +135,8 @@ export const TABLES = [
       ben_rosterpatterns: { ...memo(10000), display: "Roster Patterns (JSON)" },
       // [{key, label, color}] — the site state palette cards select from
       ben_statepalette: { ...memo(10000), display: "State palette (JSON)" },
+      // [{key, label, color}] — title-strip association colours (branding)
+      ben_titlepalette: { ...memo(10000), display: "Title palette (JSON)" },
       // app-level branding lives on the reserved "__app__" row
       ben_appname: { ...text(60), display: "App name (branding)" },
       ben_meetingcategories: { ...memo(4000), display: "Meeting categories (JSON)" },

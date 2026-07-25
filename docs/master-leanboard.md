@@ -271,7 +271,12 @@ as fallback; KPI trend target/spec/unit are config with the document as
 legacy fallback.
 
 **Appearance**: the ONE per-card cosmetic is `theme.titlebar` (the title
-strip, for associating related cards). The PCF-era theme fields
+strip, for associating related cards) — selected from the app-level
+**title-strip palette** (`ben_titlepalette` on the branding row; Settings →
+Branding; defaults navy/brick/olive/teal/plum/slate), deliberately separate
+from the state palette so recolouring a status never repaints title bars.
+Cards store the palette KEY; legacy freeform hex passes through as
+"(custom)". The PCF-era theme fields
 (background/foreground/accent/legend/font) were never applied by the code
 app and are no longer offered; stored blobs keep them verbatim (lossless
 parse). **State colours are semantics, not decoration**: the app-level

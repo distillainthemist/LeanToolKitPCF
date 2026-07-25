@@ -7,7 +7,7 @@
 // no document row — the actions table IS their data.
 
 import { cardLabel } from "../../../controls/CardSettings/registry";
-import { paletteMap } from "../../../shared/palette";
+import { paletteMap, titleStripColor } from "../../../shared/palette";
 import { assigneePeople } from "../../../shared/schema/people";
 import { parseMeetingInfo } from "../../../shared/schema/meeting";
 import {
@@ -30,7 +30,7 @@ import { appTheme, editorHost } from "../cardHost";
 import { currentViewer, detectHost } from "../runtime";
 import { actionsForBoard, actionsForInstance, upsertActions } from "../store/actions";
 import { canViewBoard, getBoard } from "../store/boards";
-import { appStatePalette } from "../store/config";
+import { appPalettes } from "../store/config";
 import { effectivelyClosed, relockOnLeave } from "../relock";
 import {
   createInstanceRow,
@@ -168,12 +168,8 @@ export function mountCardEditor(
     });
     const seqIdx = sequence.findIndex((s) => s.cardId === cardId);
     const walk = !isLive && sequence.length > 1;
-    const slotBar = (s: (typeof sequence)[number]): string => {
-      const theme = (s.settings.theme ?? {}) as Record<string, unknown>;
-      return typeof theme.titlebar === "string" && theme.titlebar !== ""
-        ? theme.titlebar
-        : appTheme().titleBar;
-    };
+    const slotBar = (s: (typeof sequence)[number]): string =>
+      titleStripColor(s.settings, titleColors) || appTheme().titleBar;
     const editHref = (s: (typeof sequence)[number]) =>
       `#/edit/${boardId}/${instanceGuid}/${s.cardId}`;
 
@@ -258,16 +254,18 @@ export function mountCardEditor(
       return;
     }
 
-    const [roster, actions, palette] = await Promise.all([
+    const [roster, actions, palettes] = await Promise.all([
       listPeople(),
       surface ? actionsForBoard(sourceBoardId) : actionsForInstance(instanceKey),
-      appStatePalette().then(paletteMap),
+      appPalettes(),
     ]);
     const viewer = currentViewer();
+    const palette = paletteMap(palettes.states);
+    const titleColors = paletteMap(palettes.titles);
 
     const theme = appTheme();
-    const themeCfg = (slot.settings.theme ?? {}) as Record<string, unknown>;
-    if (typeof themeCfg.titlebar === "string") theme.titleBar = themeCfg.titlebar;
+    const strip = titleStripColor(slot.settings, titleColors);
+    if (strip !== "") theme.titleBar = strip;
 
     // action upserts are debounced per emitted set; the LAST set wins
     // (controls emit the full set every time, upsert is by action id)

@@ -19,6 +19,7 @@ export type FieldKind =
   | "boolean"
   | "csvChips" // string list edited as chips, emitted as CSV text
   | "color" // one CSS colour
+  | "titleColor" // a select over the app TITLE-STRIP palette (stores the KEY)
   | "colorList" // list of colours, emitted as CSV text
   | "objectList" // array of flat objects, edited as a small table (`fields`)
   | "kvList" // key→value map, edited as pairs, emitted as an object
@@ -146,9 +147,9 @@ export const THEME_FIELDS: FieldSpec[] = [
   {
     key: "titlebar",
     label: "Title strip",
-    kind: "color",
+    kind: "titleColor",
     help:
-      "Fill for just the title bar — use one colour across related cards to associate them on a board. Empty = no strip.",
+      "Fill for just the title bar, from the title-strip palette (Settings → Branding) — use one colour across related cards to associate them on a board. Default = no strip.",
   },
 ];
 

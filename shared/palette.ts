@@ -17,7 +17,7 @@ export interface PaletteEntry {
   color: string;
 }
 
-/** The starter set — used whenever a site has no stored palette. */
+/** The starter STATE set — used whenever no palette is stored. */
 export function defaultPalette(): PaletteEntry[] {
   return [
     { key: "good", label: "Good", color: STATUS_PALETTE.done },
@@ -28,13 +28,33 @@ export function defaultPalette(): PaletteEntry[] {
   ];
 }
 
-/** Parse a stored palette; "" or garbage → the defaults. Never throws. */
-export function parsePalette(raw: string | null | undefined): PaletteEntry[] {
+/**
+ * The starter TITLE-STRIP set — association/brand colours, deliberately a
+ * separate palette from the states: recolouring "Issue" must never repaint
+ * title bars, and a strip named after a status would lie the moment the
+ * status colour changed.
+ */
+export function defaultTitlePalette(): PaletteEntry[] {
+  return [
+    { key: "navy", label: "Navy", color: "#1f3a5f" },
+    { key: "brick", label: "Brick", color: "#8b1e1e" },
+    { key: "olive", label: "Olive", color: "#5a6b2f" },
+    { key: "teal", label: "Teal", color: "#0e7490" },
+    { key: "plum", label: "Plum", color: "#6d28d9" },
+    { key: "slate", label: "Slate", color: "#475569" },
+  ];
+}
+
+/** Parse a stored palette; "" or garbage → `defaults`. Never throws. */
+export function parsePalette(
+  raw: string | null | undefined,
+  defaults: () => PaletteEntry[] = defaultPalette
+): PaletteEntry[] {
   const t = (raw ?? "").trim();
-  if (t === "") return defaultPalette();
+  if (t === "") return defaults();
   try {
     const arr = JSON.parse(t) as unknown;
-    if (!Array.isArray(arr)) return defaultPalette();
+    if (!Array.isArray(arr)) return defaults();
     const out: PaletteEntry[] = [];
     const seen = new Set<string>();
     for (const item of arr) {
@@ -50,9 +70,9 @@ export function parsePalette(raw: string | null | undefined): PaletteEntry[] {
         color,
       });
     }
-    return out.length > 0 ? out : defaultPalette();
+    return out.length > 0 ? out : defaults();
   } catch {
-    return defaultPalette();
+    return defaults();
   }
 }
 
@@ -93,4 +113,18 @@ export function resolvePaletteColor(
   if (palette[v] !== undefined) return palette[v];
   if (parseColor(v) !== null) return v;
   return fallback;
+}
+
+/**
+ * A slot's title-strip fill, resolved through the TITLE palette: stored
+ * palette keys resolve to the palette's colour, legacy freeform values pass
+ * through, and "" / deleted keys mean no strip.
+ */
+export function titleStripColor(
+  settings: Record<string, unknown>,
+  titlePalette: Record<string, string>
+): string {
+  const theme = (settings.theme ?? {}) as Record<string, unknown>;
+  const raw = typeof theme.titlebar === "string" ? theme.titlebar : "";
+  return resolvePaletteColor(titlePalette, raw, "");
 }

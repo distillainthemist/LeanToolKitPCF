@@ -4,7 +4,12 @@
 
 import { Ben_ltksitesettingsesService } from "../generated/services/Ben_ltksitesettingsesService";
 import { Ben_ltkuserprefsesService } from "../generated/services/Ben_ltkuserprefsesService";
-import { defaultPalette, PaletteEntry, parsePalette } from "../../../shared/palette";
+import {
+  defaultPalette,
+  defaultTitlePalette,
+  PaletteEntry,
+  parsePalette,
+} from "../../../shared/palette";
 import { allWhere, eq, upsertWhere } from "./dv";
 import { orgTreeFromRows, protectedTimesForSite } from "./mappers";
 
@@ -303,28 +308,44 @@ export async function saveSiteSettings(site: string, s: SiteSettings): Promise<v
 // must not change colours depending on which board renders it. A per-site
 // OVERRIDE can layer on later exactly like accent does.
 
-/** Raw stored palette JSON on the branding row ("" = defaults in force). */
-export async function appStatePaletteJson(): Promise<string> {
+/** Both palettes' RAW stored JSON off the branding row, in one read
+ *  ("" = defaults in force). */
+export async function appPalettesJson(): Promise<{ states: string; titles: string }> {
   const rows = await allWhere(Ben_ltksitesettingsesService.getAll, eq("ben_site", APP_ROW));
-  return rows[0]?.ben_statepalette ?? "";
+  return {
+    states: rows[0]?.ben_statepalette ?? "",
+    titles: rows[0]?.ben_titlepalette ?? "",
+  };
 }
 
-/** The app state palette, defaults when unset/unreachable. Cards SELECT
- *  from these entries; the app resolves selections to concrete colours. */
-export async function appStatePalette(): Promise<PaletteEntry[]> {
+/** Both app palettes, defaults when unset/unreachable. Cards SELECT from
+ *  these entries; the app resolves selections to concrete colours. */
+export async function appPalettes(): Promise<{
+  states: PaletteEntry[];
+  titles: PaletteEntry[];
+}> {
   try {
-    return parsePalette(await appStatePaletteJson());
+    const raw = await appPalettesJson();
+    return {
+      states: parsePalette(raw.states),
+      titles: parsePalette(raw.titles, defaultTitlePalette),
+    };
   } catch {
-    return defaultPalette();
+    return { states: defaultPalette(), titles: defaultTitlePalette() };
   }
 }
 
-export async function saveAppStatePalette(json: string): Promise<void> {
+export async function saveAppPalettes(states: string, titles: string): Promise<void> {
   await upsertWhere(
     Ben_ltksitesettingsesService,
     eq("ben_site", APP_ROW),
     (row) => row.ben_ltksitesettingsid,
-    { ben_site: APP_ROW, ben_name: "App branding", ben_statepalette: json }
+    {
+      ben_site: APP_ROW,
+      ben_name: "App branding",
+      ben_statepalette: states,
+      ben_titlepalette: titles,
+    }
   );
 }
 

@@ -4,6 +4,7 @@
 // BoardGrid's own typed placeholder (empty string here).
 
 import type { BoardTile } from "../../../controls/BoardGrid/types";
+import { titleStripColor } from "../../../shared/palette";
 import { ManifestSlot, slotPolicy } from "./mappers";
 
 export interface CardRowLite {
@@ -17,7 +18,9 @@ export function joinTiles(
   slots: ManifestSlot[],
   instanceId: string,
   cardRows: CardRowLite[],
-  catalogSvgByType: Record<string, string>
+  catalogSvgByType: Record<string, string>,
+  /** Title-strip palette (key → colour) — bar colours resolve through it. */
+  titlePalette: Record<string, string> = {}
 ): BoardTile[] {
   const instanceRow = (cardId: string) =>
     cardRows.find((r) => r.cardId === cardId && r.instanceId === instanceId);
@@ -25,7 +28,6 @@ export function joinTiles(
     cardRows.find((r) => r.cardId === cardId && r.instanceId === "");
 
   return slots.map((slot) => {
-    const theme = (slot.settings.theme ?? {}) as Record<string, unknown>;
     const own = instanceRow(slot.cardId)?.tileSvg ?? "";
     const live =
       slotPolicy(slot) === "shared" ? (liveRow(slot.cardId)?.tileSvg ?? "") : "";
@@ -42,7 +44,7 @@ export function joinTiles(
       cardId: slot.cardId,
       cardType: slot.cardType,
       title: slot.title,
-      barColor: typeof theme.titlebar === "string" ? theme.titlebar : "",
+      barColor: titleStripColor(slot.settings, titlePalette),
       svg: own !== "" ? own : live !== "" ? live : fallback,
     };
   });

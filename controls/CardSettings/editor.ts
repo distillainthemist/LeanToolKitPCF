@@ -3,7 +3,11 @@
 // This shell renders the picker and the chosen-card frame; the typed field
 // editors populate the sections (step 3).
 
-import { defaultPalette as defaultSitePalette, PaletteEntry } from "../../shared/palette";
+import {
+  defaultPalette as defaultStatePalette,
+  defaultTitlePalette,
+  PaletteEntry,
+} from "../../shared/palette";
 import { applyThemeVars, defaultTheme, Theme } from "../../shared/tokens";
 import { LTK_BASE_CSS } from "../../shared/ui/baseCss";
 import { clear, el, ensureStylesheet } from "../../shared/ui/dom";
@@ -40,7 +44,9 @@ export class CardSettingsEditor {
   /** Boards offered as link/rollup sources; null = not in board mode. */
   private boards: BoardRef[] | null = null;
   /** The app state palette (paletteColor selects). */
-  private palette: PaletteEntry[] = defaultSitePalette();
+  private palette: PaletteEntry[] = defaultStatePalette();
+  /** The app title-strip palette (the Appearance titleColor select). */
+  private titlePalette: PaletteEntry[] = defaultTitlePalette();
 
   constructor(host: HTMLElement, private readonly cb: CardSettingsCallbacks) {
     ensureStylesheet("ltk-base-css", LTK_BASE_CSS);
@@ -85,10 +91,17 @@ export class CardSettingsEditor {
     this.render();
   }
 
-  /** The state palette offered by paletteColor fields. */
-  setPalette(palette: PaletteEntry[]): void {
-    if (JSON.stringify(palette) === JSON.stringify(this.palette)) return;
+  /** The app palettes: states (paletteColor fields) + title strips
+   *  (the Appearance titleColor select). */
+  setPalettes(palette: PaletteEntry[], titlePalette: PaletteEntry[]): void {
+    if (
+      JSON.stringify(palette) === JSON.stringify(this.palette) &&
+      JSON.stringify(titlePalette) === JSON.stringify(this.titlePalette)
+    ) {
+      return;
+    }
     this.palette = palette;
+    this.titlePalette = titlePalette;
     this.render();
   }
 
@@ -216,6 +229,7 @@ export class CardSettingsEditor {
     const host: FieldHost = {
       readOnly: this.readOnly,
       palette: this.palette,
+      titlePalette: this.titlePalette,
       onChanged: () => this.commit(),
     };
 

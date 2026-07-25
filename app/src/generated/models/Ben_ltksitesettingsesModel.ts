@@ -30,6 +30,7 @@ export interface Ben_ltksitesettingsesBase {
   ben_site: string;
   ben_statepalette?: string;
   ben_timezone?: string;
+  ben_titlepalette?: string;
   importsequencenumber?: number;
   overriddencreatedon?: string;
   statecode: Ben_ltksitesettingsesstatecode;

@@ -5,11 +5,13 @@
 import { describe, expect, it } from "vitest";
 import {
   defaultPalette,
+  defaultTitlePalette,
   mintPaletteKey,
   paletteMap,
   parsePalette,
   resolvePaletteColor,
   serializePalette,
+  titleStripColor,
 } from "../../../shared/palette";
 import { parseStateEntries, parseStates } from "../../../controls/StatusTile/types";
 
@@ -94,5 +96,26 @@ describe("StatusTile state entries — every stored shape", () => {
       "At risk",
       "Off track",
     ]);
+  });
+});
+
+describe("title-strip palette (phase 7)", () => {
+  it("parses with its own defaults, separate from the states", () => {
+    const titles = parsePalette("", defaultTitlePalette);
+    expect(titles.map((e) => e.key)).toContain("brick");
+    expect(titles.map((e) => e.key)).not.toContain("good");
+    // stored title palettes parse the same shape
+    const stored = serializePalette([{ key: "brand", label: "Brand", color: "#101010" }]);
+    expect(parsePalette(stored, defaultTitlePalette)).toEqual([
+      { key: "brand", label: "Brand", color: "#101010" },
+    ]);
+  });
+
+  it("titleStripColor: key resolves, legacy hex passes, empty/deleted = no strip", () => {
+    const pal = paletteMap(defaultTitlePalette());
+    expect(titleStripColor({ theme: { titlebar: "brick" } }, pal)).toBe("#8b1e1e");
+    expect(titleStripColor({ theme: { titlebar: "#123456" } }, pal)).toBe("#123456");
+    expect(titleStripColor({}, pal)).toBe("");
+    expect(titleStripColor({ theme: { titlebar: "retired" } }, pal)).toBe("");
   });
 });

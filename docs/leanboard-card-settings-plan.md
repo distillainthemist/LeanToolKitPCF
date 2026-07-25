@@ -364,4 +364,16 @@ title strips are association/brand colours; state colours are semantics
    (board, cardEditor, composer, tiles join barColor) — keys resolve, hex
    passes through, deleted keys fall back to no strip.
 
-- [ ] DONE
+- [x] DONE 2026-07-25. `ben_titlepalette` deployed (schema pipeline, one
+  component created; model regenerated, typed). shared/palette.ts:
+  `defaultTitlePalette` (navy/brick/olive/teal/plum/slate), parsePalette
+  gained a defaults param, and `titleStripColor()` is the single resolver
+  every titlebar read now goes through (board live renderer + tiles-join
+  barColor + walk-view tabs + cardEditor + composer previews). Branding
+  tab renders both palettes via one reusable block, saved together
+  (`appPalettes`/`saveAppPalettes`, one row read). The Appearance "Title
+  strip" field is a `titleColor` select over the title palette — stores
+  the KEY; legacy hex shows as "(custom)" and keeps rendering. Proof: 193
+  vitest green, builds clean, palette-audit ALL PASS + live checks
+  (select offers palette, pick stores key, joinTiles resolves key→colour,
+  legacy hex honoured).

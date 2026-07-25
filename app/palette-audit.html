@@ -83,7 +83,9 @@
       // editor selects are the remaining DOM surface ----
       const edhost = document.getElementById("edhost");
       const ed = new CardSettingsEditor(edhost, { onChange: () => {} });
-      ed.setPalette(SITE_PALETTE);
+      ed.setPalettes(SITE_PALETTE, [
+        { key: "brick", label: "Pechey brick", color: "#8b1e1e" },
+      ]);
       ed.setDraft(parseDraft(JSON.stringify({
         cardType: "StatusTile",
         config: { states: "Run, Idle, Down" }, // legacy CSV must appear as rows
@@ -97,8 +99,9 @@
         opts,
         !!sel && opts === "Default | Great | Bad news | Pechey red"
       );
+      // 3 state rows + the Appearance section's title-strip select
       const sq = edhost.querySelectorAll(".ltk-cs-palswatch").length;
-      report("each row shows a resolved swatch", `${sq} swatches`, sq === 3);
+      report("each row shows a resolved swatch (+ title strip)", `${sq} swatches`, sq === 4);
 
       // legacy hex on an SQDPC code renders as a "(custom)" option
       ed.setDraft(parseDraft(JSON.stringify({

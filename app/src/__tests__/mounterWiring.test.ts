@@ -117,7 +117,7 @@ describe("the state palette reaches every real mount", () => {
   ];
   for (const [name, src] of screens) {
     it(`${name} loads the state palette and passes it to mounts`, () => {
-      expect(src).toContain("appStatePalette(");
+      expect(src).toContain("appPalettes(");
       expect(src).toMatch(/palette(?::| ?[,}])/);
     });
   }

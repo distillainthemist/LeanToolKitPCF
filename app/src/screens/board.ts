@@ -28,9 +28,9 @@ import { boardUrl, LATEST, latestInstanceIso } from "../links";
 import { showLoading } from "../loading";
 import { appTheme } from "../cardHost";
 import { currentViewer, detectHost } from "../runtime";
-import { paletteMap } from "../../../shared/palette";
+import { paletteMap, resolvePaletteColor, titleStripColor } from "../../../shared/palette";
 import { canViewBoard, getBoard } from "../store/boards";
-import { appStatePalette, meetingCategories } from "../store/config";
+import { appPalettes, meetingCategories } from "../store/config";
 import {
   markReopenedForEdit,
   relockOnLeave,
@@ -117,8 +117,11 @@ async function renderBoard(
 ): Promise<void> {
   const boardManifest = parseManifest(board.manifestRaw);
   const catalogSvg = await catalogSvgByType();
-  // the app state palette — live tiles resolve state colours through it
-  const paletteColors = paletteMap(await appStatePalette());
+  // the app palettes — live tiles resolve state colours through the state
+  // palette; title strips resolve through the title palette
+  const palettes = await appPalettes();
+  const paletteColors = paletteMap(palettes.states);
+  const titleColors = paletteMap(palettes.titles);
   let instances = await listInstances(board.boardId);
   // meetings auto-close once STALE_MS past — SVGs archive, cards go
   // read-only. A meeting reopened for editing this session is spared so
@@ -221,8 +224,8 @@ async function renderBoard(
       cardRows.find((r) => r.cardId === tile.cardId && r.instanceId === current?.id) ??
       cardRows.find((r) => r.cardId === tile.cardId && r.instanceId === "");
     const theme = appTheme();
-    const themeCfg = (slot.settings.theme ?? {}) as Record<string, unknown>;
-    if (typeof themeCfg.titlebar === "string") theme.titleBar = themeCfg.titlebar;
+    const strip = titleStripColor(slot.settings, titleColors);
+    if (strip !== "") theme.titleBar = strip;
     const preload = embedPreloadEnabled(slot.settings);
     // BoardGrid re-renders often; each render re-runs this, so the tile's own
     // teardown must drop its observer or they accumulate one per render
@@ -372,11 +375,18 @@ async function renderBoard(
     // card title bars carry their theme colour; cards without one fall
     // back to the meeting/app accent (same rule as the walk view's tabs)
     const fallbackBar =
-      String(((blob.theme ?? {}) as Record<string, unknown>).titlebar ?? "").trim() ||
-      appTheme().titleBar;
-    const tiles = joinTiles(m.slots, current.id, toLite(cardRows), catalogSvg).map(
-      (t) => (t.barColor === "" ? { ...t, barColor: fallbackBar } : t)
-    );
+      resolvePaletteColor(
+        titleColors,
+        String(((blob.theme ?? {}) as Record<string, unknown>).titlebar ?? "").trim(),
+        ""
+      ) || appTheme().titleBar;
+    const tiles = joinTiles(
+      m.slots,
+      current.id,
+      toLite(cardRows),
+      catalogSvg,
+      titleColors
+    ).map((t) => (t.barColor === "" ? { ...t, barColor: fallbackBar } : t));
     gridView.setColumnTitles(m.columnTitles);
     gridView.setTiles(tiles, parseColumns(m.grid, tiles));
     status.textContent =
