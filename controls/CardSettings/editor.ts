@@ -15,6 +15,7 @@ import {
   cardSpec,
   COMMON_FIELDS,
   DataPolicy,
+  LINK_SOURCE_EXCLUDED,
   policyOnPick,
   THEME_FIELDS,
 } from "./registry";
@@ -284,6 +285,11 @@ export class CardSettingsEditor {
       }
       body.appendChild(cfgGrid);
     }
+    // LinkCard (composer mode only): which board's card this one mirrors
+    if (this.boards !== null && this.draft.cardType === "LinkCard") {
+      this.renderLinkSourceSection(body);
+    }
+
     // New meeting instance (composer mode only): THIS CARD's data policy +
     // sources — each card on a board chooses its own
     if (this.boards !== null) {
@@ -375,6 +381,18 @@ export class CardSettingsEditor {
       );
       return;
     }
+    // a no-document card (LinkCard): nothing to seed, nothing to choose
+    if (spec && spec.policies !== undefined && spec.policies.length === 0) {
+      body.appendChild(
+        el(
+          "div",
+          "ltk-cs-note",
+          "No choice needed — this card has no content of its own. Closing a " +
+            "meeting archives an image of what the linked card showed."
+        )
+      );
+      return;
+    }
 
     const POLICY_LABELS: Record<string, string> = {
       clear: "Clear — start each instance from the standard content",
@@ -399,12 +417,7 @@ export class CardSettingsEditor {
     policy.disabled = this.readOnly;
     policy.addEventListener("change", () => {
       b.policy = policy.value as SettingsDraft["board"]["policy"];
-      if (b.policy !== "link") {
-        b.sourceBoardId = "";
-        b.sourceCardId = "";
-      }
       this.commit();
-      this.render(); // link pickers appear/disappear
     });
     grid.appendChild(fieldRow("This card, each new instance", policy));
     body.appendChild(
@@ -415,39 +428,59 @@ export class CardSettingsEditor {
           "Shared edits one running document (each meeting still archives its tile image at close)."
       )
     );
+  }
 
-    if (b.policy === "link") {
-      const srcBoard = selectInput(b.sourceBoardId, boardOptions("Choose a board…"));
-      srcBoard.disabled = this.readOnly;
-      srcBoard.addEventListener("change", () => {
-        b.sourceBoardId = srcBoard.value;
-        b.sourceCardId = "";
-        this.commit();
-        this.render(); // repopulate the card picker
-      });
-      grid.appendChild(fieldRow("Source board", srcBoard));
+  /**
+   * LinkCard's Source section (board mode only): which board's card this
+   * one mirrors. Stored in config.sourceBoardId / config.sourceCardId —
+   * genuine card configuration, unlike the retired link POLICY it replaced.
+   */
+  private renderLinkSourceSection(body: HTMLElement): void {
+    const boards = this.boards ?? [];
+    const cfg = this.draft.config;
+    const grid = el("div", "ltk-cs-grid");
+    body.appendChild(sectionLabel("Source"));
+    body.appendChild(grid);
 
-      const chosen = boards.find((ref) => ref.boardId === b.sourceBoardId);
-      const srcCard = selectInput(b.sourceCardId, [
-        { value: "", label: chosen ? "Choose a card…" : "Choose a board first" },
-        ...(chosen?.cards ?? []).map((c) => ({
-          value: c.cardId,
-          label: c.title !== "" ? `${c.title} (${c.cardType})` : c.cardId,
-        })),
-      ]);
-      srcCard.disabled = this.readOnly || !chosen;
-      srcCard.addEventListener("change", () => {
-        b.sourceCardId = srcCard.value;
-        this.commit();
-      });
-      grid.appendChild(fieldRow("Source card", srcCard));
-      body.appendChild(
-        el(
-          "div",
-          "ltk-cs-note",
-          "Each new instance loads the latest saved content of the source card — usually pair with Read only."
-        )
-      );
-    }
+    const curBoard = typeof cfg.sourceBoardId === "string" ? cfg.sourceBoardId : "";
+    const curCard = typeof cfg.sourceCardId === "string" ? cfg.sourceCardId : "";
+
+    const srcBoard = selectInput(curBoard, [
+      { value: "", label: "Choose a board…" },
+      ...boards.map((ref) => ({ value: ref.boardId, label: ref.name })),
+    ]);
+    srcBoard.disabled = this.readOnly;
+    srcBoard.addEventListener("change", () => {
+      cfg.sourceBoardId = srcBoard.value;
+      delete cfg.sourceCardId;
+      this.commit();
+      this.render(); // repopulate the card picker
+    });
+    grid.appendChild(fieldRow("Source board", srcBoard));
+
+    const chosen = boards.find((ref) => ref.boardId === curBoard);
+    const linkable = (chosen?.cards ?? []).filter(
+      (c) => !LINK_SOURCE_EXCLUDED.has(c.cardType)
+    );
+    const srcCard = selectInput(curCard, [
+      { value: "", label: chosen ? "Choose a card…" : "Choose a board first" },
+      ...linkable.map((c) => ({
+        value: c.cardId,
+        label: c.title !== "" ? `${c.title} (${c.cardType})` : c.cardId,
+      })),
+    ]);
+    srcCard.disabled = this.readOnly || !chosen;
+    srcCard.addEventListener("change", () => {
+      cfg.sourceCardId = srcCard.value;
+      this.commit();
+    });
+    grid.appendChild(fieldRow("Source card", srcCard));
+    body.appendChild(
+      el(
+        "div",
+        "ltk-cs-note",
+        "Embeds, action boards and other linked cards can't be sources. The card renders with the source's own settings."
+      )
+    );
   }
 }

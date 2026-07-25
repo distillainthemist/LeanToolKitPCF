@@ -239,7 +239,25 @@ const EMBED_PLACEHOLDER =
   '<text x="320" y="262" font-size="16">Tap to open the live view</text>' +
   "</g></svg>";
 
-const STATIC_TILES: Record<string, string> = { EmbedCard: EMBED_PLACEHOLDER };
+/**
+ * LinkCard resolves another board's card from Dataverse, which the dev
+ * harness can't reach — and its default art should read as a reference,
+ * not as any one card type, so a hand-authored placeholder stands in.
+ */
+const LINK_PLACEHOLDER =
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 400">' +
+  '<rect width="640" height="400" fill="#ffffff"/>' +
+  '<rect x="24" y="24" width="592" height="352" rx="10" fill="none" stroke="#c8c4bc" stroke-width="2" stroke-dasharray="10 8"/>' +
+  '<g fill="#8a8579" font-family="system-ui, sans-serif" text-anchor="middle">' +
+  '<text x="320" y="180" font-size="56">⧉</text>' +
+  '<text x="320" y="232" font-size="24" font-weight="600">Linked card</text>' +
+  '<text x="320" y="262" font-size="16">Shows a card from another board</text>' +
+  "</g></svg>";
+
+const STATIC_TILES: Record<string, string> = {
+  EmbedCard: EMBED_PLACEHOLDER,
+  LinkCard: LINK_PLACEHOLDER,
+};
 
 /** Card types that are chrome, not display tiles — no default art wanted. */
 const NOT_TILES = new Set(["MeetingScheduler", "MeetingWizard", "CardSettings", "BoardGrid", "LeanHub"]);

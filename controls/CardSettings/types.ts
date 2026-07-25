@@ -17,10 +17,12 @@ export interface ThemeDraft {
 /**
  * The board section of a settings blob — written by the composer in board
  * mode, read by the BOARD APP at instance creation (the cards themselves
- * ignore it). policy: "" = unset (the app defaults to carry).
+ * ignore it). policy: "" = unset (the app defaults to carry). The retired
+ * "link" policy is no longer valid — a LinkCard slot replaces it; source
+ * here is the ACTION SURFACES' rollup board.
  */
 export interface BoardDraft {
-  policy: "" | "clear" | "carry" | "link" | "shared";
+  policy: "" | "clear" | "carry" | "shared";
   sourceBoardId: string;
   sourceCardId: string;
 }
@@ -97,9 +99,7 @@ export function parseDraft(raw: string | null | undefined): SettingsDraft {
     const b = o.board as Record<string, unknown>;
     const pol = s(b.policy).trim();
     draft.board.policy =
-      pol === "clear" || pol === "carry" || pol === "link" || pol === "shared"
-        ? pol
-        : "";
+      pol === "clear" || pol === "carry" || pol === "shared" ? pol : "";
     const src = (b.source ?? {}) as Record<string, unknown>;
     draft.board.sourceBoardId = s(src.boardId).trim();
     draft.board.sourceCardId = s(src.cardId).trim();

@@ -9,7 +9,7 @@ import {
   serializeManifest,
   slotPolicy,
 } from "../mappers";
-import { archiveSlots, seedPlan } from "../policies";
+import { archiveSlots, isLinkCard, linkCardSource, seedPlan } from "../policies";
 import { embedPreloadEnabled, joinTiles, liveTilesEnabled } from "../tiles";
 import type { LtkAction } from "../../../../shared/schema/actions";
 
@@ -27,17 +27,22 @@ const manifestRaw = JSON.stringify({
       settingsJSON: { theme: { titlebar: "#8b1e1e" }, board: { policy: "shared" } },
     },
     {
+      // LEGACY: a stored link policy (retired) — must fall through to carry
       pos: 4, cardId: "c-link", cardType: "FiveWhys", title: "Sister issue",
       settingsJSON: { board: { policy: "link", source: { boardId: "b2", cardId: "x9" } } },
     },
     { pos: 5, cardId: "c-plain", cardType: "Fishbone", title: "Top issue", settingsJSON: {} },
+    {
+      pos: 6, cardId: "c-lc", cardType: "LinkCard", title: "Tier 1 risks",
+      settingsJSON: { config: { sourceBoardId: "b2", sourceCardId: "x9" } },
+    },
   ],
 });
 
 describe("manifest", () => {
   const m = parseManifest(manifestRaw);
   it("parses slots with spans, nav, and settings objects", () => {
-    expect(m.slots).toHaveLength(4);
+    expect(m.slots).toHaveLength(5);
     expect(m.slots[0]).toMatchObject({ pos: 1, w: 2, nav: 1, cardType: "SqdpcCard" });
     expect(m.columnTitles).toEqual(["Perform", "Improve", "Act"]);
   });
@@ -47,6 +52,9 @@ describe("manifest", () => {
   it("defaults policy to carry", () => {
     expect(slotPolicy(m.slots[3])).toBe("carry");
     expect(slotPolicy(m.slots[1])).toBe("shared");
+  });
+  it("a retired stored link policy falls through to carry", () => {
+    expect(slotPolicy(m.slots[2])).toBe("carry");
   });
   it("series-backed cards are shared whatever the blob says", () => {
     // c-sqdpc stores policy:"carry" — the Card Series table is keyed
@@ -58,16 +66,27 @@ describe("manifest", () => {
 
 describe("policies", () => {
   const m = parseManifest(manifestRaw);
-  it("plans carry/shared/link correctly", () => {
+  it("plans carry/shared correctly (legacy link = carry)", () => {
     expect(seedPlan(m.slots[3])).toMatchObject({ copyFromPrevious: true, ensureLiveRow: false });
     expect(seedPlan(m.slots[1])).toMatchObject({ copyFromPrevious: false, ensureLiveRow: true });
-    expect(seedPlan(m.slots[2]).linkSource).toEqual({ boardId: "b2", cardId: "x9" });
+    expect(seedPlan(m.slots[2])).toMatchObject({ policy: "carry", copyFromPrevious: true });
   });
   it("plans a series card as shared despite its stored carry", () => {
     expect(seedPlan(m.slots[0])).toMatchObject({ copyFromPrevious: false, ensureLiveRow: true });
   });
-  it("archives shared slots at close — including series cards", () => {
-    expect(archiveSlots(m.slots)).toEqual(["c-sqdpc", "c-kpi"]);
+  it("archives shared slots and link cards at close", () => {
+    expect(archiveSlots(m.slots)).toEqual([
+      { cardId: "c-sqdpc", from: null },
+      { cardId: "c-kpi", from: null },
+      // the LinkCard archives what its SOURCE showed
+      { cardId: "c-lc", from: { boardId: "b2", cardId: "x9" } },
+    ]);
+  });
+  it("recognises link cards and their source", () => {
+    expect(isLinkCard(m.slots[4])).toBe(true);
+    expect(linkCardSource(m.slots[4].settings)).toEqual({ boardId: "b2", cardId: "x9" });
+    expect(linkCardSource({ config: { sourceBoardId: "b2" } })).toBeNull();
+    expect(linkCardSource({})).toBeNull();
   });
 });
 

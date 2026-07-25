@@ -104,11 +104,13 @@ export async function saveCard(
 export async function stampArchiveSvg(
   instanceGuid: string,
   boardId: string,
-  cardId: string
+  cardId: string,
+  /** LinkCard: copy the SOURCE card's live svg instead of this board's. */
+  from?: { boardId: string; cardId: string } | null
 ): Promise<void> {
   const [target, live] = await Promise.all([
     instanceRow(instanceGuid, cardId),
-    liveRow(boardId, cardId),
+    liveRow(from?.boardId ?? boardId, from?.cardId ?? cardId),
   ]);
   if (target && live && live.tileSvg !== "") {
     await Ben_ltkcarddatasService.update(target.id, { ben_tilesvg: live.tileSvg });

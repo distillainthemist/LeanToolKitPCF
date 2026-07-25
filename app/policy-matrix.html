@@ -65,6 +65,10 @@
         draft: () => last,
         options: policySel ? [...policySel.options].map((o) => ({ v: o.value, t: o.label })) : null,
         seriesNote: notes.some((t) => t.includes("dated series")),
+        noDocNote: notes.some((t) => t.includes("no content of its own")),
+        sourceSection: [...host.querySelectorAll(".ltk-cs-body > div")].some(
+          (d) => d.textContent === "Source"
+        ),
       };
     }
 
@@ -99,6 +103,11 @@
         section = a.seriesNote ? "series note" : "MISSING NOTE";
         offered = a.options ? "POLICY SELECT PRESENT" : "—";
         verdictOk = a.seriesNote && a.options === null && stamped === "";
+      } else if (card.policies && card.policies.length === 0) {
+        // no-document card (LinkCard): note + Source pickers, no policy select
+        section = a.noDocNote ? "no-doc note" : "MISSING NOTE";
+        offered = a.sourceSection ? "source pickers" : "NO SOURCE SECTION";
+        verdictOk = a.noDocNote && a.sourceSection && a.options === null && stamped === "";
       } else {
         section = "policy select";
         const values = (a.options ?? []).map((o) => o.v);
@@ -117,22 +126,26 @@
       tbody.appendChild(tr);
     }
 
-    // legacy link slot: still visible, flagged, with its source pickers
+    // legacy link slot: the retired policy parses to "" (default carry) and
+    // link is never offered — phase 4 removed it entirely (LinkCard instead)
     {
       const a = audit(JSON.stringify({
         cardType: "CaptureCard",
         board: { policy: "link", source: { boardId: "b2", cardId: "x9" } },
       }));
-      const opt = (a.options ?? []).find((o) => o.v === "link");
-      const flagged = !!opt && opt.t.includes("no longer offered");
-      const srcSelects = [...host.querySelectorAll("select")].length >= 3; // policy + board + card
-      if (!(flagged && srcSelects)) bad++;
+      const values = (a.options ?? []).map((o) => o.v);
+      const noLink = !values.includes("link");
+      const sel = [...host.querySelectorAll("select")].find((s) =>
+        [...s.options].some((o) => o.label.startsWith("Default (carry")));
+      const parsedToDefault = sel && sel.value === "";
+      const ok = noLink && parsedToDefault;
+      if (!ok) bad++;
       const tr = document.createElement("tr");
       tr.innerHTML =
         `<td>CaptureCard (legacy link)</td><td>policy select</td>` +
-        `<td>${(a.options ?? []).map((o) => o.v).join(", ")}</td><td>—</td>` +
-        `<td class="${flagged && srcSelects ? "ok" : "bad"}">${
-          flagged && srcSelects ? "ok — flagged, sources shown" : "FAIL"}</td>`;
+        `<td>${values.join(", ")}</td><td>—</td>` +
+        `<td class="${ok ? "ok" : "bad"}">${
+          ok ? "ok — link retired, parses to default" : "FAIL"}</td>`;
       tbody.appendChild(tr);
     }
 

@@ -15,7 +15,7 @@ import {
 } from "./cards";
 import { allWhere, eq, firstWhere } from "./dv";
 import { parseManifest } from "./mappers";
-import { archiveSlots, isActionSurface, seedPlan } from "./policies";
+import { archiveSlots, isActionSurface, isLinkCard, seedPlan } from "./policies";
 
 export interface InstanceSummary {
   id: string; // GUID
@@ -107,6 +107,12 @@ async function seedInstanceRows(
 ): Promise<void> {
   for (const slot of slots) {
     if (isActionSurface(slot)) continue; // live actions table, no document
+    if (isLinkCard(slot)) {
+      // no document of its own — the empty instance row is purely the
+      // close-meeting archive target (the source's svg is stamped onto it)
+      await createInstanceRow(instance.id, boardId, slot.cardId, slot.cardType, "", "");
+      continue;
+    }
     const plan = seedPlan(slot);
     if (plan.ensureLiveRow) {
       await ensureLiveRow(boardId, plan.cardId, plan.cardType);
@@ -120,17 +126,11 @@ async function seedInstanceRows(
       const prevRow = await instanceRow(previous.id, plan.cardId);
       outputJson = prevRow?.outputJson ?? "";
       tileSvg = prevRow?.tileSvg ?? "";
-    } else if (plan.linkSource) {
-      const src = await liveRow(plan.linkSource.boardId, plan.linkSource.cardId);
-      // legacy link (no longer offered): reads only the source's LIVE row —
-      // its latest content when the source is shared, its template otherwise.
-      // LinkCard replaces this whole path (card-settings plan, phase 4).
-      outputJson = src?.outputJson ?? "";
     }
     // standard content: the card's live (instance-less) row is its
     // design-time template — the standard agenda etc. It seeds clear
     // cards every meeting and carry cards that have nothing to carry.
-    if (outputJson === "" && !plan.linkSource) {
+    if (outputJson === "") {
       const template = await liveRow(boardId, plan.cardId);
       outputJson = template?.outputJson ?? "";
       if (tileSvg === "") tileSvg = template?.tileSvg ?? "";
@@ -162,8 +162,8 @@ export async function closeInstance(instance: InstanceSummary): Promise<void> {
   const board = await getBoard(instance.boardId);
   if (!board) return;
   const manifest = parseManifest(board.manifestRaw);
-  for (const cardId of archiveSlots(manifest.slots)) {
-    await stampArchiveSvg(instance.id, instance.boardId, cardId);
+  for (const stamp of archiveSlots(manifest.slots)) {
+    await stampArchiveSvg(instance.id, instance.boardId, stamp.cardId, stamp.from);
   }
 }
 

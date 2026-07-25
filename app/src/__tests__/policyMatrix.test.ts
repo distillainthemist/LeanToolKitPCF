@@ -8,6 +8,7 @@ import { describe, expect, it } from "vitest";
 import {
   CARDS,
   cardSpec,
+  LINK_SOURCE_EXCLUDED,
   policyOnPick,
 } from "../../../controls/CardSettings/registry";
 
@@ -17,7 +18,8 @@ describe("policy matrix coverage", () => {
   it("every visible card is a surface, series-backed, or declares policies", () => {
     for (const card of CARDS) {
       if (card.hidden || ACTION_SURFACES.has(card.type)) continue;
-      const declared = card.seriesBacked === true || (card.policies?.length ?? 0) > 0;
+      // policies: [] is a valid declaration — a no-document card (LinkCard)
+      const declared = card.seriesBacked === true || card.policies !== undefined;
       expect(declared, `${card.type} declares no policy story`).toBe(true);
     }
   });
@@ -25,11 +27,26 @@ describe("policy matrix coverage", () => {
   it("never offers link, and defaults are members of the offering", () => {
     for (const card of CARDS) {
       expect(card.policies ?? [], card.type).not.toContain("link");
-      if (card.policies) {
+      if (card.policies && card.policies.length > 0) {
         expect(card.defaultPolicy, `${card.type} has policies but no default`).toBeDefined();
         expect(card.policies, card.type).toContain(card.defaultPolicy);
       }
     }
+  });
+
+  it("LinkCard: Reference group, no policy choice, sources constrained", () => {
+    const spec = cardSpec("LinkCard")!;
+    expect(spec.group).toBe("Reference");
+    expect(spec.policies).toEqual([]);
+    expect(spec.defaultPolicy).toBeUndefined();
+    // no chains, no embeds, no action surfaces, no scheduler
+    expect([...LINK_SOURCE_EXCLUDED].sort()).toEqual([
+      "ActionBoard",
+      "EmbedCard",
+      "EscalationViewer",
+      "LinkCard",
+      "MeetingScheduler",
+    ]);
   });
 
   it("a series-backed card offers no picker at all", () => {

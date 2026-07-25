@@ -130,12 +130,15 @@ export function serializeManifest(manifest: BoardManifest): string {
  * lives in the Card Series table (keyed board+card, windowed by the meeting
  * date), so every meeting shows the same data regardless — shared makes the
  * live row their document and gets each close its archived tile image.
+ *
+ * "link" is retired (the LinkCard card type replaced it); a stored link
+ * policy falls through to carry like any other unknown value.
  */
-export function slotPolicy(slot: ManifestSlot): "clear" | "carry" | "shared" | "link" {
+export function slotPolicy(slot: ManifestSlot): "clear" | "carry" | "shared" {
   if (cardSpec(slot.cardType)?.seriesBacked) return "shared";
   const board = (slot.settings.board ?? {}) as Record<string, unknown>;
   const policy = typeof board.policy === "string" ? board.policy : "";
-  if (policy === "clear" || policy === "shared" || policy === "link") return policy;
+  if (policy === "clear" || policy === "shared") return policy;
   return "carry";
 }
 

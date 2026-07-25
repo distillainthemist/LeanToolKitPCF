@@ -263,7 +263,24 @@ Goal: one explicit, traceable card type for "show a card from another board".
 Tests: source resolution matrix (shared/series/carry sources); no-chain
 guard; migration transform; archive stamping; policies.ts updated tests.
 
-- [ ] DONE
+- [x] DONE 2026-07-25. LinkCard registry entry (Reference group, `policies:
+  []` = no-document declaration), editor Source section (board/card pickers,
+  LINK_SOURCE_EXCLUDED filtered), app mounter that mounts the SOURCE's card
+  type with the source's ids/settings — read-only, no-op writes, optional
+  "from board · card" caption; content per pickLinkContent (shared → live
+  row; carry/clear → newest non-empty instance row, template fallback).
+  Seeding creates an empty archive-target row; close stamps the SOURCE's
+  live tile svg (ArchiveStamp.from). Link policy removed from slotPolicy /
+  seedPlan / BoardDraft / the editor; stored "link" parses to default.
+  Production migration: both legacy no-op link slots stripped (204s) —
+  zero link policies remain. tile-defaults regenerated (20 tiles, LinkCard
+  placeholder art), APP_VERSION → 0.1.2. Proof: 188 vitest green, builds
+  clean, policy-matrix.html ALL PASS (incl. no-doc note + Source pickers +
+  link-retired parse check). Focused view of a closed meeting shows live
+  source content read-only — consistent with shared cards; the archived
+  record is the stamped tile image, as elsewhere. Hosted checks for Ben:
+  a LinkCard against a real register/series card, and an archive stamp at
+  close.
 
 ## Phase 5 — Config conformance sweep
 

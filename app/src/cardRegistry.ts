@@ -14,6 +14,9 @@ import {
   resolvePaletteColor,
 } from "../../shared/palette";
 import { Theme } from "../../shared/tokens";
+import { el } from "../../shared/ui/dom";
+import { cardLabel } from "../../controls/CardSettings/registry";
+import { loadLinkTarget } from "./store/linkCard";
 import { saver } from "./saver";
 
 import { KpiTrendEditor } from "../../controls/KpiTrendCard/editor";
@@ -890,6 +893,93 @@ const REGISTRY: Record<string, CardMounter> = {
   },
 
   // ---- display-only ----
+  // A live, read-only window onto ANOTHER board's card: resolves the source
+  // slot and mounts the source's real card type with the SOURCE's ids and
+  // settings (so series cards read the source's series). All writes are
+  // no-ops regardless of context — the inner card can never touch the
+  // source's data. Content resolution: store/linkCard.ts.
+  LinkCard: (opts) => {
+    const srcBoardId = cfgStr(opts, "sourceBoardId");
+    const srcCardId = cfgStr(opts, "sourceCardId");
+    let disposed = false;
+    let teardownInner: () => void = () => undefined;
+
+    const note = (text: string) => {
+      opts.host.replaceChildren();
+      const box = el("div", "app-linkcard-note");
+      box.append(
+        el("div", "app-linkcard-note-title", opts.title || "Linked card"),
+        el("div", "app-linkcard-note-text", text)
+      );
+      opts.host.appendChild(box);
+    };
+
+    if (srcBoardId === "" || srcCardId === "") {
+      note("Choose a source board and card in board setup.");
+      return () => opts.host.replaceChildren();
+    }
+
+    void (async () => {
+      try {
+        const target = await loadLinkTarget(srcBoardId, srcCardId);
+        if (disposed) return;
+        if (target === "missing") {
+          note("The linked card no longer exists on its source board.");
+          return;
+        }
+        if (target === "excluded") {
+          note("This card type can't be linked.");
+          return;
+        }
+        const inner = REGISTRY[target.slot.cardType];
+        if (!inner) {
+          note(`No renderer for ${target.slot.cardType}.`);
+          return;
+        }
+        opts.host.replaceChildren();
+        const wrap = el("div", "app-linkcard");
+        opts.host.appendChild(wrap);
+        if (config(opts).hideCaption !== true) {
+          const sourceName = target.slot.title || cardLabel(target.slot.cardType);
+          wrap.appendChild(
+            el("div", "app-linkcard-caption", `from ${target.boardName} · ${sourceName}`)
+          );
+        }
+        const innerHost = el("div", "app-linkcard-body");
+        wrap.appendChild(innerHost);
+        teardownInner = inner({
+          host: innerHost,
+          title: opts.title || target.slot.title || cardLabel(target.slot.cardType),
+          boardId: srcBoardId,
+          cardId: srcCardId,
+          outputJson: target.outputJson,
+          people: [],
+          theme: opts.theme,
+          palette: opts.palette,
+          readOnly: true,
+          settings: target.slot.settings,
+          instanceKey: "",
+          instanceWhen: opts.instanceWhen,
+          actions: [],
+          sources: [],
+          viewer: { whoId: "", who: "" },
+          onSave: () => undefined,
+          onTile: () => undefined,
+          onActions: () => undefined,
+        });
+      } catch (err) {
+        console.warn("link card load failed", err);
+        if (!disposed) note("The linked card could not be loaded.");
+      }
+    })();
+
+    return () => {
+      disposed = true;
+      teardownInner();
+      opts.host.replaceChildren();
+    };
+  },
+
   EmbedCard: (opts) => {
     const s = saver(opts);
     // the commentary document (heading → rich-text note); "" parses to an

@@ -2,41 +2,53 @@
 // decisions (docs/master-leanboard.md, unit tested). The IO layer executes
 // what these return.
 
-import { ManifestSlot, slotLinkSource, slotPolicy } from "./mappers";
+import { ManifestSlot, slotPolicy } from "./mappers";
 
 /** What instance creation must do for one slot. */
 export interface SeedPlan {
   cardId: string;
   cardType: string;
-  policy: "clear" | "carry" | "shared" | "link";
+  policy: "clear" | "carry" | "shared";
   /** Copy outputJSON + tilesvg from the same card in the previous instance. */
   copyFromPrevious: boolean;
-  /** Read the latest output of another board's card as the seed. */
-  linkSource: { boardId: string; cardId: string } | null;
   /** Ensure the board-level live row exists (never copied into). */
   ensureLiveRow: boolean;
 }
 
 export function seedPlan(slot: ManifestSlot): SeedPlan {
   const policy = slotPolicy(slot);
-  const link = policy === "link" ? slotLinkSource(slot) : null;
   return {
     cardId: slot.cardId,
     cardType: slot.cardType,
     policy,
     copyFromPrevious: policy === "carry",
-    linkSource: link && link.cardId !== "" ? link : null,
     ensureLiveRow: policy === "shared",
   };
 }
 
+/** One close-meeting archive stamp target. */
+export interface ArchiveStamp {
+  cardId: string;
+  /**
+   * LinkCard only: copy the SOURCE card's live tile svg rather than this
+   * board's own — the record of what the linked card showed at this meeting.
+   * null = stamp from this board's live row (shared cards).
+   */
+  from: { boardId: string; cardId: string } | null;
+}
+
 /**
- * Close-meeting: which slots must have the live row's CURRENT tile svg
- * stamped onto this instance's row — the per-meeting SVG archive for
- * shared cards.
+ * Close-meeting: which slots must have a CURRENT tile svg stamped onto this
+ * instance's row — shared cards archive their own live row, link cards
+ * archive their source's.
  */
-export function archiveSlots(slots: ManifestSlot[]): string[] {
-  return slots.filter((s) => slotPolicy(s) === "shared").map((s) => s.cardId);
+export function archiveSlots(slots: ManifestSlot[]): ArchiveStamp[] {
+  return slots
+    .filter((s) => isLinkCard(s) || slotPolicy(s) === "shared")
+    .map((s) => ({
+      cardId: s.cardId,
+      from: isLinkCard(s) ? linkCardSource(s.settings) : null,
+    }));
 }
 
 /**
@@ -45,4 +57,39 @@ export function archiveSlots(slots: ManifestSlot[]): string[] {
  */
 export function isActionSurface(slot: ManifestSlot): boolean {
   return slot.cardType === "ActionBoard" || slot.cardType === "EscalationViewer";
+}
+
+/** LinkCard: no document of its own — a live window onto another board's
+ *  card, with an empty instance row kept purely as the archive target. */
+export function isLinkCard(slot: ManifestSlot): boolean {
+  return slot.cardType === "LinkCard";
+}
+
+/** A LinkCard slot's configured source ({boardId, cardId}), else null. */
+export function linkCardSource(
+  settings: Record<string, unknown>
+): { boardId: string; cardId: string } | null {
+  const config = (settings.config ?? {}) as Record<string, unknown>;
+  const boardId =
+    typeof config.sourceBoardId === "string" ? config.sourceBoardId.trim() : "";
+  const cardId =
+    typeof config.sourceCardId === "string" ? config.sourceCardId.trim() : "";
+  return boardId !== "" && cardId !== "" ? { boardId, cardId } : null;
+}
+
+/**
+ * Which document a LinkCard renders (store/linkCard.ts executes this):
+ *  - a SHARED source's truth is its live row (series cards land here too,
+ *    via slotPolicy's override);
+ *  - a carry/clear source's truth is its most recent meeting's content —
+ *    newest instance row with a non-empty document — falling back to the
+ *    live row (its standard-content template) before any meeting has run.
+ */
+export function pickLinkContent(
+  policy: "clear" | "carry" | "shared",
+  liveJson: string,
+  newestFirstInstanceJsons: string[]
+): string {
+  if (policy === "shared") return liveJson;
+  return newestFirstInstanceJsons.find((j) => j !== "") ?? liveJson;
 }

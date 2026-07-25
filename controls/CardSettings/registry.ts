@@ -86,7 +86,23 @@ export const CARD_GROUPS = [
   "Performance",
   "Problem solving",
   "Project management",
+  "Reference",
 ];
+
+/**
+ * Card types a LinkCard may NOT use as its source: itself (no chains),
+ * EmbedCard (frames have their own lifecycle — use an Embed card with the
+ * same URL), the action surfaces (they already have source pickers) and the
+ * scheduler (never on a board). Shared between the editor's source picker
+ * and the app's runtime guard.
+ */
+export const LINK_SOURCE_EXCLUDED = new Set([
+  "LinkCard",
+  "EmbedCard",
+  "ActionBoard",
+  "EscalationViewer",
+  "MeetingScheduler",
+]);
 
 /** Display label for a card type ("ActionBoard" → "Actions"). */
 export function cardLabel(type: string): string {
@@ -682,6 +698,28 @@ export const CARDS: CardSpec[] = [
       },
     ],
     appBound: ["existingMeetingsJSON", "peopleJSON"],
+  },
+  {
+    type: "LinkCard",
+    label: "Linked card",
+    group: "Reference",
+    description:
+      "Shows a card from another board, read-only — a live window that makes linkages between meetings traceable.",
+    config: [
+      {
+        key: "hideCaption",
+        label: "Hide source caption",
+        kind: "boolean",
+        help:
+          'By default a small "from board · card" caption shows under the title bar so viewers can trace the source.',
+      },
+    ],
+    appBound: [],
+    configNote:
+      "Pick the source in the Source section below. The linked card renders live and read-only with the source's own settings; closing a meeting archives an image of what it showed.",
+    // no policy choice: the card has no document of its own (policies: []
+    // renders an explanatory note instead of the picker)
+    policies: [],
   },
   {
     type: "EscalationViewer",

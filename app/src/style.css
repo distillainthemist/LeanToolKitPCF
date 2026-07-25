@@ -1127,3 +1127,37 @@ input[type="color"].app-color:disabled { opacity: 0.4; cursor: default; }
   align-items: center;
   margin-top: 4px;
 }
+
+/* ---- linked card (LinkCard) ---- */
+.app-linkcard {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+.app-linkcard-caption {
+  flex: none;
+  font-size: 11px;
+  color: #6b6b6b;
+  padding: 3px 10px;
+  background: rgba(0, 0, 0, 0.03);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.app-linkcard-body { flex: 1; min-height: 0; display: flex; }
+.app-linkcard-body > * { flex: 1; min-width: 0; }
+.app-linkcard-note {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 16px;
+  text-align: center;
+}
+.app-linkcard-note-title { font-weight: 700; font-size: 14px; }
+.app-linkcard-note-text { font-size: 12.5px; color: #6b6b6b; max-width: 320px; }
