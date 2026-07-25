@@ -45,6 +45,11 @@ export const PROCESS_MAP_CSS = `
 .pm-pal-cap { font-size: 10px; text-align: center; color: var(--ltk-muted); }
 .pm-mini { width: 88px; height: 50px; pointer-events: none; }
 .pm-readonly .pm-palette { opacity: 0.45; pointer-events: none; }
+/* tile mode (shared .ltk-tile contract): a board tile shows the map only —
+   the palette, zoom cluster and read-only badge are authoring chrome */
+.ltk-tile .pm-palette,
+.ltk-tile .pm-zoom,
+.ltk-tile .pm-ro-badge { display: none !important; }
 
 /* ---------- main column ---------- */
 .pm-main { flex: 1 1 auto; display: flex; flex-direction: column; min-width: 0; }

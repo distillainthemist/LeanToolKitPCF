@@ -52,6 +52,13 @@ export const EMBED_CSS = `
 .ltk-em-note ul, .ltk-em-note ol { margin: 4px 0; padding-left: 18px; }
 .ltk-em-acts { display: flex; flex-direction: column; gap: 6px; margin-top: auto; padding-top: 10px; }
 .ltk-em-addact { align-self: flex-start; }
+
+/* tile mode (shared .ltk-tile contract): the commentary pane is readable on
+   a tile, but its authoring chrome is not — formatting toolbar, add-action
+   and the frame refresh are all authoring, not content */
+.ltk-tile .ltk-em-fmtbar,
+.ltk-tile .ltk-em-addact,
+.ltk-tile .ltk-em-refresh { display: none !important; }
 .ltk-em-noacts { font-size: 12.5px; color: var(--ltk-muted); }
 
 /* actions chip (no-pane mode): sits left of the open/refresh chips */

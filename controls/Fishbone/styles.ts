@@ -155,6 +155,11 @@ export const FISHBONE_CSS = `
   stroke-width: 4.5;
 }
 
+/* tile mode (shared .ltk-tile contract): a board tile shows the diagram
+   only — the read-only badge and the ⊕ add affordances are authoring chrome */
+.ltk-tile .fb-ro-badge,
+.ltk-tile .fb-add { display: none !important; }
+
 /* ---------- interactivity ---------- */
 .fb-clickable {
   cursor: pointer;

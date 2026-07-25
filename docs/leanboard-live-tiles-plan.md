@@ -101,15 +101,42 @@ meeting-room tablet before phase 2 ships; if 20 cards exceeds ~500 ms there,
 mount only on-screen tiles (the phase 3 escape hatch) rather than abandoning
 the approach.
 
-### Phase 1 — tile mode  *(the enabling change)*
+### Phase 1 — tile mode — ✅ **DONE 2026-07-25**
 
-Add `tile: true` to `CardMount`. In tile mode a card renders **display only**:
-no kebab, no dialogs, no action affordances, no pan/zoom controls,
-`pointer-events: none` on the card body, and pan/zoom cards (Fishbone,
-ProcessMap, FiveWhys, FaultTree) fit-to-content on mount.
+`mountTile(cardType, opts)` in `app/src/cardRegistry.ts`. The contract lives in
+one wrapper rather than in 24 editors, and is deliberately belt-and-braces —
+a tile that can be typed into, or that can write, is a data-loss bug on a
+shared meeting screen:
 
-Verify in the dev harness against a checklist per card — this is where fidelity
-is won or lost, and it is worth being fussy.
+- `readOnly: true` — the editors' own switch, which drops most affordances;
+- an `ltk-tile` class on the host — `pointer-events: none` plus rules hiding
+  the chrome that survives readOnly (kebab, info button, zoom clusters,
+  ProcessMap's palette, Fishbone's ⊕ adds and read-only badges, EmbedCard's
+  rich-text toolbar, Agenda's disclosure carets);
+- **no writes** — `onSave`, `onTile` and `onActions` are no-ops, so a tile can
+  never overwrite the document or the snapshot it was rendered from.
+
+It also hides `.ltk-titlebar`: BoardGrid draws a title chip per slot, so a
+tile rendering its own bar would duplicate the title — the same defect that
+had to be stripped out of stored snapshots.
+
+**Verification: `app/tile-mode.html`** mounts all 19 types through
+`mountTile` and audits each for surviving kebabs, buttons, inputs, focusable
+elements, live pointer events and blank output. **19/19 clean.** Agenda's
+three section headings are declared in an `ALLOWED_BUTTONS` map with a
+reason — they are content that happens to be a `<button>` — so the audit
+fails if that count ever moves, rather than the exception being hidden.
+
+Two things the audit taught, both worth keeping:
+- Its first version checked `getComputedStyle(el).display`, which still
+  reports the element's own value inside a `display:none` parent — so it
+  missed everything hidden by a container rule and reported false failures.
+  It now uses `checkVisibility()`, which walks ancestors.
+- Results computed at page-load can predate an HMR stylesheet update; a card
+  looked broken that had already been fixed. Re-load before believing a row.
+
+Not needed after all: fit-to-content on mount. Fishbone already fits its
+viewBox to content, and ProcessMap's `setModel(data, true)` requests a fit.
 
 ### Phase 2 — live tiles for the current instance  *(the visible change)*
 

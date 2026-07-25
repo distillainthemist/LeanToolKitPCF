@@ -1,0 +1,118 @@
+<!doctype html>
+<!-- Live-tiles plan, phase 1 verification. Mounts every card type through
+     mountTile() and audits each for authoring chrome that survived the
+     display-only contract — the per-card checklist the plan asks for.
+
+       cd app && npm run dev  →  http://localhost:5180/tile-mode.html
+
+     Dev-server only: vite builds index.html alone. -->
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Tile mode audit</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 16px; background: #f0efea; }
+    table { border-collapse: collapse; background: #fff; font-size: 13px; margin-bottom: 16px; }
+    th, td { border: 1px solid #d5d1c8; padding: 5px 9px; text-align: left; }
+    th { background: #2b2b2b; color: #fff; }
+    .bad { color: #b32020; font-weight: 700; }
+    .ok { color: #1e7a1e; font-weight: 600; }
+    #wall { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+    .slot { height: 210px; overflow: hidden; background: #fff; border: 1px solid #d5d1c8; position: relative; }
+    .slot h4 { margin: 0; font-size: 11px; padding: 3px 6px; background: #2b2b2b; color: #fff; }
+    .inner { width: 640px; height: 420px; transform-origin: top left; transform: scale(0.32); position: absolute; top: 18px; }
+  </style>
+</head>
+<body>
+  <h2 style="margin:0 0 10px">Tile mode audit</h2>
+  <div id="summary"></div>
+  <table id="report"><thead><tr>
+    <th>card</th><th>kebab</th><th>buttons</th><th>inputs</th><th>focusable</th><th>pointer-events</th><th>rendered</th>
+  </tr></thead><tbody></tbody></table>
+  <div id="wall"></div>
+
+  <script type="module">
+    import { mountTile, supportedCardTypes } from "./src/cardRegistry.ts";
+    import { defaultTheme } from "../shared/tokens";
+
+    const wall = document.getElementById("wall");
+    const tbody = document.querySelector("#report tbody");
+    const theme = defaultTheme();
+
+    // Buttons that are legitimately CONTENT rather than authoring chrome.
+    // Declared, not silently excluded — if a card's count moves off this
+    // number the audit fails and someone has to look at it.
+    const ALLOWED_BUTTONS = {
+      AgendaCard: { n: 3, why: "Pre-work / Agenda / Outputs section headings are content (carets hidden)" },
+    };
+
+    // chrome that must never survive into a tile
+    function audit(host) {
+      // NOT getComputedStyle(el).display — an element inside a display:none
+      // parent still reports its own display, so that misses everything
+      // hidden by a container rule. checkVisibility walks the ancestors.
+      const vis = (el) =>
+        typeof el.checkVisibility === "function"
+          ? el.checkVisibility({ checkVisibilityCSS: true })
+          : el.getClientRects().length > 0;
+      const kebab = [...host.querySelectorAll(".ltk-kebab, .ltk-kebab-btn")].filter(vis).length;
+      const buttons = [...host.querySelectorAll("button")].filter(vis).length;
+      const inputs = [...host.querySelectorAll("input, textarea, select, [contenteditable='true']")].filter(vis).length;
+      const focusable = [...host.querySelectorAll("[tabindex]:not([tabindex='-1'])")].filter(vis).length;
+      const inert = getComputedStyle(host).pointerEvents === "none";
+      const rendered = host.textContent.trim().length > 0 || host.querySelector("svg") !== null;
+      return { kebab, buttons, inputs, focusable, inert, rendered };
+    }
+
+    const types = supportedCardTypes();
+    let failures = 0;
+
+    for (const type of types) {
+      const slot = document.createElement("div");
+      slot.className = "slot";
+      const h = document.createElement("h4");
+      h.textContent = type;
+      const inner = document.createElement("div");
+      inner.className = "inner";
+      slot.append(h, inner);
+      wall.appendChild(slot);
+
+      let err = null;
+      try {
+        mountTile(type, {
+          host: inner,
+          title: type,
+          boardId: "bench-board",
+          cardId: "bench-" + type,
+          outputJson: "",
+          theme,
+          settings: {},
+          instanceKey: "bench",
+          instanceWhen: "",
+          actions: [],
+        });
+      } catch (e) {
+        err = String(e);
+      }
+
+      const a = audit(inner);
+      const allow = ALLOWED_BUTTONS[type];
+      const btnOk = a.buttons === (allow ? allow.n : 0);
+      const cell = (n) => `<td class="${n === 0 ? "ok" : "bad"}">${n}</td>`;
+      const btnCell = `<td class="${btnOk ? "ok" : "bad"}" title="${allow ? allow.why : ""}">` +
+        `${a.buttons}${allow && btnOk ? " (content)" : ""}</td>`;
+      const bad = a.kebab + a.inputs + a.focusable > 0 || !btnOk || !a.inert || !a.rendered || err;
+      if (bad) failures++;
+      tbody.insertAdjacentHTML("beforeend",
+        `<tr><td>${type}${err ? ' <span class="bad">' + err + "</span>" : ""}</td>` +
+        cell(a.kebab) + btnCell + cell(a.inputs) + cell(a.focusable) +
+        `<td class="${a.inert ? "ok" : "bad"}">${a.inert ? "none" : "LIVE"}</td>` +
+        `<td class="${a.rendered ? "ok" : "bad"}">${a.rendered ? "yes" : "EMPTY"}</td></tr>`);
+    }
+
+    document.getElementById("summary").innerHTML =
+      `<p style="font-weight:700">${types.length - failures}/${types.length} card types clean` +
+      (failures ? ` — <span class="bad">${failures} need work</span>` : " — all display-only") + "</p>";
+  </script>
+</body>
+</html>

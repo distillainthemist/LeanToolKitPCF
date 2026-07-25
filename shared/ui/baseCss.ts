@@ -232,6 +232,27 @@ export const LTK_BASE_CSS = `
 .ltk-btn-danger { background: none; color: #d13438; border-color: #d13438; }
 .ltk-btn-danger:hover { background: #d13438; color: #ffffff; }
 
+/* ---- tile mode ----
+   A card rendered as a board tile: the real editor showing real data, but
+   display-only. readOnly already drops most affordances; these rules kill
+   what survives it, and make the whole tile inert so nothing can be typed
+   into or dragged on a shared meeting screen. Cards with their own chrome
+   (ProcessMap's palette, zoom clusters) hide it from their own stylesheet. */
+.ltk-tile, .ltk-tile * {
+  pointer-events: none !important;
+  user-select: none;
+}
+.ltk-tile .ltk-kebab,
+.ltk-tile .ltk-info-btn,
+.ltk-tile .ltk-pz-zoom { display: none !important; }
+/* BoardGrid draws the title chip for each slot, so a tile that also drew its
+   own bar would show the title twice — the same duplication that had to be
+   stripped out of stored snapshots. */
+.ltk-tile .ltk-titlebar { display: none !important; }
+/* the ghost states stay visible — an empty card should still say what it is
+   — but must not advertise a tap that does nothing */
+.ltk-tile .ltk-ghost { cursor: default; }
+
 /* ---- pan / zoom cluster (shared PanZoom controller) ---- */
 .ltk-pz-zoom {
   position: absolute;

@@ -875,6 +875,58 @@ export function cardMounter(cardType: string): CardMounter | null {
   return REGISTRY[cardType] ?? null;
 }
 
+/** What a tile mount needs; the rest of CardMount is filled in below. */
+export type TileMount = Pick<
+  CardMount,
+  | "host"
+  | "title"
+  | "boardId"
+  | "cardId"
+  | "outputJson"
+  | "theme"
+  | "settings"
+  | "instanceKey"
+  | "instanceWhen"
+  | "actions"
+>;
+
+/**
+ * Mount a card as a BOARD TILE: the same editor, rendering the same data,
+ * but display-only.
+ *
+ * The contract is enforced here rather than in 24 editors, and it is
+ * deliberately belt-and-braces — a tile that can be typed into, or that can
+ * write, is a data-loss bug on a shared meeting screen:
+ *
+ *  - `readOnly` — the editors' own switch, which drops most affordances;
+ *  - the `ltk-tile` class — kills pointer events and hides the chrome that
+ *    survives readOnly (kebab, palettes, zoom clusters);
+ *  - **no writes**: onSave, onActions and onTile are no-ops, so a tile can
+ *    never overwrite the document or the stored snapshot it was rendered
+ *    from.
+ *
+ * Returns the mounter's teardown, or null for an unknown card type.
+ */
+export function mountTile(cardType: string, opts: TileMount): (() => void) | null {
+  const mounter = REGISTRY[cardType];
+  if (!mounter) return null;
+  opts.host.classList.add("ltk-tile");
+  const teardown = mounter({
+    ...opts,
+    people: [],
+    readOnly: true,
+    sources: [],
+    viewer: { whoId: "", who: "" },
+    onSave: () => undefined,
+    onTile: () => undefined,
+    onActions: () => undefined,
+  });
+  return () => {
+    teardown();
+    opts.host.classList.remove("ltk-tile");
+  };
+}
+
 export function supportedCardTypes(): string[] {
   return Object.keys(REGISTRY);
 }

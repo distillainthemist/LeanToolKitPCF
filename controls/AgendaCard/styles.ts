@@ -38,6 +38,10 @@ export const AGENDA_CSS = `
   transition: transform 120ms ease;
 }
 .ltk-ag-open .ltk-ag-chevron { transform: rotate(90deg); }
+
+/* tile mode: the section headings are content and stay, but the disclosure
+   caret advertises a collapse the tile cannot perform */
+.ltk-tile .ltk-ag-chevron { visibility: hidden; }
 .ltk-ag-head-label {
   font-size: 15px;
   font-weight: 700;
