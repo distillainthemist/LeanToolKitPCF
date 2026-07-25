@@ -1,0 +1,112 @@
+<!doctype html>
+<!-- Live-tiles plan, phase 0 baseline. Times the two ways a board can paint
+     its wall: today's stored-SVG staging vs mounting live editors, as
+     main-thread blocking time. Sets the card-count budget in
+     docs/leanboard-live-tiles-plan.md.
+
+       cd app && npm run dev   →   http://localhost:5180/bench-tiles.html
+
+     Kept (not temporary) because the plan calls for re-running this on the
+     target tablet, where the ratio matters far more than on a dev machine.
+     Dev-server only: vite builds index.html alone. -->
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Tile render benchmark</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 16px; background: #f0efea; }
+    pre { background: #fff; border: 1px solid #ccc; padding: 12px; font-size: 14px; }
+    #wall { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+    .slot { height: 210px; overflow: hidden; background: #fff; border: 1px solid #ddd; position: relative; }
+    .inner { width: 640px; height: 420px; transform-origin: top left; position: absolute; }
+  </style>
+</head>
+<body>
+  <pre id="out">measuring…</pre>
+  <div id="wall"></div>
+  <script type="module">
+    import tileDefaults from "../tools/tile-defaults.json";
+    import { defaultTheme } from "../shared/tokens";
+    import { FiveWhysEditor } from "../controls/FiveWhys/editor";
+    import { parseFiveWhys } from "../controls/FiveWhys/types";
+    import { RiskMatrixEditor } from "../controls/RiskMatrix/editor";
+    import { parseRiskMatrix } from "../controls/RiskMatrix/types";
+    import { SqdpcEditor } from "../controls/SqdpcCard/editor";
+    import { parseSqdpc, parseDimensions, parseStatusCodes, parseSubtitles } from "../controls/SqdpcCard/types";
+    import { RaciEditor } from "../controls/Raci/editor";
+    import { parseRaci } from "../controls/Raci/types";
+
+    const theme = defaultTheme();
+    const wall = document.getElementById("wall");
+    const noop = () => {};
+
+    const MOUNTERS = [
+      (h) => { const e = new FiveWhysEditor(h, {onChange:noop,onSnapshot:noop}); e.setTheme(theme); e.setEnvelope(parseFiveWhys("").envelope, []); },
+      (h) => { const e = new RiskMatrixEditor(h, {onChange:noop,onSnapshot:noop}); e.setTheme(theme); e.setEnvelope(parseRiskMatrix("").envelope, []); },
+      (h) => { const d = parseDimensions(""); const e = new SqdpcEditor(h, {onChange:noop,onSnapshot:noop}); e.setTheme(theme);
+               e.setOptions({granularity:"day",dimensions:d,subtitles:parseSubtitles("",d),codes:parseStatusCodes(""),disableActions:false});
+               e.setEnvelope(parseSqdpc("").envelope, []); },
+      (h) => { const e = new RaciEditor(h, {onChange:noop,onSnapshot:noop}); e.setTheme(theme); e.setEnvelope(parseRaci("").envelope, []); },
+    ];
+    const TYPES = ["FiveWhys", "RiskMatrix", "SqdpcCard", "Raci"];
+
+    function slot() {
+      const s = document.createElement("div");
+      s.className = "slot";
+      const inner = document.createElement("div");
+      inner.className = "inner";
+      inner.style.transform = "scale(0.32)";
+      s.appendChild(inner);
+      wall.appendChild(s);
+      return inner;
+    }
+
+    // today's path: parse the stored SVG and stage its foreignObject content
+    function paintStored(inner, type) {
+      const raw = tileDefaults.tiles[type];
+      const doc = new DOMParser().parseFromString(raw, "image/svg+xml");
+      const svg = doc.documentElement;
+      const fo = svg.getElementsByTagName("foreignObject")[0];
+      if (fo) {
+        for (const child of Array.from(fo.childNodes)) inner.appendChild(document.importNode(child, true));
+        const st = svg.getElementsByTagName("style")[0];
+        if (st) inner.appendChild(document.importNode(st, true));
+      } else {
+        inner.appendChild(document.importNode(svg, true));
+      }
+    }
+
+    // Main-thread blocking time only. No await inside the timed region: a
+    // background tab clamps setTimeout to 1000ms and rAF never fires, which
+    // swamps the measurement. Forcing layout inside the window is what makes
+    // this real work rather than queued work.
+    function run(n, painter) {
+      wall.replaceChildren();
+      void wall.offsetHeight;
+      const t0 = performance.now();
+      for (let i = 0; i < n; i++) painter(slot(), i);
+      void wall.offsetHeight;
+      return performance.now() - t0;
+    }
+
+    (async () => {
+      // warm up both paths so neither pays first-call costs
+      run(4, (inner, i) => paintStored(inner, TYPES[i % TYPES.length]));
+      run(4, (inner, i) => MOUNTERS[i % MOUNTERS.length](inner));
+      const best = (n, painter) => Math.min(run(n, painter), run(n, painter), run(n, painter));
+      const rows = [];
+      for (const n of [4, 8, 12, 20]) {
+        const stored = best(n, (inner, i) => paintStored(inner, TYPES[i % TYPES.length]));
+        const live = best(n, (inner, i) => MOUNTERS[i % MOUNTERS.length](inner));
+        rows.push({ n, stored, live });
+      }
+      const fmt = (v) => v.toFixed(1).padStart(8);
+      document.getElementById("out").textContent =
+        "cards   stored(ms)   live(ms)   ratio\n" +
+        rows.map((r) => `${String(r.n).padStart(5)}  ${fmt(r.stored)}   ${fmt(r.live)}   ${(r.live / r.stored).toFixed(1)}x`).join("\n") +
+        `\n\nstored tile bytes fetched per card (avg of the 4 types): ` +
+        (TYPES.reduce((a, t) => a + tileDefaults.tiles[t].length, 0) / TYPES.length / 1024).toFixed(1) + "KB";
+    })();
+  </script>
+</body>
+</html>

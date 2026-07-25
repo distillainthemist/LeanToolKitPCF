@@ -66,15 +66,40 @@ per board**, not one per card.
 
 ## Phases
 
-### Phase 0 — baseline  *(half a sitting)*
+### Phase 0 — baseline — ✅ **DONE 2026-07-25**
 
-Measure before changing anything, so the trade is evidenced rather than
-argued: board-open wall time and transferred bytes for a representative board
-(and a deliberately large one), today. Record in this file.
+`app/bench-tiles.html` times both paths as **main-thread blocking time**
+(stored-SVG staging vs mounting live editors, four card types round-robin,
+best of three after a warm-up). Measured on the dev Mac:
 
-Also decide the tile budget: at what card count does live mounting stop being
-acceptable on the target tablet? That number drives whether phase 3 needs
-virtualisation.
+| cards | stored | live | ratio |
+|---|---|---|---|
+| 4 | 4.4 ms | 8.6 ms | 2.0× |
+| 8 | 9.4 ms | 17.8 ms | 1.9× |
+| 12 | 17.7 ms | 28.4 ms | 1.6× |
+| 20 | 33.9 ms | 67.3 ms | 2.0× |
+
+**Live mounting costs ~2× the main thread, but the absolute cost is small and
+linear** — 20 cards is 67 ms, against the ~50 ms that phase 3 saved on a
+*single* card edit. The feared blocker is not there.
+
+Where the real cost sits: stored tiles average **24.5 KB per card**, so a
+20-card board fetches roughly **490 KB of tile memo** it would no longer need.
+On a tablet over site wifi that dominates the 33 ms of painting it saves.
+Conclusion: **the network, not the CPU, is the thing live tiles improve** —
+and the series queries in phase 3 are therefore the number that decides this,
+not mounting cost.
+
+Caveats, stated so the number is not over-read: a dev Mac is 4–8× faster than
+the target tablet (20 cards ≈ 270–540 ms there — acceptable, but *measure it*,
+which is why the bench is committed rather than thrown away); these are
+empty-state cards, so populated ones build more DOM; and it excludes both
+series fetches and iframe loads.
+
+**Budget:** 20 cards live is fine on desktop. Re-run `bench-tiles.html` on the
+meeting-room tablet before phase 2 ships; if 20 cards exceeds ~500 ms there,
+mount only on-screen tiles (the phase 3 escape hatch) rather than abandoning
+the approach.
 
 ### Phase 1 — tile mode  *(the enabling change)*
 
