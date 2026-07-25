@@ -24,6 +24,10 @@ export interface MeetingViewCallbacks {
   onCreate?: (instance: MeetingInstance) => void;
   /** A kebab menu action on a created row. */
   onMenu?: (instance: MeetingInstance, action: "edit" | "reset" | "move") => void;
+  /** Adjust the board layout for the SELECTED meeting. Offered on the pane
+   *  kebab only while setCanAdjustLayout(true) — the host decides, since
+   *  whether a meeting may diverge from its ritual is the board's rule. */
+  onAdjustLayout?: () => void;
 }
 
 interface MenuItem {
@@ -58,6 +62,8 @@ export class MeetingSchedulerView {
   /** Shareable URL for the selection, supplied by the wrapper ("" hides
    *  the copy-link option). */
   private meetingLink = "";
+  /** Whether the selected meeting may diverge from its ritual layout. */
+  private canAdjustLayout = false;
 
   constructor(host: HTMLElement, private readonly cb: MeetingViewCallbacks) {
     ensureStylesheet("ltk-base-css", LTK_BASE_CSS);
@@ -114,6 +120,12 @@ export class MeetingSchedulerView {
   setMeetingLink(url: string): void {
     // no re-render: the menu reads this when it opens
     this.meetingLink = url;
+  }
+
+  /** Whether "Adjust board layout for this meeting" is offered. */
+  setCanAdjustLayout(on: boolean): void {
+    // no re-render: the menu reads this when it opens
+    this.canAdjustLayout = on;
   }
 
   setMeetingInfo(info: MeetingInfo | null): void {
@@ -241,6 +253,12 @@ export class MeetingSchedulerView {
           this.adhocOpen = true;
           this.render();
         },
+      });
+    }
+    if (this.cb.onAdjustLayout && this.canAdjustLayout && !this.readOnly) {
+      items.push({
+        label: "Adjust board layout for this meeting",
+        run: () => this.cb.onAdjustLayout?.(),
       });
     }
     if (this.meetingLink !== "") {

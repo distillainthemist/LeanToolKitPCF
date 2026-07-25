@@ -205,6 +205,31 @@ body {
   text-decoration: none;
 }
 .app-btn:hover { border-color: var(--app-accent); color: var(--app-accent); }
+
+/* Live/stored board indicator. A status light rather than an icon: the dot
+   is the whole message at meeting-room distance, and it stays legible when
+   the board is projected. Green = cards are rendering live; grey = showing
+   stored snapshots (either by choice, or because a closed meeting always
+   shows its archive). */
+.app-btn-mode { display: inline-flex; align-items: center; gap: 7px; }
+.app-mode-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #9a958b;
+  box-shadow: 0 0 0 2px rgba(154, 149, 139, 0.18);
+  flex: 0 0 auto;
+  transition: background 160ms ease, box-shadow 160ms ease;
+}
+.app-btn-mode.app-mode-on .app-mode-dot {
+  background: #1f9d4d;
+  box-shadow: 0 0 0 2px rgba(31, 157, 77, 0.22);
+}
+.app-btn-mode.app-mode-on { border-color: #b7dcc4; }
+.app-btn-mode.app-mode-on:hover { border-color: #1f9d4d; color: #1f9d4d; }
+@media (prefers-reduced-motion: reduce) {
+  .app-mode-dot { transition: none; }
+}
 .app-board-split {
   flex: 1;
   min-height: 0;

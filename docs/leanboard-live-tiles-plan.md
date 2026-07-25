@@ -156,10 +156,15 @@ document). Board actions are the one extra read, and only when live is on.
 re-render would leak an editor per tile; verified stable at 8 stages / 8 card
 roots across six consecutive re-renders.
 
-**Flag:** a `Tiles: stored ⇄ live` button in the board toolbar, remembered in
-`localStorage` under `ltk.liveTiles`, default **stored**. Deliberately visible
-rather than dark, because the point of this phase is judging the two against
-each other on real boards. It goes away when live becomes the default.
+**Flag:** a status-light button in the board toolbar — **Live board** (green
+dot) / **Stored board** (grey) / **Archived board** (grey, a closed meeting) —
+remembered in `localStorage` under `ltk.liveTiles`.
+
+**Live became the DEFAULT on 2026-07-25**, after hosted confirmation. Only an
+explicit opt-out (`"0"`) turns it off. The toggle stays rather than being
+removed: a stored wall is one click away if a card ever misbehaves in front of
+a meeting, and a closed meeting uses the same control to show that it is
+rendering its archive.
 
 **Verification: `app/board-live.html`** renders the same eight-card board both
 ways, side by side. At 2, 3 and 4 columns: 8/8 live stages filled, slot
@@ -253,6 +258,16 @@ type/label/description columns; only the art goes.
 
 Do this **last**, and only once phases 2–4 are proven hosted — until then the
 defaults are the fallback.
+
+> **Revised 2026-07-25 — phase 5 can no longer be a full retirement.** The
+> archive split (phase 4) means the stored path is permanent, not
+> transitional: closed meetings always render stamped snapshots, and the
+> toggle can drop any board back to stored. A never-opened card on an
+> archived meeting therefore still needs its catalog default. What phase 5
+> *can* do is narrow the pipeline's job — defaults stop being what most
+> people see, so staleness stops mattering much — but `tile-defaults.json`,
+> `selfHealCatalog()` and `ben_defaultsvg` all survive. Re-scope before
+> starting it.
 
 ### Phase 6 — preloaded embeds  *(the capability live tiles unlock)*
 

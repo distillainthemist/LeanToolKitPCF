@@ -150,15 +150,14 @@ async function renderBoard(
   // standard-board design lives in Settings → Rituals / the wizard's
   // step 2; the operational board only offers per-meeting adjustment
   // (and only when the ritual's toggle allows it)
-  const adjustBtn = el("a", "app-btn", "Adjust this meeting") as HTMLAnchorElement;
-  adjustBtn.style.display = "none";
-  // Comparison scaffolding for the live-tiles work: flips the wall between
-  // stored snapshots and live cards so the two can be judged side by side on
-  // real boards. Off by default and remembered per browser. Temporary — it
-  // goes away when live becomes the default
-  // (docs/leanboard-live-tiles-plan.md, phases 4-5).
-  const liveBtn = el("button", "app-btn", "") as HTMLButtonElement;
-  bar.append(title, status, el("span", "app-bar-gap"), liveBtn, scheduleBtn, adjustBtn);
+  // Live vs stored tiles. Live is the default; the toggle stays so a stored
+  // wall is one click away if a card ever misbehaves, and so a closed
+  // meeting can show that it is rendering its archive.
+  const liveBtn = el("button", "app-btn app-btn-mode", "") as HTMLButtonElement;
+  const liveDot = el("span", "app-mode-dot");
+  const liveLabel = el("span", "app-mode-label");
+  liveBtn.append(liveDot, liveLabel);
+  bar.append(title, status, el("span", "app-bar-gap"), liveBtn, scheduleBtn);
   parent.appendChild(bar);
 
   const split = el("div", "app-board-split");
@@ -231,21 +230,21 @@ async function renderBoard(
     return teardown ?? (() => undefined);
   };
 
-  const liveOn = () => localStorage.getItem(LIVE_TILES_KEY) === "1";
+  // live is the DEFAULT — only an explicit opt-out turns it off
+  const liveOn = () => localStorage.getItem(LIVE_TILES_KEY) !== "0";
   const applyLiveMode = () => {
     const wanted = liveOn();
     const on = liveTilesEnabled(wanted, current?.status);
     // a closed meeting always renders its stamped archive, flag or not —
     // saying so on the button, rather than silently ignoring the toggle
-    liveBtn.textContent = on
-      ? "Tiles: live"
-      : wanted && current?.status === "closed"
-        ? "Tiles: archived"
-        : "Tiles: stored";
-    liveBtn.title =
-      wanted && !on && current?.status === "closed"
-        ? "This meeting is closed — its tiles are the snapshots stamped when it closed"
-        : "";
+    const archived = wanted && current?.status === "closed";
+    liveLabel.textContent = on ? "Live board" : archived ? "Archived board" : "Stored board";
+    liveBtn.classList.toggle("app-mode-on", on);
+    liveBtn.title = archived
+      ? "This meeting is closed — the board shows the snapshots stamped when it closed"
+      : on
+        ? "Cards are rendering live. Click to show stored snapshots instead."
+        : "Showing stored snapshots. Click to render cards live.";
     gridView.setLiveRenderer(on ? liveRenderer : null);
   };
   liveBtn.addEventListener("click", () => {
@@ -286,9 +285,9 @@ async function renderBoard(
     status.textContent =
       `${current.when.slice(0, 16).replace("T", " ")} — ${current.status}` +
       (adjusted ? " · adjusted layout" : "");
-    const canAdjust = instancesAdjustable && current.status === "open";
-    adjustBtn.style.display = canAdjust ? "" : "none";
-    adjustBtn.href = `#/adjust/${board.boardId}/${current.id}`;
+    // adjusting a meeting's layout is a property OF that meeting, so it
+    // lives on the schedule pane's kebab rather than the board toolbar
+    schedulerView.setCanAdjustLayout(instancesAdjustable && current.status === "open");
     // the selected meeting decides live vs archive, so re-evaluate here
     applyLiveMode();
   };
@@ -349,6 +348,11 @@ async function renderBoard(
   const schedulerView = new MeetingSchedulerView(leftHost, {
     onAddAdhoc: (iso) => {
       void createAndSelect(`${iso}:00Z`, true);
+    },
+    // offered only while setCanAdjustLayout(true) — an open meeting on a
+    // ritual whose settings allow per-meeting divergence
+    onAdjustLayout: () => {
+      if (current) window.location.hash = `#/adjust/${board.boardId}/${current.id}`;
     },
     // the explicit + on an uncreated row — no confirmation needed
     onCreate: (inst) => {
