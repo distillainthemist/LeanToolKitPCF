@@ -29,13 +29,62 @@ type Set = (v: unknown) => void;
  * underneath. The helps are long and mostly read once, so inline they made
  * the pane three times taller than the controls it holds.
  */
+// ---- field explanations ------------------------------------------------------
+//
+// A real tooltip rather than the browser's `title`: native tooltips wait about
+// a second before appearing, which on a 12px target reads as "nothing
+// happens". This one shows on hover or focus straight away.
+//
+// It is positioned FIXED and parented to <body> on purpose — the properties
+// pane scrolls, so a tooltip inside it would clip at the pane's edge.
+
+let openTip: HTMLElement | null = null;
+let tipListenersBound = false;
+
+function hideTip(): void {
+  openTip?.remove();
+  openTip = null;
+}
+
+function bindTipListeners(): void {
+  if (tipListenersBound) return;
+  tipListenersBound = true;
+  // any scroll moves the anchor out from under the tip; so does a click
+  window.addEventListener("scroll", hideTip, true);
+  window.addEventListener("pointerdown", hideTip, true);
+  window.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") hideTip();
+  }, true);
+}
+
 export function infoIcon(help: string): HTMLElement {
+  bindTipListeners();
   const info = el("span", "ltk-cs-info", "ⓘ");
-  // native tooltip: the properties pane scrolls, and a positioned popover
-  // would clip at its edge
-  info.title = help;
   info.setAttribute("aria-label", help);
   info.tabIndex = 0;
+
+  const show = () => {
+    hideTip();
+    const tip = el("div", "ltk-cs-tip", help);
+    document.body.appendChild(tip);
+    const anchor = info.getBoundingClientRect();
+    const { width, height } = tip.getBoundingClientRect();
+    // below the icon, flipping above when it would fall off the bottom
+    let top = anchor.bottom + 6;
+    if (top + height > window.innerHeight - 8) {
+      top = Math.max(8, anchor.top - height - 6);
+    }
+    // start at the icon, pulled back inside the viewport when it would spill
+    const left = Math.min(Math.max(8, anchor.left - 6), window.innerWidth - width - 8);
+    tip.style.top = `${Math.round(top)}px`;
+    tip.style.left = `${Math.round(left)}px`;
+    openTip = tip;
+  };
+
+  info.addEventListener("mouseenter", show);
+  info.addEventListener("focus", show);
+  info.addEventListener("mouseleave", hideTip);
+  info.addEventListener("blur", hideTip);
   return info;
 }
 

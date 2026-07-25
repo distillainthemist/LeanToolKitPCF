@@ -506,14 +506,42 @@
         return {
           fields: [...document.querySelectorAll(".ltk-cs-tabbody .ltk-cs-field-label")]
             .map((l) => l.textContent.replace("ⓘ", "").trim()),
-          tip: icons[0]?.getAttribute("title")?.slice(0, 40),
+          tipAttr: icons[0]?.getAttribute("title"), // must be gone: no slow native tooltip
         };
       });
       report("switching tab shows that card's own settings",
         r2.fields.slice(0, 3).join(", "),
         r2.fields.includes("Embed URL"));
-      report("an info icon holds the field's explanation",
-        r2.tip ? `"${r2.tip}…"` : "(none)", (r2.tip ?? "").length > 10);
+      report("info icons no longer rely on the browser's slow native tooltip",
+        r2.tipAttr === null || r2.tipAttr === undefined ? "no title attribute" : `title="${r2.tipAttr}"`,
+        !r2.tipAttr);
+
+      // hovering shows a real tooltip, immediately, inside the viewport
+      const { result: rTip } = await withStudio("SqdpcCard", {}, async () => {
+        const icon = q(".app-studio-props .ltk-cs-info");
+        icon.dispatchEvent(new MouseEvent("mouseenter"));
+        await wait(40);
+        const tip = q(".ltk-cs-tip");
+        const tr = tip?.getBoundingClientRect();
+        const out = {
+          shown: !!tip,
+          text: tip?.textContent?.slice(0, 30),
+          inViewport: tr ? tr.top >= 0 && tr.left >= 0 &&
+            tr.bottom <= window.innerHeight && tr.right <= window.innerWidth : false,
+          // the studio overlay is z-index 10000; the tip must clear it
+          z: tip ? Number(getComputedStyle(tip).zIndex) : 0,
+          hit: Math.round(icon.getBoundingClientRect().width),
+        };
+        icon.dispatchEvent(new MouseEvent("mouseleave"));
+        await wait(30);
+        out.hidesOnLeave = !q(".ltk-cs-tip");
+        return out;
+      });
+      report("hovering an info icon shows its explanation at once",
+        `${rTip.shown ? `"${rTip.text}…"` : "nothing"} · z=${rTip.z} · ${rTip.hit}px target`,
+        rTip.shown && rTip.inViewport && rTip.z > 10001 && rTip.hit >= 20);
+      report("the tooltip clears when the pointer leaves",
+        rTip.hidesOnLeave ? "gone" : "still showing", rTip.hidesOnLeave);
 
       // a linked card gets its Source tab
       const { result: r3 } = await withStudio("LinkCard", {}, async () => ({

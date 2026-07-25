@@ -311,15 +311,39 @@ export const CARDSETTINGS_CSS = `
   gap: 5px;
 }
 .ltk-cs-info {
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1;
   color: var(--ltk-muted);
   cursor: help;
   flex: none;
   text-transform: none;
   letter-spacing: 0;
+  /* a 12px glyph is a fiddly hover target; the padding doubles it without
+     moving the label, and the negative margin keeps the layout unchanged */
+  padding: 4px;
+  margin: -4px;
 }
 .ltk-cs-info:hover, .ltk-cs-info:focus { color: var(--ltk-accent); outline: none; }
+
+/* the explanation itself — fixed, on <body>, so a scrolling pane cannot
+   clip it, and above the studio (10000) and picker (10001) overlays */
+.ltk-cs-tip {
+  position: fixed;
+  z-index: 10050;
+  max-width: 300px;
+  background: #2b2b2b;
+  color: #fff;
+  border-radius: 6px;
+  padding: 7px 10px;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.45;
+  letter-spacing: 0;
+  text-transform: none;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
+  pointer-events: none;
+  white-space: normal;
+}
 .ltk-cs-checkrow { display: flex; align-items: center; gap: 8px; }
 
 /* ---- state-palette select ---- */
