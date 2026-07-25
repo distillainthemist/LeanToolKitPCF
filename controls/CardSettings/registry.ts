@@ -152,7 +152,14 @@ export const CARDS: CardSpec[] = [
     label: "Five whys",
     group: "Problem solving",
     description: "Linear why-chains from a problem statement, root causes flagged.",
-    config: [],
+    config: [
+      {
+        key: "showStatus",
+        label: "Show cause status",
+        kind: "boolean",
+        help: "Show each cause's open/closed status on the chain.",
+      },
+    ],
     appBound: ["instanceId", "peopleJSON"],
     configNote: DOC_NOTE_RCA,
   },
@@ -179,7 +186,14 @@ export const CARDS: CardSpec[] = [
     label: "Fault tree",
     group: "Problem solving",
     description: "Top-down gated cause tree (AND/OR) under one top event.",
-    config: [],
+    config: [
+      {
+        key: "showStatus",
+        label: "Show cause status",
+        kind: "boolean",
+        help: "Show each cause's open/closed status on the tree.",
+      },
+    ],
     appBound: ["instanceId", "peopleJSON"],
     configNote: DOC_NOTE_RCA,
   },
@@ -373,7 +387,8 @@ export const CARDS: CardSpec[] = [
         key: "asOfDate",
         label: "As-of date",
         kind: "date",
-        help: "Anchor the window to a past date for review. Empty = today.",
+        help:
+          "Pin the window to a fixed date for review. Empty = the meeting's own date, so each meeting shows its own period.",
       },
     ],
     appBound: ["instanceId", "peopleJSON"],

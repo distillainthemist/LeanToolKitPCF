@@ -289,7 +289,10 @@ const REGISTRY: Record<string, CardMounter> = {
       ? (granRaw as ConditionsGranularity)
       : "day";
     const conditions = parseConditionsInput(cfgRaw(opts, "conditions"));
-    const asOf = parseAsOf(instanceDay(opts.instanceWhen));
+    // the window ends on the meeting's own date; a configured as-of date
+    // overrides it (the maker pinning the card to a period for review)
+    const asOf =
+      parseAsOf(cfgStr(opts, "asOfDate")) ?? parseAsOf(instanceDay(opts.instanceWhen));
     const periods = buildPeriods(gran, asOf);
     const window = { from: periods[0].key, to: periods[periods.length - 1].key };
     let lastMap: Record<string, string> = {};
@@ -799,7 +802,12 @@ const REGISTRY: Record<string, CardMounter> = {
     editor.setChrome(opts.title, promptsRaw(opts));
     editor.setPeople(opts.people);
     editor.setReadOnly(opts.readOnly);
-    editor.setSources(parseSources(JSON.stringify(opts.sources)));
+    // an explicitly configured source list wins; otherwise roll up this
+    // board's own cards (the default that makes the card work unconfigured)
+    const configured = parseSources(cfgRaw(opts, "sourcesJSON"));
+    editor.setSources(
+      configured.length > 0 ? configured : parseSources(JSON.stringify(opts.sources))
+    );
     editor.setViewer({ whoId: opts.viewer.whoId, who: opts.viewer.who });
     editor.setActions(opts.actions.filter((a) => a.escalated));
     return () => opts.host.replaceChildren();
