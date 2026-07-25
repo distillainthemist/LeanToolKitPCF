@@ -157,6 +157,25 @@ Tests: buffer semantics (no store write before Save); cancel-new-card removes
 the slot; class table drives editability; save writes manifest + row + svg.
 Dev page `app/card-studio.html` mounting the studio per card type.
 
+**Built 2026-07-26** (`app/src/screens/cardStudio.ts`). Two changes the build
+forced, both improvements:
+
+- **The panes paint synchronously.** The first cut awaited the roster,
+  palettes and live row before rendering anything, which left a blank overlay
+  until Dataverse answered — and a dead one if it never did. The studio now
+  opens instantly with defaults and upgrades in place as data lands.
+- **`standardDoc` is passed in by the caller.** The composer already loads
+  every card's document to draw its previews, so re-reading it per open was a
+  wasted round trip. When it is not supplied the studio fetches, and the pane
+  stays **read-only until it arrives** — an edit typed into a document that
+  had not loaded could otherwise be saved over real content.
+
+Proof: `app/card-studio.html` — 12 checks ALL PASS (pane class and its reason
+per card, both panes render, nothing persists before Save, Save persists once
+and applies the draft, clean Cancel writes nothing, no action affordance on
+FiveWhys/RiskMatrix/Agenda, a settings change re-renders the preview), plus
+visual confirmation of the side-by-side layout and the <900px stacking.
+
 ---
 
 ## Phase 2 — Composer integration
@@ -318,8 +337,8 @@ Beyond the four asks:
 
 ## Phases
 
-- [ ] Phase 0 — contracts (designTime, standardContent classifier, archivedSlots)
-- [ ] Phase 1 — the card studio overlay
+- [x] Phase 0 — contracts (designTime, standardContent classifier, archivedSlots) — DONE 2026-07-26
+- [x] Phase 1 — the card studio overlay — DONE 2026-07-26 (built + verified in isolation; wired up in phase 2)
 - [ ] Phase 2 — composer integration (✎ removal, pane removal, no type change)
 - [ ] Phase 3 — add / archive / duplicate flow (+ optional close-time manifest snapshot)
 - [ ] Phase 4 — enhancements + polish

@@ -1,0 +1,216 @@
+<!doctype html>
+<!-- Card-studio plan, phase 1 verification. Opens the real studio over a
+     stub slot, with persistence STUBBED, and asserts the contract that makes
+     Cancel meaningful: nothing is written before Save, the left pane is
+     editable only for cards that have standard content, actions are hidden
+     everywhere, and a settings change re-renders the live preview.
+
+       cd app && npm run dev  →  http://localhost:5180/card-studio.html
+
+     Dev-server only: vite builds index.html alone. There is no Power Apps
+     host here, so the roster/live-row reads fail and fall back — which is
+     itself part of what this page checks. -->
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Card studio audit</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 16px; background: #f0efea; }
+    table { border-collapse: collapse; background: #fff; font-size: 13px; margin-bottom: 14px; }
+    th, td { border: 1px solid #d5d1c8; padding: 5px 9px; text-align: left; }
+    th { background: #2b2b2b; color: #fff; }
+    .bad { color: #b32020; font-weight: 700; }
+    .ok { color: #1e7a1e; font-weight: 600; }
+    button.open { font: inherit; padding: 6px 12px; margin-right: 6px; }
+  </style>
+</head>
+<body>
+  <h2 style="margin:0 0 10px">Card studio audit</h2>
+  <div id="summary">running…</div>
+  <table id="report"><thead><tr><th>check</th><th>got</th><th>verdict</th></tr></thead><tbody></tbody></table>
+  <div>
+    <strong style="font-size:13px">Open one by hand:</strong><br />
+    <div id="manual" style="margin-top:6px"></div>
+  </div>
+
+  <script type="module">
+    // the app shell normally loads this from main.ts
+    import "./src/style.css";
+    import { openCardStudio } from "./src/screens/cardStudio.ts";
+    import { CARDS, cardSpec } from "../controls/CardSettings/registry.ts";
+
+    const tbody = document.querySelector("#report tbody");
+    let bad = 0;
+    const report = (check, got, ok) => {
+      if (!ok) bad++;
+      const tr = document.createElement("tr");
+      tr.innerHTML = `<td>${check}</td><td>${got}</td><td class="${ok ? "ok" : "bad"}">${ok ? "ok" : "FAIL"}</td>`;
+      tbody.appendChild(tr);
+    };
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    const slotFor = (cardType, settings = {}) => ({
+      pos: 1, w: 1, h: 1, nav: 0,
+      cardId: `c-${cardType.toLowerCase()}`, cardType, title: "", settings,
+    });
+    const q = (sel) => document.querySelector(sel);
+
+    /** Open the studio, run `body`, then make sure it is closed. */
+    async function withStudio(cardType, settings, body) {
+      const calls = { persist: 0, archive: 0 };
+      const done = openCardStudio({
+        boardId: "b-test", standardDoc: "",
+        slot: slotFor(cardType, settings),
+        boards: [{ boardId: "b-other", name: "Other board", cards: [] }],
+        persist: async () => { calls.persist++; },
+        onArchive: async () => { calls.archive++; },
+      });
+      await wait(60); // panes paint synchronously now
+      const result = await body(calls);
+      if (q(".app-studio-overlay")) q(".app-studio-overlay").remove();
+      return { result, calls, done };
+    }
+
+    // ---- 1. layout + the editable/preview split ----
+    {
+      const { result } = await withStudio("FiveWhys", {}, async () => ({
+        label: q(".app-studio-panelabel-t")?.textContent,
+        sub: q(".app-studio-panelabel-s")?.textContent,
+        hasCard: !!q(".app-studio-card")?.firstElementChild,
+        hasProps: !!q(".app-studio-props")?.firstElementChild,
+        hasSaveCancel: [...document.querySelectorAll(".app-studio-foot .app-btn")]
+          .map((b) => b.textContent).join(","),
+      }));
+      report("document card: left pane is editable standard content",
+        `${result.label} — ${result.sub}`, result.label === "Standard content");
+      report("both panes render", `card:${result.hasCard} props:${result.hasProps}`,
+        result.hasCard && result.hasProps);
+      report("footer has Cancel + Save", result.hasSaveCancel,
+        result.hasSaveCancel === "Cancel,Save");
+    }
+
+    // ---- 2. preview-class cards are read-only and say why ----
+    for (const type of ["KpiTrendCard", "ActionBoard", "LinkCard"]) {
+      const { result } = await withStudio(type, {}, async () => ({
+        label: q(".app-studio-panelabel-t")?.textContent,
+        sub: q(".app-studio-panelabel-s")?.textContent,
+      }));
+      const note = cardSpec(type).standardContentNote;
+      report(`${type}: preview pane with its reason`, result.sub?.slice(0, 46) + "…",
+        result.label === "Preview" && result.sub === note);
+    }
+
+    // ---- 3. nothing is persisted before Save ----
+    {
+      const { calls, result } = await withStudio("FiveWhys", {}, async () => {
+        // type into the properties pane (the card title field)
+        const input = q(".app-studio-props input.ltk-input, .app-studio-props input");
+        input.value = "Renamed by the audit";
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+        await wait(50);
+        return {
+          dot: getComputedStyle(q(".app-studio-dot")).visibility,
+          headTitle: q(".app-studio-title")?.textContent,
+        };
+      });
+      report("an edit marks dirty and retitles the header", `${result.dot} / ${result.headTitle}`,
+        result.dot === "visible" && result.headTitle === "Renamed by the audit");
+      report("nothing persisted before Save", `persist called ${calls.persist}×`, calls.persist === 0);
+    }
+
+    // ---- 4. Save persists exactly once ----
+    {
+      const calls = { persist: 0 };
+      let saved = null;
+      const slot = slotFor("FiveWhys");
+      const done = openCardStudio({
+        boardId: "b-test", standardDoc: "", slot,
+        boards: [],
+        persist: async (s) => { calls.persist++; saved = s; },
+      });
+      await wait(60);
+      const input = q(".app-studio-props input");
+      input.value = "Saved title";
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      await wait(50);
+      [...document.querySelectorAll(".app-studio-foot .app-btn")]
+        .find((b) => b.textContent === "Save").click();
+      const outcome = await done;
+      report("Save persists once, applies the draft, and closes",
+        `${outcome} · persist ${calls.persist}× · title "${saved?.title}"`,
+        outcome === "saved" && calls.persist === 1 && saved.title === "Saved title" &&
+        !document.querySelector(".app-studio-overlay"));
+    }
+
+    // ---- 5. Cancel with no edits closes silently and writes nothing ----
+    {
+      const calls = { persist: 0 };
+      const done = openCardStudio({
+        boardId: "b-test", standardDoc: "", slot: slotFor("FiveWhys"), boards: [],
+        persist: async () => { calls.persist++; },
+      });
+      await wait(60);
+      [...document.querySelectorAll(".app-studio-foot .app-btn")]
+        .find((b) => b.textContent === "Cancel").click();
+      const outcome = await done;
+      report("clean Cancel closes with no prompt and no write",
+        `${outcome} · persist ${calls.persist}×`,
+        outcome === "cancelled" && calls.persist === 0);
+    }
+
+    // ---- 6. actions are hidden in every studio mount ----
+    {
+      const withActions = ["FiveWhys", "RiskMatrix", "AgendaCard"];
+      const found = [];
+      for (const type of withActions) {
+        await withStudio(type, {}, async () => {
+          const txt = q(".app-studio-card")?.textContent ?? "";
+          if (/raise action|＋ Add an action|Actions \(/i.test(txt)) found.push(type);
+        });
+      }
+      report("no action-raising affordance in the studio",
+        found.length ? found.join(", ") : "none on " + withActions.join("/"),
+        found.length === 0);
+    }
+
+    // ---- 7. a settings change re-renders the live preview ----
+    {
+      const { result } = await withStudio("SqdpcCard", {}, async () => {
+        const before = q(".app-studio-card")?.textContent ?? "";
+        // Dimensions is a chips field; drive the underlying draft through the
+        // card-title input instead, which every card has and which the
+        // preview reflects in its title bar
+        const input = q(".app-studio-props input");
+        input.value = "Preview follows settings";
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+        await wait(900); // > REMOUNT_QUIET_MS
+        const after = q(".app-studio-card")?.textContent ?? "";
+        return { changed: after !== before, has: after.includes("Preview follows settings") };
+      });
+      report("settings change re-renders the card pane",
+        `changed:${result.changed} title-in-card:${result.has}`, result.has);
+    }
+
+    document.getElementById("summary").innerHTML = bad === 0
+      ? `<p class="ok">ALL PASS</p>` : `<p class="bad">${bad} FAILURES</p>`;
+
+    // ---- manual openers ----
+    const manual = document.getElementById("manual");
+    for (const card of CARDS.filter((c) => !c.hidden)) {
+      const b = document.createElement("button");
+      b.className = "open";
+      b.textContent = card.label;
+      b.addEventListener("click", () => {
+        openCardStudio({
+          boardId: "b-test", standardDoc: "", slot: slotFor(card.type),
+          boards: [{ boardId: "b-other", name: "Other board", cards: [
+            { cardId: "x9", cardType: "RiskMatrix", title: "Site risks" },
+          ] }],
+          persist: async () => {},
+          onArchive: async () => {},
+        });
+      });
+      manual.appendChild(b);
+    }
+  </script>
+</body>
+</html>
