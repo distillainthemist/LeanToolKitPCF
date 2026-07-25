@@ -114,9 +114,21 @@ look up a single card's output directly.
 | Default Tile SVG | Multiline (200,000) | The card's rendered **empty state** (see tile defaults) |
 | Solution Version | Text (20) | Which release generated it |
 
-Dual purpose: (1) default tiles for never-opened cards; (2) the palette
-source for the board composer, seeded from CardSettings' `catalogJSON`
-output so it can never drift from the installed solution version.
+**What the app actually reads from this table: `Card Type` + `Default Tile
+SVG`, and nothing else** (`catalogSvgByType()` in `app/src/store/catalog.ts`).
+That art is the fallback for a card with nothing saved, on the **stored**
+rendering path — an archived meeting, or a board switched off live tiles. A
+live board renders each card's own empty state instead, and either way a tile
+with nothing behind it carries a **NO DATA** badge
+([leanboard-live-tiles-plan.md](leanboard-live-tiles-plan.md)).
+
+**The board composer's palette does NOT come from here.** It is built in code
+from the CardSettings registry (`buildCatalogJson()`), with no Dataverse round
+trip — so it cannot drift from the deployed app, which is stronger than the
+"cannot drift from the installed solution version" this page used to claim for
+the table. `selfHealCatalog()` still writes Label, Description and Solution
+Version, but the app never reads them back; they are there for anyone
+inspecting the table in Dataverse.
 
 ### LTK Action — one addition
 
@@ -368,8 +380,9 @@ Filter('LTK Actions',
    source-board picker only. The `board` section rides inside the same
    settings blob (sparse, lossless), so the slot stores ONE blob.
 2. **CardSettings — `catalogJSON` output.** The registry, as JSON
-   (`[{type, label, description}]`), for seeding the Card Catalog table and
-   the app palette — the palette can never drift from the installed version.
+   (`[{type, label, description}]`). The code app still uses this function
+   directly for its palette; it also seeds the Card Catalog table, but the
+   palette is read from the registry, not from the table.
 3. **Crew-linked attendees.** `peopleJSON` gains an optional `crew` field
    (`[{whoId, who, crew:"A"}]`). MeetingScheduler gains a `peopleJSON` input
    and an **`attendeesJSON` output**: on selection it emits the people whose
