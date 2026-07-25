@@ -1,0 +1,144 @@
+<!doctype html>
+<!-- Card-settings plan, phase 1 verification. Mounts the CardSettings
+     editor in BOARD MODE and audits the "New meeting instance" section per
+     card type: which policies the select offers, what a fresh pick stamps,
+     how a legacy stored link renders, and the series-backed note.
+
+       cd app && npm run dev  →  http://localhost:5180/policy-matrix.html
+
+     Dev-server only: vite builds index.html alone. -->
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Policy matrix audit</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 16px; background: #f0efea; }
+    table { border-collapse: collapse; background: #fff; font-size: 13px; margin-bottom: 16px; }
+    th, td { border: 1px solid #d5d1c8; padding: 5px 9px; text-align: left; vertical-align: top; }
+    th { background: #2b2b2b; color: #fff; }
+    .bad { color: #b32020; font-weight: 700; }
+    .ok { color: #1e7a1e; font-weight: 600; }
+    #host { width: 420px; background: #fff; border: 1px solid #d5d1c8; min-height: 320px; }
+    .row { display: flex; gap: 16px; align-items: flex-start; }
+  </style>
+</head>
+<body>
+  <h2 style="margin:0 0 10px">Policy matrix audit</h2>
+  <div id="summary"></div>
+  <div class="row">
+    <table id="report"><thead><tr>
+      <th>card</th><th>section</th><th>options offered</th><th>stamped on pick</th><th>verdict</th>
+    </tr></thead><tbody></tbody></table>
+    <div>
+      <h4 style="margin:0 0 6px">Live editor (last audited card)</h4>
+      <div id="host"></div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { CardSettingsEditor } from "../controls/CardSettings/editor.ts";
+    import { CARDS, cardSpec } from "../controls/CardSettings/registry.ts";
+    import { parseDraft } from "../controls/CardSettings/types.ts";
+
+    const tbody = document.querySelector("#report tbody");
+    const host = document.getElementById("host");
+    const BOARDS = [
+      { boardId: "b2", name: "Sister board", cards: [
+        { cardId: "x9", cardType: "CaptureCard", title: "Handover" },
+      ]},
+    ];
+
+    /** Mount the editor on a draft, return the board-section state. */
+    function audit(draftJson) {
+      host.replaceChildren();
+      let last = null;
+      const ed = new CardSettingsEditor(host, { onChange: (d) => { last = d; } });
+      ed.setBoards(BOARDS);
+      ed.setDraft(parseDraft(draftJson), false);
+      // the policy select is the one whose first option is the Default label
+      const selects = [...host.querySelectorAll("select")];
+      const policySel = selects.find((s) =>
+        [...s.options].some((o) => o.label.startsWith("Default (carry")));
+      const notes = [...host.querySelectorAll(".ltk-cs-note")].map((n) => n.textContent);
+      return {
+        editor: ed,
+        draft: () => last,
+        options: policySel ? [...policySel.options].map((o) => ({ v: o.value, t: o.label })) : null,
+        seriesNote: notes.some((t) => t.includes("dated series")),
+      };
+    }
+
+    /** Simulate picking a type from the picker (stamps the policy). */
+    function pick(type) {
+      host.replaceChildren();
+      let last = null;
+      const ed = new CardSettingsEditor(host, { onChange: (d) => { last = d; } });
+      ed.setBoards(BOARDS);
+      ed.setDraft(parseDraft(""), false);
+      const buttons = [...host.querySelectorAll(".ltk-cs-cardopt")];
+      const spec = cardSpec(type);
+      const btn = buttons.find((b) => b.textContent.startsWith(spec.label));
+      if (!btn) return "(not in picker)";
+      btn.click();
+      return last?.board?.policy ?? "";
+    }
+
+    let bad = 0;
+    for (const card of CARDS) {
+      if (card.hidden) continue;
+      const isSurface = card.type === "ActionBoard" || card.type === "EscalationViewer";
+      const a = audit(JSON.stringify({ cardType: card.type }));
+      const stamped = pick(card.type);
+
+      let section, offered, verdictOk, expect;
+      if (isSurface) {
+        section = "source picker";
+        offered = a.options ? "POLICY SELECT PRESENT" : "—";
+        verdictOk = a.options === null && stamped === "";
+      } else if (card.seriesBacked) {
+        section = a.seriesNote ? "series note" : "MISSING NOTE";
+        offered = a.options ? "POLICY SELECT PRESENT" : "—";
+        verdictOk = a.seriesNote && a.options === null && stamped === "";
+      } else {
+        section = "policy select";
+        const values = (a.options ?? []).map((o) => o.v);
+        offered = values.join(", ") || "(none)";
+        expect = ["", ...(card.policies ?? [])];
+        verdictOk =
+          JSON.stringify(values) === JSON.stringify(expect) &&
+          stamped === (card.defaultPolicy ?? "");
+      }
+      if (!verdictOk) bad++;
+      const tr = document.createElement("tr");
+      tr.innerHTML =
+        `<td>${card.type}</td><td>${section}</td><td>${offered}</td>` +
+        `<td>${stamped || "—"}</td>` +
+        `<td class="${verdictOk ? "ok" : "bad"}">${verdictOk ? "ok" : "FAIL"}</td>`;
+      tbody.appendChild(tr);
+    }
+
+    // legacy link slot: still visible, flagged, with its source pickers
+    {
+      const a = audit(JSON.stringify({
+        cardType: "CaptureCard",
+        board: { policy: "link", source: { boardId: "b2", cardId: "x9" } },
+      }));
+      const opt = (a.options ?? []).find((o) => o.v === "link");
+      const flagged = !!opt && opt.t.includes("no longer offered");
+      const srcSelects = [...host.querySelectorAll("select")].length >= 3; // policy + board + card
+      if (!(flagged && srcSelects)) bad++;
+      const tr = document.createElement("tr");
+      tr.innerHTML =
+        `<td>CaptureCard (legacy link)</td><td>policy select</td>` +
+        `<td>${(a.options ?? []).map((o) => o.v).join(", ")}</td><td>—</td>` +
+        `<td class="${flagged && srcSelects ? "ok" : "bad"}">${
+          flagged && srcSelects ? "ok — flagged, sources shown" : "FAIL"}</td>`;
+      tbody.appendChild(tr);
+    }
+
+    document.getElementById("summary").innerHTML = bad === 0
+      ? `<p class="ok">ALL PASS</p>`
+      : `<p class="bad">${bad} FAILURES</p>`;
+  </script>
+</body>
+</html>

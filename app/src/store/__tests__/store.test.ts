@@ -48,17 +48,26 @@ describe("manifest", () => {
     expect(slotPolicy(m.slots[3])).toBe("carry");
     expect(slotPolicy(m.slots[1])).toBe("shared");
   });
+  it("series-backed cards are shared whatever the blob says", () => {
+    // c-sqdpc stores policy:"carry" — the Card Series table is keyed
+    // board+card and windowed by meeting date, so the card is shared
+    // regardless: live row as document, archive stamp at close
+    expect(slotPolicy(m.slots[0])).toBe("shared");
+  });
 });
 
 describe("policies", () => {
   const m = parseManifest(manifestRaw);
   it("plans carry/shared/link correctly", () => {
-    expect(seedPlan(m.slots[0])).toMatchObject({ copyFromPrevious: true, ensureLiveRow: false });
+    expect(seedPlan(m.slots[3])).toMatchObject({ copyFromPrevious: true, ensureLiveRow: false });
     expect(seedPlan(m.slots[1])).toMatchObject({ copyFromPrevious: false, ensureLiveRow: true });
     expect(seedPlan(m.slots[2]).linkSource).toEqual({ boardId: "b2", cardId: "x9" });
   });
-  it("archives only shared slots at close", () => {
-    expect(archiveSlots(m.slots)).toEqual(["c-kpi"]);
+  it("plans a series card as shared despite its stored carry", () => {
+    expect(seedPlan(m.slots[0])).toMatchObject({ copyFromPrevious: false, ensureLiveRow: true });
+  });
+  it("archives shared slots at close — including series cards", () => {
+    expect(archiveSlots(m.slots)).toEqual(["c-sqdpc", "c-kpi"]);
   });
 });
 

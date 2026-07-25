@@ -2,6 +2,7 @@
 // are the toolkit's own schemas; JSON columns hold the nested structures
 // verbatim per docs/actions-dataverse.md and master-leanboard.md.
 
+import { cardSpec } from "../../../controls/CardSettings/registry";
 import { LtkAction, sanitizeAction } from "../../../shared/schema/actions";
 import type { Ben_ltkactionsBase, Ben_ltkactions } from "../generated/models/Ben_ltkactionsModel";
 import type { Ben_ltkboards } from "../generated/models/Ben_ltkboardsModel";
@@ -122,8 +123,16 @@ export function serializeManifest(manifest: BoardManifest): string {
   });
 }
 
-/** The slot's data policy, defaulted per the design (carry). */
+/**
+ * The slot's data policy, defaulted per the design (carry).
+ *
+ * Series-backed cards are ALWAYS shared, whatever the blob says: their data
+ * lives in the Card Series table (keyed board+card, windowed by the meeting
+ * date), so every meeting shows the same data regardless — shared makes the
+ * live row their document and gets each close its archived tile image.
+ */
 export function slotPolicy(slot: ManifestSlot): "clear" | "carry" | "shared" | "link" {
+  if (cardSpec(slot.cardType)?.seriesBacked) return "shared";
   const board = (slot.settings.board ?? {}) as Record<string, unknown>;
   const policy = typeof board.policy === "string" ? board.policy : "";
   if (policy === "clear" || policy === "shared" || policy === "link") return policy;

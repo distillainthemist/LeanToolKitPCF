@@ -1,0 +1,82 @@
+// The registry's data-policy matrix (leanboard-card-settings-plan.md phase 1):
+// every visible card either IS an action surface, is series-backed (no
+// choice), or declares which of clear/carry/shared it offers plus the
+// default stamped onto newly created slots. Link is never offered — the
+// LinkCard card type replaces it (phase 4).
+
+import { describe, expect, it } from "vitest";
+import {
+  CARDS,
+  cardSpec,
+  policyOnPick,
+} from "../../../controls/CardSettings/registry";
+
+const ACTION_SURFACES = new Set(["ActionBoard", "EscalationViewer"]);
+
+describe("policy matrix coverage", () => {
+  it("every visible card is a surface, series-backed, or declares policies", () => {
+    for (const card of CARDS) {
+      if (card.hidden || ACTION_SURFACES.has(card.type)) continue;
+      const declared = card.seriesBacked === true || (card.policies?.length ?? 0) > 0;
+      expect(declared, `${card.type} declares no policy story`).toBe(true);
+    }
+  });
+
+  it("never offers link, and defaults are members of the offering", () => {
+    for (const card of CARDS) {
+      expect(card.policies ?? [], card.type).not.toContain("link");
+      if (card.policies) {
+        expect(card.defaultPolicy, `${card.type} has policies but no default`).toBeDefined();
+        expect(card.policies, card.type).toContain(card.defaultPolicy);
+      }
+    }
+  });
+
+  it("a series-backed card offers no picker at all", () => {
+    for (const type of ["SqdpcCard", "ConditionsCard", "KpiTrendCard", "ParetoCard"]) {
+      const spec = cardSpec(type)!;
+      expect(spec.seriesBacked, type).toBe(true);
+      expect(spec.policies, type).toBeUndefined();
+    }
+  });
+
+  it("registers never offer clear — it would empty the register each meeting", () => {
+    for (const type of ["RiskMatrix", "Raci", "SkillsMatrix"]) {
+      expect(cardSpec(type)!.policies).toEqual(["carry", "shared"]);
+      expect(cardSpec(type)!.defaultPolicy).toBe("shared");
+    }
+  });
+
+  it("the ritual defaults: agenda clear, status tile carry (no clear)", () => {
+    expect(cardSpec("AgendaCard")!.defaultPolicy).toBe("clear");
+    expect(cardSpec("StatusTile")!.policies).toEqual(["carry", "shared"]);
+  });
+});
+
+describe("policyOnPick — the stamp on card-type selection", () => {
+  it("stamps the type's default on a fresh slot", () => {
+    expect(policyOnPick("AgendaCard", "")).toBe("clear");
+    expect(policyOnPick("RiskMatrix", "")).toBe("shared");
+    expect(policyOnPick("CaptureCard", "")).toBe("carry");
+  });
+
+  it("keeps a still-offered policy across a type change", () => {
+    expect(policyOnPick("CaptureCard", "shared")).toBe("shared");
+  });
+
+  it("replaces a policy the new type does not offer", () => {
+    // AgendaCard(clear) changed to RiskMatrix: clear not offered → default
+    expect(policyOnPick("RiskMatrix", "clear")).toBe("shared");
+    // legacy link is never offered anywhere
+    expect(policyOnPick("CaptureCard", "link")).toBe("carry");
+  });
+
+  it("stamps nothing for series-backed cards and action surfaces", () => {
+    expect(policyOnPick("SqdpcCard", "carry")).toBe("");
+    expect(policyOnPick("ActionBoard", "clear")).toBe("");
+  });
+
+  it("leaves unknown types untouched", () => {
+    expect(policyOnPick("NotACard", "shared")).toBe("shared");
+  });
+});

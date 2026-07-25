@@ -8,7 +8,15 @@ import { LTK_BASE_CSS } from "../../shared/ui/baseCss";
 import { clear, el, ensureStylesheet } from "../../shared/ui/dom";
 import { parsePrompts, Prompts, renderTitleBar } from "../../shared/ui/chrome";
 import { fieldRow, sectionLabel, selectInput } from "../../shared/ui/dialog";
-import { CARD_GROUPS, CARDS, cardSpec, COMMON_FIELDS, THEME_FIELDS } from "./registry";
+import {
+  CARD_GROUPS,
+  CARDS,
+  cardSpec,
+  COMMON_FIELDS,
+  DataPolicy,
+  policyOnPick,
+  THEME_FIELDS,
+} from "./registry";
 import { renderField, renderPromptsField, FieldHost } from "./fields";
 import { BoardRef, SettingsDraft, ThemeDraft, emptyDraft } from "./types";
 import { CARDSETTINGS_CSS } from "./styles";
@@ -146,6 +154,15 @@ export class CardSettingsEditor {
           opt.appendChild(el("span", "ltk-cs-cardopt-desc", card.description));
           opt.addEventListener("click", () => {
             this.draft.cardType = card.type;
+            // board mode: stamp the type's default policy on new slots (or
+            // when the current policy isn't offered by the new type) — the
+            // runtime default for old unset slots stays carry
+            if (this.boards !== null) {
+              this.draft.board.policy = policyOnPick(
+                card.type,
+                this.draft.board.policy
+              ) as SettingsDraft["board"]["policy"];
+            }
             this.commit();
             this.render();
           });
@@ -334,13 +351,40 @@ export class CardSettingsEditor {
       return;
     }
 
-    const policy = selectInput(b.policy, [
+    const spec = cardSpec(this.draft.cardType);
+    if (spec?.seriesBacked) {
+      body.appendChild(
+        el(
+          "div",
+          "ltk-cs-note",
+          "No choice needed — this card's data is a dated series: every " +
+            "meeting shows its own window of the same data, and closing a " +
+            "meeting archives the card's image."
+        )
+      );
+      return;
+    }
+
+    const POLICY_LABELS: Record<string, string> = {
+      clear: "Clear — start each instance from the standard content",
+      carry: "Carry — copy the previous instance",
+      shared: "Shared — one live document across instances",
+      link: "Link — show a card from another board",
+    };
+    const offered: DataPolicy[] = spec?.policies ?? ["clear", "carry", "shared"];
+    const options = [
       { value: "", label: "Default (carry from previous)" },
-      { value: "clear", label: "Clear — start each instance empty" },
-      { value: "carry", label: "Carry — copy the previous instance" },
-      { value: "shared", label: "Shared — one live document across instances" },
-      { value: "link", label: "Link — show a card from another board" },
-    ]);
+      ...offered.map((p) => ({ value: p, label: POLICY_LABELS[p] })),
+    ];
+    // a stored policy this card no longer offers (e.g. legacy link) still
+    // shows, flagged — never silently changed out from under the maker
+    if (b.policy !== "" && !offered.includes(b.policy as DataPolicy)) {
+      options.push({
+        value: b.policy,
+        label: `${POLICY_LABELS[b.policy] ?? b.policy} (no longer offered for this card)`,
+      });
+    }
+    const policy = selectInput(b.policy, options);
     policy.disabled = this.readOnly;
     policy.addEventListener("change", () => {
       b.policy = policy.value as SettingsDraft["board"]["policy"];

@@ -42,6 +42,9 @@ export interface FieldSpec {
   fields?: ObjectField[]; // objectList columns
 }
 
+/** A new-instance data policy a card can offer ("link" retired — LinkCard). */
+export type DataPolicy = "clear" | "carry" | "shared";
+
 export interface CardSpec {
   /** Canonical id stamped into the blob as `cardType` — the control name. */
   type: string;
@@ -57,6 +60,22 @@ export interface CardSpec {
   appBound: string[];
   /** Shown when a card keeps its interesting knobs in its DOCUMENT. */
   configNote?: string;
+  /**
+   * Data policies this card offers in the composer's "New meeting instance"
+   * section. Absent for action surfaces (source picker instead), for
+   * series-backed cards (no choice — see `seriesBacked`), and for hidden
+   * cards that never sit on a board.
+   */
+  policies?: DataPolicy[];
+  /** Stamped into board.policy when a NEW slot of this type is created. */
+  defaultPolicy?: DataPolicy;
+  /**
+   * Data lives in the Card Series table (keyed board+card, windowed by the
+   * meeting's date) — every meeting shows its window of the same data, so
+   * the card behaves as SHARED regardless of any stored policy: the live
+   * row is its document and each close archives the tile image.
+   */
+  seriesBacked?: boolean;
 }
 
 /** Picker group display order. */
@@ -162,6 +181,8 @@ export const CARDS: CardSpec[] = [
     ],
     appBound: ["instanceId", "peopleJSON"],
     configNote: DOC_NOTE_RCA,
+    policies: ["clear", "carry", "shared"],
+    defaultPolicy: "carry",
   },
   {
     type: "Fishbone",
@@ -180,6 +201,8 @@ export const CARDS: CardSpec[] = [
     ],
     appBound: ["instanceId", "peopleJSON"],
     configNote: DOC_NOTE_RCA,
+    policies: ["clear", "carry", "shared"],
+    defaultPolicy: "carry",
   },
   {
     type: "FaultTree",
@@ -196,6 +219,8 @@ export const CARDS: CardSpec[] = [
     ],
     appBound: ["instanceId", "peopleJSON"],
     configNote: DOC_NOTE_RCA,
+    policies: ["clear", "carry", "shared"],
+    defaultPolicy: "carry",
   },
   {
     type: "ActionBoard",
@@ -243,6 +268,10 @@ export const CARDS: CardSpec[] = [
       },
     ],
     appBound: ["instanceId"],
+    // clear is not offered: an empty document resets to the FIRST state,
+    // which reads as a false "all good" every meeting
+    policies: ["carry", "shared"],
+    defaultPolicy: "carry",
   },
   {
     type: "ParetoCard",
@@ -262,6 +291,7 @@ export const CARDS: CardSpec[] = [
     appBound: ["instanceId"],
     configNote:
       "The categories live in the card's document; counts are daily rows summed over the window.",
+    seriesBacked: true,
   },
   {
     type: "KpiTrendCard",
@@ -306,6 +336,7 @@ export const CARDS: CardSpec[] = [
     appBound: ["instanceId"],
     configNote:
       "Readings are captured in the card itself. A card that set its target or limits in-card before they moved here keeps those values until you set them above.",
+    seriesBacked: true,
   },
   {
     type: "BenefitEffort",
@@ -316,6 +347,8 @@ export const CARDS: CardSpec[] = [
     appBound: ["instanceId", "peopleJSON"],
     configNote:
       "The ideas themselves live in the card's document. Quadrant labels can be renamed via prompts field hints (quadTL/quadTR/quadBL/quadBR).",
+    policies: ["clear", "carry", "shared"],
+    defaultPolicy: "carry",
   },
   {
     type: "RiskMatrix",
@@ -325,6 +358,9 @@ export const CARDS: CardSpec[] = [
     config: [],
     appBound: ["instanceId", "peopleJSON"],
     configNote: "The risks live in the card's document, edited in the card itself.",
+    // a register: there is ONE truth. clear would silently empty it each meeting
+    policies: ["carry", "shared"],
+    defaultPolicy: "shared",
   },
   {
     type: "SqdpcCard",
@@ -370,6 +406,7 @@ export const CARDS: CardSpec[] = [
       },
     ],
     appBound: ["instanceId", "peopleJSON"],
+    seriesBacked: true,
   },
   {
     type: "ConditionsCard",
@@ -417,6 +454,7 @@ export const CARDS: CardSpec[] = [
       },
     ],
     appBound: ["instanceId", "peopleJSON"],
+    seriesBacked: true,
   },
   {
     type: "AgendaCard",
@@ -428,6 +466,10 @@ export const CARDS: CardSpec[] = [
     appBound: ["instanceId", "peopleJSON"],
     configNote:
       "The pre-work, agenda items and outputs live in the card DOCUMENT (Input / Output JSON), edited in the card itself — not in settings.",
+    // the ritual: each meeting starts from the standard agenda; carrying a
+    // ticked pre-work list defeats it
+    policies: ["clear", "carry", "shared"],
+    defaultPolicy: "clear",
   },
   {
     type: "EmbedCard",
@@ -486,6 +528,9 @@ export const CARDS: CardSpec[] = [
       },
     ],
     appBound: [],
+    // the document is only the commentary; fresh notes each meeting
+    policies: ["clear", "carry", "shared"],
+    defaultPolicy: "clear",
   },
   {
     type: "CaptureCard",
@@ -510,6 +555,8 @@ export const CARDS: CardSpec[] = [
       },
     ],
     appBound: [],
+    policies: ["clear", "carry", "shared"],
+    defaultPolicy: "carry",
   },
   {
     type: "HeatmapCard",
@@ -526,6 +573,8 @@ export const CARDS: CardSpec[] = [
       },
     ],
     appBound: ["instanceId", "peopleJSON"],
+    policies: ["clear", "carry", "shared"],
+    defaultPolicy: "carry",
   },
   {
     type: "ProcessMap",
@@ -547,6 +596,9 @@ export const CARDS: CardSpec[] = [
       },
     ],
     appBound: ["instanceId", "peopleJSON"],
+    // a maintained artifact — an empty flowchart each meeting serves nobody
+    policies: ["carry", "shared"],
+    defaultPolicy: "shared",
   },
   {
     type: "Raci",
@@ -557,6 +609,8 @@ export const CARDS: CardSpec[] = [
     appBound: ["instanceId", "peopleJSON"],
     configNote:
       "Roles and deliverables live in the card's document, editable in-card.",
+    policies: ["carry", "shared"],
+    defaultPolicy: "shared",
   },
   {
     type: "SkillsMatrix",
@@ -567,6 +621,8 @@ export const CARDS: CardSpec[] = [
     appBound: ["instanceId", "peopleJSON"],
     configNote:
       "Categories, skills and targets live in the card's document, editable in-card.",
+    policies: ["carry", "shared"],
+    defaultPolicy: "shared",
   },
   {
     type: "MeetingScheduler",
@@ -713,6 +769,22 @@ for (const card of CARDS) {
 
 export function cardSpec(type: string): CardSpec | undefined {
   return CARDS.find((c) => c.type === type);
+}
+
+/**
+ * The board.policy value a slot should hold after the maker picks (or
+ * changes to) `type`: a still-offered current policy is kept; otherwise the
+ * type's default is stamped ("" for cards with no policy choice — action
+ * surfaces, series-backed cards). Stamping the default explicitly means a
+ * per-type default only ever applies to slots created after it existed —
+ * existing slots with an unset policy keep the runtime default (carry).
+ */
+export function policyOnPick(type: string, current: string): string {
+  const spec = cardSpec(type);
+  if (!spec) return current;
+  const offered = spec.policies ?? [];
+  if (offered.includes(current as DataPolicy)) return current;
+  return spec.defaultPolicy ?? "";
 }
 
 /**
