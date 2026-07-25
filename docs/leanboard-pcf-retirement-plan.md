@@ -104,7 +104,14 @@ root tsc, app tsc, 125/125 tests and app build all pass; the app bundle hashes
 are **byte-identical** to the pre-deletion build, which is the strongest form
 of the "no behaviour change" contract.
 
-**Follow-up this exposed — the tile-defaults generator.**
+**Follow-up this exposed — the tile-defaults generator.** ✅ **PORTED
+2026-07-25**: `app/tile-defaults.html` + `app/src/tools/tileDefaults.ts` mount
+the editor classes directly and harvest `onSnapshot`; a dev-only vite endpoint
+writes `tools/tile-defaults.json` in place. Defaults regenerated (they dated
+from 2026-07-15, before the settings audit and the SQDPC/kebab fixes) and
+`APP_VERSION` bumped so the heal actually runs. The original problem
+statement follows.
+
 `tools/tile-defaults.js` + `.html` served their page over `out/controls/*/
 bundle.js` and so no longer run, while their output `tools/tile-defaults.json`
 is still imported by `app/src/store/catalog.ts` to seed each card type's

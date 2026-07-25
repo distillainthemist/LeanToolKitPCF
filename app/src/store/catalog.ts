@@ -8,7 +8,10 @@ import tileDefaults from "../../../tools/tile-defaults.json";
 import { Ben_ltkcardcatalogsService } from "../generated/services/Ben_ltkcardcatalogsService";
 import { allWhere, eq, upsertWhere } from "./dv";
 
-export const APP_VERSION = "0.1.0"; // bumped with releases; drives the heal
+// Drives the heal: selfHealCatalog() skips a catalog already stamped with
+// this value, so it MUST change whenever tools/tile-defaults.json is
+// regenerated (app/tile-defaults.html) or the new tiles never land.
+export const APP_VERSION = "0.1.1";
 
 interface CatalogEntry {
   type: string;

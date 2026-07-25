@@ -239,12 +239,25 @@ path remains available as a per-card fallback.
   tiles: {cardType: svg}}`), which `app/src/store/catalog.ts` imports to seed
   the Card Catalog table.
 
-  > **The generator is currently unrunnable.** `node tools/tile-defaults.js`
-  > served the page over the PCF build output, which retired
-  > ([leanboard-pcf-retirement-plan.md](leanboard-pcf-retirement-plan.md)).
-  > `tools/tile-defaults.json` is committed and still consumed, but it cannot
-  > be regenerated until the generator is ported onto the editor classes — so
-  > the shipped defaults will drift as card empty states change.
+  **Regenerating** (per release, or after any change to a card's empty state
+  or styling — the tiles inline each card's CSS, so they freeze at capture
+  time):
+
+  ```bash
+  cd app && npm run dev
+  ```
+
+  Open <http://localhost:5180/tile-defaults.html>, check the rendered grid,
+  then press **Write tools/tile-defaults.json**. Then **bump `APP_VERSION` in
+  `app/src/store/catalog.ts`** — `selfHealCatalog()` skips catalogs already
+  stamped with the current version, so without the bump the new tiles never
+  reach Dataverse.
+
+  The page mounts each card's editor class directly and harvests its
+  `onSnapshot` markup. Its card list comes from CardSettings' registry, so a
+  newly registered type is reported as MISSING rather than silently skipped.
+  (It replaced a generator that drove the retired PCF bundles — see
+  [leanboard-pcf-retirement-plan.md](leanboard-pcf-retirement-plan.md).)
 - **C — hand-authored:** EmbedCard / CardSettings / MeetingScheduler have no
   snapshot outputs by design; the generator includes a static placeholder
   for the one that can sit on a board (EmbedCard).

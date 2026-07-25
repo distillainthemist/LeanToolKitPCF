@@ -1,0 +1,112 @@
+<!doctype html>
+<!-- Tile-defaults generator. Dev-server page only: vite builds index.html
+     alone, so this never reaches the shipped app.
+
+       cd app && npm run dev
+       open http://localhost:5180/tile-defaults.html
+
+     Renders every registered card type in its empty state, harvests each
+     snapshot, and writes tools/tile-defaults.json via the dev-only endpoint
+     in vite.config.ts. Remember to bump APP_VERSION in
+     src/store/catalog.ts — selfHealCatalog() skips catalogs already
+     stamped with the current version, so new tiles would not otherwise
+     reach Dataverse. -->
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>LeanToolKit tile defaults</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 20px; background: #f0efea; color: #1a1a1a; }
+    h1 { font-size: 20px; margin: 0 0 4px; }
+    #status { margin: 10px 0 10px; font-weight: 600; }
+    .ltk-write {
+      font: inherit; font-weight: 600; margin-bottom: 16px; padding: 8px 14px;
+      border: 1px solid #8b1e1e; border-radius: 6px; background: #8b1e1e;
+      color: #fff; cursor: pointer;
+    }
+    .ltk-write:disabled { background: #ccc7bd; border-color: #ccc7bd; cursor: default; }
+    .err { color: #b32020; font-weight: 600; white-space: pre-wrap; }
+    #grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 14px; }
+    .tile { background: #fff; border: 1px solid #d5d1c8; border-radius: 6px; overflow: hidden; }
+    .tile h3 { font-size: 12px; margin: 0; padding: 6px 8px; background: #2b2b2b; color: #fff; font-weight: 600; }
+    .tile .art { height: 165px; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+    .tile .art > svg { width: 100%; height: 100%; }
+    /* the harvest stage must be laid out — offscreen, not display:none */
+    #stage { position: fixed; left: -10000px; top: 0; }
+  </style>
+</head>
+<body>
+  <h1>LeanToolKit tile defaults</h1>
+  <div id="status">rendering…</div>
+  <button id="write" class="ltk-write" disabled>Write tools/tile-defaults.json</button>
+  <div id="grid"></div>
+  <div id="stage"></div>
+
+  <script type="module">
+    import { generateTileDefaults } from "./src/tools/tileDefaults.ts";
+
+    const statusEl = document.getElementById("status");
+    const gridEl = document.getElementById("grid");
+
+    function preview(type, svg) {
+      const tile = document.createElement("div");
+      tile.className = "tile";
+      const h = document.createElement("h3");
+      h.textContent = type;
+      const art = document.createElement("div");
+      art.className = "art";
+      // Inline, not <img> — WebKit mis-scales foreignObject SVGs in <img>.
+      // Each tile inlines its own <style>, which would otherwise leak into
+      // the page and across tiles (ProcessMap's shapes rendered solid black
+      // from another card's rules), so scope every preview in a shadow root.
+      const shadow = art.attachShadow({ mode: "open" });
+      // let the tile keep its intrinsic aspect; the host box does the fitting
+      shadow.innerHTML =
+        `<style>svg{max-width:100%;max-height:100%;height:auto}</style>` + svg;
+      tile.append(h, art);
+      gridEl.appendChild(tile);
+    }
+
+    (async () => {
+      const { defaults, errors, missing } = await generateTileDefaults(
+        document.getElementById("stage")
+      );
+      const types = Object.keys(defaults.tiles).sort();
+      for (const t of types) preview(t, defaults.tiles[t]);
+
+      const bytes = JSON.stringify(defaults).length;
+      statusEl.textContent =
+        `${types.length} tiles generated (${(bytes / 1024).toFixed(0)}KB). ` +
+        `Check them below, then write.`;
+
+      // writing is a deliberate click: these tiles are committed source, and
+      // simply opening this page should never overwrite them
+      const btn = document.getElementById("write");
+      btn.disabled = false;
+      btn.onclick = async () => {
+        btn.disabled = true;
+        try {
+          const res = await fetch("/__tile-defaults", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify(defaults, null, 2),
+          });
+          statusEl.textContent = res.ok
+            ? `written to ${await res.text()} — now bump APP_VERSION in src/store/catalog.ts`
+            : `WRITE FAILED (${res.status})`;
+        } catch (e) {
+          statusEl.textContent = `WRITE FAILED (${e})`;
+        }
+      };
+      if (missing.length || errors.length) {
+        const p = document.createElement("div");
+        p.className = "err";
+        p.textContent =
+          (missing.length ? `MISSING mounter for: ${missing.join(", ")}\n` : "") +
+          (errors.length ? `errors: ${errors.join("; ")}` : "");
+        statusEl.after(p);
+      }
+    })();
+  </script>
+</body>
+</html>
