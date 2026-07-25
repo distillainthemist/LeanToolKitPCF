@@ -85,9 +85,19 @@ pcf-scripts), the PCF-era `.gitignore` rules, and the root `npm ci` step in
 release.yml's board-app job (the app builds without root deps once the tsconfig
 is standalone — verified by stashing `node_modules`).
 
-Reality differed from two assumptions: `.claude/launch.json` had a single
-`pcf-harness` entry rather than ~30 `ltk-*` ones, and `controls/*/generated/`
-was gitignored, so it needed `rm` rather than `git rm`.
+Reality differed from two assumptions: `controls/*/generated/` was gitignored,
+so it needed `rm` rather than `git rm`, and the ~30 `ltk-*` entries live in the
+**parent** `CodingProjects/.claude/launch.json` (the file the tooling reads),
+not the repo's own — 32 dead entries trimmed there, keeping `ltk-app`.
+
+Two CI corrections belong to this phase. Phase 1's root-typecheck step went
+red on a clean checkout: `controls/*/generated/ManifestTypes.d.ts` is
+gitignored, and the old `pcf-scripts build` *generated* it before compiling,
+so a bare `tsc` could never have passed while the wrappers existed — deleting
+them here fixed it. And that step duplicated the pre-existing `app-ci.yml`, so
+`ci.yml` is now root-typecheck-only (it catches breaks in cards and shared
+modules the registry doesn't currently mount, which App CI cannot see), with
+the redundant root installs dropped from both `app-ci.yml` and `release.yml`.
 
 **Results:** root install 3 packages / 0.8s (was the full webpack toolchain);
 root tsc, app tsc, 125/125 tests and app build all pass; the app bundle hashes

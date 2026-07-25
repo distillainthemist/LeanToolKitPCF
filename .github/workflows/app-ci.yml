@@ -1,8 +1,8 @@
 name: App CI
 
 # Type-check, test, and build the code app whenever it (or the editor
-# sources it consumes) changes. The PCF control bundles have their own
-# CI workflow; this one needs Node 22 (the pac code toolchain floor).
+# sources it consumes) changes. Node 22 is the pac code toolchain floor.
+# ci.yml separately type-checks all of shared/ + controls/ at the repo root.
 on:
   push:
     branches: [main]
@@ -32,14 +32,10 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: |
-            app/package-lock.json
-            package-lock.json
-      # root deps too: the repo tsconfig extends pcf-scripts, and vitest's
-      # transform resolves it for the shared/ editor sources the app imports
-      - name: Install root dependencies
-        run: npm ci
-        working-directory: .
+          cache-dependency-path: app/package-lock.json
+      # no root install needed: the repo tsconfig became standalone when the
+      # PCF target retired, so vite/vitest resolve the shared/ + controls/
+      # editor sources from app/ alone (verified 2026-07-25)
       - run: npm ci
       - name: Type-check
         run: npx tsc -p tsconfig.json

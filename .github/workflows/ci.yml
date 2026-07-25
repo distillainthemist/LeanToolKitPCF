@@ -1,17 +1,33 @@
 name: CI
 
-# Guards the product on every push / PR: type checks over the shared design
-# system + card editors, then the code app's tests and build.
+# Type-checks the whole of shared/ + controls/ under the repo-root config.
+#
+# App CI (app-ci.yml) type-checks, tests and builds the code app, which covers
+# the editor sources the app imports — but only those. This workflow is what
+# catches a break in a card or shared module the registry doesn't currently
+# mount, so the two are complementary, not duplicates.
 #
 # The PCF/canvas target was retired (docs/leanboard-pcf-retirement-plan.md),
-# so there is no longer a control-bundle build here.
+# so there is no control-bundle build here any more.
 on:
   push:
     branches: [main]
+    paths:
+      - "controls/**"
+      - "shared/**"
+      - "tsconfig.json"
+      - "package.json"
+      - ".github/workflows/ci.yml"
   pull_request:
+    paths:
+      - "controls/**"
+      - "shared/**"
+      - "tsconfig.json"
+      - "package.json"
+      - ".github/workflows/ci.yml"
 
 jobs:
-  build:
+  typecheck:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -20,28 +36,8 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: |
-            app/package-lock.json
-            package-lock.json
+          cache-dependency-path: package-lock.json
 
-      # root deps carry the typescript the shared/ + controls/ sources compile
-      # against, and vite resolves the root tsconfig for the editor sources the
-      # app imports
-      - name: Install root dependencies
-        run: npm ci
+      - run: npm ci
 
-      - name: Typecheck shared + card editors
-        run: npx tsc --noEmit -p tsconfig.json
-
-      - name: Install app dependencies
-        working-directory: app
-        run: npm ci
-
-      - name: Test app
-        working-directory: app
-        run: npm test
-
-      # `npm run build` in app/ is `tsc && vite build` — covers the app typecheck
-      - name: Build app
-        working-directory: app
-        run: npm run build
+      - run: npm run typecheck
