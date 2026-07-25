@@ -47,8 +47,10 @@ actually bites.
   current so `stampArchiveSvg()` has something to stamp at meeting close.
   Post-phase-3 that costs ~0.3 ms per edit, so it is no longer worth
   optimising away.
-- **EmbedCard's placeholder** — a cross-origin iframe can never be captured
-  or live-rendered in a tile.
+- **EmbedCard's placeholder** — a cross-origin iframe can never be *captured*.
+  Once tiles are live it can be *rendered*, which is what phase 6 exploits;
+  the placeholder remains the fallback for cards that do not opt into
+  preloading.
 
 ## The real cost: series cards
 
@@ -118,6 +120,47 @@ type/label/description columns; only the art goes.
 
 Do this **last**, and only once phases 2–4 are proven hosted — until then the
 defaults are the fallback.
+
+### Phase 6 — preloaded embeds  *(the capability live tiles unlock)*
+
+Requested 2026-07-25: embed tiles should load their content on the board, so
+opening one is instant rather than a cold cross-origin fetch mid-meeting.
+
+This is only possible once tiles are live — a stored SVG can never hold a live
+iframe (which is exactly why EmbedCard's tile is a hand-authored placeholder).
+
+**The constraint that dictates the design:** re-parenting an `<iframe>` reloads
+it. Every browser does this. So a preloaded board embed is thrown away the
+moment the focused view mounts its own copy — the preload buys nothing unless
+**focus promotes the very same element**. EmbedCard already works this way
+internally: its editor deliberately never re-creates the frame on change
+("an iframe reloads whenever it is recreated"), and this extends that rule
+across the tile→focus boundary.
+
+Two viable shapes, to be chosen in this phase:
+
+1. **Promote in place** — the tile's container expands (CSS/transform, or the
+   FLIP technique) to fill the focused area, with no DOM move. Keeps the load,
+   and animates nicely. Constrains the focused view's DOM structure.
+2. **Persistent off-board host** — one long-lived container per embed card,
+   positioned over the tile and re-positioned over the focus area. No
+   re-parenting, but it must track scroll/resize and stack correctly.
+
+Prefer (1) unless the focused layout makes it impossible.
+
+**Costs to bound, because this is not free:**
+- N embeds = N cross-origin page loads on board open. Make it **opt-in per
+  card** (a `preload` setting), default off, and preload only tiles that are
+  actually on screen.
+- Power BI and SharePoint embeds may trigger auth on load; N of those at once
+  on a shared meeting screen is worse than one on demand.
+- The environment CSP `frame-src` must already allow each origin — the
+  Admin-centre entry added 2026-07-23. Nothing new, but a preloaded board
+  fails N times instead of once when an origin is missing.
+
+**Verify:** open a board with two preloaded embeds, confirm both render; focus
+one and confirm — via a network trace — that **no second document load
+occurs**. That absence is the whole feature.
 
 ## Risks
 
