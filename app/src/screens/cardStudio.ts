@@ -31,13 +31,14 @@ import { assigneePeople } from "../../../shared/schema/people";
 import { clear, el } from "../../../shared/ui/dom";
 import { cardMounter } from "../cardRegistry";
 import { appTheme } from "../cardHost";
+import { markDialog, trapFocus } from "../focusTrap";
 import { promptUnsaved } from "../prompts";
 import { ensureLiveRow, liveRow, saveCard } from "../store/cards";
 import { appPalettes } from "../store/config";
 import { ManifestSlot } from "../store/mappers";
 import { listPeople } from "../store/people";
 
-export type StudioResult = "saved" | "cancelled" | "archived";
+export type StudioResult = "saved" | "cancelled" | "archived" | "duplicated";
 
 export interface StudioOptions {
   boardId: string;
@@ -74,6 +75,8 @@ export interface StudioOptions {
   persist: (slot: ManifestSlot) => Promise<void>;
   /** Board mode only: move this card to the manifest's archive. */
   onArchive?: () => Promise<void>;
+  /** Board mode only: offer "Duplicate" (the caller makes the copy). */
+  canDuplicate?: boolean;
 }
 
 /** How long the settings pane must be quiet before the preview re-mounts.
@@ -133,6 +136,22 @@ export function openCardStudio(opts: StudioOptions): Promise<StudioResult> {
     head.appendChild(titleWrap);
 
     const headActions = el("div", "app-studio-headactions");
+    if (mode === "board" && opts.canDuplicate) {
+      const dup = el("button", "app-btn", "Duplicate") as HTMLButtonElement;
+      dup.title = "Add another card set up like this one, with its standard content";
+      dup.addEventListener("click", () => {
+        void (async () => {
+          // duplicating copies what is SAVED, so settle the edit first
+          if (dirty) {
+            const choice = await promptUnsaved();
+            if (choice === "cancel") return;
+            if (choice === "save") return void doSave("duplicated");
+          }
+          close("duplicated");
+        })();
+      });
+      headActions.appendChild(dup);
+    }
     if (mode === "board" && opts.onArchive) {
       const archive = el("button", "app-btn", "Archive card") as HTMLButtonElement;
       archive.title = "Take this card off the board, keeping it (and its data) to restore later";
@@ -189,6 +208,8 @@ export function openCardStudio(opts: StudioOptions): Promise<StudioResult> {
     panel.appendChild(foot);
 
     document.body.appendChild(overlay);
+    markDialog(panel, `${opts.slot.title || cardLabel(opts.slot.cardType)} — card setup`);
+    const untrap = trapFocus(panel);
 
     // ---- lifecycle ----
     let unmountCard: () => void = () => undefined;
@@ -200,6 +221,7 @@ export function openCardStudio(opts: StudioOptions): Promise<StudioResult> {
       unmountCard();
       settings?.destroy();
       document.removeEventListener("keydown", onKey, true);
+      untrap();
       overlay.remove();
       resolve(result);
     };
@@ -219,7 +241,7 @@ export function openCardStudio(opts: StudioOptions): Promise<StudioResult> {
       })();
     };
 
-    const doSave = async () => {
+    const doSave = async (then: StudioResult = "saved") => {
       if (saving) return;
       saving = true;
       saveBtn.disabled = true;
@@ -235,7 +257,7 @@ export function openCardStudio(opts: StudioOptions): Promise<StudioResult> {
           const row = await liveRow(opts.boardId, opts.slot.cardId);
           if (row) await saveCard(row.id, pendingDoc, pendingSvg || row.tileSvg);
         }
-        close("saved");
+        close(then);
       } catch (err) {
         console.warn("card studio save failed", err);
         status.textContent = "Save failed — check the connection and try again.";
@@ -344,6 +366,11 @@ export function openCardStudio(opts: StudioOptions): Promise<StudioResult> {
     settingsEditor.setDraft(draft, true); // type is fixed: chosen at add time
     settings = settingsEditor;
     mountCard();
+    // a brand-new card opens ready to be named; an existing one must not have
+    // its focus stolen from whatever the maker came to change
+    if (opts.isNew) {
+      settingsHost.querySelector<HTMLInputElement>("input")?.focus();
+    }
 
     void (async () => {
       // roster + palettes are cosmetic (assignee chips, skills columns,

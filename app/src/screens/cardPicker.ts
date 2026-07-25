@@ -16,6 +16,7 @@ import { sanitizeSvg } from "../../../controls/BoardGrid/types";
 import { CARDS, CARD_GROUPS, cardLabel } from "../../../controls/CardSettings/registry";
 import { BoardRef } from "../../../controls/CardSettings/types";
 import { clear, el } from "../../../shared/ui/dom";
+import { markDialog, trapFocus } from "../focusTrap";
 import { ManifestSlot } from "../store/mappers";
 
 export type PickerResult =
@@ -62,9 +63,12 @@ export function openCardPicker(opts: PickerOptions): Promise<PickerResult> {
     const bodyEl = el("div", "app-picker-body");
     panel.appendChild(bodyEl);
     document.body.appendChild(overlay);
+    markDialog(panel, "Add a card");
+    const untrap = trapFocus(panel);
 
     const close = (result: PickerResult) => {
       document.removeEventListener("keydown", onKey, true);
+      untrap();
       overlay.remove();
       resolve(result);
     };

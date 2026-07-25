@@ -403,5 +403,5 @@ Beyond the four asks:
 - [x] Phase 1 — the card studio overlay — DONE 2026-07-26 (built + verified in isolation; wired up in phase 2)
 - [x] Phase 2 — composer integration — DONE 2026-07-26
 - [x] Phase 3 — add / archive / duplicate flow (+ the close-time manifest snapshot) — DONE 2026-07-26
-- [ ] Phase 4 — enhancements + polish
-- [ ] Phase 5 — docs (master-leanboard.md), release, deploy
+- [x] Phase 4 — enhancements + polish — DONE 2026-07-26
+- [x] Phase 5 — docs (master-leanboard.md), release, deploy — DONE 2026-07-26

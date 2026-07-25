@@ -396,6 +396,74 @@
         outcome === "saved" && plain.persist === 1);
     }
 
+    // ---- 12. phase 4: modal focus handling ----
+    {
+      // an opener to return focus to when the dialog closes
+      const opener = document.createElement("button");
+      opener.textContent = "opener";
+      document.body.appendChild(opener);
+      opener.focus();
+
+      const done = openCardStudio({
+        boardId: "b-test", standardDoc: "", slot: slotFor("FiveWhys"), boards: [],
+        persist: async () => {},
+      });
+      await wait(80);
+      const panel = q(".app-studio-panel");
+      report("the studio is marked as a modal dialog",
+        `${panel?.getAttribute("role")} / aria-modal=${panel?.getAttribute("aria-modal")}`,
+        panel?.getAttribute("role") === "dialog" && panel?.getAttribute("aria-modal") === "true");
+
+      // Tab from the last focusable must wrap inside, not escape to the page
+      const sel = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+      const items = [...panel.querySelectorAll(sel)].filter((e) => e.checkVisibility());
+      items[items.length - 1].focus();
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true }));
+      await wait(30);
+      const wrapped = panel.contains(document.activeElement);
+      report("Tab stays inside the dialog", wrapped ? "wrapped to the top" : "escaped", wrapped);
+
+      [...document.querySelectorAll(".app-studio-foot .app-btn")]
+        .find((b) => b.textContent === "Cancel").click();
+      await done;
+      await wait(30);
+      report("closing returns focus to the opener",
+        document.activeElement === opener ? "opener" : (document.activeElement?.tagName ?? "?"),
+        document.activeElement === opener);
+      opener.remove();
+    }
+
+    // ---- 13. phase 4: duplicate from the studio header ----
+    {
+      // board mode offers it…
+      let done = openCardStudio({
+        boardId: "b-test", standardDoc: "", slot: slotFor("FiveWhys"), boards: [],
+        canDuplicate: true, persist: async () => {},
+      });
+      await wait(60);
+      const dup = [...document.querySelectorAll(".app-studio-headactions .app-btn")]
+        .find((b) => b.textContent === "Duplicate");
+      dup.click();
+      const outcome = await done;
+      report("Duplicate closes the studio asking for a copy", outcome, outcome === "duplicated");
+
+      // …and adjusting a single meeting does not (archive/duplicate are
+      // board-template concepts)
+      done = openCardStudio({
+        boardId: "b-test", slot: slotFor("FiveWhys"), boards: [],
+        mode: "instance", instanceDoc: "", canDuplicate: true,
+        onArchive: async () => {}, persist: async () => {},
+      });
+      await wait(60);
+      const actions = [...document.querySelectorAll(".app-studio-headactions .app-btn")]
+        .map((b) => b.textContent);
+      [...document.querySelectorAll(".app-studio-foot .app-btn")]
+        .find((b) => b.textContent === "Cancel").click();
+      await done;
+      report("instance mode offers neither Duplicate nor Archive",
+        actions.length ? actions.join(",") : "(none)", actions.length === 0);
+    }
+
     document.getElementById("summary").innerHTML = bad === 0
       ? `<p class="ok">ALL PASS</p>` : `<p class="bad">${bad} FAILURES</p>`;
 

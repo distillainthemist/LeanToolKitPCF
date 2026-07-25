@@ -433,6 +433,7 @@ async function renderComposer(
         await target.persist(manifest);
         status.textContent = `saved ${new Date().toLocaleTimeString()}`;
       },
+      canDuplicate: !instanceMode,
       onArchive: instanceMode
         ? undefined
         : async () => {
@@ -451,11 +452,39 @@ async function renderComposer(
     return result;
   };
 
+  /**
+   * Copy `source` into a new independent card — a fresh cardId sharing no
+   * data — and open it. `pos` 0 lands it in the next free cell.
+   */
+  const duplicateCard = async (source: ManifestSlot, pos: number) => {
+    const copy: ManifestSlot = {
+      pos,
+      w: source.w,
+      h: source.h,
+      nav: 0, // its own place in the meeting flow, set deliberately
+      cardId: freshCardId(source.cardType),
+      cardType: source.cardType,
+      title: source.title !== "" ? `${source.title} (copy)` : "",
+      settings: JSON.parse(JSON.stringify(source.settings)) as Record<string, unknown>,
+    };
+    manifest.slots.push(copy);
+    renderGrid();
+    const result = await openStudio(copy, true, liveDoc[source.cardId] ?? "");
+    if (result === "cancelled") {
+      manifest.slots = manifest.slots.filter((s) => s !== copy);
+    }
+    renderGrid();
+    return result;
+  };
+
   const editCard = async (cardId: string) => {
     const slot = manifest.slots.find((s) => s.cardId === cardId);
     if (!slot) return;
-    await openStudio(slot, false);
+    const result = await openStudio(slot, false);
     renderGrid();
+    // "Duplicate" in the studio header: another card like this one, in the
+    // next free cell, opened so it can be renamed before it is committed
+    if (result === "duplicated") await duplicateCard(slot, 0);
   };
 
   /** A cardId nothing on this board is using, live or archived. */

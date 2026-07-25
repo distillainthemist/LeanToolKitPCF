@@ -257,10 +257,10 @@ self-heal into rows on first open. See
 ### The settings model (format vs content)
 
 Anything defining a card's **format/configuration** is set in board setup
-(the composer's CardSettings pane); only **data/content** that changes
+(the card studio's properties pane); only **data/content** that changes
 during a meeting or problem-solving session is edited from the board.
-Default/prefill content is the card's **standard content** (its live row,
-edited via "Edit standard content" in the composer).
+Default/prefill content is the card's **standard content** — its live
+(instance-less) row, edited in the studio's left pane.
 
 Documented exceptions — *structural content*, deliberately edited in-card
 because the structure IS the workshop's work product: SkillsMatrix
@@ -287,6 +287,75 @@ states (`[{label, palette}]`), SQDPC status-code colours, and Winning
 Conditions good/issue resolve through it (`shared/palette.ts`; legacy
 freeform hex passes through; a deleted key falls back to the toolkit
 default). A per-site override can layer on later exactly like accent.
+
+---
+
+## Board setup (the composer and the card studio)
+
+Board setup is a grid and a toolbar. Tapping a tile opens the **card studio**
+(`app/src/screens/cardStudio.ts`) — one overlay that owns everything about
+one card. See [leanboard-card-studio-plan.md](leanboard-card-studio-plan.md).
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│ Problem Pareto · Pareto        •      [Duplicate] [Archive]  │
+├─────────────────────────────────────┬────────────────────────┤
+│ STANDARD CONTENT                    │ PROPERTIES             │
+│ what a new meeting starts from      │  Common                │
+│   ( the live card, editable )       │  Configuration         │
+│                                     │  New meeting instance  │
+│                                     │  Appearance            │
+├─────────────────────────────────────┴────────────────────────┤
+│                                       [ Cancel ]  [ Save ]   │
+└──────────────────────────────────────────────────────────────┘
+```
+
+**Everything is buffered.** Settings live in a draft, the document in memory
+(the card's `onSave`), the tile svg as the freshest `onTile` snapshot; all
+three are written once, on **Save**. Cancel discards them, and drops the slot
+entirely if the card was newly added. Two kinds of write would escape that
+buffer and are prevented rather than undone, both via `CardMount.designTime`:
+mounters must not write to the store themselves (series rows, the StatusTile
+status log), and **actions are hidden** — a template must not accumulate
+actions on the meetings' `board:cardId` channel.
+
+**Not every card has standard content** (`CardSpec.standardContent`). Series
+cards, the action surfaces and LinkCard render **read-only with a reason**;
+this is also what keeps the buffer honest, since a read-only pane cannot fire
+the direct series writes. EmbedCard is editable for its commentary but never
+loads its frame while being designed.
+
+The layout itself — moves, resizes, nav order, column headings, column count
+— still saves immediately: there is nothing to cancel about a drag.
+
+### Adding, archiving, copying
+
+`＋ Add card` opens a picker with three sources:
+
+| Source | What it does |
+| --- | --- |
+| **New card** | The catalogue, showing each type's real tile art. Mints the slot, stamps the type's `defaultPolicy`, and opens the studio — add and configure are one flow |
+| **Archived** | This board's `manifest.archivedSlots`. Restores the slot **whole** into the clicked cell — the `cardId` never changed, so its Card Data rows, actions and series reconnect by themselves. Or deletes it for good (manifest-only: saved content, including past meetings' archived images, is never destroyed to tidy a list) |
+| **Copy existing** | Any card on any board the viewer can see. A copy is **independent** — fresh `cardId`, cloned settings, optionally the source's standard content (`seedDoc`, so an untouched Save still writes it). Contrast LinkCard, which mirrors its source live and read-only |
+
+**A card's type is chosen once**, when it is added, and never changes: the
+config keys and the document schema are both type-specific, so switching
+would strip the configuration and orphan the content.
+
+**Archive is board-setup only.** Adjusting a single meeting neither archives
+nor restores — it edits that instance's override manifest, and its studio
+previews the meeting's own content read-only.
+
+### Closed meetings freeze their composition
+
+`closeInstance()` snapshots the board manifest onto any instance that has no
+override of its own (the archive list excluded — it is design-time only).
+Without it, a closed meeting re-renders from the board's CURRENT manifest, so
+archiving or removing a card retro-removed it from every past meeting: the
+tile images survived in their rows with nothing left to display them. Same
+principle as the tile archive — *a closed meeting shows what it showed*.
+Consequence: reopening a closed meeting to adjust it edits that frozen
+layout rather than re-inheriting the board's current one.
 
 ---
 
@@ -431,7 +500,8 @@ Filter('LTK Actions',
 > These describe manifest inputs on the retired PCF wrappers. The
 > capabilities themselves live on in the card editors and card settings.
 
-1. **CardSettings — board composer mode.** New optional input
+1. **CardSettings — board composer mode.** *(The pane now lives in the card
+   studio; see Board setup above.)* New optional input
    `boardsManifestJSON` (`[{boardId, name, cards:[{cardId, cardType, title}]}]`
    — all boards, supplied up front; there is no runtime round-trip). When
    non-empty, the form gains a **New meeting instance** section that edits
