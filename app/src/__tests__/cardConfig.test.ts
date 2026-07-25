@@ -129,3 +129,21 @@ describe("retired theme fields survive the narrowed Appearance section", () => {
     expect(JSON.parse(raw).theme).toEqual(stored.theme);
   });
 });
+
+describe("phase 5 conformance keys reach their cards", () => {
+  it("Pareto unit and BenefitEffort quadrant labels round-trip", () => {
+    const config = storedConfig({
+      cardType: "ParetoCard",
+      config: { unit: "defects", paretoWindowDays: "30" },
+    });
+    expect(cfgStr(config, "unit")).toBe("defects");
+
+    const be = storedConfig({
+      cardType: "BenefitEffort",
+      config: { quadTL: "Do now", quadBR: "Park" },
+    });
+    expect(cfgStr(be, "quadTL")).toBe("Do now");
+    expect(cfgStr(be, "quadTR")).toBe(""); // unset corners stay unset
+    expect(cfgStr(be, "quadBR")).toBe("Park");
+  });
+});

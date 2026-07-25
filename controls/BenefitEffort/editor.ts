@@ -1,6 +1,7 @@
 // The BenefitEffort editor: a 2×2 canvas (benefit up, effort right). Drag a
-// chip to reposition it; tap to edit. Quadrant labels are overridable via
-// prompts fields (quadTL, quadTR, quadBL, quadBR).
+// chip to reposition it; tap to edit. Quadrant labels come from card
+// settings (setQuadrantLabels); legacy prompt hints (quadTL…) still work
+// as the fallback for cards named that way before the settings existed.
 
 import { applyThemeVars, defaultTheme, Theme } from "../../shared/tokens";
 import { LTK_BASE_CSS } from "../../shared/ui/baseCss";
@@ -22,6 +23,14 @@ export interface BenefitEffortEditorCallbacks {
   onSnapshot?: (svgMarkup: string) => void;
 }
 
+/** Quadrant names — "" = fall back to the prompt hint, then the default. */
+export interface QuadrantLabels {
+  tl: string;
+  tr: string;
+  bl: string;
+  br: string;
+}
+
 export class BenefitEffortEditor {
   private readonly root: HTMLElement;
   private env: BenefitEffortEnvelope;
@@ -33,6 +42,7 @@ export class BenefitEffortEditor {
   private lastPromptsRaw: string | null = null;
   private readOnly = false;
   private disableActions = false; // hide the add/raise-action affordances
+  private quadLabels: QuadrantLabels = { tl: "", tr: "", bl: "", br: "" };
   private readonly snapshots: SnapshotScheduler;
 
   private canvas: HTMLElement | null = null;
@@ -108,6 +118,14 @@ export class BenefitEffortEditor {
     }
   }
 
+  /** Quadrant names from card settings. "" per corner falls back to the
+   *  legacy prompt hint (quadTL…), then the classic defaults. */
+  setQuadrantLabels(labels: QuadrantLabels): void {
+    if (JSON.stringify(labels) === JSON.stringify(this.quadLabels)) return;
+    this.quadLabels = labels;
+    this.render();
+  }
+
   destroy(): void {
     this.snapshots.cancel();
     this.root.remove();
@@ -178,11 +196,14 @@ export class BenefitEffortEditor {
 
     canvas.append(el("div", "ltk-be-mid-h"), el("div", "ltk-be-mid-v"));
 
+    // config wins, then the legacy prompt hint, then the classic name
+    const quad = (cfg: string, hintKey: string, dflt: string): string =>
+      cfg !== "" ? cfg : hintFor(this.prompts, hintKey, dflt);
     const quads: [string, Partial<CSSStyleDeclaration>][] = [
-      [hintFor(this.prompts, "quadTL", "Quick wins"), { top: "0", left: "0" }],
-      [hintFor(this.prompts, "quadTR", "Major projects"), { top: "0", right: "0" }],
-      [hintFor(this.prompts, "quadBL", "Fill-ins"), { bottom: "0", left: "0" }],
-      [hintFor(this.prompts, "quadBR", "Thankless"), { bottom: "0", right: "0" }],
+      [quad(this.quadLabels.tl, "quadTL", "Quick wins"), { top: "0", left: "0" }],
+      [quad(this.quadLabels.tr, "quadTR", "Major projects"), { top: "0", right: "0" }],
+      [quad(this.quadLabels.bl, "quadBL", "Fill-ins"), { bottom: "0", left: "0" }],
+      [quad(this.quadLabels.br, "quadBR", "Thankless"), { bottom: "0", right: "0" }],
     ];
     for (const [text, pos] of quads) {
       const q = el("div", "ltk-be-quad", text);

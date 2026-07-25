@@ -190,14 +190,39 @@ Lives in `LTK Board.Manifest (JSON)`; snapshotted onto each instance.
 ### Data policies (`settingsJSON.board.policy`)
 
 The policy is **per card** — every slot's `settingsJSON` carries its own
-(the CardSettings section is titled "New meeting instance").
+(the CardSettings section is titled "New meeting instance"). The registry
+declares which policies each card TYPE offers plus its default
+(`CardSpec.policies` / `defaultPolicy`, stamped onto NEW slots only — the
+runtime default for a blob with no stored policy stays `carry`, so old
+boards never shift behaviour). See
+[leanboard-card-settings-plan.md](leanboard-card-settings-plan.md).
 
 | Policy | At instance creation |
 | --- | --- |
-| `clear` | Card row created with empty `outputJSON`; tile falls back to the catalog default |
-| `carry` (default) | Copy `outputJSON` + `Tile SVG` from the same card in the **previous instance** — a snapshot per meeting |
-| `shared` | No copy: every instance reads and writes **one live row** (Instance blank). The per-instance row is created empty and receives only the **Tile SVG at meeting close** — the archive of what each meeting saw. Best for cumulative data that crews hand between them: KPI trends, Paretos |
-| `link` | Read the **latest** card row of `board.source.{boardId, cardId}`; feed as `inputJSON`, normally with `readOnly: true` in the slot settings |
+| `clear` | Card row seeded from the card's **standard content** (its live/template row); tile falls back to the catalog default |
+| `carry` (runtime default) | Copy `outputJSON` + `Tile SVG` from the same card in the **previous instance** — a snapshot per meeting |
+| `shared` | No copy: every instance reads and writes **one live row** (Instance blank). The per-instance row is created empty and receives only the **Tile SVG at meeting close** — the archive of what each meeting saw |
+
+Offering per type: problem-solving cards (FiveWhys, Fishbone, FaultTree,
+BenefitEffort) offer all three, default carry; **registers** (RiskMatrix,
+Raci, SkillsMatrix) and ProcessMap offer carry/shared, default shared
+(clear would silently empty the register each meeting); AgendaCard and
+EmbedCard default **clear** (the ritual restarts from standard content;
+embed commentary is per meeting); CaptureCard and HeatmapCard offer all
+three, default carry; StatusTile offers carry/shared (clear would read as
+a false "on track" every meeting).
+
+**`link` is retired.** The **LinkCard** card type (group "Reference")
+replaces it: config `sourceBoardId`/`sourceCardId` (+ `hideCaption`), and
+the app mounts the SOURCE's real card type with the source's ids and
+settings, read-only with no-op writes — which is what makes linked series
+cards work (they read the source's series rows). Content: a shared source
+shows its live row; a carry/clear source shows its newest non-empty
+meeting content, template before any meeting has run (`pickLinkContent`).
+Sources exclude embeds, action surfaces, the scheduler and other link
+cards (no chains). A LinkCard's instance row is created empty and, at
+close, receives the **source's** current tile svg (`ArchiveStamp.from`) —
+the permanent record of what the linked card showed at that meeting.
 
 "Previous instance" for `carry` means **latest by scheduled datetime**, so
 shiftly boards carry deterministically across crews — the chain follows the
@@ -208,8 +233,10 @@ ActionBoard / EscalationViewer slots ignore `policy` (they render the actions
 table live); `board.source.boardId` overrides *which board's* actions they
 roll up — empty means this board.
 
-**Series cards** (Conditions, SQDPC, KPI trend, Pareto) also ignore
-`policy` for their data: it lives in the **LTK Card Series** table — one
+**Series cards** (Conditions, SQDPC, KPI trend, Pareto) are **implicitly
+shared** — `slotPolicy()` returns `shared` for them whatever the blob says,
+and the composer shows a note instead of a policy picker — because their
+data lives in the **LTK Card Series** table — one
 row per `(boardId, cardId, seriesKey, date, shift)` datum, shift
 `-`/`D`/`N` — and each meeting reads the window derived from its own
 scheduled date (SQDPC: the instance's month; Conditions: the 7 periods
@@ -226,6 +253,35 @@ open. The card document remains only as the
 tile-svg carrier; close-time SVG stamping is unchanged. Legacy documents
 self-heal into rows on first open. See
 [leanboard-card-series-plan.md](leanboard-card-series-plan.md).
+
+### The settings model (format vs content)
+
+Anything defining a card's **format/configuration** is set in board setup
+(the composer's CardSettings pane); only **data/content** that changes
+during a meeting or problem-solving session is edited from the board.
+Default/prefill content is the card's **standard content** (its live row,
+edited via "Edit standard content" in the composer).
+
+Documented exceptions — *structural content*, deliberately edited in-card
+because the structure IS the workshop's work product: SkillsMatrix
+(categories/skills/targets), Raci (roles/deliverables), Pareto
+(category definitions; its `unit` is config). BenefitEffort quadrant
+labels are config (`quadTL/TR/BL/BR`), with the legacy prompt-hint values
+as fallback; KPI trend target/spec/unit are config with the document as
+legacy fallback.
+
+**Appearance**: the ONE per-card cosmetic is `theme.titlebar` (the title
+strip, for associating related cards). The PCF-era theme fields
+(background/foreground/accent/legend/font) were never applied by the code
+app and are no longer offered; stored blobs keep them verbatim (lossless
+parse). **State colours are semantics, not decoration**: the app-level
+**state palette** (`ben_statepalette` on the branding `__app__` sitesettings
+row; Settings → Branding; defaults good/issue/atrisk/info/neutral) defines
+named colours that cards SELECT via `paletteColor` fields — StatusTile
+states (`[{label, palette}]`), SQDPC status-code colours, and Winning
+Conditions good/issue resolve through it (`shared/palette.ts`; legacy
+freeform hex passes through; a deleted key falls back to the toolkit
+default). A per-site override can layer on later exactly like accent.
 
 ---
 

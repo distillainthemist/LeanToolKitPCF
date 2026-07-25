@@ -449,6 +449,12 @@ const REGISTRY: Record<string, CardMounter> = {
     editor.setPeople(opts.people);
     editor.setReadOnly(opts.readOnly);
     editor.setDisableActions(actionsOff(opts));
+    editor.setQuadrantLabels({
+      tl: cfgStr(opts, "quadTL"),
+      tr: cfgStr(opts, "quadTR"),
+      bl: cfgStr(opts, "quadBL"),
+      br: cfgStr(opts, "quadBR"),
+    });
     editor.setEnvelope(parseBenefitEffort(opts.outputJson).envelope, opts.actions);
     return () => opts.host.replaceChildren();
   },
@@ -704,6 +710,7 @@ const REGISTRY: Record<string, CardMounter> = {
     editor.setCountNote(
       `Count = the ${window.from} – ${window.to} total; a change lands on ${day}.`
     );
+    editor.setUnit(cfgStr(opts, "unit"));
     editor.setEnvelope(env);
     void (async () => {
       try {

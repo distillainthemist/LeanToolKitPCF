@@ -32,7 +32,14 @@ function editorFor(card: string): string | undefined {
   return hit?.[1];
 }
 
-const SETTERS = ["setPeople", "setDisableActions", "setOptions", "setReadOnly"];
+const SETTERS = [
+  "setPeople",
+  "setDisableActions",
+  "setOptions",
+  "setReadOnly",
+  "setUnit",
+  "setQuadrantLabels",
+];
 
 describe("card mounters apply what their editors support", () => {
   const bodies = mounterBodies();

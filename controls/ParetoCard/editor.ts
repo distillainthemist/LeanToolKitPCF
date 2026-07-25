@@ -44,6 +44,7 @@ export class ParetoEditor {
   private actions: LtkAction[] = [];
   private canRaise = true;
   private countNote = "";
+  private unit = "";
   private readonly snapshots: SnapshotScheduler;
 
   constructor(
@@ -115,6 +116,18 @@ export class ParetoEditor {
    *  wrapper explains that an edited total lands on the meeting's day). */
   setCountNote(note: string): void {
     this.countNote = note;
+  }
+
+  /** What the counts are (card settings) — shown in bar tooltips and the
+   *  edit dialog. The card's own document is the legacy fallback. */
+  setUnit(unit: string): void {
+    if (unit === this.unit) return;
+    this.unit = unit;
+    this.render();
+  }
+
+  private effectiveUnit(): string {
+    return this.unit !== "" ? this.unit : this.env.data.unit;
   }
 
   destroy(): void {
@@ -352,7 +365,8 @@ export class ParetoEditor {
         label.appendChild(ts);
       });
       const tip = svgEl("title", {});
-      tip.textContent = `${item.label}: ${item.count}`;
+      const tipUnit = this.effectiveUnit();
+      tip.textContent = `${item.label}: ${item.count}${tipUnit !== "" ? ` ${tipUnit}` : ""}`;
       label.appendChild(tip);
       if (!this.readOnly) {
         label.addEventListener("click", () => this.editItem(item));
@@ -474,7 +488,8 @@ export class ParetoEditor {
       buttons,
     });
     dlg.body.appendChild(fieldRow("Category", label));
-    const countRow = fieldRow("Count", count);
+    const dlgUnit = this.effectiveUnit();
+    const countRow = fieldRow(dlgUnit !== "" ? `Count (${dlgUnit})` : "Count", count);
     countRow.classList.add("ltk-field-half");
     dlg.body.appendChild(countRow);
     if (this.countNote !== "") {

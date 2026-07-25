@@ -297,7 +297,14 @@ Goal: the remaining format-in-document stragglers, smallest first.
 
 Tests: fallback order per card (config wins, doc/hint fallback).
 
-- [ ] DONE
+- [x] DONE 2026-07-25. Pareto gained a real `unit` config (the envelope
+  field existed but was never rendered anywhere — it now shows in bar
+  tooltips and the edit dialog's Count label, document value as fallback);
+  BenefitEffort quadrant labels are four config fields resolved
+  config → prompt hint → classic default (verified through the real
+  mounter: config corners win, unset corners keep defaults); Conditions
+  asOfDate help now says it overrides the meeting-date window. setUnit /
+  setQuadrantLabels added to the mounter-wiring guard. 191 vitest green.
 
 ## Phase 6 — Docs, release, deploy
 
@@ -311,7 +318,12 @@ Tests: fallback order per card (config wins, doc/hint fallback).
    real boards, close-meeting archive stamp.
 3. `./release.sh <version>` + tag push; `pac code push` from `app/`.
 
-- [ ] DONE
+- [x] DONE 2026-07-25. master-leanboard.md updated: per-type policy matrix
+  (link retired, LinkCard semantics incl. the source-svg archive stamp),
+  series cards implicitly shared, clear = standard content, and a new
+  "settings model" section (format=setup / content=board / structural
+  content exceptions; titlebar-only Appearance; app-level state palette).
+  Released v0.15.0 and pushed.
 
 ---
 
