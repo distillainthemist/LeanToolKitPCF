@@ -20,7 +20,7 @@ import { actionRow, openActionDialog } from "../../shared/ui/actionUi";
 import { parsePrompts, Prompts, renderGhost, renderTitleBar } from "../../shared/ui/chrome";
 import { renderKebab } from "../../shared/ui/menu";
 import { makeInteractive } from "../../shared/interact/drag";
-import { htmlToPng, saveSvg, SnapshotScheduler } from "../../shared/export/png";
+import { htmlToPng, htmlToSvg, saveSvg, SnapshotScheduler } from "../../shared/export/png";
 import { LtkAction, newAction } from "../../shared/schema/actions";
 import { newId, nowIso } from "../../shared/schema/id";
 import { Person } from "../../shared/schema/people";
@@ -39,7 +39,7 @@ import { SKILLS_CSS } from "./styles";
 
 export interface SkillsEditorCallbacks {
   onChange: (env: SkillsEnvelope, actions: LtkAction[]) => void;
-  onPngReady?: (dataUri: string, svgMarkup?: string) => void;
+  onSnapshot?: (svgMarkup: string) => void;
 }
 
 const LABEL_COL = 190;
@@ -75,7 +75,7 @@ export class SkillsMatrixEditor {
   private lastPromptsRaw: string | null = null;
   private readOnly = false;
   private disableActions = false; // hide the add/raise-action affordances
-  private readonly png: SnapshotScheduler;
+  private readonly snapshots: SnapshotScheduler;
   private drag: DragState | null = null;
   private insertLine: HTMLElement | null = null;
 
@@ -89,7 +89,7 @@ export class SkillsMatrixEditor {
       meta: { title: "", updated: "" },
       data: { categories: [], levels: {} },
     };
-    this.png = new SnapshotScheduler(() => this.generatePng());
+    this.snapshots = new SnapshotScheduler(() => this.generateSnapshot());
     this.render();
   }
 
@@ -97,7 +97,7 @@ export class SkillsMatrixEditor {
     this.env = env;
     this.actions = actions;
     this.render();
-    this.png.schedule();
+    this.snapshots.schedule();
   }
 
   setTheme(theme: Theme): void {
@@ -136,7 +136,7 @@ export class SkillsMatrixEditor {
   }
 
   destroy(): void {
-    this.png.cancel();
+    this.snapshots.cancel();
     this.root.remove();
   }
 
@@ -721,21 +721,21 @@ export class SkillsMatrixEditor {
   private emit(): void {
     this.render();
     this.cb.onChange(this.env, this.actions);
-    this.png.schedule();
+    this.snapshots.schedule();
   }
 
-  // ---- PNG export ----
+  // ---- snapshot + downloads ----
 
-  private generatePng(): void {
-    if (!this.cb.onPngReady) return;
-    htmlToPng(this.root, LTK_BASE_CSS + SKILLS_CSS, this.theme.background, (uri, svg) =>
-      this.cb.onPngReady!(uri, svg)
+  private generateSnapshot(): void {
+    if (!this.cb.onSnapshot) return;
+    htmlToSvg(this.root, LTK_BASE_CSS + SKILLS_CSS, this.theme.background, (svg) =>
+      this.cb.onSnapshot!(svg)
     );
   }
 
     private downloadSvg(): void {
-    htmlToPng(this.root, LTK_BASE_CSS + SKILLS_CSS, this.theme.background, (_uri, svg) =>
-      saveSvg(svg ?? "", "skills-matrix.svg")
+    htmlToSvg(this.root, LTK_BASE_CSS + SKILLS_CSS, this.theme.background, (svg) =>
+      saveSvg(svg, "skills-matrix.svg")
     );
   }
 

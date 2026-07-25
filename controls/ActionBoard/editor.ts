@@ -9,7 +9,7 @@ import { parsePrompts, Prompts, renderGhost, renderTitleBar } from "../../shared
 import { renderKebab } from "../../shared/ui/menu";
 import { actionRow, completeCircle, openActionDialog } from "../../shared/ui/actionUi";
 import { makeInteractive } from "../../shared/interact/drag";
-import { htmlToPng, saveSvg, SnapshotScheduler } from "../../shared/export/png";
+import { htmlToPng, htmlToSvg, saveSvg, SnapshotScheduler } from "../../shared/export/png";
 import { ActionStatus, isOverdue, LtkAction, newAction } from "../../shared/schema/actions";
 import { Person } from "../../shared/schema/people";
 import { ACTIONBOARD_CSS } from "./styles";
@@ -48,7 +48,7 @@ const DEFAULT_GHOST = [
 
 export interface ActionBoardCallbacks {
   onChange: (actions: LtkAction[]) => void;
-  onPngReady?: (dataUri: string, svgMarkup?: string) => void;
+  onSnapshot?: (svgMarkup: string) => void;
 }
 
 export class ActionBoardEditor {
@@ -62,7 +62,7 @@ export class ActionBoardEditor {
   private readOnly = false;
   private view: BoardView = "list";
   private groupBy: KanbanGroupBy = "status";
-  private readonly png: SnapshotScheduler;
+  private readonly snapshots: SnapshotScheduler;
 
   // gantt state (transient): zoom level and the scroll position to restore
   // after a zoom re-render
@@ -92,7 +92,7 @@ export class ActionBoardEditor {
     ensureStylesheet("ltk-actionboard-css", ACTIONBOARD_CSS);
     this.root = el("div", "ltk-root");
     host.appendChild(this.root);
-    this.png = new SnapshotScheduler(() => this.generatePng());
+    this.snapshots = new SnapshotScheduler(() => this.generateSnapshot());
     this.render();
   }
 
@@ -101,7 +101,7 @@ export class ActionBoardEditor {
   setActions(actions: LtkAction[]): void {
     this.actions = actions;
     this.render();
-    this.png.schedule();
+    this.snapshots.schedule();
   }
 
   setTheme(theme: Theme): void {
@@ -141,7 +141,7 @@ export class ActionBoardEditor {
   }
 
   destroy(): void {
-    this.png.cancel();
+    this.snapshots.cancel();
     this.root.remove();
   }
 
@@ -671,7 +671,7 @@ export class ActionBoardEditor {
   private commit(): void {
     this.render();
     this.cb.onChange(this.actions);
-    this.png.schedule();
+    this.snapshots.schedule();
   }
 
   private addAction(): void {
@@ -698,18 +698,18 @@ export class ActionBoardEditor {
     });
   }
 
-  // ---- PNG export ----
+  // ---- snapshot + downloads ----
 
-  private generatePng(): void {
-    if (!this.cb.onPngReady) return;
-    htmlToPng(this.root, LTK_BASE_CSS + ACTIONBOARD_CSS, this.theme.background, (uri, svg) =>
-      this.cb.onPngReady!(uri, svg)
+  private generateSnapshot(): void {
+    if (!this.cb.onSnapshot) return;
+    htmlToSvg(this.root, LTK_BASE_CSS + ACTIONBOARD_CSS, this.theme.background, (svg) =>
+      this.cb.onSnapshot!(svg)
     );
   }
 
     private downloadSvg(): void {
-    htmlToPng(this.root, LTK_BASE_CSS + ACTIONBOARD_CSS, this.theme.background, (_uri, svg) =>
-      saveSvg(svg ?? "", "action-board.svg")
+    htmlToSvg(this.root, LTK_BASE_CSS + ACTIONBOARD_CSS, this.theme.background, (svg) =>
+      saveSvg(svg, "action-board.svg")
     );
   }
 

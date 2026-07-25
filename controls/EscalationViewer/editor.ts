@@ -12,7 +12,7 @@ import { fieldRow, openDialog, textArea } from "../../shared/ui/dialog";
 import { actionRow, openActionDialog } from "../../shared/ui/actionUi";
 import { parsePrompts, Prompts, renderGhost, renderTitleBar } from "../../shared/ui/chrome";
 import { renderKebab } from "../../shared/ui/menu";
-import { htmlToPng, saveSvg, SnapshotScheduler } from "../../shared/export/png";
+import { htmlToPng, htmlToSvg, saveSvg, SnapshotScheduler } from "../../shared/export/png";
 import { Acknowledgement, LtkAction } from "../../shared/schema/actions";
 import { nowIso, todayIso } from "../../shared/schema/id";
 import { Person } from "../../shared/schema/people";
@@ -21,7 +21,7 @@ import { ESCALATION_CSS } from "./styles";
 
 export interface EscalationEditorCallbacks {
   onChange: (actions: LtkAction[]) => void;
-  onPngReady?: (dataUri: string, svgMarkup?: string) => void;
+  onSnapshot?: (svgMarkup: string) => void;
 }
 
 export interface Viewer {
@@ -41,21 +41,21 @@ export class EscalationViewerEditor {
   private lastPromptsRaw: string | null = null;
   private readOnly = false;
   private collapsed = new Set<string>();
-  private readonly png: SnapshotScheduler;
+  private readonly snapshots: SnapshotScheduler;
 
   constructor(host: HTMLElement, private readonly cb: EscalationEditorCallbacks) {
     ensureStylesheet("ltk-base-css", LTK_BASE_CSS);
     ensureStylesheet("ltk-escalation-css", ESCALATION_CSS);
     this.root = el("div", "ltk-root");
     host.appendChild(this.root);
-    this.png = new SnapshotScheduler(() => this.generatePng());
+    this.snapshots = new SnapshotScheduler(() => this.generateSnapshot());
     this.render();
   }
 
   setActions(actions: LtkAction[]): void {
     this.actions = actions;
     this.render();
-    this.png.schedule();
+    this.snapshots.schedule();
   }
 
   /** Source labels can arrive/change independently of the actions gate. */
@@ -95,7 +95,7 @@ export class EscalationViewerEditor {
   }
 
   destroy(): void {
-    this.png.cancel();
+    this.snapshots.cancel();
     this.root.remove();
   }
 
@@ -306,21 +306,21 @@ export class EscalationViewerEditor {
   private emit(): void {
     this.render();
     this.cb.onChange(this.actions);
-    this.png.schedule();
+    this.snapshots.schedule();
   }
 
-  // ---- PNG export ----
+  // ---- snapshot + downloads ----
 
-  private generatePng(): void {
-    if (!this.cb.onPngReady) return;
-    htmlToPng(this.root, LTK_BASE_CSS + ESCALATION_CSS, this.theme.background, (uri, svg) =>
-      this.cb.onPngReady!(uri, svg)
+  private generateSnapshot(): void {
+    if (!this.cb.onSnapshot) return;
+    htmlToSvg(this.root, LTK_BASE_CSS + ESCALATION_CSS, this.theme.background, (svg) =>
+      this.cb.onSnapshot!(svg)
     );
   }
 
     private downloadSvg(): void {
-    htmlToPng(this.root, LTK_BASE_CSS + ESCALATION_CSS, this.theme.background, (_uri, svg) =>
-      saveSvg(svg ?? "", "escalations.svg")
+    htmlToSvg(this.root, LTK_BASE_CSS + ESCALATION_CSS, this.theme.background, (svg) =>
+      saveSvg(svg, "escalations.svg")
     );
   }
 

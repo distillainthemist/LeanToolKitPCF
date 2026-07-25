@@ -1,4 +1,4 @@
-// Shared card-save plumbing: latest svg from onPngReady rides every save.
+// Shared card-save plumbing: latest svg from onSnapshot rides every save.
 // Editors snapshot AFTER they emit the change, so a fresh svg arriving
 // once the debounced save has fired would otherwise be lost (the tile
 // stayed one edit behind) — it reschedules a save with the latest
@@ -23,7 +23,7 @@ export function saver(opts: {
     timer = setTimeout(fire, 400);
   };
   return {
-    onPng: (_uri: string, svgMarkup?: string) => {
+    onSnapshot: (svgMarkup: string) => {
       if (svgMarkup && svgMarkup !== svg) {
         svg = svgMarkup;
         opts.onTile?.(svg);

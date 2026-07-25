@@ -1,13 +1,19 @@
-// PNG + SVG snapshot machinery. SVG controls rasterise directly (the proven
-// Fishbone path); HTML controls are wrapped in an SVG <foreignObject>, which
-// modern Chromium/WebKit hosts rasterise fine — when a host refuses, the
-// export is skipped silently and pngExport simply stays empty.
+// Snapshot machinery. An HTML card is wrapped in an SVG <foreignObject>,
+// giving vector markup that is small, crisp at any size, and what the board
+// stores as a card's tile.
 //
-// Both snapshot paths hand their intermediate SVG markup to the callback as
-// a second argument — that string is the svgExport output (vector, small,
-// crisp at any size). Caveat: foreignObject SVGs render in documents but
-// Safari can refuse them inside <img>; boards should verify before relying
-// on them for image tiles (the PNG stays available as the fallback).
+// Two entry points, deliberately separate:
+//   htmlToSvg — markup only. This is the hot path: every debounced card edit
+//               takes a snapshot, and the board only ever keeps the markup.
+//   htmlToPng — markup PLUS a rasterised 2× PNG data URI, for the kebab's
+//               "Download PNG" alone. Rasterising costs an Image decode and
+//               a canvas draw, so nothing on the edit path should call it.
+//               When a host refuses to rasterise, the export is skipped
+//               silently.
+//
+// Caveat: foreignObject SVGs render in documents but Safari can refuse them
+// inside <img>; BoardGrid therefore renders tiles inline rather than as
+// image sources.
 
 import { SVG_NS } from "../ui/dom";
 
@@ -43,49 +49,15 @@ function escapeAttr(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
 }
 
-/**
- * Snapshot an SVG element (2× scale). `css` is inlined so classes survive.
- * The callback also receives the standalone SVG markup (the svgExport).
- */
-export function svgToPng(
-  svg: SVGSVGElement,
-  css: string,
-  background: string,
-  onReady: (dataUri: string, svgMarkup: string) => void
-): void {
-  const vb = svg.viewBox.baseVal;
-  const width = vb && vb.width > 0 ? vb.width : svg.clientWidth;
-  const height = vb && vb.height > 0 ? vb.height : svg.clientHeight;
-  if (width <= 0 || height <= 0) return;
-  const clone = svg.cloneNode(true) as SVGSVGElement;
-  clone.setAttribute("width", String(width));
-  clone.setAttribute("height", String(height));
-  clone.setAttribute("xmlns", SVG_NS);
-  const styleEl = document.createElementNS(SVG_NS, "style");
-  styleEl.textContent = css;
-  clone.insertBefore(styleEl, clone.firstChild);
-  const bgRect = document.createElementNS(SVG_NS, "rect");
-  bgRect.setAttribute("width", "100%");
-  bgRect.setAttribute("height", "100%");
-  bgRect.setAttribute("fill", background);
-  clone.insertBefore(bgRect, styleEl.nextSibling);
-  const markup = new XMLSerializer().serializeToString(clone);
-  rasterize(markup, width, height, background, 2, (uri) => onReady(uri, markup));
-}
-
-/**
- * Snapshot an HTML element via <foreignObject> (2× scale). The callback also
- * receives the standalone SVG markup (the svgExport).
- */
-export function htmlToPng(
+/** Serialise an HTML element into standalone SVG markup via <foreignObject>. */
+function snapshot(
   root: HTMLElement,
   css: string,
-  background: string,
-  onReady: (dataUri: string, svgMarkup: string) => void
-): void {
+  background: string
+): { markup: string; width: number; height: number } | null {
   const width = root.clientWidth;
   const height = root.clientHeight;
-  if (width <= 0 || height <= 0) return;
+  if (width <= 0 || height <= 0) return null;
   const clone = root.cloneNode(true) as HTMLElement;
   clone.setAttribute("xmlns", "http://www.w3.org/1999/xhtml");
   const markup =
@@ -95,7 +67,39 @@ export function htmlToPng(
     `<foreignObject width="100%" height="100%">` +
     new XMLSerializer().serializeToString(clone) +
     `</foreignObject></svg>`;
-  rasterize(markup, width, height, background, 2, (uri) => onReady(uri, markup));
+  return { markup, width, height };
+}
+
+/**
+ * Snapshot an HTML element to SVG markup — the tile the board stores.
+ * Synchronous work only: no Image decode, no canvas. Use this on the edit
+ * path; `htmlToPng` is for explicit downloads.
+ */
+export function htmlToSvg(
+  root: HTMLElement,
+  css: string,
+  background: string,
+  onReady: (svgMarkup: string) => void
+): void {
+  const shot = snapshot(root, css, background);
+  if (shot) onReady(shot.markup);
+}
+
+/**
+ * Snapshot an HTML element and rasterise it to a 2× PNG data URI. Only the
+ * kebab's "Download PNG" needs this — see the note at the top of the file.
+ */
+export function htmlToPng(
+  root: HTMLElement,
+  css: string,
+  background: string,
+  onReady: (dataUri: string, svgMarkup: string) => void
+): void {
+  const shot = snapshot(root, css, background);
+  if (!shot) return;
+  rasterize(shot.markup, shot.width, shot.height, background, 2, (uri) =>
+    onReady(uri, shot.markup)
+  );
 }
 
 /** Save SVG markup to a downloaded .svg file. */

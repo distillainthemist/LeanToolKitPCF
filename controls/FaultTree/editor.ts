@@ -25,7 +25,7 @@ import { parsePrompts, Prompts, renderGhost, renderTitleBar, hintFor } from "../
 import { renderKebab } from "../../shared/ui/menu";
 import { PanZoom } from "../../shared/ui/panzoom";
 import { makeInteractive } from "../../shared/interact/drag";
-import { htmlToPng, saveSvg, SnapshotScheduler } from "../../shared/export/png";
+import { htmlToPng, htmlToSvg, saveSvg, SnapshotScheduler } from "../../shared/export/png";
 import {
   CauseNode,
   CauseStatus,
@@ -54,7 +54,7 @@ const DEFAULT_GHOST = [
 
 export interface FaultTreeEditorCallbacks {
   onChange: (env: FaultTreeEnvelope, actions: LtkAction[]) => void;
-  onPngReady?: (dataUri: string, svgMarkup?: string) => void;
+  onSnapshot?: (svgMarkup: string) => void;
 }
 
 export class FaultTreeEditor {
@@ -69,7 +69,7 @@ export class FaultTreeEditor {
   private readOnly = false;
   private showStatus = false;
   private disableActions = false; // hide the add/raise-action affordances
-  private readonly png: SnapshotScheduler;
+  private readonly snapshots: SnapshotScheduler;
   private readonly panzoom: PanZoom;
 
   /** Collapsed branch ids — transient UI state, not persisted. */
@@ -96,8 +96,8 @@ export class FaultTreeEditor {
       meta: { title: "", updated: "" },
       data: { problem: "", causes: [] },
     };
-    this.png = new SnapshotScheduler(() => this.generatePng());
-    this.panzoom = new PanZoom({ onView: () => this.png.schedule() });
+    this.snapshots = new SnapshotScheduler(() => this.generateSnapshot());
+    this.panzoom = new PanZoom({ onView: () => this.snapshots.schedule() });
     this.render();
   }
 
@@ -108,7 +108,7 @@ export class FaultTreeEditor {
     this.actions = actions;
     this.render();
     this.panzoom.requestFit(); // auto-fit the (re)loaded tree
-    this.png.schedule();
+    this.snapshots.schedule();
   }
 
   setTheme(theme: Theme): void {
@@ -150,7 +150,7 @@ export class FaultTreeEditor {
   }
 
   destroy(): void {
-    this.png.cancel();
+    this.snapshots.cancel();
     this.panzoom.destroy();
     this.root.remove();
   }
@@ -518,7 +518,7 @@ export class FaultTreeEditor {
   private emit(): void {
     this.render();
     this.cb.onChange(this.env, this.actions);
-    this.png.schedule();
+    this.snapshots.schedule();
   }
 
   private editProblem(): void {
@@ -705,18 +705,18 @@ export class FaultTreeEditor {
     this.actions.push(action);
   }
 
-  // ---- PNG export ----
+  // ---- snapshot + downloads ----
 
-  private generatePng(): void {
-    if (!this.cb.onPngReady) return;
-    htmlToPng(this.root, LTK_BASE_CSS + FAULTTREE_CSS, this.theme.background, (uri, svg) =>
-      this.cb.onPngReady!(uri, svg)
+  private generateSnapshot(): void {
+    if (!this.cb.onSnapshot) return;
+    htmlToSvg(this.root, LTK_BASE_CSS + FAULTTREE_CSS, this.theme.background, (svg) =>
+      this.cb.onSnapshot!(svg)
     );
   }
 
     private downloadSvg(): void {
-    htmlToPng(this.root, LTK_BASE_CSS + FAULTTREE_CSS, this.theme.background, (_uri, svg) =>
-      saveSvg(svg ?? "", "fault-tree.svg")
+    htmlToSvg(this.root, LTK_BASE_CSS + FAULTTREE_CSS, this.theme.background, (svg) =>
+      saveSvg(svg, "fault-tree.svg")
     );
   }
 

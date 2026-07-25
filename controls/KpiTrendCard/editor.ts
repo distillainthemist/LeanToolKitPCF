@@ -12,7 +12,7 @@ import { renderKebab } from "../../shared/ui/menu";
 import { openActionManager } from "../../shared/ui/actionUi";
 import { LtkAction } from "../../shared/schema/actions";
 import { Person } from "../../shared/schema/people";
-import { htmlToPng, saveSvg, SnapshotScheduler } from "../../shared/export/png";
+import { htmlToPng, htmlToSvg, saveSvg, SnapshotScheduler } from "../../shared/export/png";
 import { newId, nowIso, todayIso } from "../../shared/schema/id";
 import { KpiPoint, KpiTrendEnvelope, SCHEMA_ID } from "./types";
 import { KPITREND_CSS } from "./styles";
@@ -42,7 +42,7 @@ export interface KpiSpec {
 
 export interface KpiTrendEditorCallbacks {
   onChange: (env: KpiTrendEnvelope) => void;
-  onPngReady?: (dataUri: string, svgMarkup?: string) => void;
+  onSnapshot?: (svgMarkup: string) => void;
   /** The full card-level action set on every change (already scoped). */
   onActions?: (actions: LtkAction[]) => void;
 }
@@ -61,7 +61,7 @@ export class KpiTrendEditor {
   /** Host-supplied spec (see KpiSpec); null = the document owns it and the
    *  kebab offers the in-card dialog (the PCF path). */
   private spec: KpiSpec | null = null;
-  private readonly png: SnapshotScheduler;
+  private readonly snapshots: SnapshotScheduler;
 
   constructor(
     host: HTMLElement,
@@ -76,14 +76,14 @@ export class KpiTrendEditor {
       meta: { title: "", updated: "" },
       data: { points: [], target: null, usl: null, lsl: null, unit: "" },
     };
-    this.png = new SnapshotScheduler(() => this.generatePng());
+    this.snapshots = new SnapshotScheduler(() => this.generateSnapshot());
     this.render();
   }
 
   setEnvelope(env: KpiTrendEnvelope): void {
     this.env = env;
     this.render();
-    this.png.schedule();
+    this.snapshots.schedule();
   }
 
   setTheme(theme: Theme): void {
@@ -130,7 +130,7 @@ export class KpiTrendEditor {
     if (JSON.stringify(spec) === JSON.stringify(this.spec)) return;
     this.spec = spec;
     this.render();
-    this.png.schedule();
+    this.snapshots.schedule();
   }
 
   /** The values actually drawn: host spec first, document as the fallback. */
@@ -156,7 +156,7 @@ export class KpiTrendEditor {
   }
 
   destroy(): void {
-    this.png.cancel();
+    this.snapshots.cancel();
     this.root.remove();
   }
 
@@ -459,7 +459,7 @@ export class KpiTrendEditor {
     this.env.data.points.sort((a, b) => (a.date < b.date ? -1 : 1));
     this.render();
     this.cb.onChange(this.env);
-    this.png.schedule();
+    this.snapshots.schedule();
   }
 
   private editPoint(point: KpiPoint | null): void {
@@ -588,18 +588,18 @@ export class KpiTrendEditor {
     target.focus();
   }
 
-  // ---- PNG export ----
+  // ---- snapshot + downloads ----
 
-  private generatePng(): void {
-    if (!this.cb.onPngReady) return;
-    htmlToPng(this.root, LTK_BASE_CSS + KPITREND_CSS, this.theme.background, (uri, svg) =>
-      this.cb.onPngReady!(uri, svg)
+  private generateSnapshot(): void {
+    if (!this.cb.onSnapshot) return;
+    htmlToSvg(this.root, LTK_BASE_CSS + KPITREND_CSS, this.theme.background, (svg) =>
+      this.cb.onSnapshot!(svg)
     );
   }
 
     private downloadSvg(): void {
-    htmlToPng(this.root, LTK_BASE_CSS + KPITREND_CSS, this.theme.background, (_uri, svg) =>
-      saveSvg(svg ?? "", "kpi-trend.svg")
+    htmlToSvg(this.root, LTK_BASE_CSS + KPITREND_CSS, this.theme.background, (svg) =>
+      saveSvg(svg, "kpi-trend.svg")
     );
   }
 

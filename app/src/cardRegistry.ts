@@ -246,7 +246,7 @@ const REGISTRY: Record<string, CardMounter> = {
         s.save(serializeSqdpc({ ...env2, data: { ...env2.data, ratings: {} } }));
         opts.onActions(stamped(opts, actions));
       },
-      onPngReady: s.onPng,
+      onSnapshot: s.onSnapshot,
     });
     editor.setTheme(opts.theme);
     editor.setChrome(opts.title, promptsRaw(opts));
@@ -318,7 +318,7 @@ const REGISTRY: Record<string, CardMounter> = {
         s.save(serializeConditions({ ...env2, data: { ratings: {} } }));
         opts.onActions(stamped(opts, actions));
       },
-      onPngReady: s.onPng,
+      onSnapshot: s.onSnapshot,
     });
     editor.setTheme(opts.theme);
     editor.setChrome(opts.title, promptsRaw(opts));
@@ -356,7 +356,7 @@ const REGISTRY: Record<string, CardMounter> = {
         s.save(serializeFiveWhys(env));
         opts.onActions(stamped(opts, actions));
       },
-      onPngReady: s.onPng,
+      onSnapshot: s.onSnapshot,
     });
     editor.setTheme(opts.theme);
     editor.setChrome(opts.title, promptsRaw(opts));
@@ -376,7 +376,7 @@ const REGISTRY: Record<string, CardMounter> = {
         s.save(serializeFaultTree(env));
         opts.onActions(stamped(opts, actions));
       },
-      onPngReady: s.onPng,
+      onSnapshot: s.onSnapshot,
     });
     editor.setTheme(opts.theme);
     editor.setChrome(opts.title, promptsRaw(opts));
@@ -396,7 +396,7 @@ const REGISTRY: Record<string, CardMounter> = {
         s.save(serializeBenefitEffort(env));
         opts.onActions(stamped(opts, actions));
       },
-      onPngReady: s.onPng,
+      onSnapshot: s.onSnapshot,
     });
     editor.setTheme(opts.theme);
     editor.setChrome(opts.title, promptsRaw(opts));
@@ -413,7 +413,7 @@ const REGISTRY: Record<string, CardMounter> = {
         s.save(serializeRiskMatrix(env));
         opts.onActions(stamped(opts, actions));
       },
-      onPngReady: s.onPng,
+      onSnapshot: s.onSnapshot,
     });
     editor.setTheme(opts.theme);
     editor.setChrome(opts.title, promptsRaw(opts));
@@ -430,7 +430,7 @@ const REGISTRY: Record<string, CardMounter> = {
         s.save(serializeRaci(env));
         opts.onActions(stamped(opts, actions));
       },
-      onPngReady: s.onPng,
+      onSnapshot: s.onSnapshot,
     });
     editor.setTheme(opts.theme);
     editor.setChrome(opts.title, promptsRaw(opts));
@@ -447,7 +447,7 @@ const REGISTRY: Record<string, CardMounter> = {
         s.save(serializeSkills(env));
         opts.onActions(stamped(opts, actions));
       },
-      onPngReady: s.onPng,
+      onSnapshot: s.onSnapshot,
     });
     editor.setTheme(opts.theme);
     editor.setChrome(opts.title, promptsRaw(opts));
@@ -464,7 +464,7 @@ const REGISTRY: Record<string, CardMounter> = {
         s.save(serializeAgenda(env));
         opts.onActions(stamped(opts, actions));
       },
-      onPngReady: s.onPng,
+      onSnapshot: s.onSnapshot,
     });
     editor.setTheme(opts.theme);
     editor.setChrome(opts.title, promptsRaw(opts));
@@ -481,7 +481,7 @@ const REGISTRY: Record<string, CardMounter> = {
         s.save(serializeHeatmap(env));
         opts.onActions(stamped(opts, actions));
       },
-      onPngReady: s.onPng,
+      onSnapshot: s.onSnapshot,
     });
     editor.setTheme(opts.theme);
     editor.setChrome(opts.title, promptsRaw(opts));
@@ -522,7 +522,7 @@ const REGISTRY: Record<string, CardMounter> = {
         // the doc keeps target/spec/unit + tile svg; points live in rows
         s.save(serializeKpiTrend({ ...env2, data: { ...env2.data, points: [] } }));
       },
-      onPngReady: s.onPng,
+      onSnapshot: s.onSnapshot,
       onActions: (actions) => opts.onActions(stamped(opts, actions)),
     });
     editor.setTheme(opts.theme);
@@ -582,7 +582,7 @@ const REGISTRY: Record<string, CardMounter> = {
         }
         s.save(serializeStatusTile(env));
       },
-      onPngReady: s.onPng,
+      onSnapshot: s.onSnapshot,
     });
     editor.setTheme(opts.theme);
     editor.setChrome(opts.title, promptsRaw(opts));
@@ -634,7 +634,7 @@ const REGISTRY: Record<string, CardMounter> = {
           })
         );
       },
-      onPngReady: s.onPng,
+      onSnapshot: s.onSnapshot,
       onActions: (actions) => opts.onActions(stamped(opts, actions)),
     });
     editor.setTheme(opts.theme);
@@ -678,7 +678,7 @@ const REGISTRY: Record<string, CardMounter> = {
     const s = saver(opts);
     const editor = new CaptureEditor(opts.host, {
       onChange: (env) => s.save(serializeCapture(env)),
-      onPngReady: s.onPng,
+      onSnapshot: s.onSnapshot,
     });
     editor.setTheme(opts.theme);
     editor.setChrome(opts.title, promptsRaw(opts));
@@ -743,7 +743,7 @@ const REGISTRY: Record<string, CardMounter> = {
         env.meta.updated = new Date().toISOString();
         s.save(serializeFishbone(env));
       },
-      onPngReady: s.onPng,
+      onSnapshot: s.onSnapshot,
       // raise / manage actions on a cause (the editor's cause dialog)
       onManageActions: (causeId) =>
         mgr.manage(
@@ -775,7 +775,7 @@ const REGISTRY: Record<string, CardMounter> = {
         env.meta.updated = new Date().toISOString();
         s.save(serializeProcessMap(env));
       },
-      onPngReady: s.onPng,
+      onSnapshot: s.onSnapshot,
       dialogHost: opts.host,
       // raise / manage actions on a kaizen node
       onManageActions: (nodeId) =>

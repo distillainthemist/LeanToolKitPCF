@@ -24,7 +24,7 @@ import { parsePrompts, Prompts, renderGhost, renderTitleBar, hintFor } from "../
 import { renderKebab } from "../../shared/ui/menu";
 import { PanZoom } from "../../shared/ui/panzoom";
 import { makeInteractive } from "../../shared/interact/drag";
-import { htmlToPng, saveSvg, SnapshotScheduler } from "../../shared/export/png";
+import { htmlToPng, htmlToSvg, saveSvg, SnapshotScheduler } from "../../shared/export/png";
 import {
   CauseNode,
   CauseStatus,
@@ -51,7 +51,7 @@ const DEFAULT_GHOST = [
 
 export interface FiveWhysEditorCallbacks {
   onChange: (env: FiveWhysEnvelope, actions: LtkAction[]) => void;
-  onPngReady?: (dataUri: string, svgMarkup?: string) => void;
+  onSnapshot?: (svgMarkup: string) => void;
 }
 
 export class FiveWhysEditor {
@@ -67,7 +67,7 @@ export class FiveWhysEditor {
   private readOnly = false;
   private showStatus = false;
   private disableActions = false; // hide the add/raise-action affordances
-  private readonly png: SnapshotScheduler;
+  private readonly snapshots: SnapshotScheduler;
   private readonly panzoom: PanZoom;
 
   // drag state: a fixed-position ghost follows the pointer; chain rows and
@@ -98,8 +98,8 @@ export class FiveWhysEditor {
       meta: { title: "", updated: "" },
       data: { problem: "", causes: [] },
     };
-    this.png = new SnapshotScheduler(() => this.generatePng());
-    this.panzoom = new PanZoom({ onView: () => this.png.schedule() });
+    this.snapshots = new SnapshotScheduler(() => this.generateSnapshot());
+    this.panzoom = new PanZoom({ onView: () => this.snapshots.schedule() });
     this.render();
   }
 
@@ -110,7 +110,7 @@ export class FiveWhysEditor {
     this.actions = actions;
     this.render();
     this.panzoom.requestFit(); // auto-fit the (re)loaded chains
-    this.png.schedule();
+    this.snapshots.schedule();
   }
 
   // setters no-op when the value is unchanged: updateView fires for many
@@ -153,7 +153,7 @@ export class FiveWhysEditor {
   }
 
   destroy(): void {
-    this.png.cancel();
+    this.snapshots.cancel();
     this.panzoom.destroy();
     this.root.remove();
   }
@@ -550,7 +550,7 @@ export class FiveWhysEditor {
   private emit(): void {
     this.render();
     this.cb.onChange(this.env, this.actions);
-    this.png.schedule();
+    this.snapshots.schedule();
   }
 
   private editProblem(): void {
@@ -742,21 +742,21 @@ export class FiveWhysEditor {
     this.actions.push(action);
   }
 
-  // ---- PNG export ----
+  // ---- snapshot + downloads ----
 
-  private generatePng(): void {
-    if (!this.cb.onPngReady) return;
-    htmlToPng(
+  private generateSnapshot(): void {
+    if (!this.cb.onSnapshot) return;
+    htmlToSvg(
       this.root,
       LTK_BASE_CSS + FIVEWHYS_CSS,
       this.theme.background,
-      (uri, svg) => this.cb.onPngReady!(uri, svg)
+      (svg) => this.cb.onSnapshot!(svg)
     );
   }
 
   private downloadSvg(): void {
-    htmlToPng(this.root, LTK_BASE_CSS + FIVEWHYS_CSS, this.theme.background, (_uri, svg) =>
-      saveSvg(svg ?? "", "five-whys.svg")
+    htmlToSvg(this.root, LTK_BASE_CSS + FIVEWHYS_CSS, this.theme.background, (svg) =>
+      saveSvg(svg, "five-whys.svg")
     );
   }
 

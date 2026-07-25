@@ -21,7 +21,7 @@ import {
 } from "../../shared/ui/actionUi";
 import { parsePrompts, Prompts, renderTitleBar, hintFor } from "../../shared/ui/chrome";
 import { renderKebab } from "../../shared/ui/menu";
-import { htmlToPng, saveSvg, SnapshotScheduler } from "../../shared/export/png";
+import { htmlToPng, htmlToSvg, saveSvg, SnapshotScheduler } from "../../shared/export/png";
 import { LtkAction, newAction } from "../../shared/schema/actions";
 import { newId, nowIso } from "../../shared/schema/id";
 import { Person } from "../../shared/schema/people";
@@ -42,7 +42,7 @@ const BAND_COLOURS = ["#107c10", "#f2c811", "#ca5010", "#d13438"];
 
 export interface RiskMatrixEditorCallbacks {
   onChange: (env: RiskMatrixEnvelope, actions: LtkAction[]) => void;
-  onPngReady?: (dataUri: string, svgMarkup?: string) => void;
+  onSnapshot?: (svgMarkup: string) => void;
 }
 
 export class RiskMatrixEditor {
@@ -56,7 +56,7 @@ export class RiskMatrixEditor {
   private lastPromptsRaw: string | null = null;
   private readOnly = false;
   private disableActions = false; // hide the add/raise-action affordances
-  private readonly png: SnapshotScheduler;
+  private readonly snapshots: SnapshotScheduler;
 
   constructor(
     host: HTMLElement,
@@ -71,7 +71,7 @@ export class RiskMatrixEditor {
       meta: { title: "", updated: "" },
       data: { risks: [] },
     };
-    this.png = new SnapshotScheduler(() => this.generatePng());
+    this.snapshots = new SnapshotScheduler(() => this.generateSnapshot());
     this.render();
   }
 
@@ -79,7 +79,7 @@ export class RiskMatrixEditor {
     this.env = env;
     this.actions = actions;
     this.render();
-    this.png.schedule();
+    this.snapshots.schedule();
   }
 
   setTheme(theme: Theme): void {
@@ -117,7 +117,7 @@ export class RiskMatrixEditor {
   }
 
   destroy(): void {
-    this.png.cancel();
+    this.snapshots.cancel();
     this.root.remove();
   }
 
@@ -326,7 +326,7 @@ export class RiskMatrixEditor {
   private emit(): void {
     this.render();
     this.cb.onChange(this.env, this.actions);
-    this.png.schedule();
+    this.snapshots.schedule();
   }
 
   private ratingSelect(
@@ -543,18 +543,18 @@ export class RiskMatrixEditor {
     this.actions.push(action);
   }
 
-  // ---- PNG export ----
+  // ---- snapshot + downloads ----
 
-  private generatePng(): void {
-    if (!this.cb.onPngReady) return;
-    htmlToPng(this.root, LTK_BASE_CSS + RISKMATRIX_CSS, this.theme.background, (uri, svg) =>
-      this.cb.onPngReady!(uri, svg)
+  private generateSnapshot(): void {
+    if (!this.cb.onSnapshot) return;
+    htmlToSvg(this.root, LTK_BASE_CSS + RISKMATRIX_CSS, this.theme.background, (svg) =>
+      this.cb.onSnapshot!(svg)
     );
   }
 
     private downloadSvg(): void {
-    htmlToPng(this.root, LTK_BASE_CSS + RISKMATRIX_CSS, this.theme.background, (_uri, svg) =>
-      saveSvg(svg ?? "", "risk-matrix.svg")
+    htmlToSvg(this.root, LTK_BASE_CSS + RISKMATRIX_CSS, this.theme.background, (svg) =>
+      saveSvg(svg, "risk-matrix.svg")
     );
   }
 

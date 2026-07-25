@@ -10,7 +10,7 @@ import { parsePrompts, Prompts, renderTitleBar, hintFor } from "../../shared/ui/
 import { renderKebab } from "../../shared/ui/menu";
 import { actionRow, openActionDialog } from "../../shared/ui/actionUi";
 import { makeInteractive } from "../../shared/interact/drag";
-import { htmlToPng, saveSvg, SnapshotScheduler } from "../../shared/export/png";
+import { htmlToPng, htmlToSvg, saveSvg, SnapshotScheduler } from "../../shared/export/png";
 import { LtkAction, newAction } from "../../shared/schema/actions";
 import { Person } from "../../shared/schema/people";
 import { newId, nowIso } from "../../shared/schema/id";
@@ -19,7 +19,7 @@ import { BENEFITEFFORT_CSS } from "./styles";
 
 export interface BenefitEffortEditorCallbacks {
   onChange: (env: BenefitEffortEnvelope, actions: LtkAction[]) => void;
-  onPngReady?: (dataUri: string, svgMarkup?: string) => void;
+  onSnapshot?: (svgMarkup: string) => void;
 }
 
 export class BenefitEffortEditor {
@@ -33,7 +33,7 @@ export class BenefitEffortEditor {
   private lastPromptsRaw: string | null = null;
   private readOnly = false;
   private disableActions = false; // hide the add/raise-action affordances
-  private readonly png: SnapshotScheduler;
+  private readonly snapshots: SnapshotScheduler;
 
   private canvas: HTMLElement | null = null;
   private ghost: HTMLElement | null = null;
@@ -53,7 +53,7 @@ export class BenefitEffortEditor {
       meta: { title: "", updated: "" },
       data: { items: [] },
     };
-    this.png = new SnapshotScheduler(() => this.generatePng());
+    this.snapshots = new SnapshotScheduler(() => this.generateSnapshot());
     this.render();
   }
 
@@ -61,7 +61,7 @@ export class BenefitEffortEditor {
     this.env = env;
     this.actions = actions;
     this.render();
-    this.png.schedule();
+    this.snapshots.schedule();
   }
 
   setPeople(people: Person[]): void {
@@ -109,7 +109,7 @@ export class BenefitEffortEditor {
   }
 
   destroy(): void {
-    this.png.cancel();
+    this.snapshots.cancel();
     this.root.remove();
   }
 
@@ -295,7 +295,7 @@ export class BenefitEffortEditor {
   private emit(): void {
     this.render();
     this.cb.onChange(this.env, this.actions);
-    this.png.schedule();
+    this.snapshots.schedule();
   }
 
   private editItem(
@@ -466,16 +466,16 @@ export class BenefitEffortEditor {
     });
   }
 
-  private generatePng(): void {
-    if (!this.cb.onPngReady) return;
-    htmlToPng(this.root, LTK_BASE_CSS + BENEFITEFFORT_CSS, this.theme.background, (uri, svg) =>
-      this.cb.onPngReady!(uri, svg)
+  private generateSnapshot(): void {
+    if (!this.cb.onSnapshot) return;
+    htmlToSvg(this.root, LTK_BASE_CSS + BENEFITEFFORT_CSS, this.theme.background, (svg) =>
+      this.cb.onSnapshot!(svg)
     );
   }
 
     private downloadSvg(): void {
-    htmlToPng(this.root, LTK_BASE_CSS + BENEFITEFFORT_CSS, this.theme.background, (_uri, svg) =>
-      saveSvg(svg ?? "", "benefit-effort.svg")
+    htmlToSvg(this.root, LTK_BASE_CSS + BENEFITEFFORT_CSS, this.theme.background, (svg) =>
+      saveSvg(svg, "benefit-effort.svg")
     );
   }
 

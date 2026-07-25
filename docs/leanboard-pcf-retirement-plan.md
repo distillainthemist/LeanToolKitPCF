@@ -142,7 +142,43 @@ Verify: root tsc, app tsc, vitest (125), app build, dev-harness smoke of
 (`mounterWiring.test.ts`) reads `controls/*/editor.ts` via glob — it must
 still pass untouched.
 
-## Phase 3 — svg-only snapshots  *(the editing-perf win; small)*
+## Phase 3 — svg-only snapshots — ✅ **DONE 2026-07-25**
+
+**Measured on a real SQDPC card (20 iterations, dev machine):**
+
+| path | median | mean |
+|---|---|---|
+| old `htmlToPng` (serialize + Image decode + canvas raster) | 50.30 ms | 49.28 ms |
+| new `htmlToSvg` (serialize only) | 0.30 ms | 0.35 ms |
+
+**~50 ms saved per snapshot, ~167× faster** — and a snapshot fires on every
+debounced edit of every card. The win is larger on slower tablets, where the
+raster dominates.
+
+The honest-rename option was taken: `onPngReady(uri, svg)` → `onSnapshot(svg)`,
+plus `generatePng`/`schedulePng`/`pngTimer`/`this.png` →
+`generateSnapshot`/`scheduleSnapshot`/`snapshotTimer`/`this.snapshots`, and the
+saver's `onPng` → `onSnapshot`. Nothing consumed the data URI: the only two
+handlers were `saver.onPng` (which ignored `_uri`) and card.ts's
+`() => undefined`.
+
+Scope grew slightly beyond the plan's 16 cards, all in the same spirit:
+- **`downloadSvg()`** on 15 cards also called `htmlToPng` and discarded the
+  URI — it rasterised on every "Download SVG" too. Now `htmlToSvg`.
+- **Fishbone and ProcessMap** hand-roll their snapshots and were not in the
+  plan's count, but both rasterised on every edit purely to feed a URI nobody
+  read. Fishbone's raster block is deleted outright (it has no PNG download);
+  ProcessMap keeps `renderPngDataUri` for its `exportPng()` only.
+- **`svgToPng`** was dead (zero call sites) and is gone; `htmlToPng` and
+  `htmlToSvg` now share a `snapshot()` serialiser.
+
+**Verified:** root tsc, app tsc, 125/125, app build; "Download PNG" still
+rasterises correctly (1280×840 @2×, 132 KB — vs 47.8 KB of markup, which is
+why tiles are stored as SVG); and live in the dev harness, a real click on an
+SQDPC day tile produced a fresh, different 47.8 KB SVG through the full
+debounce → `htmlToSvg` → `onSnapshot` chain.
+
+Original scope, for reference:
 
 In `shared/export/png.ts` add `htmlToSvg(root, css, background,
 onReady(svgMarkup))` — the existing `htmlToPng` minus `rasterize()`. Switch

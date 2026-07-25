@@ -14,7 +14,7 @@ describe("saver", () => {
     const s = saver({ onSave: (json, svg) => saves.push([json, svg]) });
 
     s.save('{"v":1}');
-    s.onPng("", "<svg>1</svg>");
+    s.onSnapshot("<svg>1</svg>");
     vi.advanceTimersByTime(500);
     expect(saves).toEqual([['{"v":1}', "<svg>1</svg>"]]);
 
@@ -23,7 +23,7 @@ describe("saver", () => {
     s.save('{"v":2}');
     vi.advanceTimersByTime(500); // save fired with the stale svg
     expect(saves[saves.length - 1]).toEqual(['{"v":2}', "<svg>1</svg>"]);
-    s.onPng("", "<svg>2</svg>"); // late snapshot must reschedule
+    s.onSnapshot("<svg>2</svg>"); // late snapshot must reschedule
     vi.advanceTimersByTime(500);
     expect(saves[saves.length - 1]).toEqual(['{"v":2}', "<svg>2</svg>"]);
   });
@@ -31,7 +31,7 @@ describe("saver", () => {
   it("does not save from a mount-time snapshot before any change", () => {
     const saves: string[] = [];
     const s = saver({ onSave: (json) => saves.push(json) });
-    s.onPng("", "<svg>initial</svg>");
+    s.onSnapshot("<svg>initial</svg>");
     vi.advanceTimersByTime(1000);
     expect(saves).toEqual([]);
   });

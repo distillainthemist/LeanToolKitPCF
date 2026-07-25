@@ -21,7 +21,7 @@ import {
   textInput,
   DialogButton,
 } from "../../shared/ui/dialog";
-import { htmlToPng, saveSvg, SnapshotScheduler } from "../../shared/export/png";
+import { htmlToPng, htmlToSvg, saveSvg, SnapshotScheduler } from "../../shared/export/png";
 import { makeInteractive } from "../../shared/interact/drag";
 import { LtkAction, newAction } from "../../shared/schema/actions";
 import { nowIso } from "../../shared/schema/id";
@@ -43,7 +43,7 @@ import { AGENDA_CSS } from "./styles";
 
 export interface AgendaEditorCallbacks {
   onChange: (env: AgendaEnvelope, actions: LtkAction[]) => void;
-  onPngReady?: (dataUri: string, svgMarkup?: string) => void;
+  onSnapshot?: (svgMarkup: string) => void;
 }
 
 type SectionKey = "prework" | "agenda" | "outputs";
@@ -71,7 +71,7 @@ export class AgendaEditor {
     agenda: true,
     outputs: false,
   };
-  private readonly png: SnapshotScheduler;
+  private readonly snapshots: SnapshotScheduler;
 
   constructor(
     host: HTMLElement,
@@ -86,7 +86,7 @@ export class AgendaEditor {
       meta: { title: "", updated: "" },
       data: { prework: [], items: [], outputs: [] },
     };
-    this.png = new SnapshotScheduler(() => this.generatePng());
+    this.snapshots = new SnapshotScheduler(() => this.generateSnapshot());
     this.render();
   }
 
@@ -96,7 +96,7 @@ export class AgendaEditor {
     this.env = env;
     this.actions = actions;
     this.render();
-    this.png.schedule();
+    this.snapshots.schedule();
   }
 
   setTheme(theme: Theme): void {
@@ -134,7 +134,7 @@ export class AgendaEditor {
   }
 
   destroy(): void {
-    this.png.cancel();
+    this.snapshots.cancel();
     this.root.remove();
   }
 
@@ -931,21 +931,21 @@ export class AgendaEditor {
   private emit(): void {
     this.render();
     this.cb.onChange(this.env, this.actions);
-    this.png.schedule();
+    this.snapshots.schedule();
   }
 
-  // ---- PNG export ----
+  // ---- snapshot + downloads ----
 
-  private generatePng(): void {
-    if (!this.cb.onPngReady) return;
-    htmlToPng(this.root, LTK_BASE_CSS + AGENDA_CSS, this.theme.background, (uri, svg) =>
-      this.cb.onPngReady!(uri, svg)
+  private generateSnapshot(): void {
+    if (!this.cb.onSnapshot) return;
+    htmlToSvg(this.root, LTK_BASE_CSS + AGENDA_CSS, this.theme.background, (svg) =>
+      this.cb.onSnapshot!(svg)
     );
   }
 
   private downloadSvg(): void {
-    htmlToPng(this.root, LTK_BASE_CSS + AGENDA_CSS, this.theme.background, (_uri, svg) =>
-      saveSvg(svg ?? "", "agenda.svg")
+    htmlToSvg(this.root, LTK_BASE_CSS + AGENDA_CSS, this.theme.background, (svg) =>
+      saveSvg(svg, "agenda.svg")
     );
   }
 

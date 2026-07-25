@@ -10,7 +10,7 @@ export function mountCard(parent: HTMLElement): () => void {
   const host = editorHost(parent);
   const editor = new FishboneEditor(host as HTMLDivElement, {
     onChange: (model) => console.log("store: save card document", model),
-    onPngReady: () => undefined,
+    onSnapshot: () => undefined,
   });
   const model = emptyModel();
   model.problem = "Label misfeed on Line 1";

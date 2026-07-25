@@ -45,8 +45,8 @@ const SVG_NS = "http://www.w3.org/2000/svg";
 
 export interface EditorOptions {
   onChange: (model: FishboneModel) => void;
-  /** Called (debounced) with a PNG data URI after the diagram changes. */
-  onPngReady?: (dataUri: string, svgMarkup?: string) => void;
+  /** Called (debounced) with the diagram's SVG markup — the card's tile. */
+  onSnapshot?: (svgMarkup: string) => void;
   /** Open the toolkit's action management for a cause (LeanToolKit port). */
   onManageActions?: (causeId: string) => void;
   /** Open (non-cancelled) action count for a cause, drawn as a chip badge. */
@@ -113,12 +113,12 @@ export class FishboneEditor {
   private readOnly = false;
   private disableActions = false; // hide the raise-action affordance
   private onChange: (model: FishboneModel) => void;
-  private onPngReady?: (dataUri: string, svgMarkup?: string) => void;
+  private onSnapshot?: (svgMarkup: string) => void;
   private onManageActions?: (causeId: string) => void;
   private getActionBadge?: (causeId: string) => number;
   private measurer: SVGTextElement | null = null;
   private lastLayout: Layout | null = null;
-  private pngTimer: ReturnType<typeof setTimeout> | null = null;
+  private snapshotTimer: ReturnType<typeof setTimeout> | null = null;
 
   // drag & drop state
   private drag: {
@@ -133,7 +133,7 @@ export class FishboneEditor {
 
   constructor(container: HTMLDivElement, opts: EditorOptions) {
     this.onChange = opts.onChange;
-    this.onPngReady = opts.onPngReady;
+    this.onSnapshot = opts.onSnapshot;
     this.onManageActions = opts.onManageActions;
     this.getActionBadge = opts.getActionBadge;
     ensureStylesInjected(container.ownerDocument || document);
@@ -192,7 +192,7 @@ export class FishboneEditor {
   }
 
   destroy(): void {
-    if (this.pngTimer) clearTimeout(this.pngTimer);
+    if (this.snapshotTimer) clearTimeout(this.snapshotTimer);
     window.removeEventListener("pointermove", this.onDragMove);
     window.removeEventListener("pointerup", this.onDragUp);
     if (this.root.parentElement) this.root.parentElement.removeChild(this.root);
@@ -556,7 +556,7 @@ export class FishboneEditor {
     this.drawSpine(layout);
     for (const bone of layout.bones) this.drawBone(bone);
     this.drawHead(layout);
-    this.schedulePng();
+    this.scheduleSnapshot();
 
     // Fit the viewBox to the actual content so nothing (e.g. a left-side chip
     // on the leftmost bone) is clipped, and the diagram stays centred.
@@ -1016,17 +1016,17 @@ export class FishboneEditor {
     this.commit();
   }
 
-  // ---------- PNG export ----------
+  // ---------- snapshot ----------
 
-  private schedulePng(): void {
-    if (!this.onPngReady) return;
-    if (this.pngTimer) clearTimeout(this.pngTimer);
-    this.pngTimer = setTimeout(() => this.generatePng(), 400);
+  private scheduleSnapshot(): void {
+    if (!this.onSnapshot) return;
+    if (this.snapshotTimer) clearTimeout(this.snapshotTimer);
+    this.snapshotTimer = setTimeout(() => this.generateSnapshot(), 400);
   }
 
-  /** Rasterize the current SVG to a PNG data URI (2x scale, white bg). */
-  private generatePng(): void {
-    if (!this.onPngReady) return;
+  /** Serialise the current SVG into standalone markup — the card's tile. */
+  private generateSnapshot(): void {
+    if (!this.onSnapshot) return;
     const vb = this.svg.viewBox.baseVal;
     if (!vb || vb.width <= 0 || vb.height <= 0) return;
 
@@ -1049,27 +1049,7 @@ export class FishboneEditor {
     bgRect.setAttribute("fill", this.style.backgroundColor);
     clone.insertBefore(bgRect, styleEl.nextSibling);
 
-    const xml = new XMLSerializer().serializeToString(clone);
-    const src =
-      "data:image/svg+xml;charset=utf-8," + encodeURIComponent(xml);
-    const scale = 2;
-    const img = new Image();
-    img.onload = () => {
-      try {
-        const canvas = document.createElement("canvas");
-        canvas.width = Math.round(vb.width * scale);
-        canvas.height = Math.round(vb.height * scale);
-        const ctx = canvas.getContext("2d");
-        if (!ctx) return;
-        ctx.fillStyle = this.style.backgroundColor;
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        if (this.onPngReady) this.onPngReady(canvas.toDataURL("image/png"), xml);
-      } catch {
-        /* rasterization unavailable in this host — skip silently */
-      }
-    };
-    img.src = src;
+    this.onSnapshot(new XMLSerializer().serializeToString(clone));
   }
 
   // ---------- model mutations ----------

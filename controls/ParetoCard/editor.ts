@@ -10,7 +10,7 @@ import { renderKebab } from "../../shared/ui/menu";
 import { openActionManager } from "../../shared/ui/actionUi";
 import { LtkAction } from "../../shared/schema/actions";
 import { Person } from "../../shared/schema/people";
-import { htmlToPng, saveSvg, SnapshotScheduler } from "../../shared/export/png";
+import { htmlToPng, htmlToSvg, saveSvg, SnapshotScheduler } from "../../shared/export/png";
 import { newId, nowIso } from "../../shared/schema/id";
 import { ParetoEnvelope, ParetoItem, SCHEMA_ID } from "./types";
 import { PARETO_CSS } from "./styles";
@@ -27,7 +27,7 @@ const DEFAULT_GHOST = [
 
 export interface ParetoEditorCallbacks {
   onChange: (env: ParetoEnvelope) => void;
-  onPngReady?: (dataUri: string, svgMarkup?: string) => void;
+  onSnapshot?: (svgMarkup: string) => void;
   /** The full card-level action set on every change (already scoped). */
   onActions?: (actions: LtkAction[]) => void;
 }
@@ -44,7 +44,7 @@ export class ParetoEditor {
   private actions: LtkAction[] = [];
   private canRaise = true;
   private countNote = "";
-  private readonly png: SnapshotScheduler;
+  private readonly snapshots: SnapshotScheduler;
 
   constructor(
     host: HTMLElement,
@@ -59,14 +59,14 @@ export class ParetoEditor {
       meta: { title: "", updated: "" },
       data: { items: [], unit: "" },
     };
-    this.png = new SnapshotScheduler(() => this.generatePng());
+    this.snapshots = new SnapshotScheduler(() => this.generateSnapshot());
     this.render();
   }
 
   setEnvelope(env: ParetoEnvelope): void {
     this.env = env;
     this.render();
-    this.png.schedule();
+    this.snapshots.schedule();
   }
 
   setTheme(theme: Theme): void {
@@ -118,7 +118,7 @@ export class ParetoEditor {
   }
 
   destroy(): void {
-    this.png.cancel();
+    this.snapshots.cancel();
     this.root.remove();
   }
 
@@ -424,7 +424,7 @@ export class ParetoEditor {
     this.env.meta.updated = nowIso();
     this.render();
     this.cb.onChange(this.env);
-    this.png.schedule();
+    this.snapshots.schedule();
   }
 
   private editItem(item: ParetoItem | null): void {
@@ -499,16 +499,16 @@ export class ParetoEditor {
     label.focus();
   }
 
-  private generatePng(): void {
-    if (!this.cb.onPngReady) return;
-    htmlToPng(this.root, LTK_BASE_CSS + PARETO_CSS, this.theme.background, (uri, svg) =>
-      this.cb.onPngReady!(uri, svg)
+  private generateSnapshot(): void {
+    if (!this.cb.onSnapshot) return;
+    htmlToSvg(this.root, LTK_BASE_CSS + PARETO_CSS, this.theme.background, (svg) =>
+      this.cb.onSnapshot!(svg)
     );
   }
 
     private downloadSvg(): void {
-    htmlToPng(this.root, LTK_BASE_CSS + PARETO_CSS, this.theme.background, (_uri, svg) =>
-      saveSvg(svg ?? "", "pareto.svg")
+    htmlToSvg(this.root, LTK_BASE_CSS + PARETO_CSS, this.theme.background, (svg) =>
+      saveSvg(svg, "pareto.svg")
     );
   }
 

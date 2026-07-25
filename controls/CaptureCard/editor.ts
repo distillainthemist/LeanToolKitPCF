@@ -15,7 +15,7 @@ import {
 } from "../../shared/ui/dialog";
 import { parsePrompts, Prompts, renderGhost, renderTitleBar, hintFor } from "../../shared/ui/chrome";
 import { renderKebab } from "../../shared/ui/menu";
-import { htmlToPng, saveSvg, SnapshotScheduler } from "../../shared/export/png";
+import { htmlToPng, htmlToSvg, saveSvg, SnapshotScheduler } from "../../shared/export/png";
 import { newId, nowIso } from "../../shared/schema/id";
 import {
   CaptureColumn,
@@ -53,7 +53,7 @@ interface FieldEditor {
 
 export interface CaptureEditorCallbacks {
   onChange: (env: CaptureEnvelope) => void;
-  onPngReady?: (dataUri: string, svgMarkup?: string) => void;
+  onSnapshot?: (svgMarkup: string) => void;
 }
 
 export class CaptureEditor {
@@ -67,7 +67,7 @@ export class CaptureEditor {
   private prompts: Prompts = { general: [], fields: {} };
   private lastPromptsRaw: string | null = null;
   private readOnly = false;
-  private readonly png: SnapshotScheduler;
+  private readonly snapshots: SnapshotScheduler;
   private resizeObserver: ResizeObserver | null = null;
 
   constructor(
@@ -83,7 +83,7 @@ export class CaptureEditor {
       meta: { title: "", updated: "" },
       data: { rows: [] },
     };
-    this.png = new SnapshotScheduler(() => this.generatePng());
+    this.snapshots = new SnapshotScheduler(() => this.generateSnapshot());
     // a simple (no-list) card scales its text up to fill the box
     if (typeof ResizeObserver !== "undefined") {
       this.resizeObserver = new ResizeObserver(() => this.applyFontScale());
@@ -101,7 +101,7 @@ export class CaptureEditor {
     this.env = env;
     this.syncFixedRows();
     this.render();
-    this.png.schedule();
+    this.snapshots.schedule();
   }
 
   setConfig(columns: CaptureColumn[], rowHeaders: RowHeader[], titled: boolean): void {
@@ -143,7 +143,7 @@ export class CaptureEditor {
   }
 
   destroy(): void {
-    this.png.cancel();
+    this.snapshots.cancel();
     if (this.resizeObserver) this.resizeObserver.disconnect();
     this.root.remove();
   }
@@ -485,21 +485,21 @@ export class CaptureEditor {
     this.env.meta.updated = nowIso();
     this.render();
     this.cb.onChange(this.env);
-    this.png.schedule();
+    this.snapshots.schedule();
   }
 
-  // ---- PNG export ----
+  // ---- snapshot + downloads ----
 
-  private generatePng(): void {
-    if (!this.cb.onPngReady) return;
-    htmlToPng(this.root, LTK_BASE_CSS + CAPTURE_CSS, this.theme.background, (uri, svg) =>
-      this.cb.onPngReady!(uri, svg)
+  private generateSnapshot(): void {
+    if (!this.cb.onSnapshot) return;
+    htmlToSvg(this.root, LTK_BASE_CSS + CAPTURE_CSS, this.theme.background, (svg) =>
+      this.cb.onSnapshot!(svg)
     );
   }
 
     private downloadSvg(): void {
-    htmlToPng(this.root, LTK_BASE_CSS + CAPTURE_CSS, this.theme.background, (_uri, svg) =>
-      saveSvg(svg ?? "", "capture.svg")
+    htmlToSvg(this.root, LTK_BASE_CSS + CAPTURE_CSS, this.theme.background, (svg) =>
+      saveSvg(svg, "capture.svg")
     );
   }
 

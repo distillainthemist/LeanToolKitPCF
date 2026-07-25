@@ -19,7 +19,7 @@ import {
 } from "../../shared/ui/actionUi";
 import { parsePrompts, Prompts, renderTitleBar, hintFor } from "../../shared/ui/chrome";
 import { renderKebab } from "../../shared/ui/menu";
-import { htmlToPng, saveSvg, SnapshotScheduler } from "../../shared/export/png";
+import { htmlToPng, htmlToSvg, saveSvg, SnapshotScheduler } from "../../shared/export/png";
 import { LtkAction, newAction } from "../../shared/schema/actions";
 import { newId, nowIso } from "../../shared/schema/id";
 import { Person } from "../../shared/schema/people";
@@ -31,7 +31,7 @@ const SEVERITY_LABELS = ["Low", "Medium", "High"];
 
 export interface HeatmapEditorCallbacks {
   onChange: (env: HeatmapEnvelope, actions: LtkAction[]) => void;
-  onPngReady?: (dataUri: string, svgMarkup?: string) => void;
+  onSnapshot?: (svgMarkup: string) => void;
 }
 
 export class HeatmapEditor {
@@ -46,7 +46,7 @@ export class HeatmapEditor {
   private lastPromptsRaw: string | null = null;
   private readOnly = false;
   private disableActions = false; // hide the add/raise-action affordances
-  private readonly png: SnapshotScheduler;
+  private readonly snapshots: SnapshotScheduler;
   private resizeObserver: ResizeObserver | null = null;
   private stageEl: HTMLElement | null = null;
   private wrapEl: HTMLElement | null = null;
@@ -65,7 +65,7 @@ export class HeatmapEditor {
       meta: { title: "", updated: "" },
       data: { pins: [] },
     };
-    this.png = new SnapshotScheduler(() => this.generatePng());
+    this.snapshots = new SnapshotScheduler(() => this.generateSnapshot());
     // keep the image scaled to fill the stage (aspect preserved) on resize
     if (typeof ResizeObserver !== "undefined") {
       this.resizeObserver = new ResizeObserver(() => this.fitImage());
@@ -78,7 +78,7 @@ export class HeatmapEditor {
     this.env = env;
     this.actions = actions;
     this.render();
-    this.png.schedule();
+    this.snapshots.schedule();
   }
 
   setTheme(theme: Theme): void {
@@ -122,7 +122,7 @@ export class HeatmapEditor {
   }
 
   destroy(): void {
-    this.png.cancel();
+    this.snapshots.cancel();
     if (this.resizeObserver) this.resizeObserver.disconnect();
     this.root.remove();
   }
@@ -368,7 +368,7 @@ export class HeatmapEditor {
   private persistPins(): void {
     this.env.meta.updated = nowIso();
     this.cb.onChange(this.env, this.actions);
-    this.png.schedule();
+    this.snapshots.schedule();
   }
 
   private commitActions(): void {
@@ -378,7 +378,7 @@ export class HeatmapEditor {
   private emit(): void {
     this.render();
     this.cb.onChange(this.env, this.actions);
-    this.png.schedule();
+    this.snapshots.schedule();
   }
 
   private editPin(pin: HeatmapPin | null, x: number | null, y: number | null): void {
@@ -503,18 +503,18 @@ export class HeatmapEditor {
     ta.focus();
   }
 
-  // ---- PNG export ----
+  // ---- snapshot + downloads ----
 
-  private generatePng(): void {
-    if (!this.cb.onPngReady) return;
-    htmlToPng(this.root, LTK_BASE_CSS + HEATMAP_CSS, this.theme.background, (uri, svg) =>
-      this.cb.onPngReady!(uri, svg)
+  private generateSnapshot(): void {
+    if (!this.cb.onSnapshot) return;
+    htmlToSvg(this.root, LTK_BASE_CSS + HEATMAP_CSS, this.theme.background, (svg) =>
+      this.cb.onSnapshot!(svg)
     );
   }
 
     private downloadSvg(): void {
-    htmlToPng(this.root, LTK_BASE_CSS + HEATMAP_CSS, this.theme.background, (_uri, svg) =>
-      saveSvg(svg ?? "", "heatmap.svg")
+    htmlToSvg(this.root, LTK_BASE_CSS + HEATMAP_CSS, this.theme.background, (svg) =>
+      saveSvg(svg, "heatmap.svg")
     );
   }
 

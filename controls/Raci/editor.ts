@@ -12,7 +12,7 @@ import { actionRow, openActionDialog } from "../../shared/ui/actionUi";
 import { parsePrompts, Prompts, renderTitleBar } from "../../shared/ui/chrome";
 import { renderKebab } from "../../shared/ui/menu";
 import { makeInteractive } from "../../shared/interact/drag";
-import { htmlToPng, saveSvg, SnapshotScheduler } from "../../shared/export/png";
+import { htmlToPng, htmlToSvg, saveSvg, SnapshotScheduler } from "../../shared/export/png";
 import { LtkAction, newAction } from "../../shared/schema/actions";
 import { newId, nowIso } from "../../shared/schema/id";
 import { Person } from "../../shared/schema/people";
@@ -30,7 +30,7 @@ import { RACI_CSS } from "./styles";
 
 export interface RaciEditorCallbacks {
   onChange: (env: RaciEnvelope, actions: LtkAction[]) => void;
-  onPngReady?: (dataUri: string, svgMarkup?: string) => void;
+  onSnapshot?: (svgMarkup: string) => void;
 }
 
 const LABEL_COL = 200;
@@ -47,7 +47,7 @@ export class RaciEditor {
   private lastPromptsRaw: string | null = null;
   private readOnly = false;
   private disableActions = false; // hide the add/raise-action affordances
-  private readonly png: SnapshotScheduler;
+  private readonly snapshots: SnapshotScheduler;
 
   constructor(host: HTMLElement, private readonly cb: RaciEditorCallbacks) {
     ensureStylesheet("ltk-base-css", LTK_BASE_CSS);
@@ -59,7 +59,7 @@ export class RaciEditor {
       meta: { title: "", updated: "" },
       data: { roles: [], tasks: [], assign: {} },
     };
-    this.png = new SnapshotScheduler(() => this.generatePng());
+    this.snapshots = new SnapshotScheduler(() => this.generateSnapshot());
     this.render();
   }
 
@@ -67,7 +67,7 @@ export class RaciEditor {
     this.env = env;
     this.actions = actions;
     this.render();
-    this.png.schedule();
+    this.snapshots.schedule();
   }
 
   setTheme(theme: Theme): void {
@@ -103,7 +103,7 @@ export class RaciEditor {
   }
 
   destroy(): void {
-    this.png.cancel();
+    this.snapshots.cancel();
     this.root.remove();
   }
 
@@ -472,21 +472,21 @@ export class RaciEditor {
   private emit(): void {
     this.render();
     this.cb.onChange(this.env, this.actions);
-    this.png.schedule();
+    this.snapshots.schedule();
   }
 
-  // ---- PNG export ----
+  // ---- snapshot + downloads ----
 
-  private generatePng(): void {
-    if (!this.cb.onPngReady) return;
-    htmlToPng(this.root, LTK_BASE_CSS + RACI_CSS, this.theme.background, (uri, svg) =>
-      this.cb.onPngReady!(uri, svg)
+  private generateSnapshot(): void {
+    if (!this.cb.onSnapshot) return;
+    htmlToSvg(this.root, LTK_BASE_CSS + RACI_CSS, this.theme.background, (svg) =>
+      this.cb.onSnapshot!(svg)
     );
   }
 
     private downloadSvg(): void {
-    htmlToPng(this.root, LTK_BASE_CSS + RACI_CSS, this.theme.background, (_uri, svg) =>
-      saveSvg(svg ?? "", "raci.svg")
+    htmlToSvg(this.root, LTK_BASE_CSS + RACI_CSS, this.theme.background, (svg) =>
+      saveSvg(svg, "raci.svg")
     );
   }
 

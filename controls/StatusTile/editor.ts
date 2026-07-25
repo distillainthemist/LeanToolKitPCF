@@ -7,7 +7,7 @@ import { LTK_BASE_CSS } from "../../shared/ui/baseCss";
 import { clear, el, ensureStylesheet } from "../../shared/ui/dom";
 import { fieldRow, openDialog, textArea } from "../../shared/ui/dialog";
 import { parsePrompts, Prompts, renderTitleBar, hintFor } from "../../shared/ui/chrome";
-import { htmlToPng, SnapshotScheduler } from "../../shared/export/png";
+import { htmlToSvg, SnapshotScheduler } from "../../shared/export/png";
 import { nowIso } from "../../shared/schema/id";
 import { StatusTileEnvelope, SCHEMA_ID } from "./types";
 import { STATUSTILE_CSS } from "./styles";
@@ -16,7 +16,7 @@ const DEFAULT_COLOURS = ["#107c10", "#f2c811", "#d13438"];
 
 export interface StatusTileEditorCallbacks {
   onChange: (env: StatusTileEnvelope) => void;
-  onPngReady?: (dataUri: string, svgMarkup?: string) => void;
+  onSnapshot?: (svgMarkup: string) => void;
 }
 
 export class StatusTileEditor {
@@ -28,7 +28,7 @@ export class StatusTileEditor {
   private prompts: Prompts = { general: [], fields: {} };
   private lastPromptsRaw: string | null = null;
   private readOnly = false;
-  private readonly png: SnapshotScheduler;
+  private readonly snapshots: SnapshotScheduler;
 
   constructor(
     host: HTMLElement,
@@ -43,14 +43,14 @@ export class StatusTileEditor {
       meta: { title: "", updated: "" },
       data: { stateIndex: 0, reason: "" },
     };
-    this.png = new SnapshotScheduler(() => this.generatePng());
+    this.snapshots = new SnapshotScheduler(() => this.generateSnapshot());
     this.render();
   }
 
   setEnvelope(env: StatusTileEnvelope): void {
     this.env = env;
     this.render();
-    this.png.schedule();
+    this.snapshots.schedule();
   }
 
   setTheme(theme: Theme): void {
@@ -83,7 +83,7 @@ export class StatusTileEditor {
   }
 
   destroy(): void {
-    this.png.cancel();
+    this.snapshots.cancel();
     this.root.remove();
   }
 
@@ -165,7 +165,7 @@ export class StatusTileEditor {
     this.env.meta.updated = nowIso();
     this.render();
     this.cb.onChange(this.env);
-    this.png.schedule();
+    this.snapshots.schedule();
   }
 
   private editReason(): void {
@@ -193,10 +193,10 @@ export class StatusTileEditor {
     ta.focus();
   }
 
-  private generatePng(): void {
-    if (!this.cb.onPngReady) return;
-    htmlToPng(this.root, LTK_BASE_CSS + STATUSTILE_CSS, this.theme.background, (uri, svg) =>
-      this.cb.onPngReady!(uri, svg)
+  private generateSnapshot(): void {
+    if (!this.cb.onSnapshot) return;
+    htmlToSvg(this.root, LTK_BASE_CSS + STATUSTILE_CSS, this.theme.background, (svg) =>
+      this.cb.onSnapshot!(svg)
     );
   }
 }

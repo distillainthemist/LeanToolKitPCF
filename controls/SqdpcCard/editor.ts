@@ -11,7 +11,7 @@ import { openActionDialog } from "../../shared/ui/actionUi";
 import { parsePrompts, Prompts, renderTitleBar } from "../../shared/ui/chrome";
 import { renderKebab } from "../../shared/ui/menu";
 import { makeInteractive } from "../../shared/interact/drag";
-import { htmlToPng, saveSvg, SnapshotScheduler } from "../../shared/export/png";
+import { htmlToPng, htmlToSvg, saveSvg, SnapshotScheduler } from "../../shared/export/png";
 import { LtkAction, newAction } from "../../shared/schema/actions";
 import { nowIso } from "../../shared/schema/id";
 import { Person } from "../../shared/schema/people";
@@ -40,7 +40,7 @@ export interface SqdpcOptions {
 
 export interface SqdpcEditorCallbacks {
   onChange: (env: SqdpcEnvelope, actions: LtkAction[]) => void;
-  onPngReady?: (dataUri: string, svgMarkup?: string) => void;
+  onSnapshot?: (svgMarkup: string) => void;
 }
 
 export class SqdpcEditor {
@@ -58,7 +58,7 @@ export class SqdpcEditor {
   private dimensions: string[] = DEFAULT_DIMENSIONS.slice();
   private subtitles: string[] = [];
   private codes: StatusCode[] = DEFAULT_CODES.slice();
-  private readonly png: SnapshotScheduler;
+  private readonly snapshots: SnapshotScheduler;
   private resizeObserver: ResizeObserver | null = null;
 
   constructor(
@@ -74,7 +74,7 @@ export class SqdpcEditor {
       meta: { title: "", updated: "" },
       data: { month: currentMonth(), ratings: {} },
     };
-    this.png = new SnapshotScheduler(() => this.generatePng());
+    this.snapshots = new SnapshotScheduler(() => this.generateSnapshot());
     // scale the letters to fill the box whenever it resizes
     if (typeof ResizeObserver !== "undefined") {
       this.resizeObserver = new ResizeObserver(() => this.applyTileSize());
@@ -89,7 +89,7 @@ export class SqdpcEditor {
     this.env = env;
     this.actions = actions;
     this.render();
-    this.png.schedule();
+    this.snapshots.schedule();
   }
 
   setOptions(opts: SqdpcOptions): void {
@@ -138,7 +138,7 @@ export class SqdpcEditor {
   }
 
   destroy(): void {
-    this.png.cancel();
+    this.snapshots.cancel();
     if (this.resizeObserver) this.resizeObserver.disconnect();
     this.root.remove();
   }
@@ -437,21 +437,21 @@ export class SqdpcEditor {
   private emit(): void {
     this.render();
     this.cb.onChange(this.env, this.actions);
-    this.png.schedule();
+    this.snapshots.schedule();
   }
 
-  // ---- PNG export ----
+  // ---- snapshot + downloads ----
 
-  private generatePng(): void {
-    if (!this.cb.onPngReady) return;
-    htmlToPng(this.root, LTK_BASE_CSS + SQDPC_CSS, this.theme.background, (uri, svg) =>
-      this.cb.onPngReady!(uri, svg)
+  private generateSnapshot(): void {
+    if (!this.cb.onSnapshot) return;
+    htmlToSvg(this.root, LTK_BASE_CSS + SQDPC_CSS, this.theme.background, (svg) =>
+      this.cb.onSnapshot!(svg)
     );
   }
 
     private downloadSvg(): void {
-    htmlToPng(this.root, LTK_BASE_CSS + SQDPC_CSS, this.theme.background, (_uri, svg) =>
-      saveSvg(svg ?? "", "sqdpc.svg")
+    htmlToSvg(this.root, LTK_BASE_CSS + SQDPC_CSS, this.theme.background, (svg) =>
+      saveSvg(svg, "sqdpc.svg")
     );
   }
 

@@ -54,7 +54,7 @@ export function defaultStyle(): StyleConfig {
 
 export interface EditorOptions {
   onChange: (model: PmModel) => void;
-  onPngReady?: (dataUri: string, svgMarkup?: string) => void;
+  onSnapshot?: (svgMarkup: string) => void;
   /** Open the actions dialog for a kaizen burst (wrapper supplies the UI). */
   onManageActions?: (nodeId: string) => void;
   /** Open-action count shown as a badge on kaizen bursts. */
@@ -102,10 +102,10 @@ export class ProcessMapEditor {
   private readOnly = false;
   private style: StyleConfig = defaultStyle();
   private onChange: (model: PmModel) => void;
-  private onPngReady?: (dataUri: string, svgMarkup?: string) => void;
+  private onSnapshot?: (svgMarkup: string) => void;
   private onManageActions?: (nodeId: string) => void;
   private getActionBadge?: (nodeId: string) => number;
-  private pngTimer: ReturnType<typeof setTimeout> | null = null;
+  private snapshotTimer: ReturnType<typeof setTimeout> | null = null;
   private uid = newId("pm");
 
   // interaction state
@@ -128,7 +128,7 @@ export class ProcessMapEditor {
 
   constructor(container: HTMLDivElement, opts: EditorOptions) {
     this.onChange = opts.onChange;
-    this.onPngReady = opts.onPngReady;
+    this.onSnapshot = opts.onSnapshot;
     this.onManageActions = opts.onManageActions;
     this.getActionBadge = opts.getActionBadge;
     this.dlgHost = opts.dialogHost;
@@ -153,7 +153,7 @@ export class ProcessMapEditor {
     this.syncModeUi();
     this.render();
     if (fit) this.requestFit();
-    this.schedulePng();
+    this.scheduleSnapshot();
   }
 
   getModel(): PmModel {
@@ -214,7 +214,7 @@ export class ProcessMapEditor {
     window.removeEventListener("pointermove", this.onWinMove);
     window.removeEventListener("pointerup", this.onWinUp);
     window.removeEventListener("keydown", this.onKey);
-    if (this.pngTimer) clearTimeout(this.pngTimer);
+    if (this.snapshotTimer) clearTimeout(this.snapshotTimer);
     if (this.root.parentElement) this.root.parentElement.removeChild(this.root);
   }
 
@@ -1583,19 +1583,17 @@ export class ProcessMapEditor {
 
   private commit(): void {
     this.onChange(this.model);
-    this.schedulePng();
+    this.scheduleSnapshot();
   }
 
-  private schedulePng(): void {
-    if (!this.onPngReady) return;
-    if (this.pngTimer) clearTimeout(this.pngTimer);
-    this.pngTimer = setTimeout(() => {
-      this.pngTimer = null;
+  private scheduleSnapshot(): void {
+    if (!this.onSnapshot) return;
+    if (this.snapshotTimer) clearTimeout(this.snapshotTimer);
+    this.snapshotTimer = setTimeout(() => {
+      this.snapshotTimer = null;
       if (this.model.nodes.length === 0) return;
-      const { svg } = this.buildExportSvg(); // true vector — the svgExport
-      this.renderPngDataUri(2, (dataUri) => {
-        if (dataUri && this.onPngReady) this.onPngReady(dataUri, svg);
-      });
+      const { svg } = this.buildExportSvg(); // true vector — the card's tile
+      if (this.onSnapshot) this.onSnapshot(svg);
     }, 400);
   }
 }
