@@ -208,3 +208,54 @@ export function diffParetoItems(
   if (before.size > 0) defsChanged = true; // removals
   return { defsChanged, deltas };
 }
+
+// ---- batched reads ----
+
+/** A cell plus the card it belongs to — one row of a whole-board read. */
+export interface KeyedCell extends SeriesCell {
+  cardId: string;
+}
+
+/** One card's slice of a batched read. */
+export interface SeriesWindowReq {
+  cardId: string;
+  from: string;
+  to: string;
+}
+
+/**
+ * The window a single query must cover to answer every request in a batch:
+ * the union of their date ranges. Returns null for an empty batch.
+ *
+ * Dates are yyyy-mm-dd, so string comparison IS date comparison — no parsing,
+ * and no timezone to get wrong.
+ */
+export function unionWindow(
+  reqs: SeriesWindowReq[]
+): { from: string; to: string } | null {
+  if (reqs.length === 0) return null;
+  let from = reqs[0].from;
+  let to = reqs[0].to;
+  for (const r of reqs) {
+    if (r.from < from) from = r.from;
+    if (r.to > to) to = r.to;
+  }
+  return { from, to };
+}
+
+/**
+ * Split one board-wide read back into each request's own result, so a
+ * batched query is indistinguishable from the per-card queries it replaced:
+ * a card sees only its own rows, and only those inside ITS window (which may
+ * be narrower than the union that was fetched).
+ */
+export function partitionSeries(
+  rows: KeyedCell[],
+  reqs: SeriesWindowReq[]
+): SeriesCell[][] {
+  return reqs.map((req) =>
+    rows
+      .filter((r) => r.cardId === req.cardId && r.date >= req.from && r.date <= req.to)
+      .map(({ key, date, shift, value }) => ({ key, date, shift, value }))
+  );
+}

@@ -178,11 +178,37 @@ One expected difference in the harness: ProcessMap's stored default tile is
 seeded with a three-node flow, while its live tile has no document and shows
 the empty state. That is the seed doing its job, not a rendering fault.
 
-### Phase 3 — series windowing  *(the cost)*
+### Phase 3 — series windowing — ✅ **DONE 2026-07-25**
 
-One batched `listSeries` for every series card on the board, windowed to the
-instance date, fanned out to the five card types. Measure against phase 0;
-if it regresses the budget, mount only visible tiles and hydrate on scroll.
+Batched in `store/series.ts`, **not** at the call sites: `listSeries` requests
+landing in the same microtask are merged into one query over the union of
+their windows, restricted to the cards asked for, then split back up. Every
+caller sees exactly the rows it would have seen alone. A full board's five
+series cards therefore cost **one query instead of five**, and the card editor
+gets the same benefit without a line changing in any mounter.
+
+A microtask (not a timer) is the right window because every card on a board
+mounts in a single synchronous render pass, so they are all queued by the time
+it fires.
+
+The partition is pure and lives in `seriesMap.ts` (`unionWindow`,
+`partitionSeries`), which is what makes it testable without the SDK. **138
+tests, 13 new**, covering the two ways this fails silently rather than loudly:
+a card seeing another card's rows, and a card seeing rows from *outside its
+own window* because the union that was fetched was wider. Plus the coalescing
+itself — concurrent reads produce one query, separate boards do not merge,
+a flushed batch starts a fresh one, and a failed query rejects every caller
+rather than hanging them.
+
+**Deliberately not batched: `hasAnySeries`.** It is a top-1 existence probe
+that only fires when a card's window came back empty, and batching it would
+trade N tiny bounded reads for one potentially unbounded one (every row for
+every card, to derive which cards have any). Revisit only if a fresh board's
+first open actually shows the cost.
+
+Phase 0's escape hatch (mount only on-screen tiles) was **not needed**: the
+CPU comparison inverted in phase 2, and the network cost is now one query for
+the whole board.
 
 ### Phase 4 — archive split  *(the correctness guarantee)*
 
