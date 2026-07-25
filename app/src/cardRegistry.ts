@@ -118,6 +118,9 @@ export interface CardMount {
   viewer: { whoId: string; who: string };
   /** Save the document + the freshest tile svg (debounced by the caller). */
   onSave: (outputJson: string, tileSvg: string) => void;
+  /** Every fresh snapshot, even without a document edit — lets the board
+   *  editor refresh a card's tile after a settings change. */
+  onTile?: (tileSvg: string) => void;
   /** The full emitted action set on every change (already stamped). */
   onActions: (actions: LtkAction[]) => void;
 }
@@ -134,6 +137,20 @@ function config(opts: CardMount): Record<string, unknown> {
 function cfgStr(opts: CardMount, key: string): string {
   const v = config(opts)[key];
   return typeof v === "string" ? v : "";
+}
+
+/**
+ * A config value as the raw string the control parsers expect. CardSettings
+ * stores list/table fields as ARRAYS and key-value fields as OBJECTS, while
+ * chip fields store a joined string — reading those with cfgStr yielded ""
+ * and the card silently fell back to its defaults. Every parser accepts the
+ * JSON form, so non-strings are stringified here.
+ */
+function cfgRaw(opts: CardMount, key: string): string {
+  const v = config(opts)[key];
+  if (typeof v === "string") return v;
+  if (v === undefined || v === null) return "";
+  return JSON.stringify(v);
 }
 
 /** The slot's prompts as the raw string the editors' setChrome expects. */
@@ -228,14 +245,14 @@ const REGISTRY: Record<string, CardMounter> = {
     editor.setPeople(opts.people);
     editor.setReadOnly(opts.readOnly);
     const sqGranRaw = cfgStr(opts, "granularity");
-    const sqDims = parseDimensions(cfgStr(opts, "dimensions"));
+    const sqDims = parseDimensions(cfgRaw(opts, "dimensions"));
     editor.setOptions({
       granularity: (["day", "weekday", "shift2"] as const).includes(sqGranRaw as never)
         ? (sqGranRaw as SqdpcGranularity)
         : "day",
       dimensions: sqDims,
-      subtitles: parseSubtitles(cfgStr(opts, "subtitles"), sqDims),
-      codes: parseStatusCodes(cfgStr(opts, "statusCodes")),
+      subtitles: parseSubtitles(cfgRaw(opts, "subtitles"), sqDims),
+      codes: parseStatusCodes(cfgRaw(opts, "statusCodes")),
       disableActions: actionsOff(opts),
     });
     editor.setEnvelope(env, opts.actions);
@@ -271,7 +288,7 @@ const REGISTRY: Record<string, CardMounter> = {
     ).includes(granRaw as never)
       ? (granRaw as ConditionsGranularity)
       : "day";
-    const conditions = parseConditionsInput(cfgStr(opts, "conditions"));
+    const conditions = parseConditionsInput(cfgRaw(opts, "conditions"));
     const asOf = parseAsOf(instanceDay(opts.instanceWhen));
     const periods = buildPeriods(gran, asOf);
     const window = { from: periods[0].key, to: periods[periods.length - 1].key };
@@ -520,7 +537,7 @@ const REGISTRY: Record<string, CardMounter> = {
   },
   StatusTile: (opts) => {
     const s = saver(opts);
-    const states = parseStates(cfgStr(opts, "states"));
+    const states = parseStates(cfgRaw(opts, "states"));
     const parsed = parseStatusTile(opts.outputJson).envelope;
     // additive status log: every state change also upserts a day-grain
     // series row (key "state", the meeting's day, value = the label) so
@@ -639,9 +656,9 @@ const REGISTRY: Record<string, CardMounter> = {
     editor.setTheme(opts.theme);
     editor.setChrome(opts.title, promptsRaw(opts));
     editor.setReadOnly(opts.readOnly);
-    const rows = parseCaptureRows(cfgStr(opts, "rowsJSON"));
+    const rows = parseCaptureRows(cfgRaw(opts, "rowsJSON"));
     editor.setConfig(
-      parseCaptureColumns(cfgStr(opts, "columnsJSON")),
+      parseCaptureColumns(cfgRaw(opts, "columnsJSON")),
       rows.headers,
       rows.titled
     );
@@ -655,7 +672,7 @@ const REGISTRY: Record<string, CardMounter> = {
     const s = saver(opts);
     const parsed = parseFishbone(
       opts.outputJson,
-      parseCategoriesSetting(cfgStr(opts, "categories"))
+      parseCategoriesSetting(cfgRaw(opts, "categories"))
     );
     const env = parsed.envelope;
     // the model handed to the editor, rebuilt to refresh cause badges

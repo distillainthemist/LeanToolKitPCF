@@ -18,7 +18,7 @@ import { clear, el } from "../../../shared/ui/dom";
 import { appTheme } from "../cardHost";
 import { detectHost } from "../runtime";
 import { getBoard, listBoards, saveManifest } from "../store/boards";
-import { rowsForBoard, toLite } from "../store/cards";
+import { ensureLiveRow, liveRow, rowsForBoard, saveCard, toLite } from "../store/cards";
 import { catalogSvgByType } from "../store/catalog";
 import { getInstance, saveInstanceManifest } from "../store/instances";
 import { effectivelyClosed, relockOnLeave } from "../relock";
@@ -74,6 +74,72 @@ function openStandardContent(
   void import("./cardEditor").then(({ mountCardEditor }) => {
     cleanup = mountCardEditor(panel, boardId, "live", cardId, close);
   });
+}
+
+/**
+ * Re-render a card offscreen with its CURRENT settings and standard
+ * document, and store the snapshot on its live row — the board tile then
+ * reflects a settings change (dimensions, status codes, conditions…),
+ * which editing settings alone never did: tiles only refreshed when the
+ * card's CONTENT was edited. Resolves false when the card produces no
+ * snapshot (EmbedCard) or renders nothing in time.
+ */
+async function regenerateTile(
+  boardId: string,
+  slot: ManifestSlot,
+  theme: ReturnType<typeof appTheme>
+): Promise<boolean> {
+  const { cardMounter } = await import("../cardRegistry");
+  const mounter = cardMounter(slot.cardType);
+  if (!mounter) return false;
+  await ensureLiveRow(boardId, slot.cardId, slot.cardType);
+  const row = await liveRow(boardId, slot.cardId);
+  if (!row) return false;
+
+  // offscreen but laid out — a display:none host has no size, so the
+  // editors' snapshot would come out empty
+  const host = el("div");
+  host.style.cssText =
+    "position:fixed; left:-10000px; top:0; width:640px; height:420px; display:flex;";
+  document.body.appendChild(host);
+
+  let unmount: () => void = () => undefined;
+  try {
+    const svg = await new Promise<string>((resolve) => {
+      // snapshots land in ~1s locally; allow plenty of headroom on a slow
+      // device rather than silently skipping the refresh
+      const timer = setTimeout(() => resolve(""), 8000);
+      unmount = mounter({
+        host,
+        title: slot.title || cardLabel(slot.cardType),
+        boardId,
+        cardId: slot.cardId,
+        outputJson: row.outputJson,
+        people: [],
+        theme,
+        readOnly: true, // a clean tile: no affordances, no edits
+        settings: slot.settings,
+        instanceKey: "",
+        instanceWhen: "",
+        actions: [],
+        sources: [],
+        viewer: { whoId: "", who: "" },
+        onSave: () => undefined,
+        onTile: (tileSvg) => {
+          if (tileSvg.trim() === "") return;
+          clearTimeout(timer);
+          resolve(tileSvg);
+        },
+        onActions: () => undefined,
+      });
+    });
+    if (svg === "") return false;
+    await saveCard(row.id, row.outputJson, svg);
+    return true;
+  } finally {
+    unmount();
+    host.remove();
+  }
 }
 
 function mintCardId(cardType: string, taken: Set<string>): string {
@@ -317,8 +383,14 @@ async function renderComposer(
 
   // ---- persistence (debounced; layout events save immediately) ----
   let saveTimer: ReturnType<typeof setTimeout> | null = null;
+  // leaving with a debounced save still pending must FLUSH it, not cancel
+  // it — route teardown drains cleanups synchronously, so an edit made in
+  // the last 600ms before Done/Home was silently discarded.
   cleanups.push(() => {
-    if (saveTimer !== null) clearTimeout(saveTimer);
+    if (saveTimer === null) return;
+    clearTimeout(saveTimer);
+    saveTimer = null;
+    void doSave().catch((err) => console.warn("composer flush save failed", err));
   });
   const doSave = async () => {
     await target.persist(manifest);
@@ -327,10 +399,14 @@ async function renderComposer(
   const save = (immediate = false) => {
     if (saveTimer !== null) clearTimeout(saveTimer);
     if (immediate) {
+      saveTimer = null;
       void doSave();
       return;
     }
-    saveTimer = setTimeout(() => void doSave(), 600);
+    saveTimer = setTimeout(() => {
+      saveTimer = null;
+      void doSave();
+    }, 600);
   };
 
   // ---- the grid (edit mode) ----
@@ -433,6 +509,39 @@ async function renderComposer(
     head.appendChild(
       el("span", "app-composer-panetitle", slot ? "Configure card" : "Add card")
     );
+    if (slot) {
+      // settings auto-save, but an explicit save is the moment to also
+      // re-render the tile against the new settings (a settings change
+      // produces no document edit, so the tile would otherwise stay stale)
+      const saveBtn = el("button", "app-btn app-btn-primary", "Save card") as HTMLButtonElement;
+      saveBtn.title = "Save this card's settings and refresh its tile preview";
+      saveBtn.addEventListener("click", () => {
+        const busyLabel = "Saving…";
+        if (saveBtn.textContent === busyLabel) return;
+        saveBtn.textContent = busyLabel;
+        saveBtn.disabled = true;
+        save(true); // flush the manifest first — the tile renders from it
+        void (async () => {
+          let refreshed = false;
+          try {
+            refreshed = await regenerateTile(board.boardId, slot, appTheme());
+            if (refreshed) {
+              await refreshLiveSvg();
+              renderGrid();
+            }
+          } catch (err) {
+            console.warn("tile refresh failed", err);
+          } finally {
+            saveBtn.disabled = false;
+            saveBtn.textContent = "Save card";
+            status.textContent = refreshed
+              ? `saved · tile refreshed ${new Date().toLocaleTimeString()}`
+              : `saved ${new Date().toLocaleTimeString()}`;
+          }
+        })();
+      });
+      head.appendChild(saveBtn);
+    }
     if (slot && !isActionSurface(slot)) {
       // the card's standard document (e.g. the standing agenda): what a
       // new meeting starts from when there's nothing to carry. Opens as

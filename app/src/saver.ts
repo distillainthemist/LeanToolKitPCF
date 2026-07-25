@@ -7,6 +7,10 @@
 
 export function saver(opts: {
   onSave: (outputJson: string, tileSvg: string) => void;
+  /** Every fresh snapshot, even without an edit — the board editor uses
+   *  this to regenerate a card's tile after its SETTINGS change (no
+   *  document edit occurs, so onSave alone would never fire). */
+  onTile?: (tileSvg: string) => void;
 }) {
   let svg = "";
   let latestJson: string | null = null;
@@ -22,6 +26,7 @@ export function saver(opts: {
     onPng: (_uri: string, svgMarkup?: string) => {
       if (svgMarkup && svgMarkup !== svg) {
         svg = svgMarkup;
+        opts.onTile?.(svg);
         if (latestJson !== null) schedule(); // freshest snapshot always lands
       }
     },
