@@ -126,13 +126,22 @@ export function openCardStudio(opts: StudioOptions): Promise<StudioResult> {
     const panel = el("div", "app-studio-panel");
     overlay.appendChild(panel);
 
+    const typeLabel = cardLabel(opts.slot.cardType);
     const head = el("div", "app-studio-head");
     const titleWrap = el("div", "app-studio-titlewrap");
-    const titleEl = el("span", "app-studio-title", opts.slot.title || cardLabel(opts.slot.cardType));
+    const titleEl = el("span", "app-studio-title", opts.slot.title || typeLabel);
     const dot = el("span", "app-studio-dot", "•");
     dot.title = "Unsaved changes";
     dot.style.visibility = "hidden";
-    titleWrap.append(titleEl, dot, el("span", "app-studio-type", cardLabel(opts.slot.cardType)));
+    // the type is only worth showing when it is not already the title — an
+    // untitled Embed card read "Embed  Embed"
+    const typeEl = el("span", "app-studio-type", "");
+    const paintType = () => {
+      const t = titleEl.textContent ?? "";
+      typeEl.textContent = t === typeLabel ? "" : typeLabel;
+    };
+    paintType();
+    titleWrap.append(titleEl, dot, typeEl);
     head.appendChild(titleWrap);
 
     const headActions = el("div", "app-studio-headactions");
@@ -157,9 +166,10 @@ export function openCardStudio(opts: StudioOptions): Promise<StudioResult> {
       archive.title = "Take this card off the board, keeping it (and its data) to restore later";
       archive.addEventListener("click", () => {
         void (async () => {
+          const named = draft.title.trim();
           const ok = window.confirm(
-            `Archive "${opts.slot.title || cardLabel(opts.slot.cardType)}"?\n\n` +
-              "It comes off the board but keeps its settings and saved content — " +
+            (named !== "" ? `Archive "${named}"?` : `Archive this ${typeLabel} card?`) +
+              "\n\nIt comes off the board but keeps its settings and saved content — " +
               "add it back any time from ＋ Add card → Archived."
           );
           if (!ok) return;
@@ -348,7 +358,8 @@ export function openCardStudio(opts: StudioOptions): Promise<StudioResult> {
     const settingsEditor = new CardSettingsEditor(settingsHost, {
       onChange: () => {
         markDirty();
-        titleEl.textContent = draft.title.trim() || cardLabel(opts.slot.cardType);
+        titleEl.textContent = draft.title.trim() || typeLabel;
+        paintType();
         // re-render the card against the new settings once the pane is quiet
         // — instant feedback that the old "Save card, then look at the tile"
         // loop never gave. The quiet window outlasts the card saver's 400ms

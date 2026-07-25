@@ -464,6 +464,68 @@
         actions.length ? actions.join(",") : "(none)", actions.length === 0);
     }
 
+    // ---- 14. properties pane: collapsible sections, title strip in Common ----
+    {
+      window.localStorage.removeItem("ltk.cs.collapsed"); // start from all-open
+      const { result: r1 } = await withStudio("EmbedCard", {}, async () => ({
+        sections: [...document.querySelectorAll(".ltk-cs-secthead")]
+          .map((h) => h.textContent.replace(/[▾▸]/, "")),
+        // the card's long description used to sit where a title belongs
+        chosenBlock: !!q(".ltk-cs-chosen"),
+        commonFields: [...q(".ltk-cs-section").querySelectorAll(".ltk-cs-field-label")]
+          .map((l) => l.textContent.trim()).filter(Boolean),
+        headerType: q(".app-studio-type")?.textContent,
+      }));
+      report("properties are collapsible sections", r1.sections.join(" | "),
+        r1.sections.length === 3 && r1.sections[0] === "Common");
+      report("no Appearance section — the title strip moved into Common",
+        r1.commonFields.join(", "),
+        !r1.sections.includes("Appearance") &&
+        r1.commonFields[0] === "Card title" && r1.commonFields[1] === "Title strip");
+      report("the card description no longer heads the pane",
+        r1.chosenBlock ? "still there" : "gone", !r1.chosenBlock);
+      report("an untitled card does not repeat its type in the header",
+        `type chip "${r1.headerType}"`, r1.headerType === "");
+
+      // collapsing sticks across cards
+      const { result: r2 } = await withStudio("FiveWhys", {}, async () => {
+        const cfg = [...document.querySelectorAll(".ltk-cs-secthead")]
+          .find((h) => h.textContent.includes("Configuration"));
+        cfg.click();
+        await wait(40);
+        return {
+          hidden: getComputedStyle(cfg.parentElement.querySelector(".ltk-cs-sectbody")).display,
+          stored: window.localStorage.getItem("ltk.cs.collapsed"),
+        };
+      });
+      report("collapsing hides the body and is remembered",
+        `${r2.hidden} · ${r2.stored}`,
+        r2.hidden === "none" && (r2.stored ?? "").includes("Configuration"));
+
+      const { result: r3 } = await withStudio("SqdpcCard", {}, async () => ({
+        cfgOpen: [...document.querySelectorAll(".ltk-cs-secthead")]
+          .find((h) => h.textContent.includes("Configuration"))
+          ?.getAttribute("aria-expanded"),
+      }));
+      report("the choice carries to the next card opened", `expanded=${r3.cfgOpen}`,
+        r3.cfgOpen === "false");
+      window.localStorage.removeItem("ltk.cs.collapsed");
+
+      // the archive confirm names an untitled card by its type
+      const { result: r4 } = await withStudio("EmbedCard", {}, async () => {
+        const real = window.confirm;
+        let msg = null;
+        window.confirm = (m) => { msg = m; return false; };
+        [...document.querySelectorAll(".app-studio-headactions .app-btn")]
+          .find((b) => b.textContent === "Archive card").click();
+        await wait(60);
+        window.confirm = real;
+        return msg?.split("\n")[0];
+      });
+      report("the archive prompt reads well for an untitled card", r4,
+        r4 === "Archive this Embed card?");
+    }
+
     document.getElementById("summary").innerHTML = bad === 0
       ? `<p class="ok">ALL PASS</p>` : `<p class="bad">${bad} FAILURES</p>`;
 

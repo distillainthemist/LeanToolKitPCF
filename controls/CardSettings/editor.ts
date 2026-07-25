@@ -31,6 +31,28 @@ export interface CardSettingsCallbacks {
   onChange: (draft: SettingsDraft) => void;
 }
 
+/** Which property sections a maker has collapsed — remembered across cards
+ *  and sessions, so a preference is expressed once, not per card. */
+const COLLAPSED_KEY = "ltk.cs.collapsed";
+
+function loadCollapsed(): Set<string> {
+  try {
+    const raw = window.localStorage.getItem(COLLAPSED_KEY);
+    const arr = raw ? (JSON.parse(raw) as unknown) : [];
+    return new Set(Array.isArray(arr) ? arr.map(String) : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function saveCollapsed(set: Set<string>): void {
+  try {
+    window.localStorage.setItem(COLLAPSED_KEY, JSON.stringify([...set]));
+  } catch {
+    /* private mode — the choice just does not persist */
+  }
+}
+
 export class CardSettingsEditor {
   private readonly root: HTMLElement;
   private draft: SettingsDraft = emptyDraft();
@@ -45,8 +67,9 @@ export class CardSettingsEditor {
   private boards: BoardRef[] | null = null;
   /** The app state palette (paletteColor selects). */
   private palette: PaletteEntry[] = defaultStatePalette();
-  /** The app title-strip palette (the Appearance titleColor select). */
+  /** The app title-strip palette (the Common section's titleColor select). */
   private titlePalette: PaletteEntry[] = defaultTitlePalette();
+  private readonly collapsed: Set<string> = loadCollapsed();
 
   constructor(host: HTMLElement, private readonly cb: CardSettingsCallbacks) {
     ensureStylesheet("ltk-base-css", LTK_BASE_CSS);
@@ -203,17 +226,42 @@ export class CardSettingsEditor {
   }
 
   /** The chosen card's settings form. */
+  /**
+   * A collapsible section. The header toggles it, and the open/closed choice
+   * sticks (per section name, across cards and sessions) — a maker who never
+   * touches data policies should not have to skip past them on every card.
+   */
+  private section(body: HTMLElement, title: string, fill: (host: HTMLElement) => void): void {
+    const wrap = el("div", "ltk-cs-section");
+    const open = !this.collapsed.has(title);
+    const head = el("button", "ltk-cs-secthead") as HTMLButtonElement;
+    head.type = "button";
+    head.setAttribute("aria-expanded", open ? "true" : "false");
+    head.append(el("span", "ltk-cs-chev", open ? "▾" : "▸"), el("span", "", title));
+    const inner = el("div", "ltk-cs-sectbody");
+    if (!open) inner.style.display = "none";
+    head.addEventListener("click", () => {
+      const nowOpen = this.collapsed.has(title);
+      if (nowOpen) this.collapsed.delete(title);
+      else this.collapsed.add(title);
+      saveCollapsed(this.collapsed);
+      inner.style.display = nowOpen ? "" : "none";
+      head.setAttribute("aria-expanded", nowOpen ? "true" : "false");
+      (head.firstElementChild as HTMLElement).textContent = nowOpen ? "▾" : "▸";
+    });
+    wrap.append(head, inner);
+    body.appendChild(wrap);
+    fill(inner);
+  }
+
   private renderForm(body: HTMLElement): void {
     const spec = cardSpec(this.draft.cardType);
     if (!spec) return;
 
-    // A card's TYPE is chosen once, when it is added, and never changes:
-    // the config keys and the document schema are both type-specific, so
-    // switching would strip the configuration and orphan the content.
-    const head = el("div", "ltk-cs-chosen");
-    head.appendChild(el("span", "ltk-cs-chosen-label", spec.label));
-    head.appendChild(el("span", "ltk-cs-chosen-desc", spec.description));
-    body.appendChild(head);
+    // A card's TYPE is chosen once, when it is added, and never changes: the
+    // config keys and the document schema are both type-specific, so
+    // switching would strip the configuration and orphan the content. The
+    // studio's own header names the card, so this pane does not repeat it.
 
     const host: FieldHost = {
       readOnly: this.readOnly,
@@ -222,56 +270,71 @@ export class CardSettingsEditor {
       onChanged: () => this.commit(),
     };
 
-    // Common: title, prompts, read-only
-    body.appendChild(sectionLabel("Common"));
-    const common = el("div", "ltk-cs-grid");
+    // Common: title, title strip, prompts, read-only
     const [titleSpec, promptsSpec, roSpec] = COMMON_FIELDS;
-    common.appendChild(
-      renderField(
-        titleSpec,
-        () => this.draft.title,
-        (v) => {
-          this.draft.title = typeof v === "string" ? v : "";
-        },
-        host
-      )
-    );
-    common.appendChild(
-      renderPromptsField(
-        promptsSpec,
-        () => this.draft.prompts,
-        (v) => {
-          this.draft.prompts = v;
-        },
-        host
-      )
-    );
-    common.appendChild(
-      renderField(
-        roSpec,
-        () => this.draft.readOnly,
-        (v) => {
-          this.draft.readOnly = v === true;
-        },
-        host
-      )
-    );
-    body.appendChild(common);
-
-    // Card-specific configuration
-    body.appendChild(sectionLabel("Configuration"));
-    if (spec.config.length === 0) {
-      body.appendChild(
-        el(
-          "div",
-          "ltk-cs-note",
-          spec.configNote ?? "This card has no card-specific settings."
+    this.section(body, "Common", (sec) => {
+      const grid = el("div", "ltk-cs-grid");
+      grid.appendChild(
+        renderField(
+          titleSpec,
+          () => this.draft.title,
+          (v) => {
+            this.draft.title = typeof v === "string" ? v : "";
+          },
+          host
         )
       );
-    } else {
-      if (spec.configNote) {
-        body.appendChild(el("div", "ltk-cs-note", spec.configNote));
+      // the title strip sits beside the title it colours, rather than in an
+      // Appearance section of its own (it was the only field left there)
+      for (const f of THEME_FIELDS) {
+        const key = f.key as keyof ThemeDraft;
+        grid.appendChild(
+          renderField(
+            f,
+            () => this.draft.theme[key],
+            (v) => {
+              this.draft.theme[key] = typeof v === "string" ? v : "";
+            },
+            host
+          )
+        );
       }
+      grid.appendChild(
+        renderPromptsField(
+          promptsSpec,
+          () => this.draft.prompts,
+          (v) => {
+            this.draft.prompts = v;
+          },
+          host
+        )
+      );
+      grid.appendChild(
+        renderField(
+          roSpec,
+          () => this.draft.readOnly,
+          (v) => {
+            this.draft.readOnly = v === true;
+          },
+          host
+        )
+      );
+      sec.appendChild(grid);
+    });
+
+    // Card-specific configuration
+    this.section(body, "Configuration", (sec) => {
+      if (spec.config.length === 0) {
+        sec.appendChild(
+          el(
+            "div",
+            "ltk-cs-note",
+            spec.configNote ?? "This card has no card-specific settings."
+          )
+        );
+        return;
+      }
+      if (spec.configNote) sec.appendChild(el("div", "ltk-cs-note", spec.configNote));
       const cfgGrid = el("div", "ltk-cs-grid");
       for (const f of spec.config) {
         cfgGrid.appendChild(
@@ -286,37 +349,19 @@ export class CardSettingsEditor {
           )
         );
       }
-      body.appendChild(cfgGrid);
-    }
+      sec.appendChild(cfgGrid);
+    });
+
     // LinkCard (composer mode only): which board's card this one mirrors
     if (this.boards !== null && this.draft.cardType === "LinkCard") {
-      this.renderLinkSourceSection(body);
+      this.section(body, "Source", (sec) => this.renderLinkSourceSection(sec));
     }
 
     // New meeting instance (composer mode only): THIS CARD's data policy +
     // sources — each card on a board chooses its own
     if (this.boards !== null) {
-      body.appendChild(sectionLabel("New meeting instance"));
-      this.renderBoardSection(body);
+      this.section(body, "New meeting instance", (sec) => this.renderBoardSection(sec));
     }
-
-    // Appearance last — cosmetics after content (empty = inherit defaults)
-    body.appendChild(sectionLabel("Appearance"));
-    const themeGrid = el("div", "ltk-cs-grid");
-    for (const f of THEME_FIELDS) {
-      const key = f.key as keyof ThemeDraft;
-      themeGrid.appendChild(
-        renderField(
-          f,
-          () => this.draft.theme[key],
-          (v) => {
-            this.draft.theme[key] = typeof v === "string" ? v : "";
-          },
-          host
-        )
-      );
-    }
-    body.appendChild(themeGrid);
 
     if (spec.appBound.length > 0) {
       body.appendChild(
@@ -441,8 +486,8 @@ export class CardSettingsEditor {
   private renderLinkSourceSection(body: HTMLElement): void {
     const boards = this.boards ?? [];
     const cfg = this.draft.config;
+    // the collapsible section wrapper supplies the heading
     const grid = el("div", "ltk-cs-grid");
-    body.appendChild(sectionLabel("Source"));
     body.appendChild(grid);
 
     const curBoard = typeof cfg.sourceBoardId === "string" ? cfg.sourceBoardId : "";

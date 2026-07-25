@@ -270,6 +270,36 @@ export const CARDSETTINGS_CSS = `
 .ltk-cs-json-bad { border-color: #a02832 !important; }
 .ltk-cs-jsonerr { font-size: 11px; color: #a02832; }
 
+/* ---- collapsible sections ---- */
+.ltk-cs-section { display: flex; flex-direction: column; }
+.ltk-cs-secthead {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  border: 0;
+  border-top: 1px solid var(--ltk-hairline);
+  background: none;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ltk-muted);
+  text-align: left;
+  padding: 9px 2px 7px;
+  cursor: pointer;
+}
+.ltk-cs-secthead:hover { color: var(--ltk-accent); }
+.ltk-cs-section:first-child .ltk-cs-secthead { border-top: 0; padding-top: 2px; }
+.ltk-cs-chev { font-size: 9px; width: 10px; flex: none; }
+.ltk-cs-sectbody {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 2px 0 10px;
+}
+
 /* ---- state-palette select ---- */
 .ltk-cs-palette { display: inline-flex; align-items: center; gap: 6px; }
 .ltk-cs-palswatch {
