@@ -20,6 +20,7 @@ import { detectHost } from "../runtime";
 import { getBoard, listBoards, saveManifest } from "../store/boards";
 import { ensureLiveRow, liveRow, rowsForBoard, saveCard, toLite } from "../store/cards";
 import { catalogSvgByType } from "../store/catalog";
+import { mountTile } from "../cardRegistry";
 import { getInstance, saveInstanceManifest } from "../store/instances";
 import { effectivelyClosed, relockOnLeave } from "../relock";
 import { isActionSurface } from "../store/policies";
@@ -324,13 +325,19 @@ async function renderComposer(
   const catalogSvg = await catalogSvgByType();
 
   // standard-content snapshots: a card whose live (template) row has a
-  // tile SVG previews with it instead of the generic catalog art
+  // tile SVG previews with it instead of the generic catalog art. Kept as
+  // the fallback for when live previews are unavailable.
   let liveSvg: Record<string, string> = {};
+  /** The live (template) row's document per card — what a live preview renders. */
+  let liveDoc: Record<string, string> = {};
   const refreshLiveSvg = async () => {
     const rows = await rowsForBoard(board.boardId);
     liveSvg = {};
-    for (const r of toLite(rows)) {
-      if (r.instanceId === "" && r.tileSvg !== "") liveSvg[r.cardId] = r.tileSvg;
+    liveDoc = {};
+    for (const r of rows) {
+      if (r.instanceId !== "") continue;
+      if (r.tileSvg !== "") liveSvg[r.cardId] = r.tileSvg;
+      liveDoc[r.cardId] = r.outputJson;
     }
   };
   await refreshLiveSvg();
@@ -441,6 +448,33 @@ async function renderComposer(
   });
   gridView.setTheme(appTheme());
   gridView.setEditMode(true);
+  // Live previews while designing: the composer shows what each slot will
+  // actually look like in current styling, rather than generic catalog art
+  // that froze whenever the defaults were last generated. Embeds are left
+  // to the stored path — a board being edited should not fire off report
+  // loads (and the frames belong to a board being RUN, not designed).
+  gridView.setLiveRenderer((host, tile) => {
+    if (tile.cardType === "EmbedCard") return () => undefined;
+    const slot = manifest.slots.find((sl) => sl.cardId === tile.cardId);
+    if (!slot) return () => undefined;
+    const theme = appTheme();
+    const themeCfg = (slot.settings.theme ?? {}) as Record<string, unknown>;
+    if (typeof themeCfg.titlebar === "string") theme.titleBar = themeCfg.titlebar;
+    return (
+      mountTile(tile.cardType, {
+        host,
+        title: slot.title,
+        boardId: board.boardId,
+        cardId: tile.cardId,
+        outputJson: liveDoc[tile.cardId] ?? "",
+        theme,
+        settings: slot.settings,
+        instanceKey: `${board.boardId}:${tile.cardId}`,
+        instanceWhen: "",
+        actions: [],
+      }) ?? (() => undefined)
+    );
+  });
   cleanups.push(() => gridView.destroy());
 
   const previewTiles = (): BoardTile[] =>

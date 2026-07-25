@@ -23,12 +23,11 @@ export interface MeetingViewCallbacks {
   /** The + on an uncreated row — create this meeting's record. */
   onCreate?: (instance: MeetingInstance) => void;
   /** A kebab menu action on a created row. */
-  onMenu?: (instance: MeetingInstance, action: "edit" | "reset" | "move") => void;
-  /** Adjust the board layout for the SELECTED meeting. Offered on the pane
-   *  kebab only while setCanAdjustLayout(true) — the host decides, since
-   *  whether a meeting may diverge from its ritual is the board's rule. */
-  onAdjustLayout?: () => void;
+  onMenu?: (instance: MeetingInstance, action: RowMenuAction) => void;
 }
+
+/** A record kebab action. "adjust" arrives only for an open meeting. */
+export type RowMenuAction = "edit" | "reset" | "move" | "adjust";
 
 interface MenuItem {
   label: string;
@@ -122,7 +121,8 @@ export class MeetingSchedulerView {
     this.meetingLink = url;
   }
 
-  /** Whether "Adjust board layout for this meeting" is offered. */
+  /** Whether a meeting's kebab offers "Adjust board layout…" at all — the
+   *  ritual's own setting. Closed meetings never get it regardless. */
   setCanAdjustLayout(on: boolean): void {
     // no re-render: the menu reads this when it opens
     this.canAdjustLayout = on;
@@ -224,13 +224,19 @@ export class MeetingSchedulerView {
 
   /** The kebab's record operations, anchored under the button. */
   private openRowMenu(inst: MeetingInstance, anchor: HTMLElement): void {
-    const items: { label: string; action: "edit" | "reset" | "move" }[] =
-      inst.closed
-        ? [{ label: "Edit meeting", action: "edit" }]
-        : [
-            { label: "Reset to newly created", action: "reset" },
-            { label: "Change date/time…", action: "move" },
-          ];
+    const items: { label: string; action: RowMenuAction }[] = inst.closed
+      ? [{ label: "Edit meeting", action: "edit" }]
+      : [
+          { label: "Reset to newly created", action: "reset" },
+          { label: "Change date/time…", action: "move" },
+        ];
+    // Adjusting the layout belongs to ONE meeting, so it lives on that
+    // meeting's kebab rather than the pane's. Never for a closed meeting:
+    // its board is the archive, and changing the layout would rewrite what
+    // a past meeting appears to have been.
+    if (this.canAdjustLayout && !inst.closed && inst.recordId !== "" && !this.readOnly) {
+      items.push({ label: "Adjust board layout…", action: "adjust" });
+    }
     this.openMenu(
       anchor,
       items.map((item) => ({
@@ -253,12 +259,6 @@ export class MeetingSchedulerView {
           this.adhocOpen = true;
           this.render();
         },
-      });
-    }
-    if (this.cb.onAdjustLayout && this.canAdjustLayout && !this.readOnly) {
-      items.push({
-        label: "Adjust board layout for this meeting",
-        run: () => this.cb.onAdjustLayout?.(),
       });
     }
     if (this.meetingLink !== "") {

@@ -4,7 +4,6 @@
 // drift from the deployed code.
 
 import { buildCatalogJson } from "../../../controls/CardSettings/registry";
-import tileDefaults from "../../../tools/tile-defaults.json";
 import { Ben_ltkcardcatalogsService } from "../generated/services/Ben_ltkcardcatalogsService";
 import { allWhere, eq, upsertWhere } from "./dv";
 
@@ -28,7 +27,13 @@ export async function selfHealCatalog(): Promise<void> {
   if (healed && rows.length > 0) return;
 
   const entries = JSON.parse(buildCatalogJson()) as CatalogEntry[];
-  const svgs = (tileDefaults as { tiles: Record<string, string> }).tiles;
+  // Loaded HERE rather than imported at the top: the defaults are ~290KB —
+  // 96% of this module's chunk — and are needed only on the rare open that
+  // actually heals. A static import shipped them to every user on every
+  // load to be thrown away. Vite emits them as their own chunk, fetched
+  // only when this line runs.
+  const { tiles: svgs } = (await import("../../../tools/tile-defaults.json"))
+    .default as { tiles: Record<string, string> };
   for (const entry of entries) {
     await upsertWhere(
       Ben_ltkcardcatalogsService,

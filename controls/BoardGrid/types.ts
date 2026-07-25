@@ -22,6 +22,13 @@ export interface BoardTile {
   barColor: string;
   /** Meeting navigation order (distinct from layout pos); 0 = unset. */
   nav: number;
+  /**
+   * Nothing was ever saved for this card in this meeting — the tile is the
+   * card type's generic empty state, not a record of what was there. Shown
+   * as a badge so an empty card on a past board cannot be mistaken for one
+   * that was filled in and happened to look sparse.
+   */
+  noData?: boolean;
 }
 
 /**

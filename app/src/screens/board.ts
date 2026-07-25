@@ -336,9 +336,9 @@ async function renderBoard(
     status.textContent =
       `${current.when.slice(0, 16).replace("T", " ")} — ${current.status}` +
       (adjusted ? " · adjusted layout" : "");
-    // adjusting a meeting's layout is a property OF that meeting, so it
-    // lives on the schedule pane's kebab rather than the board toolbar
-    schedulerView.setCanAdjustLayout(instancesAdjustable && current.status === "open");
+    // whether the RITUAL allows per-meeting divergence; the scheduler adds
+    // the per-meeting rule (created, and never for a closed one)
+    schedulerView.setCanAdjustLayout(instancesAdjustable);
     // the selected meeting decides live vs archive, so re-evaluate here
     applyLiveMode();
   };
@@ -400,11 +400,6 @@ async function renderBoard(
     onAddAdhoc: (iso) => {
       void createAndSelect(`${iso}:00Z`, true);
     },
-    // offered only while setCanAdjustLayout(true) — an open meeting on a
-    // ritual whose settings allow per-meeting divergence
-    onAdjustLayout: () => {
-      if (current) window.location.hash = `#/adjust/${board.boardId}/${current.id}`;
-    },
     // the explicit + on an uncreated row — no confirmation needed
     onCreate: (inst) => {
       void createAndSelect(`${inst.iso}:00Z`);
@@ -412,6 +407,11 @@ async function renderBoard(
     onMenu: (inst, action) => {
       const rec = instances.find((i) => i.id === inst.recordId);
       if (!rec) return;
+      if (action === "adjust") {
+        // the scheduler only offers this for an open, created meeting
+        window.location.hash = `#/adjust/${board.boardId}/${rec.id}`;
+        return;
+      }
       const dlgHost = (leftHost.querySelector(".ltk-root") as HTMLElement) ?? leftHost;
       if (action === "edit") {
         // a closed meeting reopens for editing; leaving this meeting's

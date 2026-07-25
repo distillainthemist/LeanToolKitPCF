@@ -30,11 +30,15 @@ export function joinTiles(
     const live =
       slotPolicy(slot) === "shared" ? (liveRow(slot.cardId)?.tileSvg ?? "") : "";
     const fallback = catalogSvgByType[slot.cardType] ?? "";
+    // neither this meeting's row nor a shared card's live row held a tile,
+    // so nothing was ever saved here and the fallback art is generic
+    const noData = own === "" && live === "";
     return {
       pos: slot.pos,
       w: slot.w,
       h: slot.h,
       nav: slot.nav,
+      noData,
       cardId: slot.cardId,
       cardType: slot.cardType,
       title: slot.title,

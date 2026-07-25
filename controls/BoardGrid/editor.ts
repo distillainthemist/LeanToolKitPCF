@@ -429,6 +429,11 @@ export class BoardGridView {
         chip.style.color = textOn(tile.barColor);
       }
       chip.appendChild(el("span", "ltk-bg-chip-title", barText));
+      if (tile.noData) {
+        const badge = el("span", "ltk-bg-nodata", "no data");
+        badge.title = "Nothing was recorded on this card";
+        chip.appendChild(badge);
+      }
       if (canEdit) {
         // meeting navigation order — distinct from the layout pos
         const nav = el("input", "ltk-bg-nav") as HTMLInputElement;

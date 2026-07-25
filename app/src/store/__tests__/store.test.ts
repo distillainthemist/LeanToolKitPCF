@@ -159,3 +159,33 @@ describe("embedPreloadEnabled", () => {
     expect(embedPreloadEnabled({ config: "nonsense" as unknown as object })).toBe(true);
   });
 });
+
+describe("joinTiles noData flag", () => {
+  const slot = {
+    pos: 1, w: 1, h: 1, nav: 0, cardId: "c1", cardType: "FiveWhys",
+    title: "Top issue", settings: {},
+  } as unknown as Parameters<typeof joinTiles>[0][number];
+
+  it("flags a card that was never saved in this meeting", () => {
+    const [tile] = joinTiles([slot], "i1", [], { FiveWhys: "<svg/>" });
+    expect(tile.noData).toBe(true);
+    expect(tile.svg).toBe("<svg/>"); // still shows the empty-state art
+  });
+
+  it("does not flag a card with its own saved tile", () => {
+    const [tile] = joinTiles(
+      [slot],
+      "i1",
+      [{ cardId: "c1", instanceId: "i1", tileSvg: "<svg>real</svg>" }],
+      { FiveWhys: "<svg/>" }
+    );
+    expect(tile.noData).toBe(false);
+  });
+
+  it("does not flag when only the catalog default is missing", () => {
+    // no art AND no rows: still nothing recorded, so the flag stands
+    const [tile] = joinTiles([slot], "i1", [], {});
+    expect(tile.noData).toBe(true);
+    expect(tile.svg).toBe("");
+  });
+});

@@ -93,6 +93,22 @@ export const BOARDGRID_CSS = `
 /* with a title bar, the snapshot sits below it rather than sliding under */
 .ltk-bg-haschip .ltk-bg-snap { top: 28px; }
 .ltk-bg-snap img { width: 100%; height: 100%; object-fit: contain; object-position: center top; pointer-events: none; }
+/* "no data" badge: a card that was never filled in. Muted rather than
+   alarming — it is a statement of fact about a past meeting, not a fault. */
+.ltk-bg-nodata {
+  flex: 0 0 auto;
+  margin-left: 6px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  border: 1px solid currentColor;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  opacity: 0.72;
+  white-space: nowrap;
+}
+
 .ltk-bg-snap .ltk-bg-nosnap {
   font-size: 12.5px;
   color: var(--ltk-muted);
