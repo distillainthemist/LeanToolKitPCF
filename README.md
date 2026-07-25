@@ -4,13 +4,12 @@ A suite of lean-board cards with a shared Flat 2.0 design system and common
 JSON contracts, shipped as the **LeanBoard code app** (`app/`).
 
 > **The PCF/canvas target is retired.** These cards began as PowerApps
-> Component Framework controls; the code app is now the sole product, and
-> releases no longer build or attach the controls solution. The last
-> importable `LeanToolKit_*.zip` pair is on the **v0.12.0** release — the
-> permanent archive. Rationale and phases:
+> Component Framework controls; the code app is now the sole product. The
+> wrappers, manifests, generated types and solution project have been
+> removed — the last importable `LeanToolKit_*.zip` pair is on the
+> **v0.12.0** release, the permanent archive. Rationale and phases:
 > [docs/leanboard-pcf-retirement-plan.md](docs/leanboard-pcf-retirement-plan.md).
-> The card editors under `controls/<Name>/` are unaffected: they are
-> platform-free classes the app mounts directly.
+> The cards themselves were untouched by the removal.
 
 See [LeanToolKit_ImplementationPlan.md](LeanToolKit_ImplementationPlan.md)
 for the full architecture, component specs and roadmap, and
@@ -89,9 +88,9 @@ controls/<Name>/ one folder per card (editor, styles, types, model)
 app/             the LeanBoard code app — mounts the editors, owns the data
 ```
 
-The PCF-only files still present under `controls/<Name>/` (`index.ts`,
-`generated/`, `ControlManifest.Input.xml`) plus `Solution/` are dormant and
-scheduled for removal in phase 2 of the retirement plan.
+Each card is a platform-free editor class: it owns its DOM, takes plain
+strings and callbacks, and knows nothing about its host. The app mounts them
+directly (`app/src/cardRegistry.ts`).
 
 ## Build & test
 

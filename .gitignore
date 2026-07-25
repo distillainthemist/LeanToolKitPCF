@@ -1,23 +1,12 @@
-# PCF / Node
+# Node
 node_modules/
-out/
-obj/
-bin/
-.vs/
-**/generated/
-# …but the code app's pac-generated typed clients are source, not build output
-!app/src/generated/
-!app/src/generated/**
 
 # code-app build + solution exports
 app/dist/
 data/dist/
-*.pcfproj.user
-Solution/bin/
-Solution/obj/
 
-# pcf-scripts writes a stray literal ~ dir on some setups
+# leftover from pcf-scripts, which wrote a stray literal ~ dir on some setups
 ~/
+
 .DS_Store
 tools/safari-tile-spike.html
-app/dist/

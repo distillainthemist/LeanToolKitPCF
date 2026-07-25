@@ -229,11 +229,17 @@ scales CSS transforms correctly. Tiles therefore stay **`svgExport` markup
 path remains available as a per-card fallback.
 
 - **A — generated defaults (baseline):** every control renders a meaningful
-  empty state; `node tools/tile-defaults.js` serves the generator that
-  captures each card's empty-state `svgExport` and writes
-  `tools/tile-defaults.json` (`{generated, format: "svg-markup", tiles:
-  {cardType: svg}}`). Regenerate per release; seed the Card Catalog table
-  from it.
+  empty state; the generator captures each card's empty-state `svgExport`
+  and writes `tools/tile-defaults.json` (`{generated, format: "svg-markup",
+  tiles: {cardType: svg}}`), which `app/src/store/catalog.ts` imports to seed
+  the Card Catalog table.
+
+  > **The generator is currently unrunnable.** `node tools/tile-defaults.js`
+  > served the page over the PCF build output, which retired
+  > ([leanboard-pcf-retirement-plan.md](leanboard-pcf-retirement-plan.md)).
+  > `tools/tile-defaults.json` is committed and still consumed, but it cannot
+  > be regenerated until the generator is ported onto the editor classes — so
+  > the shipped defaults will drift as card empty states change.
 - **C — hand-authored:** EmbedCard / CardSettings / MeetingScheduler have no
   snapshot outputs by design; the generator includes a static placeholder
   for the one that can sit on a board (EmbedCard).

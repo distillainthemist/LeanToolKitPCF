@@ -1,14 +1,22 @@
 #!/usr/bin/env node
-// Serve the tile-defaults generator (tools/tile-defaults.html) over the built
-// control bundles. The page instantiates every snapshot-capable control with
-// EMPTY inputs, harvests its empty-state svgExport, and offers the combined
-// tile-defaults.json for download — the seed for the LTK Card Catalog table
-// (see docs/master-leanboard.md, "Tile defaults").
+// ⚠️  DOES NOT RUN — needs the retired PCF build.
 //
+// This generator serves tools/tile-defaults.html over out/controls/*/bundle.js,
+// which `npm run build` produced from the PCF wrappers. Those wrappers were
+// deleted when the PCF target retired
+// (docs/leanboard-pcf-retirement-plan.md), so there is no out/controls to
+// serve. To run it as-is, check out the v0.12.0 archive tag and build there.
+//
+// Its OUTPUT is still live: tools/tile-defaults.json is imported by
+// app/src/store/catalog.ts and seeds each card type's empty-state tile in the
+// LTK Card Catalog. That file is committed and unaffected — it simply cannot
+// be regenerated until this is ported to mount the editor classes directly
+// (see the retirement plan's follow-up note). The page's logic is kept as the
+// reference for that port.
+//
+// Original usage:
 //   npm run build
 //   PORT=8295 node tools/tile-defaults.js     → open http://localhost:8295
-//
-// Regenerate per release and commit tools/tile-defaults.json.
 
 "use strict";
 

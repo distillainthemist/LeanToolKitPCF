@@ -76,7 +76,38 @@ was not merely unused, it was never deployed.
 - Verify: push a throwaway tag on a branch or dry-run the workflows;
   release asset list = App zip + LeanBoard managed zip only.
 
-## Phase 2 — delete the PCF-only surface  *(mechanical; big diff, low risk)*
+## Phase 2 — delete the PCF-only surface — ✅ **DONE 2026-07-25**
+
+Deleted as planned, plus three items the plan hadn't listed: `eslint.config.mjs`
+(a no-op stub that existed only to satisfy pcf-scripts' build-time lint — it
+ignored every file type it could parse, and eslint was only a transitive dep of
+pcf-scripts), the PCF-era `.gitignore` rules, and the root `npm ci` step in
+release.yml's board-app job (the app builds without root deps once the tsconfig
+is standalone — verified by stashing `node_modules`).
+
+Reality differed from two assumptions: `.claude/launch.json` had a single
+`pcf-harness` entry rather than ~30 `ltk-*` ones, and `controls/*/generated/`
+was gitignored, so it needed `rm` rather than `git rm`.
+
+**Results:** root install 3 packages / 0.8s (was the full webpack toolchain);
+root tsc, app tsc, 125/125 tests and app build all pass; the app bundle hashes
+are **byte-identical** to the pre-deletion build, which is the strongest form
+of the "no behaviour change" contract.
+
+**Follow-up this exposed — the tile-defaults generator.**
+`tools/tile-defaults.js` + `.html` served their page over `out/controls/*/
+bundle.js` and so no longer run, while their output `tools/tile-defaults.json`
+is still imported by `app/src/store/catalog.ts` to seed each card type's
+empty-state tile in the Card Catalog. The JSON is committed and unaffected, but
+it cannot be regenerated, so shipped defaults drift as empty states change
+(the recent title-bar removal and SQDPC centring already changed some). Both
+files carry ⚠️ banners and are kept as the reference for the port. To port:
+replace `loadBundle`/`ctorFor`/`emptyContext`/`getOutputs()` polling with direct
+ESM imports of the editor classes plus their snapshot hook — the wrinkle is
+per-card construction, which `app/src/cardRegistry.ts` encodes but couples to
+Dataverse reads the generator must not make. Worth its own sitting.
+
+Original scope, for reference:
 
 Delete:
 - `controls/*/index.ts`, `controls/*/generated/`,

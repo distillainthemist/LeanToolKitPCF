@@ -1,7 +1,21 @@
 {
-  "extends": "./node_modules/pcf-scripts/tsconfig_base.json",
+  // Standalone since the PCF target was retired — this used to extend
+  // pcf-scripts/tsconfig_base.json. The compilerOptions below are that base's
+  // effective settings, captured from `tsc --showConfig` before the dependency
+  // was removed, so controls/ and shared/ compile exactly as they did.
+  // (docs/leanboard-pcf-retirement-plan.md)
+  //
+  // The code app has its own config in app/tsconfig.json; this one covers the
+  // shared design system and the card editors the app imports from controls/.
   "compilerOptions": {
+    "jsx": "react",
+    "target": "es6",
+    "module": "es2020",
+    "moduleResolution": "node",
+    "lib": ["ES2020", "DOM"],
+    "strict": true,
+    "strictPropertyInitialization": false,
     "typeRoots": ["node_modules/@types"]
   },
-  "exclude": ["node_modules", "out", "Solution", "app", "tools", "dev"]
+  "exclude": ["node_modules", "app", "tools", "data"]
 }
