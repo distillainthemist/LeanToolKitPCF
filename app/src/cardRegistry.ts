@@ -311,7 +311,9 @@ const REGISTRY: Record<string, CardMounter> = {
     });
     editor.setTheme(opts.theme);
     editor.setChrome(opts.title, promptsRaw(opts));
+    editor.setPeople(opts.people); // the action assignee roster
     editor.setReadOnly(opts.readOnly);
+    editor.setDisableActions(actionsOff(opts));
     editor.setOptions({ granularity: gran, conditions, asOf });
     editor.setEnvelope(env, opts.actions);
     void (async () => {
@@ -347,7 +349,12 @@ const REGISTRY: Record<string, CardMounter> = {
     });
     editor.setTheme(opts.theme);
     editor.setChrome(opts.title, promptsRaw(opts));
+    editor.setPeople(opts.people); // the action assignee roster
     editor.setReadOnly(opts.readOnly);
+    editor.setOptions({
+      showStatus: config(opts).showStatus === true,
+      disableActions: actionsOff(opts),
+    });
     editor.setEnvelope(parseFiveWhys(opts.outputJson).envelope, opts.actions);
     return () => opts.host.replaceChildren();
   },
@@ -725,6 +732,8 @@ const REGISTRY: Record<string, CardMounter> = {
         ),
       getActionBadge: mgr.badge,
     });
+    // a closed meeting locks the diagram itself, not just its actions
+    editor.setReadOnly(opts.readOnly);
     editor.setDisableActions(opts.readOnly || actionsOff(opts));
     editor.setModel(modelOf());
     return () => opts.host.replaceChildren();
