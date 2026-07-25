@@ -217,3 +217,43 @@ describe("joinTiles noData flag", () => {
     expect(tile.svg).toBe("");
   });
 });
+
+describe("archived slots (card-studio plan, phase 0)", () => {
+  const withArchive = JSON.stringify({
+    grid: "3",
+    columnTitles: [],
+    slots: [{ pos: 1, cardId: "live-1", cardType: "Fishbone", title: "On board" }],
+    archivedSlots: [
+      {
+        pos: 4, w: 2, h: 1, nav: 3, cardId: "old-1", cardType: "ParetoCard",
+        title: "Retired pareto", settingsJSON: { config: { unit: "defects" } },
+      },
+    ],
+  });
+
+  it("parses archived slots separately from the live ones", () => {
+    const m = parseManifest(withArchive);
+    expect(m.slots.map((s) => s.cardId)).toEqual(["live-1"]);
+    expect(m.archivedSlots).toHaveLength(1);
+    expect(m.archivedSlots[0]).toMatchObject({
+      cardId: "old-1", cardType: "ParetoCard", title: "Retired pareto", pos: 4, w: 2, nav: 3,
+    });
+    // settings survive, so restoring a card brings its configuration back
+    expect(m.archivedSlots[0].settings).toEqual({ config: { unit: "defects" } });
+  });
+
+  it("round-trips, and omits the key entirely when nothing is archived", () => {
+    const m = parseManifest(withArchive);
+    expect(parseManifest(serializeManifest(m))).toEqual(m);
+    const plain = parseManifest(manifestRaw);
+    expect(plain.archivedSlots).toEqual([]);
+    expect(JSON.parse(serializeManifest(plain))).not.toHaveProperty("archivedSlots");
+  });
+
+  it("archived cards reach no consumer: not tiles, not seeding, not the close archive", () => {
+    const m = parseManifest(withArchive);
+    // every consumer reads manifest.slots, which archived cards are not in
+    expect(joinTiles(m.slots, "inst", [], {})).toHaveLength(1);
+    expect(archiveSlots(m.slots).map((a) => a.cardId)).not.toContain("old-1");
+  });
+});

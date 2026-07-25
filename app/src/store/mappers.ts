@@ -61,65 +61,92 @@ export interface BoardManifest {
   grid: string;
   columnTitles: string[];
   slots: ManifestSlot[];
+  /**
+   * Cards taken off the board but kept for later (board setup's Archive).
+   * A SEPARATE array rather than a flag on `slots` on purpose: `slots` has
+   * many consumers — the tiles join, instance seeding, the close-meeting
+   * archive, the board render, the editor's walk sequence, the link and
+   * escalation source pickers — and one missed filter would silently
+   * resurrect or re-seed an archived card. Keeping them out of `slots`
+   * leaves every existing consumer correct with no change.
+   */
+  archivedSlots: ManifestSlot[];
+}
+
+function parseSlots(raw: unknown): ManifestSlot[] {
+  const slots: ManifestSlot[] = [];
+  if (!Array.isArray(raw)) return slots;
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+    const s = item as Record<string, unknown>;
+    const cardId = typeof s.cardId === "string" ? s.cardId : "";
+    if (cardId === "") continue;
+    const settings =
+      s.settingsJSON && typeof s.settingsJSON === "object"
+        ? (s.settingsJSON as Record<string, unknown>)
+        : typeof s.settingsJSON === "string" && s.settingsJSON.trim().startsWith("{")
+          ? (JSON.parse(s.settingsJSON) as Record<string, unknown>)
+          : {};
+    slots.push({
+      pos: Number(s.pos) >= 1 ? Math.round(Number(s.pos)) : 0,
+      w: Number(s.w) >= 1 ? Math.round(Number(s.w)) : 1,
+      h: Number(s.h) >= 1 ? Math.round(Number(s.h)) : 1,
+      nav: Number(s.nav) >= 1 ? Math.round(Number(s.nav)) : 0,
+      cardId,
+      cardType: typeof s.cardType === "string" ? s.cardType : "",
+      title: typeof s.title === "string" ? s.title : "",
+      settings,
+    });
+  }
+  return slots;
 }
 
 export function parseManifest(raw: string): BoardManifest {
-  const empty: BoardManifest = { grid: "3", columnTitles: [], slots: [] };
+  const empty: BoardManifest = {
+    grid: "3",
+    columnTitles: [],
+    slots: [],
+    archivedSlots: [],
+  };
   const t = raw.trim();
   if (t === "" || !t.startsWith("{")) return empty;
   try {
     const o = JSON.parse(t) as Record<string, unknown>;
-    const slots: ManifestSlot[] = [];
-    if (Array.isArray(o.slots)) {
-      for (const item of o.slots) {
-        if (!item || typeof item !== "object") continue;
-        const s = item as Record<string, unknown>;
-        const cardId = typeof s.cardId === "string" ? s.cardId : "";
-        if (cardId === "") continue;
-        const settings =
-          s.settingsJSON && typeof s.settingsJSON === "object"
-            ? (s.settingsJSON as Record<string, unknown>)
-            : typeof s.settingsJSON === "string" && s.settingsJSON.trim().startsWith("{")
-              ? (JSON.parse(s.settingsJSON) as Record<string, unknown>)
-              : {};
-        slots.push({
-          pos: Number(s.pos) >= 1 ? Math.round(Number(s.pos)) : 0,
-          w: Number(s.w) >= 1 ? Math.round(Number(s.w)) : 1,
-          h: Number(s.h) >= 1 ? Math.round(Number(s.h)) : 1,
-          nav: Number(s.nav) >= 1 ? Math.round(Number(s.nav)) : 0,
-          cardId,
-          cardType: typeof s.cardType === "string" ? s.cardType : "",
-          title: typeof s.title === "string" ? s.title : "",
-          settings,
-        });
-      }
-    }
     return {
       grid: typeof o.grid === "string" && o.grid !== "" ? o.grid : "3",
       columnTitles: Array.isArray(o.columnTitles)
         ? o.columnTitles.map((v) => String(v ?? ""))
         : [],
-      slots,
+      slots: parseSlots(o.slots),
+      archivedSlots: parseSlots(o.archivedSlots),
     };
   } catch {
     return empty;
   }
 }
 
+function slotToJson(s: ManifestSlot) {
+  return {
+    pos: s.pos,
+    w: s.w,
+    h: s.h,
+    nav: s.nav,
+    cardId: s.cardId,
+    cardType: s.cardType,
+    title: s.title,
+    settingsJSON: s.settings,
+  };
+}
+
 export function serializeManifest(manifest: BoardManifest): string {
   return JSON.stringify({
     grid: manifest.grid,
     columnTitles: manifest.columnTitles,
-    slots: manifest.slots.map((s) => ({
-      pos: s.pos,
-      w: s.w,
-      h: s.h,
-      nav: s.nav,
-      cardId: s.cardId,
-      cardType: s.cardType,
-      title: s.title,
-      settingsJSON: s.settings,
-    })),
+    slots: manifest.slots.map(slotToJson),
+    // omitted entirely when empty, so existing manifests round-trip byte-clean
+    ...(manifest.archivedSlots.length > 0
+      ? { archivedSlots: manifest.archivedSlots.map(slotToJson) }
+      : {}),
   });
 }
 

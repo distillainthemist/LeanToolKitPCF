@@ -78,6 +78,21 @@ export interface CardSpec {
    * row is its document and each close archives the tile image.
    */
   seriesBacked?: boolean;
+  /**
+   * What the card studio's left pane is for this card (default "edit"):
+   *
+   *  - `"edit"` — the card's live row IS its standard content, so the pane
+   *    is the real editor and what you leave there is what a new meeting
+   *    starts from;
+   *  - `"preview"` — the card has no standard content to author (its data
+   *    is a dated series, the live actions table, or another board's card),
+   *    so the pane renders read-only and says why. This also keeps Cancel
+   *    honest: a read-only pane cannot trigger the direct series writes
+   *    that would escape the studio's buffer.
+   */
+  standardContent?: "edit" | "preview";
+  /** Why the studio's left pane is read-only (shown with the preview). */
+  standardContentNote?: string;
 }
 
 /** Picker group display order. */
@@ -217,6 +232,9 @@ export const CARDS: CardSpec[] = [
   },
   {
     type: "ActionBoard",
+    standardContent: "preview",
+    standardContentNote:
+      "This card renders the live actions table — there is no standard content to author.",
     label: "Actions",
     group: "Action management",
     description: "Every action in one place — list, kanban or gantt.",
@@ -271,6 +289,9 @@ export const CARDS: CardSpec[] = [
   },
   {
     type: "ParetoCard",
+    standardContent: "preview",
+    standardContentNote:
+      "This card's data is a dated series — every meeting shows its own window of it. There is nothing to pre-fill; configure the card on the right.",
     label: "Pareto",
     group: "Performance",
     description: "Descending count bars with the cumulative % line.",
@@ -298,6 +319,9 @@ export const CARDS: CardSpec[] = [
   },
   {
     type: "KpiTrendCard",
+    standardContent: "preview",
+    standardContentNote:
+      "This card's data is a dated series — every meeting shows its own window of it. There is nothing to pre-fill; configure the card on the right.",
     label: "KPI trend",
     group: "Performance",
     description: "Run chart with target and spec limits (USL/LSL).",
@@ -396,6 +420,9 @@ export const CARDS: CardSpec[] = [
   },
   {
     type: "SqdpcCard",
+    standardContent: "preview",
+    standardContentNote:
+      "This card's data is a dated series — every meeting shows its own window of it. There is nothing to pre-fill; configure the card on the right.",
     label: "SQDPC",
     group: "Performance",
     description: "Letter-shaped month calendars rated per day (S, Q, D, P, C…).",
@@ -443,6 +470,9 @@ export const CARDS: CardSpec[] = [
   },
   {
     type: "ConditionsCard",
+    standardContent: "preview",
+    standardContentNote:
+      "This card's data is a dated series — every meeting shows its own window of it. There is nothing to pre-fill; configure the card on the right.",
     label: "Winning conditions",
     group: "Performance",
     description: "Conditions rated good/issue over a rolling window ending today.",
@@ -738,6 +768,9 @@ export const CARDS: CardSpec[] = [
   },
   {
     type: "LinkCard",
+    standardContent: "preview",
+    standardContentNote:
+      "This card shows another board's card — its content belongs to the source.",
     label: "Linked card",
     group: "Reference",
     description:
@@ -760,6 +793,9 @@ export const CARDS: CardSpec[] = [
   },
   {
     type: "EscalationViewer",
+    standardContent: "preview",
+    standardContentNote:
+      "This card renders the live actions table — there is no standard content to author.",
     label: "Escalation viewer",
     group: "Action management",
     description: "Actions escalated to this board, grouped by their source card.",

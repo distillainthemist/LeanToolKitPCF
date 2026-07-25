@@ -97,3 +97,32 @@ describe("policyOnPick — the stamp on card-type selection", () => {
     expect(policyOnPick("NotACard", "shared")).toBe("shared");
   });
 });
+
+// ---- card-studio contracts (card-studio plan, phase 0) ----
+
+describe("standardContent classifier", () => {
+  it("every series-backed card is preview (a read-only pane cannot fire series writes)", () => {
+    for (const card of CARDS) {
+      if (!card.seriesBacked) continue;
+      expect(card.standardContent, card.type).toBe("preview");
+    }
+  });
+
+  it("preview cards explain why, edit cards do not need to", () => {
+    for (const card of CARDS) {
+      if (card.standardContent === "preview") {
+        expect(card.standardContentNote, `${card.type} preview with no reason`).toBeTruthy();
+      }
+    }
+  });
+
+  it("the action surfaces and LinkCard are preview; document cards default to edit", () => {
+    for (const type of ["ActionBoard", "EscalationViewer", "LinkCard"]) {
+      expect(cardSpec(type)!.standardContent, type).toBe("preview");
+    }
+    for (const type of ["FiveWhys", "AgendaCard", "RiskMatrix", "StatusTile", "EmbedCard"]) {
+      // undefined = "edit" (the default)
+      expect(cardSpec(type)!.standardContent ?? "edit", type).toBe("edit");
+    }
+  });
+});

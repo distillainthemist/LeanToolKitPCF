@@ -127,6 +127,18 @@ export interface CardMount {
    * screens must pass it (mounterWiring test) — missing = toolkit defaults.
    */
   palette?: Record<string, string>;
+  /**
+   * This mount is editing DESIGN-TIME standard content (the card studio),
+   * not a meeting. Two consequences, both enforced here rather than in 20
+   * editors:
+   *
+   *  - **the mounter must not write to the store itself.** onSave/onTile are
+   *    buffered by the host so Cancel can discard everything; a direct
+   *    `applySeries()` would escape that buffer and could not be undone.
+   *  - **no actions.** A template must not accumulate actions on the
+   *    meetings' `board:cardId` channel (see `actionsOff`).
+   */
+  designTime?: boolean;
   /** Board cards offered as escalation sources ({instanceKey, label}). */
   sources: { instanceId: string; label: string }[];
   /** The signed-in viewer (EscalationViewer acknowledgements). */
@@ -197,8 +209,9 @@ function promptsRaw(opts: CardMount): string {
   return typeof p === "string" ? p : JSON.stringify(p);
 }
 
+/** Actions hidden: the card's own setting, or any design-time mount. */
 function actionsOff(opts: CardMount): boolean {
-  return config(opts).disableActions === true;
+  return opts.designTime === true || config(opts).disableActions === true;
 }
 
 /** The mount's palette, defaults when the host didn't supply one. */
@@ -637,7 +650,10 @@ const REGISTRY: Record<string, CardMounter> = {
     let lastStateIndex = parsed.data.stateIndex;
     const editor = new StatusTileEditor(opts.host, {
       onChange: (env) => {
-        if (env.data.stateIndex !== lastStateIndex) {
+        // design-time (the card studio) buffers everything for Cancel, so
+        // the status log must not fire: setting a TEMPLATE's state is not a
+        // status change on any meeting's day
+        if (env.data.stateIndex !== lastStateIndex && opts.designTime !== true) {
           lastStateIndex = env.data.stateIndex;
           const label = states[env.data.stateIndex] ?? String(env.data.stateIndex);
           void applySeries(opts.boardId, opts.cardId, [
