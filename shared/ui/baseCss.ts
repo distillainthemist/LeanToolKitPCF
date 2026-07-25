@@ -59,11 +59,16 @@ export const LTK_BASE_CSS = `
 /* ---- kebab menu ---- */
 .ltk-kebab { position: absolute; top: 6px; right: 6px; z-index: 30; }
 .ltk-kebab-btn {
-  border: none; background: none; color: var(--ltk-muted);
+  border: none; background: none;
+  /* the kebab overlays the title bar, so it takes the title's font colour
+     (auto-contrasted against the strip fill) — a muted grey was nearly
+     invisible there, especially in the focused view. No title strip means
+     no --ltk-titlebar-fg, so it falls back to the card's foreground. */
+  color: var(--ltk-titlebar-fg, var(--ltk-fg));
   font-size: 18px; line-height: 1; cursor: pointer;
   min-width: 32px; min-height: 32px; border-radius: 6px;
 }
-.ltk-kebab-btn:hover { background: var(--ltk-hairline); color: var(--ltk-fg); }
+.ltk-kebab-btn:hover { background: var(--ltk-hairline); }
 .ltk-kebab-menu {
   position: absolute; right: 0; top: calc(100% + 2px);
   background: var(--ltk-bg); border: 1px solid var(--ltk-hairline);
