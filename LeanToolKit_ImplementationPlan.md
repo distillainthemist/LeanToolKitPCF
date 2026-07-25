@@ -2,6 +2,12 @@
 
 *Prepared 2026-07-10, from `LeanToolKit_PCF.md`, using Fishbone PCF v1.2.1 and ProcessMapPCF as references.*
 
+> **PCF packaging is retired** — the cards ship in the LeanBoard code app,
+> not as a controls solution
+> ([docs/leanboard-pcf-retirement-plan.md](docs/leanboard-pcf-retirement-plan.md)).
+> The card designs, JSON contracts and design system below remain current;
+> the manifest/solution/canvas-wiring sections are historical.
+
 ---
 
 ## 1. Vision digest

@@ -3,8 +3,13 @@
 One managed solution carries everything: the eight Dataverse tables,
 the **LeanBoard User security role**, the code app itself, and its
 Office 365 Users connection reference. Every GitHub release (v0.x.y
-tag) attaches **`LeanBoard_<tag>_managed.zip`** alongside the PCF
-solution zips.
+tag) attaches **`LeanBoard_<tag>_managed.zip`**.
+
+Releases from v0.12.1 onward no longer carry the `LeanToolKit_*.zip`
+PCF controls solution — that target was retired and nothing here ever
+needed it (the app mounts the card editors directly, and the controls
+solution was never imported into any Pechey environment). See
+[leanboard-pcf-retirement-plan.md](leanboard-pcf-retirement-plan.md).
 
 How the app rides along: code apps live in the Power Apps service and
 gain a Dataverse `canvasapp` row (type 4) only when **added to a

@@ -1,7 +1,12 @@
 #!/usr/bin/env bash
-# Cut a release: bumps every control manifest + the solution version, commits,
-# and tags. Pushing the tag triggers the GitHub Actions Release workflow, which
-# builds the solution zips and attaches them to a GitHub Release.
+# Cut a release: marks the commit and tags it. Pushing the tag triggers the
+# GitHub Actions Release workflow, which builds the code-app package and
+# exports the managed LeanToolKitData solution, attaching both to a GitHub
+# Release.
+#
+# The version now lives in the tag alone. This used to stamp 24 PCF control
+# manifests plus the controls solution version; that target was retired
+# (docs/leanboard-pcf-retirement-plan.md).
 #
 #   ./release.sh 0.1.0
 #   git push origin main --tags
@@ -15,20 +20,14 @@ fi
 
 cd "$(dirname "$0")"
 
-# every control manifest: version="x.y.z" on the <control> element
-for MANIFEST in controls/*/ControlManifest.Input.xml; do
-  perl -pi -e "s/version=\"[0-9]+\\.[0-9]+\\.[0-9]+\"/version=\"$VERSION\"/ if /<control /../control-type=/" \
-    "$MANIFEST"
-done
+# with no files to stamp, the tag is the whole release — so guard it rather
+# than fail late on a duplicate
+if git rev-parse -q --verify "refs/tags/v$VERSION" >/dev/null; then
+  echo "Tag v$VERSION already exists." >&2
+  exit 1
+fi
 
-# solution manifest: <Version>x.y.z.0</Version>
-perl -pi -e "s/<Version>[0-9.]+<\\/Version>/<Version>$VERSION.0<\\/Version>/" \
-  Solution/src/Other/Solution.xml
-
-echo "Set control versions $VERSION, solution version $VERSION.0"
-
-git add controls/*/ControlManifest.Input.xml Solution/src/Other/Solution.xml
-git commit -m "Release v$VERSION"
+git commit --allow-empty -m "Release v$VERSION"
 git tag "v$VERSION"
 
 echo

@@ -1,8 +1,18 @@
-# LeanToolKit PCF
+# LeanToolKit
 
-A suite of lean-board PowerApps Component Framework controls with a shared
-Flat 2.0 design system and common JSON contracts, shipped as **one importable
-solution**. See [LeanToolKit_ImplementationPlan.md](LeanToolKit_ImplementationPlan.md)
+A suite of lean-board cards with a shared Flat 2.0 design system and common
+JSON contracts, shipped as the **LeanBoard code app** (`app/`).
+
+> **The PCF/canvas target is retired.** These cards began as PowerApps
+> Component Framework controls; the code app is now the sole product, and
+> releases no longer build or attach the controls solution. The last
+> importable `LeanToolKit_*.zip` pair is on the **v0.12.0** release — the
+> permanent archive. Rationale and phases:
+> [docs/leanboard-pcf-retirement-plan.md](docs/leanboard-pcf-retirement-plan.md).
+> The card editors under `controls/<Name>/` are unaffected: they are
+> platform-free classes the app mounts directly.
+
+See [LeanToolKit_ImplementationPlan.md](LeanToolKit_ImplementationPlan.md)
 for the full architecture, component specs and roadmap, and
 [docs/controls](docs/controls/README.md) for per-control reference — what each
 control does and the exact schema of its `outputJSON` and `actionsOutputJSON`.
@@ -75,30 +85,37 @@ input and migrated onto the actions channel.
 
 ```
 shared/          design tokens, JSON schemas, UI kit, pointer/drag, PNG export
-controls/<Name>/ one folder per control (manifest, index, editor, styles, types)
-Solution/        wrapper -> LeanToolKit .zip (managed + unmanaged)
+controls/<Name>/ one folder per card (editor, styles, types, model)
+app/             the LeanBoard code app — mounts the editors, owns the data
 ```
+
+The PCF-only files still present under `controls/<Name>/` (`index.ts`,
+`generated/`, `ControlManifest.Input.xml`) plus `Solution/` are dormant and
+scheduled for removal in phase 2 of the retirement plan.
 
 ## Build & test
 
 ```bash
-npm install
-npm run build        # builds every control under controls/
-npm start            # PCF test harness on :8181
+cd app && npm install && npm run build
 ```
-
-## Package for Dataverse
 
 ```bash
-cd Solution && dotnet build -c Release
-# -> Solution/bin/Release/net462/Solution.zip + Solution_managed.zip
+cd app && npm test
 ```
+
+Typecheck the shared design system and card editors from the repo root:
+
+```bash
+npx tsc --noEmit -p tsconfig.json
+```
+
+## Deploy
+
+`pac code push` from `app/`. The receiving-org runbook is
+[docs/deploy-to-new-org.md](docs/deploy-to-new-org.md).
 
 ## Release
 
-`./release.sh 0.1.0` bumps every control manifest + the solution version,
-commits and tags; pushing the tag makes the GitHub Release workflow attach
-the solution zips.
-
-Canvas apps: enable **Settings → General → Code components**, then
-**Insert → Get more components → Code**.
+`./release.sh 0.1.0` commits and tags; pushing the tag makes the GitHub
+Release workflow attach the code-app package and the managed
+LeanToolKitData tables solution.

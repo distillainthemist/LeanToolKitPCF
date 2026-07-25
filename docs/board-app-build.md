@@ -1,10 +1,13 @@
 # Board app — build kit (Phase 3)
 
-> **Canvas-era document.** The board app shipped as a **Power Apps code
-> app** instead — see [code-app-plan.md](code-app-plan.md) (design of
-> record) and [code-app-build.md](code-app-build.md) (build & deploy).
-> This file is kept for the Power Fx recipes and screen designs it
-> contains; nothing here is the current build path.
+> **Retired — canvas-era document.** The board app shipped as a **Power Apps
+> code app** instead — see [code-app-plan.md](code-app-plan.md) (design of
+> record) and [code-app-build.md](code-app-build.md) (build & deploy). The
+> PCF controls solution this recipe imports is no longer built or released
+> ([leanboard-pcf-retirement-plan.md](leanboard-pcf-retirement-plan.md)); the
+> last importable zips are on the v0.12.0 release. This file is kept only for
+> the Power Fx recipes and screen designs it contains — none of it is
+> buildable or supported today.
 
 The screen-by-screen recipe for building the master-leanboard canvas app.
 Architecture and data model: [master-leanboard.md](master-leanboard.md).

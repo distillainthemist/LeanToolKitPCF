@@ -38,19 +38,30 @@ lack the channels.*
   without keeping a string-serialisable twin. (The platform-free editor
   classes stay — that separation is good architecture regardless of PCF.)
 
-## Phase 0 — confirm nothing consumes the PCF solution  *(gate; ~15 min)*
+## Phase 0 — confirm nothing consumes the PCF solution  *(gate)* — ✅ **CLEARED 2026-07-25**
 
-1. In Dev (and any other environment), check for canvas/model apps using
-   the controls: query `customcontrols` for `ben_LTK*` usage /
-   `canvasapps` referencing them (or simply confirm in the maker portal
-   that no app other than LeanBoard exists that embeds LTK controls).
-2. Confirm the latest release (v0.12.x) has the LeanToolKit
-   managed/unmanaged zips attached — that tag is the permanent archive;
-   rollback is `git checkout <tag>` + those assets.
-3. **STOP if anything consumes the solution** — revert to selective parity
-   instead (out of scope here).
+Checked with `pac env fetch` against **all three** tenant environments —
+Pechey Distilling Development, Pechey Distilling Production and
+PecheyDistillingOperations:
 
-## Phase 1 — stop building & shipping PCFs  *(small; no source deletions)*
+- **Zero `BenOBrien.*` custom controls exist in any environment.** The
+  `LeanToolKit` solution was never imported anywhere — the release zips
+  were only ever GitHub assets.
+- Solutions present in Dev: `LeanToolKitData` (0.12.0, the app's tables),
+  `ProofPunk`, `FishbonePCF`, plus Microsoft's. Canvas-app rows: LeanBoard
+  (the code app) and ProofPunk only.
+- `FishbonePCF` holds `pech_PecheyDistilling.Fishbone` 1.0.2 — a *different*
+  publisher prefix and namespace. `git log --all -S PecheyDistilling` over
+  `controls/` and `Solution/` returns nothing, so it was never built from
+  this repo and retirement cannot affect it. No `dependency` rows point at
+  it either.
+- v0.12.0 carries `LeanToolKit_v0.12.0.zip` + `_managed.zip` (408 KB each) —
+  the permanent archive. Rollback is `git checkout v0.12.0` + those assets.
+
+The gate was therefore cleared more strongly than assumed: the PCF target
+was not merely unused, it was never deployed.
+
+## Phase 1 — stop building & shipping PCFs  *(small; no source deletions)* — ✅ **DONE 2026-07-25**
 
 - `.github/workflows/ci.yml`: drop the controls build (keep lint/tsc if
   retained elsewhere); `release.yml`: delete the *solution* job (dotnet +
