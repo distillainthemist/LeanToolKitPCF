@@ -365,12 +365,25 @@ Two things worth keeping from building it:
   malformed settings blobs); a deferred tile creates **no frame at all** and
   shows the card's ghost, because an empty body reads as a broken embed
   rather than a deliberate one.
-- **On-screen only.** An `IntersectionObserver` per embed tile, `rootMargin:
-  200px` so loading starts just before it scrolls into view. A tall board
-  scrolled to the top no longer fires every report's sign-in at once, and an
-  embed the meeting never scrolls to costs nothing. Leaving the viewport only
-  **parks** the frame (hides it) rather than destroying it — scrolling back
-  must not pay for the load again.
+- **Staggered, not withheld.** *(corrected 2026-07-25 — the first cut was
+  wrong in the field.)* Originally an embed loaded **only** once its tile
+  intersected the viewport. That read well and broke the feature: the tile
+  wall scrolls (`.ltk-bg-body` is `overflow: auto`) and **nobody scrolls a
+  meeting board — they open the card**, so any embed below the fold never
+  preloaded at all. Reported as "embeds still only load when I navigate to
+  the page", and reproduced with a below-the-fold tile: no intersection event
+  ever fired.
+
+  Now every embed is queued for preload on mount; the `IntersectionObserver`
+  only **promotes** an on-screen tile to load immediately, and the rest drain
+  in the background one at a time (1.5 s settle, 600 ms apart). A wall of
+  sign-in-protected reports still avoids firing every prompt at once, but
+  every embed does end up loaded. Leaving the viewport still only **parks**
+  the frame rather than destroying it.
+
+  The lesson worth keeping: the acceptance test covered the *negative* case
+  (an off-screen tile stays unloaded) and never the positive one on a real
+  board, so a limit that blocked the feature entirely passed.
 
 Each observer is disposed by its own tile's teardown: BoardGrid re-renders
 often, and a per-render observer would otherwise accumulate one per render.

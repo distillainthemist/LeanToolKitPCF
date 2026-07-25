@@ -255,32 +255,71 @@ async function renderBoard(
   };
 
   // live is the DEFAULT — only an explicit opt-out turns it off
-  // Only load an embed once its tile is actually on screen. A tall board
-  // scrolled to the top should not fire every report's sign-in at once, and
-  // an embed the meeting never scrolls to should cost nothing. Once loaded a
-  // frame is kept — scrolling back must not pay for it again — so leaving
-  // the viewport only parks (hides) it.
+  // Preloading, bounded but GUARANTEED.
+  //
+  // The first cut loaded an embed only once its tile intersected the
+  // viewport. That read well and was wrong in practice: the tile wall
+  // scrolls (.ltk-bg-body is overflow:auto), and nobody scrolls a meeting
+  // board — they open the card. Any embed below the fold therefore never
+  // preloaded at all, which is precisely the cold load this was meant to
+  // remove.
+  //
+  // So: tiles on screen load at once, and the rest are warmed in the
+  // background one at a time. A wall of sign-in-protected reports still
+  // does not fire every prompt simultaneously on board open, but every
+  // embed does end up loaded.
+  const PRELOAD_SETTLE_MS = 1500;
+  const PRELOAD_GAP_MS = 600;
+  const pendingPreloads = new Map<string, () => void>();
+  let preloadTimer: ReturnType<typeof setTimeout> | null = null;
+
+  const drainPreloads = (): void => {
+    const next = pendingPreloads.keys().next();
+    if (next.done) {
+      preloadTimer = null;
+      return;
+    }
+    const run = pendingPreloads.get(next.value);
+    pendingPreloads.delete(next.value);
+    run?.();
+    preloadTimer = setTimeout(drainPreloads, PRELOAD_GAP_MS);
+  };
+
   function watchTileForPreload(
     key: string,
     slotEl: HTMLElement,
     url: string
   ): () => void {
+    const load = () => {
+      pendingPreloads.delete(key);
+      acquireFrame(key, url);
+      placeFrame(key, slotEl, true); // display-only on the wall
+    };
+    // queued from the start, so an embed the meeting never scrolls to still
+    // ends up loaded; intersecting just promotes it to the front
+    pendingPreloads.set(key, load);
+    if (preloadTimer === null) preloadTimer = setTimeout(drainPreloads, PRELOAD_SETTLE_MS);
+
     const io = new IntersectionObserver(
       (entries) => {
         for (const entry of entries) {
-          if (entry.isIntersecting) {
-            acquireFrame(key, url);
-            placeFrame(key, slotEl, true); // display-only on the wall
-          } else {
-            placeFrame(key, null);
-          }
+          if (entry.isIntersecting) load();
+          else placeFrame(key, null);
         }
       },
       { rootMargin: "200px" } // start just before it scrolls into view
     );
     io.observe(slotEl);
-    return () => io.disconnect();
+    return () => {
+      io.disconnect();
+      pendingPreloads.delete(key);
+    };
   }
+  cleanups.push(() => {
+    if (preloadTimer !== null) clearTimeout(preloadTimer);
+    preloadTimer = null;
+    pendingPreloads.clear();
+  });
 
   const liveOn = () => localStorage.getItem(LIVE_TILES_KEY) !== "0";
   const applyLiveMode = () => {
