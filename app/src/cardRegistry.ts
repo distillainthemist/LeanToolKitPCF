@@ -130,6 +130,13 @@ export interface CardMount {
    * it the card behaves exactly as before.
    */
   onEmbedFrame?: (slot: HTMLElement, url: string) => void;
+  /**
+   * EmbedCard only, and only alongside onEmbedFrame. false means the host
+   * will NOT be loading a frame for this mount, so the card shows its ghost
+   * instead of an empty body — a tile that has opted out of preloading
+   * (`deferLoad`), or one that is off screen.
+   */
+  embedPreload?: boolean;
 }
 
 export type CardMounter = (opts: CardMount) => () => void;
@@ -876,7 +883,9 @@ const REGISTRY: Record<string, CardMounter> = {
       // the host drives a persistent frame; the card keeps its chrome,
       // commentary and the open-in-a-tab link, but not the iframe
       view.useExternalFrame(true);
-      view.setUrl(embedUrl);
+      // "" leaves the ghost showing: nothing is being loaded here, and a
+      // blank body would read as a broken embed rather than a deferred one
+      view.setUrl(opts.embedPreload === false ? "" : embedUrl);
       opts.onEmbedFrame(view.frameSlot(), embedUrl);
     } else {
       view.setUrl(embedUrl);
@@ -903,7 +912,7 @@ export type TileMount = Pick<
   | "instanceWhen"
   | "actions"
 > &
-  Pick<CardMount, "onEmbedFrame">;
+  Pick<CardMount, "onEmbedFrame" | "embedPreload">;
 
 /**
  * Mount a card as a BOARD TILE: the same editor, rendering the same data,

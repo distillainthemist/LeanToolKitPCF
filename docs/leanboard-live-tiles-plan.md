@@ -309,11 +309,26 @@ Two things worth keeping from building it:
   go through the same mounter in the app, so they agree by construction — but
   any future caller must acquire under the built url, not the configured one.
 
-**Outstanding — the cost bounding the plan called for.** Every embed on a live
-board preloads today; there is no per-card `preload` opt-out and no
-on-screen-only restriction. That is fine for a board with one or two embeds
-and wrong for a wall of Power BI reports that each prompt for auth. Worth
-doing before embeds are used at scale.
+**Cost bounding — ✅ added 2026-07-25.** Two limits, both verified in
+`embed-handoff.html`:
+
+- **Per-card opt-out.** A new EmbedCard setting, *"Load only when opened"*
+  (`deferLoad`), stored positively-by-default: unticked means preload, which
+  is what live tiles are for. The field is phrased as the exception rather
+  than as "preload = true" so the checkbox state and the behaviour agree.
+  `embedPreloadEnabled()` in `store/tiles.ts` is the rule (4 tests, including
+  malformed settings blobs); a deferred tile creates **no frame at all** and
+  shows the card's ghost, because an empty body reads as a broken embed
+  rather than a deliberate one.
+- **On-screen only.** An `IntersectionObserver` per embed tile, `rootMargin:
+  200px` so loading starts just before it scrolls into view. A tall board
+  scrolled to the top no longer fires every report's sign-in at once, and an
+  embed the meeting never scrolls to costs nothing. Leaving the viewport only
+  **parks** the frame (hides it) rather than destroying it — scrolling back
+  must not pay for the load again.
+
+Each observer is disposed by its own tile's teardown: BoardGrid re-renders
+often, and a per-render observer would otherwise accumulate one per render.
 
 ## Risks
 

@@ -10,7 +10,7 @@ import {
   slotPolicy,
 } from "../mappers";
 import { archiveSlots, seedPlan } from "../policies";
-import { joinTiles, liveTilesEnabled } from "../tiles";
+import { embedPreloadEnabled, joinTiles, liveTilesEnabled } from "../tiles";
 import type { LtkAction } from "../../../../shared/schema/actions";
 
 const manifestRaw = JSON.stringify({
@@ -135,5 +135,27 @@ describe("liveTilesEnabled — the archive split", () => {
 
   it("stays off with no instance selected", () => {
     expect(liveTilesEnabled(true, undefined)).toBe(false);
+  });
+});
+
+describe("embedPreloadEnabled", () => {
+  it("preloads by default — an unconfigured card gets the fast open", () => {
+    expect(embedPreloadEnabled({})).toBe(true);
+    expect(embedPreloadEnabled({ config: {} })).toBe(true);
+  });
+
+  it("opts out only on an explicit deferLoad", () => {
+    expect(embedPreloadEnabled({ config: { deferLoad: true } })).toBe(false);
+  });
+
+  it("treats a falsy or non-boolean deferLoad as preloading", () => {
+    // settings blobs are hand-edited JSON in places; only true opts out
+    expect(embedPreloadEnabled({ config: { deferLoad: false } })).toBe(true);
+    expect(embedPreloadEnabled({ config: { deferLoad: "true" } })).toBe(true);
+  });
+
+  it("survives a malformed settings blob", () => {
+    expect(embedPreloadEnabled({ config: null as unknown as object })).toBe(true);
+    expect(embedPreloadEnabled({ config: "nonsense" as unknown as object })).toBe(true);
   });
 });

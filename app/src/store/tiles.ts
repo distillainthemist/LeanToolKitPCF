@@ -64,3 +64,15 @@ export function liveTilesEnabled(
 ): boolean {
   return flagOn && instanceStatus === "open";
 }
+
+/**
+ * Whether an embed card should load with the board rather than waiting to be
+ * opened. Preloading is the default — it is the point of live tiles — but a
+ * wall of sign-in-protected Power BI reports all loading at once is worse
+ * than one loading on demand, so a card can opt out (`deferLoad`).
+ */
+export function embedPreloadEnabled(settings: Record<string, unknown>): boolean {
+  const config = settings.config;
+  if (!config || typeof config !== "object") return true;
+  return (config as Record<string, unknown>).deferLoad !== true;
+}

@@ -53,7 +53,7 @@ import {
   rescheduleInstance,
   resetInstance,
 } from "../store/instances";
-import { joinTiles, liveTilesEnabled } from "../store/tiles";
+import { embedPreloadEnabled, joinTiles, liveTilesEnabled } from "../store/tiles";
 
 /** Remembers the live-tiles comparison toggle per browser. */
 const LIVE_TILES_KEY = "ltk.liveTiles";
@@ -220,6 +220,10 @@ async function renderBoard(
     const theme = appTheme();
     const themeCfg = (slot.settings.theme ?? {}) as Record<string, unknown>;
     if (typeof themeCfg.titlebar === "string") theme.titleBar = themeCfg.titlebar;
+    const preload = embedPreloadEnabled(slot.settings);
+    // BoardGrid re-renders often; each render re-runs this, so the tile's own
+    // teardown must drop its observer or they accumulate one per render
+    let unwatch: (() => void) | null = null;
     const teardown = mountTile(tile.cardType, {
       host,
       title: slot.title,
@@ -233,16 +237,51 @@ async function renderBoard(
       actions: boardActions.filter((a) => a.instanceId === instanceKey),
       // an embed tile uses the persistent frame, so opening the card is
       // instant instead of a cold cross-origin load mid-meeting
-      onEmbedFrame: (slot, url) => {
-        const key = frameKey(board.boardId, tile.cardId);
-        acquireFrame(key, url);
-        placeFrame(key, slot, true); // display-only on the wall
+      embedPreload: preload,
+      onEmbedFrame: (slotEl, url) => {
+        if (!preload) return; // the card is showing its ghost instead
+        unwatch = watchTileForPreload(
+          frameKey(board.boardId, tile.cardId),
+          slotEl,
+          url
+        );
       },
     });
-    return teardown ?? (() => undefined);
+    return () => {
+      unwatch?.();
+      unwatch = null;
+      teardown?.();
+    };
   };
 
   // live is the DEFAULT — only an explicit opt-out turns it off
+  // Only load an embed once its tile is actually on screen. A tall board
+  // scrolled to the top should not fire every report's sign-in at once, and
+  // an embed the meeting never scrolls to should cost nothing. Once loaded a
+  // frame is kept — scrolling back must not pay for it again — so leaving
+  // the viewport only parks (hides) it.
+  function watchTileForPreload(
+    key: string,
+    slotEl: HTMLElement,
+    url: string
+  ): () => void {
+    const io = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) {
+            acquireFrame(key, url);
+            placeFrame(key, slotEl, true); // display-only on the wall
+          } else {
+            placeFrame(key, null);
+          }
+        }
+      },
+      { rootMargin: "200px" } // start just before it scrolls into view
+    );
+    io.observe(slotEl);
+    return () => io.disconnect();
+  }
+
   const liveOn = () => localStorage.getItem(LIVE_TILES_KEY) !== "0";
   const applyLiveMode = () => {
     const wanted = liveOn();

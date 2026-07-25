@@ -468,6 +468,15 @@ export const CARDS: CardSpec[] = [
         placeholder: "ReportSection1a2b3c",
       },
       {
+        key: "deferLoad",
+        label: "Load only when opened",
+        kind: "boolean",
+        help:
+          "By default the board loads this embed with the tile, so opening " +
+          "it is instant. Tick this for a heavy or sign-in-protected report " +
+          "you do not want loading on every board open.",
+      },
+      {
         key: "commentaryHeadings",
         label: "Commentary headings",
         kind: "multiline",

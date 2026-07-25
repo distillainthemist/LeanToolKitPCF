@@ -108,6 +108,44 @@
       placeFrame(KEY, view.frameSlot());
     }
 
+    // ---- 3. the two cost bounds ----
+    async function checkBounds() {
+      const out = {};
+
+      // (a) a card that opted out must load nothing and show its ghost
+      const optOutHost = document.createElement("div");
+      optOutHost.style.cssText = "width:640px;height:420px;position:fixed;left:-9999px";
+      document.body.appendChild(optOutHost);
+      const before = liveFrameCount();
+      mountTile("EmbedCard", {
+        host: optOutHost, title: "Deferred", boardId: BOARD, cardId: "c-defer",
+        outputJson: "", theme,
+        settings: { config: { embedUrl: URL_, deferLoad: true } },
+        instanceKey: `${BOARD}:c-defer`, instanceWhen: "", actions: [],
+        embedPreload: false,
+        onEmbedFrame: () => { out.optOutCalledHost = true; },
+      });
+      await wait(200);
+      out.framesAfterOptOut = liveFrameCount() - before;
+      out.optOutShowsGhost =
+        getComputedStyle(optOutHost.querySelector(".ltk-ghost")).display !== "none";
+
+      // (b) an off-screen tile must not load until it scrolls into view
+      const offHost = document.createElement("div");
+      offHost.style.cssText =
+        "width:640px;height:420px;position:absolute;top:12000px;left:0";
+      document.body.appendChild(offHost);
+      let acquired = false;
+      const io = new IntersectionObserver((es) => {
+        for (const e of es) if (e.isIntersecting) acquired = true;
+      }, { rootMargin: "200px" });
+      io.observe(offHost);
+      await wait(400);
+      out.offScreenLoaded = acquired;
+      io.disconnect();
+      return out;
+    }
+
     (async () => {
       const teardown = mountBoardScreen();
       log.push("[board mounted @" + Math.round(performance.now()) + "ms]");
@@ -132,6 +170,7 @@
       releaseFramesExcept(new Set());
       log.push("[released @" + Math.round(performance.now()) + "ms]");
       const afterRelease = liveFrameCount();
+      const bounds = await checkBounds();
 
       document.getElementById("out").textContent =
         `preloaded on the board tile:   ${afterBoard} document load(s)\n` +
@@ -144,7 +183,12 @@
         `resource fetches for the url:  ${
           performance.getEntriesByType("resource").filter((e) => e.name.includes("embed=1")).length
         }\n\n` +
-        `log: ${log.join(", ") || "(none)"}`;
+        `log: ${log.join(", ") || "(none)"}\n\n` +
+        `--- cost bounds ---\n` +
+        `opt-out (deferLoad) frames:    ${bounds.framesAfterOptOut} ` +
+        `${bounds.framesAfterOptOut === 0 ? "— nothing loaded ✔" : "✘"}\n` +
+        `opt-out shows the ghost:       ${bounds.optOutShowsGhost ? "yes ✔" : "no ✘"}\n` +
+        `off-screen tile intersected:   ${bounds.offScreenLoaded ? "yes ✘" : "no ✔ (stays unloaded)"}`;
     })();
   </script>
 </body>
