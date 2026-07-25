@@ -342,3 +342,26 @@ Tests: fallback order per card (config wins, doc/hint fallback).
 - "Referenced by" view — reverse listing of LinkCard sources per board.
 - ActionBoard non-persistent in-card view flip.
 - Focused-view interaction polish for LinkCard targets (zoom clusters etc.).
+
+---
+
+## Phase 7 — title-strip palette (added 2026-07-25)
+
+Ben: the card title colours should ALSO come from a controlled palette,
+managed in Settings → Branding. Kept SEPARATE from the state palette —
+title strips are association/brand colours; state colours are semantics
+(recolouring "Issue" must never repaint title bars).
+
+1. `ben_titlepalette` (memo) on sitesettings via the schema pipeline;
+   branding row storage, typed model.
+2. shared/palette.ts: `defaultTitlePalette()` starter set; parse accepts a
+   defaults parameter.
+3. Branding tab: a second "Title strip palette" block, same editor.
+4. CardSettings: the Appearance "Title strip" field becomes a select over
+   the title palette (new `titleColor` field kind); legacy freeform hex
+   shows as "(custom)" and keeps rendering.
+5. Runtime: every `theme.titlebar` read resolves through the title palette
+   (board, cardEditor, composer, tiles join barColor) — keys resolve, hex
+   passes through, deleted keys fall back to no strip.
+
+- [ ] DONE
