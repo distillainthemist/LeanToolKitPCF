@@ -147,8 +147,11 @@ resolving to `"saved" | "cancelled" | "archived"`.
    re-render and its 8s timeout** from composer.ts.
 7. **Guards**: Esc and backdrop click route through `promptUnsaved()` when
    dirty; ⌘/Ctrl+S saves.
-8. **Header kebab**: "Archive card" (confirm → archive + close), optionally
-   "Duplicate card".
+8. **Header kebab**: "Archive card" (confirm → archive + close) — board-setup
+   mode only.
+9. **No action raising**: `designTime` forces `disableActions` for every card
+   and the studio passes `actions: []`, so a template cannot accumulate
+   actions on the meetings' channel.
 
 Tests: buffer semantics (no store write before Save); cancel-new-card removes
 the slot; class table drives editability; save writes manifest + row + svg.
@@ -175,34 +178,83 @@ Dev page `app/card-studio.html` mounting the studio per card type.
 
 ---
 
-## Phase 3 — Add and archive
+## Phase 3 — Add, archive, duplicate
 
-**Add-card overlay** (from any empty cell's ＋):
+**Add-card overlay** (from any empty cell's ＋) — three sources:
 
-- **New card** — the grouped, searchable catalogue, now showing each type's
-  **tile art** from `tools/tile-defaults.json` (we generate it for all 20
-  types already) instead of a text-only list.
-- **Archived** — this board's `archivedSlots`, each with its stored tile svg,
-  title and type; click restores it into the clicked cell (`pos` updated,
-  `cardId`/settings/history intact, so its Card Data rows, actions and series
-  reconnect automatically).
-- Picking a **new** type mints the slot and opens the **studio immediately** —
-  add and configure become one flow.
-- Restoring an archived card returns to the grid directly (it is already
-  configured).
+1. **New card** — the grouped, searchable catalogue, now showing each type's
+   **tile art** from `tools/tile-defaults.json` (we generate it for all 20
+   types already) instead of a text-only list. Picking a type mints the slot
+   and opens the **studio immediately** — add and configure become one flow.
+2. **Archived** — this board's `archivedSlots`, each with its stored tile svg,
+   title and type; click restores it into the clicked cell (`pos` updated,
+   `cardId`/settings/history intact, so its Card Data rows, actions and series
+   reconnect automatically). Returns straight to the grid — it is already
+   configured.
+3. **Copy an existing card** — board picker → card picker, over **every board
+   the viewer can see**, this one included.
+
+### Copy / duplicate
+
+Board list from `listBoards()`, filtered by `canViewBoard(...)` with the
+current viewer so confidential meetings never leak into the picker, and
+excluding archived boards. Card list = that board's `slots` (its own
+`archivedSlots` too, greyed, is a possible refinement — not v1).
+
+A copy is an **independent card**: a freshly minted `cardId`, so it shares no
+data with its source.
+
+| Copied | Not copied |
+| --- | --- |
+| `cardType` (never changeable afterwards) | Actions (keyed `board:cardId`) |
+| `title` (offered as "X (copy)" when copying within the same board) | Card Series rows (keyed `boardId+cardId`) |
+| The whole settings blob — config, prompts, title strip, policy | Instance history / archived tile svgs |
+| **Standard content** — the source's live row `outputJson` + `tileSvg`, **if the "Copy its standard content" toggle is on (default on)** | |
+
+The toggle matters because a **shared**-policy source (a risk register, a RACI)
+keeps its *running* content in that live row — copying it clones real content
+into the new board, which is sometimes exactly what you want (seed a new
+site's register from an existing one) and sometimes not. Turning it off copies
+the configuration alone.
+
+The picker states the difference from LinkCard in one line, since the two now
+sit side by side conceptually: **Copy** makes an independent card that then
+goes its own way; **Linked card** mirrors the original, live and read-only.
 
 **Archive** (studio kebab → confirm): move the slot from `slots` to
 `archivedSlots`. Nothing is deleted; the board simply stops rendering and
 seeding it.
 
-**Permanent delete** from the archived list (confirm, and say plainly that the
-card's saved content stays in Dataverse but becomes unreachable) — otherwise
-the archive accumulates mistaken adds forever.
+**Permanent delete** from the archived list: confirm, then drop the slot from
+`archivedSlots`. Manifest-only — the card's Card Data rows stay in Dataverse
+untouched. That is deliberate: those rows include the **per-meeting archived
+tile svgs of past meetings**, and deleting them would destroy history to tidy
+a list. The confirm says so plainly.
 
 **Discoverability**: the composer toolbar shows "3 archived" when non-empty.
 
 Tests: archive/restore round-trip through parse/serialize; restored card keeps
-its cardId; archived slots never reach `joinTiles`, seeding or close-archive.
+its cardId; archived slots never reach `joinTiles`, seeding or close-archive;
+copy mints a new cardId and carries settings (+ document only when asked);
+copy source list respects `canViewBoard`.
+
+### Related finding — past meetings re-render from the CURRENT manifest
+
+Worth deciding while we are here: a closed meeting has no manifest of its own
+unless someone adjusted that instance, so it renders from the board's
+manifest **as it stands today**. Archiving (or removing) a card therefore
+also removes it from every past meeting's board — the tile images survive in
+their rows, but nothing displays them.
+
+That contradicts the archive philosophy the live-tiles work established: *a
+closed meeting shows what it showed*. The fix is small and fits here —
+**`closeInstance()` snapshots the board manifest onto the instance** when it
+has no override, freezing each meeting's composition alongside its tile
+images. Cost: a few KB per closed instance row. It does not reduce
+editability (closed meetings are already immutable).
+
+Recommended, but called out separately because it changes what past meetings
+display and is not strictly part of the studio work.
 
 ---
 
@@ -222,8 +274,9 @@ Beyond the four asks:
 6. **No report loads while designing** — embed frames stay unloaded in the
    studio.
 7. **Keyboard**: Esc (guarded), ⌘/Ctrl+S.
-8. **Duplicate card** (optional): copy settings + standard content to a new
-   cardId — two Paretos, two Capture grids.
+8. **Duplicate across boards** (Phase 3) turns every existing card into a
+   reusable template — a proven SQDPC or Capture grid becomes the starting
+   point for the next board instead of being rebuilt field by field.
 9. **Picker shows real art**, so a maker recognises the card visually.
 10. **Optional** draft stash in `sessionStorage` so a browser crash mid-studio
     doesn't lose a long standard-content edit (see Risks).
@@ -247,16 +300,19 @@ Beyond the four asks:
 5. **Wizard-embedded designer** must keep working — the studio is a
    body-level overlay exactly like today's standard-content overlay.
 
-## Open questions for Ben
+## Decisions (Ben, 2026-07-26)
 
-1. **Archive scope** — board setup only, with the instance composer keeping a
-   plain "Remove from this meeting" (the template is untouched, so nothing is
-   lost)? *Recommended.*
-2. **Actions while editing standard content** — today actions raised there
-   land on the same `board:card` channel as the meetings'. Hide action-raising
-   in the studio (it is a template, not a meeting)? *Recommended.*
-3. **Permanent delete** in the archived list — include it, or archive-only?
-4. **Duplicate card** — worth building now, or later?
+1. **Archive is board-setup only.** The instance composer keeps a plain
+   "Remove from this meeting" — the board template is untouched there, so
+   nothing is lost.
+2. **Action raising is hidden in the studio.** It is a template, not a
+   meeting. Implemented in one place: `actionsOff(opts)` in cardRegistry
+   becomes `opts.designTime === true || config(opts).disableActions === true`,
+   so every card obeys it, and the studio passes `actions: []`.
+3. **Permanent delete is offered** from the archived list (Phase 3).
+4. **Duplicate is in scope, and wider than one board**: duplicate a card from
+   the current meeting **or any other meeting visible to the viewer on the
+   site** (Phase 3).
 
 ---
 
@@ -265,6 +321,6 @@ Beyond the four asks:
 - [ ] Phase 0 — contracts (designTime, standardContent classifier, archivedSlots)
 - [ ] Phase 1 — the card studio overlay
 - [ ] Phase 2 — composer integration (✎ removal, pane removal, no type change)
-- [ ] Phase 3 — add/archive flow
+- [ ] Phase 3 — add / archive / duplicate flow (+ optional close-time manifest snapshot)
 - [ ] Phase 4 — enhancements + polish
 - [ ] Phase 5 — docs (master-leanboard.md), release, deploy
