@@ -41,6 +41,7 @@ import { getInstance } from "../store/instances";
 import { parseManifest, slotLinkSource, slotPolicy } from "../store/mappers";
 import { listPeople } from "../store/people";
 import { isActionSurface } from "../store/policies";
+import { acquireFrame, frameKey, parkAllFrames, placeFrame } from "../embedFrames";
 
 /**
  * "Tuesday 21 July · 06:00 · Day shift · Crew A" for the walk header —

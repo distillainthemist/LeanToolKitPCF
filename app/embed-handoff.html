@@ -1,0 +1,151 @@
+<!doctype html>
+<!-- Live-tiles plan, phase 6 acceptance test. Simulates the real journey:
+     an embed preloads on a board tile, the board screen is TORN DOWN exactly
+     as the router does it, and a card editor mounts the same card. The
+     document must load ONCE.
+
+       cd app && npm run dev  →  http://localhost:5180/embed-handoff.html
+
+     Dev-server only: vite builds index.html alone. -->
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Embed handoff</title>
+  <link rel="stylesheet" href="./src/style.css" />
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 16px; background: #f0efea; }
+    pre { background: #fff; border: 1px solid #ccc; padding: 12px; font-size: 13px; white-space: pre-wrap; }
+    .screen { border: 1px dashed #aaa; padding: 10px; margin: 10px 0; }
+    .tile { width: 205px; height: 134px; overflow: hidden; position: relative; background: #fff; border: 1px solid #ddd; }
+    .stage { width: 640px; height: 420px; transform: scale(0.32); transform-origin: top left; position: absolute; }
+    .full { height: 320px; background: #fff; border: 1px solid #ddd; }
+  </style>
+</head>
+<body>
+  <pre id="out">running…</pre>
+  <div class="screen" id="outlet"></div>
+
+  <script type="module">
+    import { mountTile } from "./src/cardRegistry.ts";
+    import { acquireFrame, frameKey, liveFrameCount, parkAllFrames, placeFrame,
+             releaseFramesExcept } from "./src/embedFrames.ts";
+    import { defaultTheme } from "../shared/tokens";
+    import { EmbedView } from "../controls/EmbedCard/editor";
+    // the mounters normalise the url before it reaches a frame; the editor
+    // must acquire under the SAME string or it re-navigates (found here)
+    import { buildEmbedUrl } from "../controls/EmbedCard/types";
+
+    const BOARD = "b-test";
+    const CARD = "c-embed";
+    const KEY = frameKey(BOARD, CARD);
+    // same-origin so the load is observable without an external dependency
+    const URL_ = "/favicon.svg?embed=1";
+    const theme = defaultTheme();
+    const outlet = document.getElementById("outlet");
+    const log = [];
+    let loads = 0;
+
+    // A background browser tab throttles iframe loading, so load events and
+    // resource timings shift run to run and cannot decide this. What DOES
+    // decide it: how many times `src` is assigned. The spike already proved
+    // that a host which is only repositioned never reloads, so one src
+    // assignment across the whole journey means the document loads once.
+    let srcWrites = 0;
+    const countLoads = () => {
+      const f = document.querySelector(".app-embed-frame-host > iframe");
+      if (f && !f.dataset.counted) {
+        f.dataset.counted = "1";
+        f.addEventListener("load", () => {
+          loads++;
+          log.push(`load #${loads} @${Math.round(performance.now())}ms`);
+        });
+        new MutationObserver((records) => {
+          for (const rec of records) {
+            if (rec.attributeName === "src") {
+              srcWrites++;
+              log.push(`src assigned #${srcWrites} @${Math.round(performance.now())}ms`);
+            }
+          }
+        }).observe(f, { attributes: true, attributeFilter: ["src"] });
+      }
+      return f;
+    };
+
+    const settings = { config: { embedUrl: URL_ } };
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+
+    // ---- 1. the board: an embed tile preloads ----
+    function mountBoardScreen() {
+      outlet.innerHTML = "";
+      const tile = document.createElement("div");
+      tile.className = "tile";
+      const stage = document.createElement("div");
+      stage.className = "stage";
+      tile.appendChild(stage);
+      outlet.appendChild(tile);
+      return mountTile("EmbedCard", {
+        host: stage, title: "Line OEE", boardId: BOARD, cardId: CARD,
+        outputJson: "", theme, settings, instanceKey: `${BOARD}:${CARD}`,
+        instanceWhen: "", actions: [],
+        onEmbedFrame: (slot, url) => { acquireFrame(KEY, url); placeFrame(KEY, slot, true); },
+      });
+    }
+
+    // ---- 2. the card editor, after the router wipes the outlet ----
+    function mountEditorScreen() {
+      parkAllFrames();
+      outlet.innerHTML = ""; // exactly what route() does: clear(outlet)
+      const host = document.createElement("div");
+      host.className = "full";
+      outlet.appendChild(host);
+      const view = new EmbedView(host, {});
+      view.setTheme(theme);
+      view.setChrome("Line OEE", "");
+      const built = buildEmbedUrl({ url: URL_ });
+      view.useExternalFrame(true);
+      view.setUrl(built);
+      acquireFrame(KEY, built);
+      placeFrame(KEY, view.frameSlot());
+    }
+
+    (async () => {
+      const teardown = mountBoardScreen();
+      log.push("[board mounted @" + Math.round(performance.now()) + "ms]");
+      countLoads(); // synchronously: the document cannot have loaded yet
+      await wait(900);
+      const afterBoard = loads;
+      const frameEl = document.querySelector(".app-embed-frame-host > iframe");
+      const tileInert = getComputedStyle(
+        document.querySelector(".app-embed-frame-host")
+      ).pointerEvents;
+
+      teardown();                 // the board screen goes away
+      log.push("[board torn down @" + Math.round(performance.now()) + "ms]");
+      mountEditorScreen();        // the card editor arrives
+      log.push("[editor mounted @" + Math.round(performance.now()) + "ms]");
+      await wait(900);
+      const afterOpen = loads;
+      const sameElement = document.querySelector(".app-embed-frame-host > iframe") === frameEl;
+
+      // leaving the board entirely must free the frame
+      parkAllFrames();
+      releaseFramesExcept(new Set());
+      log.push("[released @" + Math.round(performance.now()) + "ms]");
+      const afterRelease = liveFrameCount();
+
+      document.getElementById("out").textContent =
+        `preloaded on the board tile:   ${afterBoard} document load(s)\n` +
+        `tile frame pointer-events:     ${tileInert} ${tileInert === "none" ? "(display-only ✔)" : "(SHOULD BE none)"}\n` +
+        `src assignments (the test):    ${srcWrites} ` +
+        `${srcWrites <= 1 ? "— cannot reload ✔" : "— RELOADED ✘"}\n` +
+        `document load events seen:     ${afterOpen} (throttled tab; indicative only)\n` +
+        `same iframe element reused:    ${sameElement ? "yes ✔" : "no ✘"}\n` +
+        `frames alive after leaving:    ${afterRelease} ${afterRelease === 0 ? "✔" : "✘ leaked"}\n\n` +
+        `resource fetches for the url:  ${
+          performance.getEntriesByType("resource").filter((e) => e.name.includes("embed=1")).length
+        }\n\n` +
+        `log: ${log.join(", ") || "(none)"}`;
+    })();
+  </script>
+</body>
+</html>

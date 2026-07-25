@@ -6,6 +6,7 @@
 import { el, clear } from "../../shared/ui/dom";
 import { getLeaveGuard, setLeaveGuard } from "./navGuard";
 import "./style.css";
+import { releaseFramesExcept } from "./embedFrames";
 
 const app = document.querySelector<HTMLDivElement>("#app")!;
 
@@ -116,6 +117,12 @@ function route(): void {
   clear(outlet);
   const hash = window.location.hash || "#/";
   const parts = hash.slice(2).split("/").filter(Boolean); // drop "#/"
+
+  // Persistent embed frames live outside the routed DOM so an embed can move
+  // from a board tile to its card editor without reloading. They must not
+  // outlive that journey: anywhere other than a board or one of its cards,
+  // drop them so a Power BI report is not left running forever.
+  if (parts[0] !== "board" && parts[0] !== "edit") releaseFramesExcept(new Set());
 
   // Settings hides on the operational surfaces too — Home leads back
   const showHome = ["settings", "board", "edit", "adjust"].includes(parts[0] ?? "");

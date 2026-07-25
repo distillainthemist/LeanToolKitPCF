@@ -51,6 +51,8 @@ export class EmbedView {
   private cardTitle = "";
   private lastPromptsRaw: string | null = null;
   private currentUrl = "";
+  /** The host owns the iframe (see useExternalFrame). */
+  private externalFrame = false;
   private readOnly = false;
   private headings: string[] = [];
   private notes: Record<string, string> = {};
@@ -208,16 +210,37 @@ export class EmbedView {
       return;
     }
     this.ghost.style.display = "none";
+    this.openBtn.href = url;
+    this.openBtn.style.display = "";
+    if (this.externalFrame) return; // the host's frame is already showing it
     this.frame.style.display = "";
     this.veil.classList.add("ltk-em-on");
     this.frame.src = url;
-    this.openBtn.href = url;
-    this.openBtn.style.display = "";
+  }
+
+  /**
+   * Hand the frame over to the host, which supplies a persistent iframe of
+   * its own and parks it over frameSlot(). Used so an embed survives moving
+   * between screens: any iframe this card owned would reload the moment the
+   * screen it lives in is torn down. The card still owns everything else —
+   * chrome, commentary, actions, the open-in-new-tab link.
+   */
+  useExternalFrame(on: boolean): void {
+    this.externalFrame = on;
+    if (!on) return;
+    this.frame.style.display = "none";
+    this.frame.removeAttribute("src");
+    this.veil.classList.remove("ltk-em-on");
+  }
+
+  /** The element a host-supplied frame should be parked over. */
+  frameSlot(): HTMLElement {
+    return this.body;
   }
 
   /** Reload the frame against the same url (the ⟳ button / refreshTrigger). */
   refresh(): void {
-    if (this.currentUrl === "") return;
+    if (this.currentUrl === "" || this.externalFrame) return;
     this.veil.classList.add("ltk-em-on");
     this.frame.src = this.currentUrl;
   }

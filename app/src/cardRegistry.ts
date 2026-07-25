@@ -123,6 +123,13 @@ export interface CardMount {
   onTile?: (tileSvg: string) => void;
   /** The full emitted action set on every change (already stamped). */
   onActions: (actions: LtkAction[]) => void;
+  /**
+   * EmbedCard only. When supplied, the card does NOT load its own iframe —
+   * the host owns a persistent one and parks it over `slot`, so the embed
+   * survives moving between screens (see app/src/embedFrames.ts). Without
+   * it the card behaves exactly as before.
+   */
+  onEmbedFrame?: (slot: HTMLElement, url: string) => void;
 }
 
 export type CardMounter = (opts: CardMount) => () => void;
@@ -859,14 +866,21 @@ const REGISTRY: Record<string, CardMounter> = {
     // the settings key is "embedUrl" (see CardSettings/registry.ts); route
     // through buildEmbedUrl so it is normalised and the Power BI pane
     // toggles / page selection are applied
-    view.setUrl(
-      buildEmbedUrl({
-        url: cfgStr(opts, "embedUrl"),
-        hideFilterPane: config(opts).hideFilterPane === true,
-        hidePageNav: config(opts).hidePageNav === true,
-        pageName: cfgStr(opts, "pageName"),
-      })
-    );
+    const embedUrl = buildEmbedUrl({
+      url: cfgStr(opts, "embedUrl"),
+      hideFilterPane: config(opts).hideFilterPane === true,
+      hidePageNav: config(opts).hidePageNav === true,
+      pageName: cfgStr(opts, "pageName"),
+    });
+    if (opts.onEmbedFrame) {
+      // the host drives a persistent frame; the card keeps its chrome,
+      // commentary and the open-in-a-tab link, but not the iframe
+      view.useExternalFrame(true);
+      view.setUrl(embedUrl);
+      opts.onEmbedFrame(view.frameSlot(), embedUrl);
+    } else {
+      view.setUrl(embedUrl);
+    }
     return () => opts.host.replaceChildren();
   },
 };
@@ -888,7 +902,8 @@ export type TileMount = Pick<
   | "instanceKey"
   | "instanceWhen"
   | "actions"
->;
+> &
+  Pick<CardMount, "onEmbedFrame">;
 
 /**
  * Mount a card as a BOARD TILE: the same editor, rendering the same data,

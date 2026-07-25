@@ -42,6 +42,7 @@ import { catalogSvgByType } from "../store/catalog";
 import { rowsForBoard, toLite } from "../store/cards";
 import { actionsForBoard } from "../store/actions";
 import { mountTile } from "../cardRegistry";
+import { acquireFrame, frameKey, parkAllFrames, placeFrame } from "../embedFrames";
 import { LtkAction } from "../../../shared/schema/actions";
 import {
   closeInstance,
@@ -197,7 +198,11 @@ async function renderBoard(
     onLayout: () => undefined, // edit mode arrives with the composer slice
   });
   gridView.setTheme(appTheme());
-  cleanups.push(() => gridView.destroy());
+  cleanups.push(() => {
+    gridView.destroy();
+    // hide, do not destroy: the card editor may be about to adopt one
+    parkAllFrames();
+  });
 
   // ---- live tiles (see docs/leanboard-live-tiles-plan.md) ----
   // Mount the real card, display-only, instead of painting its stored svg.
@@ -226,6 +231,13 @@ async function renderBoard(
       instanceKey,
       instanceWhen: current?.when ?? "",
       actions: boardActions.filter((a) => a.instanceId === instanceKey),
+      // an embed tile uses the persistent frame, so opening the card is
+      // instant instead of a cold cross-origin load mid-meeting
+      onEmbedFrame: (slot, url) => {
+        const key = frameKey(board.boardId, tile.cardId);
+        acquireFrame(key, url);
+        placeFrame(key, slot, true); // display-only on the wall
+      },
     });
     return teardown ?? (() => undefined);
   };

@@ -269,46 +269,51 @@ defaults are the fallback.
 > `selfHealCatalog()` and `ben_defaultsvg` all survive. Re-scope before
 > starting it.
 
-### Phase 6 — preloaded embeds  *(the capability live tiles unlock)*
+### Phase 6 — preloaded embeds — ✅ **DONE 2026-07-25** *(cost bounding outstanding)*
 
-Requested 2026-07-25: embed tiles should load their content on the board, so
-opening one is instant rather than a cold cross-origin fetch mid-meeting.
+`app/src/embedFrames.ts` owns one long-lived `<iframe>` per embed card, in a
+`position: fixed` host attached to `<body>` — **outside the routed DOM**,
+because `route()` does `clear(outlet)` and any frame living in a screen dies
+with it. Screens never take the frame; they only say where it should appear.
+The board parks it over a tile, the card editor parks it over its frame area,
+and the same document stays loaded throughout.
 
-This is only possible once tiles are live — a stored SVG can never hold a live
-iframe (which is exactly why EmbedCard's tile is a hand-authored placeholder).
+**Spiked before building**, since the whole design rests on two premises:
+re-parenting an iframe took its load count 1 → 2, while a host that was only
+repositioned, hidden and scaled stayed at 1. Both confirmed.
 
-**The constraint that dictates the design:** re-parenting an `<iframe>` reloads
-it. Every browser does this. So a preloaded board embed is thrown away the
-moment the focused view mounts its own copy — the preload buys nothing unless
-**focus promotes the very same element**. EmbedCard already works this way
-internally: its editor deliberately never re-creates the frame on change
-("an iframe reloads whenever it is recreated"), and this extends that rule
-across the tile→focus boundary.
+The scale is derived from the slot itself (`rect.width / offsetWidth`), so a
+tile's embed shrinks exactly like the card around it instead of reflowing to a
+phone-width layout — and in the editor the two are equal, collapsing to
+`scale(1)`. Tile frames are `pointer-events: none`: a tap on the wall must
+open the card, not land inside the embed.
 
-Two viable shapes, to be chosen in this phase:
+`EmbedView.useExternalFrame()` makes the card yield the iframe while keeping
+its chrome, commentary, actions and open-in-a-tab link; without the hook it
+behaves exactly as before. Frames are released on navigating anywhere that is
+not a board or one of its cards, so a Power BI report is not left running.
 
-1. **Promote in place** — the tile's container expands (CSS/transform, or the
-   FLIP technique) to fill the focused area, with no DOM move. Keeps the load,
-   and animates nicely. Constrains the focused view's DOM structure.
-2. **Persistent off-board host** — one long-lived container per embed card,
-   positioned over the tile and re-positioned over the focus area. No
-   re-parenting, but it must track scroll/resize and stack correctly.
+**Acceptance test — `app/embed-handoff.html`.** It runs the real journey:
+preload on a tile, tear the board screen down *exactly as the router does*,
+mount the card editor. Result: **0 `src` assignments after creation, 1
+document load, 1 network fetch, and no load event at editor-mount.**
 
-Prefer (1) unless the focused layout makes it impossible.
+Two things worth keeping from building it:
+- The browser pane is a background tab, which throttles iframe loading — load
+  events and resource timings moved run to run and could not decide the test.
+  Counting `src` assignments is deterministic and is what actually governs a
+  reload, so that is the assertion.
+- The first failing run was the harness's fault, but it exposed a real
+  constraint: the mounter **normalises** the url via `buildEmbedUrl`, and the
+  editor acquiring under the raw string re-navigated the frame. Both screens
+  go through the same mounter in the app, so they agree by construction — but
+  any future caller must acquire under the built url, not the configured one.
 
-**Costs to bound, because this is not free:**
-- N embeds = N cross-origin page loads on board open. Make it **opt-in per
-  card** (a `preload` setting), default off, and preload only tiles that are
-  actually on screen.
-- Power BI and SharePoint embeds may trigger auth on load; N of those at once
-  on a shared meeting screen is worse than one on demand.
-- The environment CSP `frame-src` must already allow each origin — the
-  Admin-centre entry added 2026-07-23. Nothing new, but a preloaded board
-  fails N times instead of once when an origin is missing.
-
-**Verify:** open a board with two preloaded embeds, confirm both render; focus
-one and confirm — via a network trace — that **no second document load
-occurs**. That absence is the whole feature.
+**Outstanding — the cost bounding the plan called for.** Every embed on a live
+board preloads today; there is no per-card `preload` opt-out and no
+on-screen-only restriction. That is fine for a board with one or two embeds
+and wrong for a wall of Power BI reports that each prompt for auth. Worth
+doing before embeds are used at scale.
 
 ## Risks
 

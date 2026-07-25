@@ -1077,3 +1077,28 @@ input[type="color"].app-color:disabled { opacity: 0.4; cursor: default; }
 .app-dragging { opacity: 0.45; }
 .app-drop-before { box-shadow: 0 -2px 0 0 var(--app-accent); }
 .app-drop-after { box-shadow: 0 2px 0 0 var(--app-accent); }
+
+/* Persistent embed frame hosts (app/src/embedFrames.ts). Fixed and outside
+   the routed DOM so the iframe is never re-parented — re-parenting reloads
+   it, which is the whole thing this avoids. Positioned by script; hidden
+   until parked over a slot. Below dialogs (z 10000) so an action dialog
+   still covers the embed. */
+.app-embed-frame-host {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 5;
+  visibility: hidden;
+  overflow: hidden;
+  background: #fff;
+  pointer-events: auto;
+}
+.app-embed-frame-host > iframe {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  display: block;
+}
+/* a board tile is display-only: the embed shows, but must not be clickable
+   there — the tile's tap opens the card */
+.app-embed-frame-host[data-tile="1"] { pointer-events: none; }
