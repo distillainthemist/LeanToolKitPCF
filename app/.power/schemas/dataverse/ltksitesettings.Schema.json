@@ -126,6 +126,14 @@
           "required": true,
           "maxLength": 100
         },
+        "ben_statepalette": {
+          "type": "string",
+          "title": "State palette (JSON)",
+          "x-ms-dataverse-attribute": "ben_statepalette",
+          "x-ms-dataverse-type": "MemoType",
+          "x-ms-schema-name": "ben_statepalette",
+          "maxLength": 10000
+        },
         "ben_timezone": {
           "type": "string",
           "title": "Time zone (IANA)",

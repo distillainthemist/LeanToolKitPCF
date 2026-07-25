@@ -133,6 +133,8 @@ export const TABLES = [
       ben_timezone: { ...text(60), display: "Time zone (IANA)" },
       ben_accent: { ...text(20), display: "Accent colour" },
       ben_rosterpatterns: { ...memo(10000), display: "Roster Patterns (JSON)" },
+      // [{key, label, color}] — the site state palette cards select from
+      ben_statepalette: { ...memo(10000), display: "State palette (JSON)" },
       // app-level branding lives on the reserved "__app__" row
       ben_appname: { ...text(60), display: "App name (branding)" },
       ben_meetingcategories: { ...memo(4000), display: "Meeting categories (JSON)" },

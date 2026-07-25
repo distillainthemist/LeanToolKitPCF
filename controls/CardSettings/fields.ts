@@ -12,7 +12,7 @@ import { captureColumnsEditor } from "./captureColumns";
 
 export interface FieldHost {
   readOnly: boolean;
-  /** The board site's state palette — feeds paletteColor selects. */
+  /** The app state palette — feeds paletteColor selects. */
   palette: PaletteEntry[];
   onChanged: () => void;
 }
@@ -222,7 +222,7 @@ function colorControl(
 }
 
 /**
- * A site-palette selection: Default (""), one of the site's named colours,
+ * A state-palette selection: Default (""), one of the palette's named colours,
  * or — when the stored value is neither — that value as a "(custom)"
  * option, so legacy freeform hex keeps rendering honestly. A swatch beside
  * the select shows the resolved colour.

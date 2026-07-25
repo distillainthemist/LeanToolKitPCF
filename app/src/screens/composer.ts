@@ -19,7 +19,7 @@ import { clear, el } from "../../../shared/ui/dom";
 import { appTheme } from "../cardHost";
 import { detectHost } from "../runtime";
 import { getBoard, listBoards, saveManifest } from "../store/boards";
-import { sitePalette } from "../store/config";
+import { appStatePalette } from "../store/config";
 import { ensureLiveRow, liveRow, rowsForBoard, saveCard, toLite } from "../store/cards";
 import { catalogSvgByType } from "../store/catalog";
 import { mountTile } from "../cardRegistry";
@@ -327,9 +327,9 @@ async function renderComposer(
 ): Promise<void> {
   const manifest: BoardManifest = target.manifest;
   const catalogSvg = await catalogSvgByType();
-  // the site state palette: paletteColor selects in the settings pane, and
+  // the app state palette: paletteColor selects in the settings pane, and
   // resolution for live previews / tile refreshes
-  const palette = await sitePalette(board.site);
+  const palette = await appStatePalette();
   const paletteColors = paletteMap(palette);
 
   // standard-content snapshots: a card whose live (template) row has a

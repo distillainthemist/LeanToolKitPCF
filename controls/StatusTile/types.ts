@@ -40,7 +40,7 @@ export function serializeStatusTile(env: StatusTileEnvelope): string {
   return serializeEnvelope(env);
 }
 
-/** One configured state: the label plus its site-palette selection ("" =
+/** One configured state: the label plus its state-palette selection ("" =
  *  the positional toolkit default — green/amber/red repeating). */
 export interface StateEntry {
   label: string;

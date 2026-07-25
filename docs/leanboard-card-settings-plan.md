@@ -200,14 +200,20 @@ legacy csv states); mounter wiring test extended to assert palette is passed.
   board site's palette. Proof: 182 vitest green (15 new), builds clean,
   palette-audit.html dev page ALL PASS (rendered colours + editor selects).
 
-  ⚠ Column: `ben_statepalette` did NOT exist on ben_ltksitesettings when
-  probed (FetchXML, Dev env) — nor did any likely alternative name. The
-  model refresh (`pac code add-data-source -a dataverse -t
-  ben_ltksitesettings`) picked up nothing. Reads are defensively untyped
-  and saves omit the key until set, so everything ships and works on
-  defaults; palette SAVES will fail until the column exists. Ben to
-  confirm the column's schema name/environment, then: re-run the model
-  refresh, switch config.ts to the typed field, and verify a hosted save.
+  **Scope change (Ben, mid-phase): the palette is APP-level, not site-level**
+  — status colours are semantics ("good" means the same on every board), it
+  removes the LinkCard host-site ambiguity, and it lives with the rest of
+  the visual identity. The editor sits on Settings → Branding (super-admin);
+  a per-site OVERRIDE can layer on later exactly like accent. Store:
+  `appStatePalette()`/`saveAppStatePalette()` on the branding row;
+  `SiteSettings` carries no palette.
+
+  Column: `ben_statepalette` added via the repo's own schema pipeline —
+  data/schema.mjs + deploy-schema.mjs (device-code token from Ben, Web API,
+  idempotent: exactly one component created). Model refreshed
+  (`pac code add-data-source -a dataverse -t ben_ltksitesettings`), typed
+  field in use. Proven end-to-end with a write → read-back → revert on the
+  branding row (204/match/204, net-zero change).
 
 ## Phase 4 — LinkCard (and link policy removal)
 

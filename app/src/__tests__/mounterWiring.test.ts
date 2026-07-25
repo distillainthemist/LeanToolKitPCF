@@ -102,15 +102,15 @@ describe("persistent embed frames are wired on every screen that mounts cards", 
 
 import composerSrc from "../screens/composer.ts?raw";
 
-describe("the site palette reaches every real mount", () => {
+describe("the state palette reaches every real mount", () => {
   const screens: [string, string][] = [
     ["board", boardSrc],
     ["cardEditor", cardEditorSrc],
     ["composer", composerSrc],
   ];
   for (const [name, src] of screens) {
-    it(`${name} loads the site palette and passes it to mounts`, () => {
-      expect(src).toContain("sitePalette(");
+    it(`${name} loads the state palette and passes it to mounts`, () => {
+      expect(src).toContain("appStatePalette(");
       expect(src).toMatch(/palette(?::| ?[,}])/);
     });
   }

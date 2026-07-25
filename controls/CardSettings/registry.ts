@@ -123,7 +123,7 @@ export const COMMON_FIELDS: FieldSpec[] = [
  * The Appearance section: the ONE per-card cosmetic. The PCF-era fields
  * (background / foreground / accent / legend / font) were never applied by
  * the code app and are no longer offered — colours come from the app accent
- * and, from the site palette onwards, per-state selections in Configuration.
+ * and, from the state palette onwards, per-state selections in Configuration.
  * Old blobs that stored those keys keep them verbatim (lossless parse).
  */
 export const THEME_FIELDS: FieldSpec[] = [
@@ -239,7 +239,7 @@ export const CARDS: CardSpec[] = [
         label: "States",
         kind: "objectList",
         help:
-          "The states, in cycle order, each colouring from the site palette. Colour Default = the toolkit green/amber/red by position. Empty = On track / At risk / Off track.",
+          "The states, in cycle order, each colouring from the app's state palette (Settings → Branding). Colour Default = the toolkit green/amber/red by position. Empty = On track / At risk / Off track.",
         fields: [
           { key: "label", label: "State", kind: "text", placeholder: "On track" },
           { key: "palette", label: "Colour", kind: "paletteColor" },
@@ -376,7 +376,7 @@ export const CARDS: CardSpec[] = [
         label: "Status codes",
         kind: "objectList",
         help:
-          "Up to four tap-cycle states, each with a site-palette colour and glyph (older cards with fixed hex colours keep them).",
+          "Up to four tap-cycle states, each with a state-palette colour and glyph (older cards with fixed hex colours keep them).",
         fields: [
           { key: "code", label: "Code", kind: "text", placeholder: "good" },
           { key: "label", label: "Label", kind: "text", placeholder: "Good" },

@@ -30,7 +30,7 @@ import { appTheme, editorHost } from "../cardHost";
 import { currentViewer, detectHost } from "../runtime";
 import { actionsForBoard, actionsForInstance, upsertActions } from "../store/actions";
 import { canViewBoard, getBoard } from "../store/boards";
-import { sitePalette } from "../store/config";
+import { appStatePalette } from "../store/config";
 import { effectivelyClosed, relockOnLeave } from "../relock";
 import {
   createInstanceRow,
@@ -261,7 +261,7 @@ export function mountCardEditor(
     const [roster, actions, palette] = await Promise.all([
       listPeople(),
       surface ? actionsForBoard(sourceBoardId) : actionsForInstance(instanceKey),
-      sitePalette(board.site).then(paletteMap),
+      appStatePalette().then(paletteMap),
     ]);
     const viewer = currentViewer();
 

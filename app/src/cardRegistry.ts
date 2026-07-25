@@ -118,7 +118,7 @@ export interface CardMount {
   /** The card's current actions from the central table. */
   actions: LtkAction[];
   /**
-   * The board site's state palette (key → colour). Cards store palette
+   * The app state palette (key → colour). Cards store palette
    * KEYS; mounters resolve them to colours here so controls keep taking
    * plain colour strings. Optional so display-only harnesses compile;
    * screens must pass it (mounterWiring test) — missing = toolkit defaults.
@@ -357,7 +357,7 @@ const REGISTRY: Record<string, CardMounter> = {
       },
       onSnapshot: s.onSnapshot,
     });
-    // good/issue colours follow the site palette via the legend slots the
+    // good/issue colours follow the state palette via the legend slots the
     // control reads (legend[1] good, legend[2] issue)
     const cnPal = pal(opts);
     const cnLegend = opts.theme.legend.slice();

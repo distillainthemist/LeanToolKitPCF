@@ -38,7 +38,7 @@ export class CardSettingsEditor {
   private search = "";
   /** Boards offered as link/rollup sources; null = not in board mode. */
   private boards: BoardRef[] | null = null;
-  /** The board site's state palette (paletteColor selects). */
+  /** The app state palette (paletteColor selects). */
   private palette: PaletteEntry[] = defaultSitePalette();
 
   constructor(host: HTMLElement, private readonly cb: CardSettingsCallbacks) {
@@ -84,7 +84,7 @@ export class CardSettingsEditor {
     this.render();
   }
 
-  /** The site state palette offered by paletteColor fields. */
+  /** The state palette offered by paletteColor fields. */
   setPalette(palette: PaletteEntry[]): void {
     if (JSON.stringify(palette) === JSON.stringify(this.palette)) return;
     this.palette = palette;

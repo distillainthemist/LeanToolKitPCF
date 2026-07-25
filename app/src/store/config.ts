@@ -270,8 +270,6 @@ export interface SiteSettings {
   accent: string;
   /** [{name, pattern}] */
   rosterPatternsJson: string;
-  /** [{key, label, color}] — the site state palette; "" = toolkit defaults. */
-  statePaletteJson: string;
 }
 
 export async function siteSettings(site: string): Promise<SiteSettings> {
@@ -281,12 +279,6 @@ export async function siteSettings(site: string): Promise<SiteSettings> {
     timezone: r?.ben_timezone ?? "",
     accent: r?.ben_accent ?? "",
     rosterPatternsJson: r?.ben_rosterpatterns ?? "",
-    // TODO(phase 3): switch to the typed field once ben_statepalette is on
-    // the regenerated model — the column probe found no such column yet
-    statePaletteJson:
-      ((r as unknown as Record<string, unknown> | undefined)?.ben_statepalette as
-        | string
-        | undefined) ?? "",
   };
 }
 
@@ -301,22 +293,39 @@ export async function saveSiteSettings(site: string, s: SiteSettings): Promise<v
       ben_timezone: s.timezone,
       ben_accent: s.accent,
       ben_rosterpatterns: s.rosterPatternsJson,
-      // only sent when set, so sites that never touch the palette don't
-      // depend on the column existing
-      ...(s.statePaletteJson !== "" ? { ben_statepalette: s.statePaletteJson } : {}),
     }
   );
 }
 
-/** The site's state palette, defaults when unset/unreachable. Cards SELECT
+// ---- app state palette ------------------------------------------------------
+// APP-level (the branding row), not per site: status colours are semantics —
+// "good" must mean the same thing on every board and site, and a linked card
+// must not change colours depending on which board renders it. A per-site
+// OVERRIDE can layer on later exactly like accent does.
+
+/** Raw stored palette JSON on the branding row ("" = defaults in force). */
+export async function appStatePaletteJson(): Promise<string> {
+  const rows = await allWhere(Ben_ltksitesettingsesService.getAll, eq("ben_site", APP_ROW));
+  return rows[0]?.ben_statepalette ?? "";
+}
+
+/** The app state palette, defaults when unset/unreachable. Cards SELECT
  *  from these entries; the app resolves selections to concrete colours. */
-export async function sitePalette(site: string): Promise<PaletteEntry[]> {
-  if (site === "") return defaultPalette();
+export async function appStatePalette(): Promise<PaletteEntry[]> {
   try {
-    return parsePalette((await siteSettings(site)).statePaletteJson);
+    return parsePalette(await appStatePaletteJson());
   } catch {
     return defaultPalette();
   }
+}
+
+export async function saveAppStatePalette(json: string): Promise<void> {
+  await upsertWhere(
+    Ben_ltksitesettingsesService,
+    eq("ben_site", APP_ROW),
+    (row) => row.ben_ltksitesettingsid,
+    { ben_site: APP_ROW, ben_name: "App branding", ben_statepalette: json }
+  );
 }
 
 export interface SiteRosterPattern {
