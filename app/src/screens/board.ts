@@ -268,7 +268,10 @@ async function renderBoard(
   // background one at a time. A wall of sign-in-protected reports still
   // does not fire every prompt simultaneously on board open, but every
   // embed does end up loaded.
-  const PRELOAD_SETTLE_MS = 1500;
+  // Tiles mount only after the board's own data has loaded, so there is
+  // nothing left to yield to — waiting merely shortened the head start.
+  // Just enough delay to let the wall paint first.
+  const PRELOAD_SETTLE_MS = 150;
   const PRELOAD_GAP_MS = 600;
   const pendingPreloads = new Map<string, () => void>();
   let preloadTimer: ReturnType<typeof setTimeout> | null = null;
