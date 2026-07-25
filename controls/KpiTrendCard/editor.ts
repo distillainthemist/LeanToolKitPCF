@@ -1,7 +1,8 @@
 // The KpiTrendCard editor: a run chart (SVG) with an optional dashed target
 // line and optional specification limits (USL/LSL). The latest value reads out
 // large; readings go red only when they fall outside the spec limits. Tap a dot
-// to edit it; ＋ adds a point; the kebab holds target/spec-limit settings.
+// to edit it; ＋ adds a point. Target / spec limits / unit come from card
+// settings (setSpec), with the card's own document as the legacy fallback.
 
 import { applyThemeVars, defaultTheme, Theme } from "../../shared/tokens";
 import { LTK_BASE_CSS } from "../../shared/ui/baseCss";

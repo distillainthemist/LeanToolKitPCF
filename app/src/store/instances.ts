@@ -122,8 +122,9 @@ async function seedInstanceRows(
       tileSvg = prevRow?.tileSvg ?? "";
     } else if (plan.linkSource) {
       const src = await liveRow(plan.linkSource.boardId, plan.linkSource.cardId);
-      // link reads the source's latest content; fall back to its newest
-      // instance row when the source card is not shared
+      // legacy link (no longer offered): reads only the source's LIVE row —
+      // its latest content when the source is shared, its template otherwise.
+      // LinkCard replaces this whole path (card-settings plan, phase 4).
       outputJson = src?.outputJson ?? "";
     }
     // standard content: the card's live (instance-less) row is its

@@ -118,45 +118,20 @@ export const COMMON_FIELDS: FieldSpec[] = [
   },
 ];
 
+/**
+ * The Appearance section: the ONE per-card cosmetic. The PCF-era fields
+ * (background / foreground / accent / legend / font) were never applied by
+ * the code app and are no longer offered — colours come from the app accent
+ * and, from the site palette onwards, per-state selections in Configuration.
+ * Old blobs that stored those keys keep them verbatim (lossless parse).
+ */
 export const THEME_FIELDS: FieldSpec[] = [
-  {
-    key: "background",
-    label: "Background",
-    kind: "color",
-    help: "Card background colour. Empty = default white.",
-  },
-  {
-    key: "foreground",
-    label: "Foreground",
-    kind: "color",
-    help: "Text / line colour. Empty = rich black.",
-  },
-  {
-    key: "accent",
-    label: "Accent",
-    kind: "color",
-    help: "Highlights, selection, primary buttons. Empty = rich black.",
-  },
   {
     key: "titlebar",
     label: "Title strip",
     kind: "color",
     help:
       "Fill for just the title bar — use one colour across related cards to associate them on a board. Empty = no strip.",
-  },
-  {
-    key: "legend",
-    label: "Legend colours",
-    kind: "colorList",
-    help:
-      "Status / series colours, meaning varies per card (e.g. [–, Done, Issue]). Empty = defaults.",
-  },
-  {
-    key: "font",
-    label: "Font",
-    kind: "text",
-    help: "Font family or comma-separated stack. Empty = inherit.",
-    placeholder: "Segoe UI, system-ui, sans-serif",
   },
 ];
 
@@ -263,7 +238,7 @@ export const CARDS: CardSpec[] = [
         label: "States",
         kind: "csvChips",
         help:
-          "The states, in cycle order. Colours come from the theme legend colours.",
+          "The states, in cycle order (toolkit status colours; per-state colour selection arrives with the site palette).",
         placeholder: "On track, At risk, Off track",
       },
     ],

@@ -280,8 +280,8 @@ export class CardSettingsEditor {
       this.renderBoardSection(body);
     }
 
-    // Theme last — cosmetics after content (empty = inherit defaults)
-    body.appendChild(sectionLabel("Theme"));
+    // Appearance last — cosmetics after content (empty = inherit defaults)
+    body.appendChild(sectionLabel("Appearance"));
     const themeGrid = el("div", "ltk-cs-grid");
     for (const f of THEME_FIELDS) {
       const key = f.key as keyof ThemeDraft;

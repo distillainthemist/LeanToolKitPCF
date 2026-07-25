@@ -110,3 +110,22 @@ describe("Capture card columns reach the card", () => {
     ]);
   });
 });
+
+describe("retired theme fields survive the narrowed Appearance section", () => {
+  // Phase 2 removed background/foreground/accent/legend/font from the
+  // editor UI. Blobs that stored them (PCF era) must round-trip untouched —
+  // parsing is lossless and serialization emits whatever was set.
+  it("legacy theme keys round-trip verbatim", () => {
+    const stored = {
+      cardType: "StatusTile",
+      theme: {
+        titlebar: "#8b1e1e",
+        legend: "#18cdf2,#f22626",
+        font: "Comic Sans MS",
+        background: "#fffbe6",
+      },
+    };
+    const raw = serializeDraft(parseDraft(JSON.stringify(stored)));
+    expect(JSON.parse(raw).theme).toEqual(stored.theme);
+  });
+});

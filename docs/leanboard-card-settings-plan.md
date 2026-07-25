@@ -146,7 +146,12 @@ Goal: the Theme section tells the truth.
 Tests: draft round-trip with legacy theme keys (still preserved); editor
 renders only titlebar.
 
-- [ ] DONE
+- [x] DONE 2026-07-25. THEME_FIELDS → titlebar only; section renamed
+  "Appearance"; StatusTile help stops claiming legend colours work; stale
+  comments fixed (KpiTrendCard kebab, instances.ts link fallback). Legacy
+  theme keys proven to round-trip verbatim (cardConfig.test.ts). Proof:
+  167 vitest green, builds clean, policy-matrix.html dev page shows
+  APPEARANCE with Title strip alone and the policy audit still ALL PASS.
 
 ## Phase 3 — Site state palette
 
