@@ -464,52 +464,63 @@
         actions.length ? actions.join(",") : "(none)", actions.length === 0);
     }
 
-    // ---- 14. properties pane: collapsible sections, title strip in Common ----
+    // ---- 14. properties pane: tabs, grouping, info icons ----
     {
-      window.localStorage.removeItem("ltk.cs.collapsed"); // start from all-open
       const { result: r1 } = await withStudio("EmbedCard", {}, async () => ({
-        sections: [...document.querySelectorAll(".ltk-cs-secthead")]
-          .map((h) => h.textContent.replace(/[▾▸]/, "")),
+        tabs: [...document.querySelectorAll(".ltk-cs-tab")].map((t) => t.textContent),
+        onTab: q(".ltk-cs-tab-on")?.textContent,
         // the card's long description used to sit where a title belongs
         chosenBlock: !!q(".ltk-cs-chosen"),
-        commonFields: [...q(".ltk-cs-section").querySelectorAll(".ltk-cs-field-label")]
-          .map((l) => l.textContent.trim()).filter(Boolean),
+        commonFields: [...q(".ltk-cs-tabbody").querySelectorAll(".ltk-cs-field-label")]
+          .map((l) => l.textContent.replace("ⓘ", "").trim()).filter(Boolean),
+        // the data policy moved in under Common
+        subLabels: [...document.querySelectorAll(".ltk-cs-sublabel")].map((l) => l.textContent),
         headerType: q(".app-studio-type")?.textContent,
+        inlineHelp: document.querySelectorAll(".ltk-cs-help").length,
+        infoIcons: q(".ltk-cs-tabbody").querySelectorAll(".ltk-cs-info").length,
       }));
-      report("properties are collapsible sections", r1.sections.join(" | "),
-        r1.sections.length === 3 && r1.sections[0] === "Common");
-      report("no Appearance section — the title strip moved into Common",
-        r1.commonFields.join(", "),
-        !r1.sections.includes("Appearance") &&
+      report("properties are tabs, opening on Common",
+        `${r1.tabs.join(" | ")} · on "${r1.onTab}"`,
+        r1.tabs.length === 2 && r1.tabs[0] === "Common" &&
+        r1.tabs[1] === "Card specific" && r1.onTab === "Common");
+      report("the title strip sits in Common, right after the title",
+        r1.commonFields.slice(0, 2).join(", "),
         r1.commonFields[0] === "Card title" && r1.commonFields[1] === "Title strip");
+      report("New meeting instance moved under Common",
+        r1.subLabels.join(", ") || "(none)",
+        r1.subLabels.includes("New meeting instance"));
+      report("explanations are info icons, not inline text",
+        `${r1.infoIcons} icons, ${r1.inlineHelp} inline blocks`,
+        r1.infoIcons > 0 && r1.inlineHelp === 0);
       report("the card description no longer heads the pane",
         r1.chosenBlock ? "still there" : "gone", !r1.chosenBlock);
       report("an untitled card does not repeat its type in the header",
         `type chip "${r1.headerType}"`, r1.headerType === "");
 
-      // collapsing sticks across cards
-      const { result: r2 } = await withStudio("FiveWhys", {}, async () => {
-        const cfg = [...document.querySelectorAll(".ltk-cs-secthead")]
-          .find((h) => h.textContent.includes("Configuration"));
-        cfg.click();
+      // an info icon carries the registry's help text as its tooltip
+      const { result: r2 } = await withStudio("EmbedCard", {}, async () => {
+        [...document.querySelectorAll(".ltk-cs-tab")]
+          .find((t) => t.textContent === "Card specific").click();
         await wait(40);
+        const icons = [...document.querySelectorAll(".ltk-cs-tabbody .ltk-cs-info")];
         return {
-          hidden: getComputedStyle(cfg.parentElement.querySelector(".ltk-cs-sectbody")).display,
-          stored: window.localStorage.getItem("ltk.cs.collapsed"),
+          fields: [...document.querySelectorAll(".ltk-cs-tabbody .ltk-cs-field-label")]
+            .map((l) => l.textContent.replace("ⓘ", "").trim()),
+          tip: icons[0]?.getAttribute("title")?.slice(0, 40),
         };
       });
-      report("collapsing hides the body and is remembered",
-        `${r2.hidden} · ${r2.stored}`,
-        r2.hidden === "none" && (r2.stored ?? "").includes("Configuration"));
+      report("switching tab shows that card's own settings",
+        r2.fields.slice(0, 3).join(", "),
+        r2.fields.includes("Embed URL"));
+      report("an info icon holds the field's explanation",
+        r2.tip ? `"${r2.tip}…"` : "(none)", (r2.tip ?? "").length > 10);
 
-      const { result: r3 } = await withStudio("SqdpcCard", {}, async () => ({
-        cfgOpen: [...document.querySelectorAll(".ltk-cs-secthead")]
-          .find((h) => h.textContent.includes("Configuration"))
-          ?.getAttribute("aria-expanded"),
+      // a linked card gets its Source tab
+      const { result: r3 } = await withStudio("LinkCard", {}, async () => ({
+        tabs: [...document.querySelectorAll(".ltk-cs-tab")].map((t) => t.textContent),
       }));
-      report("the choice carries to the next card opened", `expanded=${r3.cfgOpen}`,
-        r3.cfgOpen === "false");
-      window.localStorage.removeItem("ltk.cs.collapsed");
+      report("a linked card gains a Source tab", r3.tabs.join(" | "),
+        r3.tabs.includes("Source"));
 
       // the archive confirm names an untitled card by its type
       const { result: r4 } = await withStudio("EmbedCard", {}, async () => {

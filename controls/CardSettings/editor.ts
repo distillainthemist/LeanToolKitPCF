@@ -1,7 +1,10 @@
-// The CardSettings editor: pick a card type (searchable grid of the toolkit's
-// cards), then edit its settings in sections — Common, Theme, Configuration.
-// This shell renders the picker and the chosen-card frame; the typed field
-// editors populate the sections (step 3).
+// The CardSettings editor — the card studio's properties pane: the chosen
+// card's settings across a few tabs (Common, Card specific, and Source for a
+// linked card). Each field's explanation sits behind an info icon rather
+// than printed under the control, so the pane stays scannable.
+//
+// It still renders the card-type picker when no type is set, for harnesses
+// and any caller that has not chosen one — the app picks the type up front.
 
 import {
   defaultPalette as defaultStatePalette,
@@ -31,26 +34,12 @@ export interface CardSettingsCallbacks {
   onChange: (draft: SettingsDraft) => void;
 }
 
-/** Which property sections a maker has collapsed — remembered across cards
- *  and sessions, so a preference is expressed once, not per card. */
-const COLLAPSED_KEY = "ltk.cs.collapsed";
-
-function loadCollapsed(): Set<string> {
-  try {
-    const raw = window.localStorage.getItem(COLLAPSED_KEY);
-    const arr = raw ? (JSON.parse(raw) as unknown) : [];
-    return new Set(Array.isArray(arr) ? arr.map(String) : []);
-  } catch {
-    return new Set();
-  }
-}
-
-function saveCollapsed(set: Set<string>): void {
-  try {
-    window.localStorage.setItem(COLLAPSED_KEY, JSON.stringify([...set]));
-  } catch {
-    /* private mode — the choice just does not persist */
-  }
+/** A small heading inside a tab, for a group that is not a tab of its own. */
+function subLabel(text: string): HTMLElement {
+  const h = document.createElement("div");
+  h.className = "ltk-cs-sublabel";
+  h.textContent = text;
+  return h;
 }
 
 export class CardSettingsEditor {
@@ -69,7 +58,8 @@ export class CardSettingsEditor {
   private palette: PaletteEntry[] = defaultStatePalette();
   /** The app title-strip palette (the Common section's titleColor select). */
   private titlePalette: PaletteEntry[] = defaultTitlePalette();
-  private readonly collapsed: Set<string> = loadCollapsed();
+  /** Which properties tab is showing. */
+  private tab = "Common";
 
   constructor(host: HTMLElement, private readonly cb: CardSettingsCallbacks) {
     ensureStylesheet("ltk-base-css", LTK_BASE_CSS);
@@ -115,7 +105,7 @@ export class CardSettingsEditor {
   }
 
   /** The app palettes: states (paletteColor fields) + title strips
-   *  (the Appearance titleColor select). */
+   *  (the Common tab's titleColor select). */
   setPalettes(palette: PaletteEntry[], titlePalette: PaletteEntry[]): void {
     if (
       JSON.stringify(palette) === JSON.stringify(this.palette) &&
@@ -226,34 +216,6 @@ export class CardSettingsEditor {
   }
 
   /** The chosen card's settings form. */
-  /**
-   * A collapsible section. The header toggles it, and the open/closed choice
-   * sticks (per section name, across cards and sessions) — a maker who never
-   * touches data policies should not have to skip past them on every card.
-   */
-  private section(body: HTMLElement, title: string, fill: (host: HTMLElement) => void): void {
-    const wrap = el("div", "ltk-cs-section");
-    const open = !this.collapsed.has(title);
-    const head = el("button", "ltk-cs-secthead") as HTMLButtonElement;
-    head.type = "button";
-    head.setAttribute("aria-expanded", open ? "true" : "false");
-    head.append(el("span", "ltk-cs-chev", open ? "▾" : "▸"), el("span", "", title));
-    const inner = el("div", "ltk-cs-sectbody");
-    if (!open) inner.style.display = "none";
-    head.addEventListener("click", () => {
-      const nowOpen = this.collapsed.has(title);
-      if (nowOpen) this.collapsed.delete(title);
-      else this.collapsed.add(title);
-      saveCollapsed(this.collapsed);
-      inner.style.display = nowOpen ? "" : "none";
-      head.setAttribute("aria-expanded", nowOpen ? "true" : "false");
-      (head.firstElementChild as HTMLElement).textContent = nowOpen ? "▾" : "▸";
-    });
-    wrap.append(head, inner);
-    body.appendChild(wrap);
-    fill(inner);
-  }
-
   private renderForm(body: HTMLElement): void {
     const spec = cardSpec(this.draft.cardType);
     if (!spec) return;
@@ -270,9 +232,12 @@ export class CardSettingsEditor {
       onChanged: () => this.commit(),
     };
 
-    // Common: title, title strip, prompts, read-only
-    const [titleSpec, promptsSpec, roSpec] = COMMON_FIELDS;
-    this.section(body, "Common", (sec) => {
+    // ---- the tabs' contents ----
+
+    /** Common: identity and presentation, plus what each new meeting starts
+     *  from (the data policy) — the settings every card shares. */
+    const fillCommon = (sec: HTMLElement): void => {
+      const [titleSpec, promptsSpec, roSpec] = COMMON_FIELDS;
       const grid = el("div", "ltk-cs-grid");
       grid.appendChild(
         renderField(
@@ -284,8 +249,7 @@ export class CardSettingsEditor {
           host
         )
       );
-      // the title strip sits beside the title it colours, rather than in an
-      // Appearance section of its own (it was the only field left there)
+      // the title strip sits beside the title it colours
       for (const f of THEME_FIELDS) {
         const key = f.key as keyof ThemeDraft;
         grid.appendChild(
@@ -320,10 +284,15 @@ export class CardSettingsEditor {
         )
       );
       sec.appendChild(grid);
-    });
+      // the per-card data policy lives here too (composer mode only)
+      if (this.boards !== null) {
+        sec.appendChild(subLabel("New meeting instance"));
+        this.renderBoardSection(sec);
+      }
+    };
 
-    // Card-specific configuration
-    this.section(body, "Configuration", (sec) => {
+    /** Card specific: the keys only this card type understands. */
+    const fillConfig = (sec: HTMLElement): void => {
       if (spec.config.length === 0) {
         sec.appendChild(
           el(
@@ -350,18 +319,37 @@ export class CardSettingsEditor {
         );
       }
       sec.appendChild(cfgGrid);
-    });
+    };
 
+    // ---- the tab bar ----
+    const tabs: { name: string; fill: (sec: HTMLElement) => void }[] = [
+      { name: "Common", fill: fillCommon },
+      { name: "Card specific", fill: fillConfig },
+    ];
     // LinkCard (composer mode only): which board's card this one mirrors
     if (this.boards !== null && this.draft.cardType === "LinkCard") {
-      this.section(body, "Source", (sec) => this.renderLinkSourceSection(sec));
+      tabs.push({ name: "Source", fill: (sec) => this.renderLinkSourceSection(sec) });
     }
+    if (!tabs.some((t) => t.name === this.tab)) this.tab = tabs[0].name;
 
-    // New meeting instance (composer mode only): THIS CARD's data policy +
-    // sources — each card on a board chooses its own
-    if (this.boards !== null) {
-      this.section(body, "New meeting instance", (sec) => this.renderBoardSection(sec));
+    const bar = el("div", "ltk-cs-tabs");
+    const pane = el("div", "ltk-cs-tabbody");
+    for (const t of tabs) {
+      const btn = el(
+        "button",
+        "ltk-cs-tab" + (t.name === this.tab ? " ltk-cs-tab-on" : ""),
+        t.name
+      ) as HTMLButtonElement;
+      btn.type = "button";
+      btn.addEventListener("click", () => {
+        if (this.tab === t.name) return;
+        this.tab = t.name;
+        this.render();
+      });
+      bar.appendChild(btn);
     }
+    body.append(bar, pane);
+    tabs.find((t) => t.name === this.tab)!.fill(pane);
 
     if (spec.appBound.length > 0) {
       body.appendChild(

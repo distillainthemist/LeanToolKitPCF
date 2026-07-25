@@ -9,7 +9,7 @@
 import { el } from "../../shared/ui/dom";
 import { checkItem } from "../../shared/ui/dialog";
 import { FieldSpec } from "./registry";
-import { FieldHost } from "./fields";
+import { FieldHost, labelRow } from "./fields";
 
 type Get = () => unknown;
 type Set = (v: unknown) => void;
@@ -439,8 +439,7 @@ export function captureColumnsEditor(
   sync();
 
   const field = el("div", "ltk-cs-field ltk-cs-field-wide");
-  field.appendChild(el("label", "ltk-cs-field-label", spec.label));
+  field.appendChild(labelRow(spec.label, spec.help));
   field.appendChild(box);
-  if (spec.help) field.appendChild(el("div", "ltk-cs-help", spec.help));
   return field;
 }

@@ -1190,8 +1190,8 @@ input[type="color"].app-color:disabled { opacity: 0.4; cursor: default; }
   gap: 6px;
 }
 .app-studio-right {
-  flex: 0 0 372px;
-  width: 372px;
+  flex: 0 0 446px;
+  width: 446px;
   display: flex;
   flex-direction: column;
   gap: 6px;

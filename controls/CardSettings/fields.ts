@@ -24,11 +24,32 @@ type Set = (v: unknown) => void;
 
 // ---- shared scaffolding ------------------------------------------------------
 
+/**
+ * A field's label, with its explanation behind an ⓘ rather than printed
+ * underneath. The helps are long and mostly read once, so inline they made
+ * the pane three times taller than the controls it holds.
+ */
+export function infoIcon(help: string): HTMLElement {
+  const info = el("span", "ltk-cs-info", "ⓘ");
+  // native tooltip: the properties pane scrolls, and a positioned popover
+  // would clip at its edge
+  info.title = help;
+  info.setAttribute("aria-label", help);
+  info.tabIndex = 0;
+  return info;
+}
+
+export function labelRow(label: string, help?: string): HTMLElement {
+  const row = el("label", "ltk-cs-field-label");
+  row.appendChild(el("span", "", label));
+  if (help) row.appendChild(infoIcon(help));
+  return row;
+}
+
 function fieldWrap(spec: FieldSpec, control: HTMLElement, wide = false): HTMLElement {
   const field = el("div", "ltk-cs-field" + (wide ? " ltk-cs-field-wide" : ""));
-  field.appendChild(el("label", "ltk-cs-field-label", spec.label));
+  field.appendChild(labelRow(spec.label, spec.help));
   field.appendChild(control);
-  if (spec.help) field.appendChild(el("div", "ltk-cs-help", spec.help));
   return field;
 }
 
@@ -117,10 +138,12 @@ function booleanEditor(spec: FieldSpec, get: Get, set: Set, host: FieldHost): HT
     set(item.box.checked ? true : undefined);
     host.onChanged();
   });
+  // a checkbox carries its own label, so the info icon rides beside it
   const field = el("div", "ltk-cs-field");
-  field.appendChild(el("label", "ltk-cs-field-label", " "));
-  field.appendChild(item.wrap);
-  if (spec.help) field.appendChild(el("div", "ltk-cs-help", spec.help));
+  const row = el("div", "ltk-cs-checkrow");
+  row.appendChild(item.wrap);
+  if (spec.help) row.appendChild(infoIcon(spec.help));
+  field.appendChild(row);
   return field;
 }
 

@@ -13,6 +13,7 @@ import {
 import { parseOrgTree } from "../../../shared/schema/meeting";
 import { parsePeople } from "../../../shared/schema/people";
 import { el } from "../../../shared/ui/dom";
+import { showLoading } from "../loading";
 import { appTheme, editorHost } from "../cardHost";
 import { detectHost } from "../runtime";
 import { saveMeetingBoard } from "../store/boards";
@@ -44,6 +45,8 @@ export function mountWizard(parent: HTMLElement, editBoardId = ""): () => void {
     const hosted = await detectHost();
     // creation is admin-gated; editing is open to admins AND the owner
     let editRaw = "";
+    /** The meeting being edited, so the title says WHICH one. */
+    let editingName = "";
     if (hosted) {
       const viewer = currentViewer()!;
       const stored = await viewerPerson(viewer.objectId);
@@ -56,6 +59,7 @@ export function mountWizard(parent: HTMLElement, editBoardId = ""): () => void {
           return;
         }
         editRaw = board.occurrenceSettingsRaw;
+        editingName = board.name;
         let ownerId = "";
         try {
           const blob = JSON.parse(editRaw) as { meeting?: { owner?: { whoId?: string } } };
@@ -165,7 +169,14 @@ export function mountWizard(parent: HTMLElement, editBoardId = ""): () => void {
       },
     });
     view.setTheme(appTheme());
-    view.setChrome(editing ? "Edit meeting" : "New meeting", "");
+    view.setChrome(
+      editing
+        ? editingName !== ""
+          ? `Edit meeting — ${editingName}`
+          : "Edit meeting"
+        : "New meeting",
+      ""
+    );
     view.setOrgTree(parseOrgTree(org));
     if (hosted) {
       view.setRosterPatterns(await rosterPatternLibrary());
@@ -212,8 +223,15 @@ export function mountWizard(parent: HTMLElement, editBoardId = ""): () => void {
           await saveBlob();
           note.remove();
         }
-        const { mountDesigner } = await import("./composer");
-        designerCleanup = await mountDesigner(designerDiv!, boardId);
+        // the designer reads the board, its card rows, every board's
+        // manifest, the tile catalogue and the palettes before it can paint
+        const stopLoading = showLoading(designerDiv!);
+        try {
+          const { mountDesigner } = await import("./composer");
+          designerCleanup = await mountDesigner(designerDiv!, boardId);
+        } finally {
+          stopLoading();
+        }
       })();
     });
 

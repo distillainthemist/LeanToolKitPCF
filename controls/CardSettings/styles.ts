@@ -109,7 +109,6 @@ export const CARDSETTINGS_CSS = `
   color: var(--ltk-muted);
   min-height: 13px;
 }
-.ltk-cs-help { font-size: 11px; color: var(--ltk-muted); line-height: 1.35; }
 
 /* ---- chips (string lists) ---- */
 .ltk-cs-chips {
@@ -270,35 +269,58 @@ export const CARDSETTINGS_CSS = `
 .ltk-cs-json-bad { border-color: #a02832 !important; }
 .ltk-cs-jsonerr { font-size: 11px; color: #a02832; }
 
-/* ---- collapsible sections ---- */
-.ltk-cs-section { display: flex; flex-direction: column; }
-.ltk-cs-secthead {
+/* ---- properties tabs (mirrors the app's own tab styling) ---- */
+.ltk-cs-tabs {
   display: flex;
-  align-items: center;
-  gap: 6px;
-  width: 100%;
-  border: 0;
-  border-top: 1px solid var(--ltk-hairline);
-  background: none;
+  gap: 2px;
+  border-bottom: 1px solid var(--ltk-hairline);
+  margin: -2px 0 2px;
+}
+.ltk-cs-tab {
   font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  border: none;
+  background: none;
+  color: var(--ltk-muted);
+  padding: 8px 12px 6px;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.ltk-cs-tab:hover { color: var(--ltk-fg); }
+.ltk-cs-tab-on { color: var(--ltk-fg); border-bottom-color: var(--ltk-accent); }
+.ltk-cs-tabbody { display: flex; flex-direction: column; gap: 12px; }
+
+/* a heading for a group inside a tab */
+.ltk-cs-sublabel {
   font-size: 11px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--ltk-muted);
-  text-align: left;
-  padding: 9px 2px 7px;
-  cursor: pointer;
+  padding-top: 6px;
+  border-top: 1px solid var(--ltk-hairline);
 }
-.ltk-cs-secthead:hover { color: var(--ltk-accent); }
-.ltk-cs-section:first-child .ltk-cs-secthead { border-top: 0; padding-top: 2px; }
-.ltk-cs-chev { font-size: 9px; width: 10px; flex: none; }
-.ltk-cs-sectbody {
+
+/* ---- per-field explanations, behind an icon ---- */
+.ltk-cs-field-label {
   display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 2px 0 10px;
+  align-items: center;
+  gap: 5px;
 }
+.ltk-cs-info {
+  font-size: 12px;
+  line-height: 1;
+  color: var(--ltk-muted);
+  cursor: help;
+  flex: none;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.ltk-cs-info:hover, .ltk-cs-info:focus { color: var(--ltk-accent); outline: none; }
+.ltk-cs-checkrow { display: flex; align-items: center; gap: 8px; }
 
 /* ---- state-palette select ---- */
 .ltk-cs-palette { display: inline-flex; align-items: center; gap: 6px; }
