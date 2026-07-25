@@ -14,10 +14,12 @@ import {
   parseDraft,
   serializeDraft,
 } from "../../../controls/CardSettings/types";
+import { paletteMap } from "../../../shared/palette";
 import { clear, el } from "../../../shared/ui/dom";
 import { appTheme } from "../cardHost";
 import { detectHost } from "../runtime";
 import { getBoard, listBoards, saveManifest } from "../store/boards";
+import { sitePalette } from "../store/config";
 import { ensureLiveRow, liveRow, rowsForBoard, saveCard, toLite } from "../store/cards";
 import { catalogSvgByType } from "../store/catalog";
 import { mountTile } from "../cardRegistry";
@@ -88,7 +90,8 @@ function openStandardContent(
 async function regenerateTile(
   boardId: string,
   slot: ManifestSlot,
-  theme: ReturnType<typeof appTheme>
+  theme: ReturnType<typeof appTheme>,
+  palette: Record<string, string>
 ): Promise<boolean> {
   const { cardMounter } = await import("../cardRegistry");
   const mounter = cardMounter(slot.cardType);
@@ -118,6 +121,7 @@ async function regenerateTile(
         outputJson: row.outputJson,
         people: [],
         theme,
+        palette,
         readOnly: true, // a clean tile: no affordances, no edits
         settings: slot.settings,
         instanceKey: "",
@@ -323,6 +327,10 @@ async function renderComposer(
 ): Promise<void> {
   const manifest: BoardManifest = target.manifest;
   const catalogSvg = await catalogSvgByType();
+  // the site state palette: paletteColor selects in the settings pane, and
+  // resolution for live previews / tile refreshes
+  const palette = await sitePalette(board.site);
+  const paletteColors = paletteMap(palette);
 
   // standard-content snapshots: a card whose live (template) row has a
   // tile SVG previews with it instead of the generic catalog art. Kept as
@@ -468,6 +476,7 @@ async function renderComposer(
         cardId: tile.cardId,
         outputJson: liveDoc[tile.cardId] ?? "",
         theme,
+        palette: paletteColors,
         settings: slot.settings,
         instanceKey: `${board.boardId}:${tile.cardId}`,
         instanceWhen: "",
@@ -558,7 +567,7 @@ async function renderComposer(
         void (async () => {
           let refreshed = false;
           try {
-            refreshed = await regenerateTile(board.boardId, slot, appTheme());
+            refreshed = await regenerateTile(board.boardId, slot, appTheme(), paletteColors);
             if (refreshed) {
               await refreshLiveSvg();
               renderGrid();
@@ -633,6 +642,7 @@ async function renderComposer(
       },
     });
     editor.setTheme(appTheme());
+    editor.setPalette(palette);
     editor.setChrome(slot ? slot.title || cardLabel(slot.cardType) : "New card", "");
     editor.setBoards(sourceRefs());
     editor.setDraft(slot ? draftFromSlot(slot) : parseDraft(""), false);

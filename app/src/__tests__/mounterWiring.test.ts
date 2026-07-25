@@ -92,3 +92,33 @@ describe("persistent embed frames are wired on every screen that mounts cards", 
     expect(mounterBodies().EmbedCard).toContain("opts.onEmbedFrame");
   });
 });
+
+// ---- site state palette ----
+//
+// palette is OPTIONAL on CardMount (display-only harnesses default to the
+// toolkit palette), which makes forgetting it silent: a screen that skips
+// it renders default colours instead of the site's. Every screen that
+// mounts real cards must pass it.
+
+import composerSrc from "../screens/composer.ts?raw";
+
+describe("the site palette reaches every real mount", () => {
+  const screens: [string, string][] = [
+    ["board", boardSrc],
+    ["cardEditor", cardEditorSrc],
+    ["composer", composerSrc],
+  ];
+  for (const [name, src] of screens) {
+    it(`${name} loads the site palette and passes it to mounts`, () => {
+      expect(src).toContain("sitePalette(");
+      expect(src).toMatch(/palette(?::| ?[,}])/);
+    });
+  }
+
+  it("the palette-consuming mounters resolve through it", () => {
+    const bodies = mounterBodies();
+    for (const card of ["StatusTile", "SqdpcCard", "ConditionsCard"]) {
+      expect(bodies[card], card).toContain("resolvePaletteColor(");
+    }
+  });
+});

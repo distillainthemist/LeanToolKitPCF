@@ -7,6 +7,7 @@
 // no document row — the actions table IS their data.
 
 import { cardLabel } from "../../../controls/CardSettings/registry";
+import { paletteMap } from "../../../shared/palette";
 import { assigneePeople } from "../../../shared/schema/people";
 import { parseMeetingInfo } from "../../../shared/schema/meeting";
 import {
@@ -29,6 +30,7 @@ import { appTheme, editorHost } from "../cardHost";
 import { currentViewer, detectHost } from "../runtime";
 import { actionsForBoard, actionsForInstance, upsertActions } from "../store/actions";
 import { canViewBoard, getBoard } from "../store/boards";
+import { sitePalette } from "../store/config";
 import { effectivelyClosed, relockOnLeave } from "../relock";
 import {
   createInstanceRow,
@@ -256,9 +258,10 @@ export function mountCardEditor(
       return;
     }
 
-    const [roster, actions] = await Promise.all([
+    const [roster, actions, palette] = await Promise.all([
       listPeople(),
       surface ? actionsForBoard(sourceBoardId) : actionsForInstance(instanceKey),
+      sitePalette(board.site).then(paletteMap),
     ]);
     const viewer = currentViewer();
 
@@ -380,6 +383,7 @@ export function mountCardEditor(
           roster
         ),
         theme,
+        palette,
         // a closed meeting presents its saved state — every card
         // read-only. Effective-closed also covers a >24h meeting whose
         // board nobody has visited (status still "open", never swept).

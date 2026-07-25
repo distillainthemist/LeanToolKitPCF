@@ -6,11 +6,14 @@
 
 import { el } from "../../shared/ui/dom";
 import { checkItem } from "../../shared/ui/dialog";
+import { PaletteEntry, paletteMap, resolvePaletteColor } from "../../shared/palette";
 import { FieldSpec, ObjectField } from "./registry";
 import { captureColumnsEditor } from "./captureColumns";
 
 export interface FieldHost {
   readOnly: boolean;
+  /** The board site's state palette — feeds paletteColor selects. */
+  palette: PaletteEntry[];
   onChanged: () => void;
 }
 
@@ -218,6 +221,48 @@ function colorControl(
   return wrap;
 }
 
+/**
+ * A site-palette selection: Default (""), one of the site's named colours,
+ * or — when the stored value is neither — that value as a "(custom)"
+ * option, so legacy freeform hex keeps rendering honestly. A swatch beside
+ * the select shows the resolved colour.
+ */
+function paletteControl(
+  initial: string,
+  host: FieldHost,
+  onSet: (v: string) => void
+): HTMLElement {
+  const wrap = el("span", "ltk-cs-palette");
+  const sel = el("select", "ltk-input ltk-cs-cell") as HTMLSelectElement;
+  const options = [
+    { value: "", label: "Default" },
+    ...host.palette.map((p) => ({ value: p.key, label: p.label })),
+  ];
+  if (initial !== "" && !host.palette.some((p) => p.key === initial)) {
+    options.push({ value: initial, label: `${initial} (custom)` });
+  }
+  for (const o of options) {
+    const opt = el("option", "", o.label) as HTMLOptionElement;
+    opt.value = o.value;
+    sel.appendChild(opt);
+  }
+  sel.value = initial;
+  sel.disabled = host.readOnly;
+  const swatch = el("span", "ltk-cs-palswatch");
+  const paint = () => {
+    const color = resolvePaletteColor(paletteMap(host.palette), sel.value, "");
+    swatch.style.background = color === "" ? "transparent" : color;
+    swatch.classList.toggle("ltk-cs-palswatch-unset", color === "");
+  };
+  sel.addEventListener("change", () => {
+    paint();
+    onSet(sel.value);
+  });
+  paint();
+  wrap.append(sel, swatch);
+  return wrap;
+}
+
 function colorEditor(spec: FieldSpec, get: Get, set: Set, host: FieldHost): HTMLElement {
   const control = colorControl(asString(get()), host.readOnly, (v) => {
     set(v === "" ? undefined : v);
@@ -304,7 +349,16 @@ function objectListEditor(spec: FieldSpec, get: Get, set: Set, host: FieldHost):
         for (const f of fields) out[f.key] = asString(src[f.key]);
         return out;
       })
-    : [];
+    : // a field that BECAME an objectList (StatusTile states) may hold a
+      // legacy CSV string — adopt each item into the first column so the
+      // stored states appear as rows instead of silently vanishing
+      typeof cur === "string" && cur.trim() !== "" && fields.length > 0
+      ? cur
+          .split(",")
+          .map((v) => v.trim())
+          .filter((v) => v !== "")
+          .map((v) => ({ [fields[0].key]: v }))
+      : [];
 
   const push = () => {
     const cleaned = cleanRows(rows, fields);
@@ -327,6 +381,13 @@ function objectListEditor(spec: FieldSpec, get: Get, set: Set, host: FieldHost):
         if (f.kind === "color") {
           td.appendChild(
             colorControl(row[f.key] ?? "", host.readOnly, (v) => {
+              row[f.key] = v;
+              push();
+            })
+          );
+        } else if (f.kind === "paletteColor") {
+          td.appendChild(
+            paletteControl(row[f.key] ?? "", host, (v) => {
               row[f.key] = v;
               push();
             })

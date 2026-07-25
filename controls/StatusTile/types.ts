@@ -40,22 +40,58 @@ export function serializeStatusTile(env: StatusTileEnvelope): string {
   return serializeEnvelope(env);
 }
 
-/** Parse the states input: JSON array or CSV of labels; default RAG. */
-export function parseStates(raw: string | null | undefined): string[] {
+/** One configured state: the label plus its site-palette selection ("" =
+ *  the positional toolkit default — green/amber/red repeating). */
+export interface StateEntry {
+  label: string;
+  palette: string;
+}
+
+const DEFAULT_STATES: StateEntry[] = [
+  { label: "On track", palette: "" },
+  { label: "At risk", palette: "" },
+  { label: "Off track", palette: "" },
+];
+
+/**
+ * Parse the states input in any of its stored shapes: the objectList form
+ * [{label, palette}], the legacy JSON array of labels, or legacy CSV.
+ * Fewer than two usable states → the default RAG set.
+ */
+export function parseStateEntries(raw: string | null | undefined): StateEntry[] {
   const t = (raw ?? "").trim();
-  const fallback = ["On track", "At risk", "Off track"];
-  if (t === "") return fallback;
-  let items: string[];
+  if (t === "") return DEFAULT_STATES.slice();
+  let items: unknown[];
   if (t.startsWith("[")) {
     try {
       const arr = JSON.parse(t) as unknown;
-      items = Array.isArray(arr) ? arr.map((v) => String(v).trim()) : [];
+      items = Array.isArray(arr) ? arr : [];
     } catch {
-      items = t.split(",").map((v) => v.trim());
+      items = t.split(",");
     }
   } else {
-    items = t.split(",").map((v) => v.trim());
+    items = t.split(",");
   }
-  const clean = items.filter((v) => v !== "");
-  return clean.length >= 2 ? clean : fallback;
+  const clean: StateEntry[] = [];
+  for (const item of items) {
+    if (typeof item === "string") {
+      const label = item.trim();
+      if (label !== "") clean.push({ label, palette: "" });
+      continue;
+    }
+    if (!item || typeof item !== "object") continue;
+    const o = item as Record<string, unknown>;
+    const label = typeof o.label === "string" ? o.label.trim() : "";
+    if (label === "") continue;
+    clean.push({
+      label,
+      palette: typeof o.palette === "string" ? o.palette.trim() : "",
+    });
+  }
+  return clean.length >= 2 ? clean : DEFAULT_STATES.slice();
+}
+
+/** Parse the states input: labels only (the cycle order). */
+export function parseStates(raw: string | null | undefined): string[] {
+  return parseStateEntries(raw).map((s) => s.label);
 }

@@ -5,6 +5,7 @@
 // moment it ships in a client bundle, so the empty-org window is the
 // only thing that makes it safe.
 
+import { mintPaletteKey, parsePalette, serializePalette } from "../../../shared/palette";
 import { copyText } from "../../../shared/ui/clipboard";
 import { clear, el } from "../../../shared/ui/dom";
 import { boardHash, boardUrl } from "../links";
@@ -1976,6 +1977,92 @@ async function renderSiteCadence(
       field("Accent colour", accentGroup.el, "Overrides the app accent for this site")
     );
 
+    // --- state palette (named colours cards select from) ---
+    pane.appendChild(sectionTitle("State palette"));
+    pane.appendChild(
+      el(
+        "div",
+        "app-settings-note",
+        "Named colours for card states (status tiles, SQDPC codes, winning conditions). " +
+          "Cards store the NAME, so recolouring here restyles every board on the site. " +
+          "Removing a colour is safe \u2014 cards using it fall back to their defaults."
+      )
+    );
+    let paletteRows = parsePalette(s.statePaletteJson);
+    // sparse: only persist once a site actually customises the palette
+    let paletteTouched = s.statePaletteJson.trim() !== "";
+    const palBox = el("div", "app-dept-list");
+    pane.appendChild(palBox);
+    const HEX6 = /^#[0-9a-fA-F]{6}$/;
+    const drawPalette = () => {
+      clear(palBox);
+      for (const entry of paletteRows) {
+        const row = el("div", "app-palette-row");
+        const swatch = el("input", "app-palette-swatch") as HTMLInputElement;
+        swatch.type = "color";
+        swatch.value = HEX6.test(entry.color) ? entry.color : "#808080";
+        swatch.disabled = !canEdit;
+        swatch.title = entry.color;
+        swatch.addEventListener("input", () => {
+          entry.color = swatch.value;
+          swatch.title = entry.color;
+          paletteTouched = true;
+          ctx.markDirty();
+        });
+        const label = el("input", "app-input") as HTMLInputElement;
+        label.value = entry.label;
+        label.placeholder = "Name";
+        label.disabled = !canEdit;
+        label.addEventListener("input", () => {
+          entry.label = label.value;
+          paletteTouched = true;
+          ctx.markDirty();
+        });
+        row.append(swatch, label, el("span", "app-field-hint", entry.key));
+        if (canEdit) {
+          const x = el("button", "app-btn app-palette-x", "\u00d7") as HTMLButtonElement;
+          x.title = "Remove \u2014 cards using this colour fall back to their defaults";
+          x.addEventListener("click", () => {
+            paletteRows = paletteRows.filter((e) => e !== entry);
+            paletteTouched = true;
+            drawPalette();
+            ctx.markDirty();
+          });
+          row.appendChild(x);
+        }
+        palBox.appendChild(row);
+      }
+      if (canEdit) {
+        const actions = el("div", "app-palette-actions");
+        const add = el("button", "app-org-add", "\uff0b Add colour") as HTMLButtonElement;
+        add.addEventListener("click", () => {
+          const taken = new Set(paletteRows.map((e) => e.key));
+          const n = paletteRows.length + 1;
+          paletteRows.push({
+            key: mintPaletteKey(`colour ${n}`, taken),
+            label: `Colour ${n}`,
+            color: "#808080",
+          });
+          paletteTouched = true;
+          drawPalette();
+          ctx.markDirty();
+          const inputs = palBox.querySelectorAll<HTMLInputElement>(".app-input");
+          inputs[inputs.length - 1]?.select();
+        });
+        const reset = el("button", "app-btn", "Reset to defaults") as HTMLButtonElement;
+        reset.title = "Back to the toolkit set; nothing custom is kept";
+        reset.addEventListener("click", () => {
+          paletteRows = parsePalette("");
+          paletteTouched = false;
+          drawPalette();
+          ctx.markDirty();
+        });
+        actions.append(add, reset);
+        palBox.appendChild(actions);
+      }
+    };
+    drawPalette();
+
     // --- roster patterns (editable cards) ---
     pane.appendChild(sectionTitle("Shift roster patterns"));
     const patBox = el("div", "app-dept-list");
@@ -2146,6 +2233,11 @@ async function renderSiteCadence(
         await saveSiteSettings(currentSite, {
           timezone: tz.value.trim(),
           accent: accentGroup.value(),
+          statePaletteJson: paletteTouched
+            ? serializePalette(
+                paletteRows.filter((e) => e.label.trim() !== "" && e.color !== "")
+              )
+            : "",
           rosterPatternsJson: JSON.stringify(
             patterns
               .filter((p) => p.name.trim() !== "" || p.pattern.trim() !== "")

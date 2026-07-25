@@ -269,4 +269,12 @@ export const CARDSETTINGS_CSS = `
 }
 .ltk-cs-json-bad { border-color: #a02832 !important; }
 .ltk-cs-jsonerr { font-size: 11px; color: #a02832; }
+
+/* ---- site-palette select ---- */
+.ltk-cs-palette { display: inline-flex; align-items: center; gap: 6px; }
+.ltk-cs-palswatch {
+  width: 16px; height: 16px; border-radius: 4px; flex: none;
+  border: 1px solid var(--ltk-hairline, #d5d1c8);
+}
+.ltk-cs-palswatch-unset { background: transparent; opacity: 0.35; }
 `;

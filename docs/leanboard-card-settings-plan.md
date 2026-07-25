@@ -188,7 +188,26 @@ Goal: state colours defined once per site; cards select from them.
 Tests: palette parse/default; resolution fallbacks (missing key, legacy hex,
 legacy csv states); mounter wiring test extended to assert palette is passed.
 
-- [ ] DONE
+- [x] DONE 2026-07-25 (code side). shared/palette.ts (parse / serialize /
+  paletteMap / resolvePaletteColor / mintPaletteKey); SiteSettings gains
+  statePaletteJson + sitePalette(); settings site tab gets the palette
+  editor (sparse: "" until a site customises); CardSettings gains the
+  paletteColor field kind (Default + site labels + "(custom)" for legacy
+  hex, resolved swatch) and setPalette; StatusTile states became an
+  objectList (label + palette) with legacy CSV/JSON adoption; SQDPC
+  statusCodes colour is a palette select; mounters resolve StatusTile
+  legend slots, SQDPC code colours and Conditions good/issue through the
+  board site's palette. Proof: 182 vitest green (15 new), builds clean,
+  palette-audit.html dev page ALL PASS (rendered colours + editor selects).
+
+  ⚠ Column: `ben_statepalette` did NOT exist on ben_ltksitesettings when
+  probed (FetchXML, Dev env) — nor did any likely alternative name. The
+  model refresh (`pac code add-data-source -a dataverse -t
+  ben_ltksitesettings`) picked up nothing. Reads are defensively untyped
+  and saves omit the key until set, so everything ships and works on
+  defaults; palette SAVES will fail until the column exists. Ben to
+  confirm the column's schema name/environment, then: re-run the model
+  refresh, switch config.ts to the typed field, and verify a hosted save.
 
 ## Phase 4 — LinkCard (and link policy removal)
 

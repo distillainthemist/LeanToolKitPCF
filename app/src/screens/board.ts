@@ -28,8 +28,9 @@ import { boardUrl, LATEST, latestInstanceIso } from "../links";
 import { showLoading } from "../loading";
 import { appTheme } from "../cardHost";
 import { currentViewer, detectHost } from "../runtime";
+import { paletteMap } from "../../../shared/palette";
 import { canViewBoard, getBoard } from "../store/boards";
-import { meetingCategories } from "../store/config";
+import { meetingCategories, sitePalette } from "../store/config";
 import {
   markReopenedForEdit,
   relockOnLeave,
@@ -116,6 +117,8 @@ async function renderBoard(
 ): Promise<void> {
   const boardManifest = parseManifest(board.manifestRaw);
   const catalogSvg = await catalogSvgByType();
+  // the site state palette — live tiles resolve state colours through it
+  const paletteColors = paletteMap(await sitePalette(board.site));
   let instances = await listInstances(board.boardId);
   // meetings auto-close once STALE_MS past — SVGs archive, cards go
   // read-only. A meeting reopened for editing this session is spared so
@@ -231,6 +234,7 @@ async function renderBoard(
       cardId: tile.cardId,
       outputJson: row?.outputJson ?? "",
       theme,
+      palette: paletteColors,
       settings: slot.settings,
       instanceKey,
       instanceWhen: current?.when ?? "",

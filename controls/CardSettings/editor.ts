@@ -3,6 +3,7 @@
 // This shell renders the picker and the chosen-card frame; the typed field
 // editors populate the sections (step 3).
 
+import { defaultPalette as defaultSitePalette, PaletteEntry } from "../../shared/palette";
 import { applyThemeVars, defaultTheme, Theme } from "../../shared/tokens";
 import { LTK_BASE_CSS } from "../../shared/ui/baseCss";
 import { clear, el, ensureStylesheet } from "../../shared/ui/dom";
@@ -37,6 +38,8 @@ export class CardSettingsEditor {
   private search = "";
   /** Boards offered as link/rollup sources; null = not in board mode. */
   private boards: BoardRef[] | null = null;
+  /** The board site's state palette (paletteColor selects). */
+  private palette: PaletteEntry[] = defaultSitePalette();
 
   constructor(host: HTMLElement, private readonly cb: CardSettingsCallbacks) {
     ensureStylesheet("ltk-base-css", LTK_BASE_CSS);
@@ -78,6 +81,13 @@ export class CardSettingsEditor {
   setBoards(boards: BoardRef[] | null): void {
     if (JSON.stringify(boards) === JSON.stringify(this.boards)) return;
     this.boards = boards;
+    this.render();
+  }
+
+  /** The site state palette offered by paletteColor fields. */
+  setPalette(palette: PaletteEntry[]): void {
+    if (JSON.stringify(palette) === JSON.stringify(this.palette)) return;
+    this.palette = palette;
     this.render();
   }
 
@@ -204,6 +214,7 @@ export class CardSettingsEditor {
 
     const host: FieldHost = {
       readOnly: this.readOnly,
+      palette: this.palette,
       onChanged: () => this.commit(),
     };
 

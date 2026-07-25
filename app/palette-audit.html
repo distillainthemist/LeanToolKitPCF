@@ -1,0 +1,117 @@
+<!doctype html>
+<!-- Card-settings plan, phase 3 verification. A mock SITE palette drives:
+     (1) the CardSettings paletteColor selects (StatusTile states, SQDPC
+     status codes), and (2) the mounted cards' rendered colours via the
+     mounters' resolution. Asserts computed styles, not intentions.
+
+       cd app && npm run dev  →  http://localhost:5180/palette-audit.html
+
+     Dev-server only: vite builds index.html alone. -->
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Palette audit</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 16px; background: #f0efea; }
+    table { border-collapse: collapse; background: #fff; font-size: 13px; margin-bottom: 16px; }
+    th, td { border: 1px solid #d5d1c8; padding: 5px 9px; text-align: left; }
+    th { background: #2b2b2b; color: #fff; }
+    .bad { color: #b32020; font-weight: 700; }
+    .ok { color: #1e7a1e; font-weight: 600; }
+    .row { display: flex; gap: 16px; align-items: flex-start; }
+    .stage { width: 420px; height: 300px; background: #fff; border: 1px solid #d5d1c8; }
+    #edhost { width: 420px; background: #fff; border: 1px solid #d5d1c8; }
+  </style>
+</head>
+<body>
+  <h2 style="margin:0 0 10px">Site palette audit</h2>
+  <div id="summary"></div>
+  <table id="report"><thead><tr><th>check</th><th>got</th><th>verdict</th></tr></thead><tbody></tbody></table>
+  <div class="row">
+    <div><h4 style="margin:0 0 6px">StatusTile (site colours)</h4><div id="st" class="stage"></div></div>
+    <div><h4 style="margin:0 0 6px">Editor (paletteColor selects)</h4><div id="edhost"></div></div>
+  </div>
+
+  <script type="module">
+    import { mountTile } from "./src/cardRegistry.ts";
+    import { CardSettingsEditor } from "../controls/CardSettings/editor.ts";
+    import { parseDraft } from "../controls/CardSettings/types.ts";
+    import { paletteMap } from "../shared/palette.ts";
+    import { defaultTheme } from "../shared/tokens.ts";
+
+    const SITE_PALETTE = [
+      { key: "good", label: "Great", color: "#123456" },
+      { key: "issue", label: "Bad news", color: "#654321" },
+      { key: "brand", label: "Pechey red", color: "#8b1e1e" },
+    ];
+    const colors = paletteMap(SITE_PALETTE);
+    const tbody = document.querySelector("#report tbody");
+    let bad = 0;
+    const report = (check, got, ok) => {
+      if (!ok) bad++;
+      const tr = document.createElement("tr");
+      tr.innerHTML = `<td>${check}</td><td>${got}</td><td class="${ok ? "ok" : "bad"}">${ok ? "ok" : "FAIL"}</td>`;
+      tbody.appendChild(tr);
+    };
+    const toHex = (rgb) => {
+      const m = /rgba?\((\d+)[,\s]+(\d+)[,\s]+(\d+)/.exec(rgb);
+      return m ? "#" + [m[1], m[2], m[3]].map((v) => (+v).toString(16).padStart(2, "0")).join("") : rgb;
+    };
+
+    // ---- 1. StatusTile mounted with palette-key states ----
+    const st = document.getElementById("st");
+    mountTile("StatusTile", {
+      host: st,
+      title: "Line status",
+      boardId: "b1", cardId: "c1",
+      outputJson: JSON.stringify({ schema: "ltk/statustile@1", meta: {}, data: { stateIndex: 0, reason: "" } }),
+      theme: defaultTheme(),
+      palette: colors,
+      settings: { config: { states: [
+        { label: "Great", palette: "good" },
+        { label: "Bad", palette: "issue" },
+        { label: "Legacy", palette: "#18cdf2" },
+      ] } },
+      instanceKey: "b1:c1", instanceWhen: "", actions: [],
+    });
+    setTimeout(() => {
+      const tile = st.querySelector(".ltk-st-tile");
+      const bg = tile ? toHex(getComputedStyle(tile).backgroundColor) : "(no tile)";
+      report("StatusTile state 0 uses site 'good' #123456", bg, bg === "#123456");
+
+      // ---- 2. Conditions legend resolution is covered by unit tests; the
+      // editor selects are the remaining DOM surface ----
+      const edhost = document.getElementById("edhost");
+      const ed = new CardSettingsEditor(edhost, { onChange: () => {} });
+      ed.setPalette(SITE_PALETTE);
+      ed.setDraft(parseDraft(JSON.stringify({
+        cardType: "StatusTile",
+        config: { states: "Run, Idle, Down" }, // legacy CSV must appear as rows
+      })), false);
+      const rows = [...edhost.querySelectorAll(".ltk-cs-table .ltk-cs-tr")].length - 1;
+      report("legacy CSV states adopt into objectList rows", `${rows} rows`, rows === 3);
+      const sel = edhost.querySelector(".ltk-cs-palette select");
+      const opts = sel ? [...sel.options].map((o) => o.textContent).join(" | ") : "(none)";
+      report(
+        "paletteColor select offers Default + site labels",
+        opts,
+        !!sel && opts === "Default | Great | Bad news | Pechey red"
+      );
+      const sq = edhost.querySelectorAll(".ltk-cs-palswatch").length;
+      report("each row shows a resolved swatch", `${sq} swatches`, sq === 3);
+
+      // legacy hex on an SQDPC code renders as a "(custom)" option
+      ed.setDraft(parseDraft(JSON.stringify({
+        cardType: "SqdpcCard",
+        config: { statusCodes: [{ code: "good", label: "Good", color: "#0b6a0b", icon: "✓" }] },
+      })), false);
+      const sel2 = [...edhost.querySelectorAll(".ltk-cs-palette select")][0];
+      const hasCustom = sel2 && [...sel2.options].some((o) => o.textContent === "#0b6a0b (custom)");
+      report("legacy hex shows as (custom) option", sel2 ? sel2.value : "(none)", !!hasCustom && sel2.value === "#0b6a0b");
+
+      document.getElementById("summary").innerHTML = bad === 0
+        ? `<p class="ok">ALL PASS</p>` : `<p class="bad">${bad} FAILURES</p>`;
+    }, 300);
+  </script>
+</body>
+</html>

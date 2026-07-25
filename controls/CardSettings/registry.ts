@@ -28,7 +28,8 @@ export type FieldKind =
 export interface ObjectField {
   key: string;
   label: string;
-  kind: "text" | "color";
+  /** paletteColor = a select over the site state palette (stores the KEY). */
+  kind: "text" | "color" | "paletteColor";
   placeholder?: string;
 }
 
@@ -236,10 +237,13 @@ export const CARDS: CardSpec[] = [
       {
         key: "states",
         label: "States",
-        kind: "csvChips",
+        kind: "objectList",
         help:
-          "The states, in cycle order (toolkit status colours; per-state colour selection arrives with the site palette).",
-        placeholder: "On track, At risk, Off track",
+          "The states, in cycle order, each colouring from the site palette. Colour Default = the toolkit green/amber/red by position. Empty = On track / At risk / Off track.",
+        fields: [
+          { key: "label", label: "State", kind: "text", placeholder: "On track" },
+          { key: "palette", label: "Colour", kind: "paletteColor" },
+        ],
       },
     ],
     appBound: ["instanceId"],
@@ -371,11 +375,12 @@ export const CARDS: CardSpec[] = [
         key: "statusCodes",
         label: "Status codes",
         kind: "objectList",
-        help: "Up to four tap-cycle states, each with a colour and glyph.",
+        help:
+          "Up to four tap-cycle states, each with a site-palette colour and glyph (older cards with fixed hex colours keep them).",
         fields: [
           { key: "code", label: "Code", kind: "text", placeholder: "good" },
           { key: "label", label: "Label", kind: "text", placeholder: "Good" },
-          { key: "color", label: "Colour", kind: "color" },
+          { key: "color", label: "Colour", kind: "paletteColor" },
           { key: "icon", label: "Icon", kind: "text", placeholder: "✓" },
         ],
       },

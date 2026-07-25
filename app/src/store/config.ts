@@ -4,6 +4,7 @@
 
 import { Ben_ltksitesettingsesService } from "../generated/services/Ben_ltksitesettingsesService";
 import { Ben_ltkuserprefsesService } from "../generated/services/Ben_ltkuserprefsesService";
+import { defaultPalette, PaletteEntry, parsePalette } from "../../../shared/palette";
 import { allWhere, eq, upsertWhere } from "./dv";
 import { orgTreeFromRows, protectedTimesForSite } from "./mappers";
 
@@ -269,6 +270,8 @@ export interface SiteSettings {
   accent: string;
   /** [{name, pattern}] */
   rosterPatternsJson: string;
+  /** [{key, label, color}] — the site state palette; "" = toolkit defaults. */
+  statePaletteJson: string;
 }
 
 export async function siteSettings(site: string): Promise<SiteSettings> {
@@ -278,6 +281,12 @@ export async function siteSettings(site: string): Promise<SiteSettings> {
     timezone: r?.ben_timezone ?? "",
     accent: r?.ben_accent ?? "",
     rosterPatternsJson: r?.ben_rosterpatterns ?? "",
+    // TODO(phase 3): switch to the typed field once ben_statepalette is on
+    // the regenerated model — the column probe found no such column yet
+    statePaletteJson:
+      ((r as unknown as Record<string, unknown> | undefined)?.ben_statepalette as
+        | string
+        | undefined) ?? "",
   };
 }
 
@@ -292,8 +301,22 @@ export async function saveSiteSettings(site: string, s: SiteSettings): Promise<v
       ben_timezone: s.timezone,
       ben_accent: s.accent,
       ben_rosterpatterns: s.rosterPatternsJson,
+      // only sent when set, so sites that never touch the palette don't
+      // depend on the column existing
+      ...(s.statePaletteJson !== "" ? { ben_statepalette: s.statePaletteJson } : {}),
     }
   );
+}
+
+/** The site's state palette, defaults when unset/unreachable. Cards SELECT
+ *  from these entries; the app resolves selections to concrete colours. */
+export async function sitePalette(site: string): Promise<PaletteEntry[]> {
+  if (site === "") return defaultPalette();
+  try {
+    return parsePalette((await siteSettings(site)).statePaletteJson);
+  } catch {
+    return defaultPalette();
+  }
 }
 
 export interface SiteRosterPattern {

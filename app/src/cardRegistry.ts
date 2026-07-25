@@ -8,6 +8,11 @@
 import { LtkAction } from "../../shared/schema/actions";
 import { Person } from "../../shared/schema/people";
 import { openActionManager } from "../../shared/ui/actionUi";
+import {
+  defaultPalette,
+  paletteMap,
+  resolvePaletteColor,
+} from "../../shared/palette";
 import { Theme } from "../../shared/tokens";
 import { saver } from "./saver";
 
@@ -50,7 +55,7 @@ import { parseFiveWhys, serializeFiveWhys } from "../../controls/FiveWhys/types"
 import { FaultTreeEditor } from "../../controls/FaultTree/editor";
 import { parseFaultTree, serializeFaultTree } from "../../controls/FaultTree/types";
 import { StatusTileEditor } from "../../controls/StatusTile/editor";
-import { parseStates, parseStatusTile, serializeStatusTile } from "../../controls/StatusTile/types";
+import { parseStateEntries, parseStatusTile, serializeStatusTile } from "../../controls/StatusTile/types";
 import { ParetoEditor } from "../../controls/ParetoCard/editor";
 import { parsePareto, serializePareto } from "../../controls/ParetoCard/types";
 import { BenefitEffortEditor } from "../../controls/BenefitEffort/editor";
@@ -112,6 +117,13 @@ export interface CardMount {
   instanceWhen: string;
   /** The card's current actions from the central table. */
   actions: LtkAction[];
+  /**
+   * The board site's state palette (key → colour). Cards store palette
+   * KEYS; mounters resolve them to colours here so controls keep taking
+   * plain colour strings. Optional so display-only harnesses compile;
+   * screens must pass it (mounterWiring test) — missing = toolkit defaults.
+   */
+  palette?: Record<string, string>;
   /** Board cards offered as escalation sources ({instanceKey, label}). */
   sources: { instanceId: string; label: string }[];
   /** The signed-in viewer (EscalationViewer acknowledgements). */
@@ -184,6 +196,11 @@ function promptsRaw(opts: CardMount): string {
 
 function actionsOff(opts: CardMount): boolean {
   return config(opts).disableActions === true;
+}
+
+/** The mount's palette, defaults when the host didn't supply one. */
+function pal(opts: CardMount): Record<string, string> {
+  return opts.palette ?? paletteMap(defaultPalette());
 }
 
 /** New actions get this card's identity; escalated imports keep theirs. */
@@ -268,13 +285,19 @@ const REGISTRY: Record<string, CardMounter> = {
     editor.setReadOnly(opts.readOnly);
     const sqGranRaw = cfgStr(opts, "granularity");
     const sqDims = parseDimensions(cfgRaw(opts, "dimensions"));
+    // status codes may store palette keys (or legacy freeform hex) —
+    // resolve to concrete colours; an unresolvable value keeps itself
+    const sqPal = pal(opts);
     editor.setOptions({
       granularity: (["day", "weekday", "shift2"] as const).includes(sqGranRaw as never)
         ? (sqGranRaw as SqdpcGranularity)
         : "day",
       dimensions: sqDims,
       subtitles: parseSubtitles(cfgRaw(opts, "subtitles"), sqDims),
-      codes: parseStatusCodes(cfgRaw(opts, "statusCodes")),
+      codes: parseStatusCodes(cfgRaw(opts, "statusCodes")).map((c) => ({
+        ...c,
+        color: resolvePaletteColor(sqPal, c.color, c.color),
+      })),
       disableActions: actionsOff(opts),
     });
     editor.setEnvelope(env, opts.actions);
@@ -334,7 +357,13 @@ const REGISTRY: Record<string, CardMounter> = {
       },
       onSnapshot: s.onSnapshot,
     });
-    editor.setTheme(opts.theme);
+    // good/issue colours follow the site palette via the legend slots the
+    // control reads (legend[1] good, legend[2] issue)
+    const cnPal = pal(opts);
+    const cnLegend = opts.theme.legend.slice();
+    cnLegend[1] = resolvePaletteColor(cnPal, "good", cnLegend[1] ?? "") || undefined;
+    cnLegend[2] = resolvePaletteColor(cnPal, "issue", cnLegend[2] ?? "") || undefined;
+    editor.setTheme({ ...opts.theme, legend: cnLegend });
     editor.setChrome(opts.title, promptsRaw(opts));
     editor.setPeople(opts.people); // the action assignee roster
     editor.setReadOnly(opts.readOnly);
@@ -578,7 +607,19 @@ const REGISTRY: Record<string, CardMounter> = {
   },
   StatusTile: (opts) => {
     const s = saver(opts);
-    const states = parseStates(cfgRaw(opts, "states"));
+    const stateEntries = parseStateEntries(cfgRaw(opts, "states"));
+    const states = stateEntries.map((e) => e.label);
+    // each state's palette selection resolves into the legend slot the
+    // control already reads; "" keeps the slot's positional default
+    const palette = pal(opts);
+    const theme: Theme = {
+      ...opts.theme,
+      legend: stateEntries.map(
+        (e, i) =>
+          resolvePaletteColor(palette, e.palette, opts.theme.legend[i] ?? "") ||
+          undefined
+      ),
+    };
     const parsed = parseStatusTile(opts.outputJson).envelope;
     // additive status log: every state change also upserts a day-grain
     // series row (key "state", the meeting's day, value = the label) so
@@ -598,7 +639,7 @@ const REGISTRY: Record<string, CardMounter> = {
       },
       onSnapshot: s.onSnapshot,
     });
-    editor.setTheme(opts.theme);
+    editor.setTheme(theme);
     editor.setChrome(opts.title, promptsRaw(opts));
     editor.setReadOnly(opts.readOnly);
     editor.setStates(states);
@@ -912,7 +953,7 @@ export type TileMount = Pick<
   | "instanceWhen"
   | "actions"
 > &
-  Pick<CardMount, "onEmbedFrame" | "embedPreload">;
+  Pick<CardMount, "onEmbedFrame" | "embedPreload" | "palette">;
 
 /**
  * Mount a card as a BOARD TILE: the same editor, rendering the same data,
