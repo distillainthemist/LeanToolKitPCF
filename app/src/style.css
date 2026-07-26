@@ -1086,27 +1086,34 @@ input[type="color"].app-color:disabled { opacity: 0.4; cursor: default; }
 
 /* ---- linked card (LinkCard) ---- */
 .app-linkcard {
+  position: relative;
   display: flex;
   flex-direction: column;
   width: 100%;
   height: 100%;
   min-height: 0;
 }
-/* jump to the source board/occurrence, on the linked card's title bar */
+/* jump to the source board/occurrence — an overlay pinned to the top right
+   of the linked card, so the inner card's re-renders cannot remove it */
 .app-linkcard-jump {
-  margin-left: auto;
-  flex: none;
+  position: absolute;
+  top: 7px;
+  right: 10px;
+  z-index: 2;
   font-size: 11.5px;
   font-weight: 600;
   text-decoration: none;
-  color: inherit;
-  opacity: 0.85;
+  color: #2b2b2b;
+  opacity: 0.8;
   border: 1px solid currentColor;
   border-radius: 999px;
   padding: 1px 9px;
   white-space: nowrap;
 }
 .app-linkcard-jump:hover { opacity: 1; }
+/* a board tile hides the card's title bar (BoardGrid draws its own chip), so
+   the button would otherwise float over the content */
+.ltk-tile .app-linkcard-jump { display: none; }
 .app-linkcard-body { flex: 1; min-height: 0; display: flex; }
 .app-linkcard-body > * { flex: 1; min-width: 0; }
 .app-linkcard-note {
@@ -1405,6 +1412,8 @@ input[type="color"].app-color:disabled { opacity: 0.4; cursor: default; }
 
 /* a linked card's title carries its source, so it needs room to shrink and
    a smaller face than a normal card title */
+/* leave room for the Open button pinned at the bar's right end */
+.app-linkcard .ltk-titlebar { padding-right: 86px; }
 .app-linkcard .ltk-titlebar-text {
   font-size: 15px;
   min-width: 0;

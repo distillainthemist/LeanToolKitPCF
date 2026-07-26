@@ -13,7 +13,7 @@ import {
   paletteMap,
   resolvePaletteColor,
 } from "../../shared/palette";
-import { Theme } from "../../shared/tokens";
+import { textOn, Theme } from "../../shared/tokens";
 import { el } from "../../shared/ui/dom";
 import { cardLabel } from "../../controls/CardSettings/registry";
 import { boardHash } from "./links";
@@ -1001,19 +1001,25 @@ const REGISTRY: Record<string, CardMounter> = {
           onTile: () => undefined,
           onActions: () => undefined,
         });
-        // a way through to the source, on the title bar the inner card just
-        // drew. Board tiles kill pointer events, so this only bites in the
-        // focused view — which is where a viewer would want to follow it.
-        if (showSource) {
-          const bar = innerHost.querySelector(".ltk-titlebar");
-          if (bar) {
-            const jump = el("a", "app-linkcard-jump", "Open ↗") as HTMLAnchorElement;
-            jump.href = boardHash(srcBoardId, target.instanceWhen);
-            jump.title = `Open ${target.boardName}${
-              target.instanceWhen !== "" ? ` — ${whenLabel(target.instanceWhen)}` : ""
-            }`;
-            bar.appendChild(jump);
-          }
+        // A way through to the source. It is a sibling OVERLAY, not a child
+        // of the title bar: the inner card re-renders whenever its own data
+        // lands (a series card reloads its rows a moment after mounting) and
+        // rebuilds that bar from scratch, which swallowed the button a blink
+        // after it appeared. Nothing the inner card does can touch it here.
+        //
+        // Not in the studio — following a link out of board setup would
+        // leave the overlay stranded over another screen.
+        if (showSource && opts.designTime !== true) {
+          const jump = el("a", "app-linkcard-jump", "Open ↗") as HTMLAnchorElement;
+          jump.href = boardHash(srcBoardId, target.instanceWhen);
+          jump.title = `Open ${target.boardName}${
+            target.instanceWhen !== "" ? ` — ${whenLabel(target.instanceWhen)}` : ""
+          }`;
+          // the button sits ON the title strip, so it takes the strip's
+          // contrast colour rather than the page's
+          const strip = opts.theme.titleBar;
+          if (strip !== "") jump.style.color = textOn(strip);
+          wrap.appendChild(jump);
         }
       } catch (err) {
         console.warn("link card load failed", err);
