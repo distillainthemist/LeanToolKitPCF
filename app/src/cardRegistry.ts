@@ -80,7 +80,7 @@ import {
   parseRows as parseCaptureRows,
   serializeCapture,
 } from "../../controls/CaptureCard/types";
-import { ActionBoardEditor } from "../../controls/ActionBoard/editor";
+import { ActionBoardEditor, parseKanbanColumns } from "../../controls/ActionBoard/editor";
 import { EscalationViewerEditor } from "../../controls/EscalationViewer/editor";
 import { parseSources } from "../../controls/EscalationViewer/types";
 import { EmbedView } from "../../controls/EmbedCard/editor";
@@ -889,9 +889,12 @@ const REGISTRY: Record<string, CardMounter> = {
     const groupBy = cfgStr(opts, "kanbanGroupBy");
     editor.setOptions({
       view: (["list", "kanban", "gantt"].includes(view) ? view : "list") as never,
-      groupBy: (["status", "assignee", "due"].includes(groupBy)
-        ? groupBy
-        : "status") as never,
+      // the accepted values are the ones the registry OFFERS and the editor
+      // understands — "status" | "issue". This used to validate against
+      // ["status","assignee","due"], so choosing "By issue" fell through to
+      // status and the setting silently did nothing.
+      groupBy: (groupBy === "issue" ? "issue" : "status") as never,
+      columns: parseKanbanColumns(cfgRaw(opts, "kanbanColumns")),
     });
     editor.setActions(opts.actions);
     return () => opts.host.replaceChildren();

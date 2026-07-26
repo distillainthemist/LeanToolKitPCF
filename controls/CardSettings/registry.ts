@@ -250,13 +250,21 @@ export const CARDS: CardSpec[] = [
       },
       {
         key: "kanbanGroupBy",
-        label: "Kanban columns",
+        label: "Kanban grouping",
         kind: "enum",
         options: [
           { value: "status", label: "By status" },
           { value: "issue", label: "By issue" },
         ],
-        help: "What the kanban columns represent (kanban view only).",
+        help: "What each kanban column represents (Kanban view only).",
+      },
+      {
+        key: "kanbanColumns",
+        label: "Fixed columns",
+        kind: "csvChips",
+        help:
+          "Name the columns yourself, in the order you want them. They always show, even when empty, and dragging a card into one files it under that name. Empty = build the columns from whatever the actions are already tagged with. Grouped by issue only.",
+        placeholder: "Safety, Quality, Delivery",
       },
     ],
     appBound: ["instanceId", "peopleJSON"],

@@ -17,6 +17,35 @@ import { ACTIONBOARD_CSS } from "./styles";
 export type BoardView = "list" | "kanban" | "gantt";
 export type KanbanGroupBy = "status" | "issue";
 
+/**
+ * The configured kanban columns, from a JSON array or comma-separated text
+ * (CardSettings stores chip fields either way). Blank entries are dropped and
+ * duplicates collapse, since each column has to be a distinct drop target.
+ */
+export function parseKanbanColumns(raw: string | null | undefined): string[] {
+  const t = (raw ?? "").trim();
+  if (t === "") return [];
+  let items: unknown[];
+  if (t.startsWith("[")) {
+    try {
+      const arr = JSON.parse(t) as unknown;
+      items = Array.isArray(arr) ? arr : [];
+    } catch {
+      items = t.split(",");
+    }
+  } else {
+    items = t.split(",");
+  }
+  const out: string[] = [];
+  for (const item of items) {
+    const label = String(item ?? "").trim();
+    if (label === "") continue;
+    if (out.some((x) => x.toLowerCase() === label.toLowerCase())) continue;
+    out.push(label);
+  }
+  return out;
+}
+
 /** Day number of a yyyy-mm-dd date (UTC, so arithmetic is DST-proof). */
 function dayNum(iso: string): number {
   return Math.floor(Date.parse(iso + "T00:00:00Z") / 86400000);
@@ -62,6 +91,8 @@ export class ActionBoardEditor {
   private readOnly = false;
   private view: BoardView = "list";
   private groupBy: KanbanGroupBy = "status";
+  /** Configured "by issue" columns; empty = discovered from the actions. */
+  private fixedColumns: string[] = [];
   private readonly snapshots: SnapshotScheduler;
 
   // gantt state (transient): zoom level and the scroll position to restore
@@ -131,12 +162,25 @@ export class ActionBoardEditor {
     }
   }
 
-  setOptions(opts: { view: BoardView; groupBy: KanbanGroupBy }): void {
-    if (this.view === opts.view && this.groupBy === opts.groupBy) return;
+  setOptions(opts: {
+    view: BoardView;
+    groupBy: KanbanGroupBy;
+    /** Fixed "by issue" columns; empty = whatever issues the actions have. */
+    columns?: string[];
+  }): void {
+    const cols = opts.columns ?? [];
+    if (
+      this.view === opts.view &&
+      this.groupBy === opts.groupBy &&
+      JSON.stringify(cols) === JSON.stringify(this.fixedColumns)
+    ) {
+      return;
+    }
     // re-fit the gantt whenever it is (re)entered
     if (opts.view === "gantt" && this.view !== "gantt") this.ganttAutoFit = true;
     this.view = opts.view;
     this.groupBy = opts.groupBy;
+    this.fixedColumns = cols;
     this.render();
   }
 
@@ -265,6 +309,23 @@ export class ActionBoardEditor {
         label: c.label,
         items: visible.filter((a) => a.status === c.status),
       }));
+    }
+    // configured columns: exactly these, in this order, ALWAYS shown — an
+    // empty swim lane is information ("nothing in Safety this week"), and a
+    // column that came and went as actions were added would be unusable as a
+    // drop target. Matching is case-insensitive so a typed issue still lands.
+    if (this.fixedColumns.length > 0) {
+      const norm = (s: string) => s.trim().toLowerCase();
+      const cols = this.fixedColumns.map((label) => ({
+        key: label,
+        label,
+        items: visible.filter((a) => norm(a.issue) === norm(label)),
+      }));
+      // anything that matches no column still has to be reachable
+      const known = new Set(this.fixedColumns.map(norm));
+      const rest = visible.filter((a) => !known.has(norm(a.issue)));
+      if (rest.length > 0) cols.push({ key: "", label: "Other", items: rest });
+      return cols;
     }
     // by issue: preserve first-seen order, empty issue last
     const keys: string[] = [];
