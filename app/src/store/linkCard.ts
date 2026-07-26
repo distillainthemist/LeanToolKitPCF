@@ -9,12 +9,19 @@ import { getBoard } from "./boards";
 import { rowsForBoard } from "./cards";
 import { listInstances } from "./instances";
 import { ManifestSlot, parseManifest, slotPolicy } from "./mappers";
-import { pickLinkContent } from "./policies";
+import { pickLinkContent, pickLinkIndex } from "./policies";
 
 export interface LinkTarget {
   boardName: string;
   slot: ManifestSlot;
   outputJson: string;
+  /**
+   * The meeting whose content is being shown, ISO datetime — so the card can
+   * say WHICH occurrence a viewer is looking at, and link straight to it.
+   * "" when the content is the source's live document (a shared card, or a
+   * template with no meeting behind it yet), which belongs to no occurrence.
+   */
+  instanceWhen: string;
 }
 
 export type LinkTargetFailure = "missing" | "excluded";
@@ -38,21 +45,28 @@ export async function loadLinkTarget(
     rows.find((r) => r.cardId === srcCardId && r.instanceId === "")?.outputJson ?? "";
   const policy = slotPolicy(slot);
   let newestFirst: string[] = [];
+  /** Each candidate document's meeting datetime, in the same order. */
+  let whens: string[] = [];
   if (policy !== "shared") {
     // rank this card's instance rows by their meeting's datetime
     const order = new Map(
       (await listInstances(srcBoardId)).map((i) => [i.id, i.when])
     );
-    newestFirst = rows
+    const ranked = rows
       .filter((r) => r.cardId === srcCardId && r.instanceId !== "")
       .sort((a, b) =>
         (order.get(b.instanceId) ?? "").localeCompare(order.get(a.instanceId) ?? "")
-      )
-      .map((r) => r.outputJson);
+      );
+    newestFirst = ranked.map((r) => r.outputJson);
+    whens = ranked.map((r) => order.get(r.instanceId) ?? "");
   }
+  // the same decision drives both, so the datetime shown always belongs to
+  // the content actually rendered
+  const chosen = pickLinkIndex(policy, newestFirst);
   return {
     boardName: board.name,
     slot,
     outputJson: pickLinkContent(policy, liveJson, newestFirst),
+    instanceWhen: chosen >= 0 ? (whens[chosen] ?? "") : "",
   };
 }

@@ -16,6 +16,8 @@ import {
 import { Theme } from "../../shared/tokens";
 import { el } from "../../shared/ui/dom";
 import { cardLabel } from "../../controls/CardSettings/registry";
+import { boardHash } from "./links";
+import { dayLabel, linkTitle, whenLabel } from "./linkTitle";
 import { loadLinkTarget } from "./store/linkCard";
 import { saver } from "./saver";
 
@@ -723,8 +725,12 @@ const REGISTRY: Record<string, CardMounter> = {
     editor.setPeople(opts.people);
     editor.setActions(opts.actions);
     editor.setCanRaise(!actionsOff(opts));
+    // the count shown is a WINDOW total, but an edit only moves the meeting
+    // day's tally — worth saying, in words rather than the ISO shorthand
+    // this used to print ("Count = the 2026-06-28 – 2026-07-27 total; …")
     editor.setCountNote(
-      `Count = the ${window.from} – ${window.to} total; a change lands on ${day}.`
+      `Total for ${dayLabel(window.from)} – ${dayLabel(window.to)}. ` +
+        `A change here applies to ${dayLabel(day)}.`
     );
     editor.setUnit(cfgStr(opts, "unit"));
     editor.setEnvelope(env);
@@ -965,17 +971,19 @@ const REGISTRY: Record<string, CardMounter> = {
         opts.host.replaceChildren();
         const wrap = el("div", "app-linkcard");
         opts.host.appendChild(wrap);
-        if (config(opts).hideCaption !== true) {
-          const sourceName = target.slot.title || cardLabel(target.slot.cardType);
-          wrap.appendChild(
-            el("div", "app-linkcard-caption", `from ${target.boardName} · ${sourceName}`)
-          );
-        }
         const innerHost = el("div", "app-linkcard-body");
         wrap.appendChild(innerHost);
+        // The source used to sit in a grey band above the card, which cost a
+        // strip of height on every board and read as chrome. It belongs in
+        // the title: what you are looking at, and which meeting it came from.
+        const sourceName = target.slot.title || cardLabel(target.slot.cardType);
+        const showSource = config(opts).hideCaption !== true;
+        const title = showSource
+          ? linkTitle(sourceName, target.boardName, target.instanceWhen)
+          : opts.title || sourceName;
         teardownInner = inner({
           host: innerHost,
-          title: opts.title || target.slot.title || cardLabel(target.slot.cardType),
+          title,
           boardId: srcBoardId,
           cardId: srcCardId,
           outputJson: target.outputJson,
@@ -993,6 +1001,20 @@ const REGISTRY: Record<string, CardMounter> = {
           onTile: () => undefined,
           onActions: () => undefined,
         });
+        // a way through to the source, on the title bar the inner card just
+        // drew. Board tiles kill pointer events, so this only bites in the
+        // focused view — which is where a viewer would want to follow it.
+        if (showSource) {
+          const bar = innerHost.querySelector(".ltk-titlebar");
+          if (bar) {
+            const jump = el("a", "app-linkcard-jump", "Open ↗") as HTMLAnchorElement;
+            jump.href = boardHash(srcBoardId, target.instanceWhen);
+            jump.title = `Open ${target.boardName}${
+              target.instanceWhen !== "" ? ` — ${whenLabel(target.instanceWhen)}` : ""
+            }`;
+            bar.appendChild(jump);
+          }
+        }
       } catch (err) {
         console.warn("link card load failed", err);
         if (!disposed) note("The linked card could not be loaded.");

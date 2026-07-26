@@ -179,6 +179,13 @@ export class ProcessMapEditor {
    */
   setTheme(theme: Theme): void {
     applyThemeVars(this.root, theme);
+    // Dialogs render into dlgHost, which is the mount host ABOVE .ltk-root
+    // (the stage is transformed for zoom/pan, and a transformed ancestor
+    // becomes the containing block for position:fixed, which would trap
+    // them). Outside the root none of the --ltk-* variables resolve, so
+    // `.ltk-dialog { background: var(--ltk-bg) }` painted nothing and the
+    // dialogs came out transparent.
+    if (this.dlgHost) applyThemeVars(this.dlgHost, theme);
   }
 
   /**

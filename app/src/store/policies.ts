@@ -78,6 +78,21 @@ export function linkCardSource(
 }
 
 /**
+ * WHICH of the candidates a LinkCard renders: the index into
+ * `newestFirstInstanceJsons`, or -1 when the answer is the live row (a
+ * shared source, or nothing stored yet). Kept beside the content rule so the
+ * two cannot disagree — the datetime a linked card shows has to belong to
+ * the content it is actually rendering.
+ */
+export function pickLinkIndex(
+  policy: "clear" | "carry" | "shared",
+  newestFirstInstanceJsons: string[]
+): number {
+  if (policy === "shared") return -1;
+  return newestFirstInstanceJsons.findIndex((j) => j !== "");
+}
+
+/**
  * Which document a LinkCard renders (store/linkCard.ts executes this):
  *  - a SHARED source's truth is its live row (series cards land here too,
  *    via slotPolicy's override);
