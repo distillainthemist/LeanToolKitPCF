@@ -42,7 +42,7 @@
     const SITE_PALETTE = [
       { key: "good", label: "Great", color: "#123456" },
       { key: "issue", label: "Bad news", color: "#654321" },
-      { key: "brand", label: "Pechey red", color: "#8b1e1e" },
+      { key: "brand", label: "Brand red", color: "#8b1e1e" },
     ];
     const colors = paletteMap(SITE_PALETTE);
     const tbody = document.querySelector("#report tbody");
@@ -84,7 +84,7 @@
       const edhost = document.getElementById("edhost");
       const ed = new CardSettingsEditor(edhost, { onChange: () => {} });
       ed.setPalettes(SITE_PALETTE, [
-        { key: "brick", label: "Pechey brick", color: "#8b1e1e" },
+        { key: "brick", label: "Brand brick", color: "#8b1e1e" },
       ]);
       ed.setDraft(parseDraft(JSON.stringify({
         cardType: "StatusTile",
@@ -97,7 +97,7 @@
       report(
         "paletteColor select offers Default + site labels",
         opts,
-        !!sel && opts === "Default | Great | Bad news | Pechey red"
+        !!sel && opts === "Default | Great | Bad news | Brand red"
       );
       // 3 state rows + the Appearance section's title-strip select
       const sq = edhost.querySelectorAll(".ltk-cs-palswatch").length;

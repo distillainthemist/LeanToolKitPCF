@@ -10,7 +10,7 @@ import { allWhere, eq, upsertWhere } from "./dv";
 // Drives the heal: selfHealCatalog() skips a catalog already stamped with
 // this value, so it MUST change whenever tools/tile-defaults.json is
 // regenerated (app/tile-defaults.html) or the new tiles never land.
-export const APP_VERSION = "0.1.2";
+export const APP_VERSION = "0.1.3";
 
 interface CatalogEntry {
   type: string;

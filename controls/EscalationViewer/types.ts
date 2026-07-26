@@ -6,7 +6,7 @@
 //
 // Grouping: each action's instanceId identifies the card it was raised on.
 // sourcesJSON ([{instanceId, label}]) maps those ids to friendly names
-// ("Bottling line board · Fishbone"); unmapped ids fall back to the action's
+// ("Packing line board · Fishbone"); unmapped ids fall back to the action's
 // context.source (the card type), then "Other".
 
 import { isComplete, LtkAction } from "../../shared/schema/actions";

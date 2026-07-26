@@ -423,7 +423,7 @@ export class MeetingWizardView {
     const title = this.textInput(
       this.draft.title,
       (v) => (this.draft.title = v),
-      "e.g. Bottling line standup"
+      "e.g. Packing line standup"
     );
     // keep the draft (and the forward-nav gate) live per keystroke — the
     // change event only fires on blur, which left Next stuck disabled

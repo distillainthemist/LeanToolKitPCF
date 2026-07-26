@@ -22,8 +22,8 @@ describe("whenLabel", () => {
 
 describe("linkTitle", () => {
   it("says what it is, which board, and which occurrence", () => {
-    expect(linkTitle("Safety Cross", "Bottling line standup", "2026-07-25T06:00:00")).toMatch(
-      /^Safety Cross · Bottling line standup · .+/
+    expect(linkTitle("Safety Cross", "Packing line standup", "2026-07-25T06:00:00")).toMatch(
+      /^Safety Cross · Packing line standup · .+/
     );
   });
 

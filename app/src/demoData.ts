@@ -16,8 +16,8 @@ export const ORG_TREE = [
   {
     site: "Riverbend",
     departments: [
-      { department: "Bottling", areas: ["Line 1", "Line 2"] },
-      { department: "Distilling", areas: ["Stills", "Fermentation"] },
+      { department: "Assembly", areas: ["Line 1", "Line 2"] },
+      { department: "Machining", areas: ["Cell 1", "Cell 2"] },
       { department: "Warehouse", areas: [] },
     ],
   },
@@ -30,7 +30,7 @@ export const BOARDS = [
     boardId: "board-standup",
     settingsJSON: {
       cardType: "MeetingScheduler",
-      title: "Bottling standup",
+      title: "Assembly standup",
       theme: { titlebar: "#2563eb", accent: "#2563eb" },
       config: {
         category: "shiftly",
@@ -46,7 +46,7 @@ export const BOARDS = [
       meeting: {
         purpose: "Shift handover: review the last shift, agree the top issue, assign actions.",
         owner: { whoId: "p0", who: "Dana Field" },
-        org: { site: "Riverbend", department: "Bottling", area: "Line 1" },
+        org: { site: "Riverbend", department: "Assembly", area: "Line 1" },
         participants: [
           { whoId: "p0", who: "Dana Field" },
           { whoId: "p1", who: "Sam Patel", crew: "A" },
@@ -120,6 +120,6 @@ export const ACTIONS = [
 ];
 
 export const ACTION_SOURCES = [
-  { instanceId: "b-fish", label: "Bottling board · Top issue" },
-  { instanceId: "b-actions", label: "Bottling board · Actions" },
+  { instanceId: "b-fish", label: "Assembly board · Top issue" },
+  { instanceId: "b-actions", label: "Assembly board · Actions" },
 ];

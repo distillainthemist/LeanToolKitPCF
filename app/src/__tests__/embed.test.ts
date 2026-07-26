@@ -10,11 +10,11 @@ import {
 
 describe("safeEmbedUrl", () => {
   it("passes https through and adds a scheme to bare hosts", () => {
-    expect(safeEmbedUrl("https://www.pecheydistilling.com.au")).toBe(
-      "https://www.pecheydistilling.com.au"
+    expect(safeEmbedUrl("https://www.example-manufacturing.com")).toBe(
+      "https://www.example-manufacturing.com"
     );
-    expect(safeEmbedUrl("www.pecheydistilling.com.au")).toBe(
-      "https://www.pecheydistilling.com.au"
+    expect(safeEmbedUrl("www.example-manufacturing.com")).toBe(
+      "https://www.example-manufacturing.com"
     );
   });
 
@@ -29,7 +29,7 @@ describe("isPowerBiUrl", () => {
   it("recognises the Power BI service across clouds", () => {
     expect(isPowerBiUrl("https://app.powerbi.com/reportEmbed?reportId=x")).toBe(true);
     expect(isPowerBiUrl("https://app.powerbi.cn/reportEmbed")).toBe(true);
-    expect(isPowerBiUrl("https://www.pecheydistilling.com.au")).toBe(false);
+    expect(isPowerBiUrl("https://www.example-manufacturing.com")).toBe(false);
   });
 });
 
@@ -101,12 +101,12 @@ describe("buildEmbedUrl", () => {
   it("returns the generic url untouched", () => {
     expect(
       buildEmbedUrl({
-        url: "www.pecheydistilling.com.au",
+        url: "www.example-manufacturing.com",
         hideFilterPane: true, // Power BI only — ignored here
         hidePageNav: true,
         pageName: "x",
       })
-    ).toBe("https://www.pecheydistilling.com.au");
+    ).toBe("https://www.example-manufacturing.com");
   });
 
   it("injects the Power BI pane toggles and page as query params", () => {

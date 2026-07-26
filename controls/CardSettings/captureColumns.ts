@@ -191,7 +191,7 @@ export function captureColumnsEditor(
       const lIn = el("input", "ltk-input ltk-cs-cell") as HTMLInputElement;
       lIn.type = "text";
       lIn.value = op.label;
-      lIn.placeholder = "e.g. Fermenter";
+      lIn.placeholder = "e.g. Machine";
       lIn.disabled = host.readOnly;
       lIn.addEventListener("input", () => {
         const old = op.value;

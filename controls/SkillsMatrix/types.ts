@@ -50,15 +50,15 @@ export const DEFAULT_CATEGORIES: SkillCategory[] = [
     id: "c1",
     name: "Production",
     skills: [
-      { id: "s1", name: "Mashing", target: 3 },
-      { id: "s2", name: "Distillation", target: 3 },
+      { id: "s1", name: "Machine setup", target: 3 },
+      { id: "s2", name: "Changeover", target: 3 },
     ],
   },
   {
     id: "c2",
     name: "Packaging",
     skills: [
-      { id: "s3", name: "Bottling line", target: 2 },
+      { id: "s3", name: "Packing line", target: 2 },
       { id: "s4", name: "Quality checks", target: 2 },
     ],
   },
