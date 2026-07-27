@@ -340,7 +340,7 @@ never hard-code. This is what keeps the feature sellable beyond one site.
 | 2 | Is the connection delegated (per-user)? | Expected: yes, per-user consent on first run; definitive proof is the two-account test in Phase 2 (needs spike 8). See improvement 2 |
 | 3 | Are the DMS custom columns crawled and mapped to managed properties, with the recrawl done? | Gates search *and the navigation tree*. Tenant-admin lead time — raise in week 1 |
 | 4 | Term store readable via `/_api/v2.1/termStore` through the connector, or Graph only? | **Closed 2026-07-27: site-scoped, 200 — no Graph needed** |
-| 5 | Which preview surfaces render inside the Power Apps host iframe? | **Preliminary positive:** Doc.aspx probe carried no `frame-ancestors` / `X-Frame-Options`; in-browser test with a real document still required |
+| 5 | Which preview surfaces render inside the Power Apps host iframe? | **Answered 2026-07-27, probing the real file after Ben hit a blocked-file glyph on a PDF.** The raw file URL is served as an attachment, so no browser will frame it — that was the bug. `Doc.aspx?action=embedview` answers an **error page for a PDF** (the Office branch was wrong there too). **`embed.aspx?UniqueId=` returns a real page for both .pdf and .docx, with no `X-Frame-Options` and no `frame-ancestors`** — one endpoint, every type. Fallback: `getpreview.ashx?path=<absolute url>` (NOT `guidFile=`, which 400s) returns PNG bytes for both. Whether the frame paints inside the *player* is Ben's confirmation |
 | 6 | Is `format=pdf` reachable for rendition generation? | **Closed 2026-07-27: yes, and site-scoped** — `/_api/v2.0/drive/items/{id}/content?format=pdf` → 302 presigned URL |
 | 7 | One SharePoint site, confirmed? | **Closed: `https://pecheydistillingcom.sharepoint.com/sites/Dev`** (dev target; §10.3 confirms the single-site model for deployments) |
 | 8 | Is a second licensed account available in the dev tenant? | Without it the permission-trimming proof is unrunnable as written |
@@ -565,6 +565,12 @@ accounts (spike 8 prerequisite); board chunks unchanged.
   view" first. **Properties & history**: full field text via
   `GetFileById` (works for search rows with no item id) + the SharePoint
   version list.
+  **Revised 2026-07-27** after Ben hit a blocked-file glyph on a PDF: the
+  preview now goes through `embed.aspx?UniqueId=` for **every** file type
+  (see spike 5 — the raw-file and Doc.aspx routes are both wrong), and
+  because a cross-origin frame cannot be asked whether it painted, the
+  note under it offers a **page image** (`getpreview.ashx?path=`) as a
+  guaranteed-render path rather than a dead end.
 - **Scope notes (honest):** org-tree nodes are selection-disabled until a
   deployment maps crawled → managed properties (tooltip says so); the
   drafts/superseded toggle applies in browse mode via a documented text
