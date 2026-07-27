@@ -9,11 +9,12 @@ import { el, clear } from "../../../shared/ui/dom";
 import { markDialog, trapFocus } from "../focusTrap";
 import {
   DocRow,
-  downloadUrlFor,
   embedUrlFor,
   extGlyph,
   formatWhen,
-  openUrlFor,
+  pdfDownloadUrlFor,
+  pdfViewUrlFor,
+  sourceUrlFor,
   thumbnailUrlFor,
 } from "./rows";
 import { itemDetails, itemVersions } from "./data";
@@ -83,21 +84,24 @@ export function openDocViewer(opts: ViewerOpts): void {
   const stage = el("div", "app-docs-viewstage");
   panel.appendChild(stage);
 
+  // every reader action lands on the PDF rendering — the editable source
+  // is reachable only through the working-document "Work on it" path
+  const pdfUrl = pdfViewUrlFor(site, row);
   const actions = el("div", "app-docs-viewactions");
   actions.append(
-    linkBtn("Open in SharePoint ↗", openUrlFor(site, row), true),
-    linkBtn("Download", downloadUrlFor(site, row))
+    linkBtn("Open PDF ↗", pdfUrl, true),
+    linkBtn("Download PDF", pdfDownloadUrlFor(site, row))
   );
-  const copy = el("button", "app-btn", "Copy link") as HTMLButtonElement;
+  const copy = el("button", "app-btn", "Copy PDF link") as HTMLButtonElement;
   copy.addEventListener("click", () => {
-    void navigator.clipboard.writeText(openUrlFor(site, row)).then(() => {
+    void navigator.clipboard.writeText(pdfUrl).then(() => {
       copy.textContent = "Copied ✓";
-      setTimeout(() => (copy.textContent = "Copy link"), 1500);
+      setTimeout(() => (copy.textContent = "Copy PDF link"), 1500);
     });
   });
   const mail = linkBtn(
-    "Email link",
-    `mailto:?subject=${encodeURIComponent(row.name)}&body=${encodeURIComponent(openUrlFor(site, row))}`
+    "Email PDF link",
+    `mailto:?subject=${encodeURIComponent(row.name)}&body=${encodeURIComponent(pdfUrl)}`
   );
   mail.target = "_self"; // mailto in a new tab leaves a blank window behind
   actions.append(copy, mail);
@@ -116,7 +120,7 @@ export function openDocViewer(opts: ViewerOpts): void {
     note.append(document.createTextNode("Preview not showing? "));
     const asImage = el("button", "app-linklike", "Show page preview") as HTMLButtonElement;
     asImage.addEventListener("click", () => paintThumbnail());
-    note.append(asImage, document.createTextNode(" · or Open in SharePoint above."));
+    note.append(asImage, document.createTextNode(" · or Open PDF above."));
     stage.appendChild(note);
   };
 
@@ -141,7 +145,9 @@ export function openDocViewer(opts: ViewerOpts): void {
     // working documents: the draft's flow — ask before opening to edit
     const ask = el("div", "app-docs-viewask");
     ask.appendChild(el("div", "", `Work on “${row.name}”?`));
-    const work = linkBtn("Work on it ↗", openUrlFor(site, row), true);
+    // the one route to the editable source, and only for a library the
+    // super admin typed as "working documents"
+    const work = linkBtn("Work on it ↗", sourceUrlFor(site, row), true);
     work.addEventListener("click", close);
     const view = el("button", "app-btn", "Just view") as HTMLButtonElement;
     view.addEventListener("click", () => {

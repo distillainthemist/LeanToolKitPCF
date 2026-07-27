@@ -552,6 +552,22 @@ accounts (spike 8 prerequisite); board chunks unchanged.
   hints / the Organisation tree from the term store), search bar with
   This-library / All-documents scope, the FR-SE-005 "Include drafts &
   superseded" toggle, and the document list.
+- **The corpus is the exposed libraries — never the site.** Every search
+  carries a `ListID` scope clause (one library, or an OR across all
+  exposed ones); `searchPage` refuses to send an unscoped query at all.
+  Measured on the Dev site: unscoped answers with **4,543** items
+  (OneDrive files, `.loop`, `.one`, site pages) against **2** in the
+  configured library. "All documents" therefore means *everything
+  LeanBoard exposes*, and the scope toggle switches between the current
+  view and that whole corpus.
+- **Readers only ever get a PDF rendering** (FR-DI-005/006). Open,
+  Download, Copy link and Email link all resolve through
+  `pdfViewUrlFor` / `pdfDownloadUrlFor`: an Office file converts on the
+  fly (`/content?format=pdf` → presigned `application/pdf`, no further
+  auth), and a file that is already a PDF opens in SharePoint's viewer
+  because pdf→pdf conversion is refused (406). The editable source has
+  exactly one route — `sourceUrlFor`, behind the "Work on it" prompt on
+  a library typed as *working documents*.
 - **Two data modes, both through pure tested parsers** (`rows.ts`, 9 tests):
   browse = list REST pages (`FieldValuesAsText` projects every column as
   text — one call, no per-type handling; server paging via nextLink),

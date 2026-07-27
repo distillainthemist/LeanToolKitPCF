@@ -99,21 +99,31 @@ export function toSiteRelative(url: string, site: string): string {
 // ---- search mode (postquery) -------------------------------------------
 
 export interface SearchOpts {
-  /** Restrict to one library ("" = whole site). */
-  listId?: string;
+  /**
+   * The libraries the search may see — the corpus is ALWAYS what a super
+   * admin exposed, never the whole site. Unscoped, this site's index
+   * answers with 4,543 items (OneDrive files, .loop, .one, site pages)
+   * against 2 in the configured library; the scope clause is what makes
+   * a result list mean anything.
+   */
+  listIds: string[];
   rowLimit?: number;
   startRow?: number;
   /** Sort newest-first instead of by relevance (the browse-ish default). */
   byModified?: boolean;
 }
 
-/** The postquery body. Empty text means "everything" (recent documents). */
-export function buildSearchBody(text: string, opts: SearchOpts = {}): string {
+/** The postquery body. Empty text means "everything in scope" (recent). */
+export function buildSearchBody(text: string, opts: SearchOpts): string {
   const t = text.trim();
   const terms: string[] = [];
   if (t !== "") terms.push(`${t.replace(/["']/g, " ").trim()}*`);
   terms.push("IsDocument:1");
-  if ((opts.listId ?? "") !== "") terms.push(`ListID:${opts.listId}`);
+  const ids = opts.listIds.filter((id) => id.trim() !== "");
+  if (ids.length === 1) terms.push(`ListID:${ids[0]}`);
+  else if (ids.length > 1) {
+    terms.push(`(${ids.map((id) => `ListID:${id}`).join(" OR ")})`);
+  }
   const request: Record<string, unknown> = {
     Querytext: terms.join(" "),
     RowLimit: opts.rowLimit ?? 50,
@@ -229,14 +239,35 @@ export function thumbnailUrlFor(site: string, row: DocRow): string {
   return `${site}/_layouts/15/getpreview.ashx?path=${encodeURIComponent(abs)}`;
 }
 
-/** The open-in-SharePoint URL (new tab; ?web=1 keeps office docs in the
- *  browser instead of nagging for the desktop app). */
-export function openUrlFor(site: string, row: DocRow): string {
-  return `${originOf(site)}${row.serverUrl}?web=1`;
+/**
+ * The reader's URL — ALWAYS a PDF rendering, never the editable source
+ * (FR-DI-005/006: a general reader has no editable-format entitlement).
+ *
+ * A file that is already a PDF has no editable form to protect, and
+ * SharePoint refuses to convert pdf→pdf (406 "no conversion available"),
+ * so it opens in SharePoint's own PDF viewer. Everything else converts
+ * on the fly — probed: .docx → `application/pdf` from a presigned URL
+ * that needs no further auth, served inline.
+ */
+export function pdfViewUrlFor(site: string, row: DocRow): string {
+  return row.ext === "pdf"
+    ? `${site}/_layouts/15/embed.aspx?UniqueId=${row.uniqueId}`
+    : `${site}/_api/v2.0/drive/items/${row.uniqueId}/content?format=pdf`;
 }
 
-export function downloadUrlFor(site: string, row: DocRow): string {
-  return `${site}/_layouts/15/download.aspx?UniqueId=${row.uniqueId}`;
+/** The same rendering as a file. An existing PDF's content URL already
+ *  carries an attachment disposition; a converted one does not, so it may
+ *  open in the browser's PDF viewer rather than saving — either way the
+ *  reader never receives the editable source. */
+export function pdfDownloadUrlFor(site: string, row: DocRow): string {
+  const base = `${site}/_api/v2.0/drive/items/${row.uniqueId}/content`;
+  return row.ext === "pdf" ? base : `${base}?format=pdf`;
+}
+
+/** The editable source. ONLY for the work-on-it path on a working
+ *  document — never offered to a reader. */
+export function sourceUrlFor(site: string, row: DocRow): string {
+  return `${originOf(site)}${row.serverUrl}?web=1`;
 }
 
 /** FR-SE-005 heuristic until status semantics are configurable: these

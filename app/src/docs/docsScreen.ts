@@ -22,7 +22,7 @@ import {
   extGlyph,
   formatWhen,
   isNonCurrentStatus,
-  openUrlFor,
+  pdfViewUrlFor,
 } from "./rows";
 import { DocLibrary, docsConfig } from "./docsStore";
 import { fetchTermPaths } from "./sp";
@@ -97,6 +97,9 @@ export function mountDocs(
 
     const states = paletteMap(palettes.states);
     const byListId = new Map(libraries.map((l) => [l.listId.toLowerCase(), l]));
+    /** The whole corpus LeanBoard can see — every exposed library, and
+     *  the widest any query here is ever allowed to reach. */
+    const allListIds = libraries.map((l) => l.listId);
     const current: DocLibrary | null = byListId.get(selected.toLowerCase()) ?? null;
 
     // ---- chrome: title, search, controls -------------------------------
@@ -116,6 +119,9 @@ export function mountDocs(
       o.value = v;
       scope.appendChild(o);
     }
+    scope.title =
+      "Search what you are looking at, or every library this site exposes — " +
+      "never the wider SharePoint.";
     scope.style.display = current ? "" : "none";
     const nonCurrent = el("label", "app-docs-check app-docs-noncurrent");
     const nonCurrentBox = el("input", "") as HTMLInputElement;
@@ -320,8 +326,13 @@ export function mountDocs(
           ),
         })
       );
-      item("Open in SharePoint ↗", () => window.open(openUrlFor(app.siteUrl, row), "_blank"));
-      item("Copy link", () => void navigator.clipboard.writeText(openUrlFor(app.siteUrl, row)));
+      // readers get the PDF rendering, never the editable source
+      item("Open PDF ↗", () =>
+        window.open(pdfViewUrlFor(app.siteUrl, row), "_blank", "noopener")
+      );
+      item("Copy PDF link", () =>
+        void navigator.clipboard.writeText(pdfViewUrlFor(app.siteUrl, row))
+      );
       if (lib?.libType === "working") {
         item("Request check-out", null, "Document control arrives in a later phase");
       }
@@ -368,8 +379,12 @@ export function mountDocs(
       const useSearch = query.trim() !== "" || current === null || scope.value === "all";
       if (useSearch) {
         const startRow = nextToken === "" ? 0 : Number(nextToken);
+        // never unscoped: either the library in view, or every library
+        // this site exposes — the corpus is what was configured, not the
+        // whole SharePoint tenant
         const page = await searchPage(app.siteUrl, query, {
-          listId: current && scope.value === "library" ? current.listId : "",
+          listIds:
+            current && scope.value === "library" ? [current.listId] : allListIds,
           rowLimit: PAGE,
           startRow,
         });

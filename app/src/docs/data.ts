@@ -31,12 +31,17 @@ export async function browsePage(
   return { ...parseItemsPage(r.data, site, listId), error: "" };
 }
 
-/** One search page (permission-trimmed, spans the site). */
+/** One search page (permission-trimmed, bounded to the given libraries).
+ *  No libraries in scope means no corpus — answering with the whole
+ *  tenant index would be worse than answering with nothing. */
 export async function searchPage(
   site: string,
   text: string,
-  opts: SearchOpts = {}
+  opts: SearchOpts
 ): Promise<SearchPage & { error: string }> {
+  if (opts.listIds.filter((id) => id.trim() !== "").length === 0) {
+    return { rows: [], total: 0, error: "" };
+  }
   const r = await spRequest(site, "POST", "_api/search/postquery", {
     headers: VERBOSE,
     body: buildSearchBody(text, opts),

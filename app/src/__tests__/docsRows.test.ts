@@ -6,15 +6,16 @@ import { describe, expect, it } from "vitest";
 import {
   buildBrowseUri,
   buildSearchBody,
-  downloadUrlFor,
   embedUrlFor,
   extGlyph,
   extOf,
   formatWhen,
   isNonCurrentStatus,
-  openUrlFor,
   parseItemsPage,
+  pdfDownloadUrlFor,
+  pdfViewUrlFor,
   rowsFromSearch,
+  sourceUrlFor,
   thumbnailUrlFor,
   toSiteRelative,
 } from "../docs/rows";
@@ -68,12 +69,30 @@ describe("browse parsing", () => {
 
 describe("search", () => {
   it("builds scoped query text with wildcard, doc filter and sort", () => {
-    const body = JSON.parse(buildSearchBody("pump", { listId: "l1" }));
+    const body = JSON.parse(buildSearchBody("pump", { listIds: ["l1"] }));
     expect(body.request.Querytext).toBe("pump* IsDocument:1 ListID:l1");
     expect(body.request.SortList).toBeUndefined(); // text search = relevance
-    const empty = JSON.parse(buildSearchBody("", {}));
-    expect(empty.request.Querytext).toBe("IsDocument:1");
+    const empty = JSON.parse(buildSearchBody("", { listIds: ["l1"] }));
+    expect(empty.request.Querytext).toBe("IsDocument:1 ListID:l1");
     expect(empty.request.SortList.results[0].Property).toBe("LastModifiedTime");
+  });
+
+  it("ORs several libraries — 'all documents' means all EXPOSED ones", () => {
+    const body = JSON.parse(buildSearchBody("", { listIds: ["l1", "l2", "l3"] }));
+    expect(body.request.Querytext).toBe(
+      "IsDocument:1 (ListID:l1 OR ListID:l2 OR ListID:l3)"
+    );
+  });
+
+  it("never emits an unscoped query — that would return the whole tenant", () => {
+    // measured on the dev site: unscoped 4,543 hits (OneDrive, .loop,
+    // site pages) vs 2 in the configured library
+    for (const listIds of [[], [""], ["  "]]) {
+      expect(JSON.parse(buildSearchBody("pump", { listIds })).request.Querytext).toBe(
+        "pump* IsDocument:1"
+      );
+    }
+    // …and the transport refuses to send it at all (see data.searchPage)
   });
 
   it("parses the verbose table into rows", () => {
@@ -154,12 +173,28 @@ describe("presentation helpers", () => {
     );
   });
 
-  it("keeps open and download on their own endpoints", () => {
-    expect(openUrlFor(SITE, row)).toBe(
-      "https://x.sharepoint.com/sites/Dev/Shared Documents/A.docx?web=1"
+  it("sends readers to a PDF rendering, never the editable source", () => {
+    // an office doc converts on the fly…
+    expect(pdfViewUrlFor(SITE, row)).toBe(
+      `${SITE}/_api/v2.0/drive/items/u-1/content?format=pdf`
     );
-    expect(downloadUrlFor(SITE, row)).toBe(
-      `${SITE}/_layouts/15/download.aspx?UniqueId=u-1`
+    expect(pdfDownloadUrlFor(SITE, row)).toBe(
+      `${SITE}/_api/v2.0/drive/items/u-1/content?format=pdf`
+    );
+    // …while a file that IS a pdf cannot be converted (SharePoint answers
+    // 406 for pdf→pdf), so it opens in SharePoint's own viewer
+    const asPdf = { ...row, ext: "pdf" };
+    expect(pdfViewUrlFor(SITE, asPdf)).toBe(
+      `${SITE}/_layouts/15/embed.aspx?UniqueId=u-1`
+    );
+    expect(pdfDownloadUrlFor(SITE, asPdf)).toBe(
+      `${SITE}/_api/v2.0/drive/items/u-1/content`
+    );
+  });
+
+  it("keeps the editable source on its own helper (working docs only)", () => {
+    expect(sourceUrlFor(SITE, row)).toBe(
+      "https://x.sharepoint.com/sites/Dev/Shared Documents/A.docx?web=1"
     );
   });
 
