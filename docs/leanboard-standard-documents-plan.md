@@ -545,6 +545,49 @@ The `#/docs` area: title bar, left navigation, right list.
 built from real crawled data; permission trimming demonstrated with two
 accounts (spike 8 prerequisite); board chunks unchanged.
 
+#### Phase 2 status — 2026-07-27: built, hosted verification with Ben
+
+- **`#/docs` is live** (app-bar "Documents" link — a static anchor, zero
+  reads at shell load): left nav (All documents / per-library with type
+  hints / the Organisation tree from the term store), search bar with
+  This-library / All-documents scope, the FR-SE-005 "Include drafts &
+  superseded" toggle, and the document list.
+- **Two data modes, both through pure tested parsers** (`rows.ts`, 9 tests):
+  browse = list REST pages (`FieldValuesAsText` projects every column as
+  text — one call, no per-type handling; server paging via nextLink),
+  search = permission-trimmed `postquery` (verbose table shape; empty query
+  sorts newest-first, so "All documents" is a recent-documents view).
+- **Status chips** resolve value → state-palette key → colour through the
+  branding palette. Default-view columns come from the Phase 1 config.
+- **Viewer** (`viewer.ts`): new-tab primary (Open in SharePoint, Download,
+  Copy link, Email link), embed preview as progressive enhancement with the
+  fallback note visible; working-type libraries ask "Work on it / Just
+  view" first. **Properties & history**: full field text via
+  `GetFileById` (works for search rows with no item id) + the SharePoint
+  version list.
+- **Scope notes (honest):** org-tree nodes are selection-disabled until a
+  deployment maps crawled → managed properties (tooltip says so); the
+  drafts/superseded toggle applies in browse mode via a documented text
+  heuristic and is disabled where no status column is mapped; favourite
+  moved to Phase 3 where its prefs table lands; tier badge = the Library
+  column/name chip (corporate-tier badging arrives with linkage work).
+- **Perf proof** (`app/docs-list.html`, driving the real `listView.ts`):
+  1,000 rows appended in 51 ms (worst page 6 ms), initial full layout
+  164 ms one-time, mid-list scroll + forced layout 10.8 ms — 8/8 checks.
+  Board chunks ±0; the area rides in lazy chunks (docsScreen 15.4 kB,
+  docsStore 6.2 kB shared with the settings tab).
+- **Incidentals:** SDK calls HANG without a host (they don't reject), so
+  the dev server short-circuits via `detectHost` to a friendly note;
+  vite now honours an assigned `PORT` (parallel sessions were fighting
+  over 5180); generic chunk basenames renamed (`docsScreen`/`docsStore`).
+
+**Hosted checks (Ben):** app bar shows Documents → All documents lists the
+Dev site's files via search; the library node browses with configured
+columns and status chips; search narrows live; the viewer opens (note
+whether the embed renders inside the host — that answer closes spike 5),
+Open in SharePoint / Download / Copy link work; properties & history shows
+fields and versions; a working-type library asks before opening to edit.
+
 ### Phase 3 — Views, sharing, and the board cards
 
 - Saved and bookmarked views; share via link through `app/src/links.ts`.
