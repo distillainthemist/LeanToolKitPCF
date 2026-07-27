@@ -17,7 +17,13 @@ import {
   defaultStyle,
   newId,
 } from "./model";
-import { mix as mixHex, textOn } from "../../shared/tokens";
+import {
+  applyThemeVars,
+  defaultTheme,
+  mix as mixHex,
+  textOn,
+  Theme,
+} from "../../shared/tokens";
 import { LTK_BASE_CSS } from "../../shared/ui/baseCss";
 import { ensureStylesheet } from "../../shared/ui/dom";
 import { parsePrompts, Prompts, renderTitleBar } from "../../shared/ui/chrome";
@@ -112,6 +118,7 @@ export class FishboneEditor {
 
   private model: FishboneModel = emptyModel();
   private style: StyleConfig = defaultStyle();
+  private theme: Theme = defaultTheme();
   private cardTitle = "";
   private prompts: Prompts = { general: [], fields: {} };
   private lastPromptsRaw: string | null = null;
@@ -186,6 +193,18 @@ export class FishboneEditor {
 
   getModel(): FishboneModel {
     return this.model;
+  }
+
+  /**
+   * The app theme, as --ltk-* variables on the root. The diagram itself is
+   * driven by StyleConfig, not the theme — this exists for the shared chrome
+   * around it, which reads var(--ltk-titlebar): without it the title strip
+   * fell back to transparent and this was the one card whose title never
+   * took the site's colour.
+   */
+  setTheme(theme: Theme): void {
+    this.theme = theme;
+    applyThemeVars(this.root, this.theme);
   }
 
   setStyle(style: StyleConfig): void {

@@ -1,0 +1,115 @@
+<!doctype html>
+<!-- Dev harness: the Fishbone title strip must take the site's title colour,
+     the same as every other card. Left = the old path (no setTheme call),
+     right = with the theme wired. Vite only builds index.html, so this page
+     never reaches dist/. -->
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Fishbone: title strip colour</title>
+  <style>
+    body { font: 14px system-ui; margin: 16px; background: #f5f5f7; }
+    .row { display: flex; gap: 16px; }
+    .pane { flex: 1; background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 8px; }
+    .pane h2 { font-size: 13px; margin: 0 0 8px; color: #555; }
+    .host { height: 320px; }
+    pre { background: #111; color: #0f0; padding: 12px; border-radius: 8px; white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+  <h1>Fishbone title strip</h1>
+  <div class="row">
+    <div class="pane"><h2>before — no setTheme</h2><div class="host" id="a"></div></div>
+    <div class="pane"><h2>after — setTheme(theme)</h2><div class="host" id="b"></div></div>
+  </div>
+  <pre id="out">running…</pre>
+  <script type="module">
+    import { FishboneEditor } from "../controls/Fishbone/editor.ts";
+    import { defaultTheme } from "../shared/tokens.ts";
+    import { defaultTitlePalette } from "../shared/palette.ts";
+    import { paletteMap, titleStripColor } from "../shared/palette.ts";
+
+    const lines = [];
+    let fails = 0;
+    const check = (name, pass, detail = "") => {
+      if (!pass) fails++;
+      lines.push(`${pass ? "PASS" : "FAIL"}  ${name}${detail ? " — " + detail : ""}`);
+    };
+
+    const model = {
+      problem: "Line stoppages",
+      categories: ["Measurements", "People", "Methods", "Machines"],
+      causes: [{ id: "c1", category: "People", text: "Handover gaps", votes: 2, status: "Hypothesis" }],
+    };
+
+    const mount = (id, withTheme, theme) => {
+      const ed = new FishboneEditor(document.getElementById(id), { onChange: () => {} });
+      if (withTheme) ed.setTheme(theme);
+      ed.setChrome("Fishbone", "");
+      ed.setModel(model);
+      return ed;
+    };
+
+    // the app theme: titleBar defaults to the site accent (cardHost.appTheme)
+    const theme = defaultTheme();
+    theme.titleBar = "#2563eb";
+
+    mount("a", false, theme);
+    const edAfter = mount("b", true, theme);
+
+    const bg = (id) => {
+      const bar = document.querySelector(`#${id} .ltk-titlebar`);
+      return bar ? getComputedStyle(bar).backgroundColor : "(no bar)";
+    };
+    const fg = (id) => {
+      const t = document.querySelector(`#${id} .ltk-titlebar-text`);
+      return t ? getComputedStyle(t).color : "(no text)";
+    };
+
+    check("the bug reproduces: unthemed strip is transparent",
+      bg("a") === "rgba(0, 0, 0, 0)", `got ${bg("a")}`);
+    check("themed strip paints the site title colour",
+      bg("b") === "rgb(37, 99, 235)", `got ${bg("b")}`);
+    check("title text flips to a readable colour on the strip",
+      fg("b") === "rgb(255, 255, 255)", `got ${fg("b")}`);
+
+    // a per-card palette pick must win over the app default
+    const titles = paletteMap(defaultTitlePalette());
+    const brick = titleStripColor({ theme: { titlebar: "brick" } }, titles);
+    check("a palette key resolves to its colour", brick === "#8b1e1e", `got ${brick}`);
+    const custom = { ...theme, titleBar: brick };
+    const host = document.createElement("div");
+    host.style.height = "200px";
+    document.body.appendChild(host);
+    const ed3 = new FishboneEditor(host, { onChange: () => {} });
+    ed3.setTheme(custom);
+    ed3.setChrome("Fishbone", "");
+    ed3.setModel(model);
+    check("per-card colour beats the app default",
+      getComputedStyle(host.querySelector(".ltk-titlebar")).backgroundColor === "rgb(139, 30, 30)",
+      `got ${getComputedStyle(host.querySelector(".ltk-titlebar")).backgroundColor}`);
+    host.remove();
+
+    // the strip must stay hidden on a board tile
+    const tileHost = document.createElement("div");
+    tileHost.className = "ltk-tile";
+    tileHost.style.height = "200px";
+    document.body.appendChild(tileHost);
+    const ed4 = new FishboneEditor(tileHost, { onChange: () => {} });
+    ed4.setTheme(theme);
+    ed4.setChrome("Fishbone", "");
+    ed4.setModel(model);
+    check("tile mode still hides the strip",
+      getComputedStyle(tileHost.querySelector(".ltk-titlebar")).display === "none");
+    tileHost.remove();
+
+    // renderChrome throws the bar away and builds a new one — the colour
+    // rides on the root's vars, so it must survive that
+    edAfter.setChrome("Fishbone — renamed", "");
+    check("colour survives a chrome rebuild", bg("b") === "rgb(37, 99, 235)", `got ${bg("b")}`);
+
+    document.getElementById("out").textContent =
+      lines.join("\n") + `\n\n${fails === 0 ? "ALL PASS" : fails + " FAILED"} (${lines.length} checks)`;
+  </script>
+</body>
+</html>
