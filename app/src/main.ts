@@ -160,6 +160,10 @@ function route(): void {
       } else if (parts[0] === "settings") {
         const { mountSettings } = await import("./screens/settings");
         mount = () => mountSettings(outlet, parts[1] ?? "");
+      } else if (parts[0] === "docs-spike") {
+        // Phase 0 runtime spike (Standard Documents plan) — temporary
+        const { mountDocsSpike } = await import("./docs/spike");
+        mount = () => mountDocsSpike(outlet);
       } else {
         const { mountHub } = await import("./screens/hub");
         mount = () => mountHub(outlet);
