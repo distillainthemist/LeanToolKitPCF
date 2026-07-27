@@ -30,7 +30,18 @@ import { openDocProperties, openDocViewer } from "./viewer";
 
 const PAGE = 50;
 
-export function mountDocs(parent: HTMLElement, selected: string): () => void {
+export interface DocsMountOpts {
+  /** Inside the hub's Documents tab: no page title, and navigation
+   *  re-mounts in place instead of writing the hash (a hash write would
+   *  route away to the standalone #/docs screen). */
+  embedded?: boolean;
+}
+
+export function mountDocs(
+  parent: HTMLElement,
+  selected: string,
+  opts: DocsMountOpts = {}
+): () => void {
   const wrap = el("div", "app-docs-wrap");
   parent.appendChild(wrap);
   const stopLoading = showLoading(wrap);
@@ -41,7 +52,7 @@ export function mountDocs(parent: HTMLElement, selected: string): () => void {
     if (!(await detectHost())) {
       stopLoading();
       if (dead) return;
-      wrap.appendChild(el("h2", "app-docs-title", "Documents"));
+      if (!opts.embedded) wrap.appendChild(el("h2", "app-docs-title", "Documents"));
       wrap.appendChild(
         el(
           "div",
@@ -72,7 +83,7 @@ export function mountDocs(parent: HTMLElement, selected: string): () => void {
 
     const { app, libraries } = cfg;
     if (app.siteUrl === "" || libraries.length === 0) {
-      wrap.appendChild(el("h2", "app-docs-title", "Documents"));
+      if (!opts.embedded) wrap.appendChild(el("h2", "app-docs-title", "Documents"));
       wrap.appendChild(
         el(
           "div",
@@ -90,7 +101,7 @@ export function mountDocs(parent: HTMLElement, selected: string): () => void {
 
     // ---- chrome: title, search, controls -------------------------------
     const top = el("div", "app-docs-top");
-    top.appendChild(el("h2", "app-docs-title", "Documents"));
+    if (!opts.embedded) top.appendChild(el("h2", "app-docs-title", "Documents"));
     const search = el("input", "app-input app-docs-search") as HTMLInputElement;
     search.type = "search";
     search.placeholder = current
@@ -119,19 +130,28 @@ export function mountDocs(parent: HTMLElement, selected: string): () => void {
     // ---- left nav ------------------------------------------------------
     const nav = el("nav", "app-docs-nav");
     bodyRow.appendChild(nav);
-    const navLink = (label: string, hash: string, active: boolean, hint = "") => {
+    const navLink = (label: string, listId: string, active: boolean, hint = "") => {
       const a = el("a", `app-docs-navitem${active ? " app-docs-navitem-on" : ""}`) as HTMLAnchorElement;
-      a.href = hash;
+      a.href = listId === "" ? "#/docs" : `#/docs/${listId}`;
       a.append(el("span", "app-docs-navlabel", label));
       if (hint !== "") a.appendChild(el("span", "app-field-hint", hint));
+      if (opts.embedded) {
+        // stay inside the hub tab: remount in place, never touch the hash
+        a.addEventListener("click", (e) => {
+          e.preventDefault();
+          dead = true;
+          wrap.remove();
+          mountDocs(parent, listId, opts);
+        });
+      }
       nav.appendChild(a);
       return a;
     };
-    navLink("All documents", "#/docs", current === null);
+    navLink("All documents", "", current === null);
     for (const lib of libraries) {
       navLink(
         lib.config.title || lib.name,
-        `#/docs/${lib.listId}`,
+        lib.listId,
         current?.listId === lib.listId,
         lib.libType
       );

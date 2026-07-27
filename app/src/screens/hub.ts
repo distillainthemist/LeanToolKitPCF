@@ -46,6 +46,8 @@ export function mountHub(parent: HTMLElement): () => void {
   // hold the card with the spinner + quote until it's all in
   const stopLoading = showLoading(host);
   let view: LeanHubView | null = null;
+  // extra-tab content (the Documents area) registers its teardown here
+  const cleanups: (() => void)[] = [];
 
   void (async () => {
     const hosted = await detectHost();
@@ -152,6 +154,14 @@ export function mountHub(parent: HTMLElement): () => void {
     view.setCanEditSite(true);
     view.setPrefs(parsePrefs(prefsRaw));
     view.setHideSettingsTab(true); // settings live behind the header cog now
+    // Standard Documents rides as a hub tab. DYNAMIC import only — the
+    // import gate fails the build if the hub (a board-path entry) ever
+    // reaches src/docs/ statically; the area loads on first tab open.
+    view.setExtraTabs([{ key: "documents", label: "Documents" }], (key, tabHost) => {
+      void import("../docs/docsScreen").then(({ mountDocs }) => {
+        cleanups.push(mountDocs(tabHost, "", { embedded: true }));
+      });
+    });
     if (hosted) {
       const { meetingCategories } = await import("../store/config");
       const cats = await meetingCategories();
@@ -206,5 +216,8 @@ export function mountHub(parent: HTMLElement): () => void {
     }
   })();
 
-  return () => view?.destroy();
+  return () => {
+    for (const fn of cleanups.splice(0)) fn();
+    view?.destroy();
+  };
 }

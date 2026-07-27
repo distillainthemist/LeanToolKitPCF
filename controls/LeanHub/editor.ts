@@ -66,7 +66,15 @@ export class LeanHubView {
   private lastPromptsRaw: string | null = null;
   private readOnly = false;
 
-  private tab: Tab = "myday";
+  private tab: Tab | string = "myday";
+  /** Host-supplied tabs (e.g. the LeanBoard Documents area). Each gets a
+   *  PERSISTENT host element: render() re-parents it rather than
+   *  rebuilding, so externally mounted content survives tab switches —
+   *  plain DOM keeps its state across re-appends. onExtraTab fires once
+   *  per key, on first activation (lazy mounting). */
+  private extraTabs: { key: string; label: string }[] = [];
+  private onExtraTab: ((key: string, host: HTMLElement) => void) | null = null;
+  private extraHosts = new Map<string, HTMLElement>();
   /** Board directory for the Rituals view; null = option hidden. */
   private boards: { boardId: string; name: string; meta: string }[] | null = null;
   private onOpenBoard: ((boardId: string) => void) | null = null;
@@ -195,6 +203,17 @@ export class LeanHubView {
     this.render();
   }
 
+  /** Host-supplied tabs appended after Actions; content is mounted by
+   *  the caller into the host element handed to onSelect. */
+  setExtraTabs(
+    tabs: { key: string; label: string }[],
+    onSelect: (key: string, host: HTMLElement) => void
+  ): void {
+    this.extraTabs = tabs;
+    this.onExtraTab = onSelect;
+    this.render();
+  }
+
   /** Hide the in-hub Settings tab (the app hosts settings itself). */
   setHideSettingsTab(on: boolean): void {
     if (this.hideSettingsTab !== on) {
@@ -244,11 +263,12 @@ export class LeanHubView {
     renderTitleBar(this.root, this.cardTitle, this.prompts);
 
     const tabs = el("div", "ltk-lh-tabs");
-    const defs: { key: Tab; label: string }[] = [
+    const defs: { key: Tab | string; label: string }[] = [
       { key: "myday", label: "My day" },
       { key: "calendar", label: "Cadence" },
       { key: "actions", label: "Actions" },
     ];
+    for (const t of this.extraTabs) defs.push(t);
     if (!this.hideSettingsTab) defs.push({ key: "settings", label: "Settings" });
     for (const t of defs) {
       const btn = el("button", "ltk-lh-tab", t.label) as HTMLButtonElement;
@@ -264,7 +284,17 @@ export class LeanHubView {
 
     const body = el("div", "ltk-lh-body");
     this.root.appendChild(body);
-    if (this.tab === "myday") this.renderMyDay(body);
+    const extra = this.extraTabs.find((t) => t.key === this.tab);
+    if (extra) {
+      let host = this.extraHosts.get(extra.key);
+      const fresh = host === undefined;
+      if (host === undefined) {
+        host = el("div", "ltk-lh-ext");
+        this.extraHosts.set(extra.key, host);
+      }
+      body.appendChild(host);
+      if (fresh) this.onExtraTab?.(extra.key, host);
+    } else if (this.tab === "myday") this.renderMyDay(body);
     else if (this.tab === "calendar") this.renderCalendar(body);
     else if (this.tab === "actions") this.renderActions(body);
     else this.renderSettings(body);

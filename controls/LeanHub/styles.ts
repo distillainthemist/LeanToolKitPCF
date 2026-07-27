@@ -47,6 +47,13 @@ export const LEANHUB_CSS = `
   display: flex;
   flex-direction: column;
 }
+/* a host-supplied tab's persistent mount point fills the body */
+.ltk-lh-ext {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
 
 /* ---- calendar toolbar ---- */
 .ltk-lh-bar {

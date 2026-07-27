@@ -19,11 +19,6 @@ brand.addEventListener("click", () => {
 });
 const nav = el("nav", "app-nav");
 const gap = el("span", "app-bar-gap");
-// Standard Documents entry — a static link only: the docs area reads its
-// config on entry, never at shell load (performance contract)
-const docsLink = el("a", "app-link") as HTMLAnchorElement;
-docsLink.textContent = "Documents";
-docsLink.href = "#/docs";
 // one context button: Settings from the hub, Home everywhere else
 const modeLink = el("a", "app-link app-link-cog") as HTMLAnchorElement;
 const modeIcon = el("span", "app-mode-icon", "\u2699");
@@ -31,7 +26,6 @@ const modeText = el("span", "", "Settings");
 modeLink.append(modeIcon, modeText);
 modeLink.href = "#/settings";
 nav.appendChild(gap);
-nav.appendChild(docsLink);
 nav.appendChild(modeLink);
 bar.append(brand, nav);
 app.appendChild(bar);
