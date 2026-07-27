@@ -25,6 +25,22 @@
         "office365groups"
       ],
       "dataSets": {}
+    },
+    "cbfe9bd9-7b15-4b91-97f1-bbe8afbef82d": {
+      "id": "/providers/Microsoft.PowerApps/apis/shared_sharepointonline",
+      "displayName": "SharePoint",
+      "dataSources": [
+        "documents"
+      ],
+      "dataSets": {
+        "https://pecheydistillingcom.sharepoint.com/sites/Dev": {
+          "dataSources": {
+            "documents": {
+              "tableName": "Documents"
+            }
+          }
+        }
+      }
     }
   },
   "databaseReferences": {

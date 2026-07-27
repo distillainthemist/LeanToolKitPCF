@@ -33,9 +33,36 @@ const BOARD_ENTRIES = [
 ].filter((p) => existsSync(p));
 
 const isDocs = (p) => p.includes(`${sep}src${sep}docs${sep}`);
-const isSpService = (p) =>
-  p.includes(`${sep}src${sep}generated${sep}`) && /sharepoint/i.test(p);
 const isGenerated = (p) => p.includes(`${sep}src${sep}generated${sep}`);
+
+// SharePoint services are found from power.config.json (the authority on
+// which data sources belong to which connector), matched to generated
+// service files by their `dataSourceName = '<name>'` line — pac names
+// files after the TABLE (DocumentsService.ts), so a filename heuristic
+// cannot work.
+function spServiceFiles() {
+  const cfgPath = resolve(APP, "power.config.json");
+  if (!existsSync(cfgPath)) return new Set();
+  const cfg = JSON.parse(readFileSync(cfgPath, "utf8"));
+  const spSources = new Set();
+  for (const ref of Object.values(cfg.connectionReferences ?? {})) {
+    if (typeof ref.id === "string" && ref.id.endsWith("shared_sharepointonline")) {
+      for (const ds of ref.dataSources ?? []) spSources.add(ds.toLowerCase());
+    }
+  }
+  const out = new Set();
+  const svcDir = resolve(SRC, "generated", "services");
+  if (spSources.size === 0 || !existsSync(svcDir)) return out;
+  for (const name of readdirSync(svcDir)) {
+    if (!name.endsWith(".ts")) continue;
+    const p = join(svcDir, name);
+    const m = /dataSourceName = '([^']+)'/.exec(readFileSync(p, "utf8"));
+    if (m && spSources.has(m[1].toLowerCase())) out.add(p);
+  }
+  return out;
+}
+const SP_SERVICES = spServiceFiles();
+const isSpService = (p) => SP_SERVICES.has(p);
 
 // ---- collect every .ts source the app can reach (src + shared + controls)
 function walk(dir, out) {
@@ -136,13 +163,29 @@ if (docsFiles.length > 0) {
 }
 
 // Rule C (source side): outside src/docs/ and src/generated/, no file may
-// statically import a SharePoint service.
+// statically reach a SharePoint service — including via the generated
+// barrel (src/generated/index.ts re-exports every service, so a static
+// import of the barrel launders the connector into the importer's chunk).
+// The walk therefore continues through generated/ intermediates.
+function reachesSpViaGenerated(start) {
+  const seen = new Set([start]);
+  const queue = [start];
+  while (queue.length > 0) {
+    for (const dep of deps.get(queue.shift()) ?? []) {
+      if (isSpService(dep)) return dep;
+      if (isGenerated(dep) && !seen.has(dep)) {
+        seen.add(dep);
+        queue.push(dep);
+      }
+    }
+  }
+  return null;
+}
 for (const file of files) {
   if (isDocs(file) || isGenerated(file)) continue;
-  for (const dep of deps.get(file) ?? []) {
-    if (isSpService(dep)) {
-      violations.push(`RULE C — ${rel(file)} statically imports ${rel(dep)} (use dynamic import, or move it under src/docs/)`);
-    }
+  const hit = reachesSpViaGenerated(file);
+  if (hit) {
+    violations.push(`RULE C — ${rel(file)} statically reaches ${rel(hit)} (use dynamic import, or move it under src/docs/)`);
   }
 }
 
