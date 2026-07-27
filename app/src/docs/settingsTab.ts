@@ -38,10 +38,11 @@ import {
   DocLibrary,
   appDocsConfig,
   deleteDocLibrary,
+  invalidateDocsCache,
   listDocLibraries,
   saveAppDocsConfig,
   saveDocLibrary,
-} from "./store";
+} from "./docsStore";
 import { parseOrgTree } from "../../../shared/schema/meeting";
 import { orgJson } from "../store/config";
 
@@ -101,6 +102,7 @@ export async function renderDocsSettings(body: HTMLElement, ctx: Ctx): Promise<v
     }
     // re-read so row GUIDs exist for later deletes
     exposed = await listDocLibraries();
+    invalidateDocsCache(); // the #/docs area re-reads on next entry
     ctx.markClean();
     paintLibraries();
   };

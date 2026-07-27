@@ -4,7 +4,10 @@
     {
       "name": "leanboard-app",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev"],
+      "runtimeArgs": [
+        "run",
+        "dev"
+      ],
       "cwd": "app",
       "port": 5180
     }

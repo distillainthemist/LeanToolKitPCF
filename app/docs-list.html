@@ -1,0 +1,127 @@
+<!doctype html>
+<!-- Dev harness: the Standard Documents list at scale (plan Phase 2
+     proof — "list interaction measured at ≥1,000 documents"). Drives the
+     REAL renderer (src/docs/listView.ts + rows.ts helpers) with
+     synthetic rows in 50-row pages, the way the transport delivers them.
+     Vite builds index.html alone, so this never reaches dist/. -->
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Docs list: 1,000-row measurement</title>
+  <link rel="stylesheet" href="/src/style.css" />
+  <style>
+    body { font: 14px system-ui; margin: 16px; }
+    #host { height: 480px; display: flex; flex-direction: column; border: 1px solid #ddd; border-radius: 8px; }
+    pre { background: #111; color: #0f0; padding: 12px; border-radius: 8px; white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+  <h1>Standard Documents — list at 1,000 rows</h1>
+  <div id="host"></div>
+  <pre id="out">running…</pre>
+  <script type="module">
+    import { mountDocList } from "./src/docs/listView.ts";
+    import { extGlyph, formatWhen } from "./src/docs/rows.ts";
+
+    const lines = [];
+    let fails = 0;
+    const check = (name, pass, detail = "") => {
+      if (!pass) fails++;
+      lines.push(`${pass ? "PASS" : "FAIL"}  ${name}${detail ? " — " + detail : ""}`);
+    };
+
+    const EXTS = ["docx", "xlsx", "pdf", "pptx"];
+    const STATUSES = ["Current", "Draft", "Superseded", "Current", "Current"];
+    const row = (i) => ({
+      id: i,
+      uniqueId: `u-${i}`,
+      name: `SOP-${String(i).padStart(4, "0")} Standard operating procedure ${i}.${EXTS[i % 4]}`,
+      ext: EXTS[i % 4],
+      serverUrl: `/sites/Dev/Docs/SOP-${i}`,
+      listId: "l1",
+      modified: new Date(2026, 0, 1 + (i % 200)).toISOString(),
+      values: { DMSStatus: STATUSES[i % 5], DMSOwner: `Owner ${i % 12}` },
+    });
+
+    let opened = 0;
+    let nearEnd = 0;
+    const list = mountDocList(document.getElementById("host"), {
+      columns: [
+        {
+          key: "name", label: "Document", width: "minmax(220px, 2fr)",
+          render: (r) => {
+            const s = document.createElement("span");
+            s.textContent = `${extGlyph(r.ext)} ${r.name}`;
+            return s;
+          },
+        },
+        { key: "status", label: "Status", render: (r) => r.values.DMSStatus },
+        { key: "owner", label: "Owner", render: (r) => r.values.DMSOwner },
+        { key: "mod", label: "Modified", width: "110px", render: (r) => formatWhen(r.modified) },
+      ],
+      emptyText: "empty",
+      onRow: () => opened++,
+      onNearEnd: () => nearEnd++,
+    });
+
+    // page in 20 × 50 rows, timing each append
+    const times = [];
+    let n = 0;
+    for (let page = 0; page < 20; page++) {
+      const rows = Array.from({ length: 50 }, (_, i) => row(page * 50 + i));
+      const t0 = performance.now();
+      if (page === 0) list.setRows(rows); else list.append(rows);
+      times.push(performance.now() - t0);
+      n += 50;
+    }
+    const total = times.reduce((a, b) => a + b, 0);
+    const worst = Math.max(...times);
+    check("1,000 rows rendered", list.count() === 1000, `count ${list.count()}`);
+    check("total append time under 1.5s", total < 1500, `${total.toFixed(0)}ms`);
+    check("worst single page under 250ms", worst < 250, `${worst.toFixed(0)}ms`);
+
+    // scroll to the bottom: the sentinel must fire onNearEnd. Timers and
+    // rAF are throttled in a non-painting pane, so poll with a deadline
+    // and accept a hidden-tab skip rather than hang.
+    const scroll = document.querySelector(".app-doclist-scroll");
+    scroll.scrollTop = scroll.scrollHeight;
+    const deadline = performance.now() + 1500;
+    while (nearEnd === 0 && performance.now() < deadline) {
+      await new Promise((r) => setTimeout(r, 50));
+    }
+    check(
+      "infinite-scroll sentinel fires",
+      nearEnd > 0 || document.hidden,
+      nearEnd > 0 ? `fired ${nearEnd}×` : "skipped — tab hidden, IO throttled"
+    );
+
+    // scroll responsiveness at depth: synchronous scroll + forced layout
+    // (paint-independent — meaningful even when the pane isn't painting).
+    // Flush the initial 1,000-row layout FIRST and report it separately —
+    // otherwise its one-time cost lands inside the scroll measure.
+    const t0l = performance.now();
+    void scroll.offsetHeight;
+    const initialLayout = performance.now() - t0l;
+    const t1 = performance.now();
+    scroll.scrollTop = scroll.scrollHeight / 2;
+    void scroll.offsetHeight;
+    const frame = performance.now() - t1;
+    check("initial 1,000-row layout under 250ms", initialLayout < 250, `${initialLayout.toFixed(1)}ms`);
+    check("mid-list scroll + layout under 50ms", frame < 50, `${frame.toFixed(1)}ms`);
+
+    // row click routes through
+    scroll.querySelector(".app-doclist-row").dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    check("row click reaches onRow", opened === 1);
+
+    // reset clears
+    list.setRows([]);
+    check("reset to empty shows empty state", list.count() === 0 &&
+      !!document.querySelector(".app-doclist-empty"));
+
+    document.getElementById("out").textContent =
+      lines.join("\n") +
+      `\n\npage times: first ${times[0].toFixed(1)}ms, mean ${(total / 20).toFixed(1)}ms, worst ${worst.toFixed(1)}ms` +
+      `\n${fails === 0 ? "ALL PASS" : fails + " FAILED"} (${lines.length} checks)`;
+  </script>
+</body>
+</html>

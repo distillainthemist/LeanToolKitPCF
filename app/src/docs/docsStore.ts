@@ -30,6 +30,31 @@ export interface DocLibrary {
 
 const TYPES: LibraryType[] = ["standard", "record", "working", "revision", "template"];
 
+// Session cache — library config changes only through the settings tab
+// (which invalidates), so repeat #/docs navigation costs no Dataverse
+// round-trips (performance contract: repeat navigation feels instant).
+let cache: Promise<{ app: AppDocsConfig; libraries: DocLibrary[] }> | null = null;
+
+export function invalidateDocsCache(): void {
+  cache = null;
+}
+
+/** App config + exposed libraries in one cached read. */
+export function docsConfig(): Promise<{ app: AppDocsConfig; libraries: DocLibrary[] }> {
+  cache ??= (async () => {
+    const rows = await allWhere(Ben_ltkdoclibrariesService.getAll);
+    const appRow = rows.find((r) => r.ben_listid === APP_LIST_ID);
+    return {
+      app: parseAppDocsConfig(appRow?.ben_configjson),
+      libraries: rows
+        .filter((r) => (r.ben_listid ?? "") !== APP_LIST_ID && (r.ben_listid ?? "") !== "")
+        .map(mapRow),
+    };
+  })();
+  cache.catch(() => (cache = null)); // a failed read must not stick
+  return cache;
+}
+
 export async function appDocsConfig(): Promise<AppDocsConfig> {
   const row = await firstWhere(
     Ben_ltkdoclibrariesService.getAll,
@@ -52,20 +77,31 @@ export async function saveAppDocsConfig(cfg: AppDocsConfig): Promise<void> {
   );
 }
 
+function mapRow(r: {
+  ben_ltkdoclibraryid?: string;
+  ben_listid?: string;
+  ben_siteurl?: string;
+  ben_name?: string;
+  ben_libtype?: string;
+  ben_configjson?: string;
+}): DocLibrary {
+  return {
+    rowId: r.ben_ltkdoclibraryid ?? "",
+    listId: r.ben_listid ?? "",
+    siteUrl: r.ben_siteurl ?? "",
+    name: r.ben_name ?? "",
+    libType: TYPES.includes((r.ben_libtype ?? "") as LibraryType)
+      ? ((r.ben_libtype ?? "") as LibraryType)
+      : "standard",
+    config: parseLibraryConfig(r.ben_configjson),
+  };
+}
+
 export async function listDocLibraries(): Promise<DocLibrary[]> {
   const rows = await allWhere(Ben_ltkdoclibrariesService.getAll);
   return rows
     .filter((r) => (r.ben_listid ?? "") !== APP_LIST_ID && (r.ben_listid ?? "") !== "")
-    .map((r) => ({
-      rowId: r.ben_ltkdoclibraryid ?? "",
-      listId: r.ben_listid ?? "",
-      siteUrl: r.ben_siteurl ?? "",
-      name: r.ben_name ?? "",
-      libType: TYPES.includes((r.ben_libtype ?? "") as LibraryType)
-        ? ((r.ben_libtype ?? "") as LibraryType)
-        : "standard",
-      config: parseLibraryConfig(r.ben_configjson),
-    }));
+    .map(mapRow);
 }
 
 export async function saveDocLibrary(lib: {

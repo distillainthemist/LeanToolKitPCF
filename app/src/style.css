@@ -1448,3 +1448,59 @@ input[type="color"].app-color:disabled { opacity: 0.4; cursor: default; }
 .app-docs-statusrow { display: flex; gap: 8px; align-items: center; margin: 3px 0; }
 .app-docs-check { display: flex; gap: 6px; align-items: center; font-size: 13px; margin: 8px 0; }
 .app-docs-driftlist { margin: 4px 0 10px 18px; font-size: 12.5px; }
+
+/* ---- Standard Documents area (plan Phase 2) ---- */
+.app-docs-wrap { display: flex; flex-direction: column; height: 100%; padding: 12px 16px; box-sizing: border-box; }
+.app-docs-top { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
+.app-docs-title { margin: 0; font-size: 20px; }
+.app-docs-search { flex: 1; min-width: 200px; max-width: 460px; }
+.app-docs-scope { width: auto; }
+.app-docs-noncurrent { margin: 0; white-space: nowrap; }
+.app-docs-body { display: flex; gap: 14px; flex: 1; min-height: 0; }
+.app-docs-nav { width: 210px; flex: none; overflow-y: auto; border-right: 1px solid #e5e5e5; padding-right: 8px; }
+.app-docs-navitem { display: block; padding: 6px 8px; border-radius: 6px; color: inherit; text-decoration: none; }
+.app-docs-navitem:hover { background: #f0f0f0; }
+.app-docs-navitem-on { background: var(--app-accent, #2563eb); }
+.app-docs-navitem-on .app-docs-navlabel, .app-docs-navitem-on .app-field-hint { color: #fff; }
+.app-docs-navlabel { display: block; font-size: 13.5px; }
+.app-docs-navorg { margin: 14px 0 4px; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.04em; color: #6b6b6b; }
+.app-docs-navterm { font-size: 12.5px; color: #8a8a8a; padding: 2px 0; cursor: not-allowed; }
+.app-docs-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.app-docs-status { font-size: 12px; color: #6b6b6b; margin-bottom: 6px; min-height: 15px; }
+.app-doclist { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.app-doclist-head, .app-doclist-row { display: grid; gap: 10px; align-items: center; padding: 6px 8px; }
+.app-doclist-head { border-bottom: 2px solid #e5e5e5; font-size: 11.5px; color: #6b6b6b; }
+.app-doclist-scroll { flex: 1; overflow-y: auto; min-height: 0; }
+.app-doclist-row { border-bottom: 1px solid #efefef; cursor: pointer; font-size: 13.5px; }
+.app-doclist-row:hover { background: #f7f7f9; }
+.app-doclist-cell { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.app-doclist-empty { padding: 24px; color: #6b6b6b; }
+.app-doclist-tail { padding: 6px 8px; font-size: 12px; color: #6b6b6b; }
+.app-doclist-sentinel { height: 1px; }
+.app-docs-namecell { display: inline-flex; gap: 8px; align-items: center; min-width: 0; }
+.app-docs-name { overflow: hidden; text-overflow: ellipsis; }
+.app-docs-chip { padding: 1px 8px; border-radius: 9px; font-size: 12px; background: #eee; }
+.app-docs-kebab { border: none; background: none; cursor: pointer; font-size: 16px; padding: 2px 8px; }
+.app-docs-menu { position: fixed; z-index: 60; width: 200px; background: #fff; border: 1px solid #ddd; border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.14); padding: 4px; }
+.app-docs-menuitem { display: block; width: 100%; text-align: left; border: none; background: none; padding: 7px 10px; border-radius: 5px; cursor: pointer; font-size: 13px; }
+.app-docs-menuitem:hover:not(:disabled) { background: #f0f0f0; }
+.app-docs-menuitem:disabled { color: #aaa; cursor: default; }
+.app-docs-scrim { position: fixed; inset: 0; z-index: 55; background: rgba(20,20,20,0.45); display: flex; align-items: center; justify-content: center; }
+.app-docs-dialog { background: #fff; border-radius: 10px; box-shadow: 0 12px 40px rgba(0,0,0,0.25); display: flex; flex-direction: column; max-height: 92vh; }
+.app-docs-viewer { width: min(1080px, 94vw); height: min(760px, 92vh); }
+.app-docs-props { width: min(640px, 92vw); }
+.app-docs-viewhead { display: flex; gap: 10px; align-items: center; padding: 10px 14px; border-bottom: 1px solid #eee; }
+.app-docs-viewname { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.app-docs-viewclose { margin-left: auto; }
+.app-docs-viewstage { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 0 14px; }
+.app-docs-viewframe { flex: 1; border: 1px solid #eee; border-radius: 6px; margin-top: 10px; }
+.app-docs-viewnote { padding: 4px 0 0; }
+.app-docs-viewactions { display: flex; gap: 8px; padding: 12px 14px; flex-wrap: wrap; }
+.app-docs-viewask { margin: auto; text-align: center; font-size: 15px; display: flex; flex-direction: column; gap: 14px; }
+.app-docs-propsbody { overflow-y: auto; padding: 12px 16px; }
+.app-docs-propgrid { display: grid; grid-template-columns: minmax(140px, auto) 1fr; gap: 4px 14px; margin-bottom: 14px; }
+.app-docs-propkey { font-size: 12.5px; color: #6b6b6b; }
+.app-docs-propval { font-size: 13px; word-break: break-word; }
+.app-docs-verrow { display: flex; gap: 12px; padding: 4px 0; border-bottom: 1px solid #f2f2f2; font-size: 12.5px; }
+.app-docs-verlabel { font-weight: 600; min-width: 90px; }
+.app-docs-vercomment { color: #6b6b6b; }

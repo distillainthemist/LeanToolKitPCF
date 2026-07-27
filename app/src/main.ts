@@ -19,6 +19,11 @@ brand.addEventListener("click", () => {
 });
 const nav = el("nav", "app-nav");
 const gap = el("span", "app-bar-gap");
+// Standard Documents entry — a static link only: the docs area reads its
+// config on entry, never at shell load (performance contract)
+const docsLink = el("a", "app-link") as HTMLAnchorElement;
+docsLink.textContent = "Documents";
+docsLink.href = "#/docs";
 // one context button: Settings from the hub, Home everywhere else
 const modeLink = el("a", "app-link app-link-cog") as HTMLAnchorElement;
 const modeIcon = el("span", "app-mode-icon", "\u2699");
@@ -26,6 +31,7 @@ const modeText = el("span", "", "Settings");
 modeLink.append(modeIcon, modeText);
 modeLink.href = "#/settings";
 nav.appendChild(gap);
+nav.appendChild(docsLink);
 nav.appendChild(modeLink);
 bar.append(brand, nav);
 app.appendChild(bar);
@@ -125,7 +131,7 @@ function route(): void {
   if (parts[0] !== "board" && parts[0] !== "edit") releaseFramesExcept(new Set());
 
   // Settings hides on the operational surfaces too — Home leads back
-  const showHome = ["settings", "board", "edit", "adjust"].includes(parts[0] ?? "");
+  const showHome = ["settings", "board", "edit", "adjust", "docs"].includes(parts[0] ?? "");
   modeIcon.textContent = showHome ? "⌂" : "⚙";
   modeText.textContent = showHome ? "Home" : "Settings";
   modeLink.href = showHome ? "#/" : "#/settings";
@@ -160,6 +166,9 @@ function route(): void {
       } else if (parts[0] === "settings") {
         const { mountSettings } = await import("./screens/settings");
         mount = () => mountSettings(outlet, parts[1] ?? "");
+      } else if (parts[0] === "docs") {
+        const { mountDocs } = await import("./docs/docsScreen");
+        mount = () => mountDocs(outlet, parts[1] ?? "");
       } else if (parts[0] === "docs-spike") {
         // Phase 0 runtime spike (Standard Documents plan) — temporary
         const { mountDocsSpike } = await import("./docs/spike");

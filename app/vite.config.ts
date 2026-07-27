@@ -46,7 +46,9 @@ export default defineConfig({
   // fs.allow spans the monorepo root: app source imports ../controls and
   // ../shared, and dev-time verification imports controls via /@fs/
   server: {
-    port: 5180,
+    // honour an assigned port (parallel sessions each get their own via
+    // PORT); 5180 stays the default for a plain `npm run dev`
+    port: Number(process.env.PORT ?? "") || 5180,
     strictPort: true,
     fs: { allow: [".."] },
     // tools/tile-defaults.json is imported by src/store/catalog.ts, so a
