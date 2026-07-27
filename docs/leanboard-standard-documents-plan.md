@@ -111,13 +111,15 @@ item-level lockdown, which is listed as optional hardening a deployment can
 add. Trusted-but-audited editors is the honest position for the generic
 product.
 
-### The rendition dependency
+### The rendition dependency — resolved
 
-Graph `format=pdf` is a Graph endpoint, so rendition generation shares the
-connector-reachability question (spike 6). If it proves unreachable, the
-generic product degrades gracefully: readers get the native read-only preview
-of the source, and organisations wanting FR-DI-005-strict renditions add a
-deployment flow for that one job.
+`format=pdf` turns out to live on SharePoint's **site-scoped**
+`/_api/v2.0` drive surface, not only on Graph — probed on the Dev site
+2026-07-27: HTTP 302 to a presigned conversion URL. So rendition generation
+rides the same site-scoped REST the rest of the plan uses, with no Graph
+dependency at all. The graceful degradation (native read-only preview,
+deployment flow for strict FR-DI-005) remains documented as the fallback if a
+tenant's conversion service misbehaves.
 
 ---
 
@@ -337,10 +339,10 @@ never hard-code. This is what keeps the feature sellable beyond one site.
 | 1 | **Does the SharePoint connector expose its HTTP action from a code app?** | **Run first, before any feature code.** "Send an HTTP request to SharePoint" has historically been a flow-only action, absent from canvas apps — and code apps share the canvas connector runtime, so failure is *plausible, not residual*. Every data path in this plan flows through it. Plan B is pre-designed below |
 | 2 | Is the connection delegated (per-user)? | Expected: yes, per-user consent on first run; the two-account test is the proof. See improvement 2 |
 | 3 | Are the DMS custom columns crawled and mapped to managed properties, with the recrawl done? | Gates search *and the navigation tree*. Tenant-admin lead time — raise in week 1 |
-| 4 | Term store readable via `/_api/v2.1/termStore` through the connector, or Graph only? | Determines whether the tree's structure source needs plan B even if search does not |
-| 5 | Which preview surfaces render inside the Power Apps host iframe? | Expectation set to "mostly none for Office formats"; the spike verifies what does (PDF in plain iframe is the best candidate) and validates the thumbnail endpoints |
-| 6 | Is Graph `format=pdf` reachable for rendition generation? | The flow-free watermarked-rendition mechanism depends on it; graceful degradation documented above |
-| 7 | One SharePoint site, confirmed? | Load-bearing for search scoping; §10.3 of the requirements document says yes |
+| 4 | Term store readable via `/_api/v2.1/termStore` through the connector, or Graph only? | **Closed 2026-07-27: site-scoped, 200 — no Graph needed** |
+| 5 | Which preview surfaces render inside the Power Apps host iframe? | **Preliminary positive:** Doc.aspx probe carried no `frame-ancestors` / `X-Frame-Options`; in-browser test with a real document still required |
+| 6 | Is `format=pdf` reachable for rendition generation? | **Closed 2026-07-27: yes, and site-scoped** — `/_api/v2.0/drive/items/{id}/content?format=pdf` → 302 presigned URL |
+| 7 | One SharePoint site, confirmed? | **Closed: `https://pecheydistillingcom.sharepoint.com/sites/Dev`** (dev target; §10.3 confirms the single-site model for deployments) |
 | 8 | Is a second licensed account available in the dev tenant? | Without it the permission-trimming proof is unrunnable as written |
 
 **Plan B (if spike 1 fails):** a solution-aware **custom connector** wrapping
@@ -419,9 +421,33 @@ import; baseline recorded.
   (`node data/get-token.mjs https://<host>.sharepoint.com <file>`, Ben signs
   in).
 
-**Waiting on Ben:** the tenant's SharePoint URL (or initialise SharePoint); a
-dev site to target; a device-code sign-in for the probes; the spike 8 answer
-(second licensed account).
+**Endpoint probes — 2026-07-27, `/sites/Dev`, 6/6 passed** (`sp-probe.mjs`,
+device-code token via the **Microsoft Office first-party client** —
+SharePoint's security hardening rejects Azure CLI-client tokens outright,
+`"App is not allowed to call SPO with user tokens"`):
+
+- `/_api/web` 200 — plain REST reachable.
+- **search postquery 200, refiner returned** — search + refiner mechanics
+  work at the site scope (FileType refiner; DMS-column refinability still
+  awaits real columns + crawl).
+- **`/_api/v2.1/termStore` 200** — term store readable site-scoped, **no
+  Graph needed** (spike 4 closed).
+- `/_api/v2.0/drive` 200 — the modern drive surface works site-scoped.
+- **`format=pdf` 302 → presigned conversion URL** — the flow-free rendition
+  mechanism is real, and site-scoped (spike 6 closed, better than hoped).
+- Doc.aspx returned **no `frame-ancestors` and no `X-Frame-Options`** —
+  promising for the overlay viewer, but only an in-browser test with a real
+  document settles spike 5.
+
+**Design fact from the failed first probe:** SPO rejects user tokens minted
+through the Azure CLI public client. There is **no raw-token plan C** —
+runtime access rides the connector (plan A) or a custom connector (plan B),
+full stop.
+
+**Still open:** spike 1's runtime half — `executeAsync` with the ungeneraled
+`HttpRequest` operation, testable only inside a host (`npx power-apps run`
+or the hosted app); this is the plan A/B decision gate. Spike 2's two-account
+proof and spike 8 (second licensed account) — Ben.
 
 ### Phase 1 — Configuration
 
