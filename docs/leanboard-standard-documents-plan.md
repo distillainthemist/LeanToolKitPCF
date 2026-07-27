@@ -336,8 +336,8 @@ never hard-code. This is what keeps the feature sellable beyond one site.
 
 | # | Question | Why it matters |
 | --- | --- | --- |
-| 1 | **Does the SharePoint connector expose its HTTP action from a code app?** | **Run first, before any feature code.** "Send an HTTP request to SharePoint" has historically been a flow-only action, absent from canvas apps — and code apps share the canvas connector runtime, so failure is *plausible, not residual*. Every data path in this plan flows through it. Plan B is pre-designed below |
-| 2 | Is the connection delegated (per-user)? | Expected: yes, per-user consent on first run; the two-account test is the proof. See improvement 2 |
+| 1 | **Does the SharePoint connector expose its HTTP action from a code app?** | **Closed 2026-07-27: YES — plan A.** pac generates no wrapper, but `executeAsync` resolves operations from the client-side `apis` map; the `HttpRequest` operation, declared locally, executed against the gateway (hosted spike, blocks 3–4) |
+| 2 | Is the connection delegated (per-user)? | Expected: yes, per-user consent on first run; definitive proof is the two-account test in Phase 2 (needs spike 8). See improvement 2 |
 | 3 | Are the DMS custom columns crawled and mapped to managed properties, with the recrawl done? | Gates search *and the navigation tree*. Tenant-admin lead time — raise in week 1 |
 | 4 | Term store readable via `/_api/v2.1/termStore` through the connector, or Graph only? | **Closed 2026-07-27: site-scoped, 200 — no Graph needed** |
 | 5 | Which preview surfaces render inside the Power Apps host iframe? | **Preliminary positive:** Doc.aspx probe carried no `frame-ancestors` / `X-Frame-Options`; in-browser test with a real document still required |
@@ -345,7 +345,9 @@ never hard-code. This is what keeps the feature sellable beyond one site.
 | 7 | One SharePoint site, confirmed? | **Closed: `https://pecheydistillingcom.sharepoint.com/sites/Dev`** (dev target; §10.3 confirms the single-site model for deployments) |
 | 8 | Is a second licensed account available in the dev tenant? | Without it the permission-trimming proof is unrunnable as written |
 
-**Plan B (if spike 1 fails):** a solution-aware **custom connector** wrapping
+**Plan B — NOT NEEDED: spike 1 passed in the hosted app (see Phase 0
+status); kept for the record.** The sketch was: a solution-aware
+**custom connector** wrapping
 the specific REST + Graph endpoints the plan needs (search postquery, list
 items, checkout/checkin, upload, `format=pdf`, term store). Costs: connector
 authoring, per-organisation consent, ALM packaging; the licence floor is
@@ -444,10 +446,32 @@ through the Azure CLI public client. There is **no raw-token plan C** —
 runtime access rides the connector (plan A) or a custom connector (plan B),
 full stop.
 
-**Still open:** spike 1's runtime half — `executeAsync` with the ungeneraled
-`HttpRequest` operation, testable only inside a host (`npx power-apps run`
-or the hosted app); this is the plan A/B decision gate. Spike 2's two-account
-proof and spike 8 (second licensed account) — Ben.
+**Decision gate closed — 2026-07-27: PLAN A.** Ben ran the hosted spike
+(`?screen=docs-spike`, the player drops fragments so the spike rides the
+ritual-link launch-param door): all four blocks succeeded —
+
+1. tabular `getAll` — 2 rows;
+2. `executeAsync` on a declared control op (`GetEditor`) — success;
+3. **`HttpRequest` GET `_api/web` — success**, site JSON returned: the
+   gateway accepts an operation declared only client-side;
+4. **search postquery through the same door — success**, full result JSON.
+
+**The mechanism is now an architectural fact:** the docs data layer is a
+small module under `src/docs/` wrapping
+`executeAsync({connectorOperation: {tableName, operationName: "HttpRequest",
+parameters}})` with the operation declared in the local `apis` map —
+`spRequest(method, uri, headers?, body?)` — through which search, list REST,
+term store, the v2.0 drive surface and `format=pdf` all travel (endpoint
+behaviour proven by the token probes, transport proven by the spike). The
+spike screen grows into that module in Phase 1 rather than being removed.
+
+**Rolled into later phases:** spike 2's definitive proof is the two-account
+permission-trimming test (Phase 2, needs the spike 8 account); spike 5's
+in-browser embed check lands with the Phase 2 viewer; spike 3's DMS-column
+refinability awaits real columns + crawl (Phase 1/2 lead-time). Spike 8
+(second licensed account) — still with Ben.
+
+**Phase 0 is otherwise COMPLETE.**
 
 ### Phase 1 — Configuration
 
