@@ -203,6 +203,27 @@ export const TABLES = [
     },
     key: ["ben_whoid"],
   },
+  {
+    // Standard Documents (docs/leanboard-standard-documents-plan.md,
+    // Phase 1): one row per exposed SharePoint library. The reserved
+    // ben_listid "__app__" row carries the app-level docs config (site
+    // URL, term group / org term set) in its configjson — same pattern
+    // as the sitesettings "__app__" branding row. Nothing here is
+    // authoritative about a document: SharePoint columns are the record,
+    // these rows only say how LeanBoard presents them.
+    schema: "ben_LTKDocLibrary",
+    logical: "ben_ltkdoclibrary",
+    display: "LTK Doc Library",
+    plural: "LTK Doc Libraries",
+    primaryNameMax: 200,
+    columns: {
+      ben_listid: { ...text(80), display: "List Id (GUID; __app__ = app row)", required: true },
+      ben_siteurl: { ...text(400), display: "Site URL" },
+      ben_libtype: { ...text(20), display: "Type (standard|record|working|revision|template)" },
+      ben_configjson: { ...memo(200000), display: "Library configuration (JSON)" },
+    },
+    key: ["ben_listid"],
+  },
 ];
 
 /** 1:N relationships (lookup column lives on the referencing table). */

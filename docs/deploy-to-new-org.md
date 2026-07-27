@@ -32,10 +32,15 @@ the portal add is the one-time bridge.
 
 1. Import `LeanBoard_<tag>_managed.zip` (maker portal →
    Solutions → Import, or `pac solution import`).
-2. When prompted for the **Office 365 Users and Office 365 Groups
-   connection references**, bind each to a connection in the target
-   environment (create them on the spot if none exist — Users powers
-   Entra people search; Groups powers the access-control group sync).
+2. When prompted for the **Office 365 Users, Office 365 Groups and
+   SharePoint connection references**, bind each to a connection in the
+   target environment (create them on the spot if none exist — Users
+   powers Entra people search; Groups powers the access-control group
+   sync; SharePoint powers the Standard Documents area, running every
+   call as the signed-in user so document visibility is exactly what
+   SharePoint already grants them). An org not using Standard Documents
+   still binds the reference; the app makes no SharePoint call until a
+   super admin configures a site under Settings → Documents.
 3. **Assign the "LeanBoard User" security role** to everyone who will
    use the app (Power Platform admin centre → environment → Users, or
    better: map an Entra group to a Dataverse group team and give the

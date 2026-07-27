@@ -47,6 +47,13 @@ export const dataSourcesInfo = {
     "dataSourceType": "Dataverse",
     "apis": {}
   },
+  "ben_ltkdoclibraries": {
+    "tableId": "",
+    "version": "",
+    "primaryKey": "ben_ltkdoclibraryid",
+    "dataSourceType": "Dataverse",
+    "apis": {}
+  },
   "ben_ltkpeoples": {
     "tableId": "",
     "version": "",

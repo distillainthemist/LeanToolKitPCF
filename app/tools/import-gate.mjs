@@ -163,17 +163,18 @@ if (docsFiles.length > 0) {
 }
 
 // Rule C (source side): outside src/docs/ and src/generated/, no file may
-// statically reach a SharePoint service — including via the generated
-// barrel (src/generated/index.ts re-exports every service, so a static
-// import of the barrel launders the connector into the importer's chunk).
-// The walk therefore continues through generated/ intermediates.
-function reachesSpViaGenerated(start) {
+// statically reach a SharePoint service by ANY chain — the generated
+// barrel (index.ts re-exports every service) and docs modules (sp.ts
+// imports the service directly) both launder connector code into the
+// importer's chunk. Full static closure, so the settings screen reaching
+// docs/settings.ts without a dynamic import is caught too.
+function reachesSp(start) {
   const seen = new Set([start]);
   const queue = [start];
   while (queue.length > 0) {
     for (const dep of deps.get(queue.shift()) ?? []) {
       if (isSpService(dep)) return dep;
-      if (isGenerated(dep) && !seen.has(dep)) {
+      if (!seen.has(dep)) {
         seen.add(dep);
         queue.push(dep);
       }
@@ -183,7 +184,7 @@ function reachesSpViaGenerated(start) {
 }
 for (const file of files) {
   if (isDocs(file) || isGenerated(file)) continue;
-  const hit = reachesSpViaGenerated(file);
+  const hit = reachesSp(file);
   if (hit) {
     violations.push(`RULE C — ${rel(file)} statically reaches ${rel(hit)} (use dynamic import, or move it under src/docs/)`);
   }

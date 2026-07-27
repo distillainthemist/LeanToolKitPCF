@@ -13,27 +13,12 @@ import { getClient } from "@microsoft/power-apps/data";
 import { dataSourcesInfo } from "../../.power/schemas/appschemas/dataSourcesInfo";
 import { DocumentsService } from "../generated/services/DocumentsService";
 import { el } from "../../../shared/ui/dom";
+import { spRequest } from "./sp";
 
+const SITE = "https://pecheydistillingcom.sharepoint.com/sites/Dev";
 const SEARCH_BODY = JSON.stringify({
   request: { Querytext: "*", RowLimit: 3, TrimDuplicates: false },
 });
-
-/** Declare the connector's HttpRequest op in the local apis map. */
-function declareHttpRequest(): void {
-  const info = dataSourcesInfo as unknown as {
-    documents: { apis: Record<string, unknown> };
-  };
-  info.documents.apis["HttpRequest"] ??= {
-    path: "/{connectionId}/datasets/{dataset}/httprequest",
-    method: "POST",
-    parameters: [
-      { name: "connectionId", in: "path", required: true, type: "string" },
-      { name: "dataset", in: "path", required: true, type: "string" },
-      { name: "parameters", in: "body", required: true, type: "object" },
-    ],
-    responseInfo: { "200": { type: "object" } },
-  };
-}
 
 export function mountDocsSpike(parent: HTMLElement): () => void {
   const host = el("div", "app-docs-spike");
@@ -82,50 +67,33 @@ export function mountDocsSpike(parent: HTMLElement): () => void {
       show("2. executeAsync GetEditor THREW", String(e));
     }
 
-    // 3. the decision gate: HttpRequest, declared locally, GET _api/web
-    declareHttpRequest();
-    try {
-      const r = await client.executeAsync<object, unknown>({
-        connectorOperation: {
-          tableName: "documents",
-          operationName: "HttpRequest",
-          parameters: {
-            parameters: {
-              method: "GET",
-              uri: "_api/web?$select=Title,Url",
-              headers: { Accept: "application/json;odata=nometadata" },
-            },
-          },
-        },
-      });
-      show("3. HttpRequest GET _api/web  ← THE PLAN A/B ANSWER", r);
-    } catch (e) {
-      show("3. HttpRequest GET _api/web THREW", String(e));
-    }
+    // 3. the decision gate (kept green as the transport's smoke test):
+    //    HttpRequest GET _api/web through sp.ts — the real data layer
+    const web = await spRequest(SITE, "GET", "_api/web?$select=Title,Url");
+    show("3. spRequest GET _api/web  ← plan A transport", web);
 
     // 4. the prize: search postquery through the same door
-    try {
-      const r = await client.executeAsync<object, unknown>({
-        connectorOperation: {
-          tableName: "documents",
-          operationName: "HttpRequest",
-          parameters: {
-            parameters: {
-              method: "POST",
-              uri: "_api/search/postquery",
-              headers: {
-                "Content-Type": "application/json;odata=verbose",
-                Accept: "application/json;odata=verbose",
-              },
-              body: SEARCH_BODY,
-            },
-          },
-        },
-      });
-      show("4. HttpRequest POST search/postquery", r);
-    } catch (e) {
-      show("4. HttpRequest POST search/postquery THREW", String(e));
-    }
+    const search = await spRequest(SITE, "POST", "_api/search/postquery", {
+      headers: {
+        "Content-Type": "application/json;odata=verbose",
+        Accept: "application/json;odata=verbose",
+      },
+      body: SEARCH_BODY,
+    });
+    show(
+      "4. spRequest POST search/postquery",
+      search.ok
+        ? {
+            ok: true,
+            rows:
+              ((search.data as Record<string, never>)?.["d"] as Record<string, never>)?.[
+                "postquery"
+              ] !== undefined
+                ? "postquery payload present"
+                : "unexpected shape",
+          }
+        : search
+    );
 
     line("\ndone.");
   })();

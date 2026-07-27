@@ -81,6 +81,10 @@
         "ltkcardseries": {
           "entitySetName": "ben_ltkcardserieses",
           "logicalName": "ben_ltkcardseries"
+        },
+        "ltkdoclibraries": {
+          "entitySetName": "ben_ltkdoclibraries",
+          "logicalName": "ben_ltkdoclibrary"
         }
       },
       "environmentVariableName": ""

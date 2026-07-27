@@ -255,6 +255,16 @@ export function mountSettings(parent: HTMLElement, initialTab = ""): () => void 
     }
     if (me.role === "superadmin") {
       tabs.push({ key: "brand", label: "Branding", render: () => renderBranding(body, ctx) });
+      tabs.push({
+        key: "documents",
+        label: "Documents",
+        // dynamic import ONLY — the import gate fails the build if a
+        // static chain from here ever reaches the SharePoint service
+        render: async () => {
+          const { renderDocsSettings } = await import("../docs/settingsTab");
+          await renderDocsSettings(body, ctx);
+        },
+      });
     }
     if (!isAdmin) {
       tabs.push({ key: "request", label: "Request admin", render: () => renderRequest(body, me) });

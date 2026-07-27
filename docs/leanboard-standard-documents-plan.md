@@ -493,6 +493,39 @@ Settings → **Documents** tab (super admin only).
 *Proof:* config round-trips; a library added and removed leaves no orphan
 rows; unit tests on the mapping model; board chunks unchanged.
 
+#### Phase 1 status — 2026-07-27: built, hosted verification with Ben
+
+- **Schema:** `ben_ltkdoclibrary` deployed through the pipeline (table +
+  4 columns + alternate key on `ben_listid`); the reserved `__app__` row
+  carries app-level docs config — no new column on sitesettings needed.
+  `Ben_ltkdoclibrariesService` generated.
+- **`src/docs/` grew from the spike into the real layer:** `sp.ts` (the
+  plan-A transport — `spRequest` with per-call dataset override, so
+  configured sites need no rebinding — plus the Phase 1 fetchers:
+  libraries, fields, term groups/sets, capped term-path walk), `model.ts`
+  (pure mapping model: library/app config parse+serialize sparse and
+  tolerant, column roles from the DMS column table, `mergeColumns`,
+  `orgDrift` with term-offset), `store.ts` (Dataverse IO; unexpose
+  deletes the row — no orphans), `settingsTab.ts` (the tab UI).
+- **Settings → Documents** (super admin): site URL + library discovery
+  and exposure; per library display name, type, rendition folder,
+  column table (display/available/default/role), status→state-palette
+  colours with prefill-from-choices; term group + Organisation set
+  pickers; read-only drift report with company-level offset toggle.
+  Everything buffered, saved through the settings save bar.
+- **Guardrails held and tightened:** rule C is now full static closure —
+  proven by planting the exact forbidden import (settings → docs
+  statically) and watching it fail; docs settings renamed `settingsTab.ts`
+  after the chunk report exposed a basename collision folding it into the
+  ceilinged settings chunk; baseline re-cut post-docs (32 chunks,
+  8 ceilings). 232 tests (10 new on the model).
+- **ALM:** deploy-to-new-org.md now covers the SharePoint connection
+  reference (bind always; inert until configured).
+
+**Hosted checks (Ben):** Settings → Documents renders; Load libraries
+lists the Dev site's libraries; expose + configure + Save; reload
+round-trips; untick + Save deletes the row; drift report runs.
+
 ### Phase 2 — The read experience
 
 The `#/docs` area: title bar, left navigation, right list.
