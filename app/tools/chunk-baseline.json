@@ -1,0 +1,43 @@
+{
+  "updated": "2026-07-27",
+  "ceilings": {
+    "index": 23083,
+    "cardRegistry": 436772,
+    "mappers": 116440,
+    "composer": 79469,
+    "hub": 58108,
+    "settings": 67998,
+    "board": 43575,
+    "cardEditor": 17559
+  },
+  "sizes": {
+    "PluginBridge": 1888,
+    "actions": 1135,
+    "board": 26668,
+    "boards": 3871,
+    "cardEditor": 5855,
+    "cardHost": 11521,
+    "cardRegistry": 341225,
+    "catalog": 1507,
+    "clipboard": 392,
+    "composer": 55383,
+    "config": 10833,
+    "editor": 16893,
+    "hub": 38294,
+    "index": 10274,
+    "links": 1158,
+    "loading": 9217,
+    "mappers": 84960,
+    "meeting": 1801,
+    "people": 18415,
+    "prompts": 1818,
+    "recurrence": 7424,
+    "rolldown-runtime": 158,
+    "runtime": 664,
+    "settings": 46206,
+    "sitePrompt": 2075,
+    "tile-defaults": 326409,
+    "viewAs": 367,
+    "wizard": 34504
+  }
+}

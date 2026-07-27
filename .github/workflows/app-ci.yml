@@ -41,5 +41,12 @@ jobs:
         run: npx tsc -p tsconfig.json
       - name: Unit tests
         run: npx vitest run
+      # Standard Documents guardrails (docs/leanboard-standard-documents-plan.md
+      # Phase 0): the docs area must never share static imports with the
+      # board path, and board-path chunks must stay under their ceilings.
+      - name: Import gate
+        run: node tools/import-gate.mjs
       - name: Build
         run: npm run build
+      - name: Chunk sizes
+        run: node tools/chunk-report.mjs
