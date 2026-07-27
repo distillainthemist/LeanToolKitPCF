@@ -31,6 +31,12 @@ export const LATEST = "latest";
 /** Player query parameter naming the ritual to open on launch. */
 export const LAUNCH_PARAM = "ritual";
 
+/** Player query parameter opening a named screen (whitelisted — the
+ *  player fragment never reaches the app, so screens without a nav link
+ *  need a param). Currently only the Phase 0 docs spike; remove with it. */
+export const SCREEN_PARAM = "screen";
+const SCREEN_ROUTES: Record<string, string> = { "docs-spike": "#/docs-spike" };
+
 /** Player query parameter pinning one occurrence ("yyyy-mm-ddTHH:MM"). */
 export const AT_PARAM = "at";
 
@@ -77,6 +83,8 @@ export function launchTarget(): string {
     );
     return ((named?.[1] ?? "").trim() || (query.get(name) ?? "").trim());
   };
+  const screen = SCREEN_ROUTES[param(SCREEN_PARAM)];
+  if (screen !== undefined) return screen;
   const boardId = param(LAUNCH_PARAM);
   return boardId === "" ? "" : boardHash(boardId, param(AT_PARAM));
 }
