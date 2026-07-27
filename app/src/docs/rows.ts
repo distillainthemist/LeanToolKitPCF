@@ -192,8 +192,6 @@ export function rowsFromSearch(raw: unknown): SearchPage {
 
 // ---- shared presentation helpers ---------------------------------------
 
-const OFFICE_EXTS = new Set(["docx", "doc", "dotx", "xlsx", "xls", "pptx", "ppt"]);
-
 /** Origin of the configured site ("https://tenant.sharepoint.com"). */
 export function originOf(site: string): string {
   try {
@@ -203,13 +201,32 @@ export function originOf(site: string): string {
   }
 }
 
-/** In-app preview URL: WOPI embed for office formats, the file itself
- *  for browser-native ones (pdf, images). */
+/**
+ * In-app preview URL — the modern embed endpoint, for EVERY file type.
+ *
+ * Not the raw file URL: SharePoint serves documents with
+ * `Content-Disposition: attachment`, so a browser refuses to render one
+ * inline in a frame and paints its blocked-file glyph instead (what Ben
+ * saw for a PDF). `embed.aspx` is the surface SharePoint's own "Embed"
+ * dialog emits, so it is the one designed to be framed by another
+ * origin, and it renders Office, PDF, images and video alike.
+ */
 export function embedUrlFor(site: string, row: DocRow): string {
-  if (OFFICE_EXTS.has(row.ext)) {
-    return `${site}/_layouts/15/Doc.aspx?sourcedoc={${row.uniqueId}}&action=embedview`;
-  }
-  return `${originOf(site)}${row.serverUrl}`;
+  return `${site}/_layouts/15/embed.aspx?UniqueId=${row.uniqueId}`;
+}
+
+/**
+ * Page-one preview image. An <img>, so no framing policy can block it —
+ * the fallback when the preview frame will not paint, and what the draft
+ * asked for ("as a pdf via thumbnail").
+ *
+ * `path` (the absolute file URL, singly encoded) — NOT `guidFile`, which
+ * answers 400. Probed 2026-07-27 against the Dev site: real PNG bytes
+ * back for both a .pdf and a .docx.
+ */
+export function thumbnailUrlFor(site: string, row: DocRow): string {
+  const abs = `${originOf(site)}${row.serverUrl}`;
+  return `${site}/_layouts/15/getpreview.ashx?path=${encodeURIComponent(abs)}`;
 }
 
 /** The open-in-SharePoint URL (new tab; ?web=1 keeps office docs in the

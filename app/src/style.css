@@ -1504,3 +1504,22 @@ input[type="color"].app-color:disabled { opacity: 0.4; cursor: default; }
 .app-docs-verrow { display: flex; gap: 12px; padding: 4px 0; border-bottom: 1px solid #f2f2f2; font-size: 12.5px; }
 .app-docs-verlabel { font-weight: 600; min-width: 90px; }
 .app-docs-vercomment { color: #6b6b6b; }
+.app-linklike {
+  border: none;
+  background: none;
+  padding: 0;
+  color: var(--app-accent, #2563eb);
+  cursor: pointer;
+  font: inherit;
+  text-decoration: underline;
+}
+.app-docs-viewimg {
+  flex: 1;
+  min-height: 0;
+  object-fit: contain;
+  object-position: top center;
+  margin-top: 10px;
+  border: 1px solid #eee;
+  border-radius: 6px;
+  background: #fafafa;
+}

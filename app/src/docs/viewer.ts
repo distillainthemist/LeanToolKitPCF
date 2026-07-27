@@ -14,6 +14,7 @@ import {
   extGlyph,
   formatWhen,
   openUrlFor,
+  thumbnailUrlFor,
 } from "./rows";
 import { itemDetails, itemVersions } from "./data";
 
@@ -107,14 +108,33 @@ export function openDocViewer(opts: ViewerOpts): void {
     const frame = el("iframe", "app-docs-viewframe") as HTMLIFrameElement;
     frame.src = embedUrlFor(site, row);
     frame.title = row.name;
+    // some hosts/tenants refuse to be framed by a foreign origin at all;
+    // the page image always renders, so it is one click away rather than
+    // a dead end (a cross-origin frame cannot be asked whether it painted)
     stage.appendChild(frame);
-    stage.appendChild(
-      el(
-        "div",
-        "app-field-hint app-docs-viewnote",
-        "Preview blank? Some formats refuse to embed here — Open in SharePoint always works."
-      )
-    );
+    const note = el("div", "app-field-hint app-docs-viewnote");
+    note.append(document.createTextNode("Preview not showing? "));
+    const asImage = el("button", "app-linklike", "Show page preview") as HTMLButtonElement;
+    asImage.addEventListener("click", () => paintThumbnail());
+    note.append(asImage, document.createTextNode(" · or Open in SharePoint above."));
+    stage.appendChild(note);
+  };
+
+  const paintThumbnail = () => {
+    clear(stage);
+    const img = el("img", "app-docs-viewimg") as HTMLImageElement;
+    img.src = thumbnailUrlFor(site, row);
+    img.alt = `First page of ${row.name}`;
+    const note = el("div", "app-field-hint app-docs-viewnote");
+    img.addEventListener("error", () => {
+      img.remove();
+      note.textContent = "No page preview available for this file — open it in SharePoint.";
+    });
+    note.append(document.createTextNode("Page one only. "));
+    const back = el("button", "app-linklike", "Try the full preview") as HTMLButtonElement;
+    back.addEventListener("click", () => paintPreview());
+    note.appendChild(back);
+    stage.append(img, note);
   };
 
   if (opts.askToWork) {

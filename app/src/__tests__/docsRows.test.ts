@@ -15,6 +15,7 @@ import {
   openUrlFor,
   parseItemsPage,
   rowsFromSearch,
+  thumbnailUrlFor,
   toSiteRelative,
 } from "../docs/rows";
 
@@ -135,11 +136,25 @@ describe("presentation helpers", () => {
     values: {},
   };
 
-  it("routes office docs to the WOPI embed, pdf to the file", () => {
-    expect(embedUrlFor(SITE, row)).toContain("Doc.aspx?sourcedoc={u-1}&action=embedview");
-    expect(embedUrlFor(SITE, { ...row, ext: "pdf" })).toBe(
-      "https://x.sharepoint.com/sites/Dev/Shared Documents/A.docx"
+  it("previews every file type through the modern embed endpoint", () => {
+    // Doc.aspx?action=embedview answers an ERROR page for a PDF, and the
+    // raw file URL is served as an attachment (browsers refuse to frame
+    // it) — probed 2026-07-27. embed.aspx handles both, so there is no
+    // per-extension branch left to get wrong.
+    const expected = `${SITE}/_layouts/15/embed.aspx?UniqueId=u-1`;
+    expect(embedUrlFor(SITE, row)).toBe(expected);
+    expect(embedUrlFor(SITE, { ...row, ext: "pdf" })).toBe(expected);
+    expect(embedUrlFor(SITE, { ...row, ext: "png" })).toBe(expected);
+  });
+
+  it("builds the thumbnail from the absolute path, singly encoded", () => {
+    expect(thumbnailUrlFor(SITE, row)).toBe(
+      `${SITE}/_layouts/15/getpreview.ashx?path=` +
+        encodeURIComponent("https://x.sharepoint.com/sites/Dev/Shared Documents/A.docx")
     );
+  });
+
+  it("keeps open and download on their own endpoints", () => {
     expect(openUrlFor(SITE, row)).toBe(
       "https://x.sharepoint.com/sites/Dev/Shared Documents/A.docx?web=1"
     );
