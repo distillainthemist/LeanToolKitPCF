@@ -129,6 +129,33 @@ export interface SearchOpts {
 }
 
 /**
+ * Rebuild depth-first (render) order from a level-by-level walk: each
+ * node directly under its parent, siblings keeping their term-store
+ * order. The parallel BFS term walk returns nodes level by level, which
+ * painted every grandchild after the LAST top-level term (Ben's
+ * screenshot: Bell Bay's areas indented under Boyne).
+ */
+export function termTreeOrder<T extends { labels: string[] }>(nodes: T[]): T[] {
+  const SEP = "\u0000"; // labels contain spaces; a NUL cannot appear in one
+  const byParent = new Map<string, T[]>();
+  for (const n of nodes) {
+    const key = n.labels.slice(0, -1).join(SEP);
+    const siblings = byParent.get(key) ?? [];
+    siblings.push(n);
+    byParent.set(key, siblings);
+  }
+  const out: T[] = [];
+  const emit = (parentKey: string) => {
+    for (const n of byParent.get(parentKey) ?? []) {
+      out.push(n);
+      emit(n.labels.join(SEP));
+    }
+  };
+  emit("");
+  return out;
+}
+
+/**
  * The auto-created managed property behind a taxonomy column: `owstaxId`
  * + the column's internal name. Verified on the dev tenant 2026-07-28:
  * `owstaxIdOrganisation:<termGuid>` filtered correctly with NO tenant

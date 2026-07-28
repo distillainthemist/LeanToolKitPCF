@@ -17,6 +17,7 @@ import {
   rowsFromSearch,
   sourceUrlFor,
   taxonomySearchProperty,
+  termTreeOrder,
   thumbnailUrlFor,
   toSiteRelative,
 } from "../docs/rows";
@@ -157,6 +158,32 @@ describe("search", () => {
       })
     );
     expect(empty.request.Querytext).toBe("IsDocument:1 ListID:l1");
+  });
+
+  it("re-orders a level-by-level term walk into render (depth-first) order", () => {
+    // the parallel walk returns levels, which painted Bell Bay's areas
+    // indented under Boyne (Ben's screenshot)
+    const bfs = [
+      { id: "bb", labels: ["Bell Bay"] },
+      { id: "bo", labels: ["Boyne"] },
+      { id: "c", labels: ["Bell Bay", "Casting"] },
+      { id: "m", labels: ["Bell Bay", "Maintenance"] },
+      { id: "ca", labels: ["Boyne", "Carbon"] },
+    ];
+    expect(termTreeOrder(bfs).map((n) => n.id)).toEqual(["bb", "c", "m", "bo", "ca"]);
+  });
+
+  it("never confuses 'Bell Bay' with a Bell → Bay path", () => {
+    // labels contain spaces, so the parent key must join on a character
+    // that cannot appear in one — a space separator would collide here
+    const nodes = [
+      { id: "1", labels: ["Bell Bay"] },
+      { id: "2", labels: ["Bell"] },
+      { id: "3", labels: ["Bell", "Bay"] },
+      { id: "4", labels: ["Bell", "Bay", "X"] },
+      { id: "5", labels: ["Bell Bay", "Y"] },
+    ];
+    expect(termTreeOrder(nodes).map((n) => n.id)).toEqual(["1", "5", "2", "3", "4"]);
   });
 
   it("parses the verbose table into rows", () => {

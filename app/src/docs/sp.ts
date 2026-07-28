@@ -13,6 +13,7 @@
 
 import { getClient } from "@microsoft/power-apps/data";
 import { dataSourcesInfo } from "../../.power/schemas/appschemas/dataSourcesInfo";
+import { termTreeOrder } from "./rows";
 
 // the import is for side effect typing only — the data source must exist
 // in the app for the connection to be present at runtime
@@ -258,5 +259,11 @@ async function walkTermSet(
     }
     frontier = next;
   }
-  return { nodes, truncated, error: nodes.length === 0 ? firstError : "" };
+  return {
+    // the walk collects level by level; callers render array order, so
+    // hand back depth-first order (children under their parent)
+    nodes: termTreeOrder(nodes),
+    truncated,
+    error: nodes.length === 0 ? firstError : "",
+  };
 }
