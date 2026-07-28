@@ -498,6 +498,38 @@ export async function renderDocsSettings(body: HTMLElement, ctx: Ctx): Promise<v
   };
   seedOption(groupSel, app.termGroupId, app.termGroupName);
   seedOption(setSel, app.orgSetId, app.orgSetName);
+
+  /**
+   * Fill the set dropdown for the current group. This ran ONLY inside
+   * the group-change handler before, so with a SAVED group the sets
+   * never loaded and the dropdown sat on "—" forever (Ben's screenshot).
+   * Now it also runs after Load groups and on opening the tab with a
+   * saved group. A leading "—" keeps "no set chosen" an explicit state —
+   * nothing is auto-assigned behind the maker's back.
+   */
+  const loadSets = async () => {
+    if (app.termGroupId === "") return;
+    const r = await fetchTermSets(app.siteUrl, app.termGroupId);
+    const sets = Array.isArray((r.data as { value?: unknown[] })?.value)
+      ? ((r.data as { value: unknown[] }).value as {
+          id?: string;
+          localizedNames?: { name?: string }[];
+        }[])
+      : [];
+    if (!r.ok) return; // keep whatever is seeded rather than blanking
+    clear(setSel);
+    const dash = el("option", "", "—") as HTMLOptionElement;
+    dash.value = "";
+    setSel.appendChild(dash);
+    for (const s of sets) {
+      const o = el("option", "", s.localizedNames?.[0]?.name ?? "") as HTMLOptionElement;
+      o.value = s.id ?? "";
+      setSel.appendChild(o);
+    }
+    setSel.value = sets.some((s) => s.id === app.orgSetId) ? app.orgSetId : "";
+  };
+  if (app.termGroupId !== "") void loadSets();
+
   const loadGroups = el("button", "app-btn", "Load groups") as HTMLButtonElement;
   loadGroups.addEventListener("click", () => {
     void (async () => {
@@ -510,41 +542,40 @@ export async function renderDocsSettings(body: HTMLElement, ctx: Ctx): Promise<v
         return;
       }
       clear(groupSel);
+      // "—" first when nothing is saved, so the display never claims a
+      // selection the config does not hold
+      if (!groups.some((g) => g.id === app.termGroupId)) {
+        const dash = el("option", "", "—") as HTMLOptionElement;
+        dash.value = "";
+        groupSel.appendChild(dash);
+      }
       for (const g of groups) {
         const o = el("option", "", g.name ?? "") as HTMLOptionElement;
         o.value = g.id ?? "";
         groupSel.appendChild(o);
       }
-      if (groups.some((g) => g.id === app.termGroupId)) groupSel.value = app.termGroupId;
+      if (groups.some((g) => g.id === app.termGroupId)) {
+        groupSel.value = app.termGroupId;
+        void loadSets();
+      }
       loadGroups.textContent = "Load groups";
     })();
   });
   groupSel.addEventListener("change", () => {
     app.termGroupId = groupSel.value;
-    app.termGroupName = groupSel.selectedOptions[0]?.textContent ?? "";
+    app.termGroupName =
+      groupSel.value === "" ? "" : (groupSel.selectedOptions[0]?.textContent ?? "");
+    // a different group invalidates the saved set — explicit re-pick
+    app.orgSetId = "";
+    app.orgSetName = "";
+    seedOption(setSel, "", "");
     ctx.markDirty();
-    void (async () => {
-      const r = await fetchTermSets(app.siteUrl, app.termGroupId);
-      const sets = Array.isArray((r.data as { value?: unknown[] })?.value)
-        ? ((r.data as { value: unknown[] }).value as {
-            id?: string;
-            localizedNames?: { name?: string }[];
-          }[])
-        : [];
-      clear(setSel);
-      for (const s of sets) {
-        const o = el("option", "", s.localizedNames?.[0]?.name ?? "") as HTMLOptionElement;
-        o.value = s.id ?? "";
-        setSel.appendChild(o);
-      }
-      if (sets.some((s) => s.id === app.orgSetId)) setSel.value = app.orgSetId;
-      app.orgSetId = setSel.value;
-      app.orgSetName = setSel.selectedOptions[0]?.textContent ?? "";
-    })();
+    void loadSets();
   });
   setSel.addEventListener("change", () => {
     app.orgSetId = setSel.value;
-    app.orgSetName = setSel.selectedOptions[0]?.textContent ?? "";
+    app.orgSetName =
+      setSel.value === "" ? "" : (setSel.selectedOptions[0]?.textContent ?? "");
     ctx.markDirty();
   });
   const groupRow = el("div", "app-docs-siterow");
