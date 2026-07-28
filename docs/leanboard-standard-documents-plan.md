@@ -630,6 +630,43 @@ fields and versions; a working-type library asks before opening to edit.
 card tile paint time is indistinguishable from a comparable existing card;
 board opens make no SharePoint calls until a docs card is present.
 
+#### Phase 3 status — 2026-07-28: built, hosted verification with Ben
+
+- **Prefs storage:** two columns on `ben_ltkuserprefs`
+  (`ben_docfavoritesjson`, `ben_docviewsjson`) instead of the plan's
+  separate `ben_ltkdocprefs` table — userprefs IS the per-user
+  presentation-prefs row; deployed through the pipeline, service
+  regenerated. Session-cached (`prefs.ts`).
+- **Saved views** (`views.ts` pure + tested): per person, in the nav —
+  open / copy-link / delete, save-current inline. **Shared links carry
+  the view state** as the `docview` launch param through the ritual-link
+  door (`docsViewUrl` / `takePendingDocView`); *Copy link* in the top
+  bar shares the current filter exactly. Dev-server links work through
+  the query-string fallback launchTarget already had.
+- **Favourites:** kebab star, nav entry with count, entries carry enough
+  to render and open without a lookup (`FavDoc`).
+- **Register export (FR-RP-008):** *Export* in the top bar — CSV
+  (BOM-prefixed for Excel) of the current scope's configured available
+  columns via browse paging, capped at 2000 rows with the cap surfaced
+  in the status line. The PDF half of FR-RP-008 stays descoped.
+- **Board cards** (`docsCards.ts`, lazy): **Standard documents**
+  (library/org-term/title-filter/rows config; live list, tap opens the
+  viewer overlay) and **Document health** (overdue + due-soon stat
+  chips, worst five, derived at read time from the `nextReviewDate`-role
+  column — never stored; per-library scan capped at 200 with the cap
+  surfaced; a missing role column says so). Card contract held:
+  `cardRegistry` reaches `src/docs` by **dynamic import only** (gate
+  rule A proof — board closure unchanged at 128), fetch after paint
+  with 300–1500 ms jitter, tile snapshot via `onTile` (no document, no
+  saver). Both types in `LINK_SOURCE_EXCLUDED`; hand-authored picker
+  tiles; catalog heal `0.1.4`.
+
+**Hosted checks (Ben):** save a view, reopen it, copy its link and open
+in a fresh tab (the same filter must appear); star a document and check
+Favourites; Export downloads a sensible CSV; add both cards to a board —
+tiles paint instantly from stored SVG, content arrives a beat later,
+Document health shows the mapped review dates or the explanatory note.
+
 ### Phase 4 — Light document control
 
 - Check-out / check-in for working documents (native REST).
