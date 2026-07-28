@@ -161,13 +161,20 @@ export function fetchTermChildren(
  * level (v2.1 has no subtree expand). Depth-capped and request-capped —
  * a drift report is an admin surface, not a hot path.
  */
+export interface TermNode {
+  /** Term id — what search filtering keys on (owstaxId… properties). */
+  id: string;
+  /** Full label path from the set root, e.g. ["Bell Bay", "Casting"]. */
+  labels: string[];
+}
+
 export async function fetchTermPaths(
   site: string,
   setId: string,
   maxDepth = 4,
   maxRequests = 120
-): Promise<{ paths: string[][]; truncated: boolean; error: string }> {
-  const paths: string[][] = [];
+): Promise<{ nodes: TermNode[]; truncated: boolean; error: string }> {
+  const nodes: TermNode[] = [];
   let requests = 0;
   let truncated = false;
   const label = (t: Record<string, unknown>): string => {
@@ -192,13 +199,13 @@ export async function fetchTermPaths(
       const name = label(t);
       const id = typeof t.id === "string" ? t.id : "";
       if (name === "" || id === "") continue;
-      const path = [...prefix, name];
-      paths.push(path);
-      const err = await walk(id, path);
+      const labels = [...prefix, name];
+      nodes.push({ id, labels });
+      const err = await walk(id, labels);
       if (err !== "") return err;
     }
     return "";
   };
   const error = await walk("", []);
-  return { paths, truncated, error };
+  return { nodes, truncated, error };
 }

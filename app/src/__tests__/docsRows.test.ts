@@ -16,6 +16,7 @@ import {
   pdfViewUrlFor,
   rowsFromSearch,
   sourceUrlFor,
+  taxonomySearchProperty,
   thumbnailUrlFor,
   toSiteRelative,
 } from "../docs/rows";
@@ -123,6 +124,39 @@ describe("search", () => {
       );
     }
     // …and the transport refuses to send it at all (see data.searchPage)
+  });
+
+  it("filters by organisation term via the auto-created taxonomy property", () => {
+    // verified on the dev tenant 2026-07-28: owstaxIdOrganisation:<guid>
+    // answered with no tenant-admin mapping
+    expect(taxonomySearchProperty("Organisation")).toBe("owstaxIdOrganisation");
+    expect(taxonomySearchProperty("DMSOrgUnit")).toBe("owstaxIdDMSOrgUnit");
+    const one = JSON.parse(
+      buildSearchBody("", {
+        listIds: ["l1"],
+        termFilter: { properties: ["owstaxIdOrganisation"], termIds: ["t1"] },
+      })
+    );
+    expect(one.request.Querytext).toBe("IsDocument:1 ListID:l1 owstaxIdOrganisation:t1");
+    // a picked node ORs its subtree — a GUID matches only its exact term
+    const subtree = JSON.parse(
+      buildSearchBody("pump", {
+        listIds: ["l1"],
+        termFilter: { properties: ["owstaxIdOrganisation"], termIds: ["t1", "t2"] },
+      })
+    );
+    expect(subtree.request.Querytext).toBe(
+      "(Title:pump* OR Filename:pump*) IsDocument:1 ListID:l1 " +
+        "(owstaxIdOrganisation:t1 OR owstaxIdOrganisation:t2)"
+    );
+    // an empty filter contributes nothing rather than a broken clause
+    const empty = JSON.parse(
+      buildSearchBody("", {
+        listIds: ["l1"],
+        termFilter: { properties: [], termIds: ["t1"] },
+      })
+    );
+    expect(empty.request.Querytext).toBe("IsDocument:1 ListID:l1");
   });
 
   it("parses the verbose table into rows", () => {

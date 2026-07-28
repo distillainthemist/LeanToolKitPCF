@@ -23,9 +23,12 @@ import {
   formatWhen,
   isNonCurrentStatus,
   pdfViewUrlFor,
+  taxonomySearchProperty,
 } from "./rows";
 import { DocLibrary, docsConfig } from "./docsStore";
-import { fetchTermPaths } from "./sp";
+import { TermNode, fetchTermPaths } from "./sp";
+import { currentViewer } from "../runtime";
+import { viewerPerson } from "../store/people";
 import { openDocProperties, openDocViewer } from "./viewer";
 
 const PAGE = 50;
@@ -170,25 +173,102 @@ export function mountDocs(
         lib.libType
       );
     }
+    // ---- organisation tree — a real filter now -------------------------
+    // Filtering keys on the auto-created owstaxId<Column> property with
+    // term GUIDs (verified 2026-07-28: no admin mapping needed on the dev
+    // tenant). A GUID matches only its exact term, so picking a node ORs
+    // the node with its whole subtree — the walk yields it anyway.
+    const orgCols = new Set<string>();
+    for (const lib of libraries) {
+      for (const c of lib.config.columns) if (c.role === "orgUnit") orgCols.add(c.internal);
+    }
+    const orgProps = [...orgCols].map(taxonomySearchProperty);
+    let termNodes: TermNode[] = [];
+    let orgFilter: { node: TermNode; ids: string[] } | null = null;
+    const orgButtons = new Map<string, HTMLElement>();
+
+    const paintOrgSelection = () => {
+      for (const [id, btn] of orgButtons) {
+        btn.classList.toggle("app-docs-navterm-on", orgFilter?.node.id === id);
+      }
+    };
+
+    const subtreeIds = (node: TermNode): string[] =>
+      termNodes
+        .filter(
+          (n) =>
+            n.id === node.id ||
+            (n.labels.length > node.labels.length &&
+              node.labels.every((l, i) => n.labels[i] === l))
+        )
+        .map((n) => n.id);
+
+    const applyOrg = (node: TermNode | null) => {
+      orgFilter = node === null ? null : { node, ids: subtreeIds(node) };
+      paintOrgSelection();
+      paintChip();
+      void load(true);
+    };
+
+    /** Deepest term whose label path matches the viewer's own site /
+     *  department / area (offset 1 tolerates a company-rooted set). */
+    const viewerNode = async (): Promise<TermNode | null> => {
+      const viewer = currentViewer();
+      if (!viewer) return null;
+      const me = await viewerPerson(viewer.objectId).catch(() => null);
+      if (!me) return null;
+      const want = [me.site, me.department, me.area]
+        .map((s) => (s ?? "").trim().toLowerCase())
+        .filter((s) => s !== "");
+      if (want.length === 0) return null;
+      let best: TermNode | null = null;
+      for (const n of termNodes) {
+        for (const offset of [0, 1]) {
+          const labels = n.labels.slice(offset).map((l) => l.toLowerCase());
+          if (labels.length === 0 || labels.length > want.length) continue;
+          if (labels.every((l, i) => l === want[i])) {
+            if (!best || n.labels.length > best.labels.length) best = n;
+          }
+        }
+      }
+      return best;
+    };
+
     if (app.orgSetId !== "") {
       const orgHead = el("div", "app-docs-navorg", "Organisation");
       nav.appendChild(orgHead);
       const orgBox = el("div", "app-docs-navorgbox");
       nav.appendChild(orgBox);
       orgBox.appendChild(el("div", "app-field-hint", "Loading…"));
-      void fetchTermPaths(app.siteUrl, app.orgSetId, 3, 40).then(({ paths, error }) => {
+      void fetchTermPaths(app.siteUrl, app.orgSetId, 3, 40).then(async ({ nodes, error }) => {
         if (dead) return;
         clear(orgBox);
-        if (error !== "" || paths.length === 0) {
+        if (error !== "" || nodes.length === 0) {
           orgBox.appendChild(el("div", "app-field-hint", "No organisation terms yet."));
           return;
         }
-        for (const p of paths) {
-          const node = el("div", "app-docs-navterm", p[p.length - 1]);
-          node.style.paddingLeft = `${8 + (p.length - 1) * 14}px`;
-          node.title =
-            "Filtering by organisation arrives once the site's search mapping for this column is in place.";
-          orgBox.appendChild(node);
+        termNodes = nodes;
+        for (const n of nodes) {
+          const btn = el("button", "app-docs-navterm", n.labels[n.labels.length - 1]) as HTMLButtonElement;
+          btn.style.paddingLeft = `${8 + (n.labels.length - 1) * 14}px`;
+          if (orgProps.length === 0) {
+            btn.disabled = true;
+            btn.title =
+              "Map a column to the Organisation unit role in Settings → Documents to filter by organisation.";
+          } else {
+            btn.title = n.labels.join(" › ");
+            btn.addEventListener("click", () =>
+              applyOrg(orgFilter?.node.id === n.id ? null : n)
+            );
+          }
+          orgButtons.set(n.id, btn);
+          orgBox.appendChild(btn);
+        }
+        // land on the viewer's own corner of the organisation, visibly
+        // removable via the filter chip
+        if (orgProps.length > 0 && orgFilter === null) {
+          const mine = await viewerNode();
+          if (!dead && mine && orgFilter === null) applyOrg(mine);
         }
       });
     }
@@ -196,8 +276,24 @@ export function mountDocs(
     // ---- the list ------------------------------------------------------
     const main = el("div", "app-docs-main");
     bodyRow.appendChild(main);
+    const filterBar = el("div", "app-docs-filterbar");
+    main.appendChild(filterBar);
     const status = el("div", "app-docs-status");
     main.appendChild(status);
+
+    const paintChip = () => {
+      clear(filterBar);
+      if (!orgFilter) return;
+      const chip = el("span", "app-docs-orgchip");
+      chip.appendChild(
+        document.createTextNode(`Organisation: ${orgFilter.node.labels.join(" › ")}`)
+      );
+      const x = el("button", "app-docs-orgchip-x", "×") as HTMLButtonElement;
+      x.title = "Clear the organisation filter";
+      x.addEventListener("click", () => applyOrg(null));
+      chip.appendChild(x);
+      filterBar.appendChild(chip);
+    };
 
     const statusCol = current?.config.columns.find((c) => c.role === "status") ?? null;
     const statusChip = (value: string): HTMLElement => {
@@ -403,7 +499,13 @@ export function mountDocs(
         list.setRows([]);
       }
       list.setLoading(true);
-      const useSearch = query.trim() !== "" || current === null || scope.value === "all";
+      // an organisation filter forces search mode: list REST cannot
+      // filter by taxonomy, the index can
+      const useSearch =
+        query.trim() !== "" ||
+        current === null ||
+        scope.value === "all" ||
+        orgFilter !== null;
       if (useSearch) {
         const startRow = nextToken === "" ? 0 : Number(nextToken);
         // never unscoped: either the library in view, or every library
@@ -415,6 +517,9 @@ export function mountDocs(
           rowLimit: PAGE,
           startRow,
           searchContents: contentsBox.checked,
+          termFilter: orgFilter
+            ? { properties: orgProps, termIds: orgFilter.ids }
+            : undefined,
         });
         if (dead || gen !== generation) return;
         list.append(applyNonCurrent(page.rows));

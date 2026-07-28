@@ -119,6 +119,25 @@ export interface SearchOpts {
    * procedure turns this on deliberately.
    */
   searchContents?: boolean;
+  /**
+   * Restrict to documents tagged with any of these terms (the node the
+   * user picked plus its descendants — a GUID matches only its exact
+   * term, so subtree filtering ORs the subtree's ids, which the term
+   * store walk already yields).
+   */
+  termFilter?: { properties: string[]; termIds: string[] };
+}
+
+/**
+ * The auto-created managed property behind a taxonomy column: `owstaxId`
+ * + the column's internal name. Verified on the dev tenant 2026-07-28:
+ * `owstaxIdOrganisation:<termGuid>` filtered correctly with NO tenant
+ * admin mapping (label matching worked too, but labels collide across
+ * term sets — GUIDs don't). A tenant where this answers nothing needs
+ * the RefinableString mapping; the settings diagnostic tests it.
+ */
+export function taxonomySearchProperty(internalName: string): string {
+  return `owstaxId${internalName}`;
 }
 
 /** KQL-safe: quotes and brackets change the meaning of a query. */
@@ -145,6 +164,11 @@ export function buildSearchBody(text: string, opts: SearchOpts): string {
   if (ids.length === 1) terms.push(`ListID:${ids[0]}`);
   else if (ids.length > 1) {
     terms.push(`(${ids.map((id) => `ListID:${id}`).join(" OR ")})`);
+  }
+  const tf = opts.termFilter;
+  if (tf && tf.properties.length > 0 && tf.termIds.length > 0) {
+    const parts = tf.properties.flatMap((p) => tf.termIds.map((t) => `${p}:${t}`));
+    terms.push(parts.length === 1 ? parts[0] : `(${parts.join(" OR ")})`);
   }
   const request: Record<string, unknown> = {
     Querytext: terms.join(" "),

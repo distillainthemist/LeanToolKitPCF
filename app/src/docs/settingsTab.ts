@@ -46,6 +46,8 @@ import {
 } from "./docsStore";
 import { parseOrgTree } from "../../../shared/schema/meeting";
 import { orgJson } from "../store/config";
+import { searchPage } from "./data";
+import { taxonomySearchProperty } from "./rows";
 
 interface Ctx {
   markDirty: () => void;
@@ -560,18 +562,83 @@ export async function renderDocsSettings(body: HTMLElement, ctx: Ctx): Promise<v
   body.appendChild(companyWrap);
 
   const driftBtn = el("button", "app-btn", "Load drift report") as HTMLButtonElement;
-  body.appendChild(driftBtn);
+  // Does search filtering by organisation term WORK in this tenant?
+  // Answers per top-level term with a live document count. All zeros
+  // distinguishes the three honest possibilities in its hint — this is
+  // the check a new deployment runs instead of guessing (dev tenants
+  // auto-expose owstaxId<Column>; a locked-down tenant may need a
+  // RefinableString mapping from a tenant admin).
+  const diagBtn = el("button", "app-btn", "Test search filtering") as HTMLButtonElement;
+  const btnRow = el("div", "app-docs-siterow");
+  btnRow.append(driftBtn, diagBtn);
+  body.appendChild(btnRow);
   const driftBox = el("div", "");
   body.appendChild(driftBox);
+  diagBtn.addEventListener("click", () => {
+    void (async () => {
+      clear(driftBox);
+      const props = [
+        ...new Set(
+          exposed.flatMap((l) =>
+            l.config.columns.filter((c) => c.role === "orgUnit").map((c) => c.internal)
+          )
+        ),
+      ].map(taxonomySearchProperty);
+      const listIds = exposed.map((l) => l.listId);
+      if (props.length === 0 || listIds.length === 0 || app.orgSetId === "") {
+        driftBox.appendChild(
+          note(
+            "Needs an exposed library with a column mapped to the Organisation unit " +
+              "role, and an Organisation term set selected above."
+          )
+        );
+        return;
+      }
+      diagBtn.disabled = true;
+      diagBtn.textContent = "Testing…";
+      const { nodes, error } = await fetchTermPaths(app.siteUrl, app.orgSetId, 3, 40);
+      if (error !== "" || nodes.length === 0) {
+        driftBox.appendChild(note(`Could not read the term set: ${error || "no terms"}`));
+      } else {
+        const lines: string[] = [];
+        let hits = 0;
+        for (const top of nodes.filter((n) => n.labels.length === 1).slice(0, 6)) {
+          const ids = nodes.filter((n) => n.labels[0] === top.labels[0]).map((n) => n.id);
+          const res = await searchPage(app.siteUrl, "", {
+            listIds,
+            rowLimit: 1,
+            termFilter: { properties: props, termIds: ids },
+          });
+          hits += res.total;
+          lines.push(
+            `${top.labels[0]}: ${res.error !== "" ? `error — ${res.error.slice(0, 80)}` : `${res.total} document(s)`}`
+          );
+        }
+        driftBox.appendChild(note(`Via ${props.join(", ")} — ${lines.join(" · ")}`));
+        if (hits === 0) {
+          driftBox.appendChild(
+            note(
+              "All zero. Either nothing is tagged yet, the search index has not " +
+                "crawled the tags (minutes to hours), or this tenant needs a " +
+                "RefinableString mapping from a tenant admin."
+            )
+          );
+        }
+      }
+      diagBtn.disabled = false;
+      diagBtn.textContent = "Test search filtering";
+    })();
+  });
   driftBtn.addEventListener("click", () => {
     void (async () => {
       driftBtn.disabled = true;
       driftBtn.textContent = "Comparing…";
       clear(driftBox);
-      const [{ paths, truncated, error }, orgRaw] = await Promise.all([
+      const [{ nodes, truncated, error }, orgRaw] = await Promise.all([
         fetchTermPaths(app.siteUrl, app.orgSetId),
         orgJson(),
       ]);
+      const paths = nodes.map((n) => n.labels);
       driftBtn.disabled = false;
       driftBtn.textContent = "Load drift report";
       if (error !== "") {
