@@ -1553,3 +1553,20 @@ button.app-docs-navterm.app-docs-navterm-on {
   border: none; background: none; cursor: pointer; font-size: 14px;
   padding: 0 2px; color: #444;
 }
+.app-docs-viewrow { display: flex; gap: 2px; align-items: center; }
+.app-docs-viewrow .app-docs-navterm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.app-docs-viewbtn { border: none; background: none; cursor: pointer; font-size: 13px; color: #666; padding: 2px 4px; border-radius: 4px; flex: none; }
+.app-docs-viewbtn:hover { background: #f0f0f0; }
+.app-docs-viewname { font-size: 12px; padding: 3px 6px; flex: 1; min-width: 0; }
+/* the Standard documents / Document health board cards */
+.app-docscard { height: 100%; display: flex; flex-direction: column; overflow: hidden; }
+.app-docscard-body { flex: 1; min-height: 0; overflow-y: auto; padding: 8px 12px; display: flex; flex-direction: column; gap: 2px; }
+.app-docscard-row { display: flex; gap: 8px; align-items: center; border: none; background: none; text-align: left; padding: 5px 4px; border-radius: 6px; font-size: 13.5px; cursor: pointer; }
+.app-docscard-row:hover { background: #f5f5f7; }
+.app-docscard-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.app-docscard-stats { display: flex; gap: 12px; padding: 8px 4px 10px; }
+.app-docscard-stat { display: flex; flex-direction: column; align-items: center; gap: 2px; border-radius: 8px; padding: 8px 14px; font-size: 12px; background: #f2f2f2; }
+.app-docscard-statn { font-size: 24px; font-weight: 700; line-height: 1; }
+.app-docscard-bad { background: #fde7e7; color: #8a1f1f; }
+.app-docscard-warn { background: #fff3d6; color: #7a5a00; }
+.app-docscard-good { background: #e7f5e9; color: #1f6b2d; }

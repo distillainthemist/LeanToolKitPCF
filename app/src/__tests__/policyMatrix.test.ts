@@ -39,9 +39,12 @@ describe("policy matrix coverage", () => {
     expect(spec.group).toBe("Reference");
     expect(spec.policies).toEqual([]);
     expect(spec.defaultPolicy).toBeUndefined();
-    // no chains, no embeds, no action surfaces, no scheduler
+    // no chains, no embeds, no action surfaces, no scheduler, and no
+    // live SharePoint views (a live view of a live view is noise)
     expect([...LINK_SOURCE_EXCLUDED].sort()).toEqual([
       "ActionBoard",
+      "DocHealth",
+      "DocsCard",
       "EmbedCard",
       "EscalationViewer",
       "LinkCard",

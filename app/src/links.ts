@@ -37,6 +37,34 @@ export const LAUNCH_PARAM = "ritual";
 export const SCREEN_PARAM = "screen";
 const SCREEN_ROUTES: Record<string, string> = { "docs-spike": "#/docs-spike" };
 
+/** Player query parameter carrying a shared Documents view. It carries
+ *  the view STATE itself — saved views are per person, so a link with an
+ *  id would be dead for the recipient. */
+export const DOCVIEW_PARAM = "docview";
+let pendingDocView = "";
+
+/** The docview payload the launch delivered — consumed once, by the
+ *  Documents screen when it mounts. */
+export function takePendingDocView(): string {
+  const v = pendingDocView;
+  pendingDocView = "";
+  return v;
+}
+
+/** The absolute player URL for a Documents view (encoded via
+ *  encodeDocView). Dev server: the page's own URL with the query param —
+ *  launchTarget reads the iframe's own search string as its fallback. */
+export function docsViewUrl(encoded: string): string {
+  if (!host || host.appId === "" || host.environmentId === "") {
+    const base = window.location.href.split("#")[0].split("?")[0];
+    return `${base}?${DOCVIEW_PARAM}=${encodeURIComponent(encoded)}#/docs`;
+  }
+  const q = new URLSearchParams();
+  if (host.tenantId !== "") q.set("tenantId", host.tenantId);
+  q.set(DOCVIEW_PARAM, encoded);
+  return `${PLAYER}/e/${host.environmentId}/app/${host.appId}?${q.toString()}#/docs`;
+}
+
 /** Player query parameter pinning one occurrence ("yyyy-mm-ddTHH:MM"). */
 export const AT_PARAM = "at";
 
@@ -83,6 +111,11 @@ export function launchTarget(): string {
     );
     return ((named?.[1] ?? "").trim() || (query.get(name) ?? "").trim());
   };
+  const dv = param(DOCVIEW_PARAM);
+  if (dv !== "") {
+    pendingDocView = dv;
+    return "#/docs";
+  }
   const screen = SCREEN_ROUTES[param(SCREEN_PARAM)];
   if (screen !== undefined) return screen;
   const boardId = param(LAUNCH_PARAM);

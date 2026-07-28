@@ -1,0 +1,144 @@
+// Standard Documents — saved views, the shareable view link payload, and
+// favourites (plan Phase 3). Pure: no SDK imports, fully unit-tested.
+//
+// A shared link carries the view STATE, not a saved-view id — saved views
+// are per person, so a link to "my" view would be dead for the recipient.
+
+export interface DocView {
+  /** Display name ("" for the transient state a link carries). */
+  name: string;
+  /** Library list id, "" = all documents. */
+  listId: string;
+  query: string;
+  /** "Search inside documents" toggle. */
+  contents: boolean;
+  /** "Include drafts & superseded" toggle. */
+  nonCurrent: boolean;
+  /** Organisation term id ("" = no filter) + its label path for display. */
+  orgTermId: string;
+  orgPath: string[];
+}
+
+export function emptyDocView(): DocView {
+  return {
+    name: "",
+    listId: "",
+    query: "",
+    contents: false,
+    nonCurrent: false,
+    orgTermId: "",
+    orgPath: [],
+  };
+}
+
+const asStr = (v: unknown): string => (typeof v === "string" ? v.trim() : "");
+
+function viewToJson(v: DocView): Record<string, unknown> {
+  const o: Record<string, unknown> = {};
+  if (v.name !== "") o.n = v.name;
+  if (v.listId !== "") o.l = v.listId;
+  if (v.query !== "") o.q = v.query;
+  if (v.contents) o.c = 1;
+  if (v.nonCurrent) o.d = 1;
+  if (v.orgTermId !== "") o.o = v.orgTermId;
+  if (v.orgPath.length > 0) o.p = v.orgPath;
+  return o;
+}
+
+function viewFromJson(raw: unknown): DocView {
+  const out = emptyDocView();
+  if (!raw || typeof raw !== "object") return out;
+  const o = raw as Record<string, unknown>;
+  out.name = asStr(o.n);
+  out.listId = asStr(o.l);
+  out.query = asStr(o.q);
+  out.contents = o.c === 1 || o.c === true;
+  out.nonCurrent = o.d === 1 || o.d === true;
+  out.orgTermId = asStr(o.o);
+  out.orgPath = Array.isArray(o.p) ? (o.p as unknown[]).map(asStr).filter((s) => s !== "") : [];
+  return out;
+}
+
+/** The launch-param payload (compact JSON; the player passes it through
+ *  as an opaque string). */
+export function encodeDocView(v: DocView): string {
+  return JSON.stringify(viewToJson({ ...v, name: "" }));
+}
+
+/** Tolerant decode — a mangled link opens the plain Documents area. */
+export function decodeDocView(raw: string): DocView {
+  try {
+    return viewFromJson(JSON.parse(raw));
+  } catch {
+    return emptyDocView();
+  }
+}
+
+// ---- the per-user saved lists (ben_ltkuserprefs columns) ---------------
+
+export function parseDocViews(raw: string | null | undefined): DocView[] {
+  const t = (raw ?? "").trim();
+  if (t === "") return [];
+  try {
+    const arr = JSON.parse(t) as unknown;
+    if (!Array.isArray(arr)) return [];
+    return arr
+      .map(viewFromJson)
+      .filter((v) => v.name !== ""); // a saved view without a name is noise
+  } catch {
+    return [];
+  }
+}
+
+export function serializeDocViews(views: DocView[]): string {
+  return JSON.stringify(views.map(viewToJson));
+}
+
+/** A favourited document — enough to render and open without a lookup. */
+export interface FavDoc {
+  uniqueId: string;
+  name: string;
+  ext: string;
+  serverUrl: string;
+  listId: string;
+}
+
+export function parseFavDocs(raw: string | null | undefined): FavDoc[] {
+  const t = (raw ?? "").trim();
+  if (t === "") return [];
+  try {
+    const arr = JSON.parse(t) as unknown;
+    if (!Array.isArray(arr)) return [];
+    const out: FavDoc[] = [];
+    for (const item of arr) {
+      if (!item || typeof item !== "object") continue;
+      const o = item as Record<string, unknown>;
+      const uniqueId = asStr(o.uniqueId);
+      const name = asStr(o.name);
+      if (uniqueId === "" || name === "") continue;
+      out.push({
+        uniqueId,
+        name,
+        ext: asStr(o.ext),
+        serverUrl: asStr(o.serverUrl),
+        listId: asStr(o.listId),
+      });
+    }
+    return out;
+  } catch {
+    return [];
+  }
+}
+
+export function serializeFavDocs(favs: FavDoc[]): string {
+  return JSON.stringify(favs);
+}
+
+// ---- the register export (FR-RP-008) -----------------------------------
+
+/** RFC-4180-ish CSV: quote when needed, double embedded quotes. */
+export function toCsv(headers: string[], rows: string[][]): string {
+  const cell = (s: string): string =>
+    /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  return [headers, ...rows].map((r) => r.map(cell).join(",")).join("\r\n");
+}

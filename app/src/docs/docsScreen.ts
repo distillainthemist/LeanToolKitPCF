@@ -29,6 +29,22 @@ import { DocLibrary, docsConfig } from "./docsStore";
 import { TermNode, fetchTermPaths } from "./sp";
 import { currentViewer } from "../runtime";
 import { viewerPerson } from "../store/people";
+import { docsViewUrl, takePendingDocView } from "../links";
+import {
+  DocView,
+  FavDoc,
+  decodeDocView,
+  emptyDocView,
+  encodeDocView,
+  toCsv,
+} from "./views";
+import { deleteDocView, docPrefs, saveDocView, toggleFavorite } from "./prefs";
+
+// Applied by the next mount: saved-view clicks and the Favourites entry
+// re-mount the screen in place (the embedded pattern), and the state
+// rides here rather than in the hash.
+let pendingView: DocView | null = null;
+let pendingFav = false;
 import { openDocProperties, openDocViewer } from "./viewer";
 
 const PAGE = 50;
@@ -103,16 +119,35 @@ export function mountDocs(
     /** The whole corpus LeanBoard can see — every exposed library, and
      *  the widest any query here is ever allowed to reach. */
     const allListIds = libraries.map((l) => l.listId);
-    const current: DocLibrary | null = byListId.get(selected.toLowerCase()) ?? null;
+
+    // a view to boot into: a saved-view click (module stash) or a shared
+    // link's payload (launch param, consumed once)
+    const bootRaw = takePendingDocView();
+    const bootView: DocView | null =
+      pendingView ?? (bootRaw !== "" ? decodeDocView(bootRaw) : null);
+    pendingView = null;
+    const favMode = pendingFav;
+    pendingFav = false;
+
+    const current: DocLibrary | null = favMode
+      ? null
+      : (byListId.get((bootView?.listId || selected).toLowerCase()) ?? null);
+    const whoId = currentViewer()?.objectId ?? "";
+    let favs: FavDoc[] = [];
+    let savedViews: DocView[] = [];
 
     // ---- chrome: title, search, controls -------------------------------
     const top = el("div", "app-docs-top");
     if (!opts.embedded) top.appendChild(el("h2", "app-docs-title", "Documents"));
     const search = el("input", "app-input app-docs-search") as HTMLInputElement;
     search.type = "search";
-    search.placeholder = current
-      ? `Search ${current.config.title || current.name}…`
-      : "Search all documents…";
+    search.placeholder = favMode
+      ? "Favourites"
+      : current
+        ? `Search ${current.config.title || current.name}…`
+        : "Search all documents…";
+    search.disabled = favMode;
+    if (bootView) search.value = bootView.query;
     const scope = el("select", "app-input app-docs-scope") as HTMLSelectElement;
     for (const [v, label] of [
       ["library", "This library"],
@@ -138,7 +173,27 @@ export function mountDocs(
     const nonCurrentBox = el("input", "") as HTMLInputElement;
     nonCurrentBox.type = "checkbox";
     nonCurrent.append(nonCurrentBox, document.createTextNode(" Include drafts & superseded"));
-    top.append(search, scope, contents, nonCurrent);
+    if (bootView) {
+      contentsBox.checked = bootView.contents;
+      nonCurrentBox.checked = bootView.nonCurrent;
+    }
+
+    // share the CURRENT filter as a player link (FR-SE — views travel as
+    // state, not ids), and export the register (FR-RP-008)
+    const shareBtn = el("button", "app-btn", "Copy link") as HTMLButtonElement;
+    shareBtn.title = "A link that opens Documents exactly as you see it now.";
+    const exportBtn = el("button", "app-btn", "Export") as HTMLButtonElement;
+    exportBtn.title =
+      "Download the register as CSV — every document in the current scope " +
+      "with its configured columns (search text is not applied).";
+    top.append(search, scope, contents, nonCurrent, shareBtn, exportBtn);
+    if (favMode) {
+      scope.style.display = "none";
+      contents.style.display = "none";
+      nonCurrent.style.display = "none";
+      shareBtn.style.display = "none";
+      exportBtn.style.display = "none";
+    }
     wrap.appendChild(top);
 
     const bodyRow = el("div", "app-docs-body");
@@ -164,7 +219,7 @@ export function mountDocs(
       nav.appendChild(a);
       return a;
     };
-    navLink("All documents", "", current === null);
+    navLink("All documents", "", current === null && !favMode);
     for (const lib of libraries) {
       navLink(
         lib.config.title || lib.name,
@@ -172,6 +227,97 @@ export function mountDocs(
         current?.listId === lib.listId,
         lib.libType
       );
+    }
+
+    /** Re-mount in place with a stashed boot state (both modes — the
+     *  embedded pattern; the hash stays put). */
+    const remount = () => {
+      dead = true;
+      wrap.remove();
+      mountDocs(parent, "", opts);
+    };
+
+    // ---- favourites ----------------------------------------------------
+    const favLink = el(
+      "a",
+      `app-docs-navitem${favMode ? " app-docs-navitem-on" : ""}`
+    ) as HTMLAnchorElement;
+    favLink.href = "#/docs";
+    favLink.appendChild(el("span", "app-docs-navlabel", "★ Favourites"));
+    const favHint = el("span", "app-field-hint", "");
+    favLink.appendChild(favHint);
+    favLink.addEventListener("click", (e) => {
+      e.preventDefault();
+      pendingFav = true;
+      remount();
+    });
+    nav.appendChild(favLink);
+
+    // ---- saved views ---------------------------------------------------
+    const viewsHead = el("div", "app-docs-navorg", "Views");
+    nav.appendChild(viewsHead);
+    const viewsBox = el("div", "app-docs-navorgbox");
+    nav.appendChild(viewsBox);
+    const paintViews = () => {
+      clear(viewsBox);
+      for (const v of savedViews) {
+        const row = el("div", "app-docs-viewrow");
+        const open = el("button", "app-docs-navterm", v.name) as HTMLButtonElement;
+        open.title = "Open this view";
+        open.addEventListener("click", () => {
+          pendingView = v;
+          remount();
+        });
+        const link = el("button", "app-docs-viewbtn", "⧉") as HTMLButtonElement;
+        link.title = "Copy a link that opens this view";
+        link.addEventListener("click", () => {
+          void navigator.clipboard.writeText(docsViewUrl(encodeDocView(v)));
+          link.textContent = "✓";
+          setTimeout(() => (link.textContent = "⧉"), 1200);
+        });
+        const x = el("button", "app-docs-viewbtn", "×") as HTMLButtonElement;
+        x.title = "Delete this view";
+        x.addEventListener("click", () => {
+          void deleteDocView(whoId, v.name).then((list) => {
+            if (dead) return;
+            savedViews = list;
+            paintViews();
+          });
+        });
+        row.append(open, link, x);
+        viewsBox.appendChild(row);
+      }
+      // save the current filter under a name (inline, no dialog)
+      const saveRow = el("div", "app-docs-viewrow");
+      const nameIn = el("input", "app-input app-docs-viewname") as HTMLInputElement;
+      nameIn.placeholder = "Save current view…";
+      const ok = el("button", "app-docs-viewbtn", "＋") as HTMLButtonElement;
+      ok.title = "Save the current filter as a view";
+      const commit = () => {
+        const name = nameIn.value.trim();
+        if (name === "" || whoId === "" || favMode) return;
+        void saveDocView(whoId, { ...currentView(), name }).then((list) => {
+          if (dead) return;
+          savedViews = list;
+          paintViews();
+        });
+      };
+      ok.addEventListener("click", commit);
+      nameIn.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") commit();
+      });
+      saveRow.append(nameIn, ok);
+      viewsBox.appendChild(saveRow);
+    };
+    if (whoId !== "") {
+      void docPrefs(whoId).then((p) => {
+        if (dead) return;
+        favs = p.favorites;
+        savedViews = p.views;
+        favHint.textContent = favs.length === 0 ? "" : String(favs.length);
+        paintViews();
+        if (favMode) void load(true); // favourites arrived — paint them
+      });
     }
     // ---- organisation tree — a real filter now -------------------------
     // Filtering keys on the auto-created owstaxId<Column> property with
@@ -264,9 +410,19 @@ export function mountDocs(
           orgButtons.set(n.id, btn);
           orgBox.appendChild(btn);
         }
-        // land on the viewer's own corner of the organisation, visibly
-        // removable via the filter chip
-        if (orgProps.length > 0 && orgFilter === null) {
+        // a shared/saved view's org filter first; otherwise land on the
+        // viewer's own corner of the organisation (chip makes either
+        // one-click removable)
+        const wantOrg = bootView?.orgTermId ?? "";
+        if (wantOrg !== "") {
+          const match = nodes.find((x) => x.id === wantOrg);
+          if (match) applyOrg(match);
+        } else if (
+          orgProps.length > 0 &&
+          orgFilter === null &&
+          bootView === null &&
+          !favMode
+        ) {
           const mine = await viewerNode();
           if (!dead && mine && orgFilter === null) applyOrg(mine);
         }
@@ -425,6 +581,23 @@ export function mountDocs(
         menu!.appendChild(b);
       };
       const lib = byListId.get(row.listId) ?? current;
+      if (whoId !== "") {
+        const isFav = favs.some((f) => f.uniqueId === row.uniqueId);
+        item(isFav ? "★ Remove favourite" : "☆ Add to favourites", () => {
+          void toggleFavorite(whoId, {
+            uniqueId: row.uniqueId,
+            name: row.name,
+            ext: row.ext,
+            serverUrl: row.serverUrl,
+            listId: row.listId,
+          }).then((next) => {
+            if (dead) return;
+            favs = next;
+            favHint.textContent = favs.length === 0 ? "" : String(favs.length);
+            if (favMode) void load(true);
+          });
+        });
+      }
       item("Properties & history", () =>
         openDocProperties({
           site: app.siteUrl,
@@ -466,7 +639,7 @@ export function mountDocs(
     };
 
     // ---- data flow -----------------------------------------------------
-    let query = "";
+    let query = bootView?.query ?? "";
     let generation = 0;
     let nextToken = ""; // browse: next uri; search: startRow as string
     let inFlight = false;
@@ -491,6 +664,24 @@ export function mountDocs(
 
     const load = async (reset: boolean) => {
       if (inFlight || (done && !reset)) return;
+      // favourites are local rows — no query, no paging
+      if (favMode) {
+        list.setRows(
+          favs.map((f) => ({
+            id: 0,
+            uniqueId: f.uniqueId,
+            name: f.name,
+            ext: f.ext,
+            serverUrl: f.serverUrl,
+            listId: f.listId,
+            modified: "",
+            values: {},
+          }))
+        );
+        done = true;
+        status.textContent = `${favs.length} favourite(s)`;
+        return;
+      }
       inFlight = true;
       const gen = reset ? ++generation : generation;
       if (reset) {
@@ -555,6 +746,79 @@ export function mountDocs(
         ? "Map a column to the Approval status role in Settings → Documents first"
         : "Applies inside a library with a status column mapped";
     }
+
+    // ---- share + register export ---------------------------------------
+    const currentView = (): DocView => ({
+      ...emptyDocView(),
+      listId: current?.listId ?? "",
+      query: query.trim(),
+      contents: contentsBox.checked,
+      nonCurrent: nonCurrentBox.checked,
+      orgTermId: orgFilter?.node.id ?? "",
+      orgPath: orgFilter?.node.labels ?? [],
+    });
+    shareBtn.addEventListener("click", () => {
+      void navigator.clipboard
+        .writeText(docsViewUrl(encodeDocView(currentView())))
+        .then(() => {
+          shareBtn.textContent = "Copied ✓";
+          setTimeout(() => (shareBtn.textContent = "Copy link"), 1500);
+        });
+    });
+    const EXPORT_CAP = 2000;
+    exportBtn.addEventListener("click", () => {
+      void (async () => {
+        exportBtn.disabled = true;
+        exportBtn.textContent = "Exporting…";
+        const scopeLibs = current ? [current] : libraries;
+        // the union of configured available columns, labelled
+        const cols: { internal: string; label: string }[] = [];
+        for (const lib of scopeLibs) {
+          for (const c of lib.config.columns) {
+            if (!c.available) continue;
+            if (!cols.some((x) => x.internal === c.internal)) {
+              cols.push({ internal: c.internal, label: c.label || c.internal });
+            }
+          }
+        }
+        const rows: string[][] = [];
+        let truncated = false;
+        for (const lib of scopeLibs) {
+          let next = "";
+          for (;;) {
+            const page = await browsePage(app.siteUrl, lib.listId, next);
+            for (const r of page.rows) {
+              if (rows.length >= EXPORT_CAP) {
+                truncated = true;
+                break;
+              }
+              rows.push([
+                r.name,
+                lib.config.title || lib.name,
+                formatWhen(r.modified),
+                ...cols.map((c) => r.values[c.internal] ?? ""),
+              ]);
+            }
+            next = page.next;
+            if (next === "" || truncated || page.error !== "") break;
+          }
+          if (truncated) break;
+        }
+        const csv = toCsv(
+          ["Document", "Library", "Modified", ...cols.map((c) => c.label)],
+          rows
+        );
+        const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" });
+        const a = el("a", "") as HTMLAnchorElement;
+        a.href = URL.createObjectURL(blob);
+        a.download = `documents-register-${new Date().toISOString().slice(0, 10)}.csv`;
+        a.click();
+        URL.revokeObjectURL(a.href);
+        exportBtn.disabled = false;
+        exportBtn.textContent = "Export";
+        status.textContent = `${rows.length} row(s) exported${truncated ? ` — capped at ${EXPORT_CAP}` : ""}`;
+      })();
+    });
 
     void load(true);
   })();

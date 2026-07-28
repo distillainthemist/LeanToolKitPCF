@@ -10,6 +10,22 @@
       "x-ms-dataverse-primary-id": "ben_ltkuserprefsid",
       "x-ms-dataverse-primary-name": "ben_name",
       "properties": {
+        "ben_docfavoritesjson": {
+          "type": "string",
+          "title": "Document favourites (JSON)",
+          "x-ms-dataverse-attribute": "ben_docfavoritesjson",
+          "x-ms-dataverse-type": "MemoType",
+          "x-ms-schema-name": "ben_docfavoritesjson",
+          "maxLength": 100000
+        },
+        "ben_docviewsjson": {
+          "type": "string",
+          "title": "Saved document views (JSON)",
+          "x-ms-dataverse-attribute": "ben_docviewsjson",
+          "x-ms-dataverse-type": "MemoType",
+          "x-ms-schema-name": "ben_docviewsjson",
+          "maxLength": 100000
+        },
         "ben_ltkuserprefsid": {
           "type": "string",
           "title": "LTK User Prefs",

@@ -180,6 +180,11 @@ export const TABLES = [
     columns: {
       ben_userid: { ...text(100), display: "User Id (whoId)", required: true },
       ben_preferences: { ...memo(4000), display: "Preferences (JSON)" },
+      // Standard Documents (plan Phase 3) — the plan named a ben_ltkdocprefs
+      // table, but this IS the per-user presentation-prefs table; two more
+      // columns beat a whole new table + service. Presentation state only.
+      ben_docfavoritesjson: { ...memo(100000), display: "Document favourites (JSON)" },
+      ben_docviewsjson: { ...memo(100000), display: "Saved document views (JSON)" },
     },
     key: ["ben_userid"],
   },

@@ -170,6 +170,21 @@ export interface CardMount {
 
 export type CardMounter = (opts: CardMount) => () => void;
 
+/** The Standard Documents cards live in src/docs/ (lazy chunk); this
+ *  wrapper is the only thing the board pays for them. */
+function docsCardMounter(kind: "docs" | "health"): CardMounter {
+  return (opts) => {
+    let dead = false;
+    void import("./docs/docsCards").then((m) => {
+      if (!dead) m.mountDocsCard(kind, opts);
+    });
+    return () => {
+      dead = true;
+      opts.host.replaceChildren();
+    };
+  };
+}
+
 // ---- shared plumbing ----
 
 function config(opts: CardMount): Record<string, unknown> {
@@ -926,6 +941,14 @@ const REGISTRY: Record<string, CardMounter> = {
   },
 
   // ---- display-only ----
+  // Standard Documents on the board (docs plan Phase 3). DYNAMIC import
+  // only: the import gate forbids a static edge from here into src/docs/,
+  // which is exactly what keeps SharePoint bytes out of the board chunk —
+  // the module loads when a documents card actually mounts, and the card
+  // fetches after paint with jitter (see docsCards.ts).
+  DocsCard: docsCardMounter("docs"),
+  DocHealth: docsCardMounter("health"),
+
   // A live, read-only window onto ANOTHER board's card: resolves the source
   // slot and mounts the source's real card type with the SOURCE's ids and
   // settings (so series cards read the source's series). All writes are

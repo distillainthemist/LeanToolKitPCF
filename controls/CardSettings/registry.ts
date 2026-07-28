@@ -120,6 +120,9 @@ export const LINK_SOURCE_EXCLUDED = new Set([
   "ActionBoard",
   "EscalationViewer",
   "MeetingScheduler",
+  // live SharePoint views — linking a live view of a live view is noise
+  "DocsCard",
+  "DocHealth",
 ]);
 
 /** Display label for a card type ("ActionBoard" → "Actions"). */
@@ -780,6 +783,88 @@ export const CARDS: CardSpec[] = [
     appBound: [],
     // no policy choice: the card has no document of its own (policies: []
     // renders an explanatory note instead of the picker)
+    policies: [],
+  },
+  {
+    // Standard Documents on the board (docs plan Phase 3) — documents
+    // INSIDE the ritual, the part only LeanBoard can do (FR-DI-004).
+    type: "DocsCard",
+    standardContent: "preview",
+    standardContentNote:
+      "This card lists live controlled documents from the Documents area — there is no standard content to author.",
+    label: "Standard documents",
+    group: "Reference",
+    description:
+      "The area's controlled documents, live from SharePoint — the team's standards on the board they run from.",
+    config: [
+      {
+        key: "docsLibrary",
+        label: "Library",
+        kind: "text",
+        help: "A library's display name from the Documents area; blank shows every exposed library.",
+        placeholder: "Standards",
+      },
+      {
+        key: "docsOrg",
+        label: "Organisation term",
+        kind: "text",
+        help: "Only documents tagged with this organisation term (or anything beneath it).",
+        placeholder: "Casting",
+      },
+      {
+        key: "docsMatch",
+        label: "Title filter",
+        kind: "text",
+        help: "Only documents whose name or title matches these words.",
+        placeholder: "SOP",
+      },
+      {
+        key: "docsCount",
+        label: "Rows",
+        kind: "number",
+        help: "How many documents to show (default 8).",
+        placeholder: "8",
+      },
+    ],
+    appBound: [],
+    // no policy choice: the card holds no document of its own
+    policies: [],
+  },
+  {
+    // The reminder surface of the flow-free design: overdue and due-soon
+    // reviews, derived at read time — never stored (docs plan Phase 3).
+    type: "DocHealth",
+    standardContent: "preview",
+    standardContentNote:
+      "This card derives document health live from SharePoint — there is no standard content to author.",
+    label: "Document health",
+    group: "Reference",
+    description:
+      "Overdue and due-soon document reviews for this area, derived live — the daily meeting is the reminder.",
+    config: [
+      {
+        key: "docsLibrary",
+        label: "Library",
+        kind: "text",
+        help: "A library's display name from the Documents area; blank checks every exposed library.",
+        placeholder: "Standards",
+      },
+      {
+        key: "docsOrg",
+        label: "Organisation term",
+        kind: "text",
+        help: "Only documents tagged with this organisation term (or anything beneath it).",
+        placeholder: "Casting",
+      },
+      {
+        key: "dueSoonDays",
+        label: "Due-soon window (days)",
+        kind: "number",
+        help: "Reviews inside this window count as due soon (default 30).",
+        placeholder: "30",
+      },
+    ],
+    appBound: [],
     policies: [],
   },
   {

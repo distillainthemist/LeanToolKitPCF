@@ -14,6 +14,8 @@ export const Ben_ltkuserprefsesstatuscode = {
 export type Ben_ltkuserprefsesstatuscode = keyof typeof Ben_ltkuserprefsesstatuscode;
 
 export interface Ben_ltkuserprefsesBase {
+  ben_docfavoritesjson?: string;
+  ben_docviewsjson?: string;
   ben_ltkuserprefsid: string;
   ben_name?: string;
   ben_preferences?: string;
