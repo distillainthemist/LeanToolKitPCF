@@ -34,6 +34,7 @@ import {
   fetchTermPaths,
   fetchTermSets,
   fetchTermsInSet,
+  invalidateTermPaths,
 } from "./sp";
 import {
   DocLibrary,
@@ -106,6 +107,7 @@ export async function renderDocsSettings(body: HTMLElement, ctx: Ctx): Promise<v
     // re-read so row GUIDs exist for later deletes
     exposed = await listDocLibraries();
     invalidateDocsCache(); // the #/docs area re-reads on next entry
+    invalidateTermPaths(); // a changed group/set must not serve the old tree
     ctx.markClean();
     paintLibraries();
   };

@@ -168,44 +168,95 @@ export interface TermNode {
   labels: string[];
 }
 
-export async function fetchTermPaths(
+interface TermWalk {
+  nodes: TermNode[];
+  truncated: boolean;
+  error: string;
+}
+
+// Session cache — term sets change rarely, and the walk is the docs
+// tab's slowest load (Ben timed it). In the hub tab, every library
+// click re-mounts the screen, so without this the walk re-ran on every
+// navigation. The settings save invalidates it.
+const termCache = new Map<string, Promise<TermWalk>>();
+
+export function invalidateTermPaths(): void {
+  termCache.clear();
+}
+
+export function fetchTermPaths(
   site: string,
   setId: string,
   maxDepth = 4,
   maxRequests = 120
-): Promise<{ nodes: TermNode[]; truncated: boolean; error: string }> {
+): Promise<TermWalk> {
+  const key = `${site}|${setId}|${maxDepth}`;
+  let hit = termCache.get(key);
+  if (hit === undefined) {
+    hit = walkTermSet(site, setId, maxDepth, maxRequests);
+    // a failed or empty walk must not stick as the cached answer
+    hit.then(
+      (r) => {
+        if (r.error !== "" || r.nodes.length === 0) termCache.delete(key);
+      },
+      () => termCache.delete(key)
+    );
+    termCache.set(key, hit);
+  }
+  return hit;
+}
+
+/** Breadth-first, one PARALLEL batch per level: wall time is the tree's
+ *  depth in round-trips, not its node count — sequential per-node walking
+ *  took ~8 gateway round-trips even for a two-branch dev tree. */
+async function walkTermSet(
+  site: string,
+  setId: string,
+  maxDepth: number,
+  maxRequests: number
+): Promise<TermWalk> {
   const nodes: TermNode[] = [];
   let requests = 0;
   let truncated = false;
+  let firstError = "";
   const label = (t: Record<string, unknown>): string => {
     const labels = t.labels as { name?: string; isDefault?: boolean }[] | undefined;
     if (!Array.isArray(labels)) return "";
     const def = labels.find((l) => l.isDefault) ?? labels[0];
     return (def?.name ?? "").trim();
   };
-  const walk = async (parentId: string, prefix: string[]): Promise<string> => {
-    if (prefix.length >= maxDepth) return "";
-    if (requests >= maxRequests) {
+  let frontier: { id: string; labels: string[] }[] = [{ id: "", labels: [] }];
+  while (frontier.length > 0) {
+    const parents = frontier.filter((p) => p.labels.length < maxDepth);
+    if (parents.length === 0) break;
+    if (requests + parents.length > maxRequests) {
       truncated = true;
-      return "";
+      break;
     }
-    requests++;
-    const r = await fetchTermChildren(site, setId, parentId);
-    if (!r.ok) return r.status;
-    const terms = Array.isArray((r.data as { value?: unknown[] })?.value)
-      ? ((r.data as { value: unknown[] }).value as Record<string, unknown>[])
-      : [];
-    for (const t of terms) {
-      const name = label(t);
-      const id = typeof t.id === "string" ? t.id : "";
-      if (name === "" || id === "") continue;
-      const labels = [...prefix, name];
-      nodes.push({ id, labels });
-      const err = await walk(id, labels);
-      if (err !== "") return err;
+    requests += parents.length;
+    const results = await Promise.all(
+      parents.map((p) => fetchTermChildren(site, setId, p.id))
+    );
+    const next: typeof frontier = [];
+    for (let i = 0; i < parents.length; i++) {
+      const r = results[i];
+      if (!r.ok) {
+        if (firstError === "") firstError = r.status;
+        continue; // a partial tree beats none — the error only surfaces if NOTHING loads
+      }
+      const terms = Array.isArray((r.data as { value?: unknown[] })?.value)
+        ? ((r.data as { value: unknown[] }).value as Record<string, unknown>[])
+        : [];
+      for (const t of terms) {
+        const name = label(t);
+        const id = typeof t.id === "string" ? t.id : "";
+        if (name === "" || id === "") continue;
+        const labels = [...parents[i].labels, name];
+        nodes.push({ id, labels });
+        next.push({ id, labels });
+      }
     }
-    return "";
-  };
-  const error = await walk("", []);
-  return { nodes, truncated, error };
+    frontier = next;
+  }
+  return { nodes, truncated, error: nodes.length === 0 ? firstError : "" };
 }
