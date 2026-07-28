@@ -1523,3 +1523,11 @@ input[type="color"].app-color:disabled { opacity: 0.4; cursor: default; }
   border-radius: 6px;
   background: #fafafa;
 }
+.app-docs-proplinks { display: flex; flex-direction: column; gap: 2px; }
+.app-docs-proplink { color: var(--app-accent, #2563eb); }
+.app-docs-propref { color: #444; }
+.app-docs-statusval { min-width: 160px; font-size: 13px; }
+.app-docs-statusswatch {
+  width: 18px; height: 18px; border-radius: 4px;
+  border: 1px solid #ddd; display: inline-block;
+}

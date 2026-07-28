@@ -36,6 +36,7 @@ export const COLUMN_ROLES: { key: string; label: string }[] = [
   { key: "orgUnit", label: "Organisation unit" },
   { key: "process", label: "Process" },
   { key: "managementProcess", label: "Management process" },
+  { key: "linkedDocuments", label: "Linked documents" },
   { key: "priorNames", label: "Prior names" },
   { key: "priorIds", label: "Prior IDs" },
   { key: "distribution", label: "Distribution audience" },
@@ -203,6 +204,30 @@ export interface SpField {
   title: string;
   type: string;
   choices: string[];
+  /** A managed-metadata column: its allowed values live in a term set,
+   *  not in the column. Detected from the field type, so a maker never
+   *  has to declare it. */
+  isTaxonomy: boolean;
+  /** The term set behind a taxonomy column, when SharePoint reports it —
+   *  this is what makes the colour mapping automatic rather than typed. */
+  termSetId: string;
+}
+
+/** Field types SharePoint uses for managed metadata (single and multi). */
+const TAXONOMY_TYPES = new Set(["TaxonomyFieldType", "TaxonomyFieldTypeMulti"]);
+
+/** A field's term set id, wherever this SharePoint chose to report it:
+ *  as a property on the field, or only inside its SchemaXml. */
+function termSetOf(r: Record<string, unknown>): string {
+  const direct = typeof r.TermSetId === "string" ? r.TermSetId : "";
+  if (direct !== "" && !/^0{8}-/.test(direct)) return direct;
+  const xml = typeof r.SchemaXml === "string" ? r.SchemaXml : "";
+  // SharePoint writes the property either as <Name>TermSetId</Name>
+  // followed by <Value>, or as a Name="TermSetId" attribute
+  const m =
+    /<Name>TermSetId<\/Name>\s*<Value[^>]*>\s*([0-9a-fA-F-]{36})/.exec(xml) ??
+    /Name="TermSetId"[^>]*>\s*([0-9a-fA-F-]{36})/.exec(xml);
+  return m ? m[1] : "";
 }
 
 /** Internal names that carry no user meaning even though not Hidden. */
@@ -236,11 +261,14 @@ export function fieldsFromResponse(raw: unknown): SpField[] {
             .map(asStr)
             .filter((c) => c !== "")
         : [];
+    const type = asStr(r.TypeAsString);
     out.push({
       internal,
       title: asStr(r.Title) || internal,
-      type: asStr(r.TypeAsString),
+      type,
       choices,
+      isTaxonomy: TAXONOMY_TYPES.has(type),
+      termSetId: TAXONOMY_TYPES.has(type) ? termSetOf(r) : "",
     });
   }
   return out;

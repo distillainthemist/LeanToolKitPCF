@@ -15,7 +15,7 @@ import { detectHost } from "../runtime";
 import { paletteMap, resolvePaletteColor } from "../../../shared/palette";
 import { textOn } from "../../../shared/tokens";
 import { appPalettes } from "../store/config";
-import { browsePage, searchPage } from "./data";
+import { browsePage, driveIdFor, searchPage } from "./data";
 import { ListColumn, mountDocList } from "./listView";
 import {
   DocRow,
@@ -279,11 +279,17 @@ export function mountDocs(
       emptyText: "No documents here yet.",
       onRow: (row) => {
         const lib = byListId.get(row.listId) ?? current;
-        openDocViewer({
-          site: app.siteUrl,
-          row,
-          libraryName: lib ? lib.config.title || lib.name : "",
-          askToWork: lib?.libType === "working",
+        // the drive is per LIBRARY, and the PDF routes need it — resolve
+        // before opening (cached, so only the first open of a library pays)
+        void driveIdFor(app.siteUrl, row.listId || lib?.listId || "").then((driveId) => {
+          if (dead) return;
+          openDocViewer({
+            site: app.siteUrl,
+            row,
+            driveId,
+            libraryName: lib ? lib.config.title || lib.name : "",
+            askToWork: lib?.libType === "working",
+          });
         });
       },
       onNearEnd: () => void loadMore(),
@@ -324,15 +330,28 @@ export function mountDocs(
               .filter((c) => c.label !== "")
               .map((c) => [c.internal, c.label])
           ),
+          linkColumns: (lib?.config.columns ?? [])
+            .filter((c) => c.role === "linkedDocuments")
+            .map((c) => c.internal),
         })
       );
       // readers get the PDF rendering, never the editable source
-      item("Open PDF ↗", () =>
-        window.open(pdfViewUrlFor(app.siteUrl, row), "_blank", "noopener")
-      );
-      item("Copy PDF link", () =>
-        void navigator.clipboard.writeText(pdfViewUrlFor(app.siteUrl, row))
-      );
+      const pdfUrl = () =>
+        driveIdFor(app.siteUrl, row.listId || lib?.listId || "").then((d) =>
+          pdfViewUrlFor(app.siteUrl, d, row)
+        );
+      item("Open PDF ↗", () => {
+        // opened synchronously with about:blank so the popup blocker sees
+        // a user gesture, then pointed at the URL once the drive resolves
+        const tab = window.open("", "_blank", "noopener");
+        void pdfUrl().then((u) => {
+          if (tab) tab.location.href = u;
+          else window.open(u, "_blank", "noopener");
+        });
+      });
+      item("Copy PDF link", () => {
+        void pdfUrl().then((u) => navigator.clipboard.writeText(u));
+      });
       if (lib?.libType === "working") {
         item("Request check-out", null, "Document control arrives in a later phase");
       }

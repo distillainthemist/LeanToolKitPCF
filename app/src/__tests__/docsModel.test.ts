@@ -102,6 +102,39 @@ describe("SharePoint response mapping", () => {
     expect(fields[1].choices).toEqual(["Draft", "Current"]);
   });
 
+  it("detects managed-metadata columns and their term set automatically", () => {
+    // so a maker never declares "this one is managed metadata" — and the
+    // colour mapping can read the term set's own values
+    const [direct, viaXml, plain] = fieldsFromResponse({
+      value: [
+        {
+          InternalName: "DMSOrgUnit",
+          Title: "Organisation unit",
+          TypeAsString: "TaxonomyFieldType",
+          TermSetId: "11111111-2222-3333-4444-555555555555",
+        },
+        {
+          InternalName: "DMSTags",
+          Title: "Tags",
+          TypeAsString: "TaxonomyFieldTypeMulti",
+          // some responses report the set only inside the schema
+          TermSetId: "00000000-0000-0000-0000-000000000000",
+          SchemaXml:
+            '<Field><Customization><ArrayOfProperty><Property><Name>TermSetId</Name>' +
+            "<Value>aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee</Value></Property>" +
+            "</ArrayOfProperty></Customization></Field>",
+        },
+        { InternalName: "Title", Title: "Name", TypeAsString: "Text" },
+      ],
+    });
+    expect(direct.isTaxonomy).toBe(true);
+    expect(direct.termSetId).toBe("11111111-2222-3333-4444-555555555555");
+    expect(viaXml.isTaxonomy).toBe(true);
+    expect(viaXml.termSetId).toBe("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee");
+    expect(plain.isTaxonomy).toBe(false);
+    expect(plain.termSetId).toBe("");
+  });
+
   it("merges stored config over live fields — stored wins, new appends, vanished drops", () => {
     const merged = mergeColumns(
       [
@@ -109,8 +142,8 @@ describe("SharePoint response mapping", () => {
         { internal: "Vanished", label: "", available: true, inDefault: false, role: "" },
       ],
       [
-        { internal: "Title", title: "Name", type: "Text", choices: [] },
-        { internal: "DMSStatus", title: "Status", type: "Choice", choices: [] },
+        { internal: "Title", title: "Name", type: "Text", choices: [], isTaxonomy: false, termSetId: "" },
+        { internal: "DMSStatus", title: "Status", type: "Choice", choices: [], isTaxonomy: false, termSetId: "" },
       ]
     );
     expect(merged.map((c) => c.internal)).toEqual(["DMSStatus", "Title"]);

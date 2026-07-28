@@ -9,7 +9,6 @@ import { el, clear } from "../../../shared/ui/dom";
 import { markDialog, trapFocus } from "../focusTrap";
 import {
   DocRow,
-  embedUrlFor,
   extGlyph,
   formatWhen,
   pdfDownloadUrlFor,
@@ -22,6 +21,9 @@ import { itemDetails, itemVersions } from "./data";
 interface ViewerOpts {
   site: string;
   row: DocRow;
+  /** The owning library's drive; "" = unresolved, and the viewer falls
+   *  back to SharePoint's own page (see pdfViewUrlFor). */
+  driveId: string;
   /** Owning library's LeanBoard display name ("" unknown). */
   libraryName: string;
   /** true = working document: offer "work on it" before viewing. */
@@ -86,11 +88,11 @@ export function openDocViewer(opts: ViewerOpts): void {
 
   // every reader action lands on the PDF rendering — the editable source
   // is reachable only through the working-document "Work on it" path
-  const pdfUrl = pdfViewUrlFor(site, row);
+  const pdfUrl = pdfViewUrlFor(site, opts.driveId, row);
   const actions = el("div", "app-docs-viewactions");
   actions.append(
     linkBtn("Open PDF ↗", pdfUrl, true),
-    linkBtn("Download PDF", pdfDownloadUrlFor(site, row))
+    linkBtn("Download PDF", pdfDownloadUrlFor(site, opts.driveId, row))
   );
   const copy = el("button", "app-btn", "Copy PDF link") as HTMLButtonElement;
   copy.addEventListener("click", () => {
@@ -110,7 +112,10 @@ export function openDocViewer(opts: ViewerOpts): void {
   const paintPreview = () => {
     clear(stage);
     const frame = el("iframe", "app-docs-viewframe") as HTMLIFrameElement;
-    frame.src = embedUrlFor(site, row);
+    // the same PDF the action buttons point at: for an office file this
+    // is converted bytes straight into the browser's PDF viewer, which
+    // is far lighter than loading SharePoint's whole embed page
+    frame.src = pdfUrl;
     frame.title = row.name;
     // some hosts/tenants refuse to be framed by a foreign origin at all;
     // the page image always renders, so it is one click away rather than
@@ -168,6 +173,20 @@ interface PropsOpts {
   row: DocRow;
   /** internal → display label overrides from the library config. */
   labels: Record<string, string>;
+  /** Internal names of columns holding links to other documents — their
+   *  values render as clickable links, since navigating to them is the
+   *  entire point of the column. */
+  linkColumns?: string[];
+}
+
+/** Split a link-column's text into individual URLs / references.
+ *  SharePoint renders multi-value and hyperlink columns as text, so the
+ *  separator varies: newlines, semicolons or comma-space. */
+export function splitLinkedValues(value: string): string[] {
+  return value
+    .split(/[\n;]+|,\s+/)
+    .map((s) => s.trim())
+    .filter((s) => s !== "");
 }
 
 /** Keys FieldValuesAsText returns that read as noise, not properties. */
@@ -225,13 +244,31 @@ export function openDocProperties(opts: PropsOpts): void {
       body.appendChild(el("div", "app-settings-note", `Could not load properties: ${details.error}`));
       return;
     }
+    const linkCols = new Set(opts.linkColumns ?? []);
     const grid = el("div", "app-docs-propgrid");
     for (const [k, v] of Object.entries(details.values)) {
       if (v.trim() === "" || PROP_SKIP.has(k)) continue;
-      grid.append(
-        el("span", "app-docs-propkey", opts.labels[k] ?? k),
-        el("span", "app-docs-propval", v)
-      );
+      grid.appendChild(el("span", "app-docs-propkey", opts.labels[k] ?? k));
+      if (linkCols.has(k)) {
+        const cell = el("span", "app-docs-propval app-docs-proplinks");
+        for (const part of splitLinkedValues(v)) {
+          if (/^https?:\/\//i.test(part)) {
+            const a = el("a", "app-docs-proplink", part.split("/").pop() || part) as HTMLAnchorElement;
+            a.href = part;
+            a.target = "_blank";
+            a.rel = "noopener";
+            a.title = part;
+            cell.appendChild(a);
+          } else {
+            // a reference rather than a URL (e.g. a document number) —
+            // shown as-is; resolving it needs the linkage work in a later phase
+            cell.appendChild(el("span", "app-docs-propref", part));
+          }
+        }
+        grid.appendChild(cell);
+      } else {
+        grid.appendChild(el("span", "app-docs-propval", v));
+      }
     }
     body.appendChild(grid);
 

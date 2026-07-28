@@ -105,13 +105,24 @@ export function fetchLibraries(site: string): Promise<SpResult> {
   );
 }
 
-/** A library's visible fields (columns). */
+/** A library's visible fields (columns). SchemaXml comes along because a
+ *  taxonomy column's term set is sometimes reported only in there — it is
+ *  what lets LeanBoard find a status column's terms by itself. */
 export function fetchFields(site: string, listId: string): Promise<SpResult> {
   return spRequest(
     site,
     "GET",
-    `_api/web/lists(guid'${listId}')/fields?$filter=Hidden eq false&$select=InternalName,Title,TypeAsString,Choices`
+    `_api/web/lists(guid'${listId}')/fields?$filter=Hidden eq false` +
+      `&$select=InternalName,Title,TypeAsString,Choices,TermSetId,SchemaXml`
   );
+}
+
+/** Every term in a set, flattened — the values a managed-metadata column
+ *  can hold, which is what colours get attached to. */
+export function fetchTermsInSet(site: string, setId: string): Promise<SpResult> {
+  return spRequest(site, "GET", `_api/v2.1/termStore/sets/${setId}/terms?$select=id,labels`, {
+    headers: { Accept: "application/json" },
+  });
 }
 
 /** Term store groups (site-scoped v2.1 — Phase 0 probe). */

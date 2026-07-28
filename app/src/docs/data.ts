@@ -19,6 +19,32 @@ const VERBOSE = {
   Accept: "application/json;odata=verbose",
 };
 
+/**
+ * listId → drive id, cached for the session (a library's drive id never
+ * changes). Every PDF URL needs it: addressing an item through the
+ * site's default drive answers `itemNotFound` for any library that is
+ * not the default one — which is every purpose-made document library.
+ *
+ * Returns "" when it cannot be resolved; callers fall back to the
+ * site-scoped viewer rather than showing an error.
+ */
+const drives = new Map<string, Promise<string>>();
+
+export function driveIdFor(site: string, listId: string): Promise<string> {
+  const key = `${site}|${listId.toLowerCase()}`;
+  let hit = drives.get(key);
+  if (hit === undefined) {
+    hit = spRequest(site, "GET", `_api/v2.0/sites/root/lists/${listId}/drive`).then((r) => {
+      const id = (r.data as { id?: unknown } | null)?.id;
+      return r.ok && typeof id === "string" ? id : "";
+    });
+    // a failed lookup must not stick as the cached answer
+    hit.catch(() => drives.delete(key));
+    drives.set(key, hit);
+  }
+  return hit;
+}
+
 /** First (or next: pass the previous page's `next`) browse page. */
 export async function browsePage(
   site: string,

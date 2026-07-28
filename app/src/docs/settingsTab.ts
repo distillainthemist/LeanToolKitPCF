@@ -33,6 +33,7 @@ import {
   fetchTermGroups,
   fetchTermPaths,
   fetchTermSets,
+  fetchTermsInSet,
 } from "./sp";
 import {
   DocLibrary,
@@ -259,70 +260,123 @@ export async function renderDocsSettings(body: HTMLElement, ctx: Ctx): Promise<v
     }
     host.appendChild(grid);
 
-    // status colours (for the column holding the status role)
+    // ---- status colours -------------------------------------------------
+    // The values come from the COLUMN, never from typing: a Choice column
+    // carries its own choices, and a managed-metadata column names a term
+    // set whose terms we read. Nothing to keep in step by hand, and no way
+    // to map a colour onto a value the column cannot hold.
     const statusBox = el("div", "");
     host.appendChild(statusBox);
+
     const paintStatus = () => {
       clear(statusBox);
       const statusCol = lib.config.columns.find((c) => c.role === "status");
       if (!statusCol) return;
+      const field = liveByName.get(statusCol.internal);
       statusBox.appendChild(el("div", "app-field-label", "Status colours"));
+      const kind = field?.isTaxonomy
+        ? "managed metadata"
+        : field?.choices.length
+          ? "choice column"
+          : "";
       statusBox.appendChild(
-        note("Map each status value to a state colour from Branding — one truth for colour meaning.")
+        note(
+          `Each value of ${field?.title ?? statusCol.internal}` +
+            (kind !== "" ? ` (${kind})` : "") +
+            " takes a state colour from Branding — one truth for what a colour means."
+        )
       );
       const rows = el("div", "app-dept-list");
-      const entries = Object.entries(lib.config.statusColors);
-      const drawRow = (value: string, key: string) => {
+      statusBox.appendChild(rows);
+
+      /** One value → colour row. `value` is fixed: it comes from the column. */
+      const drawRow = (value: string) => {
         const row = el("div", "app-docs-statusrow");
-        const val = el("input", "app-input") as HTMLInputElement;
-        val.placeholder = "Status value";
-        val.value = value;
+        row.appendChild(el("span", "app-docs-statusval", value));
         const pick = el("select", "app-input") as HTMLSelectElement;
+        const none = el("option", "", "— no colour —") as HTMLOptionElement;
+        none.value = "";
+        pick.appendChild(none);
         for (const p of palettes.states) {
           const o = el("option", "", p.label) as HTMLOptionElement;
           o.value = p.key;
           pick.appendChild(o);
         }
-        if (palettes.states.some((p) => p.key === key)) pick.value = key;
-        const sync = () => {
-          delete lib.config.statusColors[value];
-          value = val.value.trim();
-          if (value !== "") lib.config.statusColors[value] = pick.value;
-          ctx.markDirty();
+        pick.value = lib.config.statusColors[value] ?? "";
+        const swatch = el("span", "app-docs-statusswatch");
+        const paintSwatch = () => {
+          const hit = palettes.states.find((p) => p.key === pick.value);
+          swatch.style.background = hit?.color ?? "transparent";
         };
-        val.addEventListener("input", sync);
-        pick.addEventListener("change", sync);
-        const x = el("button", "app-btn app-palette-x", "×") as HTMLButtonElement;
-        x.addEventListener("click", () => {
-          delete lib.config.statusColors[val.value.trim()];
-          row.remove();
+        paintSwatch();
+        pick.addEventListener("change", () => {
+          if (pick.value === "") delete lib.config.statusColors[value];
+          else lib.config.statusColors[value] = pick.value;
+          paintSwatch();
           ctx.markDirty();
         });
-        row.append(val, pick, x);
+        row.append(pick, swatch);
         rows.appendChild(row);
       };
-      for (const [value, key] of entries) drawRow(value, key);
-      statusBox.appendChild(rows);
-      const actions = el("div", "app-palette-actions");
-      const add = el("button", "app-org-add", "＋ Add status") as HTMLButtonElement;
-      add.addEventListener("click", () => {
-        drawRow("", palettes.states[0]?.key ?? "");
-        ctx.markDirty();
-      });
-      actions.appendChild(add);
-      const choices = liveByName.get(statusCol.internal)?.choices ?? [];
-      if (choices.length > 0) {
-        const prefill = el("button", "app-btn", "Prefill from choices") as HTMLButtonElement;
-        prefill.addEventListener("click", () => {
-          for (const c of choices) {
-            lib.config.statusColors[c] ??= palettes.states[0]?.key ?? "";
-          }
-          ctx.markDirty();
-          paintStatus();
+
+      const drawValues = (values: string[]) => {
+        clear(rows);
+        if (values.length === 0) {
+          rows.appendChild(
+            note(
+              "No values could be read from this column — check it is a choice or " +
+                "managed-metadata column, then reopen this library."
+            )
+          );
+          return;
+        }
+        for (const v of values) drawRow(v);
+        // colours saved against values the column no longer offers would
+        // be invisible and un-removable, so surface them for cleanup
+        const stale = Object.keys(lib.config.statusColors).filter((v) => !values.includes(v));
+        if (stale.length > 0) {
+          const warn = note(`Not in this column any more: ${stale.join(", ")}`);
+          const drop = el("button", "app-btn", "Remove") as HTMLButtonElement;
+          drop.addEventListener("click", () => {
+            for (const v of stale) delete lib.config.statusColors[v];
+            ctx.markDirty();
+            drawValues(values);
+          });
+          warn.appendChild(drop);
+          rows.appendChild(warn);
+        }
+      };
+
+      if (field?.isTaxonomy) {
+        if (field.termSetId === "") {
+          rows.appendChild(
+            note(
+              "This is a managed-metadata column, but SharePoint did not report its " +
+                "term set — pick the set under Term store above and reopen the library."
+            )
+          );
+          return;
+        }
+        rows.appendChild(el("div", "app-field-hint", "Reading the term set…"));
+        void fetchTermsInSet(app.siteUrl, field.termSetId).then((r) => {
+          const terms = Array.isArray((r.data as { value?: unknown[] })?.value)
+            ? ((r.data as { value: unknown[] }).value as Record<string, unknown>[])
+            : [];
+          drawValues(
+            terms
+              .map((t) => {
+                const labels = t.labels as { name?: string; isDefault?: boolean }[] | undefined;
+                const def = Array.isArray(labels)
+                  ? (labels.find((l) => l.isDefault) ?? labels[0])
+                  : undefined;
+                return (def?.name ?? "").trim();
+              })
+              .filter((n) => n !== "")
+          );
         });
-        actions.appendChild(prefill);
+      } else {
+        drawValues(field?.choices ?? Object.keys(lib.config.statusColors));
       }
-      statusBox.appendChild(actions);
     };
     paintStatus();
   };

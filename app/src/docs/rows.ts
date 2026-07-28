@@ -212,17 +212,34 @@ export function originOf(site: string): string {
 }
 
 /**
- * In-app preview URL — the modern embed endpoint, for EVERY file type.
+ * The reader's URL — always a PDF rendering, never the editable source
+ * (FR-DI-005/006), and used for the preview frame as well as Open /
+ * Copy / Email so there is one mechanism rather than three.
  *
- * Not the raw file URL: SharePoint serves documents with
- * `Content-Disposition: attachment`, so a browser refuses to render one
- * inline in a frame and paints its blocked-file glyph instead (what Ben
- * saw for a PDF). `embed.aspx` is the surface SharePoint's own "Embed"
- * dialog emits, so it is the one designed to be framed by another
- * origin, and it renders Office, PDF, images and video alike.
+ * MUST be drive-scoped. `_api/v2.0/drive/…` (no id) addresses only the
+ * site's DEFAULT library, so it answered `itemNotFound` for every
+ * purpose-made document library — i.e. for exactly the libraries this
+ * feature exists to serve. Reproduced against a non-default library and
+ * fixed by naming the drive.
+ *
+ * A file that is ALREADY a PDF cannot be converted — both SharePoint's
+ * `format=pdf` and the media transform answer 406 "no conversion
+ * available" — and its own content URL is served as an attachment, so it
+ * would download rather than render. Those go through SharePoint's
+ * viewer page. Everything else streams converted PDF bytes straight
+ * into the browser's own viewer, which is what makes this ~an order of
+ * magnitude lighter than `embed.aspx` (226 kB of HTML that then loads
+ * the document inside itself).
  */
-export function embedUrlFor(site: string, row: DocRow): string {
-  return `${site}/_layouts/15/embed.aspx?UniqueId=${row.uniqueId}`;
+export function pdfViewUrlFor(site: string, driveId: string, row: DocRow): string {
+  if (row.ext === "pdf" || driveId === "") {
+    return `${site}/_layouts/15/embed.aspx?UniqueId=${row.uniqueId}`;
+  }
+  return driveItemUrl(site, driveId, row) + "/content?format=pdf";
+}
+
+function driveItemUrl(site: string, driveId: string, row: DocRow): string {
+  return `${site}/_api/v2.0/drives/${driveId}/items/${row.uniqueId}`;
 }
 
 /**
@@ -239,28 +256,16 @@ export function thumbnailUrlFor(site: string, row: DocRow): string {
   return `${site}/_layouts/15/getpreview.ashx?path=${encodeURIComponent(abs)}`;
 }
 
-/**
- * The reader's URL — ALWAYS a PDF rendering, never the editable source
- * (FR-DI-005/006: a general reader has no editable-format entitlement).
- *
- * A file that is already a PDF has no editable form to protect, and
- * SharePoint refuses to convert pdf→pdf (406 "no conversion available"),
- * so it opens in SharePoint's own PDF viewer. Everything else converts
- * on the fly — probed: .docx → `application/pdf` from a presigned URL
- * that needs no further auth, served inline.
- */
-export function pdfViewUrlFor(site: string, row: DocRow): string {
-  return row.ext === "pdf"
-    ? `${site}/_layouts/15/embed.aspx?UniqueId=${row.uniqueId}`
-    : `${site}/_api/v2.0/drive/items/${row.uniqueId}/content?format=pdf`;
-}
-
 /** The same rendering as a file. An existing PDF's content URL already
- *  carries an attachment disposition; a converted one does not, so it may
- *  open in the browser's PDF viewer rather than saving — either way the
- *  reader never receives the editable source. */
-export function pdfDownloadUrlFor(site: string, row: DocRow): string {
-  const base = `${site}/_api/v2.0/drive/items/${row.uniqueId}/content`;
+ *  carries an attachment disposition (so it saves); a converted one does
+ *  not, so it may open in the browser's PDF viewer instead — either way
+ *  the reader never receives the editable source. Falls back to the
+ *  site-scoped download when the drive could not be resolved. */
+export function pdfDownloadUrlFor(site: string, driveId: string, row: DocRow): string {
+  if (driveId === "") {
+    return `${site}/_layouts/15/download.aspx?UniqueId=${row.uniqueId}`;
+  }
+  const base = driveItemUrl(site, driveId, row) + "/content";
   return row.ext === "pdf" ? base : `${base}?format=pdf`;
 }
 

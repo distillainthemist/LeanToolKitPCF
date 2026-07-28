@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildBrowseUri,
   buildSearchBody,
-  embedUrlFor,
+
   extGlyph,
   extOf,
   formatWhen,
@@ -155,17 +155,6 @@ describe("presentation helpers", () => {
     values: {},
   };
 
-  it("previews every file type through the modern embed endpoint", () => {
-    // Doc.aspx?action=embedview answers an ERROR page for a PDF, and the
-    // raw file URL is served as an attachment (browsers refuse to frame
-    // it) — probed 2026-07-27. embed.aspx handles both, so there is no
-    // per-extension branch left to get wrong.
-    const expected = `${SITE}/_layouts/15/embed.aspx?UniqueId=u-1`;
-    expect(embedUrlFor(SITE, row)).toBe(expected);
-    expect(embedUrlFor(SITE, { ...row, ext: "pdf" })).toBe(expected);
-    expect(embedUrlFor(SITE, { ...row, ext: "png" })).toBe(expected);
-  });
-
   it("builds the thumbnail from the absolute path, singly encoded", () => {
     expect(thumbnailUrlFor(SITE, row)).toBe(
       `${SITE}/_layouts/15/getpreview.ashx?path=` +
@@ -173,22 +162,48 @@ describe("presentation helpers", () => {
     );
   });
 
+  const DRIVE = "b!drive-id";
+
   it("sends readers to a PDF rendering, never the editable source", () => {
     // an office doc converts on the fly…
-    expect(pdfViewUrlFor(SITE, row)).toBe(
-      `${SITE}/_api/v2.0/drive/items/u-1/content?format=pdf`
+    expect(pdfViewUrlFor(SITE, DRIVE, row)).toBe(
+      `${SITE}/_api/v2.0/drives/${DRIVE}/items/u-1/content?format=pdf`
     );
-    expect(pdfDownloadUrlFor(SITE, row)).toBe(
-      `${SITE}/_api/v2.0/drive/items/u-1/content?format=pdf`
+    expect(pdfDownloadUrlFor(SITE, DRIVE, row)).toBe(
+      `${SITE}/_api/v2.0/drives/${DRIVE}/items/u-1/content?format=pdf`
     );
-    // …while a file that IS a pdf cannot be converted (SharePoint answers
-    // 406 for pdf→pdf), so it opens in SharePoint's own viewer
+    // …while a file that IS a pdf cannot be converted (both SharePoint's
+    // format=pdf and the media transform answer 406), so it renders
+    // through SharePoint's viewer and downloads its own bytes
     const asPdf = { ...row, ext: "pdf" };
-    expect(pdfViewUrlFor(SITE, asPdf)).toBe(
+    expect(pdfViewUrlFor(SITE, DRIVE, asPdf)).toBe(
       `${SITE}/_layouts/15/embed.aspx?UniqueId=u-1`
     );
-    expect(pdfDownloadUrlFor(SITE, asPdf)).toBe(
-      `${SITE}/_api/v2.0/drive/items/u-1/content`
+    expect(pdfDownloadUrlFor(SITE, DRIVE, asPdf)).toBe(
+      `${SITE}/_api/v2.0/drives/${DRIVE}/items/u-1/content`
+    );
+  });
+
+  it("is drive-scoped — the default drive 404s for any other library", () => {
+    // the production bug: `/drive/items/…` (no drive id) addresses only
+    // the site's DEFAULT library, so every purpose-made document library
+    // answered itemNotFound. Reproduced against a real non-default
+    // library on 2026-07-27.
+    for (const url of [
+      pdfViewUrlFor(SITE, DRIVE, row),
+      pdfDownloadUrlFor(SITE, DRIVE, row),
+    ]) {
+      expect(url).toContain(`/drives/${DRIVE}/items/`);
+      expect(url).not.toContain("/_api/v2.0/drive/items/");
+    }
+  });
+
+  it("degrades to site-scoped URLs when the drive cannot be resolved", () => {
+    expect(pdfViewUrlFor(SITE, "", row)).toBe(
+      `${SITE}/_layouts/15/embed.aspx?UniqueId=u-1`
+    );
+    expect(pdfDownloadUrlFor(SITE, "", row)).toBe(
+      `${SITE}/_layouts/15/download.aspx?UniqueId=u-1`
     );
   });
 
