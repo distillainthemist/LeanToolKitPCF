@@ -286,8 +286,11 @@ export function originOf(site: string): string {
 
 /**
  * The reader's URL — always a PDF rendering, never the editable source
- * (FR-DI-005/006), and used for the preview frame as well as Open /
- * Copy / Email so there is one mechanism rather than three.
+ * (FR-DI-005/006). Used by the Open / Copy / Email actions (top-level,
+ * first-party navigations, where cookie auth is reliable) and as the
+ * preview frame's LAST-RESORT fallback — the frame itself prefers the
+ * presigned URLs below, because cookie auth inside a third-party iframe
+ * is at the mercy of the browser's cookie policy.
  *
  * MUST be drive-scoped. `_api/v2.0/drive/…` (no id) addresses only the
  * site's DEFAULT library, so it answered `itemNotFound` for every
@@ -313,6 +316,53 @@ export function pdfViewUrlFor(site: string, driveId: string, row: DocRow): strin
 
 function driveItemUrl(site: string, driveId: string, row: DocRow): string {
   return `${site}/_api/v2.0/drives/${driveId}/items/${row.uniqueId}`;
+}
+
+/**
+ * Presigned, cookie-free URLs pulled from a drive item fetched with
+ * `?expand=thumbnails`. The preview FRAME must use these: an iframe on
+ * apps.powerapps.com reaches SharePoint as a THIRD party, and browsers
+ * now withhold third-party cookies — so a cookie-authenticated frame
+ * (embed.aspx, /content?format=pdf) silently becomes an anonymous
+ * request, bounces to the AAD sign-in page, and that page's
+ * `X-Frame-Options: DENY` is the "content is blocked" panel. Presigned
+ * URLs carry their auth in the URL, so no cookie policy can break them.
+ * (Top-level links are first-party navigations and stay on the cookie
+ * paths. Probed 2026-07-29 against the Dev site.)
+ */
+export interface PresignedUrls {
+  /** tempauth download URL — CORS `*`, attachment disposition (so it is
+   *  fetch-to-blob material, not an iframe src). */
+  downloadUrl: string;
+  /** page-one image on the media-transform service. */
+  thumbUrl: string;
+}
+
+export function presignedFromItem(data: unknown): PresignedUrls {
+  const o = (data ?? {}) as Record<string, unknown>;
+  const dl = o["@content.downloadUrl"];
+  const thumbs = Array.isArray(o.thumbnails)
+    ? (o.thumbnails as Record<string, unknown>[])
+    : [];
+  const large = (thumbs[0]?.large ?? null) as { url?: unknown } | null;
+  return {
+    downloadUrl: typeof dl === "string" ? dl : "",
+    thumbUrl: large !== null && typeof large.url === "string" ? large.url : "",
+  };
+}
+
+/**
+ * The presigned PDF rendering of an OFFICE document: the thumbnail URL
+ * with `/transform/thumbnail` swapped for `/transform/pdf` — same
+ * service, same signature, converted bytes served inline with no
+ * framing headers at all. (The trick from the Canvas apps era, now the
+ * mechanism of record — it is also what made previews faster there.)
+ * "" for a PDF (the transform answers 406 "no conversion available" for
+ * pdf input) and for thumbnails not on the transform service.
+ */
+export function transformPdfUrl(thumbUrl: string, ext: string): string {
+  if (ext === "pdf" || !thumbUrl.includes("/transform/thumbnail")) return "";
+  return thumbUrl.replace("/transform/thumbnail", "/transform/pdf");
 }
 
 /**

@@ -51,18 +51,24 @@ export function takePendingDocView(): string {
   return v;
 }
 
+/** Non-consuming peek: the hub uses it to front its Documents tab, whose
+ *  mount then consumes the payload. */
+export function hasPendingDocView(): boolean {
+  return pendingDocView !== "";
+}
+
 /** The absolute player URL for a Documents view (encoded via
  *  encodeDocView). Dev server: the page's own URL with the query param —
  *  launchTarget reads the iframe's own search string as its fallback. */
 export function docsViewUrl(encoded: string): string {
   if (!host || host.appId === "" || host.environmentId === "") {
     const base = window.location.href.split("#")[0].split("?")[0];
-    return `${base}?${DOCVIEW_PARAM}=${encodeURIComponent(encoded)}#/docs`;
+    return `${base}?${DOCVIEW_PARAM}=${encodeURIComponent(encoded)}#/`;
   }
   const q = new URLSearchParams();
   if (host.tenantId !== "") q.set("tenantId", host.tenantId);
   q.set(DOCVIEW_PARAM, encoded);
-  return `${PLAYER}/e/${host.environmentId}/app/${host.appId}?${q.toString()}#/docs`;
+  return `${PLAYER}/e/${host.environmentId}/app/${host.appId}?${q.toString()}#/`;
 }
 
 /** Player query parameter pinning one occurrence ("yyyy-mm-ddTHH:MM"). */
@@ -114,7 +120,9 @@ export function launchTarget(): string {
   const dv = param(DOCVIEW_PARAM);
   if (dv !== "") {
     pendingDocView = dv;
-    return "#/docs";
+    // land on the hub — its Documents tab fronts itself and consumes the
+    // payload (the standalone #/docs page has no app chrome around it)
+    return "#/";
   }
   const screen = SCREEN_ROUTES[param(SCREEN_PARAM)];
   if (screen !== undefined) return screen;

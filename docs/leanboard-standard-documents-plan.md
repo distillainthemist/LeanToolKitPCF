@@ -340,7 +340,7 @@ never hard-code. This is what keeps the feature sellable beyond one site.
 | 2 | Is the connection delegated (per-user)? | Expected: yes, per-user consent on first run; definitive proof is the two-account test in Phase 2 (needs spike 8). See improvement 2 |
 | 3 | Are the DMS custom columns crawled and mapped to managed properties, with the recrawl done? | **Closed 2026-07-28 — better than feared.** SharePoint auto-exposes a taxonomy column as the queryable property `owstaxId<InternalName>` with **no tenant-admin mapping**: verified live (`owstaxIdOrganisation:<termGuid>` → hit) against a UI-created column and tagged documents on the dev tenant, after one crawl cycle (~minutes). GUID matching is the primitive (labels also matched but collide across sets); subtree filtering ORs descendant ids from the term-store walk. Per-tenant confirmation is one click: Settings → Documents → **Test search filtering**. A tenant where that answers all-zero needs the RefinableString mapping — that (plus refiner *counts*, which need refinable properties) is the remaining admin-side item |
 | 4 | Term store readable via `/_api/v2.1/termStore` through the connector, or Graph only? | **Closed 2026-07-27: site-scoped, 200 — no Graph needed** |
-| 5 | Which preview surfaces render inside the Power Apps host iframe? | **Answered 2026-07-27, probing the real file after Ben hit a blocked-file glyph on a PDF.** The raw file URL is served as an attachment, so no browser will frame it — that was the bug. `Doc.aspx?action=embedview` answers an **error page for a PDF** (the Office branch was wrong there too). **`embed.aspx?UniqueId=` returns a real page for both .pdf and .docx, with no `X-Frame-Options` and no `frame-ancestors`** — one endpoint, every type. Fallback: `getpreview.ashx?path=<absolute url>` (NOT `guidFile=`, which 400s) returns PNG bytes for both. Whether the frame paints inside the *player* is Ben's confirmation |
+| 5 | Which preview surfaces render inside the Power Apps host iframe? | **Answered 2026-07-27, probing the real file after Ben hit a blocked-file glyph on a PDF.** The raw file URL is served as an attachment, so no browser will frame it — that was the bug. `Doc.aspx?action=embedview` answers an **error page for a PDF** (the Office branch was wrong there too). **`embed.aspx?UniqueId=` returns a real page for both .pdf and .docx, with no `X-Frame-Options` and no `frame-ancestors`** — one endpoint, every type. Fallback: `getpreview.ashx?path=<absolute url>` (NOT `guidFile=`, which 400s) returns PNG bytes for both. Whether the frame paints inside the *player* is Ben's confirmation. **Amended 2026-07-29:** framing headers were never the whole story — these are all *cookie-authenticated* surfaces, and third-party cookie blocking turns them into the AAD sign-in page (`X-Frame-Options: DENY`) inside the frame. The preview now prefers presigned URLs (transform PDF / `@content.downloadUrl` → blob) and keeps these as fallback only |
 | 6 | Is `format=pdf` reachable for rendition generation? | **Closed 2026-07-27: yes, and site-scoped** — `/_api/v2.0/drive/items/{id}/content?format=pdf` → 302 presigned URL |
 | 7 | One SharePoint site, confirmed? | **Closed: `https://pecheydistillingcom.sharepoint.com/sites/Dev`** (dev target; §10.3 confirms the single-site model for deployments) |
 | 8 | Is a second licensed account available in the dev tenant? | Without it the permission-trimming proof is unrunnable as written |
@@ -587,6 +587,26 @@ accounts (spike 8 prerequisite); board chunks unchanged.
   because a cross-origin frame cannot be asked whether it painted, the
   note under it offers a **page image** (`getpreview.ashx?path=`) as a
   guaranteed-render path rather than a dead end.
+  **Revised again 2026-07-29 — the preview frame is now cookie-free.**
+  Ben hit "content is blocked" on the embedded PDF (the link still
+  worked). Diagnosis, probed live: an iframe from the player reaches
+  SharePoint as a **third party**, and with third-party cookies withheld
+  a cookie-authenticated frame becomes an anonymous request →
+  `Authenticate.aspx` → the AAD sign-in page, whose
+  `X-Frame-Options: DENY` is exactly that panel. No Power Apps admin CSP
+  setting can fix it (the block is issued *inside* the frame), and
+  `embed.aspx` itself is innocent — authenticated, it still answers 200
+  with no framing headers. The frame therefore resolves **presigned**
+  URLs first (one `driveItem?expand=thumbnails` call): an Office file
+  frames the media-transform PDF (`/transform/thumbnail` →
+  `/transform/pdf` on the thumbnail URL — Ben's Canvas-era substitution,
+  now the mechanism of record; inline, zero framing headers); a native
+  PDF fetches its `@content.downloadUrl` (tempauth, `Access-Control-
+  Allow-Origin: *`, verified 2026-07-29) and renders a **blob: URL** —
+  same-origin, unblockable. The page-image fallback moves to the
+  presigned thumbnail for the same reason. Cookie paths remain only as
+  last-resort fallbacks and for the top-level link actions, which are
+  first-party navigations and unaffected.
 - **Organisation filtering went live 2026-07-28** (spike 3 closed): the
   tree filters via `owstaxId<Column>:<termGuid>` — node + subtree ORed,
   search mode forced (list REST cannot filter by taxonomy), a clearable

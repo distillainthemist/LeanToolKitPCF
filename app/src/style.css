@@ -1481,6 +1481,7 @@ input[type="color"].app-color:disabled { opacity: 0.4; cursor: default; }
 .app-docs-name { overflow: hidden; text-overflow: ellipsis; }
 .app-docs-chip { padding: 1px 8px; border-radius: 9px; font-size: 12px; background: #eee; }
 .app-docs-kebab { border: none; background: none; cursor: pointer; font-size: 16px; padding: 2px 8px; }
+.app-docs-topkebab { margin-left: auto; border: 1px solid #ddd; border-radius: 6px; background: none; cursor: pointer; font-size: 16px; padding: 4px 10px; }
 .app-docs-menu { position: fixed; z-index: 60; width: 200px; background: #fff; border: 1px solid #ddd; border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.14); padding: 4px; }
 .app-docs-menuitem { display: block; width: 100%; text-align: left; border: none; background: none; padding: 7px 10px; border-radius: 5px; cursor: pointer; font-size: 13px; }
 .app-docs-menuitem:hover:not(:disabled) { background: #f0f0f0; }

@@ -214,6 +214,19 @@ export class LeanHubView {
     this.render();
   }
 
+  /** Front a tab programmatically — a deep link landing on an extra tab
+   *  (e.g. a shared Documents view) selects it the way a click would. */
+  selectTab(key: string): void {
+    const known =
+      key === "myday" ||
+      key === "calendar" ||
+      key === "actions" ||
+      this.extraTabs.some((t) => t.key === key);
+    if (!known || this.tab === key) return;
+    this.tab = key;
+    this.render();
+  }
+
   /** Hide the in-hub Settings tab (the app hosts settings itself). */
   setHideSettingsTab(on: boolean): void {
     if (this.hideSettingsTab !== on) {

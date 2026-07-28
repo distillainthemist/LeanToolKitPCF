@@ -178,21 +178,16 @@ export function mountDocs(
       nonCurrentBox.checked = bootView.nonCurrent;
     }
 
-    // share the CURRENT filter as a player link (FR-SE — views travel as
-    // state, not ids), and export the register (FR-RP-008)
-    const shareBtn = el("button", "app-btn", "Copy link") as HTMLButtonElement;
-    shareBtn.title = "A link that opens Documents exactly as you see it now.";
-    const exportBtn = el("button", "app-btn", "Export") as HTMLButtonElement;
-    exportBtn.title =
-      "Download the register as CSV — every document in the current scope " +
-      "with its configured columns (search text is not applied).";
-    top.append(search, scope, contents, nonCurrent, shareBtn, exportBtn);
+    // secondary actions (share the current filter as a player link,
+    // export the register) live behind one kebab — the app's convention
+    const topKebab = el("button", "app-kebab app-docs-topkebab", "⋮") as HTMLButtonElement;
+    topKebab.title = "More actions";
+    top.append(search, scope, contents, nonCurrent, topKebab);
     if (favMode) {
       scope.style.display = "none";
       contents.style.display = "none";
       nonCurrent.style.display = "none";
-      shareBtn.style.display = "none";
-      exportBtn.style.display = "none";
+      topKebab.style.display = "none";
     }
     wrap.appendChild(top);
 
@@ -610,6 +605,11 @@ export function mountDocs(
           linkColumns: (lib?.config.columns ?? [])
             .filter((c) => c.role === "linkedDocuments")
             .map((c) => c.internal),
+          // readers see the register's fields, not SharePoint's plumbing:
+          // exactly the columns ticked available in the library settings
+          columns: lib
+            ? lib.config.columns.filter((c) => c.available).map((c) => c.internal)
+            : undefined,
         })
       );
       // readers get the PDF rendering, never the editable source
@@ -757,19 +757,20 @@ export function mountDocs(
       orgTermId: orgFilter?.node.id ?? "",
       orgPath: orgFilter?.node.labels ?? [],
     });
-    shareBtn.addEventListener("click", () => {
+    const copyViewLink = () => {
       void navigator.clipboard
         .writeText(docsViewUrl(encodeDocView(currentView())))
         .then(() => {
-          shareBtn.textContent = "Copied ✓";
-          setTimeout(() => (shareBtn.textContent = "Copy link"), 1500);
+          status.textContent = "Link copied ✓ — it opens Documents exactly as you see it now.";
         });
-    });
+    };
     const EXPORT_CAP = 2000;
-    exportBtn.addEventListener("click", () => {
+    let exporting = false;
+    const exportRegister = () => {
+      if (exporting) return;
       void (async () => {
-        exportBtn.disabled = true;
-        exportBtn.textContent = "Exporting…";
+        exporting = true;
+        status.textContent = "Exporting…";
         const scopeLibs = current ? [current] : libraries;
         // the union of configured available columns, labelled
         const cols: { internal: string; label: string }[] = [];
@@ -814,10 +815,40 @@ export function mountDocs(
         a.download = `documents-register-${new Date().toISOString().slice(0, 10)}.csv`;
         a.click();
         URL.revokeObjectURL(a.href);
-        exportBtn.disabled = false;
-        exportBtn.textContent = "Export";
+        exporting = false;
         status.textContent = `${rows.length} row(s) exported${truncated ? ` — capped at ${EXPORT_CAP}` : ""}`;
       })();
+    };
+    topKebab.addEventListener("click", () => {
+      if (menu) {
+        closeMenu();
+        return;
+      }
+      menu = el("div", "app-docs-menu");
+      const item = (label: string, title: string, onPick: () => void) => {
+        const b = el("button", "app-docs-menuitem", label) as HTMLButtonElement;
+        b.title = title;
+        b.addEventListener("click", () => {
+          closeMenu();
+          onPick();
+        });
+        menu!.appendChild(b);
+      };
+      item(
+        "Copy link to this view",
+        "A link that opens Documents exactly as you see it now.",
+        copyViewLink
+      );
+      item(
+        "Export register (CSV)",
+        "Every document in the current scope with its configured columns " +
+          "(search text is not applied).",
+        exportRegister
+      );
+      const r = topKebab.getBoundingClientRect();
+      menu.style.top = `${r.bottom + 4}px`;
+      menu.style.left = `${Math.max(8, r.right - 200)}px`;
+      document.body.appendChild(menu);
     });
 
     void load(true);

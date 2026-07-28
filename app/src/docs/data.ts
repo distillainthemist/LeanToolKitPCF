@@ -6,11 +6,13 @@ import { spRequest } from "./sp";
 import {
   DocRow,
   ItemsPage,
+  PresignedUrls,
   SearchOpts,
   SearchPage,
   buildBrowseUri,
   buildSearchBody,
   parseItemsPage,
+  presignedFromItem,
   rowsFromSearch,
 } from "./rows";
 
@@ -74,6 +76,24 @@ export async function searchPage(
   });
   if (!r.ok) return { rows: [], total: 0, error: r.status };
   return { ...rowsFromSearch(r.data), error: "" };
+}
+
+/** Cookie-free preview URLs for one item (see PresignedUrls in rows.ts
+ *  for why the frame cannot use the cookie-authenticated URLs). One
+ *  round trip: the item with its thumbnails expanded. */
+export async function presignedUrls(
+  site: string,
+  driveId: string,
+  row: DocRow
+): Promise<PresignedUrls & { error: string }> {
+  if (driveId === "") return { downloadUrl: "", thumbUrl: "", error: "drive unknown" };
+  const r = await spRequest(
+    site,
+    "GET",
+    `_api/v2.0/drives/${driveId}/items/${row.uniqueId}?expand=thumbnails`
+  );
+  if (!r.ok) return { downloadUrl: "", thumbUrl: "", error: r.status };
+  return { ...presignedFromItem(r.data), error: "" };
 }
 
 /** Full text projection of one document's fields (properties pane) —

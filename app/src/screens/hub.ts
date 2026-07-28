@@ -14,12 +14,13 @@ import { LtkAction, parseActionsJson } from "../../../shared/schema/actions";
 import { parseOrgTree } from "../../../shared/schema/meeting";
 import { parsePeople } from "../../../shared/schema/people";
 import { appTheme, editorHost } from "../cardHost";
-import { boardHash, boardUrl } from "../links";
+import { boardHash, boardUrl, hasPendingDocView } from "../links";
 import { currentViewer, detectHost } from "../runtime";
 import { actionsForViewer, upsertActions } from "../store/actions";
 import { canViewBoard, listBoards } from "../store/boards";
 import { selfHealCatalog } from "../store/catalog";
 import {
+  meetingCategories,
   protectedTimesJson,
   orgJson,
   saveProtectedTimes,
@@ -61,13 +62,31 @@ export function mountHub(parent: HTMLElement): () => void {
     let sourceLabels: Record<string, string> = {};
     let viewerId: string;
     let site = "";
+    // fetched once in the parallel round, reused below (each of these
+    // used to be re-queried later in the mount)
+    let me: Awaited<ReturnType<typeof viewerPerson>> = null;
+    let visibleBoards: Awaited<ReturnType<typeof listBoards>> = [];
+    let categories: Awaited<ReturnType<typeof meetingCategories>> = [];
 
     if (hosted) {
       const viewer = currentViewer()!;
       viewerId = viewer.objectId;
-      await selfHealCatalog();
+      // ONE parallel round for every independent read — this chain used
+      // to run serially, and ~ten connector round trips in a row were
+      // the visible seconds before My day painted
+      const [, meFirst, allBoards, roster, myActions, org, prefs, cats] = await Promise.all([
+        selfHealCatalog(),
+        viewerPerson(viewerId),
+        listBoards(),
+        listPeople(),
+        actionsForViewer(viewerId),
+        orgJson(),
+        userPrefsJson(viewerId),
+        meetingCategories(),
+      ]);
+      categories = cats;
       // self-register the viewer into the roster on first visit
-      let me = await viewerPerson(viewerId);
+      me = meFirst;
       if (!me) {
         me = {
           whoId: viewerId,
@@ -86,9 +105,10 @@ export function mountHub(parent: HTMLElement): () => void {
       site = me.site;
 
       // confidential meetings exist only for their owner + participants
-      const boards = (await listBoards()).filter((b) =>
+      const boards = allBoards.filter((b) =>
         canViewBoard(b.occurrenceSettingsRaw, viewerId)
       );
+      visibleBoards = boards;
       meetingsRaw = JSON.stringify(
         boards
           .filter((b) => b.kind === "meeting" && b.occurrenceSettingsRaw.trim() !== "")
@@ -101,14 +121,14 @@ export function mountHub(parent: HTMLElement): () => void {
             `${b.name} · ${slot.title || cardLabel(slot.cardType)}`;
         }
       }
-      const roster = await listPeople();
       peopleRaw = JSON.stringify(
         roster.map((p) => ({ whoId: p.whoId, who: p.who, crew: p.crew }))
       );
-      actions = await actionsForViewer(viewerId);
-      orgRaw = await orgJson();
+      actions = myActions;
+      orgRaw = org;
+      prefsRaw = prefs;
+      // the one read that depends on another (the viewer's site)
       protectedRaw = site !== "" ? await protectedTimesJson(site) : "[]";
-      prefsRaw = await userPrefsJson(viewerId);
     } else {
       viewerId = VIEWER_ID;
       meetingsRaw = JSON.stringify(BOARDS);
@@ -162,15 +182,15 @@ export function mountHub(parent: HTMLElement): () => void {
         cleanups.push(mountDocs(tabHost, "", { embedded: true }));
       });
     });
+    // a shared Documents link launched the app: front the tab — its
+    // mount consumes the pending view payload
+    if (hasPendingDocView()) view.selectTab("documents");
     if (hosted) {
-      const { meetingCategories } = await import("../store/config");
-      const cats = await meetingCategories();
+      // categories and boards came in with the boot round — no re-query
       const colorByCategory = Object.fromEntries(
-        cats.filter((c) => c.color !== "").map((c) => [c.name, c.color])
+        categories.filter((c) => c.color !== "").map((c) => [c.name, c.color])
       );
-      const allBoards = (await listBoards()).filter((b) =>
-        canViewBoard(b.occurrenceSettingsRaw, viewerId)
-      );
+      const allBoards = visibleBoards;
       const dir = allBoards.map((b) => ({
         boardId: b.boardId,
         name: b.name,
@@ -195,8 +215,9 @@ export function mountHub(parent: HTMLElement): () => void {
       );
       // first access: prompt the viewer to place themselves in the org
       // (site drives meetings, actions and protected times). Modal on
-      // first visit; a lighter banner remains if they skip.
-      const meNow = await viewerPerson(viewerId);
+      // first visit; a lighter banner remains if they skip. `me` is the
+      // boot-round person (self-registered above if new).
+      const meNow = me;
       if (meNow && meNow.site === "") {
         const { promptForSite } = await import("./sitePrompt");
         const saved = await promptForSite(meNow);

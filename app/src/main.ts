@@ -44,7 +44,14 @@ void (async () => {
     const { launchTarget } = await import("./links");
     const target = launchTarget();
     if (target !== "" && (window.location.hash === "" || window.location.hash === "#/")) {
-      window.location.hash = target;
+      if (window.location.hash === target) {
+        // already on the landing route (a docview launch): no hashchange
+        // will fire, so re-route by hand — the hub re-mounts and sees the
+        // now-pending state
+        route();
+      } else {
+        window.location.hash = target;
+      }
     }
     const { branding, siteSettings } = await import("./store/config");
     const { viewerPerson } = await import("./store/people");

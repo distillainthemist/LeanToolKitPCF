@@ -1,5 +1,13 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { boardUrl, latestInstanceIso, launchTarget, setAppHost } from "../links";
+import {
+  boardUrl,
+  docsViewUrl,
+  hasPendingDocView,
+  latestInstanceIso,
+  launchTarget,
+  setAppHost,
+  takePendingDocView,
+} from "../links";
 
 const NOW = Date.parse("2026-07-23T09:00:00Z");
 
@@ -44,6 +52,23 @@ describe("launchTarget", () => {
   it("ignores screens not on the whitelist", () => {
     setAppHost({ ...HOST, queryParams: { screen: "settings" } });
     expect(launchTarget()).toBe("");
+  });
+
+  it("a docview launch lands on the hub (its Documents tab consumes it)", () => {
+    setAppHost({ ...HOST, queryParams: { docview: '{"listId":"l1"}' } });
+    // the standalone #/docs page has no app chrome — never send links there
+    expect(launchTarget()).toBe("#/");
+    expect(hasPendingDocView()).toBe(true); // the peek does not consume
+    expect(hasPendingDocView()).toBe(true);
+    expect(takePendingDocView()).toBe('{"listId":"l1"}');
+    expect(hasPendingDocView()).toBe(false); // the take does
+    expect(takePendingDocView()).toBe("");
+  });
+
+  it("shared view links carry the hub fragment", () => {
+    setAppHost(HOST);
+    expect(docsViewUrl("{}").endsWith("#/")).toBe(true);
+    expect(docsViewUrl("{}")).toContain("docview=%7B%7D");
   });
 });
 

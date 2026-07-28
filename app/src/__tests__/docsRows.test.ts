@@ -14,12 +14,14 @@ import {
   parseItemsPage,
   pdfDownloadUrlFor,
   pdfViewUrlFor,
+  presignedFromItem,
   rowsFromSearch,
   sourceUrlFor,
   taxonomySearchProperty,
   termTreeOrder,
   thumbnailUrlFor,
   toSiteRelative,
+  transformPdfUrl,
 } from "../docs/rows";
 
 const SITE = "https://x.sharepoint.com/sites/Dev";
@@ -302,6 +304,34 @@ describe("presentation helpers", () => {
     expect(sourceUrlFor(SITE, row)).toBe(
       "https://x.sharepoint.com/sites/Dev/Shared Documents/A.docx?web=1"
     );
+  });
+
+  it("pulls presigned URLs from a thumbnails-expanded drive item", () => {
+    // shape probed live 2026-07-29: @content.downloadUrl at the top,
+    // thumbnails as a sized-set array
+    const item = {
+      "@content.downloadUrl": "https://x.sharepoint.com/dl?tempauth=t",
+      thumbnails: [{ large: { url: "https://r-mediap.svc.ms/transform/thumbnail?cs=abc" } }],
+    };
+    expect(presignedFromItem(item)).toEqual({
+      downloadUrl: "https://x.sharepoint.com/dl?tempauth=t",
+      thumbUrl: "https://r-mediap.svc.ms/transform/thumbnail?cs=abc",
+    });
+    // partial and broken shapes degrade to "" rather than throwing
+    expect(presignedFromItem({ thumbnails: [] })).toEqual({ downloadUrl: "", thumbUrl: "" });
+    expect(presignedFromItem(null)).toEqual({ downloadUrl: "", thumbUrl: "" });
+  });
+
+  it("turns the transform thumbnail into a transform PDF — office only", () => {
+    const thumb = "https://r-mediap.svc.ms/transform/thumbnail?provider=spo&cs=abc";
+    expect(transformPdfUrl(thumb, "docx")).toBe(
+      "https://r-mediap.svc.ms/transform/pdf?provider=spo&cs=abc"
+    );
+    // pdf input answers 406 "no conversion available" — never offered
+    expect(transformPdfUrl(thumb, "pdf")).toBe("");
+    // a thumbnail not on the transform service cannot be substituted
+    expect(transformPdfUrl("https://x.sharepoint.com/getpreview.ashx?path=p", "docx")).toBe("");
+    expect(transformPdfUrl("", "docx")).toBe("");
   });
 
   it("classifies non-current statuses", () => {

@@ -1,8 +1,12 @@
 // Standard Documents — the document viewer and properties overlays
-// (plan Phase 2). New-tab is the PRIMARY open path (the code app is
-// itself an iframe on apps.powerapps.com, and SharePoint's embed
-// surfaces may refuse foreign frame-ancestors); the in-overlay preview
-// is progressive enhancement with the fallback visibly one click away.
+// (plan Phase 2). New-tab is the PRIMARY open path (first-party, so
+// cookie auth always works there); the in-overlay preview is
+// progressive enhancement with the fallback visibly one click away.
+// The preview FRAME uses presigned, cookie-free URLs — an iframe to
+// SharePoint is a third-party context, and browsers withholding
+// third-party cookies turn a cookie-authenticated frame into the AAD
+// sign-in page, whose X-Frame-Options: DENY is the "content is
+// blocked" panel (diagnosed 2026-07-29; see PresignedUrls in rows.ts).
 // Working documents ask before opening for edit (the draft's UX).
 
 import { el, clear } from "../../../shared/ui/dom";
@@ -15,8 +19,9 @@ import {
   pdfViewUrlFor,
   sourceUrlFor,
   thumbnailUrlFor,
+  transformPdfUrl,
 } from "./rows";
-import { itemDetails, itemVersions } from "./data";
+import { itemDetails, itemVersions, presignedUrls } from "./data";
 
 interface ViewerOpts {
   site: string;
@@ -30,7 +35,10 @@ interface ViewerOpts {
   askToWork: boolean;
 }
 
-function overlay(label: string): {
+function overlay(
+  label: string,
+  onClose?: () => void
+): {
   panel: HTMLElement;
   close: () => void;
 } {
@@ -44,6 +52,7 @@ function overlay(label: string): {
     untrap();
     scrim.remove();
     document.removeEventListener("keydown", onKey);
+    onClose?.();
   };
   const onKey = (e: KeyboardEvent) => {
     if (e.key === "Escape") close();
@@ -65,7 +74,10 @@ function linkBtn(label: string, href: string, primary = false): HTMLAnchorElemen
 
 export function openDocViewer(opts: ViewerOpts): void {
   const { site, row } = opts;
-  const { panel, close } = overlay(row.name);
+  let blobUrl = "";
+  const { panel, close } = overlay(row.name, () => {
+    if (blobUrl !== "") URL.revokeObjectURL(blobUrl);
+  });
   panel.classList.add("app-docs-viewer");
 
   const head = el("div", "app-docs-viewhead");
@@ -109,41 +121,83 @@ export function openDocViewer(opts: ViewerOpts): void {
   actions.append(copy, mail);
   panel.appendChild(actions);
 
+  // one item lookup shared by both painters, started on first need
+  let presignedOnce: ReturnType<typeof presignedUrls> | null = null;
+  const presigned = () => (presignedOnce ??= presignedUrls(site, opts.driveId, row));
+  // a click on either painter invalidates any still-loading older paint
+  let paintGen = 0;
+
+  /** The frame src the browser can always load: a presigned transform
+   *  URL for office files, fetched-to-blob bytes for a PDF (its
+   *  presigned URL is attachment-disposed, but it answers CORS `*`).
+   *  "" = nothing cookie-free available — fall back to the cookie path,
+   *  which still works wherever third-party cookies still flow. */
+  const cookieFreeSrc = async (): Promise<string> => {
+    const p = await presigned();
+    if (row.ext !== "pdf") return transformPdfUrl(p.thumbUrl, row.ext);
+    if (p.downloadUrl === "") return "";
+    try {
+      const res = await fetch(p.downloadUrl);
+      if (!res.ok) return "";
+      const bytes = await res.blob();
+      if (blobUrl !== "") URL.revokeObjectURL(blobUrl);
+      blobUrl = URL.createObjectURL(
+        bytes.type === "application/pdf" ? bytes : new Blob([bytes], { type: "application/pdf" })
+      );
+      return blobUrl;
+    } catch {
+      // a player CSP connect-src could refuse the fetch — cookie fallback
+      return "";
+    }
+  };
+
   const paintPreview = () => {
+    const gen = ++paintGen;
     clear(stage);
-    const frame = el("iframe", "app-docs-viewframe") as HTMLIFrameElement;
-    // the same PDF the action buttons point at: for an office file this
-    // is converted bytes straight into the browser's PDF viewer, which
-    // is far lighter than loading SharePoint's whole embed page
-    frame.src = pdfUrl;
-    frame.title = row.name;
-    // some hosts/tenants refuse to be framed by a foreign origin at all;
-    // the page image always renders, so it is one click away rather than
-    // a dead end (a cross-origin frame cannot be asked whether it painted)
-    stage.appendChild(frame);
-    const note = el("div", "app-field-hint app-docs-viewnote");
-    note.append(document.createTextNode("Preview not showing? "));
-    const asImage = el("button", "app-linklike", "Show page preview") as HTMLButtonElement;
-    asImage.addEventListener("click", () => paintThumbnail());
-    note.append(asImage, document.createTextNode(" · or Open PDF above."));
-    stage.appendChild(note);
+    stage.appendChild(el("div", "app-loading-line", "Loading preview…"));
+    void (async () => {
+      const src = (await cookieFreeSrc()) || pdfUrl;
+      if (gen !== paintGen) return;
+      clear(stage);
+      const frame = el("iframe", "app-docs-viewframe") as HTMLIFrameElement;
+      frame.src = src;
+      frame.title = row.name;
+      // the page image is one click away rather than a dead end (a
+      // cross-origin frame cannot be asked whether it painted)
+      stage.appendChild(frame);
+      const note = el("div", "app-field-hint app-docs-viewnote");
+      note.append(document.createTextNode("Preview not showing? "));
+      const asImage = el("button", "app-linklike", "Show page preview") as HTMLButtonElement;
+      asImage.addEventListener("click", () => paintThumbnail());
+      note.append(asImage, document.createTextNode(" · or Open PDF above."));
+      stage.appendChild(note);
+    })();
   };
 
   const paintThumbnail = () => {
+    const gen = ++paintGen;
     clear(stage);
-    const img = el("img", "app-docs-viewimg") as HTMLImageElement;
-    img.src = thumbnailUrlFor(site, row);
-    img.alt = `First page of ${row.name}`;
-    const note = el("div", "app-field-hint app-docs-viewnote");
-    img.addEventListener("error", () => {
-      img.remove();
-      note.textContent = "No page preview available for this file — open it in SharePoint.";
-    });
-    note.append(document.createTextNode("Page one only. "));
-    const back = el("button", "app-linklike", "Try the full preview") as HTMLButtonElement;
-    back.addEventListener("click", () => paintPreview());
-    note.appendChild(back);
-    stage.append(img, note);
+    stage.appendChild(el("div", "app-loading-line", "Loading preview…"));
+    void (async () => {
+      const p = await presigned();
+      if (gen !== paintGen) return;
+      clear(stage);
+      const img = el("img", "app-docs-viewimg") as HTMLImageElement;
+      // presigned page-one image; getpreview.ashx (cookie-auth'd) only
+      // when the item lookup came back empty
+      img.src = p.thumbUrl !== "" ? p.thumbUrl : thumbnailUrlFor(site, row);
+      img.alt = `First page of ${row.name}`;
+      const note = el("div", "app-field-hint app-docs-viewnote");
+      img.addEventListener("error", () => {
+        img.remove();
+        note.textContent = "No page preview available for this file — open it in SharePoint.";
+      });
+      note.append(document.createTextNode("Page one only. "));
+      const back = el("button", "app-linklike", "Try the full preview") as HTMLButtonElement;
+      back.addEventListener("click", () => paintPreview());
+      note.appendChild(back);
+      stage.append(img, note);
+    })();
   };
 
   if (opts.askToWork) {
@@ -177,6 +231,11 @@ interface PropsOpts {
    *  values render as clickable links, since navigating to them is the
    *  entire point of the column. */
   linkColumns?: string[];
+  /** Internal names (config order) of the columns ticked *available* in
+   *  the library's settings — the ONLY properties shown when provided.
+   *  Absent (library unknown for this row), every non-noise field
+   *  renders, filtered by the skip set below. */
+  columns?: string[];
 }
 
 /** Split a link-column's text into individual URLs / references.
@@ -246,8 +305,14 @@ export function openDocProperties(opts: PropsOpts): void {
     }
     const linkCols = new Set(opts.linkColumns ?? []);
     const grid = el("div", "app-docs-propgrid");
-    for (const [k, v] of Object.entries(details.values)) {
-      if (v.trim() === "" || PROP_SKIP.has(k)) continue;
+    // configured libraries: exactly the ticked columns, in config order —
+    // a reader should see the register's fields, not SharePoint's plumbing
+    const shown: [string, string][] = opts.columns
+      ? opts.columns
+          .map((k): [string, string] => [k, details.values[k] ?? ""])
+          .filter(([, v]) => v.trim() !== "")
+      : Object.entries(details.values).filter(([k, v]) => v.trim() !== "" && !PROP_SKIP.has(k));
+    for (const [k, v] of shown) {
       grid.appendChild(el("span", "app-docs-propkey", opts.labels[k] ?? k));
       if (linkCols.has(k)) {
         const cell = el("span", "app-docs-propval app-docs-proplinks");
@@ -270,7 +335,17 @@ export function openDocProperties(opts: PropsOpts): void {
         grid.appendChild(el("span", "app-docs-propval", v));
       }
     }
-    body.appendChild(grid);
+    if (shown.length === 0) {
+      body.appendChild(
+        el(
+          "div",
+          "app-field-hint",
+          "No properties to show — the library's settings choose which columns appear here."
+        )
+      );
+    } else {
+      body.appendChild(grid);
+    }
 
     body.appendChild(el("div", "app-field-label", "Revision history"));
     const vres =
