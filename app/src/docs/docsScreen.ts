@@ -123,11 +123,19 @@ export function mountDocs(
       "Search what you are looking at, or every library this site exposes — " +
       "never the wider SharePoint.";
     scope.style.display = current ? "" : "none";
+    const contents = el("label", "app-docs-check");
+    const contentsBox = el("input", "") as HTMLInputElement;
+    contentsBox.type = "checkbox";
+    contents.append(contentsBox, document.createTextNode(" Search inside documents"));
+    contents.title =
+      "Off, this matches document names and titles — how you look for something " +
+      "you know exists. On, it also matches the text inside every document, " +
+      "which finds far more.";
     const nonCurrent = el("label", "app-docs-check app-docs-noncurrent");
     const nonCurrentBox = el("input", "") as HTMLInputElement;
     nonCurrentBox.type = "checkbox";
     nonCurrent.append(nonCurrentBox, document.createTextNode(" Include drafts & superseded"));
-    top.append(search, scope, nonCurrent);
+    top.append(search, scope, contents, nonCurrent);
     wrap.appendChild(top);
 
     const bodyRow = el("div", "app-docs-body");
@@ -406,6 +414,7 @@ export function mountDocs(
             current && scope.value === "library" ? [current.listId] : allListIds,
           rowLimit: PAGE,
           startRow,
+          searchContents: contentsBox.checked,
         });
         if (dead || gen !== generation) return;
         list.append(applyNonCurrent(page.rows));
@@ -432,6 +441,7 @@ export function mountDocs(
       debounce = setTimeout(() => void load(true), 300);
     });
     scope.addEventListener("change", () => void load(true));
+    contentsBox.addEventListener("change", () => void load(true));
     nonCurrentBox.addEventListener("change", () => void load(true));
     // the heuristic toggle only bites where a status column is mapped
     if (!statusCol) {

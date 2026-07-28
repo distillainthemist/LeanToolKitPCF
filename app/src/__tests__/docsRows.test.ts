@@ -68,9 +68,39 @@ describe("browse parsing", () => {
 });
 
 describe("search", () => {
+  it("matches names and titles by default, not document contents", () => {
+    // full-text search is why "pump" returned every procedure that so much
+    // as mentions one; the default is now the narrower, predictable match
+    const body = JSON.parse(buildSearchBody("pump", { listIds: ["l1"] }));
+    expect(body.request.Querytext).toBe(
+      "(Title:pump* OR Filename:pump*) IsDocument:1 ListID:l1"
+    );
+  });
+
+  it("ANDs each word, so more words narrow rather than widen", () => {
+    const body = JSON.parse(buildSearchBody("brand guidelines", { listIds: ["l1"] }));
+    expect(body.request.Querytext).toBe(
+      "(Title:brand* OR Filename:brand*) (Title:guidelines* OR Filename:guidelines*) " +
+        "IsDocument:1 ListID:l1"
+    );
+  });
+
+  it("searches inside documents only when asked", () => {
+    const body = JSON.parse(
+      buildSearchBody("pump seal", { listIds: ["l1"], searchContents: true })
+    );
+    expect(body.request.Querytext).toBe("pump* seal* IsDocument:1 ListID:l1");
+  });
+
+  it("strips characters that would change the query's meaning", () => {
+    const body = JSON.parse(buildSearchBody('pu"mp (x)', { listIds: ["l1"] }));
+    expect(body.request.Querytext).toBe(
+      "(Title:pump* OR Filename:pump*) (Title:x* OR Filename:x*) IsDocument:1 ListID:l1"
+    );
+  });
+
   it("builds scoped query text with wildcard, doc filter and sort", () => {
     const body = JSON.parse(buildSearchBody("pump", { listIds: ["l1"] }));
-    expect(body.request.Querytext).toBe("pump* IsDocument:1 ListID:l1");
     expect(body.request.SortList).toBeUndefined(); // text search = relevance
     const empty = JSON.parse(buildSearchBody("", { listIds: ["l1"] }));
     expect(empty.request.Querytext).toBe("IsDocument:1 ListID:l1");
@@ -89,7 +119,7 @@ describe("search", () => {
     // site pages) vs 2 in the configured library
     for (const listIds of [[], [""], ["  "]]) {
       expect(JSON.parse(buildSearchBody("pump", { listIds })).request.Querytext).toBe(
-        "pump* IsDocument:1"
+        "(Title:pump* OR Filename:pump*) IsDocument:1"
       );
     }
     // …and the transport refuses to send it at all (see data.searchPage)

@@ -111,13 +111,35 @@ export interface SearchOpts {
   startRow?: number;
   /** Sort newest-first instead of by relevance (the browse-ish default). */
   byModified?: boolean;
+  /**
+   * Match the text of the documents themselves, not just their names and
+   * titles. Off by default: SharePoint's free-text search is full-text
+   * and ranked rather than filtered, so "pump" returns every procedure
+   * that so much as mentions a pump. Someone hunting a phrase inside a
+   * procedure turns this on deliberately.
+   */
+  searchContents?: boolean;
+}
+
+/** KQL-safe: quotes and brackets change the meaning of a query. */
+function sanitizeTerm(word: string): string {
+  return word.replace(/["'()[\]{}]/g, "").trim();
 }
 
 /** The postquery body. Empty text means "everything in scope" (recent). */
 export function buildSearchBody(text: string, opts: SearchOpts): string {
-  const t = text.trim();
   const terms: string[] = [];
-  if (t !== "") terms.push(`${t.replace(/["']/g, " ").trim()}*`);
+  const words = text.split(/\s+/).map(sanitizeTerm).filter((w) => w !== "");
+  if (words.length > 0) {
+    if (opts.searchContents) {
+      // every word must appear somewhere in the document or its metadata
+      terms.push(words.map((w) => `${w}*`).join(" "));
+    } else {
+      // every word must appear in the name or the title — the default,
+      // because that is how people look for a document they know exists
+      for (const w of words) terms.push(`(Title:${w}* OR Filename:${w}*)`);
+    }
+  }
   terms.push("IsDocument:1");
   const ids = opts.listIds.filter((id) => id.trim() !== "");
   if (ids.length === 1) terms.push(`ListID:${ids[0]}`);
@@ -141,7 +163,7 @@ export function buildSearchBody(text: string, opts: SearchOpts): string {
       ],
     },
   };
-  if (opts.byModified || t === "") {
+  if (opts.byModified || words.length === 0) {
     request.SortList = {
       results: [{ Property: "LastModifiedTime", Direction: 1 }],
     };
