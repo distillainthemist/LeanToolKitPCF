@@ -338,7 +338,7 @@ never hard-code. This is what keeps the feature sellable beyond one site.
 | --- | --- | --- |
 | 1 | **Does the SharePoint connector expose its HTTP action from a code app?** | **Closed 2026-07-27: YES — plan A.** pac generates no wrapper, but `executeAsync` resolves operations from the client-side `apis` map; the `HttpRequest` operation, declared locally, executed against the gateway (hosted spike, blocks 3–4) |
 | 2 | Is the connection delegated (per-user)? | Expected: yes, per-user consent on first run; definitive proof is the two-account test in Phase 2 (needs spike 8). See improvement 2 |
-| 3 | Are the DMS custom columns crawled and mapped to managed properties, with the recrawl done? | Gates search *and the navigation tree*. Tenant-admin lead time — raise in week 1 |
+| 3 | Are the DMS custom columns crawled and mapped to managed properties, with the recrawl done? | **Closed 2026-07-28 — better than feared.** SharePoint auto-exposes a taxonomy column as the queryable property `owstaxId<InternalName>` with **no tenant-admin mapping**: verified live (`owstaxIdOrganisation:<termGuid>` → hit) against a UI-created column and tagged documents on the dev tenant, after one crawl cycle (~minutes). GUID matching is the primitive (labels also matched but collide across sets); subtree filtering ORs descendant ids from the term-store walk. Per-tenant confirmation is one click: Settings → Documents → **Test search filtering**. A tenant where that answers all-zero needs the RefinableString mapping — that (plus refiner *counts*, which need refinable properties) is the remaining admin-side item |
 | 4 | Term store readable via `/_api/v2.1/termStore` through the connector, or Graph only? | **Closed 2026-07-27: site-scoped, 200 — no Graph needed** |
 | 5 | Which preview surfaces render inside the Power Apps host iframe? | **Answered 2026-07-27, probing the real file after Ben hit a blocked-file glyph on a PDF.** The raw file URL is served as an attachment, so no browser will frame it — that was the bug. `Doc.aspx?action=embedview` answers an **error page for a PDF** (the Office branch was wrong there too). **`embed.aspx?UniqueId=` returns a real page for both .pdf and .docx, with no `X-Frame-Options` and no `frame-ancestors`** — one endpoint, every type. Fallback: `getpreview.ashx?path=<absolute url>` (NOT `guidFile=`, which 400s) returns PNG bytes for both. Whether the frame paints inside the *player* is Ben's confirmation |
 | 6 | Is `format=pdf` reachable for rendition generation? | **Closed 2026-07-27: yes, and site-scoped** — `/_api/v2.0/drive/items/{id}/content?format=pdf` → 302 presigned URL |
@@ -587,12 +587,20 @@ accounts (spike 8 prerequisite); board chunks unchanged.
   because a cross-origin frame cannot be asked whether it painted, the
   note under it offers a **page image** (`getpreview.ashx?path=`) as a
   guaranteed-render path rather than a dead end.
-- **Scope notes (honest):** org-tree nodes are selection-disabled until a
-  deployment maps crawled → managed properties (tooltip says so); the
-  drafts/superseded toggle applies in browse mode via a documented text
-  heuristic and is disabled where no status column is mapped; favourite
-  moved to Phase 3 where its prefs table lands; tier badge = the Library
-  column/name chip (corporate-tier badging arrives with linkage work).
+- **Organisation filtering went live 2026-07-28** (spike 3 closed): the
+  tree filters via `owstaxId<Column>:<termGuid>` — node + subtree ORed,
+  search mode forced (list REST cannot filter by taxonomy), a clearable
+  chip shows the active filter, and the viewer's own site / department /
+  area preselects when labels line up (offset-tolerant for
+  company-rooted sets). Nodes stay disabled with a pointer to Settings
+  until some column carries the *Organisation unit* role. Settings
+  gained **Test search filtering** — live per-term counts through the
+  exact query the nav uses, the per-tenant mapping check.
+- **Scope notes (honest):** the drafts/superseded toggle applies in
+  browse mode via a documented text heuristic and is disabled where no
+  status column is mapped; favourite moved to Phase 3 where its prefs
+  table lands; tier badge = the Library column/name chip (corporate-tier
+  badging arrives with linkage work).
 - **Perf proof** (`app/docs-list.html`, driving the real `listView.ts`):
   1,000 rows appended in 51 ms (worst page 6 ms), initial full layout
   164 ms one-time, mid-list scroll + forced layout 10.8 ms — 8/8 checks.
