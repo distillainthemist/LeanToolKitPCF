@@ -122,6 +122,14 @@ function route(): void {
   cleanup = () => undefined;
   setLeaveGuard(null); // the outgoing screen's guard never outlives it
   clear(outlet);
+  // every route mounts into its OWN root. Screens fetch before painting
+  // and append to their parent after the await, mostly without a dead
+  // flag — so a screen superseded mid-fetch used to drop its UI into the
+  // shared outlet under the next screen (the "two screens stacked" bug).
+  // With a per-route root, a late append lands in a detached node.
+  // display:contents keeps the outlet's flex layout applying directly.
+  const screenRoot = el("div", "app-screen-root");
+  outlet.appendChild(screenRoot);
   const hash = window.location.hash || "#/";
   const parts = hash.slice(2).split("/").filter(Boolean); // drop "#/"
 
@@ -145,38 +153,38 @@ function route(): void {
       let mount: () => () => void;
       if (parts[0] === "board" && parts[1]) {
         const { mountBoard } = await import("./screens/board");
-        mount = () => mountBoard(outlet, parts[1], decodeURIComponent(parts[2] ?? ""));
+        mount = () => mountBoard(screenRoot, parts[1], decodeURIComponent(parts[2] ?? ""));
       } else if (parts[0] === "setup" && parts[1]) {
         const { mountComposer } = await import("./screens/composer");
-        mount = () => mountComposer(outlet, parts[1], parts[2] === "new");
+        mount = () => mountComposer(screenRoot, parts[1], parts[2] === "new");
       } else if (parts[0] === "adjust" && parts[1] && parts[2]) {
         const { mountInstanceComposer } = await import("./screens/composer");
-        mount = () => mountInstanceComposer(outlet, parts[1], parts[2]);
+        mount = () => mountInstanceComposer(screenRoot, parts[1], parts[2]);
       } else if (parts[0] === "edit" && parts[1] && parts[2] && parts[3]) {
         const { mountCardEditor } = await import("./screens/cardEditor");
-        mount = () => mountCardEditor(outlet, parts[1], parts[2], parts[3]);
+        mount = () => mountCardEditor(screenRoot, parts[1], parts[2], parts[3]);
       } else if (parts[0] === "boards") {
         const { mountBoards } = await import("./screens/boards");
-        mount = () => mountBoards(outlet);
+        mount = () => mountBoards(screenRoot);
       } else if (parts[0] === "wizard") {
         const { mountWizard } = await import("./screens/wizard");
-        mount = () => mountWizard(outlet, parts[1] ?? "");
+        mount = () => mountWizard(screenRoot, parts[1] ?? "");
       } else if (parts[0] === "people") {
         const { mountPeople } = await import("./screens/people");
-        mount = () => mountPeople(outlet);
+        mount = () => mountPeople(screenRoot);
       } else if (parts[0] === "settings") {
         const { mountSettings } = await import("./screens/settings");
-        mount = () => mountSettings(outlet, parts[1] ?? "");
+        mount = () => mountSettings(screenRoot, parts[1] ?? "");
       } else if (parts[0] === "docs") {
         const { mountDocs } = await import("./docs/docsScreen");
-        mount = () => mountDocs(outlet, parts[1] ?? "");
+        mount = () => mountDocs(screenRoot, parts[1] ?? "");
       } else if (parts[0] === "docs-spike") {
         // Phase 0 runtime spike (Standard Documents plan) — temporary
         const { mountDocsSpike } = await import("./docs/spike");
-        mount = () => mountDocsSpike(outlet);
+        mount = () => mountDocsSpike(screenRoot);
       } else {
         const { mountHub } = await import("./screens/hub");
-        mount = () => mountHub(outlet);
+        mount = () => mountHub(screenRoot);
       }
       if (token !== routeToken) return; // superseded — do not mount
       cleanup = mount();
@@ -184,7 +192,7 @@ function route(): void {
       if (token !== routeToken) return;
       const box = el("pre", "app-missing");
       box.textContent = `Screen failed to load:\n${err instanceof Error ? (err.stack ?? err.message) : String(err)}`;
-      outlet.appendChild(box);
+      screenRoot.appendChild(box);
     }
   })();
 }

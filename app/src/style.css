@@ -46,6 +46,9 @@ body {
 .app-link:hover { color: #26241f; }
 .app-link-on { background: var(--app-accent); color: #fff; }
 
+/* per-route mount root (main.ts route()) — transparent to layout so the
+   outlet's flex column applies to screen children directly */
+.app-screen-root { display: contents; }
 .app-outlet {
   flex: 1;
   min-height: 0;
