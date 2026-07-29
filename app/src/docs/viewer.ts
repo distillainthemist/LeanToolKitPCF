@@ -113,14 +113,40 @@ export function openDocViewer(opts: ViewerOpts): void {
       setTimeout(() => (copy.textContent = "Copy PDF link"), 1500);
     });
   });
+  // print: a blob-rendered PDF is same-origin, so the frame prints in
+  // place; anything else opens the PDF in a new tab to print from there
+  // (a cross-origin frame cannot be scripted — stated, not silent)
+  const print = el("button", "app-btn", "Print") as HTMLButtonElement;
+  print.title =
+    "A PDF prints right here; an Office document opens its PDF rendering " +
+    "in a new tab to print from.";
+  print.addEventListener("click", () => {
+    if (activeFrame !== null && activeIsBlob) {
+      activeFrame.contentWindow?.focus();
+      activeFrame.contentWindow?.print();
+    } else {
+      window.open(pdfUrl, "_blank", "noopener");
+    }
+  });
   const mail = linkBtn(
     "Email PDF link",
     `mailto:?subject=${encodeURIComponent(row.name)}&body=${encodeURIComponent(pdfUrl)}`
   );
   mail.target = "_self"; // mailto in a new tab leaves a blank window behind
-  actions.append(copy, mail);
+  // Teams share: the compose deep link — no API, no consent, works
+  // wherever Teams is signed in (FR: share via email or Teams message)
+  const teams = linkBtn(
+    "Share to Teams",
+    "https://teams.microsoft.com/l/chat/0/0?users=&message=" +
+      encodeURIComponent(`${row.name}: ${pdfUrl}`)
+  );
+  actions.append(copy, print, mail, teams);
   panel.appendChild(actions);
 
+  // the live preview frame + whether its src is a same-origin blob (the
+  // Print action can only script that case)
+  let activeFrame: HTMLIFrameElement | null = null;
+  let activeIsBlob = false;
   // one item lookup shared by both painters, started on first need
   let presignedOnce: ReturnType<typeof presignedUrls> | null = null;
   const presigned = () => (presignedOnce ??= presignedUrls(site, opts.driveId, row));
@@ -162,6 +188,8 @@ export function openDocViewer(opts: ViewerOpts): void {
       const frame = el("iframe", "app-docs-viewframe") as HTMLIFrameElement;
       frame.src = src;
       frame.title = row.name;
+      activeFrame = frame;
+      activeIsBlob = src.startsWith("blob:");
       // the page image is one click away rather than a dead end (a
       // cross-origin frame cannot be asked whether it painted)
       stage.appendChild(frame);
@@ -182,6 +210,8 @@ export function openDocViewer(opts: ViewerOpts): void {
       const p = await presigned();
       if (gen !== paintGen) return;
       clear(stage);
+      activeFrame = null;
+      activeIsBlob = false;
       const img = el("img", "app-docs-viewimg") as HTMLImageElement;
       // presigned page-one image; getpreview.ashx (cookie-auth'd) only
       // when the item lookup came back empty

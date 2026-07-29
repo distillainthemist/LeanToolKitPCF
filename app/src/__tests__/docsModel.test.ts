@@ -12,8 +12,10 @@ import {
   orgTreePaths,
   parseAppDocsConfig,
   parseLibraryConfig,
+  seedDefaultColumns,
   serializeAppDocsConfig,
   serializeLibraryConfig,
+  suggestRoles,
 } from "../docs/model";
 
 describe("library config", () => {
@@ -21,8 +23,8 @@ describe("library config", () => {
     const cfg = {
       title: "Standards",
       columns: [
-        { internal: "DMSStatus", label: "Status", available: true, inDefault: true, role: "status" },
-        { internal: "DMSOwner", label: "", available: false, inDefault: false, role: "owner" },
+        { internal: "DMSStatus", label: "Status", available: true, inDefault: true, role: "status", termSetId: "set-1" },
+        { internal: "DMSOwner", label: "", available: false, inDefault: false, role: "owner", termSetId: "" },
       ],
       statusColors: { Current: "good", Draft: "neutral" },
       renditionPath: "Renditions",
@@ -35,7 +37,9 @@ describe("library config", () => {
     expect(raw).toBe("{}");
     const one = serializeLibraryConfig({
       ...emptyLibraryConfig(),
-      columns: [{ internal: "Title", label: "", available: true, inDefault: false, role: "" }],
+      columns: [
+        { internal: "Title", label: "", available: true, inDefault: false, role: "", termSetId: "" },
+      ],
     });
     expect(JSON.parse(one)).toEqual({ columns: [{ internal: "Title" }] });
   });
@@ -138,8 +142,8 @@ describe("SharePoint response mapping", () => {
   it("merges stored config over live fields — stored wins, new appends, vanished drops", () => {
     const merged = mergeColumns(
       [
-        { internal: "DMSStatus", label: "Status!", available: true, inDefault: true, role: "status" },
-        { internal: "Vanished", label: "", available: true, inDefault: false, role: "" },
+        { internal: "DMSStatus", label: "Status!", available: true, inDefault: true, role: "status", termSetId: "" },
+        { internal: "Vanished", label: "", available: true, inDefault: false, role: "", termSetId: "" },
       ],
       [
         { internal: "Title", title: "Name", type: "Text", choices: [], isTaxonomy: false, termSetId: "" },
@@ -148,7 +152,84 @@ describe("SharePoint response mapping", () => {
     );
     expect(merged.map((c) => c.internal)).toEqual(["DMSStatus", "Title"]);
     expect(merged[0].label).toBe("Status!");
-    expect(merged[1]).toEqual({ internal: "Title", label: "", available: true, inDefault: false, role: "" });
+    expect(merged[1]).toEqual({
+      internal: "Title",
+      label: "",
+      available: true,
+      inDefault: false,
+      role: "",
+      termSetId: "",
+    });
+  });
+
+  it("the live schema stamps termSetId; a blind live read keeps the stored one", () => {
+    const merged = mergeColumns(
+      [
+        { internal: "DMSOrgUnit", label: "", available: true, inDefault: false, role: "orgUnit", termSetId: "old-set" },
+        { internal: "DMSTags", label: "", available: true, inDefault: false, role: "tags", termSetId: "kept-set" },
+      ],
+      [
+        { internal: "DMSOrgUnit", title: "Org", type: "TaxonomyFieldType", choices: [], isTaxonomy: true, termSetId: "new-set" },
+        { internal: "DMSTags", title: "Tags", type: "TaxonomyFieldTypeMulti", choices: [], isTaxonomy: true, termSetId: "" },
+      ]
+    );
+    expect(merged[0].termSetId).toBe("new-set");
+    expect(merged[1].termSetId).toBe("kept-set");
+  });
+});
+
+describe("role suggestion + register defaults (Phase 3a)", () => {
+  const col = (internal: string, role = "", inDefault = false) => ({
+    internal,
+    label: "",
+    available: true,
+    inDefault,
+    role,
+    termSetId: "",
+  });
+
+  it("fills unset roles from the spec's DMS* names, never overwriting", () => {
+    const out = suggestRoles([
+      col("DMSStatus"),
+      col("DMSOwner", "approvers"), // hand-set: stays
+      col("SomethingElse"),
+    ]);
+    expect(out.map((c) => c.role)).toEqual(["status", "approvers", ""]);
+  });
+
+  it("seeds the register view per type when nothing is ticked", () => {
+    const cfg = {
+      ...emptyLibraryConfig(),
+      columns: [
+        col("DMSDocumentType", "docType"),
+        col("DMSOwner", "owner"),
+        col("DMSStatus", "status"),
+        col("DMSEffectiveDate", "effectiveDate"),
+        col("DMSTags", "tags"),
+      ],
+    };
+    const std = seedDefaultColumns(cfg, "standard");
+    expect(std.columns.filter((c) => c.inDefault).map((c) => c.internal)).toEqual([
+      "DMSDocumentType",
+      "DMSOwner",
+      "DMSStatus",
+      "DMSEffectiveDate",
+    ]);
+    // working documents lean on the built-in Modified column instead
+    const work = seedDefaultColumns(cfg, "working");
+    expect(work.columns.filter((c) => c.inDefault).map((c) => c.internal)).toEqual([
+      "DMSDocumentType",
+      "DMSOwner",
+      "DMSStatus",
+    ]);
+  });
+
+  it("never touches a config someone has ticked", () => {
+    const cfg = {
+      ...emptyLibraryConfig(),
+      columns: [col("DMSTags", "tags", true), col("DMSStatus", "status")],
+    };
+    expect(seedDefaultColumns(cfg, "standard")).toBe(cfg);
   });
 });
 

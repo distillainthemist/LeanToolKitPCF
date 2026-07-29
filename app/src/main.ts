@@ -175,14 +175,9 @@ function route(): void {
       } else if (parts[0] === "settings") {
         const { mountSettings } = await import("./screens/settings");
         mount = () => mountSettings(screenRoot, parts[1] ?? "");
-      } else if (parts[0] === "docs") {
-        const { mountDocs } = await import("./docs/docsScreen");
-        mount = () => mountDocs(screenRoot, parts[1] ?? "");
-      } else if (parts[0] === "docs-spike") {
-        // Phase 0 runtime spike (Standard Documents plan) — temporary
-        const { mountDocsSpike } = await import("./docs/spike");
-        mount = () => mountDocsSpike(screenRoot);
       } else {
+        // "#/docs" lands here too: the hub fronts its Documents tab for
+        // old bookmarks — the standalone page (no app chrome) is retired
         const { mountHub } = await import("./screens/hub");
         mount = () => mountHub(screenRoot);
       }

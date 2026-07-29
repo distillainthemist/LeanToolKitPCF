@@ -137,7 +137,7 @@ describe("search", () => {
     const one = JSON.parse(
       buildSearchBody("", {
         listIds: ["l1"],
-        termFilter: { properties: ["owstaxIdOrganisation"], termIds: ["t1"] },
+        termFilters: [{ properties: ["owstaxIdOrganisation"], termIds: ["t1"] }],
       })
     );
     expect(one.request.Querytext).toBe("IsDocument:1 ListID:l1 owstaxIdOrganisation:t1");
@@ -145,7 +145,7 @@ describe("search", () => {
     const subtree = JSON.parse(
       buildSearchBody("pump", {
         listIds: ["l1"],
-        termFilter: { properties: ["owstaxIdOrganisation"], termIds: ["t1", "t2"] },
+        termFilters: [{ properties: ["owstaxIdOrganisation"], termIds: ["t1", "t2"] }],
       })
     );
     expect(subtree.request.Querytext).toBe(
@@ -156,10 +156,27 @@ describe("search", () => {
     const empty = JSON.parse(
       buildSearchBody("", {
         listIds: ["l1"],
-        termFilter: { properties: [], termIds: ["t1"] },
+        termFilters: [{ properties: [], termIds: ["t1"] }],
       })
     );
     expect(empty.request.Querytext).toBe("IsDocument:1 ListID:l1");
+  });
+
+  it("ANDs filters across columns, ORs terms within one (Phase 3a)", () => {
+    const two = JSON.parse(
+      buildSearchBody("", {
+        listIds: ["l1"],
+        termFilters: [
+          { properties: ["owstaxIdDMSOrgUnit"], termIds: ["o1", "o2"] },
+          { properties: ["owstaxIdDMSProcess"], termIds: ["p1"] },
+        ],
+      })
+    );
+    // both clauses present = both must match (KQL terms are ANDed)
+    expect(two.request.Querytext).toBe(
+      "IsDocument:1 ListID:l1 (owstaxIdDMSOrgUnit:o1 OR owstaxIdDMSOrgUnit:o2) " +
+        "owstaxIdDMSProcess:p1"
+    );
   });
 
   it("re-orders a level-by-level term walk into render (depth-first) order", () => {

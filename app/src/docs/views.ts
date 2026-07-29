@@ -4,19 +4,37 @@
 // A shared link carries the view STATE, not a saved-view id — saved views
 // are per person, so a link to "my" view would be dead for the recipient.
 
+/** One taxonomy-column filter (Phase 3a): the column's internal name,
+ *  the picked term, and the term's label path for display. Subtree ids
+ *  are recomputed from the term walk at apply time — a link carries the
+ *  pick, not the tenant's tree. */
+export interface DocFilter {
+  col: string;
+  termId: string;
+  path: string[];
+}
+
 export interface DocView {
   /** Display name ("" for the transient state a link carries). */
   name: string;
   /** Library list id, "" = all documents. */
   listId: string;
   query: string;
-  /** "Search inside documents" toggle. */
+  /** "Search everything" toggle (contents and all fields). */
   contents: boolean;
   /** "Include drafts & superseded" toggle. */
   nonCurrent: boolean;
-  /** Organisation term id ("" = no filter) + its label path for display. */
+  /** Organisation term id ("" = no filter) + its label path for display.
+   *  Kept as its own slot so pre-3a links keep opening; the screen folds
+   *  it into the same filter list as `filters`. */
   orgTermId: string;
   orgPath: string[];
+  /** Taxonomy filters beyond the organisation (Phase 3a). */
+  filters: DocFilter[];
+  /** Column internal names shown, in order; [] = the library default. */
+  columns: string[];
+  /** Column internal name driving the nav tree; "" = organisation. */
+  groupBy: string;
 }
 
 export function emptyDocView(): DocView {
@@ -28,6 +46,9 @@ export function emptyDocView(): DocView {
     nonCurrent: false,
     orgTermId: "",
     orgPath: [],
+    filters: [],
+    columns: [],
+    groupBy: "",
   };
 }
 
@@ -42,8 +63,16 @@ function viewToJson(v: DocView): Record<string, unknown> {
   if (v.nonCurrent) o.d = 1;
   if (v.orgTermId !== "") o.o = v.orgTermId;
   if (v.orgPath.length > 0) o.p = v.orgPath;
+  if (v.filters.length > 0) {
+    o.f = v.filters.map((f) => ({ c: f.col, t: f.termId, p: f.path }));
+  }
+  if (v.columns.length > 0) o.k = v.columns;
+  if (v.groupBy !== "") o.g = v.groupBy;
   return o;
 }
+
+const asStrings = (v: unknown): string[] =>
+  Array.isArray(v) ? (v as unknown[]).map(asStr).filter((s) => s !== "") : [];
 
 function viewFromJson(raw: unknown): DocView {
   const out = emptyDocView();
@@ -55,7 +84,19 @@ function viewFromJson(raw: unknown): DocView {
   out.contents = o.c === 1 || o.c === true;
   out.nonCurrent = o.d === 1 || o.d === true;
   out.orgTermId = asStr(o.o);
-  out.orgPath = Array.isArray(o.p) ? (o.p as unknown[]).map(asStr).filter((s) => s !== "") : [];
+  out.orgPath = asStrings(o.p);
+  if (Array.isArray(o.f)) {
+    for (const item of o.f as unknown[]) {
+      if (!item || typeof item !== "object") continue;
+      const fo = item as Record<string, unknown>;
+      const col = asStr(fo.c);
+      const termId = asStr(fo.t);
+      if (col === "" || termId === "") continue;
+      out.filters.push({ col, termId, path: asStrings(fo.p) });
+    }
+  }
+  out.columns = asStrings(o.k);
+  out.groupBy = asStr(o.g);
   return out;
 }
 

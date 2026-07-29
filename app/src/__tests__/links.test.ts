@@ -41,16 +41,8 @@ describe("launchTarget", () => {
     expect(launchTarget()).toBe("");
   });
 
-  it("routes to a whitelisted screen, beating a ritual param", () => {
-    setAppHost({
-      ...HOST,
-      queryParams: { Screen: "docs-spike", ritual: "ritual-2" },
-    });
-    expect(launchTarget()).toBe("#/docs-spike");
-  });
-
-  it("ignores screens not on the whitelist", () => {
-    setAppHost({ ...HOST, queryParams: { screen: "settings" } });
+  it("ignores the retired screen param (the docs spike is gone)", () => {
+    setAppHost({ ...HOST, queryParams: { screen: "docs-spike" } });
     expect(launchTarget()).toBe("");
   });
 

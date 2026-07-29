@@ -687,7 +687,28 @@ Favourites; Export downloads a sensible CSV; add both cards to a board —
 tiles paint instantly from stored SVG, content arrives a beat later,
 Document health shows the mapped review dates or the explanatory note.
 
-### Phase 3a — UI closure against the original specification (PROPOSED 2026-07-30, awaiting Ben's review)
+### Phase 3a — UI closure against the original specification (BUILT 2026-07-30 — Ben approved the plan; hosted verification pending)
+
+**Status:** all five workstreams implemented in one pass (270 tests, gate
+OK, perf harness 8/8 at 41 ms/1,000 rows). Delivered: `DocView` carries
+`filters`/`columns`/`groupBy` (pre-3a payload round-trip proven by
+test); `ColumnConfig.termSetId` persisted (live schema wins on merge);
+role auto-suggestion from the spec's `DMS*` internal names + per-type
+register-default seeding (never touches a ticked config); the group-by
+tree over any taxonomy column with carets/collapse; "＋ Filter" chips via
+`owstaxId`, ANDed in `buildSearchBody(termFilters[])`; "Choose columns…"
+in the top kebab riding view state; viewer Print (blob frames print in
+place, office opens the PDF tab — titled) + Share to Teams deep link;
+"Search everything" copy; filter selections restyled to a tinted accent
+(filled = scope only); saved-view rows on the kebab convention with
+"＋ Save view"; humane status/empty copy; skeleton first-load rows;
+standalone `#/docs` + `docs-spike` + the `screen` param retired (old
+`#/docs` bookmarks land on the hub's Documents tab).
+**Hosted checks (Ben):** v0.23 saved links open unchanged; tree groups
+by Document type and back; two filters AND correctly (org + process);
+column chooser sticks in a saved view's link; Print from a PDF and a
+docx; Teams share lands in a compose window; a fresh library configure
+auto-fills roles + register columns.
 
 An independent audit of the shipped UI (v0.23) against the original
 specification's **User Experience & Interaction** section, plus a Flat 2.0

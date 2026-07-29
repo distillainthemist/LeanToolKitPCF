@@ -26,6 +26,8 @@ import {
   mergeColumns,
   orgDrift,
   orgTreePaths,
+  seedDefaultColumns,
+  suggestRoles,
 } from "./model";
 import {
   fetchFields,
@@ -163,7 +165,10 @@ export async function renderDocsSettings(body: HTMLElement, ctx: Ctx): Promise<v
     if (live.length === 0) {
       host.appendChild(note("Columns could not be loaded (see the site URL, or try again in the hosted app)."));
     }
-    lib.config.columns = mergeColumns(lib.config.columns, live);
+    // merge live schema, fill unset roles from the spec's DMS* names,
+    // then seed the register defaults if nobody has ticked columns yet
+    lib.config.columns = suggestRoles(mergeColumns(lib.config.columns, live));
+    lib.config = seedDefaultColumns(lib.config, lib.libType);
     const liveByName = new Map(live.map((f) => [f.internal, f]));
 
     const title = el("input", "app-input") as HTMLInputElement;
@@ -184,6 +189,12 @@ export async function renderDocsSettings(body: HTMLElement, ctx: Ctx): Promise<v
     type.value = lib.libType;
     type.addEventListener("change", () => {
       lib.libType = type.value as LibraryType;
+      // an untouched column set follows the type's register defaults
+      const seeded = seedDefaultColumns(lib.config, lib.libType);
+      if (seeded !== lib.config) {
+        lib.config = seeded;
+        void configPanel(lib, host); // repaint the grid's ticks
+      }
       ctx.markDirty();
     });
     host.appendChild(
@@ -640,7 +651,7 @@ export async function renderDocsSettings(body: HTMLElement, ctx: Ctx): Promise<v
           const res = await searchPage(app.siteUrl, "", {
             listIds,
             rowLimit: 1,
-            termFilter: { properties: props, termIds: ids },
+            termFilters: [{ properties: props, termIds: ids }],
           });
           hits += res.total;
           lines.push(

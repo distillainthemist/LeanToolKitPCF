@@ -57,6 +57,10 @@ export interface ColumnConfig {
   inDefault: boolean;
   /** Document-management role ("" = none). */
   role: string;
+  /** Term set behind a taxonomy column ("" = not taxonomy / unknown).
+   *  Persisted so the Documents area can group and filter by the column
+   *  without re-reading the field schema (Phase 3a). */
+  termSetId: string;
 }
 
 /** Per-library configuration (ben_configjson on a library row). */
@@ -112,6 +116,7 @@ export function parseLibraryConfig(raw: string | null | undefined): LibraryConfi
           available: col.available !== false,
           inDefault: col.inDefault === true,
           role: asStr(col.role),
+          termSetId: asStr(col.termSetId),
         });
       }
     }
@@ -139,6 +144,7 @@ export function serializeLibraryConfig(cfg: LibraryConfig): string {
     if (!c.available) col.available = false;
     if (c.inDefault) col.inDefault = true;
     if (c.role !== "") col.role = c.role;
+    if (c.termSetId !== "") col.termSetId = c.termSetId;
     return col;
   });
   if (cols.length > 0) o.columns = cols;
@@ -281,15 +287,79 @@ export function mergeColumns(stored: ColumnConfig[], live: SpField[]): ColumnCon
   const liveByName = new Map(live.map((f) => [f.internal, f]));
   const out: ColumnConfig[] = [];
   for (const c of stored) {
-    if (liveByName.has(c.internal)) {
-      out.push({ ...c });
+    const f = liveByName.get(c.internal);
+    if (f !== undefined) {
+      // the live schema wins on termSetId (SharePoint is the record);
+      // keep the stored value only when the live read could not see one
+      out.push({ ...c, termSetId: f.termSetId !== "" ? f.termSetId : c.termSetId });
       liveByName.delete(c.internal);
     }
   }
   for (const f of liveByName.values()) {
-    out.push({ internal: f.internal, label: "", available: true, inDefault: false, role: "" });
+    out.push({
+      internal: f.internal,
+      label: "",
+      available: true,
+      inDefault: false,
+      role: "",
+      termSetId: f.termSetId,
+    });
   }
   return out;
+}
+
+/** The spec's column table, by internal name — exact matches fill a
+ *  role the super admin has not set. Suggestion only: an assigned role
+ *  is never overwritten, and any name can be re-mapped by hand. */
+const ROLE_BY_INTERNAL: Record<string, string> = {
+  DMSDocumentID: "documentId",
+  DMSDocumentType: "docType",
+  DMSOwner: "owner",
+  DMSApprovers: "approvers",
+  DMSReviewers: "reviewers",
+  DMSImportance: "importance",
+  DMSStatus: "status",
+  DMSEffectiveDate: "effectiveDate",
+  DMSNextReviewDate: "nextReviewDate",
+  DMSRegulatorApproved: "regulatorApproved",
+  DMSRegulatorReturnedPDF: "regulatorPdf",
+  DMSTags: "tags",
+  DMSOrgUnit: "orgUnit",
+  DMSProcess: "process",
+  DMSManagementProcess: "managementProcess",
+  DMSLinkedDocuments: "linkedDocuments",
+  DMSPriorNames: "priorNames",
+  DMSPriorID: "priorIds",
+  DMSDistributionAudience: "distribution",
+  DMSAcknowledgementRequired: "ackRequired",
+  DMSReviewCadenceMonths: "reviewCadence",
+  DMSRetainUntil: "retainUntil",
+};
+
+export function suggestRoles(cols: ColumnConfig[]): ColumnConfig[] {
+  return cols.map((c) =>
+    c.role === "" && ROLE_BY_INTERNAL[c.internal] !== undefined
+      ? { ...c, role: ROLE_BY_INTERNAL[c.internal] }
+      : c
+  );
+}
+
+/** The spec's core register view, seeded from column roles when a
+ *  library has no default ticks at all (first configure, or a type
+ *  change before anyone chose columns): document type, owner, status —
+ *  plus the effective date for standards and records ("date of approval
+ *  / addition"). Working documents lean on the built-in Modified column
+ *  the list appends anyway. Never touches a config someone has ticked. */
+export function seedDefaultColumns(cfg: LibraryConfig, libType: string): LibraryConfig {
+  if (cfg.columns.some((c) => c.inDefault)) return cfg;
+  const roles = new Set(["docType", "owner", "status"]);
+  if (libType === "standard" || libType === "record") roles.add("effectiveDate");
+  return {
+    ...cfg,
+    columns: cfg.columns.map((c) =>
+      roles.has(c.role) ? { ...c, inDefault: true } : c
+    ),
+  };
 }
 
 // ---- org ↔ term set drift ----------------------------------------------

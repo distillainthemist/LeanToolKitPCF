@@ -164,11 +164,11 @@ export function mountDocs(
     const contents = el("label", "app-docs-check");
     const contentsBox = el("input", "") as HTMLInputElement;
     contentsBox.type = "checkbox";
-    contents.append(contentsBox, document.createTextNode(" Search inside documents"));
+    contents.append(contentsBox, document.createTextNode(" Search everything"));
     contents.title =
       "Off, this matches document names and titles — how you look for something " +
-      "you know exists. On, it also matches the text inside every document, " +
-      "which finds far more.";
+      "you know exists. On, it matches everything the index knows: the text " +
+      "inside every document and the value of every field — which finds far more.";
     const nonCurrent = el("label", "app-docs-check app-docs-noncurrent");
     const nonCurrentBox = el("input", "") as HTMLInputElement;
     nonCurrentBox.type = "checkbox";
@@ -263,46 +263,69 @@ export function mountDocs(
           pendingView = v;
           remount();
         });
-        const link = el("button", "app-docs-viewbtn", "⧉") as HTMLButtonElement;
-        link.title = "Copy a link that opens this view";
-        link.addEventListener("click", () => {
-          void navigator.clipboard.writeText(docsViewUrl(encodeDocView(v)));
-          link.textContent = "✓";
-          setTimeout(() => (link.textContent = "⧉"), 1200);
+        // secondary actions ride the app's kebab convention
+        const kb = el("button", "app-kebab app-docs-viewkebab", "⋮") as HTMLButtonElement;
+        kb.setAttribute("aria-label", `${v.name} actions`);
+        kb.addEventListener("click", (e) => {
+          e.stopPropagation();
+          if (menu) {
+            closeMenu();
+            return;
+          }
+          menu = el("div", "app-docs-menu");
+          const item = (label: string, onPick: () => void) => {
+            const b = el("button", "app-docs-menuitem", label) as HTMLButtonElement;
+            b.addEventListener("click", () => {
+              closeMenu();
+              onPick();
+            });
+            menu!.appendChild(b);
+          };
+          item("Copy link to this view", () => {
+            void navigator.clipboard.writeText(docsViewUrl(encodeDocView(v)));
+            status.textContent = "Link copied ✓";
+          });
+          item("Delete view", () => {
+            void deleteDocView(whoId, v.name).then((list) => {
+              if (dead) return;
+              savedViews = list;
+              paintViews();
+            });
+          });
+          const r = kb.getBoundingClientRect();
+          menu.style.top = `${r.bottom + 4}px`;
+          menu.style.left = `${Math.max(8, r.right - 200)}px`;
+          document.body.appendChild(menu);
         });
-        const x = el("button", "app-docs-viewbtn", "×") as HTMLButtonElement;
-        x.title = "Delete this view";
-        x.addEventListener("click", () => {
-          void deleteDocView(whoId, v.name).then((list) => {
+        row.append(open, kb);
+        viewsBox.appendChild(row);
+      }
+      // one button; the name input appears only when saving
+      const saveBtn = el("button", "app-docs-navterm app-docs-saveview", "＋ Save view") as HTMLButtonElement;
+      saveBtn.title = "Save the current filter as a view";
+      saveBtn.addEventListener("click", () => {
+        if (whoId === "" || favMode) return;
+        const saveRow = el("div", "app-docs-viewrow");
+        const nameIn = el("input", "app-input app-docs-viewname") as HTMLInputElement;
+        nameIn.placeholder = "View name…";
+        const commit = () => {
+          const name = nameIn.value.trim();
+          if (name === "") return;
+          void saveDocView(whoId, { ...currentView(), name }).then((list) => {
             if (dead) return;
             savedViews = list;
             paintViews();
           });
+        };
+        nameIn.addEventListener("keydown", (e) => {
+          if (e.key === "Enter") commit();
+          if (e.key === "Escape") paintViews();
         });
-        row.append(open, link, x);
-        viewsBox.appendChild(row);
-      }
-      // save the current filter under a name (inline, no dialog)
-      const saveRow = el("div", "app-docs-viewrow");
-      const nameIn = el("input", "app-input app-docs-viewname") as HTMLInputElement;
-      nameIn.placeholder = "Save current view…";
-      const ok = el("button", "app-docs-viewbtn", "＋") as HTMLButtonElement;
-      ok.title = "Save the current filter as a view";
-      const commit = () => {
-        const name = nameIn.value.trim();
-        if (name === "" || whoId === "" || favMode) return;
-        void saveDocView(whoId, { ...currentView(), name }).then((list) => {
-          if (dead) return;
-          savedViews = list;
-          paintViews();
-        });
-      };
-      ok.addEventListener("click", commit);
-      nameIn.addEventListener("keydown", (e) => {
-        if (e.key === "Enter") commit();
+        saveRow.appendChild(nameIn);
+        saveBtn.replaceWith(saveRow);
+        nameIn.focus();
       });
-      saveRow.append(nameIn, ok);
-      viewsBox.appendChild(saveRow);
+      viewsBox.appendChild(saveBtn);
     };
     if (whoId !== "") {
       void docPrefs(whoId).then((p) => {
@@ -314,28 +337,50 @@ export function mountDocs(
         if (favMode) void load(true); // favourites arrived — paint them
       });
     }
-    // ---- organisation tree — a real filter now -------------------------
+    // ---- taxonomy filters + the group-by tree (Phase 3a) ---------------
     // Filtering keys on the auto-created owstaxId<Column> property with
     // term GUIDs (verified 2026-07-28: no admin mapping needed on the dev
     // tenant). A GUID matches only its exact term, so picking a node ORs
-    // the node with its whole subtree — the walk yields it anyway.
+    // the node with its whole subtree — the walk yields it anyway. The
+    // organisation filter of Phase 2 is now one entry in a general list:
+    // any taxonomy column with a known term set can filter, and any of
+    // them can drive the tree.
     const orgCols = new Set<string>();
     for (const lib of libraries) {
       for (const c of lib.config.columns) if (c.role === "orgUnit") orgCols.add(c.internal);
     }
     const orgProps = [...orgCols].map(taxonomySearchProperty);
-    let termNodes: TermNode[] = [];
-    let orgFilter: { node: TermNode; ids: string[] } | null = null;
-    const orgButtons = new Map<string, HTMLElement>();
 
-    const paintOrgSelection = () => {
-      for (const [id, btn] of orgButtons) {
-        btn.classList.toggle("app-docs-navterm-on", orgFilter?.node.id === id);
+    /** Taxonomy columns beyond the organisation, unioned across the
+     *  exposed libraries: internal → display label + term set. */
+    const taxCols = new Map<string, { label: string; setId: string }>();
+    for (const lib of libraries) {
+      for (const c of lib.config.columns) {
+        if (!c.available || c.termSetId === "" || c.role === "orgUnit") continue;
+        if (!taxCols.has(c.internal)) {
+          taxCols.set(c.internal, { label: c.label || c.internal, setId: c.termSetId });
+        }
       }
-    };
+    }
+    /** col "" = the organisation (its own slot in links). */
+    const colLabel = (col: string): string =>
+      col === "" ? "Organisation" : (taxCols.get(col)?.label ?? col);
+    const setFor = (col: string): string =>
+      col === "" ? app.orgSetId : (taxCols.get(col)?.setId ?? "");
+    const propsFor = (col: string): string[] =>
+      col === "" ? orgProps : [taxonomySearchProperty(col)];
 
-    const subtreeIds = (node: TermNode): string[] =>
-      termNodes
+    interface ActiveFilter {
+      col: string;
+      node: TermNode;
+      ids: string[];
+    }
+    let filters: ActiveFilter[] = [];
+    const filterFor = (col: string): ActiveFilter | null =>
+      filters.find((f) => f.col === col) ?? null;
+
+    const subtreeIdsIn = (nodes: TermNode[], node: TermNode): string[] =>
+      nodes
         .filter(
           (n) =>
             n.id === node.id ||
@@ -344,11 +389,27 @@ export function mountDocs(
         )
         .map((n) => n.id);
 
-    const applyOrg = (node: TermNode | null) => {
-      orgFilter = node === null ? null : { node, ids: subtreeIds(node) };
-      paintOrgSelection();
-      paintChip();
+    /** Set/replace (node) or clear (null) the filter on one column. */
+    const applyFilter = (col: string, node: TermNode | null, nodes: TermNode[]) => {
+      filters = filters.filter((f) => f.col !== col);
+      if (node !== null) filters.push({ col, node, ids: subtreeIdsIn(nodes, node) });
+      paintTreeSelection();
+      paintChips();
       void load(true);
+    };
+
+    // ---- the tree ------------------------------------------------------
+    let groupBy = bootView?.groupBy ?? "";
+    if (groupBy !== "" && !taxCols.has(groupBy)) groupBy = "";
+    let treeNodes: TermNode[] = [];
+    const treeButtons = new Map<string, HTMLElement>();
+    const collapsed = new Set<string>();
+
+    const paintTreeSelection = () => {
+      const active = filterFor(groupBy);
+      for (const [id, btn] of treeButtons) {
+        btn.classList.toggle("app-docs-navterm-on", active?.node.id === id);
+      }
     };
 
     /** Deepest term whose label path matches the viewer's own site /
@@ -363,7 +424,7 @@ export function mountDocs(
         .filter((s) => s !== "");
       if (want.length === 0) return null;
       let best: TermNode | null = null;
-      for (const n of termNodes) {
+      for (const n of treeNodes) {
         for (const offset of [0, 1]) {
           const labels = n.labels.slice(offset).map((l) => l.toLowerCase());
           if (labels.length === 0 || labels.length > want.length) continue;
@@ -375,52 +436,129 @@ export function mountDocs(
       return best;
     };
 
-    if (app.orgSetId !== "") {
-      const orgHead = el("div", "app-docs-navorg", "Organisation");
-      nav.appendChild(orgHead);
-      const orgBox = el("div", "app-docs-navorgbox");
-      nav.appendChild(orgBox);
-      orgBox.appendChild(el("div", "app-field-hint", "Loading…"));
-      void fetchTermPaths(app.siteUrl, app.orgSetId, 3, 40).then(async ({ nodes, error }) => {
-        if (dead) return;
-        clear(orgBox);
+    const treeHead = el("div", "app-docs-navorg", "Browse by");
+    const groupSel = el("select", "app-input app-docs-groupby") as HTMLSelectElement;
+    const groupOpt = (value: string, label: string) => {
+      const o = el("option", "", label) as HTMLOptionElement;
+      o.value = value;
+      groupSel.appendChild(o);
+    };
+    if (app.orgSetId !== "") groupOpt("", "Organisation");
+    for (const [internal, meta] of taxCols) groupOpt(internal, meta.label);
+    groupSel.value = groupBy;
+    const treeBox = el("div", "app-docs-navorgbox");
+
+    const paintTree = () => {
+      clear(treeBox);
+      treeButtons.clear();
+      const setId = setFor(groupBy);
+      if (setId === "") {
+        treeBox.appendChild(el("div", "app-field-hint", "No term set for this column."));
+        return;
+      }
+      treeBox.appendChild(el("div", "app-field-hint", "Loading…"));
+      void fetchTermPaths(app.siteUrl, setId, 4, 60).then(async ({ nodes, error }) => {
+        if (dead || setFor(groupBy) !== setId) return;
+        clear(treeBox);
         if (error !== "" || nodes.length === 0) {
-          orgBox.appendChild(el("div", "app-field-hint", "No organisation terms yet."));
+          treeBox.appendChild(el("div", "app-field-hint", "No terms yet."));
           return;
         }
-        termNodes = nodes;
+        treeNodes = nodes;
+        const disabled = groupBy === "" && orgProps.length === 0;
+        const SEP = "\u0000";
+        const key = (labels: string[]) => labels.join(SEP);
+        const hasChildren = new Set<string>();
         for (const n of nodes) {
+          if (n.labels.length > 1) hasChildren.add(key(n.labels.slice(0, -1)));
+        }
+        const rows = new Map<string, HTMLElement>();
+        const paintCollapse = () => {
+          for (const n of nodes) {
+            const row = rows.get(n.id);
+            if (!row) continue;
+            let hidden = false;
+            for (let d = 1; d < n.labels.length && !hidden; d++) {
+              if (collapsed.has(key(n.labels.slice(0, d)))) hidden = true;
+            }
+            row.style.display = hidden ? "none" : "";
+          }
+        };
+        for (const n of nodes) {
+          const row = el("div", "app-docs-treerow");
+          row.style.paddingLeft = `${(n.labels.length - 1) * 14}px`;
+          const k = key(n.labels);
+          if (hasChildren.has(k)) {
+            const caret = el("button", "app-docs-caret", collapsed.has(k) ? "▸" : "▾") as HTMLButtonElement;
+            caret.setAttribute("aria-expanded", String(!collapsed.has(k)));
+            caret.addEventListener("click", () => {
+              if (collapsed.has(k)) collapsed.delete(k);
+              else collapsed.add(k);
+              caret.textContent = collapsed.has(k) ? "▸" : "▾";
+              caret.setAttribute("aria-expanded", String(!collapsed.has(k)));
+              paintCollapse();
+            });
+            row.appendChild(caret);
+          } else {
+            row.appendChild(el("span", "app-docs-caret app-docs-caret-none", ""));
+          }
           const btn = el("button", "app-docs-navterm", n.labels[n.labels.length - 1]) as HTMLButtonElement;
-          btn.style.paddingLeft = `${8 + (n.labels.length - 1) * 14}px`;
-          if (orgProps.length === 0) {
+          if (disabled) {
             btn.disabled = true;
             btn.title =
               "Map a column to the Organisation unit role in Settings → Documents to filter by organisation.";
           } else {
             btn.title = n.labels.join(" › ");
             btn.addEventListener("click", () =>
-              applyOrg(orgFilter?.node.id === n.id ? null : n)
+              applyFilter(groupBy, filterFor(groupBy)?.node.id === n.id ? null : n, nodes)
             );
           }
-          orgButtons.set(n.id, btn);
-          orgBox.appendChild(btn);
+          row.appendChild(btn);
+          treeButtons.set(n.id, btn);
+          rows.set(n.id, row);
+          treeBox.appendChild(row);
         }
-        // a shared/saved view's org filter first; otherwise land on the
-        // viewer's own corner of the organisation (chip makes either
-        // one-click removable)
-        const wantOrg = bootView?.orgTermId ?? "";
-        if (wantOrg !== "") {
-          const match = nodes.find((x) => x.id === wantOrg);
-          if (match) applyOrg(match);
-        } else if (
-          orgProps.length > 0 &&
-          orgFilter === null &&
-          bootView === null &&
-          !favMode
-        ) {
-          const mine = await viewerNode();
-          if (!dead && mine && orgFilter === null) applyOrg(mine);
+        paintCollapse();
+        paintTreeSelection();
+        // boot: a shared/saved view's org filter first; otherwise land on
+        // the viewer's own corner of the organisation (chip makes either
+        // one-click removable). Organisation tree only.
+        if (groupBy === "" && filterFor("") === null) {
+          const wantOrg = bootView?.orgTermId ?? "";
+          if (wantOrg !== "") {
+            const match = nodes.find((x) => x.id === wantOrg);
+            if (match) applyFilter("", match, nodes);
+          } else if (orgProps.length > 0 && bootView === null && !favMode) {
+            const mine = await viewerNode();
+            if (!dead && mine && filterFor("") === null) applyFilter("", mine, nodes);
+          }
         }
+      });
+    };
+
+    groupSel.addEventListener("change", () => {
+      groupBy = groupSel.value;
+      collapsed.clear();
+      treeNodes = [];
+      paintTree();
+    });
+
+    if (app.orgSetId !== "" || taxCols.size > 0) {
+      nav.appendChild(treeHead);
+      if (taxCols.size > 0) nav.appendChild(groupSel);
+      nav.appendChild(treeBox);
+      paintTree();
+    }
+
+    // boot: filters a shared/saved view carries beyond the organisation —
+    // each needs its own set's walk for subtree ids
+    for (const f of bootView?.filters ?? []) {
+      const setId = setFor(f.col);
+      if (setId === "" || filterFor(f.col) !== null) continue;
+      void fetchTermPaths(app.siteUrl, setId, 4, 60).then(({ nodes }) => {
+        if (dead) return;
+        const match = nodes.find((n) => n.id === f.termId);
+        if (match && filterFor(f.col) === null) applyFilter(f.col, match, nodes);
       });
     }
 
@@ -432,19 +570,75 @@ export function mountDocs(
     const status = el("div", "app-docs-status");
     main.appendChild(status);
 
-    const paintChip = () => {
+    const paintChips = () => {
       clear(filterBar);
-      if (!orgFilter) return;
-      const chip = el("span", "app-docs-orgchip");
-      chip.appendChild(
-        document.createTextNode(`Organisation: ${orgFilter.node.labels.join(" › ")}`)
-      );
-      const x = el("button", "app-docs-orgchip-x", "×") as HTMLButtonElement;
-      x.title = "Clear the organisation filter";
-      x.addEventListener("click", () => applyOrg(null));
-      chip.appendChild(x);
-      filterBar.appendChild(chip);
+      for (const f of filters) {
+        const chip = el("span", "app-docs-orgchip");
+        chip.appendChild(
+          document.createTextNode(`${colLabel(f.col)}: ${f.node.labels.join(" › ")}`)
+        );
+        const x = el("button", "app-docs-orgchip-x", "×") as HTMLButtonElement;
+        x.title = `Clear the ${colLabel(f.col)} filter`;
+        x.addEventListener("click", () => applyFilter(f.col, null, []));
+        chip.appendChild(x);
+        filterBar.appendChild(chip);
+      }
+      // add a filter on any other taxonomy column (same mechanism as the
+      // tree — column, then term)
+      const addable: string[] = [];
+      if (app.orgSetId !== "" && orgProps.length > 0 && filterFor("") === null) addable.push("");
+      for (const col of taxCols.keys()) {
+        if (filterFor(col) === null) addable.push(col);
+      }
+      if (addable.length === 0 || favMode) return;
+      const add = el("button", "app-docs-addfilter", "＋ Filter") as HTMLButtonElement;
+      add.addEventListener("click", () => {
+        if (menu) {
+          closeMenu();
+          return;
+        }
+        menu = el("div", "app-docs-menu");
+        for (const col of addable) {
+          const b = el("button", "app-docs-menuitem", colLabel(col)) as HTMLButtonElement;
+          b.addEventListener("click", () => {
+            closeMenu();
+            const setId = setFor(col);
+            if (setId === "") return;
+            menu = el("div", "app-docs-menu app-docs-termmenu");
+            menu.appendChild(el("div", "app-field-hint", "Loading terms…"));
+            const anchor = add.getBoundingClientRect();
+            menu.style.top = `${anchor.bottom + 4}px`;
+            menu.style.left = `${anchor.left}px`;
+            document.body.appendChild(menu);
+            void fetchTermPaths(app.siteUrl, setId, 4, 60).then(({ nodes, error }) => {
+              if (dead || !menu) return;
+              clear(menu);
+              if (error !== "" || nodes.length === 0) {
+                menu.appendChild(el("div", "app-field-hint", "No terms found."));
+                return;
+              }
+              for (const n of nodes) {
+                const t = el("button", "app-docs-menuitem", n.labels[n.labels.length - 1]) as HTMLButtonElement;
+                t.style.paddingLeft = `${10 + (n.labels.length - 1) * 12}px`;
+                t.title = n.labels.join(" › ");
+                t.addEventListener("click", () => {
+                  closeMenu();
+                  applyFilter(col, n, nodes);
+                });
+                menu!.appendChild(t);
+              }
+            });
+          });
+          menu!.appendChild(b);
+        }
+        const r = add.getBoundingClientRect();
+        menu.style.top = `${r.bottom + 4}px`;
+        menu.style.left = `${r.left}px`;
+        document.body.appendChild(menu);
+      });
+      filterBar.appendChild(add);
     };
+    paintChips();
 
     const statusCol = current?.config.columns.find((c) => c.role === "status") ?? null;
     const statusChip = (value: string): HTMLElement => {
@@ -495,22 +689,52 @@ export function mountDocs(
       render: (row) => formatWhen(row.modified),
     };
 
+    // the view's own column set beats the library default (Phase 3a —
+    // carried by saved views and shared links; [] = default)
+    const chosenColumns = bootView?.columns ?? [];
     const columns: ListColumn<DocRow>[] = [nameCol];
     if (current) {
-      for (const c of current.config.columns) {
-        if (!c.inDefault) continue;
+      const byInternal = new Map(current.config.columns.map((c) => [c.internal, c]));
+      const shown: { internal: string; label: string; role: string }[] = [];
+      if (chosenColumns.length > 0) {
+        for (const internal of chosenColumns) {
+          if (internal === "Modified") {
+            shown.push({ internal: "Modified", label: "Modified", role: "" });
+            continue;
+          }
+          const c = byInternal.get(internal);
+          if (c && c.available) {
+            shown.push({ internal, label: c.label !== "" ? c.label : internal, role: c.role });
+          }
+        }
+      } else {
+        for (const c of current.config.columns) {
+          if (!c.inDefault) continue;
+          shown.push({
+            internal: c.internal,
+            label: c.label !== "" ? c.label : c.internal,
+            role: c.role,
+          });
+        }
+      }
+      for (const c of shown) {
+        if (c.internal === "Modified") {
+          columns.push(modifiedCol);
+          continue;
+        }
         const live = c.internal;
+        const role = c.role;
         columns.push({
           key: live,
-          label: c.label !== "" ? c.label : live,
+          label: c.label,
           render: (row) => {
             const v = row.values[live] ?? "";
             if (v === "") return "";
-            return c.role === "status" ? statusChip(v) : v;
+            return role === "status" ? statusChip(v) : v;
           },
         });
       }
-      if (!current.config.columns.some((c) => c.inDefault && c.internal === "Modified")) {
+      if (!shown.some((c) => c.internal === "Modified")) {
         columns.push(modifiedCol);
       }
     } else {
@@ -656,10 +880,21 @@ export function mountDocs(
         return;
       }
       const n = list.count();
+      if (n === 0) {
+        // an empty answer names the way out rather than dead-ending
+        status.textContent =
+          filters.length > 0 || query.trim() !== ""
+            ? "No documents match — clear filters or change the search."
+            : "No documents here yet.";
+        return;
+      }
+      const docs = (k: number) => `${k} document${k === 1 ? "" : "s"}`;
       status.textContent =
-        query.trim() === "" && current
-          ? `${n} document(s) loaded`
-          : `${n}${total !== null && total > n ? ` of ${total}` : ""} result(s)`;
+        query.trim() === "" && current && filters.length === 0
+          ? docs(n)
+          : total !== null && total > n
+            ? `${docs(n)} of ${total} matching`
+            : `${docs(n)} matching`;
     };
 
     const load = async (reset: boolean) => {
@@ -690,13 +925,13 @@ export function mountDocs(
         list.setRows([]);
       }
       list.setLoading(true);
-      // an organisation filter forces search mode: list REST cannot
-      // filter by taxonomy, the index can
+      // any taxonomy filter forces search mode: list REST cannot filter
+      // by taxonomy, the index can
       const useSearch =
         query.trim() !== "" ||
         current === null ||
         scope.value === "all" ||
-        orgFilter !== null;
+        filters.length > 0;
       if (useSearch) {
         const startRow = nextToken === "" ? 0 : Number(nextToken);
         // never unscoped: either the library in view, or every library
@@ -708,9 +943,10 @@ export function mountDocs(
           rowLimit: PAGE,
           startRow,
           searchContents: contentsBox.checked,
-          termFilter: orgFilter
-            ? { properties: orgProps, termIds: orgFilter.ids }
-            : undefined,
+          termFilters:
+            filters.length > 0
+              ? filters.map((f) => ({ properties: propsFor(f.col), termIds: f.ids }))
+              : undefined,
         });
         if (dead || gen !== generation) return;
         list.append(applyNonCurrent(page.rows));
@@ -748,15 +984,24 @@ export function mountDocs(
     }
 
     // ---- share + register export ---------------------------------------
-    const currentView = (): DocView => ({
-      ...emptyDocView(),
-      listId: current?.listId ?? "",
-      query: query.trim(),
-      contents: contentsBox.checked,
-      nonCurrent: nonCurrentBox.checked,
-      orgTermId: orgFilter?.node.id ?? "",
-      orgPath: orgFilter?.node.labels ?? [],
-    });
+    const currentView = (): DocView => {
+      const org = filterFor("");
+      return {
+        ...emptyDocView(),
+        listId: current?.listId ?? "",
+        query: query.trim(),
+        contents: contentsBox.checked,
+        nonCurrent: nonCurrentBox.checked,
+        // the organisation keeps its own slot so pre-3a links stay valid
+        orgTermId: org?.node.id ?? "",
+        orgPath: org?.node.labels ?? [],
+        filters: filters
+          .filter((f) => f.col !== "")
+          .map((f) => ({ col: f.col, termId: f.node.id, path: f.node.labels })),
+        columns: chosenColumns,
+        groupBy,
+      };
+    };
     const copyViewLink = () => {
       void navigator.clipboard
         .writeText(docsViewUrl(encodeDocView(currentView())))
@@ -819,6 +1064,70 @@ export function mountDocs(
         status.textContent = `${rows.length} row(s) exported${truncated ? ` — capped at ${EXPORT_CAP}` : ""}`;
       })();
     };
+    /** Pick the view's columns from the library's available set — the
+     *  choice rides the view state, so saved views and shared links
+     *  carry it (spec: "users can add/remove available columns"). */
+    const chooseColumns = () => {
+      if (!current) return;
+      const lib = current;
+      const scrim = el("div", "app-docs-scrim");
+      const dialog = el("div", "app-docs-dialog app-docs-chooser");
+      scrim.appendChild(dialog);
+      const head = el("div", "app-docs-viewhead");
+      head.appendChild(el("span", "app-docs-viewname", "Choose columns"));
+      const x = el("button", "app-btn app-docs-viewclose", "✕") as HTMLButtonElement;
+      x.addEventListener("click", () => scrim.remove());
+      head.appendChild(x);
+      dialog.appendChild(head);
+      const body = el("div", "app-docs-propsbody");
+      dialog.appendChild(body);
+      const effective =
+        chosenColumns.length > 0
+          ? chosenColumns
+          : [
+              ...lib.config.columns.filter((c) => c.inDefault).map((c) => c.internal),
+              "Modified",
+            ];
+      const entries = [
+        ...lib.config.columns
+          .filter((c) => c.available)
+          .map((c) => ({ internal: c.internal, label: c.label !== "" ? c.label : c.internal })),
+        { internal: "Modified", label: "Modified" },
+      ];
+      const boxes = new Map<string, HTMLInputElement>();
+      for (const e of entries) {
+        const row = el("label", "app-docs-check app-docs-colrow");
+        const box = el("input", "") as HTMLInputElement;
+        box.type = "checkbox";
+        box.checked = effective.includes(e.internal);
+        row.append(box, document.createTextNode(` ${e.label}`));
+        boxes.set(e.internal, box);
+        body.appendChild(row);
+      }
+      const actions = el("div", "app-docs-viewactions");
+      const apply = el("button", "app-btn app-btn-primary", "Apply") as HTMLButtonElement;
+      apply.addEventListener("click", () => {
+        const picked = entries
+          .filter((e) => boxes.get(e.internal)?.checked)
+          .map((e) => e.internal);
+        scrim.remove();
+        pendingView = { ...currentView(), columns: picked };
+        remount();
+      });
+      const reset = el("button", "app-btn", "Reset to default") as HTMLButtonElement;
+      reset.addEventListener("click", () => {
+        scrim.remove();
+        pendingView = { ...currentView(), columns: [] };
+        remount();
+      });
+      actions.append(apply, reset);
+      dialog.appendChild(actions);
+      scrim.addEventListener("pointerdown", (e) => {
+        if (e.target === scrim) scrim.remove();
+      });
+      document.body.appendChild(scrim);
+    };
+
     topKebab.addEventListener("click", () => {
       if (menu) {
         closeMenu();
@@ -834,6 +1143,13 @@ export function mountDocs(
         });
         menu!.appendChild(b);
       };
+      if (current) {
+        item(
+          "Choose columns…",
+          "Add or remove this view's columns from the library's available set.",
+          chooseColumns
+        );
+      }
       item(
         "Copy link to this view",
         "A link that opens Documents exactly as you see it now.",

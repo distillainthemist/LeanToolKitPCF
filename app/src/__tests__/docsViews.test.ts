@@ -23,9 +23,26 @@ describe("view link payload", () => {
       nonCurrent: true,
       orgTermId: "t9",
       orgPath: ["Bell Bay", "Casting"],
+      filters: [{ col: "DMSProcess", termId: "p3", path: ["Casting", "Rodding"] }],
+      columns: ["DMSStatus", "Modified"],
+      groupBy: "DMSProcess",
     };
     const back = decodeDocView(encodeDocView(v));
     expect(back).toEqual({ ...v, name: "" });
+  });
+
+  it("a pre-3a payload keeps opening — new fields default empty", () => {
+    // exactly what a v0.20–v0.23 link carries
+    const legacy = '{"l":"l1","q":"sop","c":1,"o":"t9","p":["Bell Bay"]}';
+    const v = decodeDocView(legacy);
+    expect(v.listId).toBe("l1");
+    expect(v.orgTermId).toBe("t9");
+    expect(v.filters).toEqual([]);
+    expect(v.columns).toEqual([]);
+    expect(v.groupBy).toBe("");
+    // and a filter entry missing its column or term is dropped, not kept broken
+    const partial = decodeDocView('{"f":[{"c":"DMSProcess"},{"c":"A","t":"t1"}]}');
+    expect(partial.filters).toEqual([{ col: "A", termId: "t1", path: [] }]);
   });
 
   it("an empty view encodes tiny and decodes to defaults", () => {

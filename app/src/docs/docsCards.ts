@@ -152,9 +152,9 @@ async function paintDocs(
     listIds: scope.libs.map((l) => l.listId),
     rowLimit: n,
     byModified: true,
-    termFilter:
+    termFilters:
       scope.orgIds.length > 0 && scope.orgProps.length > 0
-        ? { properties: scope.orgProps, termIds: scope.orgIds }
+        ? [{ properties: scope.orgProps, termIds: scope.orgIds }]
         : undefined,
   });
   if (page.error !== "") return note(body, `Documents refused: ${page.error}`);

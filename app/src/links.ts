@@ -31,12 +31,6 @@ export const LATEST = "latest";
 /** Player query parameter naming the ritual to open on launch. */
 export const LAUNCH_PARAM = "ritual";
 
-/** Player query parameter opening a named screen (whitelisted — the
- *  player fragment never reaches the app, so screens without a nav link
- *  need a param). Currently only the Phase 0 docs spike; remove with it. */
-export const SCREEN_PARAM = "screen";
-const SCREEN_ROUTES: Record<string, string> = { "docs-spike": "#/docs-spike" };
-
 /** Player query parameter carrying a shared Documents view. It carries
  *  the view STATE itself — saved views are per person, so a link with an
  *  id would be dead for the recipient. */
@@ -124,8 +118,6 @@ export function launchTarget(): string {
     // payload (the standalone #/docs page has no app chrome around it)
     return "#/";
   }
-  const screen = SCREEN_ROUTES[param(SCREEN_PARAM)];
-  if (screen !== undefined) return screen;
   const boardId = param(LAUNCH_PARAM);
   return boardId === "" ? "" : boardHash(boardId, param(AT_PARAM));
 }

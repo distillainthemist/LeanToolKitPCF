@@ -120,12 +120,14 @@ export interface SearchOpts {
    */
   searchContents?: boolean;
   /**
-   * Restrict to documents tagged with any of these terms (the node the
-   * user picked plus its descendants — a GUID matches only its exact
-   * term, so subtree filtering ORs the subtree's ids, which the term
-   * store walk already yields).
+   * Taxonomy filters, ANDed — each entry restricts to documents tagged
+   * with any of its terms (the node the user picked plus its
+   * descendants — a GUID matches only its exact term, so subtree
+   * filtering ORs the subtree's ids, which the term store walk already
+   * yields). One entry per filtered column (Phase 3a generalised the
+   * single organisation filter).
    */
-  termFilter?: { properties: string[]; termIds: string[] };
+  termFilters?: { properties: string[]; termIds: string[] }[];
 }
 
 /**
@@ -192,8 +194,8 @@ export function buildSearchBody(text: string, opts: SearchOpts): string {
   else if (ids.length > 1) {
     terms.push(`(${ids.map((id) => `ListID:${id}`).join(" OR ")})`);
   }
-  const tf = opts.termFilter;
-  if (tf && tf.properties.length > 0 && tf.termIds.length > 0) {
+  for (const tf of opts.termFilters ?? []) {
+    if (tf.properties.length === 0 || tf.termIds.length === 0) continue;
     const parts = tf.properties.flatMap((p) => tf.termIds.map((t) => `${p}:${t}`));
     terms.push(parts.length === 1 ? parts[0] : `(${parts.join(" OR ")})`);
   }

@@ -98,6 +98,25 @@ export function mountDocList<T>(host: HTMLElement, opts: DocListOptions<T>): Doc
     append: appendRows,
     setLoading: (on) => {
       tail.textContent = on ? "Loading…" : "";
+      // first load: skeleton rows instead of an empty pane (removed by
+      // the first real setRows/append via clear/empty)
+      const skel = body.querySelectorAll(".app-doclist-skel");
+      if (on && n === 0 && skel.length === 0) {
+        body.querySelector(".app-doclist-empty")?.remove();
+        for (let i = 0; i < 6; i++) {
+          const r = el("div", "app-doclist-row app-doclist-skel");
+          r.style.gridTemplateColumns = tracks;
+          for (let c = 0; c < opts.columns.length; c++) {
+            const cell = el("div", "app-doclist-cell");
+            cell.appendChild(el("span", "app-doclist-skelbar", ""));
+            r.appendChild(cell);
+          }
+          body.appendChild(r);
+        }
+      } else if (!on) {
+        for (const s of skel) s.remove();
+        empty();
+      }
     },
     count: () => n,
     destroy: () => {

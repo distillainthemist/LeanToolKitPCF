@@ -182,9 +182,12 @@ export function mountHub(parent: HTMLElement): () => void {
         cleanups.push(mountDocs(tabHost, "", { embedded: true }));
       });
     });
-    // a shared Documents link launched the app: front the tab — its
-    // mount consumes the pending view payload
-    if (hasPendingDocView()) view.selectTab("documents");
+    // a shared Documents link launched the app (or an old #/docs
+    // bookmark landed here): front the tab — its mount consumes any
+    // pending view payload
+    if (hasPendingDocView() || window.location.hash.startsWith("#/docs")) {
+      view.selectTab("documents");
+    }
     if (hosted) {
       // categories and boards came in with the boot round — no re-query
       const colorByCategory = Object.fromEntries(
