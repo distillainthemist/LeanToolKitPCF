@@ -1569,7 +1569,9 @@ button.app-docs-navterm.app-docs-navterm-on {
 .app-docs-viewkebab { flex: none; }
 .app-docs-saveview { color: #555; }
 .app-docs-chooser { width: min(420px, 92vw); }
-.app-docs-colrow { display: block; padding: 3px 0; }
+.app-docs-colslist { display: flex; flex-direction: column; }
+.app-docs-colorderrow { display: flex; align-items: center; gap: 6px; padding: 3px 2px; border-radius: 5px; background: #fff; }
+.app-docs-colorderrow .app-docs-check { flex: 1; min-width: 0; }
 .app-doclist-skel .app-doclist-skelbar {
   display: inline-block; height: 11px; border-radius: 5px; width: 70%;
   background: linear-gradient(90deg, #eee 25%, #f6f6f6 50%, #eee 75%);

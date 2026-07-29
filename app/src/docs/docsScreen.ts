@@ -10,6 +10,7 @@
 // would lie about the corpus.
 
 import { el, clear } from "../../../shared/ui/dom";
+import { draggableRow } from "../../../shared/ui/dragList";
 import { showLoading } from "../loading";
 import { detectHost } from "../runtime";
 import { paletteMap, resolvePaletteColor } from "../../../shared/palette";
@@ -1094,22 +1095,46 @@ export function mountDocs(
           .map((c) => ({ internal: c.internal, label: c.label !== "" ? c.label : c.internal })),
         { internal: "Modified", label: "Modified" },
       ];
-      const boxes = new Map<string, HTMLInputElement>();
-      for (const e of entries) {
-        const row = el("label", "app-docs-check app-docs-colrow");
-        const box = el("input", "") as HTMLInputElement;
-        box.type = "checkbox";
-        box.checked = effective.includes(e.internal);
-        row.append(box, document.createTextNode(` ${e.label}`));
-        boxes.set(e.internal, box);
-        body.appendChild(row);
+      // ordered model: the shown columns first in their current order,
+      // the rest after — ticks choose, drag sets the order (Ben,
+      // 2026-07-30), and Apply reads the ticked rows top to bottom
+      const rows: { internal: string; label: string; on: boolean }[] = [];
+      for (const key of effective) {
+        const e = entries.find((x) => x.internal === key);
+        if (e) rows.push({ ...e, on: true });
       }
+      for (const e of entries) {
+        if (!rows.some((r) => r.internal === e.internal)) rows.push({ ...e, on: false });
+      }
+      body.appendChild(
+        el("div", "app-field-hint", "Tick the columns to show; drag ⠿ to set their order.")
+      );
+      const listBox = el("div", "app-docs-colslist");
+      body.appendChild(listBox);
+      const paintRows = () => {
+        clear(listBox);
+        rows.forEach((r, i) => {
+          const row = el("div", "app-docs-colorderrow");
+          const handle = el("span", "app-drag-handle", "⠿");
+          handle.title = "Drag to reorder";
+          const pick = el("label", "app-docs-check");
+          const box = el("input", "") as HTMLInputElement;
+          box.type = "checkbox";
+          box.checked = r.on;
+          box.addEventListener("change", () => {
+            r.on = box.checked;
+          });
+          pick.append(box, document.createTextNode(` ${r.label}`));
+          row.append(handle, pick);
+          draggableRow(row, handle, "docs-cols", i, rows, paintRows);
+          listBox.appendChild(row);
+        });
+      };
+      paintRows();
       const actions = el("div", "app-docs-viewactions");
       const apply = el("button", "app-btn app-btn-primary", "Apply") as HTMLButtonElement;
       apply.addEventListener("click", () => {
-        const picked = entries
-          .filter((e) => boxes.get(e.internal)?.checked)
-          .map((e) => e.internal);
+        const picked = rows.filter((r) => r.on).map((r) => r.internal);
         scrim.remove();
         pendingView = { ...currentView(), columns: picked };
         remount();
