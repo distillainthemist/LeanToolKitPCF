@@ -687,6 +687,149 @@ Favourites; Export downloads a sensible CSV; add both cards to a board —
 tiles paint instantly from stored SVG, content arrives a beat later,
 Document health shows the mapped review dates or the explanatory note.
 
+### Phase 3a — UI closure against the original specification (PROPOSED 2026-07-30, awaiting Ben's review)
+
+An independent audit of the shipped UI (v0.23) against the original
+specification's **User Experience & Interaction** section, plus a Flat 2.0
+critique, and the workstreams that close the gaps. Document-control
+functionality (check-out, approvals, tasks, notifications) stays in
+Phases 4–5; this phase is purely the read experience's interface.
+
+#### Spec audit — UX section, line by line
+
+| Spec requirement | Current state | Verdict |
+| --- | --- | --- |
+| Style matches LeanBoard | Same palette/tokens, kebab convention, sentence case | ✅ close (see Flat 2.0 notes) |
+| Title pane / left nav / right list layout | Implemented (hub tab; embedded = tab is the title) | ✅ |
+| Nav defaults to org structure, folder-style | Org tree present *below* the library list; no folder affordances (carets/disclosure); flat indented buttons | ⚠️ partial |
+| Nav hierarchy dynamically configurable from managed columns | Fixed: libraries + Organisation only. Process / Document type / any taxonomy column cannot drive the tree | ❌ gap **[3a-1]** |
+| Selection defaults to viewer's org unit | Implemented (offset-tolerant label match) | ✅ |
+| Default core columns: type, title, owner, status, date-per-library-type | Defaults are whatever `inDefault` ticks say; nothing seeds the spec's core set per library type; "All documents" shows name/library/modified only | ⚠️ gap **[3a-2]** |
+| Users add/remove columns from their view | No column chooser; `DocView` carries no column set, so saved views and shared links cannot differ in columns | ❌ gap **[3a-3]** |
+| Row click → PDF overlay | Implemented (now cookie-free) | ✅ |
+| Overlay: print, download, share via email **or Teams** | Download / copy link / email present. **No Print. No Teams share** | ❌ gap **[3a-4]** |
+| Working docs ask work-vs-view | Implemented | ✅ |
+| Kebab: properties/history, favourite, request checkout | First two done; checkout stub explicitly Phase 4 | ✅ (deferral by design) |
+| Search all columns, case-insensitive | Default matches Title/Filename only. NOTE: the "search inside documents" toggle's free KQL matches **all indexed metadata too** — the spec's "all columns" is that toggle, mislabelled | ⚠️ copy gap **[3a-5]** |
+| Search current filter vs all documents | Scope select implemented | ✅ |
+| Chatbot button | Phase 6 by agreement | ✅ (deferred) |
+| Filter/view dropdown: filter by **any column** | Only the org tree filters; no general filter UI | ❌ gap **[3a-6]** |
+| Views bookmarked + shared via link | Implemented (state-carrying links) | ✅ |
+| Properties pane: all properties + history | Revised on Ben's instruction to *ticked columns only* + history — treat as the spec superseded | ✅ |
+
+Out of scope here, tracked elsewhere: org term-set alignment sync
+(Phase 5), notifications/My tasks (Phases 4–5), document addition and
+control (Phase 4), records retention (Phase 5), Teams *notification*
+messages (Phase 5 — distinct from the share button above).
+
+#### Flat 2.0 critique — honest reading of the current screen
+
+Flat 2.0 means flat surfaces with *deliberate, minimal* depth (soft
+shadows on floating things only), one accent doing the selection work,
+affordances that look like what they are, and typography carrying the
+hierarchy. Against that:
+
+1. **Two saturated selections at once.** "All documents" (scope) and
+   "Bell Bay" (filter) both render as filled accent pills. Two different
+   concepts share the strongest visual state on screen — a reader cannot
+   tell scope from filter. Fix: scope keeps the filled state; filters get
+   a lighter treatment (tinted background + accent text, matching the
+   filter chip), so the accent means exactly one thing.
+2. **The tree is not a tree.** The spec asked for a folder-style view;
+   what shipped is indented flat buttons. No disclosure carets, no
+   collapse, no sense of containment — at four levels (company → site →
+   department → team) this will read as a wall of text on real data.
+3. **Default list is thin.** Name + library + modified reads as a file
+   list, not a register. The spec's core set (type, owner, status chip,
+   the *right* date per library type) is what makes it a DMS at a glance
+   — status colours are already configured and mostly invisible today.
+4. **Views section chrome.** The inline "Save current view…" input +
+   icon buttons per row is the one place the UI invents novel controls;
+   everywhere else secondary actions live in kebabs. Fold view actions
+   into the app's menu convention.
+5. **Right-pane furniture:** "2 result(s)" is developer copy; empty
+   states are bare sentences with no next action; the loading state is a
+   text line where the list could skeleton (listView already virtualises
+   — skeleton rows are cheap).
+6. **What already reads well:** whitespace, chips, the overlay viewer,
+   sentence case, the single accent variable, menu shadows — the
+   foundation is right; this is a tightening pass, not a redesign.
+
+#### Workstreams
+
+**3a-A · Register columns (gaps 3a-2, 3a-3)**
+- Seed per-type default columns at library configure time (Phase 1
+  settings): standards → type/owner/status/effective date; records →
+  type/owner/status/added; working → type/owner/status/modified — from
+  column roles, editable as today (`inDefault` stays the store).
+- Column chooser on the list (kebab → "Choose columns…"): tick from the
+  library's `available` columns; selection lives in the view state.
+- `DocView` gains `columns: string[]` (encode/decode tolerant, absent =
+  library default) so saved views and shared links carry it. Chooser
+  hidden on "All documents" (cross-library columns stay fixed).
+- Owner/person and date columns render humanely (FieldValuesAsText
+  already provides text; dates through `formatWhen`).
+
+**3a-B · Filters + configurable hierarchy (gaps 3a-1, 3a-6)**
+- "Group by" select above the tree: any *taxonomy* column with a
+  resolvable term set (Organisation default; Document type, Process,
+  Management process, Tags, Importance, Status as configured). Reuses
+  `fetchTermPaths(site, setId)` — already parameterised, cached,
+  DFS-ordered. Viewer preselect applies only to the Organisation set.
+- Filter chips for taxonomy columns beyond the tree: "Add filter" →
+  column → term picker (same walk); each an owstaxId KQL clause ANDed
+  into the search body — the org-filter mechanism generalised. Filters
+  force search mode exactly as the org filter does today; chips row
+  already exists.
+- HONEST LIMIT, stated in the UI: non-taxonomy columns (text, person,
+  date) are not filterable without tenant-level refinable-property
+  mapping — deferred with a settings note, not faked client-side.
+  (On this spec's schema that still covers type, importance, status,
+  tags, org unit, process, management process — the columns that matter.)
+- `DocView` gains the generalised filter list (org filter becomes the
+  first entry; old links keep decoding).
+
+**3a-C · Viewer completion (gap 3a-4)**
+- Print: PDFs render from a same-origin blob — `frame.contentWindow.print()`
+  directly. Office docs' transform frame is cross-origin — Print opens
+  the PDF in a new tab where the browser's viewer prints (stated in the
+  button's title, not silently different).
+- Share to Teams: deep link (`https://teams.microsoft.com/l/chat/0/0?...`)
+  carrying the document's PDF link — no API, no consent, works wherever
+  Teams is signed in. Sits beside Email in the overlay actions.
+
+**3a-D · Flat 2.0 tightening (critique 1–5)**
+- One accent: filled state reserved for scope; filters restyled lighter.
+- Tree affordances: disclosure carets with collapse (state per session),
+  guide indents, `aria-expanded`.
+- Views/favourites rows: actions into kebabs; "Save current view"
+  becomes a single button + inline name prompt.
+- Status copy: "n documents" / "n of m results"; empty states name the
+  next action ("No documents match — clear filters or change library").
+- Skeleton rows in listView while the first page loads (bounded, no
+  layout shift — extend the perf harness checks).
+- Retire the standalone `#/docs` grey page and the `docs-spike` screen +
+  `screen` launch param (deep links land on the hub since v0.23).
+
+**3a-E · Search copy (gap 3a-5)**
+- Rename the toggle to reflect reality ("Search names only" default vs
+  "Search everything — contents and all fields"), title text explaining
+  the difference; no query-builder change.
+
+#### Order and proof
+
+A → B → C/E → D (A and B touch the same view model; C, E, D are
+independent). Each lands behind the existing guardrails (import gate,
+chunk ceilings, pure-parser tests for every `DocView` change — encode/
+decode round-trips with old payloads MUST keep opening). Hosted proof:
+a saved link from v0.23 opens unchanged; a new link carries columns +
+filters; print produces paper from both a PDF and a docx; a Teams share
+lands in a compose window; the tree groups by Document type and back.
+
+*Not in 3a:* anything that writes to SharePoint, My tasks, chatbot,
+refinable-property counts, per-column sort (list follows modified/rank
+as today — add only if Ben asks).
+
 ### Phase 4 — Light document control
 
 - Check-out / check-in for working documents (native REST).
