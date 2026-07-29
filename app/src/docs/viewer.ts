@@ -15,10 +15,8 @@ import {
   DocRow,
   extGlyph,
   formatWhen,
-  pdfDownloadUrlFor,
   pdfViewUrlFor,
   sourceUrlFor,
-  thumbnailUrlFor,
   transformPdfUrl,
 } from "./rows";
 import { itemDetails, itemVersions, presignedUrls } from "./data";
@@ -99,13 +97,13 @@ export function openDocViewer(opts: ViewerOpts): void {
   panel.appendChild(stage);
 
   // every reader action lands on the PDF rendering — the editable source
-  // is reachable only through the working-document "Work on it" path
+  // is reachable only through the working-document "Work on it" path.
+  // Two actions only (Ben, 2026-07-30): the rendered PDF's own toolbar
+  // already offers print/save/download, so duplicating them here was
+  // noise. A copied link travels to email or Teams equally well.
   const pdfUrl = pdfViewUrlFor(site, opts.driveId, row);
   const actions = el("div", "app-docs-viewactions");
-  actions.append(
-    linkBtn("Open PDF ↗", pdfUrl, true),
-    linkBtn("Download PDF", pdfDownloadUrlFor(site, opts.driveId, row))
-  );
+  actions.append(linkBtn("Open PDF ↗", pdfUrl, true));
   const copy = el("button", "app-btn", "Copy PDF link") as HTMLButtonElement;
   copy.addEventListener("click", () => {
     void navigator.clipboard.writeText(pdfUrl).then(() => {
@@ -113,45 +111,12 @@ export function openDocViewer(opts: ViewerOpts): void {
       setTimeout(() => (copy.textContent = "Copy PDF link"), 1500);
     });
   });
-  // print: a blob-rendered PDF is same-origin, so the frame prints in
-  // place; anything else opens the PDF in a new tab to print from there
-  // (a cross-origin frame cannot be scripted — stated, not silent)
-  const print = el("button", "app-btn", "Print") as HTMLButtonElement;
-  print.title =
-    "A PDF prints right here; an Office document opens its PDF rendering " +
-    "in a new tab to print from.";
-  print.addEventListener("click", () => {
-    if (activeFrame !== null && activeIsBlob) {
-      activeFrame.contentWindow?.focus();
-      activeFrame.contentWindow?.print();
-    } else {
-      window.open(pdfUrl, "_blank", "noopener");
-    }
-  });
-  const mail = linkBtn(
-    "Email PDF link",
-    `mailto:?subject=${encodeURIComponent(row.name)}&body=${encodeURIComponent(pdfUrl)}`
-  );
-  mail.target = "_self"; // mailto in a new tab leaves a blank window behind
-  // Teams share: the compose deep link — no API, no consent, works
-  // wherever Teams is signed in (FR: share via email or Teams message)
-  const teams = linkBtn(
-    "Share to Teams",
-    "https://teams.microsoft.com/l/chat/0/0?users=&message=" +
-      encodeURIComponent(`${row.name}: ${pdfUrl}`)
-  );
-  actions.append(copy, print, mail, teams);
+  actions.append(copy);
   panel.appendChild(actions);
 
-  // the live preview frame + whether its src is a same-origin blob (the
-  // Print action can only script that case)
-  let activeFrame: HTMLIFrameElement | null = null;
-  let activeIsBlob = false;
-  // one item lookup shared by both painters, started on first need
+  // one item lookup, started on first need
   let presignedOnce: ReturnType<typeof presignedUrls> | null = null;
   const presigned = () => (presignedOnce ??= presignedUrls(site, opts.driveId, row));
-  // a click on either painter invalidates any still-loading older paint
-  let paintGen = 0;
 
   /** The frame src the browser can always load: a presigned transform
    *  URL for office files, fetched-to-blob bytes for a PDF (its
@@ -178,55 +143,15 @@ export function openDocViewer(opts: ViewerOpts): void {
   };
 
   const paintPreview = () => {
-    const gen = ++paintGen;
     clear(stage);
     stage.appendChild(el("div", "app-loading-line", "Loading preview…"));
     void (async () => {
       const src = (await cookieFreeSrc()) || pdfUrl;
-      if (gen !== paintGen) return;
       clear(stage);
       const frame = el("iframe", "app-docs-viewframe") as HTMLIFrameElement;
       frame.src = src;
       frame.title = row.name;
-      activeFrame = frame;
-      activeIsBlob = src.startsWith("blob:");
-      // the page image is one click away rather than a dead end (a
-      // cross-origin frame cannot be asked whether it painted)
       stage.appendChild(frame);
-      const note = el("div", "app-field-hint app-docs-viewnote");
-      note.append(document.createTextNode("Preview not showing? "));
-      const asImage = el("button", "app-linklike", "Show page preview") as HTMLButtonElement;
-      asImage.addEventListener("click", () => paintThumbnail());
-      note.append(asImage, document.createTextNode(" · or Open PDF above."));
-      stage.appendChild(note);
-    })();
-  };
-
-  const paintThumbnail = () => {
-    const gen = ++paintGen;
-    clear(stage);
-    stage.appendChild(el("div", "app-loading-line", "Loading preview…"));
-    void (async () => {
-      const p = await presigned();
-      if (gen !== paintGen) return;
-      clear(stage);
-      activeFrame = null;
-      activeIsBlob = false;
-      const img = el("img", "app-docs-viewimg") as HTMLImageElement;
-      // presigned page-one image; getpreview.ashx (cookie-auth'd) only
-      // when the item lookup came back empty
-      img.src = p.thumbUrl !== "" ? p.thumbUrl : thumbnailUrlFor(site, row);
-      img.alt = `First page of ${row.name}`;
-      const note = el("div", "app-field-hint app-docs-viewnote");
-      img.addEventListener("error", () => {
-        img.remove();
-        note.textContent = "No page preview available for this file — open it in SharePoint.";
-      });
-      note.append(document.createTextNode("Page one only. "));
-      const back = el("button", "app-linklike", "Try the full preview") as HTMLButtonElement;
-      back.addEventListener("click", () => paintPreview());
-      note.appendChild(back);
-      stage.append(img, note);
     })();
   };
 

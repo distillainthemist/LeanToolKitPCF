@@ -41,12 +41,107 @@ import {
 import { el } from "../../../shared/ui/dom";
 import { showLoading } from "../loading";
 
+/** Everything one hub paint needs — the result of one boot round. */
+interface HubData {
+  viewerId: string;
+  site: string;
+  meetingsRaw: string;
+  peopleRaw: string;
+  orgRaw: string;
+  protectedRaw: string;
+  prefsRaw: string;
+  actions: LtkAction[];
+  sourceLabels: Record<string, string>;
+  visibleBoards: Awaited<ReturnType<typeof listBoards>>;
+  categories: Awaited<ReturnType<typeof meetingCategories>>;
+  me: Awaited<ReturnType<typeof viewerPerson>>;
+}
+
+/** The last boot round, kept for the session. Returning to the hub
+ *  paints from this INSTANTLY (the "coming back from a board feels
+ *  slow" complaint was a full ~8-query round on every return); a fresh
+ *  round always runs in the background and re-feeds the view's setters
+ *  — stale for a beat, never wrong for long. */
+let hubCache: HubData | null = null;
+
+async function fetchHubData(viewer: {
+  objectId: string;
+  name: string;
+  email: string;
+}): Promise<HubData> {
+  const viewerId = viewer.objectId;
+  // ONE parallel round for every independent read — this chain used
+  // to run serially, and ~ten connector round trips in a row were
+  // the visible seconds before My day painted
+  const [, meFirst, allBoards, roster, myActions, org, prefs, cats] = await Promise.all([
+    selfHealCatalog(),
+    viewerPerson(viewerId),
+    listBoards(),
+    listPeople(),
+    actionsForViewer(viewerId),
+    orgJson(),
+    userPrefsJson(viewerId),
+    meetingCategories(),
+  ]);
+  // self-register the viewer into the roster on first visit
+  let me = meFirst;
+  if (!me) {
+    me = {
+      whoId: viewerId,
+      who: viewer.name,
+      email: viewer.email,
+      site: "",
+      department: "",
+      area: "",
+      role: "user",
+      active: true,
+    };
+    // upsertPerson also fire-and-forgets the access-group sync (the
+    // viewer is rarely a group owner; admins reconcile via Sync now)
+    await upsertPerson(me);
+  }
+  const site = me.site;
+
+  // confidential meetings exist only for their owner + participants
+  const boards = allBoards.filter((b) => canViewBoard(b.occurrenceSettingsRaw, viewerId));
+  const sourceLabels: Record<string, string> = {};
+  for (const b of boards) {
+    for (const slot of parseManifest(b.manifestRaw).slots) {
+      // actions carry instanceId = boardId:cardId (the app's action key)
+      sourceLabels[`${b.boardId}:${slot.cardId}`] =
+        `${b.name} · ${slot.title || cardLabel(slot.cardType)}`;
+    }
+  }
+  return {
+    viewerId,
+    site,
+    meetingsRaw: JSON.stringify(
+      boards
+        .filter((b) => b.kind === "meeting" && b.occurrenceSettingsRaw.trim() !== "")
+        .map((b) => ({ boardId: b.boardId, settingsJSON: b.occurrenceSettingsRaw }))
+    ),
+    peopleRaw: JSON.stringify(
+      roster.map((p) => ({ whoId: p.whoId, who: p.who, crew: p.crew }))
+    ),
+    orgRaw: org,
+    // the one read that depends on another (the viewer's site)
+    protectedRaw: site !== "" ? await protectedTimesJson(site) : "[]",
+    prefsRaw: prefs,
+    actions: myActions,
+    sourceLabels,
+    visibleBoards: boards,
+    categories: cats,
+    me,
+  };
+}
+
 export function mountHub(parent: HTMLElement): () => void {
   const host = editorHost(parent);
   // the My-day rollup pulls boards, roster, actions, org and prefs —
   // hold the card with the spinner + quote until it's all in
   const stopLoading = showLoading(host);
   let view: LeanHubView | null = null;
+  let dead = false;
   // extra-tab content (the Documents area) registers its teardown here
   const cleanups: (() => void)[] = [];
 
@@ -62,73 +157,37 @@ export function mountHub(parent: HTMLElement): () => void {
     let sourceLabels: Record<string, string> = {};
     let viewerId: string;
     let site = "";
-    // fetched once in the parallel round, reused below (each of these
-    // used to be re-queried later in the mount)
     let me: Awaited<ReturnType<typeof viewerPerson>> = null;
     let visibleBoards: Awaited<ReturnType<typeof listBoards>> = [];
     let categories: Awaited<ReturnType<typeof meetingCategories>> = [];
+    /** Set when this paint came from the session cache — a fresh round
+     *  is then already running to re-feed the view. */
+    let paintedFromCache = false;
 
     if (hosted) {
       const viewer = currentViewer()!;
-      viewerId = viewer.objectId;
-      // ONE parallel round for every independent read — this chain used
-      // to run serially, and ~ten connector round trips in a row were
-      // the visible seconds before My day painted
-      const [, meFirst, allBoards, roster, myActions, org, prefs, cats] = await Promise.all([
-        selfHealCatalog(),
-        viewerPerson(viewerId),
-        listBoards(),
-        listPeople(),
-        actionsForViewer(viewerId),
-        orgJson(),
-        userPrefsJson(viewerId),
-        meetingCategories(),
-      ]);
-      categories = cats;
-      // self-register the viewer into the roster on first visit
-      me = meFirst;
-      if (!me) {
-        me = {
-          whoId: viewerId,
-          who: viewer.name,
-          email: viewer.email,
-          site: "",
-          department: "",
-          area: "",
-          role: "user",
-          active: true,
-        };
-        // upsertPerson also fire-and-forgets the access-group sync (the
-        // viewer is rarely a group owner; admins reconcile via Sync now)
-        await upsertPerson(me);
+      let data: HubData;
+      if (hubCache !== null && hubCache.viewerId === viewer.objectId) {
+        data = hubCache;
+        paintedFromCache = true;
+      } else {
+        data = await fetchHubData(viewer);
+        hubCache = data;
       }
-      site = me.site;
-
-      // confidential meetings exist only for their owner + participants
-      const boards = allBoards.filter((b) =>
-        canViewBoard(b.occurrenceSettingsRaw, viewerId)
-      );
-      visibleBoards = boards;
-      meetingsRaw = JSON.stringify(
-        boards
-          .filter((b) => b.kind === "meeting" && b.occurrenceSettingsRaw.trim() !== "")
-          .map((b) => ({ boardId: b.boardId, settingsJSON: b.occurrenceSettingsRaw }))
-      );
-      for (const b of boards) {
-        for (const slot of parseManifest(b.manifestRaw).slots) {
-          // actions carry instanceId = boardId:cardId (the app's action key)
-          sourceLabels[`${b.boardId}:${slot.cardId}`] =
-            `${b.name} · ${slot.title || cardLabel(slot.cardType)}`;
-        }
-      }
-      peopleRaw = JSON.stringify(
-        roster.map((p) => ({ whoId: p.whoId, who: p.who, crew: p.crew }))
-      );
-      actions = myActions;
-      orgRaw = org;
-      prefsRaw = prefs;
-      // the one read that depends on another (the viewer's site)
-      protectedRaw = site !== "" ? await protectedTimesJson(site) : "[]";
+      ({
+        viewerId,
+        site,
+        meetingsRaw,
+        peopleRaw,
+        orgRaw,
+        protectedRaw,
+        prefsRaw,
+        actions,
+        sourceLabels,
+        visibleBoards,
+        categories,
+        me,
+      } = data);
     } else {
       viewerId = VIEWER_ID;
       meetingsRaw = JSON.stringify(BOARDS);
@@ -216,6 +275,46 @@ export function mountHub(parent: HTMLElement): () => void {
             .map((b) => [b.boardId, colorByCategory[b.category]])
         )
       );
+      if (paintedFromCache) {
+        // the instant paint showed the LAST round's data — always refresh
+        // in the background and re-feed the setters (they diff, so an
+        // unchanged round repaints nothing)
+        void fetchHubData(currentViewer()!)
+          .then((fresh) => {
+            hubCache = fresh;
+            if (dead || view === null) return;
+            site = fresh.site; // onProtected closes over this
+            view.setMeetings(parseHubMeetings(fresh.meetingsRaw));
+            view.setOrgTree(parseOrgTree(fresh.orgRaw));
+            view.setPeople(parsePeople(fresh.peopleRaw), fresh.viewerId);
+            view.setProtectedTimes(parseProtectedTimes(fresh.protectedRaw));
+            view.setActions(fresh.actions);
+            view.setSourceLabels(fresh.sourceLabels);
+            view.setPrefs(parsePrefs(fresh.prefsRaw));
+            const freshColors = Object.fromEntries(
+              fresh.categories.filter((c) => c.color !== "").map((c) => [c.name, c.color])
+            );
+            view.setBoards(
+              fresh.visibleBoards.map((b) => ({
+                boardId: b.boardId,
+                name: b.name,
+                meta: [b.category, b.site, b.department].filter(Boolean).join(" · "),
+              })),
+              (boardId) => {
+                window.location.hash = boardHash(boardId);
+              },
+              "Rituals"
+            );
+            view.setBoardColors(
+              Object.fromEntries(
+                fresh.visibleBoards
+                  .filter((b) => (freshColors[b.category] ?? "") !== "")
+                  .map((b) => [b.boardId, freshColors[b.category]])
+              )
+            );
+          })
+          .catch(() => undefined); // a failed refresh keeps the stale paint
+      }
       // first access: prompt the viewer to place themselves in the org
       // (site drives meetings, actions and protected times). Modal on
       // first visit; a lighter banner remains if they skip. `me` is the
@@ -225,6 +324,9 @@ export function mountHub(parent: HTMLElement): () => void {
         const { promptForSite } = await import("./sitePrompt");
         const saved = await promptForSite(meNow);
         if (saved) {
+          // the cached round still has the empty site — drop it, or the
+          // remount would repaint stale and prompt again
+          hubCache = null;
           // re-run the router so meetings/protected times pick up the site
           window.dispatchEvent(new Event("hashchange"));
           return;
@@ -241,6 +343,7 @@ export function mountHub(parent: HTMLElement): () => void {
   })();
 
   return () => {
+    dead = true;
     for (const fn of cleanups.splice(0)) fn();
     view?.destroy();
   };

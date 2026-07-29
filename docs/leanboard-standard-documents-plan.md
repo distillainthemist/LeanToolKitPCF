@@ -706,9 +706,18 @@ standalone `#/docs` + `docs-spike` + the `screen` param retired (old
 `#/docs` bookmarks land on the hub's Documents tab).
 **Hosted checks (Ben):** v0.23 saved links open unchanged; tree groups
 by Document type and back; two filters AND correctly (org + process);
-column chooser sticks in a saved view's link; Print from a PDF and a
-docx; Teams share lands in a compose window; a fresh library configure
+column chooser sticks in a saved view's link; a fresh library configure
 auto-fills roles + register columns.
+**Amended 2026-07-30 (Ben, after seeing it live):** the viewer's action
+row is reduced to **Open PDF + Copy PDF link** — the rendered PDF's own
+toolbar already offers print/save, so the 3a-C Print/Email/Teams/
+Download buttons were noise and are removed, along with the "Preview
+not showing?" note and the page-image fallback it pointed to (the
+cookie-free frame made the fallback moot). Same session: the hub gained
+a **stale-while-revalidate boot cache** — returning to the hub paints
+instantly from the last round while a fresh round re-feeds the view's
+setters in the background (invalidated when the site prompt saves),
+which is the between-screens load-time fix.
 
 An independent audit of the shipped UI (v0.23) against the original
 specification's **User Experience & Interaction** section, plus a Flat 2.0
