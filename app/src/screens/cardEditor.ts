@@ -129,23 +129,81 @@ export function mountCardEditor(
   parent: HTMLElement,
   boardId: string,
   instanceGuid: string,
-  cardId: string,
+  initialCardId: string,
   onClose?: () => void
 ): () => void {
-  const cleanups: Array<() => void> = [];
+  const routeCleanups: Array<() => void> = [];
   // before any await — route() drains cleanups synchronously, so a
   // mid-load departure must still re-lock a reopened meeting
-  if (instanceGuid !== "live") cleanups.push(() => relockOnLeave(boardId));
+  if (instanceGuid !== "live") routeCleanups.push(() => relockOnLeave(boardId));
+  // the CURRENT card's teardown + DOM — swapped on every in-place hop
+  // (a walk hop never routes: the old card holds the screen under a
+  // light overlay until the next one is built, then they swap — Ben's
+  // "hold until the new one is ready")
+  let innerCleanups: Array<() => void> = [];
+  routeCleanups.push(() => {
+    for (const fn of innerCleanups) fn();
+  });
+  let currentWrap: HTMLElement | null = null;
+  // two quick hops can resolve out of order (a memo-warm target beats a
+  // cold one) — only the LATEST show may take the screen
+  let showGen = 0;
+
+  const show = (cardId: string, initial: boolean): void => {
+    const gen = ++showGen;
+    const cleanups: Array<() => void> = [];
+    const wrap = el("div", "app-screen-root"); // layout-transparent wrapper
+    if (!initial) wrap.style.display = "none"; // built offstage, swapped when ready
+    parent.appendChild(wrap);
+    // hops: a small spinner OVER the old card, not a fresh quote screen
+    let holdOverlay: HTMLElement | null = null;
+    if (!initial && currentWrap) {
+      const oldRow = currentWrap.querySelector<HTMLElement>(".app-card-row");
+      if (oldRow) {
+        oldRow.style.position = "relative";
+        holdOverlay = el("div", "app-hold-overlay");
+        holdOverlay.appendChild(el("div", "app-loading-spinner"));
+        oldRow.appendChild(holdOverlay);
+      }
+    }
+    /** Reveal this card: tear down + remove the previous one, take over. */
+    const finish = () => {
+      holdOverlay?.remove();
+      if (gen !== showGen) {
+        // superseded by a newer hop — discard quietly, touch nothing live
+        for (const fn of cleanups) fn();
+        wrap.remove();
+        return;
+      }
+      if (!initial) {
+        for (const fn of innerCleanups) fn();
+        currentWrap?.remove();
+        wrap.style.display = "";
+      }
+      currentWrap = wrap;
+      innerCleanups = cleanups;
+    };
+    /** In-place hop to another card of the SAME walk: URL updates via
+     *  pushState (Back still walks history through the router), no
+     *  route remount, no flash. Modified clicks keep browser behaviour. */
+    const hop = (targetCardId: string, href: string) => (e: MouseEvent) => {
+      if (e.ctrlKey || e.metaKey || e.shiftKey || e.button !== 0) return;
+      e.preventDefault();
+      window.history.pushState(null, "", href);
+      show(targetCardId, false);
+    };
+  // first entry paints the standard loading state; hops keep the old
+  // card visible instead
+  let stopLoading: () => void = () => undefined;
   void (async () => {
-    // never a blank void while data loads (Ben's slideshow flash)
-    const stopLoading = showLoading(parent);
-    cleanups.push(stopLoading);
+    if (initial) stopLoading = showLoading(wrap);
     const hosted = await detectHost();
     if (!hosted) {
       stopLoading();
-      parent.appendChild(
+      wrap.appendChild(
         el("div", "app-board-note", "The card editor needs the Power Apps host.")
       );
+      finish();
       return;
     }
     // "live" = the card's standard content (template document), edited
@@ -167,7 +225,8 @@ export function mountCardEditor(
     const slot = manifest?.slots.find((x) => x.cardId === cardId);
     if (!board || !manifest || !slot) {
       stopLoading();
-      parent.appendChild(el("p", "app-missing", `Unknown card ${cardId} on ${boardId}`));
+      wrap.appendChild(el("p", "app-missing", `Unknown card ${cardId} on ${boardId}`));
+      finish();
       return;
     }
     // meeting-record cards of a confidential meeting are for its owner and
@@ -177,13 +236,14 @@ export function mountCardEditor(
       !canViewBoard(board.occurrenceSettingsRaw, currentViewer()?.objectId ?? "")
     ) {
       stopLoading();
-      parent.appendChild(
+      wrap.appendChild(
         el(
           "div",
           "app-board-note",
           "This meeting is confidential — only its owner and participants can view it."
         )
       );
+      finish();
       return;
     }
 
@@ -232,7 +292,7 @@ export function mountCardEditor(
           else window.history.back();
         });
       }
-      parent.appendChild(bar);
+      wrap.appendChild(bar);
     }
 
     const surface = isActionSurface(slot);
@@ -264,9 +324,10 @@ export function mountCardEditor(
       }
       if (!row) {
         stopLoading();
-        parent.appendChild(
+        wrap.appendChild(
           el("p", "app-missing", "No data row for this card yet — open the meeting first.")
         );
+        finish();
         return;
       }
     }
@@ -274,7 +335,7 @@ export function mountCardEditor(
     const mounter = cardMounter(slot.cardType);
     if (!mounter) {
       stopLoading();
-      parent.appendChild(
+      wrap.appendChild(
         el(
           "div",
           "app-board-note",
@@ -319,7 +380,7 @@ export function mountCardEditor(
     let host: HTMLElement;
     if (walk) {
       const walkRow = el("div", "app-card-row");
-      parent.appendChild(walkRow);
+      wrap.appendChild(walkRow);
       const rail = (slot: (typeof sequence)[number] | null, dir: "prev" | "next") => {
         // glyph + caption + aria — never a bare chevron (review Phase 3.5)
         const arrow = el("a", `app-card-arrow`) as HTMLAnchorElement;
@@ -333,6 +394,7 @@ export function mountCardEditor(
             "aria-label",
             `${dir === "prev" ? "Previous" : "Next"} card: ${label}`
           );
+          arrow.addEventListener("click", hop(slot.cardId, editHref(slot)));
         } else {
           arrow.classList.add("app-card-arrow-off");
           arrow.setAttribute("aria-hidden", "true");
@@ -370,6 +432,9 @@ export function mountCardEditor(
         }
         tab.href = editHref(s);
         tab.title = label;
+        if (s.cardId !== cardId) {
+          tab.addEventListener("click", hop(s.cardId, editHref(s)));
+        }
         strip.appendChild(tab);
       });
       const hiddenSlots = sequence
@@ -396,6 +461,11 @@ export function mountCardEditor(
             `${i + 1} · ${s.title || cardLabel(s.cardType)}`
           ) as HTMLAnchorElement;
           item.href = editHref(s);
+          const go = hop(s.cardId, editHref(s));
+          item.addEventListener("click", (e) => {
+            closeMenu();
+            go(e);
+          });
           menu.appendChild(item);
         }
         const closeMenu = () => {
@@ -444,18 +514,18 @@ export function mountCardEditor(
         titleRow.appendChild(statusChip(`Card ${seqIdx + 1} of ${sequence.length}`, "neutral"));
       }
       titleRow.append(el("span", "app-bar-gap"), saved, backBtn);
-      parent.insertBefore(titleRow, walkRow);
+      wrap.insertBefore(titleRow, walkRow);
 
       head.appendChild(strip);
       // header above the rails; padding keeps it aligned with the editor
-      parent.insertBefore(head, walkRow);
+      wrap.insertBefore(head, walkRow);
       walkRow.appendChild(rail(seqIdx > 0 ? sequence[seqIdx - 1] : null, "prev"));
       host = editorHost(walkRow);
       walkRow.appendChild(
         rail(seqIdx >= 0 && seqIdx < sequence.length - 1 ? sequence[seqIdx + 1] : null, "next")
       );
     } else {
-      host = editorHost(parent);
+      host = editorHost(wrap);
     }
     const rowGuid = row?.id ?? "";
     cleanups.push(
@@ -518,6 +588,22 @@ export function mountCardEditor(
       })
     );
     cleanups.push(() => parkAllFrames());
-  })();
-  return () => cleanups.forEach((fn) => fn());
+    stopLoading();
+    finish();
+  })().catch((err) => {
+    // a failed load must never strand the hold overlay or a hidden wrap
+    stopLoading();
+    wrap.appendChild(
+      el(
+        "div",
+        "app-board-note",
+        `The card could not load: ${err instanceof Error ? err.message : String(err)}`
+      )
+    );
+    finish();
+  });
+  };
+
+  show(initialCardId, true);
+  return () => routeCleanups.forEach((fn) => fn());
 }
