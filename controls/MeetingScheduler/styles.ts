@@ -58,8 +58,16 @@ export const MEETING_CSS = `
   color: var(--ltk-accent);
   background: color-mix(in srgb, var(--ltk-accent) 10%, transparent);
 }
-.ltk-ms-lead-add { font-weight: 700; }
-.ltk-ms-lock { flex: 0 0 auto; font-size: 12px; opacity: 0.8; }
+/* the labelled Start button (design review Phase 2.5) */
+.ltk-ms-start {
+  width: auto;
+  min-width: 58px;
+  min-height: 36px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--ltk-fg);
+}
+.ltk-ms-lock { flex: 0 0 auto; font-size: 12px; opacity: 0.85; white-space: nowrap; }
 .ltk-ms-menu {
   position: absolute;
   z-index: 60;
@@ -188,6 +196,7 @@ export const MEETING_CSS = `
   flex: 0 0 auto;
   display: flex;
   align-items: stretch;
+  min-height: 48px; /* touch floor for the whole selectable row */
   border: 1px solid var(--ltk-hairline);
   border-radius: 6px;
   overflow: hidden; /* the right-edge control hugs the rounded corner */
@@ -203,8 +212,10 @@ export const MEETING_CSS = `
 }
 .ltk-ms-row:hover { border-color: var(--ltk-accent); }
 .ltk-ms-row.ltk-ms-selected {
+  /* selection = outline AND a tint, not a hairline alone (Phase 2.5) */
   border-color: var(--ltk-accent);
   box-shadow: inset 0 0 0 1px var(--ltk-accent);
+  background: color-mix(in srgb, var(--ltk-accent) 5%, transparent);
 }
 .ltk-ms-row.ltk-ms-today { background: rgba(0,0,0,0.03); }
 
@@ -250,12 +261,18 @@ export const MEETING_CSS = `
 .ltk-ms-col-input:focus { outline: none; border-color: var(--ltk-accent); }
 .ltk-ms-col-input:disabled { opacity: 0.6; cursor: default; }
 
-.ltk-ms-row-date {
+.ltk-ms-row-datecell {
   flex: 0 0 92px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.ltk-ms-row-date {
   font-size: 12.5px;
   font-weight: 700;
   color: var(--ltk-fg);
 }
+.ltk-ms-row-rel { font-size: 11.5px; color: var(--ltk-muted); }
 .ltk-ms-row-time {
   flex: 0 0 44px;
   font-size: 12.5px;

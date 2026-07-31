@@ -243,6 +243,20 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .app-mode-dot { transition: none; }
 }
+/* scheduler-pane category identity: 4px top border on the pane (set
+   inline with the category colour) + this labelled chip row — the pane
+   header itself stays white (design review Phase 2.4) */
+.app-pane-cat {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 14px 0;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #57534a;
+}
+.app-pane-catdot { width: 10px; height: 10px; border-radius: 50%; flex: 0 0 auto; }
 .app-board-split {
   flex: 1;
   min-height: 0;

@@ -416,6 +416,13 @@ export class BoardGridView {
     const snap = el("div", "ltk-bg-snap");
     this.renderSnapshot(snap, tile);
     card.appendChild(snap);
+    if (tile.noData) {
+      // an empty card says so in the body, quietly — the title bar
+      // carries identity, not alarm badges (design review Phase 2.2)
+      const emptyLine = el("div", "ltk-bg-emptyline", "Not filled in this meeting");
+      emptyLine.title = "Nothing was recorded on this card";
+      snap.appendChild(emptyLine);
+    }
 
     // title bar along the top: the title only (card type as fallback), with
     // the nav-order field and ✎ edit button at its right end in edit mode
@@ -428,12 +435,11 @@ export class BoardGridView {
         chip.style.background = tile.barColor;
         chip.style.color = textOn(tile.barColor);
       }
-      chip.appendChild(el("span", "ltk-bg-chip-title", barText));
-      if (tile.noData) {
-        const badge = el("span", "ltk-bg-nodata", "no data");
-        badge.title = "Nothing was recorded on this card";
-        chip.appendChild(badge);
+      // read-mode flow position leads the bar (design review Phase 2.3)
+      if (!canEdit && tile.nav > 0) {
+        chip.appendChild(el("span", "ltk-bg-navtag", String(tile.nav)));
       }
+      chip.appendChild(el("span", "ltk-bg-chip-title", barText));
       if (canEdit) {
         // meeting navigation order — distinct from the layout pos
         const nav = el("input", "ltk-bg-nav") as HTMLInputElement;
@@ -449,9 +455,6 @@ export class BoardGridView {
           this.emitLayout();
         });
         chip.appendChild(nav);
-      } else if (tile.nav > 0) {
-        // read mode: show the flow position quietly
-        chip.appendChild(el("span", "ltk-bg-navtag", String(tile.nav)));
       }
       // no ✎ button: tapping the tile itself configures it (see below), so
       // the chip stays clean — just the title and the nav-order field

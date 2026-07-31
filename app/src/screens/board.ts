@@ -23,7 +23,8 @@ import {
 } from "../../../shared/schema/recurrence";
 import { parseMeetingInfo } from "../../../shared/schema/meeting";
 import { openDialog } from "../../../shared/ui/dialog";
-import { el } from "../../../shared/ui/dom";
+import { clear, el } from "../../../shared/ui/dom";
+import { statusChip } from "../../../shared/ui/format";
 import { boardUrl, LATEST, latestInstanceIso } from "../links";
 import { showLoading } from "../loading";
 import { appTheme } from "../cardHost";
@@ -389,9 +390,14 @@ async function renderBoard(
     ).map((t) => (t.barColor === "" ? { ...t, barColor: fallbackBar } : t));
     gridView.setColumnTitles(m.columnTitles);
     gridView.setTiles(tiles, parseColumns(m.grid, tiles));
-    status.textContent =
-      `${current.when.slice(0, 16).replace("T", " ")} — ${current.status}` +
-      (adjusted ? " · adjusted layout" : "");
+    // a friendly date + chips, never "2026-07-31T07:00 — closed"
+    // (design review Phase 2.1)
+    clear(status);
+    status.appendChild(document.createTextNode(friendlyWhen(current.when)));
+    if (current.status === "closed") {
+      status.appendChild(statusChip("🔒 Closed — archived snapshots", "neutral"));
+    }
+    if (adjusted) status.appendChild(statusChip("Adjusted layout", "neutral"));
     // whether the RITUAL allows per-meeting divergence; the scheduler adds
     // the per-meeting rule (created, and never for a closed one)
     schedulerView.setCanAdjustLayout(instancesAdjustable);
@@ -656,10 +662,21 @@ async function renderBoard(
   // without a category stays white (the card's own background)
   const cats = await meetingCategories();
   const catColor = cats.find((c) => c.name === board.category)?.color ?? "";
+  // the pane header stays WHITE — the category speaks through a 4px top
+  // border and a labelled chip, not a filled strip fighting the board's
+  // card titlebars for attention (design review Phase 2.4)
   const schedulerTheme = appTheme();
-  schedulerTheme.titleBar = catColor !== "" ? catColor : "#ffffff";
+  schedulerTheme.titleBar = "#ffffff";
   schedulerView.setTheme(schedulerTheme);
   schedulerView.setChrome("Details & schedule", "");
+  if (catColor !== "") {
+    rightHost.style.borderTop = `4px solid ${catColor}`;
+    const catRow = el("div", "app-pane-cat");
+    const dot = el("span", "app-pane-catdot");
+    dot.style.background = catColor;
+    catRow.append(dot, el("span", "app-pane-catname", board.category));
+    rightHost.prepend(catRow);
+  }
   // no selection yet: the pane menu offers the ritual's own link
   schedulerView.setMeetingLink(boardUrl(board.boardId));
   schedulerView.setMeetingInfo(parseMeetingInfo(blobRaw));

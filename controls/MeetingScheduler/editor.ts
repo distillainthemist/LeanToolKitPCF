@@ -487,6 +487,18 @@ export class MeetingSchedulerView {
     this.root.appendChild(about);
   }
 
+  private relativeDayOf(date: string, today: string): string {
+    if (date === today) return "Today";
+    const d = Math.round(
+      (Date.parse(`${date}T00:00`) - Date.parse(`${today}T00:00`)) / 86_400_000
+    );
+    if (d === 1) return "Tomorrow";
+    if (d === -1) return "Yesterday";
+    if (d > 1 && d <= 14) return `In ${d} days`;
+    if (d < -1 && d >= -14) return `${-d} days ago`;
+    return ""; // beyond two weeks the date speaks for itself
+  }
+
   private renderRow(inst: MeetingInstance, today: string): HTMLElement {
     const row = el("div", "ltk-ms-row");
     if (inst.date === today) row.classList.add("ltk-ms-today");
@@ -495,12 +507,14 @@ export class MeetingSchedulerView {
     const content = el("div", "ltk-ms-row-content");
     row.appendChild(content);
 
-    // identity line: tapping it selects/opens the meeting
+    // identity line: tapping it selects/opens the meeting. The date
+    // carries its relative day underneath (design review Phase 2.5).
     const main = el("div", "ltk-ms-row-main");
-    main.append(
-      el("span", "ltk-ms-row-date", this.prettyDate(inst)),
-      el("span", "ltk-ms-row-time", inst.time)
-    );
+    const dateCell = el("span", "ltk-ms-row-datecell");
+    dateCell.appendChild(el("span", "ltk-ms-row-date", this.prettyDate(inst)));
+    const rel = this.relativeDayOf(inst.date, today);
+    if (rel !== "") dateCell.appendChild(el("span", "ltk-ms-row-rel", rel));
+    main.append(dateCell, el("span", "ltk-ms-row-time", inst.time));
     if (inst.adhoc) main.appendChild(el("span", "ltk-ms-adhoc", "ad-hoc"));
 
     if (inst.shift !== "") {
@@ -543,7 +557,8 @@ export class MeetingSchedulerView {
     }
     main.appendChild(status);
     if (inst.closed) {
-      const lock = el("span", "ltk-ms-lock", "🔒");
+      // the word travels with the glyph — never colour or icon alone
+      const lock = el("span", "ltk-ms-lock", "🔒 Locked");
       lock.title = "Closed — read only (⋮ → Edit meeting to change it)";
       main.appendChild(lock);
     }
@@ -585,7 +600,8 @@ export class MeetingSchedulerView {
     // current/future meeting; a created one gets the record kebab
     if (!this.readOnly) {
       if (inst.recordId === "" && inst.status === "planned" && this.cb.onCreate) {
-        const add = el("button", "ltk-ms-lead ltk-ms-lead-add", "＋") as HTMLButtonElement;
+        // a labelled Start button, not a bare glyph (Phase 2.5)
+        const add = el("button", "ltk-ms-lead ltk-ms-start", "Start") as HTMLButtonElement;
         add.type = "button";
         add.title = "Create this meeting's record";
         add.addEventListener("click", (e) => {
