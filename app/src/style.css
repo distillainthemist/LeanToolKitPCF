@@ -137,7 +137,9 @@ body {
   padding: 2px 2px 0;
 }
 .app-card-tab {
-  /* shrinkable with an ellipsis so the strip never crops at the ends */
+  /* shrinkable with an ellipsis so the strip never crops at the ends.
+     Selection is tint-vs-filled (set inline from the strip colour) —
+     opacity never carries the state (design review Phase 3.2). */
   flex: 0 1 auto;
   min-width: 0;
   max-width: 220px;
@@ -145,23 +147,45 @@ body {
   text-overflow: ellipsis;
   font-size: 12.5px;
   font-weight: 600;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
   padding: 7px 16px;
   border-radius: 8px 8px 0 0;
   text-decoration: none;
   white-space: nowrap;
-  opacity: 0.5;
 }
-.app-card-tab:hover { opacity: 0.85; }
-.app-card-tab-on { opacity: 1; font-weight: 700; }
-.app-card-tab-thin {
-  /* out-of-window card: compressed to its order number, still clickable */
-  flex: 0 0 auto;
-  width: 24px;
-  min-width: 24px;
-  padding: 7px 0;
-  text-align: center;
-  font-size: 11px;
+.app-card-tab:hover { filter: brightness(0.96); }
+.app-card-tab-on { font-weight: 700; }
+/* the out-of-window remainder behind one labelled menu (Phase 3.1) */
+.app-tabmore-wrap { position: relative; flex: 0 0 auto; align-self: center; }
+.app-card-tabmore { min-height: 38px; padding: 6px 12px; white-space: nowrap; }
+.app-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 60;
+  min-width: 220px;
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14);
+  padding: 4px;
+  max-height: 320px;
+  overflow-y: auto;
 }
+.app-menuitem {
+  display: block;
+  padding: 9px 10px;
+  border-radius: 5px;
+  font-size: 13px;
+  color: #26241f;
+  text-decoration: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.app-menuitem:hover { background: #f0f0f0; }
 .app-card-row {
   flex: 1;
   min-height: 0;
@@ -176,12 +200,12 @@ body {
   border-radius: 0 0 8px 8px;
 }
 .app-card-arrow {
-  flex: 0 0 42px;
+  flex: 0 0 48px;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  font-size: 34px;
-  line-height: 1;
+  gap: 2px;
   color: #6d675c;
   background: #fff;
   border-radius: 8px;
@@ -189,6 +213,8 @@ body {
   text-decoration: none;
   user-select: none;
 }
+.app-card-arrow-glyph { font-size: 30px; line-height: 1; }
+.app-card-arrow-cap { font-size: 9.5px; font-weight: 700; letter-spacing: 0.08em; }
 .app-card-arrow:hover { color: var(--app-accent); }
 .app-card-arrow-off { opacity: 0.25; pointer-events: none; }
 

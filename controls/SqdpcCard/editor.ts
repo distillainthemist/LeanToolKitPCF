@@ -199,17 +199,24 @@ export class SqdpcEditor {
     });
     body.appendChild(panels);
 
-    // legend: the configured codes with their icons
+    // legend: the configured codes with their icons AND this month's
+    // counts — the legend answers "how has the month gone" at a glance
+    // (design review Phase 3.4)
+    const counts = this.monthCounts();
     const legend = el("div", "ltk-sq-legend");
     for (const code of this.codes) {
       const item = el("span", "ltk-sq-legend-item");
       const swatch = el("span", "ltk-sq-swatch");
       swatch.style.background = code.color;
       item.appendChild(swatch);
-      item.appendChild(
-        el("span", undefined, code.icon !== "" ? `${code.icon} ${code.label}` : code.label)
-      );
+      const label = code.icon !== "" ? `${code.icon} ${code.label}` : code.label;
+      item.appendChild(el("span", undefined, `${label} · ${counts.byCode[code.code] ?? 0}`));
       legend.appendChild(item);
+    }
+    if (counts.unrated > 0) {
+      const none = el("span", "ltk-sq-legend-item ltk-sq-legend-none");
+      none.appendChild(el("span", undefined, `No entry yet · ${counts.unrated}`));
+      legend.appendChild(none);
     }
     if (!this.readOnly) {
       const raiseHint = this.disableActions ? "" : " · hold to raise an action";
@@ -311,11 +318,40 @@ export class SqdpcEditor {
     }
   }
 
+  /** Local yyyy-mm-dd — the ring must follow the wall clock, not UTC. */
+  private localToday(): string {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  }
+
+  /** This month's entry counts per code + the not-yet-rated slots up to
+   *  today (a future day owes nothing). shift2 counts halves. */
+  private monthCounts(): { byCode: Record<string, number>; unrated: number } {
+    const byCode: Record<string, number> = {};
+    let unrated = 0;
+    const today = this.localToday();
+    const days = monthDays(this.env.data.month, this.granularity === "weekday");
+    const slots = this.granularity === "shift2" ? ["|D", "|N"] : [""];
+    for (const dim of this.dimensions) {
+      for (const day of days) {
+        for (const s of slots) {
+          const v = this.env.data.ratings[`${dim}|${day}${s}`];
+          if (v !== undefined) byCode[v] = (byCode[v] ?? 0) + 1;
+          else if (day <= today) unrated++;
+        }
+      }
+    }
+    return { byCode, unrated };
+  }
+
   private renderTile(dim: string, day: string): HTMLElement {
     const tile = el("div", "ltk-sq-tile");
     if (this.readOnly) tile.classList.add("ltk-readonly");
     const dayNum = String(Number(day.slice(8)));
     const weekday = WEEKDAY_INITIALS[new Date(day + "T00:00:00Z").getUTCDay()];
+    // today wears a ring in live AND snapshot render — the class styles it
+    // from the stylesheet, which snapshots inline (review Phase 3.4)
+    if (day === this.localToday()) tile.classList.add("ltk-sq-todaytile");
 
     if (this.granularity === "shift2") {
       return this.renderShiftTile(tile, dim, day, dayNum, weekday);
@@ -335,7 +371,15 @@ export class SqdpcEditor {
     const sub = el(
       "div",
       "ltk-sq-sub",
-      rated ? (rated.icon !== "" ? rated.icon : weekday) : unknown ? "?" : weekday
+      rated
+        ? rated.icon !== ""
+          ? rated.icon
+          : weekday
+        : unknown
+          ? "?"
+          : day === this.localToday()
+            ? "TODAY"
+            : weekday
     );
     sub.style.color = fg;
     tile.appendChild(sub);

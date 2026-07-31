@@ -93,6 +93,15 @@ export const SQDPC_CSS = `
   flex-wrap: wrap;
 }
 .ltk-sq-legend-item { display: inline-flex; align-items: center; gap: 4px; }
+.ltk-sq-legend-none { font-style: italic; }
+/* today's tile wears a ring — visible live and in the stored snapshot
+   (design review Phase 3.4); negative offset so grid gaps never clip it */
+.ltk-sq-tile.ltk-sq-todaytile {
+  outline: 3px solid var(--ltk-accent);
+  outline-offset: -2px;
+  position: relative;
+  z-index: 1;
+}
 .ltk-sq-swatch {
   display: inline-block;
   width: 12px;

@@ -23,8 +23,9 @@ import {
   parseWeekTopics,
   startOfDay,
 } from "../../../shared/schema/recurrence";
-import { textOn } from "../../../shared/tokens";
+import { readableShade, textOn } from "../../../shared/tokens";
 import { el } from "../../../shared/ui/dom";
+import { statusChip } from "../../../shared/ui/format";
 import { cardMounter, supportedCardTypes } from "../cardRegistry";
 import { appTheme, editorHost } from "../cardHost";
 import { currentViewer, detectHost } from "../runtime";
@@ -289,16 +290,21 @@ export function mountCardEditor(
       const walkRow = el("div", "app-card-row");
       parent.appendChild(walkRow);
       const rail = (slot: (typeof sequence)[number] | null, dir: "prev" | "next") => {
-        const arrow = el(
-          "a",
-          `app-card-arrow`,
-          dir === "prev" ? "‹" : "›"
-        ) as HTMLAnchorElement;
+        // glyph + caption + aria — never a bare chevron (review Phase 3.5)
+        const arrow = el("a", `app-card-arrow`) as HTMLAnchorElement;
+        arrow.appendChild(el("span", "app-card-arrow-glyph", dir === "prev" ? "‹" : "›"));
+        arrow.appendChild(el("span", "app-card-arrow-cap", dir === "prev" ? "PREV" : "NEXT"));
         if (slot) {
+          const label = slot.title || cardLabel(slot.cardType);
           arrow.href = editHref(slot);
-          arrow.title = slot.title || cardLabel(slot.cardType);
+          arrow.title = label;
+          arrow.setAttribute(
+            "aria-label",
+            `${dir === "prev" ? "Previous" : "Next"} card: ${label}`
+          );
         } else {
           arrow.classList.add("app-card-arrow-off");
+          arrow.setAttribute("aria-hidden", "true");
         }
         return arrow;
       };
@@ -315,36 +321,84 @@ export function mountCardEditor(
         end = Math.min(sequence.length, start + 2 * WINDOW + 1);
         start = Math.max(0, end - (2 * WINDOW + 1));
       }
+      // in-window tabs by name; the remainder behind ONE labelled menu
+      // (review Phase 3.1/3.2 — no number stubs, no opacity-as-selection)
       sequence.forEach((s, i) => {
-        const wide = i >= start && i < end;
-        const label = s.title || cardLabel(s.cardType);
-        const tab = el(
-          "a",
-          "app-card-tab",
-          wide ? label : String(i + 1)
-        ) as HTMLAnchorElement;
+        if (i < start || i >= end) return;
+        const label = `${i + 1} · ${s.title || cardLabel(s.cardType)}`;
+        const tab = el("a", "app-card-tab", label) as HTMLAnchorElement;
         const bg = slotBar(s);
-        tab.style.background = bg;
-        tab.style.color = textOn(bg);
+        if (s.cardId === cardId) {
+          tab.style.background = bg;
+          tab.style.color = textOn(bg);
+          tab.classList.add("app-card-tab-on");
+        } else {
+          // inactive = a tint of its own strip colour, readable text
+          tab.style.background = `color-mix(in srgb, ${bg} 13%, #fff)`;
+          tab.style.color = readableShade(bg);
+        }
         tab.href = editHref(s);
-        tab.title = `${i + 1} · ${label}`;
-        if (!wide) tab.classList.add("app-card-tab-thin");
-        if (s.cardId === cardId) tab.classList.add("app-card-tab-on");
+        tab.title = label;
         strip.appendChild(tab);
       });
-      const backBtn = el("a", "app-btn app-card-back", "‹ Back") as HTMLAnchorElement;
+      const hiddenSlots = sequence
+        .map((s, i) => ({ s, i }))
+        .filter(({ i }) => i < start || i >= end);
+      if (hiddenSlots.length > 0) {
+        const moreWrap = el("span", "app-tabmore-wrap");
+        const more = el(
+          "button",
+          "app-btn app-card-tabmore",
+          `＋ ${hiddenSlots.length} more ▾`
+        ) as HTMLButtonElement;
+        more.type = "button";
+        more.setAttribute("aria-haspopup", "menu");
+        more.setAttribute("aria-expanded", "false");
+        const menu = el("div", "app-menu");
+        menu.style.display = "none";
+        for (const { s, i } of hiddenSlots) {
+          const item = el(
+            "a",
+            "app-menuitem",
+            `${i + 1} · ${s.title || cardLabel(s.cardType)}`
+          ) as HTMLAnchorElement;
+          item.href = editHref(s);
+          menu.appendChild(item);
+        }
+        more.addEventListener("click", (e) => {
+          e.stopPropagation();
+          const open = menu.style.display === "none";
+          menu.style.display = open ? "block" : "none";
+          more.setAttribute("aria-expanded", String(open));
+        });
+        const closeOnOutside = (e: PointerEvent) => {
+          if (!moreWrap.contains(e.target as Node)) {
+            menu.style.display = "none";
+            more.setAttribute("aria-expanded", "false");
+          }
+        };
+        document.addEventListener("pointerdown", closeOnOutside);
+        cleanups.push(() => document.removeEventListener("pointerdown", closeOnOutside));
+        moreWrap.append(more, menu);
+        strip.appendChild(moreWrap);
+      }
+      const backBtn = el("a", "app-btn app-card-back", "‹ Back to board") as HTMLAnchorElement;
       backBtn.href = backHref;
       backBtn.title = "Back to the board";
 
       // title line above the tabs: meeting name + occurrence details on
-      // the left, saved status and Back on the right
+      // the left (closed = a chip with the word, review Phase 3.3),
+      // walk position, then saved status and Back on the right
       const titleRow = el("div", "app-card-titlerow");
       titleRow.appendChild(el("span", "app-card-meeting", board.name));
-      let meta = occurrenceMeta(board, instance);
-      if (instance && effectivelyClosed(instance)) {
-        meta = meta === "" ? "closed" : `${meta} · closed`;
-      }
+      const meta = occurrenceMeta(board, instance);
       if (meta !== "") titleRow.appendChild(el("span", "app-card-meta", meta));
+      if (instance && effectivelyClosed(instance)) {
+        titleRow.appendChild(statusChip("🔒 Closed", "neutral"));
+      }
+      if (seqIdx >= 0 && sequence.length > 1) {
+        titleRow.appendChild(statusChip(`Card ${seqIdx + 1} of ${sequence.length}`, "neutral"));
+      }
       titleRow.append(el("span", "app-bar-gap"), saved, backBtn);
       parent.insertBefore(titleRow, walkRow);
 
