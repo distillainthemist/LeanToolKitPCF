@@ -44,6 +44,7 @@ import { getInstance } from "../store/instances";
 import { parseManifest, slotLinkSource, slotPolicy } from "../store/mappers";
 import { listPeople } from "../store/people";
 import { isActionSurface } from "../store/policies";
+import { showLoading } from "../loading";
 import { acquireFrame, frameKey, parkAllFrames, placeFrame } from "../embedFrames";
 
 /**
@@ -105,6 +106,25 @@ function occurrenceMeta(
   return parts.join(" · ");
 }
 
+/**
+ * Short-lived memo for the meeting walk (design review follow-up): a
+ * card-to-card hop is a full route remount, and refetching the SAME
+ * board, instance, roster and palettes on every hop is what blanked the
+ * screen between cards. 60s bounds staleness; the card's own row and
+ * actions are always fetched fresh — they are the live data being
+ * edited, the memo covers only the walk's chrome.
+ */
+const WALK_TTL_MS = 60_000;
+const walkMemo = new Map<string, { at: number; value: Promise<unknown> }>();
+function memo<T>(key: string, fn: () => Promise<T>): Promise<T> {
+  const hit = walkMemo.get(key);
+  if (hit && Date.now() - hit.at < WALK_TTL_MS) return hit.value as Promise<T>;
+  const value = fn();
+  walkMemo.set(key, { at: Date.now(), value });
+  value.catch(() => walkMemo.delete(key)); // a failure must not stick
+  return value;
+}
+
 export function mountCardEditor(
   parent: HTMLElement,
   boardId: string,
@@ -117,8 +137,12 @@ export function mountCardEditor(
   // mid-load departure must still re-lock a reopened meeting
   if (instanceGuid !== "live") cleanups.push(() => relockOnLeave(boardId));
   void (async () => {
+    // never a blank void while data loads (Ben's slideshow flash)
+    const stopLoading = showLoading(parent);
+    cleanups.push(stopLoading);
     const hosted = await detectHost();
     if (!hosted) {
+      stopLoading();
       parent.appendChild(
         el("div", "app-board-note", "The card editor needs the Power Apps host.")
       );
@@ -128,8 +152,10 @@ export function mountCardEditor(
     // from the board designer rather than a meeting record
     const isLive = instanceGuid === "live";
     const [board, instance] = await Promise.all([
-      getBoard(boardId),
-      isLive ? Promise.resolve(null) : getInstance(instanceGuid),
+      memo(`board|${boardId}`, () => getBoard(boardId)),
+      isLive
+        ? Promise.resolve(null)
+        : memo(`inst|${instanceGuid}`, () => getInstance(instanceGuid)),
     ]);
     // an adjusted meeting's cards live in its override manifest, not
     // (necessarily) the board's own
@@ -140,6 +166,7 @@ export function mountCardEditor(
       : null;
     const slot = manifest?.slots.find((x) => x.cardId === cardId);
     if (!board || !manifest || !slot) {
+      stopLoading();
       parent.appendChild(el("p", "app-missing", `Unknown card ${cardId} on ${boardId}`));
       return;
     }
@@ -149,6 +176,7 @@ export function mountCardEditor(
       !isLive &&
       !canViewBoard(board.occurrenceSettingsRaw, currentViewer()?.objectId ?? "")
     ) {
+      stopLoading();
       parent.appendChild(
         el(
           "div",
@@ -235,6 +263,7 @@ export function mountCardEditor(
         }
       }
       if (!row) {
+        stopLoading();
         parent.appendChild(
           el("p", "app-missing", "No data row for this card yet — open the meeting first.")
         );
@@ -244,6 +273,7 @@ export function mountCardEditor(
 
     const mounter = cardMounter(slot.cardType);
     if (!mounter) {
+      stopLoading();
       parent.appendChild(
         el(
           "div",
@@ -256,10 +286,11 @@ export function mountCardEditor(
     }
 
     const [roster, actions, palettes] = await Promise.all([
-      listPeople(),
+      memo("roster", () => listPeople()),
       surface ? actionsForBoard(sourceBoardId) : actionsForInstance(instanceKey),
-      appPalettes(),
+      memo("palettes", () => appPalettes()),
     ]);
+    stopLoading(); // everything below builds synchronously
     const viewer = currentViewer();
     const palette = paletteMap(palettes.states);
     const titleColors = paletteMap(palettes.titles);

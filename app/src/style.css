@@ -103,8 +103,8 @@ body {
   align-items: center;
   gap: 12px;
   flex-wrap: wrap;
-  /* rail width + row gap — aligned with the tabs and editor */
-  padding: 0 50px;
+  /* rail width (48) + row gap (8) — aligned with the tabs and editor */
+  padding: 0 56px;
 }
 .app-card-meeting { font-size: 19px; font-weight: 800; letter-spacing: 0.01em; }
 .app-card-meta { font-size: 13px; font-weight: 400; color: #57534a; }
@@ -113,8 +113,8 @@ body {
   display: flex;
   align-items: center;
   gap: 10px;
-  /* rail width + row gap — keeps the tabs aligned with the editor */
-  padding: 0 50px;
+  /* rail width (48) + row gap (8) — keeps the tabs aligned with the editor */
+  padding: 0 56px;
   /* cancel the outlet gap so the tabs sit ON the card's title bar */
   margin-bottom: -8px;
   position: relative;
