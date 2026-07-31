@@ -13,8 +13,10 @@ import {
   serializePalette,
 } from "../../../shared/palette";
 import { copyText } from "../../../shared/ui/clipboard";
+import { openDialog } from "../../../shared/ui/dialog";
 import { clear, el } from "../../../shared/ui/dom";
 import { draggableRow } from "../../../shared/ui/dragList";
+import { statusChip } from "../../../shared/ui/format";
 import { boardHash, boardUrl } from "../links";
 import { setLeaveGuard } from "../navGuard";
 import { promptText, promptUnsaved } from "../prompts";
@@ -736,7 +738,7 @@ function accessControlCard(
   const note = el("div", "app-field-hint", "");
   const choose = el("button", "app-btn", "Choose group…") as HTMLButtonElement;
   const sync = el("button", "app-btn", "Sync now") as HTMLButtonElement;
-  const stop = el("button", "app-btn", "Stop managing") as HTMLButtonElement;
+  const stop = el("button", "app-btn app-btn-danger", "Stop managing…") as HTMLButtonElement;
   row.append(choose, sync, stop);
   card.append(line, row, note);
 
@@ -797,13 +799,40 @@ function accessControlCard(
   sync.addEventListener("click", () => void runSync());
   stop.addEventListener("click", () => {
     void (async () => {
-      try {
-        await saveAccessGroup(null);
-        note.textContent = "The app no longer manages any group.";
-      } catch (err) {
-        note.textContent = `Couldn't clear the setting: ${errText(err)}`;
-      }
-      await paint();
+      // destructive: name the group and the consequence before acting
+      const g = await accessGroup().catch(() => null);
+      const host = (card.closest(".app-settings-body") as HTMLElement) ?? card;
+      const dlg = openDialog({
+        host,
+        title: `Stop managing ${g?.name ?? "the access group"}?`,
+        buttons: [
+          { label: "Cancel", kind: "secondary", onClick: () => dlg.close() },
+          {
+            label: "Stop managing",
+            kind: "danger",
+            onClick: () => {
+              dlg.close();
+              void (async () => {
+                try {
+                  await saveAccessGroup(null);
+                  note.textContent = "The app no longer manages any group.";
+                } catch (err) {
+                  note.textContent = `Couldn't clear the setting: ${errText(err)}`;
+                }
+                await paint();
+              })();
+            },
+          },
+        ],
+      });
+      dlg.body.appendChild(
+        el(
+          "div",
+          "app-settings-note",
+          "Roster changes stop syncing to the group's membership. Nobody " +
+            "is removed from the group — the app just stops managing it."
+        )
+      );
     })();
   });
   void paint();
@@ -917,7 +946,6 @@ async function renderUsers(body: HTMLElement, me: RosterPerson): Promise<void> {
     body.appendChild(
       accessControlCard(me, () => people, () => void reloadPeople())
     );
-    body.appendChild(directoryAddCard(() => people, () => void reloadPeople()));
   }
 
   // directory reads (job title + account status) are lazy and cached, so
@@ -977,10 +1005,39 @@ async function renderUsers(body: HTMLElement, me: RosterPerson): Promise<void> {
   });
   const bar = el("div", "app-settings-row app-users-filters");
   bar.append(search, siteSel, roleSel, statusSel);
-  body.appendChild(bar);
+  // ONE search per intent (design review Phase 5.1): the filter bar
+  // filters the roster; adding someone is an explicit button that opens
+  // the directory search on demand
+  if (canEdit) {
+    const addBtn = el("button", "app-btn app-btn-primary", "＋ Add person") as HTMLButtonElement;
+    addBtn.setAttribute("aria-expanded", "false");
+    bar.appendChild(addBtn);
+    body.appendChild(bar);
+    const addCard = directoryAddCard(() => people, () => void reloadPeople());
+    addCard.style.display = "none";
+    body.appendChild(addCard);
+    addBtn.addEventListener("click", () => {
+      const open = addCard.style.display === "none";
+      addCard.style.display = open ? "" : "none";
+      addBtn.setAttribute("aria-expanded", String(open));
+      if (open) addCard.querySelector("input")?.focus();
+    });
+  } else {
+    body.appendChild(bar);
+  }
 
-  const count = el("div", "app-settings-note", "");
-  body.appendChild(count);
+  // shared header row — the grid's column labels live here once, not on
+  // every row (Phase 5.2); the count leads it
+  const head = el("div", "app-user-head");
+  const count = el("span", "app-user-head-count", "");
+  head.append(
+    count,
+    el("span", "app-user-head-col", "Site"),
+    el("span", "app-user-head-col", "Crew"),
+    el("span", "app-user-head-col", "Role"),
+    el("span", "app-user-head-col", "Access")
+  );
+  body.appendChild(head);
   const list = el("div", "app-people-list");
   body.appendChild(list);
   body.appendChild(roleLegend());
@@ -1052,18 +1109,30 @@ function labelledControl(label: string, control: HTMLElement): HTMLElement {
   return wrap;
 }
 
-/** The three role definitions, shown under the roster as a key. */
+/** The role definitions, shown under the roster behind a disclosure —
+ *  reference material, not everyday reading (design review Phase 5.6). */
 function roleLegend(): HTMLElement {
   const box = el("div", "app-role-legend");
-  box.appendChild(el("div", "app-user-field-label", "What the roles mean"));
+  const toggle = el("button", "app-legend-toggle", "▸ What the roles mean") as HTMLButtonElement;
+  toggle.type = "button";
+  toggle.setAttribute("aria-expanded", "false");
+  const items = el("div", "app-role-legend-items");
+  items.style.display = "none";
   for (const rk of ROLES) {
     const item = el("div", "app-role-legend-item");
     item.append(
       el("span", `app-role-badge app-role-${rk}`, roleLabel(rk)),
       el("span", "app-role-legend-blurb", ROLE_META[rk].blurb)
     );
-    box.appendChild(item);
+    items.appendChild(item);
   }
+  toggle.addEventListener("click", () => {
+    const open = items.style.display === "none";
+    items.style.display = open ? "" : "none";
+    toggle.textContent = `${open ? "▾" : "▸"} What the roles mean`;
+    toggle.setAttribute("aria-expanded", String(open));
+  });
+  box.append(toggle, items);
   return box;
 }
 
@@ -1082,12 +1151,22 @@ function userRow(
   if (!p.active) r.classList.add("app-user-revoked");
 
   const main = el("div", "app-user-main");
+  // initials avatar (Phase 5.2) — identity lands before the name is read
+  const initials = p.who
+    .split(/\s+/)
+    .filter((w) => w !== "")
+    .map((w) => w[0].toUpperCase());
+  const avatar = el(
+    "span",
+    "app-user-avatar",
+    (initials[0] ?? "?") + (initials.length > 1 ? initials[initials.length - 1] : "")
+  );
+  const ident = el("div", "app-user-ident");
   const nameLine = el("div", "app-user-nameline");
   const roleBadge = el("span", `app-role-badge app-role-${p.role}`, roleLabel(p.role));
-  const statusBadge = el(
-    "span",
-    `app-status-badge app-status-${p.active ? "active" : "revoked"}`,
-    p.active ? "Active" : "Revoked"
+  const statusBadge = statusChip(
+    p.active ? "● Active" : "○ Revoked",
+    p.active ? "green" : "neutral"
   );
   nameLine.append(el("span", "app-people-name", p.who), roleBadge, statusBadge);
 
@@ -1095,7 +1174,8 @@ function userRow(
   // resolves (Office 365 Users). A missing/disabled account is surfaced.
   const titleLine = el("div", "app-user-title", "…");
   const emailLine = el("div", "app-user-email", p.email || "no email on file");
-  main.append(nameLine, titleLine, emailLine);
+  ident.append(nameLine, titleLine, emailLine);
+  main.append(avatar, ident);
   r.appendChild(main);
 
   const paintDirectory = (d: DirectoryProfile) => {
@@ -1161,34 +1241,71 @@ function userRow(
     }
   };
   const role = roleSelect(p.role);
-  role.disabled = !editable || p.whoId === me.whoId; // no self-demotion footguns
+  const isSelf = p.whoId === me.whoId;
+  role.disabled = !editable || isSelf; // no self-demotion footguns
   role.addEventListener("change", () => {
     p.role = role.value || "user";
     roleBadge.textContent = roleLabel(p.role);
     roleBadge.className = `app-role-badge app-role-${p.role}`;
     void upsertPerson({ ...p }, syncWarn);
   });
-  controls.append(
-    labelledControl("Site", site),
-    labelledControl("Crew", crew),
-    labelledControl("Role", role)
-  );
+  const roleCell = labelledControl("Role", role);
+  if (isSelf && canEdit) {
+    // say WHY it is disabled (Phase 5.3)
+    roleCell.appendChild(el("span", "app-user-selfhint", "You can't change your own role"));
+  }
+  controls.append(labelledControl("Site", site), labelledControl("Crew", crew), roleCell);
 
   // revoke / restore app access (removes them from meeting rosters and
-  // people pickers while keeping the row so it can be restored)
-  if (canEdit && p.whoId !== me.whoId) {
+  // people pickers while keeping the row so it can be restored). Revoke
+  // confirms, naming the person and the consequence (Phase 5.5).
+  if (canEdit && !isSelf) {
     const access = el(
       "button",
       `app-btn ${p.active ? "app-btn-danger" : ""}`,
-      p.active ? "Revoke access" : "Restore access"
+      p.active ? "Revoke access…" : "Restore access"
     ) as HTMLButtonElement;
-    access.addEventListener("click", () => {
+    const flip = () => {
       p.active = !p.active;
       // revoke leaves the group / restore rejoins (inside upsertPerson);
       // syncWarn re-finds the row the redraw below creates
       void upsertPerson({ ...p }, syncWarn).then(onChanged);
+    };
+    access.addEventListener("click", () => {
+      if (!p.active) {
+        flip(); // restoring is the undo — no ceremony
+        return;
+      }
+      const host = (r.closest(".app-settings-body") as HTMLElement) ?? r;
+      const dlg = openDialog({
+        host,
+        title: `Revoke access for ${p.who}?`,
+        buttons: [
+          { label: "Cancel", kind: "secondary", onClick: () => dlg.close() },
+          {
+            label: "Revoke access",
+            kind: "danger",
+            onClick: () => {
+              dlg.close();
+              flip();
+            },
+          },
+        ],
+      });
+      dlg.body.appendChild(
+        el(
+          "div",
+          "app-settings-note",
+          `${p.who} leaves the access group and disappears from meeting ` +
+            "rosters and people pickers. Their row stays here so access " +
+            "can be restored later."
+        )
+      );
     });
     controls.append(labelledControl("Access", access));
+  } else {
+    // an empty cell keeps the grid's columns aligned
+    controls.append(el("span", "app-user-field"));
   }
 
   r.appendChild(controls);
