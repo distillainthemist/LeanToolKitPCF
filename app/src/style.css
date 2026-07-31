@@ -567,7 +567,8 @@ input[type="color"].app-cat-swatch {
   opacity: 0.85;
 }
 .app-wizard-cancel:hover { opacity: 1; background: rgba(255, 255, 255, 0.18); }
-.app-settings { display: flex; flex-direction: column; gap: 12px; max-width: 900px; }
+/* full-width: settings owns the screen like the hub does (Ben, 2026-08-01) */
+.app-settings { display: flex; flex-direction: column; gap: 12px; }
 /* white-card underline tabs — same look as the hub's Cadence/Actions */
 .app-settings-tabs { display: flex; gap: 2px; }
 .app-settings-tab {
@@ -707,12 +708,14 @@ input[type="color"].app-cat-swatch {
   display: flex;
   align-items: stretch;
   gap: 10px;
-  flex-wrap: wrap;
+  /* one line: tabs left, View-as pinned top-right (never wrapped below) */
+  flex-wrap: nowrap;
   padding: 0 10px;
   border-bottom: 1px solid #eceae5;
 }
 .app-settings-tabsrow .app-settings-tabs { flex: 1; }
-.app-settings-tabsrow .app-viewas { align-self: center; }
+.app-settings-tabsrow .app-viewas { align-self: center; flex: 0 0 auto; }
+.app-settings-tabsrow .app-settings-tabs { flex: 1; min-width: 0; overflow-x: auto; }
 /* the single settings card: tabs row on top, body below, no gap */
 .app-settings-card {
   display: flex;
@@ -880,6 +883,9 @@ input[type="color"].app-color:disabled { opacity: 0.4; cursor: default; }
      these need the extra specificity to win — the controls dissolve into
      the row's grid and each field takes its own column */
   .app-user-row .app-user-controls { display: contents; }
+  /* the generic people-list cap (860px) would clip the grid's last
+     column — the Users register needs the full card width */
+  .app-settings-body .app-people-list { max-width: none; }
   .app-user-row .app-user-field { min-width: 0; width: 100%; }
   .app-user-row .app-user-field .app-input { width: 100%; min-width: 0; }
   .app-user-row .app-user-field-label { display: none; }
