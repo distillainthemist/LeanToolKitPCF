@@ -41,6 +41,8 @@ export interface MeetingWizardCallbacks {
 interface Step {
   key: string;
   label: string;
+  /** One line saying what the step is FOR — shown under its title. */
+  description: string;
   render: (body: HTMLElement) => void;
 }
 
@@ -195,20 +197,51 @@ export class MeetingWizardView {
 
   private steps(): Step[] {
     const list: Step[] = [
-      { key: "basics", label: "Basics", render: (b) => this.renderBasics(b) },
-      { key: "org", label: "Organisation", render: (b) => this.renderOrg(b) },
-      { key: "cadence", label: "Cadence", render: (b) => this.renderCadence(b) },
+      {
+        key: "basics",
+        label: "Basics",
+        description: "Name the meeting and say what it is for.",
+        render: (b) => this.renderBasics(b),
+      },
+      {
+        key: "org",
+        label: "Organisation",
+        description: "Where in the organisation this meeting lives.",
+        render: (b) => this.renderOrg(b),
+      },
+      {
+        key: "cadence",
+        label: "Cadence",
+        description: "When it runs and how often.",
+        render: (b) => this.renderCadence(b),
+      },
     ];
     // crews/roster fold into the Cadence page as one site-roster pick
     list.push(
-      { key: "people", label: "Participants", render: (b) => this.renderPeople(b) },
-      { key: "records", label: "Meeting records", render: (b) => this.renderRecords(b) },
-      { key: "review", label: "Review", render: (b) => this.renderReview(b) }
+      {
+        key: "people",
+        label: "Participants",
+        description: "Who owns and attends it.",
+        render: (b) => this.renderPeople(b),
+      },
+      {
+        key: "records",
+        label: "Meeting records",
+        description: "What gets captured on each meeting's record.",
+        render: (b) => this.renderRecords(b),
+      },
+      {
+        key: "review",
+        label: "Review",
+        description: "Check the setup before it goes live.",
+        render: (b) => this.renderReview(b),
+      }
     );
     if (this.boardStepMount !== null) {
       list.push({
         key: "board",
         label: "Meeting board",
+        description: "Lay out the cards the meeting runs on.",
         render: (b) => this.renderBoardStep(b),
       });
     }
@@ -254,8 +287,15 @@ export class MeetingWizardView {
     steps.forEach((s, i) => {
       const dot = el("button", "ltk-mw-step") as HTMLButtonElement;
       dot.type = "button";
-      dot.append(el("span", "ltk-mw-step-n", String(i + 1)), el("span", "ltk-mw-step-label", s.label));
-      if (i === idx) dot.classList.add("ltk-mw-step-current");
+      // done steps trade their number for a ✓ (design review Phase 4.1)
+      dot.append(
+        el("span", "ltk-mw-step-n", i < idx ? "✓" : String(i + 1)),
+        el("span", "ltk-mw-step-label", s.label)
+      );
+      if (i === idx) {
+        dot.classList.add("ltk-mw-step-current");
+        dot.setAttribute("aria-current", "step");
+      }
       if (i < idx) dot.classList.add("ltk-mw-step-done");
       if (i > idx) gated.push(dot);
       dot.addEventListener("click", () => {
@@ -271,6 +311,9 @@ export class MeetingWizardView {
     // the centred form column — fields compose the same at any host width
     const form = el("div", "ltk-mw-form");
     body.appendChild(form);
+    // the step announces itself before its fields (Phase 4.2)
+    form.appendChild(el("div", "ltk-mw-stephead", step.label));
+    form.appendChild(el("div", "ltk-mw-stepdesc", step.description));
     step.render(form);
 
     // footer: Back / Next, or Create on the review step
@@ -285,8 +328,15 @@ export class MeetingWizardView {
       foot.appendChild(back);
     }
     foot.appendChild(el("span", "ltk-mw-foot-gap"));
+    // orientation in the middle of the footer (Phase 4.5)
+    foot.appendChild(el("span", "ltk-mw-stepcount", `Step ${idx + 1} of ${steps.length}`));
+    foot.appendChild(el("span", "ltk-mw-foot-gap"));
     if (idx < steps.length - 1) {
-      const next = el("button", "ltk-mw-btn ltk-mw-btn-primary", "Next ›") as HTMLButtonElement;
+      const next = el(
+        "button",
+        "ltk-mw-btn ltk-mw-btn-primary",
+        `Next: ${steps[idx + 1].label} ›`
+      ) as HTMLButtonElement;
       next.type = "button";
       if (step.key === "basics") gated.push(next);
       next.addEventListener("click", () => {
@@ -315,6 +365,29 @@ export class MeetingWizardView {
   }
 
   // ---- field helpers ----
+
+  /** A bordered toggle row: 22px control, bold claim, plain-language
+   *  consequence underneath (design review Phase 4.4). */
+  private checkRow(
+    claim: string,
+    consequence: string,
+    checked: boolean,
+    onChange: (v: boolean) => void
+  ): HTMLElement {
+    const wrap = el("label", "ltk-mw-checkrow");
+    const box = el("input", "") as HTMLInputElement;
+    box.type = "checkbox";
+    box.checked = checked;
+    box.disabled = this.readOnly;
+    box.addEventListener("change", () => onChange(box.checked));
+    const text = el("span", "ltk-mw-checkrow-text");
+    text.append(
+      el("span", "ltk-mw-checkrow-claim", claim),
+      el("span", "ltk-mw-checkrow-why", consequence)
+    );
+    wrap.append(box, text);
+    return wrap;
+  }
 
   private row(label: string, input: HTMLElement, help?: string): HTMLElement {
     const row = el("div", "ltk-mw-row");
@@ -557,20 +630,17 @@ export class MeetingWizardView {
       )
     );
 
-    const conf = el("input", "") as HTMLInputElement;
-    conf.type = "checkbox";
-    conf.checked = this.draft.confidential;
-    conf.disabled = this.readOnly;
-    conf.addEventListener("change", () => {
-      this.draft.confidential = conf.checked;
-      this.commit();
-    });
-    const confWrap = el("label", "ltk-mw-help");
-    confWrap.append(
-      conf,
-      " Confidential — only the owner and participants can view this meeting"
+    body.appendChild(
+      this.checkRow(
+        "Confidential",
+        "Only the owner and participants can see this meeting anywhere in the app.",
+        this.draft.confidential,
+        (v) => {
+          this.draft.confidential = v;
+          this.commit();
+        }
+      )
     );
-    body.appendChild(confWrap);
   }
 
   private renderOrg(body: HTMLElement): void {
@@ -1058,17 +1128,17 @@ export class MeetingWizardView {
       )
     );
 
-    const adj = el("input", "") as HTMLInputElement;
-    adj.type = "checkbox";
-    adj.checked = this.draft.instancesAdjustable;
-    adj.disabled = this.readOnly;
-    adj.addEventListener("change", () => {
-      this.draft.instancesAdjustable = adj.checked;
-      this.commit();
-    });
-    const wrap = el("label", "ltk-mw-help");
-    wrap.append(adj, " Participants can adjust individual meeting instances (add ad-hoc cards)");
-    body.appendChild(wrap);
+    body.appendChild(
+      this.checkRow(
+        "Participants can adjust single meetings",
+        "Lets a meeting add ad-hoc cards to its own board without changing the ritual.",
+        this.draft.instancesAdjustable,
+        (v) => {
+          this.draft.instancesAdjustable = v;
+          this.commit();
+        }
+      )
+    );
   }
 
   private renderReview(body: HTMLElement): void {
