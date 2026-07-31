@@ -19,6 +19,14 @@ export const LTK_BASE_CSS = `
 }
 .ltk-root *, .ltk-root *::before, .ltk-root *::after { box-sizing: border-box; }
 
+/* WCAG 2.2: a visible ring on every keyboard stop, never on mouse click
+   (design review Phase 0.1). Offset 2 keeps rings outside the control;
+   tiles that clip may override locally with offset -2. */
+.ltk-root :where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--ltk-accent);
+  outline-offset: 2px;
+}
+
 /* ---- title bar + prompts ---- */
 .ltk-titlebar {
   display: flex;
@@ -66,7 +74,7 @@ export const LTK_BASE_CSS = `
      no --ltk-titlebar-fg, so it falls back to the card's foreground. */
   color: var(--ltk-titlebar-fg, var(--ltk-fg));
   font-size: 18px; line-height: 1; cursor: pointer;
-  min-width: 32px; min-height: 32px; border-radius: 6px;
+  min-width: 44px; min-height: 44px; border-radius: 6px;
 }
 .ltk-kebab-btn:hover { background: var(--ltk-hairline); }
 .ltk-kebab-menu {
@@ -127,13 +135,13 @@ export const LTK_BASE_CSS = `
 .ltk-check {
   display: flex; align-items: center; gap: 8px;
   border: 1px solid var(--ltk-hairline); border-radius: 6px;
-  padding: 8px 10px; min-height: 40px; cursor: pointer; font-size: 14px;
+  padding: 8px 10px; min-height: 44px; cursor: pointer; font-size: 14px;
   transition: border-color 150ms ease, background 150ms ease;
 }
 .ltk-check:hover { border-color: var(--ltk-accent); }
 .ltk-check input {
   accent-color: var(--ltk-accent);
-  width: 16px; height: 16px; margin: 0; flex: 0 0 auto; cursor: pointer;
+  width: 22px; height: 22px; margin: 0; flex: 0 0 auto; cursor: pointer;
 }
 .ltk-check-on { border-color: var(--ltk-accent); background: var(--ltk-hairline); }
 
@@ -146,9 +154,8 @@ export const LTK_BASE_CSS = `
 .ltk-input {
   font: inherit; font-size: 14px; color: var(--ltk-fg);
   background: var(--ltk-bg); border: 1px solid var(--ltk-hairline);
-  border-radius: 6px; padding: 8px 10px; min-height: 36px;
+  border-radius: 6px; padding: 8px 10px; min-height: 44px;
 }
-.ltk-input:focus { outline: 2px solid var(--ltk-accent); outline-offset: -1px; }
 .ltk-textarea { resize: vertical; }
 .ltk-char-counter { font-size: 12px; color: var(--ltk-muted); text-align: right; }
 
@@ -208,8 +215,8 @@ export const LTK_BASE_CSS = `
   background: none;
   color: var(--ltk-muted);
   font-size: 14px;
-  min-width: 32px;
-  min-height: 32px;
+  min-width: 44px;
+  min-height: 44px;
   border-radius: 6px;
   cursor: pointer;
   flex: 0 0 auto;
@@ -220,7 +227,7 @@ export const LTK_BASE_CSS = `
 .ltk-btn {
   font: inherit; font-size: 14px; font-weight: 600;
   border-radius: 6px; padding: 8px 14px; cursor: pointer;
-  border: 1px solid transparent; min-height: 36px;
+  border: 1px solid transparent; min-height: 44px;
   transition: background 150ms ease, color 150ms ease;
 }
 .ltk-btn-primary { background: var(--ltk-accent); color: #ffffff; }

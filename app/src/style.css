@@ -5,6 +5,14 @@
 /* the app accent — branding settings will override this (v2 slice 3) */
 :root { --app-accent: #2563eb; }
 
+/* WCAG 2.2: a visible ring on every keyboard stop, never on mouse click
+   (design review Phase 0.1). Offset 2 keeps it outside the control; use
+   offset -2 locally only where an overflow:hidden parent would clip. */
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--app-accent, #2563eb);
+  outline-offset: 2px;
+}
+
 html, body { height: 100%; }
 
 body {
@@ -203,7 +211,9 @@ body {
   background: #fff;
   color: #26241f;
   border-radius: 8px;
-  padding: 6px 12px;
+  /* 44px touch floor (design review Phase 0.2) */
+  min-height: 44px;
+  padding: 10px 14px;
   cursor: pointer;
   text-decoration: none;
 }
@@ -282,7 +292,7 @@ body {
 }
 .app-loading-by {
   font-size: 12.5px;
-  color: #8a847a;
+  color: #6d675c;
 }
 .app-board-left, .app-board-right {
   position: relative; /* dialog overlays anchor here */
@@ -323,6 +333,7 @@ body {
   font-size: 13px;
   border: 1px solid #d9d5cd;
   border-radius: 8px;
+  min-height: 44px; /* touch floor */
   padding: 7px 10px;
   background: #fff;
 }
@@ -612,7 +623,7 @@ input[type="color"].app-cat-swatch {
 }
 .app-owner:hover:not(:disabled) { border-color: var(--app-accent); color: var(--app-accent); }
 .app-owner:disabled { cursor: default; opacity: 0.8; }
-.app-owner-none { border-style: dashed; color: #8a847a; }
+.app-owner-none { border-style: dashed; color: #6d675c; }
 .app-owner-none:disabled { display: none; } /* nothing to show or do */
 .app-cadence-pane { display: flex; flex-direction: column; gap: 10px; }
 
@@ -672,7 +683,7 @@ input[type="color"].app-cat-swatch {
 .app-settings-card .app-settings-body { box-shadow: none; border-radius: 0; }
 .app-settings-card .app-save-bar { border-radius: 0; border-right: none; border-top: none; }
 .app-viewas { display: flex; align-items: center; gap: 7px; margin-left: auto; }
-.app-viewas-select { padding: 5px 8px; font-size: 12.5px; }
+.app-viewas-select { padding: 5px 8px; font-size: 12.5px; min-height: 44px; }
 .app-viewas-banner {
   flex: 0 0 auto;
   display: flex;
@@ -701,9 +712,9 @@ input[type="color"].app-cat-swatch {
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: #8a847a;
+  color: #6d675c;
 }
-.app-field-hint { font-size: 12px; color: #8a847a; }
+.app-field-hint { font-size: 12px; color: #6d675c; }
 
 /* section heading within a tab */
 .app-section {
@@ -739,8 +750,8 @@ input[type="color"].app-color::-webkit-color-swatch-wrapper { padding: 0; }
 input[type="color"].app-color::-webkit-color-swatch { border: none; border-radius: 5px; }
 input[type="color"].app-color:disabled { opacity: 0.4; cursor: default; }
 .app-accent-group { display: flex; align-items: center; gap: 12px; }
-.app-check { display: flex; align-items: center; gap: 7px; font-size: 13px; cursor: pointer; }
-.app-check input { width: 16px; height: 16px; accent-color: var(--app-accent); }
+.app-check { display: flex; align-items: center; gap: 7px; font-size: 13px; cursor: pointer; min-height: 44px; }
+.app-check input { width: 22px; height: 22px; accent-color: var(--app-accent); }
 
 /* branding logo row */
 .app-logo-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
@@ -784,7 +795,7 @@ input[type="color"].app-color:disabled { opacity: 0.4; cursor: default; }
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: #8a847a;
+  color: #6d675c;
 }
 
 /* role badges (roster + legend) */
@@ -811,7 +822,7 @@ input[type="color"].app-color:disabled { opacity: 0.4; cursor: default; }
   white-space: nowrap;
 }
 .app-status-active { background: #e3f4e8; color: #1a7f45; }
-.app-status-revoked { background: #f1efec; color: #8a847a; border: 1px solid #ddd8d0; }
+.app-status-revoked { background: #f1efec; color: #6d675c; border: 1px solid #ddd8d0; }
 
 /* job title / directory line */
 .app-user-title { font-size: 12.5px; color: #57534a; }
@@ -859,7 +870,7 @@ input[type="color"].app-color:disabled { opacity: 0.4; cursor: default; }
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: #8a847a;
+  color: #6d675c;
   padding: 8px 6px 3px;
 }
 .app-org-company:first-child { padding-top: 2px; }
@@ -880,8 +891,8 @@ input[type="color"].app-color:disabled { opacity: 0.4; cursor: default; }
 .app-org-siteitem-on { background: #fff; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
 .app-org-siteitem-on .app-org-sitename { color: var(--app-accent); }
 .app-org-sitename { font-weight: 600; font-size: 13px; }
-.app-org-sitemeta { font-size: 11.5px; color: #8a847a; }
-.app-org-empty { font-size: 12px; color: #8a847a; font-style: italic; padding: 2px 10px 4px; }
+.app-org-sitemeta { font-size: 11.5px; color: #6d675c; }
+.app-org-empty { font-size: 12px; color: #6d675c; font-style: italic; padding: 2px 10px 4px; }
 .app-org-add {
   font: inherit;
   font-size: 12px;
@@ -969,6 +980,8 @@ input[type="color"].app-color:disabled { opacity: 0.4; cursor: default; }
   cursor: pointer;
   color: #b6b0a6;
   font-size: 13px;
+  min-width: 44px;
+  min-height: 44px;
   padding: 2px 4px;
   flex: 0 0 auto;
 }
@@ -1014,7 +1027,8 @@ input[type="color"].app-color:disabled { opacity: 0.4; cursor: default; }
   background: #fff;
   color: #57534a;
   border-radius: 999px;
-  padding: 4px 10px;
+  min-height: 36px; /* dense secondary control — 36px floor */
+  padding: 4px 12px;
   cursor: pointer;
 }
 .app-day-chip:disabled { cursor: default; opacity: 0.6; }
@@ -1331,7 +1345,7 @@ input[type="color"].app-color:disabled { opacity: 0.4; cursor: default; }
 }
 .app-picker-art svg { width: 100%; height: 100%; object-fit: contain; }
 .app-picker-opt-label { font-size: 13px; font-weight: 700; }
-.app-picker-opt-desc { font-size: 11.5px; line-height: 1.3; color: #6b6b6b; }
+.app-picker-opt-desc { font-size: 12.5px; line-height: 1.3; color: #6b6b6b; }
 .app-picker-empty { font-size: 13px; color: #6b6b6b; padding: 8px 2px; }
 
 /* the composer grid now fills the width the settings pane used to take */

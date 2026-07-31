@@ -167,14 +167,14 @@ export const LEANHUB_CSS = `
 }
 .ltk-lh-chip:hover { border-color: var(--ltk-accent); box-shadow: 0 2px 8px rgba(0,0,0,0.12); }
 .ltk-lh-chip-title {
-  font-size: 11.5px;
+  font-size: 12.5px;
   font-weight: 700;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .ltk-lh-chip-meta {
-  font-size: 10px;
+  font-size: 11.5px;
   color: var(--ltk-muted);
   white-space: nowrap;
   overflow: hidden;
@@ -251,11 +251,12 @@ export const LEANHUB_CSS = `
   gap: 10px;
   border: 1px solid var(--ltk-hairline);
   border-radius: 8px;
+  min-height: 44px; /* touch floor: the tick's row is its target */
   padding: 8px 10px;
 }
 .ltk-lh-tick {
-  width: 16px;
-  height: 16px;
+  width: 22px;
+  height: 22px;
   flex: 0 0 auto;
   margin: 0;
   accent-color: var(--ltk-accent);
@@ -325,8 +326,8 @@ export const LEANHUB_CSS = `
   font: inherit;
   font-size: 10.5px;
   font-weight: 700;
-  width: 22px;
-  height: 22px;
+  width: 36px;
+  height: 36px;
   border-radius: 999px;
   border: 1px solid var(--ltk-hairline);
   background: var(--ltk-bg);

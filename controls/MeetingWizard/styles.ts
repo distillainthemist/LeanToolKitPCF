@@ -106,7 +106,7 @@ export const WIZARD_CSS = `
   padding: 8px 10px;
   width: 100%;
 }
-.ltk-mw-input:focus { outline: 2px solid var(--ltk-accent); outline-offset: -1px; }
+.ltk-mw-input:focus-visible { outline: 2px solid var(--ltk-accent); outline-offset: 2px; }
 .ltk-mw-textarea { min-height: 72px; resize: vertical; }
 .ltk-mw-help { font-size: 12px; color: var(--ltk-muted); }
 
@@ -166,6 +166,7 @@ export const WIZARD_CSS = `
   background: var(--ltk-bg);
   color: var(--ltk-muted);
   border-radius: 999px;
+  min-height: 36px; /* dense secondary control — 36px floor */
   padding: 4px 12px;
   cursor: pointer;
 }
