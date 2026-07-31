@@ -345,7 +345,6 @@ export function mountCardEditor(
         .map((s, i) => ({ s, i }))
         .filter(({ i }) => i < start || i >= end);
       if (hiddenSlots.length > 0) {
-        const moreWrap = el("span", "app-tabmore-wrap");
         const more = el(
           "button",
           "app-btn app-card-tabmore",
@@ -354,8 +353,11 @@ export function mountCardEditor(
         more.type = "button";
         more.setAttribute("aria-haspopup", "menu");
         more.setAttribute("aria-expanded", "false");
+        // the menu lives on document.body with FIXED positioning — the
+        // tabs strip clips its own overflow (that is the windowing), so
+        // an absolute child there would open invisibly
         const menu = el("div", "app-menu");
-        menu.style.display = "none";
+        menu.style.position = "fixed";
         for (const { s, i } of hiddenSlots) {
           const item = el(
             "a",
@@ -365,22 +367,33 @@ export function mountCardEditor(
           item.href = editHref(s);
           menu.appendChild(item);
         }
+        const closeMenu = () => {
+          menu.remove();
+          more.setAttribute("aria-expanded", "false");
+        };
         more.addEventListener("click", (e) => {
           e.stopPropagation();
-          const open = menu.style.display === "none";
-          menu.style.display = open ? "block" : "none";
-          more.setAttribute("aria-expanded", String(open));
+          if (menu.isConnected) {
+            closeMenu();
+            return;
+          }
+          const r = more.getBoundingClientRect();
+          menu.style.top = `${r.bottom + 4}px`;
+          menu.style.left = `${Math.min(r.left, window.innerWidth - 240)}px`;
+          document.body.appendChild(menu);
+          more.setAttribute("aria-expanded", "true");
         });
         const closeOnOutside = (e: PointerEvent) => {
-          if (!moreWrap.contains(e.target as Node)) {
-            menu.style.display = "none";
-            more.setAttribute("aria-expanded", "false");
+          if (menu.isConnected && !menu.contains(e.target as Node) && e.target !== more) {
+            closeMenu();
           }
         };
         document.addEventListener("pointerdown", closeOnOutside);
-        cleanups.push(() => document.removeEventListener("pointerdown", closeOnOutside));
-        moreWrap.append(more, menu);
-        strip.appendChild(moreWrap);
+        cleanups.push(() => {
+          document.removeEventListener("pointerdown", closeOnOutside);
+          menu.remove();
+        });
+        strip.appendChild(more);
       }
       const backBtn = el("a", "app-btn app-card-back", "‹ Back to board") as HTMLAnchorElement;
       backBtn.href = backHref;
