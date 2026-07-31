@@ -87,6 +87,27 @@ function asStr(v: unknown): string {
 }
 
 /** meetingsJSON: [{boardId, settingsJSON}] — settingsJSON string or object. */
+/**
+ * The group label for an action's source (design review Phase 1.4): the
+ * host-supplied label map first; then Personal/Other semantics; then a
+ * board-title fallback by instanceId prefix (`boardId:cardId` — actions
+ * minted on embed cards can carry a card id the label map never saw).
+ * A raw id must never reach the screen.
+ */
+export function sourceLabel(
+  instanceId: string,
+  source: string,
+  labels: Record<string, string>,
+  boardTitle: (boardId: string) => string | undefined
+): string {
+  const exact = labels[instanceId];
+  if (exact !== undefined) return exact;
+  if (source === "leanhub" || instanceId.startsWith("hub")) return "Personal";
+  if (instanceId === "") return "Other";
+  const title = boardTitle(instanceId.split(":")[0]);
+  return title !== undefined ? `${title} · card` : "Unknown board · card";
+}
+
 export function parseHubMeetings(raw: string | null | undefined): HubMeeting[] {
   const t = (raw ?? "").trim();
   if (t === "") return [];

@@ -41,6 +41,11 @@ export const LEANHUB_CSS = `
   cursor: pointer;
 }
 .ltk-lh-tab-on { color: var(--ltk-fg); border-bottom-color: var(--ltk-accent); }
+.ltk-lh-tabcount {
+  display: inline-block; margin-left: 6px; min-width: 18px; text-align: center;
+  background: #fdecec; color: #a02832; border-radius: 999px;
+  font-size: 11.5px; font-weight: 700; padding: 1px 6px; line-height: 1.5;
+}
 .ltk-lh-body {
   flex: 1;
   min-height: 0;
@@ -213,6 +218,49 @@ export const LEANHUB_CSS = `
 .ltk-lh-bucket-today .ltk-lh-bucket-label { color: #b45309; }
 .ltk-lh-bucket-today .ltk-lh-bucket-count { background: #fef3e2; color: #b45309; }
 .ltk-lh-bucket-none { font-size: 12px; color: var(--ltk-muted); padding: 2px 2px 4px; }
+.ltk-lh-linklike {
+  border: none; background: none; padding: 0; font: inherit;
+  color: var(--ltk-accent); cursor: pointer; text-decoration: underline;
+}
+
+/* ---- My day agenda (Phase 1.1 — the hour grid stays on Cadence) ---- */
+.ltk-lh-agenda { display: flex; flex-direction: column; gap: 8px; padding: 8px 14px 14px; overflow-y: auto; }
+.ltk-lh-agendarow {
+  display: flex; align-items: center; gap: 12px;
+  border: 1px solid var(--ltk-hairline);
+  border-left: 4px solid var(--ltk-hairline);
+  border-radius: 8px; padding: 10px 12px; min-height: 56px;
+}
+.ltk-lh-agenda-time {
+  font-variant-numeric: tabular-nums; font-weight: 700; font-size: 14px;
+  flex: 0 0 auto; width: 48px;
+}
+.ltk-lh-agenda-main { flex: 1; min-width: 0; }
+.ltk-lh-agenda-name { font-size: 14px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ltk-lh-agenda-meta { font-size: 12px; color: var(--ltk-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ltk-lh-agenda-open { flex: 0 0 auto; background: none; border: 1px solid var(--ltk-hairline); color: var(--ltk-fg); }
+.ltk-lh-agenda-open:hover { border-color: var(--ltk-accent); color: var(--ltk-accent); }
+.ltk-lh-agenda-empty { font-size: 13px; color: var(--ltk-muted); font-style: italic; padding: 8px 2px; }
+
+/* ---- Actions filter chips + Done disclosure (Phases 1.5/1.6) ---- */
+.ltk-lh-fchips { display: flex; gap: 6px; flex-wrap: wrap; }
+.ltk-lh-fchip {
+  font: inherit; font-size: 12.5px; font-weight: 600;
+  border: 1px solid var(--ltk-hairline); background: var(--ltk-bg);
+  color: var(--ltk-muted); border-radius: 999px;
+  min-height: 36px; padding: 4px 14px; cursor: pointer;
+}
+.ltk-lh-fchip-on {
+  background: color-mix(in srgb, var(--ltk-accent) 12%, #fff);
+  border-color: color-mix(in srgb, var(--ltk-accent) 40%, #fff);
+  color: var(--ltk-accent);
+}
+.ltk-lh-donetoggle {
+  font: inherit; font-size: 13px; font-weight: 600; text-align: left;
+  border: none; background: none; color: var(--ltk-muted);
+  min-height: 44px; padding: 6px 2px; cursor: pointer;
+}
+.ltk-lh-donetoggle:hover { color: var(--ltk-fg); }
 @media (max-width: 760px) {
   .ltk-lh-myday { grid-template-columns: 1fr; }
   .ltk-lh-myday-cal { border-right: none; border-bottom: 1px solid var(--ltk-hairline); }

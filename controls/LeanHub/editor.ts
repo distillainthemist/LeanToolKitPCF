@@ -33,8 +33,10 @@ import {
   projectInstances,
   ProtectedTime,
   ScopeKind,
+  sourceLabel,
   timeToMinutes,
 } from "./types";
+import { dueTone, relativeDue, statusChip } from "../../shared/ui/format";
 import { LEANHUB_CSS } from "./styles";
 
 export interface LeanHubCallbacks {
@@ -55,6 +57,9 @@ export class LeanHubView {
   private meetings: HubMeeting[] = [];
   private protectedTimes: ProtectedTime[] = [];
   private prefs: HubPrefs = defaultPrefs();
+  /** Actions-tab filter chip (Phase 1.5) + Done disclosure (1.6). */
+  private actionFilter: "all" | "overdue" | "today" | "done" = "all";
+  private showDone = false;
   private people: Person[] = [];
   private viewerId = "";
   private actions: LtkAction[] = [];
@@ -283,9 +288,21 @@ export class LeanHubView {
     ];
     for (const t of this.extraTabs) defs.push(t);
     if (!this.hideSettingsTab) defs.push({ key: "settings", label: "Settings" });
+    // the Actions tab wears its overdue count (design review Phase 1.3)
+    const overdueCount = this.actions.filter(
+      (a) =>
+        isOverdue(a) &&
+        (this.viewerId === "" || a.assignees.some((x) => x.whoId === this.viewerId)) &&
+        !(this.myPart(a)?.done ?? false)
+    ).length;
     for (const t of defs) {
       const btn = el("button", "ltk-lh-tab", t.label) as HTMLButtonElement;
       btn.type = "button";
+      if (t.key === "actions" && overdueCount > 0) {
+        const chip = el("span", "ltk-lh-tabcount", String(overdueCount));
+        chip.title = `${overdueCount} overdue action${overdueCount === 1 ? "" : "s"}`;
+        btn.appendChild(chip);
+      }
       if (t.key === this.tab) btn.classList.add("ltk-lh-tab-on");
       btn.addEventListener("click", () => {
         this.tab = t.key;
@@ -611,7 +628,35 @@ export class LeanHubView {
       const meeting = byId.get(inst.boardId);
       return meeting ? instanceForPerson(meeting, inst, this.viewerId) : false;
     });
-    left.appendChild(this.buildGrid([today], instances));
+    // an AGENDA, not an hour grid (design review Phase 1.1): today is a
+    // short list of rows — the week grid stays on Cadence. Category
+    // colour rides a border plus the meta TEXT, never colour alone.
+    const agenda = el("div", "ltk-lh-agenda");
+    const ordered = [...instances].sort((a, b) => (a.time < b.time ? -1 : 1));
+    if (ordered.length === 0) {
+      agenda.appendChild(el("div", "ltk-lh-agenda-empty", "Nothing else scheduled today."));
+    }
+    for (const inst of ordered) {
+      const row = el("div", "ltk-lh-agendarow");
+      const accent =
+        inst.barColor !== "" ? inst.barColor : (this.boardColors[inst.boardId] ?? "");
+      if (accent !== "") row.style.borderLeftColor = accent;
+      const main = el("div", "ltk-lh-agenda-main");
+      main.appendChild(el("div", "ltk-lh-agenda-name", inst.title));
+      const meta: string[] = [];
+      const dept = byId.get(inst.boardId)?.info?.org.department ?? "";
+      if (dept !== "") meta.push(dept);
+      if (inst.shift !== "") meta.push(inst.shift === "day" ? "Day" : "Night");
+      if (inst.crew !== "") meta.push(`Crew ${inst.crew}`);
+      if (inst.topic !== "") meta.push(inst.topic);
+      if (meta.length > 0) main.appendChild(el("div", "ltk-lh-agenda-meta", meta.join(" · ")));
+      const open = el("button", "ltk-lh-btn ltk-lh-agenda-open", "Open board") as HTMLButtonElement;
+      open.type = "button";
+      open.addEventListener("click", () => this.cb.onSelectMeeting(inst));
+      row.append(el("span", "ltk-lh-agenda-time", inst.time), main, open);
+      agenda.appendChild(row);
+    }
+    left.appendChild(agenda);
 
     // right: my open actions bucketed late / due today / due this week
     const right = el("div", "ltk-lh-myday-col");
@@ -672,13 +717,17 @@ export class LeanHubView {
     }
     const shown = buckets.reduce((n, b) => n + b.items.length, 0);
     if (mine.length > shown) {
-      list.appendChild(
-        el(
-          "div",
-          "ltk-lh-bucket-none",
-          `${mine.length - shown} more due later or without a due date — see Actions.`
-        )
+      const more = el(
+        "div",
+        "ltk-lh-bucket-none",
+        `${mine.length - shown} more due later or without a due date — `
       );
+      // a real destination, not a hint (design review Phase 1.7)
+      const link = el("button", "ltk-lh-linklike", "see Actions") as HTMLButtonElement;
+      link.type = "button";
+      link.addEventListener("click", () => this.selectTab("actions"));
+      more.appendChild(link);
+      list.appendChild(more);
     }
   }
 
@@ -702,21 +751,59 @@ export class LeanHubView {
             a.assignees.some((x) => x.whoId === this.viewerId)
           );
     const open = mine.filter((a) => a.status !== "done" && a.status !== "cancelled");
-    if (open.length === 0) {
-      renderGhost(wrap, ["Nothing on your plate", "Actions assigned to you appear here."]);
+    // "done" here = the viewer's part is ticked (whole-action done rows
+    // left the open set already) — these collapse under one disclosure
+    // instead of littering the list struck-through (Phase 1.6)
+    const active = open.filter((a) => !(this.myPart(a)?.done ?? false));
+    const doneMine = open.filter((a) => this.myPart(a)?.done ?? false);
+
+    // filter chips (Phase 1.5) — glyphless words; active chip is tinted
+    const todayIso = isoLocal(startOfDay(new Date()));
+    const chips: { key: "all" | "overdue" | "today" | "done"; label: string }[] = [
+      { key: "all", label: "All" },
+      { key: "overdue", label: "Overdue" },
+      { key: "today", label: "Due today" },
+      { key: "done", label: "Done" },
+    ];
+    const chipRow = el("div", "ltk-lh-fchips");
+    for (const c of chips) {
+      const b = el("button", "ltk-lh-fchip", c.label) as HTMLButtonElement;
+      b.type = "button";
+      if (c.key === this.actionFilter) b.classList.add("ltk-lh-fchip-on");
+      b.setAttribute("aria-pressed", String(c.key === this.actionFilter));
+      b.addEventListener("click", () => {
+        this.actionFilter = c.key;
+        this.render();
+      });
+      chipRow.appendChild(b);
+    }
+    wrap.appendChild(chipRow);
+
+    const visible =
+      this.actionFilter === "done"
+        ? doneMine
+        : this.actionFilter === "overdue"
+          ? active.filter((a) => isOverdue(a))
+          : this.actionFilter === "today"
+            ? active.filter((a) => a.due === todayIso)
+            : active;
+    if (visible.length === 0 && (this.actionFilter !== "all" || doneMine.length === 0)) {
+      renderGhost(wrap, [
+        this.actionFilter === "all" ? "Nothing on your plate" : "Nothing here",
+        this.actionFilter === "all"
+          ? "Actions assigned to you appear here."
+          : "No actions match this filter.",
+      ]);
       return;
     }
 
-    // group by source, overdue-then-due order inside each
+    // group by source, overdue-then-due order inside each. The label
+    // NEVER shows a raw id (Phase 1.4 — sourceLabel's fallback chain).
+    const boardTitle = (boardId: string) =>
+      this.meetings.find((m) => m.boardId === boardId)?.title;
     const groups = new Map<string, LtkAction[]>();
-    for (const a of open) {
-      const label =
-        this.sourceLabels[a.instanceId] ??
-        (a.context.source === "leanhub"
-          ? "Personal"
-          : a.instanceId !== ""
-            ? a.instanceId
-            : "Other");
+    for (const a of visible) {
+      const label = sourceLabel(a.instanceId, a.context.source, this.sourceLabels, boardTitle);
       groups.set(label, [...(groups.get(label) ?? []), a]);
     }
     for (const [label, group] of groups) {
@@ -729,6 +816,25 @@ export class LeanHubView {
       });
       for (const action of group) {
         wrap.appendChild(this.renderActionRow(action));
+      }
+    }
+
+    // ticked-off work waits behind one calm row (Phase 1.6)
+    if (this.actionFilter === "all" && doneMine.length > 0) {
+      const toggle = el(
+        "button",
+        "ltk-lh-donetoggle",
+        `${this.showDone ? "▾" : "▸"} Done · ${doneMine.length}`
+      ) as HTMLButtonElement;
+      toggle.type = "button";
+      toggle.setAttribute("aria-expanded", String(this.showDone));
+      toggle.addEventListener("click", () => {
+        this.showDone = !this.showDone;
+        this.render();
+      });
+      wrap.appendChild(toggle);
+      if (this.showDone) {
+        for (const action of doneMine) wrap.appendChild(this.renderActionRow(action));
       }
     }
   }
@@ -809,11 +915,19 @@ export class LeanHubView {
       );
     }
     if (action.due !== "") {
-      const due = el("span", "ltk-lh-action-due", action.due);
-      if (isOverdue(action)) due.classList.add("ltk-lh-overdue");
-      row.appendChild(due);
+      // humanized pill, ISO in the tooltip (design review Phase 1.2);
+      // "T00:00" parses the date-only string as LOCAL midnight — bare
+      // yyyy-mm-dd would parse UTC and shift the day near midnight
+      const rel = relativeDue(`${action.due}T00:00`);
+      const pill = statusChip(
+        `${rel.tone === "overdue" ? "⚑ " : ""}${rel.label}`,
+        dueTone(rel.tone)
+      );
+      pill.classList.add("ltk-lh-action-due");
+      pill.title = action.due;
+      row.appendChild(pill);
     }
-    if (action.escalated) row.appendChild(el("span", "ltk-lh-esc", "⚑"));
+    if (action.escalated) row.appendChild(el("span", "ltk-lh-esc", "⚑ Escalated"));
     return row;
   }
 
