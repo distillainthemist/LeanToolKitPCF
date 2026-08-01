@@ -1621,7 +1621,7 @@ input[type="color"].app-color:disabled { opacity: 0.4; cursor: default; }
 .app-docs-wrap { display: flex; flex-direction: column; height: 100%; padding: 12px 16px; box-sizing: border-box; }
 .app-docs-top { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
 .app-docs-title { margin: 0; font-size: 20px; }
-.app-docs-search { flex: 1; min-width: 200px; max-width: 460px; }
+.app-docs-search { flex: 1; min-width: 200px; }
 .app-docs-scope { width: auto; }
 .app-docs-noncurrent { margin: 0; white-space: nowrap; }
 .app-docs-body { display: flex; gap: 14px; flex: 1; min-height: 0; }
