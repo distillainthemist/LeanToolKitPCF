@@ -76,6 +76,10 @@ export function mountDocs(
   parent.appendChild(wrap);
   const stopLoading = showLoading(wrap);
   let dead = false;
+  // document-level listeners this mount registers (Cmd/K, menu close) —
+  // run on the returned cleanup AND on in-place remounts, or every
+  // library click would stack another global listener
+  const innerCleanups: (() => void)[] = [];
 
   void (async () => {
     // a bare dev server has no host — SDK calls would HANG, not reject
@@ -203,44 +207,113 @@ export function mountDocs(
           : `Search ${selectedIds.length} libraries…`;
     search.disabled = favMode;
     if (bootView) search.value = bootView.query;
-    const scope = el("select", "app-input app-docs-scope") as HTMLSelectElement;
-    for (const [v, label] of [
-      ["library", "This library"],
-      ["all", "All documents"],
-    ] as const) {
-      const o = el("option", "", label) as HTMLOptionElement;
-      o.value = v;
-      scope.appendChild(o);
-    }
-    scope.title =
-      "Search what you are looking at, or every library this site exposes — " +
-      "never the wider SharePoint.";
-    scope.style.display = current ? "" : "none";
-    const contents = el("label", "app-docs-check");
-    const contentsBox = el("input", "") as HTMLInputElement;
-    contentsBox.type = "checkbox";
-    contents.append(contentsBox, document.createTextNode(" Search everything"));
-    contents.title =
-      "Off, this matches document names and titles — how you look for something " +
-      "you know exists. On, it matches everything the index knows: the text " +
-      "inside every document and the value of every field — which finds far more.";
+    // Cmd/Ctrl+K reaches the search from anywhere on the screen; the
+    // keycap badge hides on coarse pointers where it means nothing
+    const searchWrap = el("div", "app-docs-searchwrap");
+    searchWrap.appendChild(search);
+    const isMac = /mac/i.test(navigator.platform);
+    searchWrap.appendChild(el("kbd", "app-docs-kbd", isMac ? "⌘K" : "Ctrl K"));
+    const onSearchKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        search.focus();
+        search.select();
+      }
+    };
+    document.addEventListener("keydown", onSearchKey);
+    innerCleanups.push(() => document.removeEventListener("keydown", onSearchKey));
+
+    // ---- scope + depth: one dropdown (Vault V2, finding 4) -------------
+    // Scope picks the corpus — the ticked set or every exposed library,
+    // NEVER the wider SharePoint (the app's standing corpus rule; the
+    // Vault's "Everything (all sites)" option is deliberately not built).
+    // Depth widens matching from names/titles to contents & every field.
+    let scopeAll = false;
+    let searchContents = bootView?.contents ?? false;
+    const scopeBtn = el("button", "app-btn app-docs-scopebtn") as HTMLButtonElement;
+    scopeBtn.title =
+      "What to search: the libraries you have ticked, or every library " +
+      "this site exposes — never the wider SharePoint.";
+    const scopeLabel = (): string =>
+      scopeAll || allSelected
+        ? "All libraries"
+        : current
+          ? "This library"
+          : "Selected libraries";
+    const paintScopeBtn = () => {
+      scopeBtn.textContent = `${scopeLabel()} ▾`;
+    };
+    paintScopeBtn();
+    scopeBtn.addEventListener("click", () => {
+      if (menu) {
+        closeMenu();
+        return;
+      }
+      menu = el("div", "app-docs-menu");
+      const pick = (label: string, on: boolean, onPick: () => void) => {
+        const b = el("button", "app-docs-menuitem", `${on ? "✓ " : ""}${label}`) as HTMLButtonElement;
+        b.setAttribute("aria-pressed", String(on));
+        b.addEventListener("click", () => {
+          closeMenu();
+          onPick();
+        });
+        menu!.appendChild(b);
+      };
+      if (!allSelected) {
+        pick(current ? "This library" : "Selected libraries", !scopeAll, () => {
+          scopeAll = false;
+          paintScopeBtn();
+          void load(true);
+        });
+      }
+      pick("All libraries", scopeAll || allSelected, () => {
+        scopeAll = true;
+        paintScopeBtn();
+        void load(true);
+      });
+      menu.appendChild(el("div", "app-docs-menusep", ""));
+      const depth = el(
+        "button",
+        "app-docs-menuitem",
+        `${searchContents ? "✓ " : ""}Match contents & every field`
+      ) as HTMLButtonElement;
+      depth.title =
+        "Off, search matches document names and titles — how you look for " +
+        "something you know exists. On, it matches everything the index " +
+        "knows: the text inside every document and the value of every field.";
+      depth.addEventListener("click", () => {
+        closeMenu();
+        searchContents = !searchContents;
+        void load(true);
+      });
+      menu.appendChild(depth);
+      const r = scopeBtn.getBoundingClientRect();
+      menu.style.top = `${r.bottom + 4}px`;
+      menu.style.left = `${Math.max(8, r.right - 240)}px`;
+      document.body.appendChild(menu);
+    });
+
+    // ---- Action needed — placeholder only (Ben, 2026-08-01) ------------
+    // The live control (awaiting review / review due / checked out)
+    // arrives with document control in Phase 4; the button holds its
+    // final toolbar position so the layout doesn't shuffle later.
+    const actionNeeded = el("button", "app-btn app-docs-actionneeded", "Action needed") as HTMLButtonElement;
+    actionNeeded.setAttribute("aria-disabled", "true");
+    actionNeeded.title = "Arrives with document control (a later phase).";
     const nonCurrent = el("label", "app-docs-check app-docs-noncurrent");
     const nonCurrentBox = el("input", "") as HTMLInputElement;
     nonCurrentBox.type = "checkbox";
     nonCurrent.append(nonCurrentBox, document.createTextNode(" Include drafts & superseded"));
-    if (bootView) {
-      contentsBox.checked = bootView.contents;
-      nonCurrentBox.checked = bootView.nonCurrent;
-    }
+    if (bootView) nonCurrentBox.checked = bootView.nonCurrent;
 
     // secondary actions (share the current filter as a player link,
     // export the register) live behind one kebab — the app's convention
     const topKebab = el("button", "app-kebab app-docs-topkebab", "⋮") as HTMLButtonElement;
     topKebab.title = "More actions";
-    top.append(search, scope, contents, nonCurrent, topKebab);
+    top.append(searchWrap, scopeBtn, actionNeeded, nonCurrent, topKebab);
     if (favMode) {
-      scope.style.display = "none";
-      contents.style.display = "none";
+      scopeBtn.style.display = "none";
+      actionNeeded.style.display = "none";
       nonCurrent.style.display = "none";
       topKebab.style.display = "none";
     }
@@ -257,6 +330,8 @@ export function mountDocs(
      *  embedded pattern; the hash stays put). */
     const remount = () => {
       dead = true;
+      for (const f of innerCleanups) f();
+      innerCleanups.length = 0;
       wrap.remove();
       mountDocs(parent, "", opts);
     };
@@ -951,9 +1026,11 @@ export function mountDocs(
       menu?.remove();
       menu = null;
     };
-    document.addEventListener("pointerdown", (e) => {
+    const onMenuPointer = (e: PointerEvent) => {
       if (menu && !menu.contains(e.target as Node)) closeMenu();
-    });
+    };
+    document.addEventListener("pointerdown", onMenuPointer);
+    innerCleanups.push(() => document.removeEventListener("pointerdown", onMenuPointer));
     const openKebab = (anchor: HTMLElement, row: DocRow) => {
       closeMenu();
       menu = el("div", "app-docs-menu");
@@ -1099,10 +1176,7 @@ export function mountDocs(
       // any taxonomy filter forces search mode: list REST cannot filter
       // by taxonomy, the index can
       const useSearch =
-        query.trim() !== "" ||
-        current === null ||
-        scope.value === "all" ||
-        filters.length > 0;
+        query.trim() !== "" || current === null || scopeAll || filters.length > 0;
       lastUsedSearch = useSearch;
       if (useSearch) {
         const startRow = nextToken === "" ? 0 : Number(nextToken);
@@ -1110,15 +1184,10 @@ export function mountDocs(
         // library this site exposes — the corpus is what was configured,
         // not the whole SharePoint tenant
         const page = await searchPage(app.siteUrl, query, {
-          listIds:
-            current && scope.value === "library"
-              ? [current.listId]
-              : current
-                ? allListIds
-                : selectedIds,
+          listIds: scopeAll ? allListIds : current ? [current.listId] : selectedIds,
           rowLimit: PAGE,
           startRow,
-          searchContents: contentsBox.checked,
+          searchContents,
           termFilters:
             filters.length > 0
               ? filters.map((f) => ({ properties: propsFor(f.col), termIds: f.ids }))
@@ -1149,8 +1218,6 @@ export function mountDocs(
       if (debounce !== null) clearTimeout(debounce);
       debounce = setTimeout(() => void load(true), 300);
     });
-    scope.addEventListener("change", () => void load(true));
-    contentsBox.addEventListener("change", () => void load(true));
     nonCurrentBox.addEventListener("change", () => void load(true));
     // the heuristic toggle only bites where a status column is mapped
     if (!statusCol) {
@@ -1167,7 +1234,7 @@ export function mountDocs(
         ...emptyDocView(),
         listId: current?.listId ?? "",
         query: query.trim(),
-        contents: contentsBox.checked,
+        contents: searchContents,
         nonCurrent: nonCurrentBox.checked,
         // the organisation keeps its own slot so pre-3a links stay valid
         orgTermId: org?.node.id ?? "",
@@ -1375,6 +1442,8 @@ export function mountDocs(
 
   return () => {
     dead = true;
+    for (const f of innerCleanups) f();
+    innerCleanups.length = 0;
     wrap.remove();
   };
 }
