@@ -305,6 +305,10 @@ export function mountDocs(
     // kebab from V3 — state only here
     let showNonCurrent = bootView?.nonCurrent ?? false;
     let modifiedDays = bootView?.modifiedDays ?? 0;
+    // declared HERE, not in the data-flow section: the register's empty
+    // state reads it during the initial mount, and a later `let` would be
+    // a temporal-dead-zone crash that kills the whole screen
+    let query = bootView?.query ?? "";
     const modifiedIso = (): string | undefined =>
       modifiedDays > 0
         ? new Date(Date.now() - modifiedDays * 86400000).toISOString()
@@ -1419,7 +1423,6 @@ export function mountDocs(
     };
 
     // ---- data flow -----------------------------------------------------
-    let query = bootView?.query ?? "";
     let generation = 0;
     let nextToken = ""; // browse: next uri; search: startRow as string
     let inFlight = false;
