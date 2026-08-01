@@ -893,60 +893,8 @@ export function mountDocs(
         chip.appendChild(x);
         filterBar.appendChild(chip);
       }
-      // add a filter on any other taxonomy column (same mechanism as the
-      // tree — column, then term)
-      const addable: string[] = [];
-      if (app.orgSetId !== "" && orgProps.length > 0 && filterFor("") === null) addable.push("");
-      for (const col of taxCols.keys()) {
-        if (filterFor(col) === null) addable.push(col);
-      }
-      if (addable.length === 0 || favMode) return;
-      const add = el("button", "app-docs-addfilter", "＋ Filter") as HTMLButtonElement;
-      add.addEventListener("click", () => {
-        if (menu) {
-          closeMenu();
-          return;
-        }
-        menu = el("div", "app-docs-menu");
-        for (const col of addable) {
-          const b = el("button", "app-docs-menuitem", colLabel(col)) as HTMLButtonElement;
-          b.addEventListener("click", () => {
-            closeMenu();
-            const setId = setFor(col);
-            if (setId === "") return;
-            menu = el("div", "app-docs-menu app-docs-termmenu");
-            menu.appendChild(el("div", "app-field-hint", "Loading terms…"));
-            const anchor = add.getBoundingClientRect();
-            menu.style.top = `${anchor.bottom + 4}px`;
-            menu.style.left = `${anchor.left}px`;
-            document.body.appendChild(menu);
-            void fetchTermPaths(app.siteUrl, setId, 4, 60).then(({ nodes, error }) => {
-              if (dead || !menu) return;
-              clear(menu);
-              if (error !== "" || nodes.length === 0) {
-                menu.appendChild(el("div", "app-field-hint", "No terms found."));
-                return;
-              }
-              for (const n of nodes) {
-                const t = el("button", "app-docs-menuitem", n.labels[n.labels.length - 1]) as HTMLButtonElement;
-                t.style.paddingLeft = `${10 + (n.labels.length - 1) * 12}px`;
-                t.title = n.labels.join(" › ");
-                t.addEventListener("click", () => {
-                  closeMenu();
-                  applyFilter(col, n, nodes);
-                });
-                menu!.appendChild(t);
-              }
-            });
-          });
-          menu!.appendChild(b);
-        }
-        const r = add.getBoundingClientRect();
-        menu.style.top = `${r.bottom + 4}px`;
-        menu.style.left = `${r.left}px`;
-        document.body.appendChild(menu);
-      });
-      filterBar.appendChild(add);
+      // adding filters lives in the Filters popover (Vault V3); the chip
+      // row only shows what is applied
     };
     paintChips();
 
