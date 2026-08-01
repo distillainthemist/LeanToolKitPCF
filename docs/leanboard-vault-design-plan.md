@@ -7,7 +7,37 @@ document records where its assumptions diverge from the repo and how
 each phase is adapted. Scope is unchanged: **Documents only** —
 `app/src/docs/*` and the `.app-docs-*` blocks of `style.css`.
 
-Status: PROPOSED — awaiting Ben's review. No code has changed.
+Status: BUILT (V0–V5, 2026-08-01), each phase verified by Ben on dev
+before the next began. Amendments made during the build:
+
+- **No all-sites search scope** (V2): the Vault's "Everything (all
+  sites)" option was deliberately not built — the corpus stays capped
+  at the configured libraries (the app's standing rule). Scope and the
+  contents/fields depth toggle share one dropdown.
+- **Filters popover is single-term-per-column** (V3): a pick includes
+  its subtree (the shipped 3a semantics); OR-of-multiple-terms per
+  column is a possible later extension. The chip-row "＋ Filter" adder
+  retired once the popover landed.
+- **Tiles carry file-type placeholder bands, not live thumbnails**
+  (V3): thumbnail endpoints are cookie-authenticated and the player
+  iframe carries no SharePoint cookies (the v0.23 lesson); the V4
+  overlay does the real per-document render.
+- **The overlay is centred, not right-anchored** (V4, Ben's call), and
+  its preview shows an honest placeholder when nothing cookie-free is
+  available — never a frame that renders as "content is blocked".
+- **Term-filter selection stays tinted, not filled** (V1): the app
+  reserves the filled accent for "where you are"; filters are tinted
+  to match their chips. The Vault's filled-selection rule applies to
+  the location semantics it was written for.
+- **Loaded-rows counts are browse-mode only** (V1): search rows carry
+  no field text, so counts go blank there rather than lie.
+- Hard lesson (V3): a `let` declared below the register mount but read
+  by its empty-state closure was a hosted-only TDZ crash — dev falls
+  back before this code runs, and tsc cannot see closure TDZ.
+- V5 audit fixes: docs menu items / kebabs / sort headers / chip ×
+  on the 36px dense floor, filter chips 36px tall, darkened accent
+  text on tinted states for ≥4.5:1 (measured 5.6–6.9:1), Escape now
+  closes menus/popovers before any overlay behind them.
 
 ---
 

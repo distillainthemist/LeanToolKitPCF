@@ -26,6 +26,7 @@ import {
   isNonCurrentStatus,
   pdfViewUrlFor,
   splitNameForEllipsis,
+  tallyTermCounts,
   taxonomySearchProperty,
 } from "./rows";
 import { DocLibrary, docsConfig } from "./docsStore";
@@ -591,15 +592,7 @@ export function mountDocs(
       if (countSpans.size === 0) return;
       const cols = groupBy === "" ? [...orgCols] : [groupBy];
       const rows = lastUsedSearch || favMode ? [] : loadedRows();
-      const tally = new Map<string, number>();
-      for (const r of rows) {
-        for (const col of cols) {
-          for (const part of (r.values[col] ?? "").split(";")) {
-            const label = part.trim().toLowerCase();
-            if (label !== "") tally.set(label, (tally.get(label) ?? 0) + 1);
-          }
-        }
-      }
+      const tally = tallyTermCounts(rows, cols);
       for (const n of treeNodes) {
         const span = countSpans.get(n.id);
         if (!span) continue;
@@ -1331,6 +1324,16 @@ export function mountDocs(
     };
     document.addEventListener("pointerdown", onMenuPointer);
     innerCleanups.push(() => document.removeEventListener("pointerdown", onMenuPointer));
+    // Escape cascade (Vault V5): an open menu/popover eats Escape before
+    // any overlay behind it — capture phase, so it runs first
+    const onMenuKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && menu) {
+        e.stopPropagation();
+        closeMenu();
+      }
+    };
+    document.addEventListener("keydown", onMenuKey, true);
+    innerCleanups.push(() => document.removeEventListener("keydown", onMenuKey, true));
     const openKebab = (anchor: HTMLElement, row: DocRow) => {
       closeMenu();
       menu = el("div", "app-docs-menu");

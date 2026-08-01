@@ -1649,7 +1649,7 @@ input[type="color"].app-color:disabled { opacity: 0.4; cursor: default; }
   letter-spacing: 0.04em;
   color: #6d675c;
 }
-.app-docs-navheadaction { font-size: 11.5px; text-decoration: none; }
+.app-docs-navheadaction { font-size: 11.5px; text-decoration: none; min-height: 36px; display: inline-flex; align-items: center; }
 .app-docs-navheadaction:hover { text-decoration: underline; }
 .app-docs-navheadaction:disabled { color: #a8a29b; cursor: default; text-decoration: none; }
 .app-docs-librow2 {
@@ -1676,6 +1676,7 @@ input[type="color"].app-color:disabled { opacity: 0.4; cursor: default; }
 .app-docs-libname2 {
   flex: 1;
   min-width: 0;
+  align-self: stretch; /* the whole 44px row height is the target */
   text-align: left;
   border: none;
   background: none;
@@ -1687,6 +1688,8 @@ input[type="color"].app-color:disabled { opacity: 0.4; cursor: default; }
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* contrast on the tinted included-row (V5 audit: #6d675c fell to ~4.3) */
+.app-docs-librow2-on .app-field-hint { color: #57534a; }
 .app-docs-librow2-on .app-docs-libname2 { font-weight: 600; }
 /* the solo-select affordance: visible on the row's hover and any focus
    within it (finding 3 — no invisible click zones) */
@@ -1694,15 +1697,18 @@ input[type="color"].app-color:disabled { opacity: 0.4; cursor: default; }
   display: none;
   border: none;
   background: none;
-  color: var(--app-accent, #2563eb);
+  /* accent darkened for ≥4.5:1 on the tinted row (V5 audit) */
+  color: color-mix(in srgb, var(--app-accent, #2563eb) 82%, #000);
   font: inherit;
   font-size: 11.5px;
   cursor: pointer;
-  padding: 8px 6px;
+  padding: 8px;
+  min-height: 36px;
+  align-items: center;
   flex: none;
 }
 .app-docs-librow2:hover .app-docs-only,
-.app-docs-librow2:focus-within .app-docs-only { display: inline-block; }
+.app-docs-librow2:focus-within .app-docs-only { display: inline-flex; }
 .app-docs-favrow { border: none; background: none; font: inherit; cursor: pointer; text-align: left; }
 .app-docs-favrow .app-docs-libname2 { padding-left: 28px; } /* aligns with names past the checkboxes */
 .app-docs-navcount { flex: none; font-size: 11px; color: #6d675c; padding-right: 4px; }
@@ -1723,7 +1729,11 @@ input[type="color"].app-color:disabled { opacity: 0.4; cursor: default; }
 .app-docs-namecell { display: inline-flex; gap: 8px; align-items: center; min-width: 0; }
 .app-docs-name { overflow: hidden; text-overflow: ellipsis; }
 .app-docs-chip { padding: 1px 8px; border-radius: 9px; font-size: 12px; background: #eee; }
-.app-docs-kebab { border: none; background: none; cursor: pointer; font-size: 16px; padding: 2px 8px; }
+.app-docs-kebab {
+  border: none; background: none; cursor: pointer; font-size: 16px; padding: 2px 8px;
+  min-width: 36px; min-height: 36px; /* dense floor (V5 audit) */
+}
+.app-docs-viewkebab { min-width: 36px; min-height: 36px; }
 .app-docs-topkebab { margin-left: auto; border: 1px solid #ddd; border-radius: 6px; background: none; cursor: pointer; font-size: 16px; padding: 4px 10px; min-height: 44px; min-width: 44px; }
 /* Vault V2: search keycap + the scope dropdown + Action needed slot */
 .app-docs-searchwrap { position: relative; flex: 1; min-width: 160px; display: flex; }
@@ -1757,7 +1767,7 @@ input[type="color"].app-color:disabled { opacity: 0.4; cursor: default; }
 }
 .app-docs-actionneeded:hover { border-color: #ddd; color: #a8a29b; }
 .app-docs-menu { position: fixed; z-index: 60; width: 200px; background: #fff; border: 1px solid #ddd; border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.14); padding: 4px; }
-.app-docs-menuitem { display: block; width: 100%; text-align: left; border: none; background: none; padding: 7px 10px; border-radius: 5px; cursor: pointer; font-size: 13px; }
+.app-docs-menuitem { display: flex; align-items: center; width: 100%; min-height: 36px; text-align: left; border: none; background: none; padding: 7px 10px; border-radius: 5px; cursor: pointer; font-size: 13px; }
 .app-docs-menuitem:hover:not(:disabled) { background: #f0f0f0; }
 .app-docs-menuitem:disabled { color: #aaa; cursor: default; }
 .app-docs-scrim { position: fixed; inset: 0; z-index: 55; background: rgba(20,20,20,0.45); display: flex; align-items: center; justify-content: center; }
@@ -1865,7 +1875,7 @@ button.app-docs-navterm:disabled { color: #8a8a8a; cursor: not-allowed; }
    tinted state matching its chip, so the accent means exactly one thing */
 button.app-docs-navterm.app-docs-navterm-on {
   background: color-mix(in srgb, var(--app-accent, #2563eb) 12%, #fff);
-  color: var(--app-accent, #2563eb);
+  color: color-mix(in srgb, var(--app-accent, #2563eb) 82%, #000);
   font-weight: 600;
 }
 /* Phase 3a: the group-by tree, its carets, filter add, chooser */
@@ -1893,13 +1903,13 @@ button.app-docs-navterm.app-docs-navterm-on {
 .app-docs-filterbar:empty { display: none; }
 .app-docs-filterbar { margin-bottom: 6px; }
 .app-docs-orgchip {
-  display: inline-flex; align-items: center; gap: 6px;
-  background: #eef2ff; border: 1px solid #c7d2fe; border-radius: 12px;
-  padding: 2px 8px; font-size: 12.5px;
+  display: inline-flex; align-items: center; gap: 2px;
+  background: #eef2ff; border: 1px solid #c7d2fe; border-radius: 999px;
+  padding: 0 0 0 12px; min-height: 36px; font-size: 12.5px; /* finding 2 */
 }
 .app-docs-orgchip-x {
-  border: none; background: none; cursor: pointer; font-size: 14px;
-  padding: 0 2px; color: #444;
+  border: none; background: none; cursor: pointer; font-size: 16px;
+  min-width: 36px; min-height: 36px; color: #444; border-radius: 999px;
 }
 /* ---- Vault V3: title row, filters popover, register (list + tiles) --- */
 .app-docs-titlerow { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
@@ -1919,7 +1929,8 @@ button.app-docs-navterm.app-docs-navterm-on {
 .app-docs-filtersbtn-on {
   background: color-mix(in srgb, var(--app-accent, #2563eb) 10%, #fff);
   border-color: var(--app-accent, #2563eb);
-  color: var(--app-accent, #2563eb);
+  /* darkened accent: ≥4.5:1 on the tint at this size (V5 audit) */
+  color: color-mix(in srgb, var(--app-accent, #2563eb) 82%, #000);
   font-weight: 600;
 }
 .app-docs-seg { display: inline-flex; border: 1px solid #ddd; border-radius: 8px; overflow: hidden; }
@@ -1976,6 +1987,7 @@ button.app-doclist-hsort {
   font-size: 11.5px;
   color: #6b6b6b;
   padding: 0;
+  min-height: 36px; /* dense floor (V5 audit) */
   cursor: pointer;
   text-align: left;
 }
@@ -2043,7 +2055,7 @@ button.app-doclist-hsort:hover { color: var(--app-accent, #2563eb); }
 .app-docs-fpill-on {
   background: color-mix(in srgb, var(--app-accent, #2563eb) 12%, #fff);
   border-color: var(--app-accent, #2563eb);
-  color: var(--app-accent, #2563eb);
+  color: color-mix(in srgb, var(--app-accent, #2563eb) 82%, #000);
   font-weight: 600;
 }
 .app-docs-fpop-foot {

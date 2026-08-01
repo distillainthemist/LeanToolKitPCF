@@ -68,6 +68,23 @@ export function buildBrowseUri(listId: string, top = 50, opts: BrowseOpts = {}):
   );
 }
 
+/** Loaded-row term counts (Vault V1, honest counts): how many of the
+ *  loaded rows carry each term label in the given columns. Taxonomy
+ *  display text is ";"-separated for multi-value; matching is
+ *  case-insensitive on the exact label. Keyed by lowercased label. */
+export function tallyTermCounts(rows: DocRow[], cols: string[]): Map<string, number> {
+  const tally = new Map<string, number>();
+  for (const r of rows) {
+    for (const col of cols) {
+      for (const part of (r.values[col] ?? "").split(";")) {
+        const label = part.trim().toLowerCase();
+        if (label !== "") tally.set(label, (tally.get(label) ?? 0) + 1);
+      }
+    }
+  }
+  return tally;
+}
+
 /** Split a filename so the extension can survive any width: the stem
  *  end-ellipsizes in CSS, the extension never shrinks (finding 6). */
 export function splitNameForEllipsis(name: string): { stem: string; ext: string } {

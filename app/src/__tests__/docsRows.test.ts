@@ -367,6 +367,58 @@ describe("presentation helpers", () => {
   });
 });
 
+describe("Vault V5 hardening units", () => {
+  it("multi-library union: ticked list ids OR together in one scope clause", async () => {
+    const { buildSearchBody } = await import("../docs/rows");
+    const body = JSON.parse(
+      buildSearchBody("", { listIds: ["l1", "l2", "l3"] })
+    ) as { request: { Querytext: string } };
+    expect(body.request.Querytext).toContain("(ListID:l1 OR ListID:l2 OR ListID:l3)");
+  });
+  it("filter chain: OR within a column's terms, AND across columns", async () => {
+    const { buildSearchBody } = await import("../docs/rows");
+    const body = JSON.parse(
+      buildSearchBody("", {
+        listIds: ["l1"],
+        termFilters: [
+          { properties: ["owstaxIdOrganisation"], termIds: ["t1", "t2"] },
+          { properties: ["owstaxIdDMSProcess"], termIds: ["p1"] },
+        ],
+      })
+    ) as { request: { Querytext: string } };
+    const q = body.request.Querytext;
+    expect(q).toContain("(owstaxIdOrganisation:t1 OR owstaxIdOrganisation:t2)");
+    expect(q).toContain("owstaxIdDMSProcess:p1");
+    // AND across = both clauses present as separate space-joined terms
+    expect(q.indexOf("owstaxIdOrganisation")).toBeLessThan(q.indexOf("owstaxIdDMSProcess"));
+  });
+  it("loaded-row term counts: multi-value split, case-insensitive, multi-column", async () => {
+    const { tallyTermCounts } = await import("../docs/rows");
+    const row = (values: Record<string, string>) => ({
+      id: 1,
+      uniqueId: "u",
+      name: "n",
+      ext: "pdf",
+      serverUrl: "/x",
+      listId: "l",
+      modified: "",
+      values,
+    });
+    const tally = tallyTermCounts(
+      [
+        row({ Org: "Brisbane; Bell Bay" }),
+        row({ Org: "brisbane" }),
+        row({ Org: "", Other: "Brisbane" }),
+        row({}),
+      ],
+      ["Org", "Other"]
+    );
+    expect(tally.get("brisbane")).toBe(3);
+    expect(tally.get("bell bay")).toBe(1);
+    expect(tally.get("")).toBeUndefined();
+  });
+});
+
 describe("Vault V3 server-side presentation", () => {
   it("browse URI carries sort and the modified window", async () => {
     const { buildBrowseUri } = await import("../docs/rows");
