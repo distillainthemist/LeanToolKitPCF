@@ -1746,26 +1746,9 @@ input[type="color"].app-color:disabled { opacity: 0.4; cursor: default; }
   min-width: 36px; min-height: 36px; /* dense floor (V5 audit) */
 }
 .app-docs-topkebab { margin-left: auto; border: 1px solid #ddd; border-radius: 6px; background: none; cursor: pointer; font-size: 16px; padding: 4px 10px; min-height: 44px; min-width: 44px; }
-/* Vault V2: search keycap + the scope dropdown + Action needed slot */
-.app-docs-searchwrap { position: relative; flex: 1; min-width: 160px; display: flex; }
-.app-docs-searchwrap .app-docs-search { flex: 1; padding-right: 52px; }
-.app-docs-kbd {
-  position: absolute;
-  right: 10px;
-  top: 50%;
-  transform: translateY(-50%);
-  font-family: inherit;
-  font-size: 10.5px;
-  color: #6d675c;
-  border: 1px solid #d5d1c8;
-  border-radius: 4px;
-  padding: 1px 5px;
-  background: #faf9f7;
-  pointer-events: none;
-}
-@media (pointer: coarse) {
-  .app-docs-kbd { display: none; }
-}
+/* Vault V2 toolbar (search rides the register pane; Cmd/K cut) */
+.app-docs-searchwrap { flex: 1; min-width: 160px; display: flex; }
+.app-docs-searchwrap .app-docs-search { flex: 1; }
 .app-docs-scopebtn { white-space: nowrap; font-size: 12.5px; }
 .app-docs-menusep { border-top: 1px solid #e5e5e5; margin: 4px 2px; }
 /* the placeholder holds Action needed's final position, visibly parked

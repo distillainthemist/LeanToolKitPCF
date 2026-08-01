@@ -209,21 +209,9 @@ export function mountDocs(
           : `Search ${selectedIds.length} libraries…`;
     search.disabled = favMode;
     if (bootView) search.value = bootView.query;
-    // Cmd/Ctrl+K reaches the search from anywhere on the screen; the
-    // keycap badge hides on coarse pointers where it means nothing
+    // (the Cmd/K shortcut and keycap badge were cut — Ben, 2026-08-01)
     const searchWrap = el("div", "app-docs-searchwrap");
     searchWrap.appendChild(search);
-    const isMac = /mac/i.test(navigator.platform);
-    searchWrap.appendChild(el("kbd", "app-docs-kbd", isMac ? "⌘K" : "Ctrl K"));
-    const onSearchKey = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
-        e.preventDefault();
-        search.focus();
-        search.select();
-      }
-    };
-    document.addEventListener("keydown", onSearchKey);
-    innerCleanups.push(() => document.removeEventListener("keydown", onSearchKey));
 
     // ---- scope + depth: one dropdown (Vault V2, finding 4) -------------
     // Scope picks the corpus — the ticked set or every exposed library,
@@ -324,7 +312,8 @@ export function mountDocs(
       scopeBtn.style.display = "none";
       actionNeeded.style.display = "none";
     }
-    wrap.appendChild(top);
+    // the toolbar rides the REGISTER pane, not the whole screen (Ben,
+    // 2026-08-01): appended into `main` below, above the title row
 
     const bodyRow = el("div", "app-docs-body");
     wrap.appendChild(bodyRow);
@@ -732,6 +721,7 @@ export function mountDocs(
     // ---- the register pane ---------------------------------------------
     const main = el("div", "app-docs-main");
     bodyRow.appendChild(main);
+    main.appendChild(top); // search + scope + Action needed, full width
 
     // title row (Vault V3): what you are looking at + the register's own
     // controls — Filters (badged), List/Tiles, the kebab
