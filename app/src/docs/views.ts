@@ -175,6 +175,57 @@ export function serializeFavDocs(favs: FavDoc[]): string {
   return JSON.stringify(favs);
 }
 
+// ---- Documents UI state (Vault V1, ben_docuijson) ----------------------
+// Presentation-only state that follows the person across devices (Ben's
+// call, 2026-08-01: Dataverse over localStorage). Everything is optional
+// and tolerantly parsed — a mangled row must never break the screen.
+
+export interface DocUiPrefs {
+  /** Ticked library list ids ([] = never saved → all libraries). */
+  libraries: string[];
+  /** Register presentation ("" = default; consumed from V3). */
+  viewMode: string;
+  density: string;
+  /** Collapsed tree keys per term-set id. */
+  collapsed: Record<string, string[]>;
+}
+
+export function emptyDocUiPrefs(): DocUiPrefs {
+  return { libraries: [], viewMode: "", density: "", collapsed: {} };
+}
+
+export function parseDocUiPrefs(raw: string | null | undefined): DocUiPrefs {
+  const out = emptyDocUiPrefs();
+  const t = (raw ?? "").trim();
+  if (t === "") return out;
+  try {
+    const o = JSON.parse(t) as unknown;
+    if (!o || typeof o !== "object") return out;
+    const r = o as Record<string, unknown>;
+    out.libraries = asStrings(r.libs);
+    out.viewMode = asStr(r.view);
+    out.density = asStr(r.density);
+    if (r.collapsed && typeof r.collapsed === "object" && !Array.isArray(r.collapsed)) {
+      for (const [k, v] of Object.entries(r.collapsed as Record<string, unknown>)) {
+        const keys = asStrings(v);
+        if (k !== "" && keys.length > 0) out.collapsed[k] = keys;
+      }
+    }
+    return out;
+  } catch {
+    return out;
+  }
+}
+
+export function serializeDocUiPrefs(ui: DocUiPrefs): string {
+  const o: Record<string, unknown> = {};
+  if (ui.libraries.length > 0) o.libs = ui.libraries;
+  if (ui.viewMode !== "") o.view = ui.viewMode;
+  if (ui.density !== "") o.density = ui.density;
+  if (Object.keys(ui.collapsed).length > 0) o.collapsed = ui.collapsed;
+  return JSON.stringify(o);
+}
+
 // ---- the register export (FR-RP-008) -----------------------------------
 
 /** RFC-4180-ish CSV: quote when needed, double embedded quotes. */

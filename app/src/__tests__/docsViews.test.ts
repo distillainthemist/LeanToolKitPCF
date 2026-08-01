@@ -93,3 +93,30 @@ describe("register CSV (FR-RP-008)", () => {
     expect(csv).toContain('"Multi\nline",ok');
   });
 });
+
+describe("DocUiPrefs (Vault V1, ben_docuijson)", () => {
+  it("round-trips the presentation state", async () => {
+    const { parseDocUiPrefs, serializeDocUiPrefs } = await import("../docs/views");
+    const ui = {
+      libraries: ["list-a", "list-b"],
+      viewMode: "tiles",
+      density: "compact",
+      collapsed: { "set-1": ["Brisbane", "Brisbane Packaging"] },
+    };
+    expect(parseDocUiPrefs(serializeDocUiPrefs(ui))).toEqual(ui);
+  });
+  it("tolerates garbage, blanks, and unknown shapes", async () => {
+    const { parseDocUiPrefs, emptyDocUiPrefs } = await import("../docs/views");
+    expect(parseDocUiPrefs("")).toEqual(emptyDocUiPrefs());
+    expect(parseDocUiPrefs(null)).toEqual(emptyDocUiPrefs());
+    expect(parseDocUiPrefs("not json {")).toEqual(emptyDocUiPrefs());
+    expect(parseDocUiPrefs("[1,2,3]")).toEqual(emptyDocUiPrefs());
+    expect(parseDocUiPrefs('{"libs":"solo","collapsed":{"s":[]}}')).toEqual(
+      emptyDocUiPrefs()
+    );
+  });
+  it("serializes the empty state compactly", async () => {
+    const { serializeDocUiPrefs, emptyDocUiPrefs } = await import("../docs/views");
+    expect(serializeDocUiPrefs(emptyDocUiPrefs())).toBe("{}");
+  });
+});

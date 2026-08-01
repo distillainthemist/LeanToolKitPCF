@@ -15,6 +15,7 @@ export type Ben_ltkuserprefsesstatuscode = keyof typeof Ben_ltkuserprefsesstatus
 
 export interface Ben_ltkuserprefsesBase {
   ben_docfavoritesjson?: string;
+  ben_docuijson?: string;
   ben_docviewsjson?: string;
   ben_ltkuserprefsid: string;
   ben_name?: string;

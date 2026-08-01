@@ -185,6 +185,10 @@ export const TABLES = [
       // columns beat a whole new table + service. Presentation state only.
       ben_docfavoritesjson: { ...memo(100000), display: "Document favourites (JSON)" },
       ben_docviewsjson: { ...memo(100000), display: "Saved document views (JSON)" },
+      // Vault design V1 (Ben, 2026-08-01: Dataverse over localStorage so
+      // presentation state follows the person across devices): ticked
+      // libraries, list/tiles, density, collapsed tree groups.
+      ben_docuijson: { ...memo(20000), display: "Documents UI state (JSON)" },
     },
     key: ["ben_userid"],
   },

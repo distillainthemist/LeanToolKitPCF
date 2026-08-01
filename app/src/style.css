@@ -1625,12 +1625,87 @@ input[type="color"].app-color:disabled { opacity: 0.4; cursor: default; }
 .app-docs-scope { width: auto; }
 .app-docs-noncurrent { margin: 0; white-space: nowrap; }
 .app-docs-body { display: flex; gap: 14px; flex: 1; min-height: 0; }
-.app-docs-nav { width: 210px; flex: none; overflow-y: auto; border-right: 1px solid #e5e5e5; padding-right: 8px; }
-.app-docs-navitem { display: block; padding: 6px 8px; border-radius: 6px; color: inherit; text-decoration: none; }
-.app-docs-navitem:hover { background: #f0f0f0; }
-.app-docs-navitem-on { background: var(--app-accent, #2563eb); }
-.app-docs-navitem-on .app-docs-navlabel, .app-docs-navitem-on .app-field-hint { color: #fff; }
-.app-docs-navlabel { display: block; font-size: 13.5px; }
+.app-docs-nav { width: 248px; flex: none; overflow-y: auto; border-right: 1px solid #e5e5e5; padding-right: 8px; }
+/* Vault V1: the nav is three cards — LIBRARIES / SAVED VIEWS / BROWSE BY
+   — in the app's card language (hairline border, no shadow) */
+.app-docs-navcard {
+  border: 1px solid #e5e5e5;
+  border-radius: 6px;
+  background: #fff;
+  padding: 4px 6px 6px;
+  margin-bottom: 10px;
+}
+.app-docs-navhead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 4px 2px;
+}
+.app-docs-navheadlabel {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #6d675c;
+}
+.app-docs-navheadaction { font-size: 11.5px; text-decoration: none; }
+.app-docs-navheadaction:hover { text-decoration: underline; }
+.app-docs-navheadaction:disabled { color: #a8a29b; cursor: default; text-decoration: none; }
+.app-docs-librow2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px; /* touch floor */
+  padding: 0 4px;
+  border-radius: 6px;
+  width: 100%;
+}
+.app-docs-librow2:hover { background: #f0f0f0; }
+/* ticked = included: the tinted state; FILLED accent stays reserved for
+   where you ARE (the same rule the term filters follow) */
+.app-docs-librow2-on { background: color-mix(in srgb, var(--app-accent, #2563eb) 8%, #fff); }
+.app-docs-libcheck {
+  width: 20px;
+  height: 20px;
+  margin: 0;
+  flex: none;
+  accent-color: var(--app-accent, #2563eb);
+  cursor: pointer;
+}
+.app-docs-libname2 {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  padding: 12px 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.app-docs-librow2-on .app-docs-libname2 { font-weight: 600; }
+/* the solo-select affordance: visible on the row's hover and any focus
+   within it (finding 3 — no invisible click zones) */
+.app-docs-only {
+  display: none;
+  border: none;
+  background: none;
+  color: var(--app-accent, #2563eb);
+  font: inherit;
+  font-size: 11.5px;
+  cursor: pointer;
+  padding: 8px 6px;
+  flex: none;
+}
+.app-docs-librow2:hover .app-docs-only,
+.app-docs-librow2:focus-within .app-docs-only { display: inline-block; }
+.app-docs-favrow { border: none; background: none; font: inherit; cursor: pointer; text-align: left; }
+.app-docs-favrow .app-docs-libname2 { padding-left: 28px; } /* aligns with names past the checkboxes */
+.app-docs-navcount { flex: none; font-size: 11px; color: #6d675c; padding-right: 4px; }
 .app-docs-navorg { margin: 14px 0 4px; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.04em; color: #6b6b6b; }
 .app-docs-navterm { font-size: 12.5px; color: #8a8a8a; padding: 2px 0; cursor: not-allowed; }
 .app-docs-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
@@ -1704,6 +1779,7 @@ input[type="color"].app-color:disabled { opacity: 0.4; cursor: default; }
 button.app-docs-navterm {
   display: block; width: 100%; text-align: left; border: none; background: none;
   font-size: 12.5px; color: #444; padding-top: 3px; padding-bottom: 3px;
+  min-height: 44px; /* touch floor (Vault V1) */
   border-radius: 5px; cursor: pointer;
 }
 button.app-docs-navterm:hover:not(:disabled) { background: #f0f0f0; }
@@ -1717,13 +1793,14 @@ button.app-docs-navterm.app-docs-navterm-on {
   font-weight: 600;
 }
 /* Phase 3a: the group-by tree, its carets, filter add, chooser */
-.app-docs-treerow { display: flex; align-items: center; gap: 0; }
+.app-docs-treerow { display: flex; align-items: center; gap: 0; min-height: 44px; }
 .app-docs-treerow > button.app-docs-navterm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Vault V1: 44×44 caret hit area, same small glyph */
 .app-docs-caret {
-  border: none; background: none; cursor: pointer; color: #8a8a8a;
-  width: 16px; flex: none; font-size: 10px; padding: 0; text-align: center;
+  border: none; background: none; cursor: pointer; color: #6d675c;
+  width: 44px; min-height: 44px; flex: none; font-size: 10px; padding: 0; text-align: center;
 }
-.app-docs-caret-none { width: 16px; flex: none; display: inline-block; }
+.app-docs-caret-none { width: 44px; flex: none; display: inline-block; }
 .app-docs-groupby { font-size: 12px; padding: 3px 6px; margin: 2px 0 4px; width: 100%; }
 .app-docs-addfilter {
   border: 1px dashed #c2c2c2; background: none; border-radius: 12px;

@@ -33,20 +33,29 @@ import { currentViewer } from "../runtime";
 import { viewerPerson } from "../store/people";
 import { docsViewUrl, takePendingDocView } from "../links";
 import {
+  DocUiPrefs,
   DocView,
   FavDoc,
   decodeDocView,
+  emptyDocUiPrefs,
   emptyDocView,
   encodeDocView,
   toCsv,
 } from "./views";
-import { deleteDocView, docPrefs, saveDocView, toggleFavorite } from "./prefs";
+import {
+  deleteDocView,
+  docPrefs,
+  saveDocUi,
+  saveDocView,
+  toggleFavorite,
+} from "./prefs";
 
-// Applied by the next mount: saved-view clicks and the Favourites entry
-// re-mount the screen in place (the embedded pattern), and the state
-// rides here rather than in the hash.
+// Applied by the next mount: saved-view clicks, the Favourites entry and
+// library ticks re-mount the screen in place (the embedded pattern), and
+// the state rides here rather than in the hash.
 let pendingView: DocView | null = null;
 let pendingFav = false;
+let pendingLibs: string[] | null = null;
 import { openDocProperties, openDocViewer } from "./viewer";
 
 const PAGE = 50;
@@ -131,12 +140,54 @@ export function mountDocs(
     const favMode = pendingFav;
     pendingFav = false;
 
-    const current: DocLibrary | null = favMode
-      ? null
-      : (byListId.get((bootView?.listId || selected).toLowerCase()) ?? null);
+    const stashedLibs = pendingLibs;
+    pendingLibs = null;
+
     const whoId = currentViewer()?.objectId ?? "";
     let favs: FavDoc[] = [];
     let savedViews: DocView[] = [];
+
+    // ---- library selection (Vault V1: a ticked set, minimum one) -------
+    // Presentation prefs ride the person's userprefs row (Ben's call:
+    // Dataverse, so state follows them across devices). The read is the
+    // same cached promise the favourites/views block awaits below — the
+    // first Documents open of a session pays it once.
+    let uiState: DocUiPrefs = emptyDocUiPrefs();
+    if (whoId !== "") {
+      uiState = await docPrefs(whoId).then(
+        (p) => p.ui,
+        () => emptyDocUiPrefs()
+      );
+      if (dead) return;
+    }
+    const validIds = new Set(allListIds.map((id) => id.toLowerCase()));
+    const wantedIds: string[] =
+      bootView !== null
+        ? bootView.listId !== ""
+          ? [bootView.listId]
+          : allListIds
+        : (stashedLibs ??
+          (selected !== ""
+            ? [selected]
+            : uiState.libraries.length > 0
+              ? uiState.libraries
+              : allListIds));
+    let selectedIds = wantedIds.filter((id) => validIds.has(id.toLowerCase()));
+    if (selectedIds.length === 0) selectedIds = allListIds;
+    const isSelected = (listId: string): boolean =>
+      selectedIds.some((id) => id.toLowerCase() === listId.toLowerCase());
+    const allSelected = selectedIds.length === allListIds.length;
+
+    const current: DocLibrary | null =
+      favMode || selectedIds.length !== 1
+        ? null
+        : (byListId.get(selectedIds[0].toLowerCase()) ?? null);
+
+    const persistUi = (patch: Partial<DocUiPrefs>) => {
+      if (whoId === "") return;
+      uiState = { ...uiState, ...patch };
+      saveDocUi(whoId, uiState);
+    };
 
     // ---- chrome: title, search, controls -------------------------------
     const top = el("div", "app-docs-top");
@@ -147,7 +198,9 @@ export function mountDocs(
       ? "Favourites"
       : current
         ? `Search ${current.config.title || current.name}…`
-        : "Search all documents…";
+        : allSelected
+          ? "Search all documents…"
+          : `Search ${selectedIds.length} libraries…`;
     search.disabled = favMode;
     if (bootView) search.value = bootView.query;
     const scope = el("select", "app-input app-docs-scope") as HTMLSelectElement;
@@ -199,32 +252,6 @@ export function mountDocs(
     // ---- left nav ------------------------------------------------------
     const nav = el("nav", "app-docs-nav");
     bodyRow.appendChild(nav);
-    const navLink = (label: string, listId: string, active: boolean, hint = "") => {
-      const a = el("a", `app-docs-navitem${active ? " app-docs-navitem-on" : ""}`) as HTMLAnchorElement;
-      a.href = listId === "" ? "#/docs" : `#/docs/${listId}`;
-      a.append(el("span", "app-docs-navlabel", label));
-      if (hint !== "") a.appendChild(el("span", "app-field-hint", hint));
-      if (opts.embedded) {
-        // stay inside the hub tab: remount in place, never touch the hash
-        a.addEventListener("click", (e) => {
-          e.preventDefault();
-          dead = true;
-          wrap.remove();
-          mountDocs(parent, listId, opts);
-        });
-      }
-      nav.appendChild(a);
-      return a;
-    };
-    navLink("All documents", "", current === null && !favMode);
-    for (const lib of libraries) {
-      navLink(
-        lib.config.title || lib.name,
-        lib.listId,
-        current?.listId === lib.listId,
-        lib.libType
-      );
-    }
 
     /** Re-mount in place with a stashed boot state (both modes — the
      *  embedded pattern; the hash stays put). */
@@ -234,27 +261,83 @@ export function mountDocs(
       mountDocs(parent, "", opts);
     };
 
-    // ---- favourites ----------------------------------------------------
+    const navCard = (label: string): { card: HTMLElement; head: HTMLElement } => {
+      const card = el("section", "app-docs-navcard");
+      const head = el("div", "app-docs-navhead");
+      head.appendChild(el("span", "app-docs-navheadlabel", label));
+      card.appendChild(head);
+      nav.appendChild(card);
+      return { card, head };
+    };
+
+    // ---- LIBRARIES card (Vault V1) -------------------------------------
+    // Checkbox = include toggle (minimum one stays ticked); the name and
+    // the hover/focus "Only" affordance solo-select (finding 3). One
+    // ticked library keeps the fast browse path; two or more ride search.
+    const switchTo = (ids: string[]) => {
+      persistUi({ libraries: ids });
+      pendingLibs = ids;
+      remount();
+    };
+    const libCard = navCard("Libraries");
+    const selectAll = el(
+      "button",
+      "app-linklike app-docs-navheadaction",
+      "Select all"
+    ) as HTMLButtonElement;
+    selectAll.title = "Include every library";
+    selectAll.disabled = allSelected && !favMode;
+    selectAll.addEventListener("click", () => switchTo(allListIds));
+    libCard.head.appendChild(selectAll);
+    for (const lib of libraries) {
+      const on = !favMode && isSelected(lib.listId);
+      const row = el("div", `app-docs-librow2${on ? " app-docs-librow2-on" : ""}`);
+      const box = el("input", "app-docs-libcheck") as HTMLInputElement;
+      box.type = "checkbox";
+      box.checked = on;
+      box.setAttribute("aria-label", `Include ${lib.config.title || lib.name}`);
+      box.addEventListener("change", () => {
+        const next = box.checked
+          ? [...selectedIds.filter((id) => id.toLowerCase() !== lib.listId.toLowerCase()), lib.listId]
+          : selectedIds.filter((id) => id.toLowerCase() !== lib.listId.toLowerCase());
+        if (next.length === 0) {
+          box.checked = true; // the last library cannot be unticked
+          return;
+        }
+        switchTo(next);
+      });
+      const name = el(
+        "button",
+        "app-docs-libname2",
+        lib.config.title || lib.name
+      ) as HTMLButtonElement;
+      name.title = "Show only this library";
+      name.addEventListener("click", () => switchTo([lib.listId]));
+      const only = el("button", "app-docs-only", "Only") as HTMLButtonElement;
+      only.setAttribute("aria-label", `Only ${lib.config.title || lib.name}`);
+      only.addEventListener("click", () => switchTo([lib.listId]));
+      row.append(box, name, el("span", "app-field-hint", lib.libType), only);
+      libCard.card.appendChild(row);
+    }
+
+    // ---- favourites (pinned pseudo-row under the libraries) ------------
     const favLink = el(
-      "a",
-      `app-docs-navitem${favMode ? " app-docs-navitem-on" : ""}`
-    ) as HTMLAnchorElement;
-    favLink.href = "#/docs";
-    favLink.appendChild(el("span", "app-docs-navlabel", "★ Favourites"));
+      "button",
+      `app-docs-librow2 app-docs-favrow${favMode ? " app-docs-librow2-on" : ""}`
+    ) as HTMLButtonElement;
+    favLink.appendChild(el("span", "app-docs-libname2", "★ Favourites"));
     const favHint = el("span", "app-field-hint", "");
     favLink.appendChild(favHint);
-    favLink.addEventListener("click", (e) => {
-      e.preventDefault();
+    favLink.addEventListener("click", () => {
       pendingFav = true;
       remount();
     });
-    nav.appendChild(favLink);
+    libCard.card.appendChild(favLink);
 
-    // ---- saved views ---------------------------------------------------
-    const viewsHead = el("div", "app-docs-navorg", "Views");
-    nav.appendChild(viewsHead);
+    // ---- SAVED VIEWS card (finding 9: views above the tree) ------------
+    const viewsCard = navCard("Saved views");
     const viewsBox = el("div", "app-docs-navorgbox");
-    nav.appendChild(viewsBox);
+    viewsCard.card.appendChild(viewsBox);
     const paintViews = () => {
       clear(viewsBox);
       for (const v of savedViews) {
@@ -405,12 +488,43 @@ export function mountDocs(
     if (groupBy !== "" && !taxCols.has(groupBy)) groupBy = "";
     let treeNodes: TermNode[] = [];
     const treeButtons = new Map<string, HTMLElement>();
-    const collapsed = new Set<string>();
+    const countSpans = new Map<string, HTMLElement>();
+    let allBtn: HTMLButtonElement | null = null;
+    let collapsed = new Set<string>();
 
     const paintTreeSelection = () => {
       const active = filterFor(groupBy);
+      allBtn?.classList.toggle("app-docs-navterm-on", active === null);
       for (const [id, btn] of treeButtons) {
         btn.classList.toggle("app-docs-navterm-on", active?.node.id === id);
+      }
+    };
+
+    // Loaded-row counts (Ben, 2026-08-01: speed first, live counts can
+    // come later). Browse rows carry every column as display text, so a
+    // term's count = loaded rows whose group-by column holds its label;
+    // search rows carry no field text, so counts stay blank there rather
+    // than lie. Scoped honestly via the title attribute.
+    let lastUsedSearch = false;
+    const paintTreeCounts = () => {
+      if (countSpans.size === 0) return;
+      const cols = groupBy === "" ? [...orgCols] : [groupBy];
+      const rows = lastUsedSearch || favMode ? [] : loadedRows();
+      const tally = new Map<string, number>();
+      for (const r of rows) {
+        for (const col of cols) {
+          for (const part of (r.values[col] ?? "").split(";")) {
+            const label = part.trim().toLowerCase();
+            if (label !== "") tally.set(label, (tally.get(label) ?? 0) + 1);
+          }
+        }
+      }
+      for (const n of treeNodes) {
+        const span = countSpans.get(n.id);
+        if (!span) continue;
+        const count = tally.get(n.labels[n.labels.length - 1].toLowerCase()) ?? 0;
+        span.textContent = rows.length > 0 && count > 0 ? String(count) : "";
+        span.title = "In the documents loaded so far";
       }
     };
 
@@ -438,7 +552,15 @@ export function mountDocs(
       return best;
     };
 
-    const treeHead = el("div", "app-docs-navorg", "Browse by");
+    const treeCard = el("section", "app-docs-navcard");
+    const treeHead = el("div", "app-docs-navhead");
+    treeHead.appendChild(el("span", "app-docs-navheadlabel", "Browse by"));
+    treeCard.appendChild(treeHead);
+
+    /** Persisted collapse state per term set (Vault V1). */
+    const persistCollapse = (setId: string) => {
+      persistUi({ collapsed: { ...uiState.collapsed, [setId]: [...collapsed] } });
+    };
     const groupSel = el("select", "app-input app-docs-groupby") as HTMLSelectElement;
     const groupOpt = (value: string, label: string) => {
       const o = el("option", "", label) as HTMLOptionElement;
@@ -453,11 +575,14 @@ export function mountDocs(
     const paintTree = () => {
       clear(treeBox);
       treeButtons.clear();
+      countSpans.clear();
+      allBtn = null;
       const setId = setFor(groupBy);
       if (setId === "") {
         treeBox.appendChild(el("div", "app-field-hint", "No term set for this column."));
         return;
       }
+      collapsed = new Set(uiState.collapsed[setId] ?? []);
       treeBox.appendChild(el("div", "app-field-hint", "Loading…"));
       void fetchTermPaths(app.siteUrl, setId, 4, 60).then(async ({ nodes, error }) => {
         if (dead || setFor(groupBy) !== setId) return;
@@ -474,6 +599,17 @@ export function mountDocs(
         for (const n of nodes) {
           if (n.labels.length > 1) hasChildren.add(key(n.labels.slice(0, -1)));
         }
+        // the misclick recovery row: one click back to the unfiltered
+        // register (the Vault's "All folders" anatomy)
+        const allRow = el("div", "app-docs-treerow");
+        allRow.appendChild(el("span", "app-docs-caret app-docs-caret-none", ""));
+        allBtn = el("button", "app-docs-navterm", "All (no filter)") as HTMLButtonElement;
+        allBtn.title = `Clear the ${colLabel(groupBy)} filter`;
+        if (!(groupBy === "" && orgProps.length === 0)) {
+          allBtn.addEventListener("click", () => applyFilter(groupBy, null, []));
+        }
+        allRow.appendChild(allBtn);
+        treeBox.appendChild(allRow);
         const rows = new Map<string, HTMLElement>();
         const paintCollapse = () => {
           for (const n of nodes) {
@@ -499,6 +635,7 @@ export function mountDocs(
               caret.textContent = collapsed.has(k) ? "▸" : "▾";
               caret.setAttribute("aria-expanded", String(!collapsed.has(k)));
               paintCollapse();
+              persistCollapse(setId);
             });
             row.appendChild(caret);
           } else {
@@ -516,12 +653,16 @@ export function mountDocs(
             );
           }
           row.appendChild(btn);
+          const count = el("span", "app-docs-navcount", "");
+          row.appendChild(count);
+          countSpans.set(n.id, count);
           treeButtons.set(n.id, btn);
           rows.set(n.id, row);
           treeBox.appendChild(row);
         }
         paintCollapse();
         paintTreeSelection();
+        paintTreeCounts();
         // boot: a shared/saved view's org filter first; otherwise land on
         // the viewer's own corner of the organisation (chip makes either
         // one-click removable). Organisation tree only.
@@ -540,15 +681,40 @@ export function mountDocs(
 
     groupSel.addEventListener("change", () => {
       groupBy = groupSel.value;
-      collapsed.clear();
-      treeNodes = [];
+      treeNodes = []; // collapse state re-boots from prefs in paintTree
       paintTree();
     });
 
+    // keyboard: Up/Down walk the visible rows, Left/Right drive the
+    // focused row's caret (Vault V1 accept criterion)
+    treeBox.addEventListener("keydown", (e) => {
+      const focused = document.activeElement;
+      if (!(focused instanceof HTMLElement)) return;
+      const rowEls = [...treeBox.querySelectorAll<HTMLElement>(".app-docs-treerow")].filter(
+        (r) => r.style.display !== "none"
+      );
+      const rowOf = rowEls.find((r) => r.contains(focused));
+      if (!rowOf) return;
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        e.preventDefault();
+        const i = rowEls.indexOf(rowOf) + (e.key === "ArrowDown" ? 1 : -1);
+        const next = rowEls[i]?.querySelector<HTMLButtonElement>("button.app-docs-navterm");
+        next?.focus();
+      } else if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+        const caret = rowOf.querySelector<HTMLButtonElement>("button.app-docs-caret");
+        if (!caret) return;
+        const expanded = caret.getAttribute("aria-expanded") === "true";
+        if ((e.key === "ArrowLeft" && expanded) || (e.key === "ArrowRight" && !expanded)) {
+          e.preventDefault();
+          caret.click();
+        }
+      }
+    });
+
     if (app.orgSetId !== "" || taxCols.size > 0) {
-      nav.appendChild(treeHead);
-      if (taxCols.size > 0) nav.appendChild(groupSel);
-      nav.appendChild(treeBox);
+      if (taxCols.size > 0) treeCard.appendChild(groupSel);
+      treeCard.appendChild(treeBox);
+      nav.appendChild(treeCard);
       paintTree();
     }
 
@@ -777,6 +943,7 @@ export function mountDocs(
       },
       onNearEnd: () => void loadMore(),
     });
+    const loadedRows = (): DocRow[] => list.rows();
 
     // ---- kebab menu ----------------------------------------------------
     let menu: HTMLElement | null = null;
@@ -936,14 +1103,19 @@ export function mountDocs(
         current === null ||
         scope.value === "all" ||
         filters.length > 0;
+      lastUsedSearch = useSearch;
       if (useSearch) {
         const startRow = nextToken === "" ? 0 : Number(nextToken);
-        // never unscoped: either the library in view, or every library
-        // this site exposes — the corpus is what was configured, not the
-        // whole SharePoint tenant
+        // never unscoped: the library in view, the ticked set, or every
+        // library this site exposes — the corpus is what was configured,
+        // not the whole SharePoint tenant
         const page = await searchPage(app.siteUrl, query, {
           listIds:
-            current && scope.value === "library" ? [current.listId] : allListIds,
+            current && scope.value === "library"
+              ? [current.listId]
+              : current
+                ? allListIds
+                : selectedIds,
           rowLimit: PAGE,
           startRow,
           searchContents: contentsBox.checked,
@@ -967,6 +1139,7 @@ export function mountDocs(
       }
       list.setLoading(false);
       inFlight = false;
+      paintTreeCounts();
     };
     const loadMore = () => load(false);
 
@@ -1020,7 +1193,9 @@ export function mountDocs(
       void (async () => {
         exporting = true;
         status.textContent = "Exporting…";
-        const scopeLibs = current ? [current] : libraries;
+        const scopeLibs = current
+          ? [current]
+          : libraries.filter((l) => isSelected(l.listId));
         // the union of configured available columns, labelled
         const cols: { internal: string; label: string }[] = [];
         for (const lib of scopeLibs) {

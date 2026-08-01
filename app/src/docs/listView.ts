@@ -31,6 +31,8 @@ export interface DocList<T> {
   setLoading: (on: boolean) => void;
   /** Rendered row count. */
   count: () => number;
+  /** The rows currently rendered (loaded pages so far). */
+  rows: () => T[];
   destroy: () => void;
 }
 
@@ -50,7 +52,9 @@ export function mountDocList<T>(host: HTMLElement, opts: DocListOptions<T>): Doc
   for (const c of opts.columns) header.appendChild(el("span", "app-doclist-h", c.label));
 
   let n = 0;
+  let held: T[] = [];
   const appendRows = (rows: T[]) => {
+    held = held.concat(rows);
     const frag = document.createDocumentFragment();
     for (const row of rows) {
       const r = el("div", "app-doclist-row");
@@ -92,6 +96,7 @@ export function mountDocList<T>(host: HTMLElement, opts: DocListOptions<T>): Doc
     setRows: (rows) => {
       clear(body);
       n = 0;
+      held = [];
       appendRows(rows);
       bodyWrap.scrollTop = 0;
     },
@@ -119,6 +124,7 @@ export function mountDocList<T>(host: HTMLElement, opts: DocListOptions<T>): Doc
       }
     },
     count: () => n,
+    rows: () => held,
     destroy: () => {
       observer.disconnect();
       wrap.remove();
