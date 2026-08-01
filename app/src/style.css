@@ -1625,7 +1625,19 @@ input[type="color"].app-color:disabled { opacity: 0.4; cursor: default; }
 .app-docs-scope { width: auto; }
 .app-docs-noncurrent { margin: 0; white-space: nowrap; }
 .app-docs-body { display: flex; gap: 14px; flex: 1; min-height: 0; }
-.app-docs-nav { width: 248px; flex: none; overflow-y: auto; border-right: 1px solid #e5e5e5; padding-right: 8px; }
+.app-docs-nav {
+  width: 248px;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  min-height: 0; /* full-height column; the browse-by card fills it */
+  border-right: 1px solid #e5e5e5;
+  padding-right: 8px;
+}
+/* doubled class beats .app-docs-navcard's own margin at equal
+   specificity further down the file (the Users-grid lesson) */
+.app-docs-navcard.app-docs-navcard-fill { flex: 1; min-height: 0; display: flex; flex-direction: column; margin-bottom: 0; }
+.app-docs-navcard-fill .app-docs-navorgbox { flex: 1; min-height: 0; overflow-y: auto; }
 /* Vault V1: the nav is three cards — LIBRARIES / SAVED VIEWS / BROWSE BY
    — in the app's card language (hairline border, no shadow) */
 .app-docs-navcard {
@@ -1733,7 +1745,6 @@ input[type="color"].app-color:disabled { opacity: 0.4; cursor: default; }
   border: none; background: none; cursor: pointer; font-size: 16px; padding: 2px 8px;
   min-width: 36px; min-height: 36px; /* dense floor (V5 audit) */
 }
-.app-docs-viewkebab { min-width: 36px; min-height: 36px; }
 .app-docs-topkebab { margin-left: auto; border: 1px solid #ddd; border-radius: 6px; background: none; cursor: pointer; font-size: 16px; padding: 4px 10px; min-height: 44px; min-width: 44px; }
 /* Vault V2: search keycap + the scope dropdown + Action needed slot */
 .app-docs-searchwrap { position: relative; flex: 1; min-width: 160px; display: flex; }
@@ -1888,8 +1899,11 @@ button.app-docs-navterm.app-docs-navterm-on {
 }
 .app-docs-caret-none { width: 44px; flex: none; display: inline-block; }
 .app-docs-groupby { font-size: 12px; padding: 3px 6px; margin: 2px 0 4px; width: 100%; }
-.app-docs-viewkebab { flex: none; }
-.app-docs-saveview { color: #555; }
+/* the saved-views menu (register kebab) */
+.app-docs-viewsmenu { width: 280px; }
+.app-docs-saverow { display: flex; gap: 6px; padding: 4px; }
+.app-docs-saverow .app-input { flex: 1; min-width: 0; }
+.app-docs-viewrow .app-docs-menuitem { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .app-docs-chooser { width: min(420px, 92vw); }
 .app-docs-colslist { display: flex; flex-direction: column; }
 .app-docs-colorderrow { display: flex; align-items: center; gap: 6px; padding: 3px 2px; border-radius: 5px; background: #fff; }
@@ -2077,7 +2091,7 @@ button.app-doclist-hsort:hover { color: var(--app-accent, #2563eb); }
 
 .app-docs-viewrow { display: flex; gap: 2px; align-items: center; }
 .app-docs-viewrow .app-docs-navterm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.app-docs-viewbtn { border: none; background: none; cursor: pointer; font-size: 13px; color: #666; padding: 2px 4px; border-radius: 4px; flex: none; }
+.app-docs-viewbtn { border: none; background: none; cursor: pointer; font-size: 16px; color: #666; min-width: 36px; min-height: 36px; border-radius: 4px; flex: none; }
 .app-docs-viewbtn:hover { background: #f0f0f0; }
 .app-docs-viewname { font-size: 12px; padding: 3px 6px; flex: 1; min-width: 0; }
 /* the Standard documents / Document health board cards */

@@ -416,91 +416,14 @@ export function mountDocs(
     });
     libCard.card.appendChild(favLink);
 
-    // ---- SAVED VIEWS card (finding 9: views above the tree) ------------
-    const viewsCard = navCard("Saved views");
-    const viewsBox = el("div", "app-docs-navorgbox");
-    viewsCard.card.appendChild(viewsBox);
-    const paintViews = () => {
-      clear(viewsBox);
-      for (const v of savedViews) {
-        const row = el("div", "app-docs-viewrow");
-        const open = el("button", "app-docs-navterm", v.name) as HTMLButtonElement;
-        open.title = "Open this view";
-        open.addEventListener("click", () => {
-          pendingView = v;
-          remount();
-        });
-        // secondary actions ride the app's kebab convention
-        const kb = el("button", "app-kebab app-docs-viewkebab", "⋮") as HTMLButtonElement;
-        kb.setAttribute("aria-label", `${v.name} actions`);
-        kb.addEventListener("click", (e) => {
-          e.stopPropagation();
-          if (menu) {
-            closeMenu();
-            return;
-          }
-          menu = el("div", "app-docs-menu");
-          const item = (label: string, onPick: () => void) => {
-            const b = el("button", "app-docs-menuitem", label) as HTMLButtonElement;
-            b.addEventListener("click", () => {
-              closeMenu();
-              onPick();
-            });
-            menu!.appendChild(b);
-          };
-          item("Copy link to this view", () => {
-            void navigator.clipboard.writeText(docsViewUrl(encodeDocView(v)));
-            status.textContent = "Link copied ✓";
-          });
-          item("Delete view", () => {
-            void deleteDocView(whoId, v.name).then((list) => {
-              if (dead) return;
-              savedViews = list;
-              paintViews();
-            });
-          });
-          const r = kb.getBoundingClientRect();
-          menu.style.top = `${r.bottom + 4}px`;
-          menu.style.left = `${Math.max(8, r.right - 200)}px`;
-          document.body.appendChild(menu);
-        });
-        row.append(open, kb);
-        viewsBox.appendChild(row);
-      }
-      // one button; the name input appears only when saving
-      const saveBtn = el("button", "app-docs-navterm app-docs-saveview", "＋ Save view") as HTMLButtonElement;
-      saveBtn.title = "Save the current filter as a view";
-      saveBtn.addEventListener("click", () => {
-        if (whoId === "" || favMode) return;
-        const saveRow = el("div", "app-docs-viewrow");
-        const nameIn = el("input", "app-input app-docs-viewname") as HTMLInputElement;
-        nameIn.placeholder = "View name…";
-        const commit = () => {
-          const name = nameIn.value.trim();
-          if (name === "") return;
-          void saveDocView(whoId, { ...currentView(), name }).then((list) => {
-            if (dead) return;
-            savedViews = list;
-            paintViews();
-          });
-        };
-        nameIn.addEventListener("keydown", (e) => {
-          if (e.key === "Enter") commit();
-          if (e.key === "Escape") paintViews();
-        });
-        saveRow.appendChild(nameIn);
-        saveBtn.replaceWith(saveRow);
-        nameIn.focus();
-      });
-      viewsBox.appendChild(saveBtn);
-    };
+    // saved views moved OUT of this pane (Ben, 2026-08-01) — they live
+    // in the register kebab now; the nav is libraries + browse-by only
     if (whoId !== "") {
       void docPrefs(whoId).then((p) => {
         if (dead) return;
         favs = p.favorites;
         savedViews = p.views;
         favHint.textContent = favs.length === 0 ? "" : String(favs.length);
-        paintViews();
         if (favMode) void load(true); // favourites arrived — paint them
       });
     }
@@ -626,7 +549,9 @@ export function mountDocs(
       return best;
     };
 
-    const treeCard = el("section", "app-docs-navcard");
+    // the browse-by card fills the pane to the bottom (Ben, 2026-08-01:
+    // full-height left column per the Vault design), its tree scrolling
+    const treeCard = el("section", "app-docs-navcard app-docs-navcard-fill");
     const treeHead = el("div", "app-docs-navhead");
     treeHead.appendChild(el("span", "app-docs-navheadlabel", "Browse by"));
     treeCard.appendChild(treeHead);
@@ -1527,6 +1452,63 @@ export function mountDocs(
           status.textContent = "Link copied ✓ — it opens Documents exactly as you see it now.";
         });
     };
+
+    // saved views (relocated from the nav, Ben 2026-08-01): one menu —
+    // save the current state on top, the saved list beneath, delete per
+    // row. Opening a view remounts in place, same as always.
+    const openViewsMenu = () => {
+      menu = el("div", "app-docs-menu app-docs-viewsmenu");
+      const paint = () => {
+        clear(menu!);
+        const saveRow = el("div", "app-docs-saverow");
+        const nameIn = el("input", "app-input app-docs-viewname") as HTMLInputElement;
+        nameIn.placeholder = "Save current view as…";
+        const saveB = el("button", "app-btn app-btn-primary", "Save") as HTMLButtonElement;
+        const commit = () => {
+          const name = nameIn.value.trim();
+          if (name === "") return;
+          void saveDocView(whoId, { ...currentView(), name }).then((list) => {
+            if (dead) return;
+            savedViews = list;
+            paint();
+          });
+        };
+        saveB.addEventListener("click", commit);
+        nameIn.addEventListener("keydown", (e) => {
+          if (e.key === "Enter") commit();
+        });
+        saveRow.append(nameIn, saveB);
+        menu!.appendChild(saveRow);
+        if (savedViews.length > 0) menu!.appendChild(el("div", "app-docs-menusep", ""));
+        for (const v of savedViews) {
+          const row = el("div", "app-docs-viewrow");
+          const open = el("button", "app-docs-menuitem", v.name) as HTMLButtonElement;
+          open.title = "Open this view";
+          open.addEventListener("click", () => {
+            closeMenu();
+            pendingView = v;
+            remount();
+          });
+          const del = el("button", "app-docs-viewbtn", "×") as HTMLButtonElement;
+          del.title = `Delete “${v.name}”`;
+          del.setAttribute("aria-label", `Delete the view ${v.name}`);
+          del.addEventListener("click", () => {
+            void deleteDocView(whoId, v.name).then((list) => {
+              if (dead) return;
+              savedViews = list;
+              paint();
+            });
+          });
+          row.append(open, del);
+          menu!.appendChild(row);
+        }
+      };
+      paint();
+      const r = topKebab.getBoundingClientRect();
+      menu.style.top = `${r.bottom + 4}px`;
+      menu.style.left = `${Math.max(8, r.right - 280)}px`;
+      document.body.appendChild(menu);
+    };
     const EXPORT_CAP = 2000;
     let exporting = false;
     const exportRegister = () => {
@@ -1724,6 +1706,13 @@ export function mountDocs(
             }
           : null
       );
+      if (whoId !== "") {
+        item(
+          "Saved views…",
+          "Save the current filter as a view, or open a saved one.",
+          openViewsMenu
+        );
+      }
       item(
         "Copy link to this view",
         "A link that opens Documents exactly as you see it now.",
