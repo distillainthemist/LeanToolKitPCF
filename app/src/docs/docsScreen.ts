@@ -57,7 +57,7 @@ import {
 let pendingView: DocView | null = null;
 let pendingFav = false;
 let pendingLibs: string[] | null = null;
-import { openDocProperties, openDocViewer } from "./viewer";
+import { openDocViewer } from "./viewer";
 
 const PAGE = 50;
 
@@ -1165,18 +1165,58 @@ export function mountDocs(
       return columns;
     };
 
+    /** Favourite wiring shared by the overlay and the row kebab. */
+    const favToggleFor = (row: DocRow) => async (): Promise<boolean> => {
+      const next = await toggleFavorite(whoId, {
+        uniqueId: row.uniqueId,
+        name: row.name,
+        ext: row.ext,
+        serverUrl: row.serverUrl,
+        listId: row.listId,
+      });
+      if (!dead) {
+        favs = next;
+        favHint.textContent = favs.length === 0 ? "" : String(favs.length);
+        if (favMode) void load(true);
+      }
+      return next.some((f) => f.uniqueId === row.uniqueId);
+    };
+
     const onRowOpen = (row: DocRow) => {
       const lib = byListId.get(row.listId) ?? current;
       // the drive is per LIBRARY, and the PDF routes need it — resolve
       // before opening (cached, so only the first open of a library pays)
       void driveIdFor(app.siteUrl, row.listId || lib?.listId || "").then((driveId) => {
         if (dead) return;
+        const libStatusCol = lib?.config.columns.find((c) => c.role === "status") ?? null;
         openDocViewer({
           site: app.siteUrl,
           row,
           driveId,
           libraryName: lib ? lib.config.title || lib.name : "",
           askToWork: lib?.libType === "working",
+          // details pane (Vault V4): the register's fields, never
+          // SharePoint's plumbing — exactly the available-ticked columns
+          labels: Object.fromEntries(
+            (lib?.config.columns ?? [])
+              .filter((c) => c.label !== "")
+              .map((c) => [c.internal, c.label])
+          ),
+          linkColumns: (lib?.config.columns ?? [])
+            .filter((c) => c.role === "linkedDocuments")
+            .map((c) => c.internal),
+          columns: lib
+            ? lib.config.columns.filter((c) => c.available).map((c) => c.internal)
+            : undefined,
+          statusValue: libStatusCol ? (row.values[libStatusCol.internal] ?? "") : "",
+          statusChipFor: statusChip,
+          favorite:
+            whoId === ""
+              ? null
+              : {
+                  isFav: () => favs.some((f) => f.uniqueId === row.uniqueId),
+                  toggle: favToggleFor(row),
+                },
         });
       });
     };
@@ -1308,42 +1348,14 @@ export function mountDocs(
         menu!.appendChild(b);
       };
       const lib = byListId.get(row.listId) ?? current;
+      // slim kebab (Vault V4): one-click actions only — properties and
+      // history live in the overlay a row click opens
       if (whoId !== "") {
         const isFav = favs.some((f) => f.uniqueId === row.uniqueId);
         item(isFav ? "★ Remove favourite" : "☆ Add to favourites", () => {
-          void toggleFavorite(whoId, {
-            uniqueId: row.uniqueId,
-            name: row.name,
-            ext: row.ext,
-            serverUrl: row.serverUrl,
-            listId: row.listId,
-          }).then((next) => {
-            if (dead) return;
-            favs = next;
-            favHint.textContent = favs.length === 0 ? "" : String(favs.length);
-            if (favMode) void load(true);
-          });
+          void favToggleFor(row)();
         });
       }
-      item("Properties & history", () =>
-        openDocProperties({
-          site: app.siteUrl,
-          row,
-          labels: Object.fromEntries(
-            (lib?.config.columns ?? [])
-              .filter((c) => c.label !== "")
-              .map((c) => [c.internal, c.label])
-          ),
-          linkColumns: (lib?.config.columns ?? [])
-            .filter((c) => c.role === "linkedDocuments")
-            .map((c) => c.internal),
-          // readers see the register's fields, not SharePoint's plumbing:
-          // exactly the columns ticked available in the library settings
-          columns: lib
-            ? lib.config.columns.filter((c) => c.available).map((c) => c.internal)
-            : undefined,
-        })
-      );
       // readers get the PDF rendering, never the editable source
       const pdfUrl = () =>
         driveIdFor(app.siteUrl, row.listId || lib?.listId || "").then((d) =>
