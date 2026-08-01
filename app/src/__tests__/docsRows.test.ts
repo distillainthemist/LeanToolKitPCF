@@ -366,3 +366,46 @@ describe("presentation helpers", () => {
     expect(formatWhen("garbage")).toBe("garbage");
   });
 });
+
+describe("Vault V3 server-side presentation", () => {
+  it("browse URI carries sort and the modified window", async () => {
+    const { buildBrowseUri } = await import("../docs/rows");
+    expect(buildBrowseUri("L1")).toContain("$orderby=Modified desc");
+    expect(buildBrowseUri("L1", 50, { sortName: true, asc: true })).toContain(
+      "$orderby=FileLeafRef asc"
+    );
+    const withWindow = buildBrowseUri("L1", 50, {
+      modifiedAfterIso: "2026-07-01T00:00:00.000Z",
+    });
+    expect(withWindow).toContain("Modified ge datetime'2026-07-01T00:00:00.000Z'");
+    expect(withWindow).toContain("FSObjType eq 0 and");
+  });
+  it("search body carries sort direction and the modified range", async () => {
+    const { buildSearchBody } = await import("../docs/rows");
+    const asc = JSON.parse(
+      buildSearchBody("", { listIds: ["a"], byModified: true, sortAsc: true })
+    ) as { request: { SortList: { results: { Direction: number }[] } } };
+    expect(asc.request.SortList.results[0].Direction).toBe(0);
+    const body = JSON.parse(
+      buildSearchBody("pump", {
+        listIds: ["a"],
+        modifiedAfterIso: "2026-07-01T00:00:00.000Z",
+      })
+    ) as { request: { Querytext: string } };
+    expect(body.request.Querytext).toContain("LastModifiedTime>=2026-07-01");
+  });
+  it("splits filenames so the extension survives (finding 6)", async () => {
+    const { splitNameForEllipsis } = await import("../docs/rows");
+    expect(splitNameForEllipsis("Crane Pre-start Checklist Form.docx")).toEqual({
+      stem: "Crane Pre-start Checklist Form",
+      ext: ".docx",
+    });
+    expect(splitNameForEllipsis("archive.tar.gz")).toEqual({
+      stem: "archive.tar",
+      ext: ".gz",
+    });
+    expect(splitNameForEllipsis("README")).toEqual({ stem: "README", ext: "" });
+    expect(splitNameForEllipsis(".hidden")).toEqual({ stem: ".hidden", ext: "" });
+    expect(splitNameForEllipsis("dot.")).toEqual({ stem: "dot.", ext: "" });
+  });
+});

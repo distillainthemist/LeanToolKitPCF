@@ -35,6 +35,8 @@ export interface DocView {
   columns: string[];
   /** Column internal name driving the nav tree; "" = organisation. */
   groupBy: string;
+  /** Modified-within window in days (0 = any time) — Vault V3. */
+  modifiedDays: number;
 }
 
 export function emptyDocView(): DocView {
@@ -49,6 +51,7 @@ export function emptyDocView(): DocView {
     filters: [],
     columns: [],
     groupBy: "",
+    modifiedDays: 0,
   };
 }
 
@@ -68,6 +71,7 @@ function viewToJson(v: DocView): Record<string, unknown> {
   }
   if (v.columns.length > 0) o.k = v.columns;
   if (v.groupBy !== "") o.g = v.groupBy;
+  if (v.modifiedDays > 0) o.m = v.modifiedDays;
   return o;
 }
 
@@ -97,6 +101,8 @@ function viewFromJson(raw: unknown): DocView {
   }
   out.columns = asStrings(o.k);
   out.groupBy = asStr(o.g);
+  out.modifiedDays =
+    typeof o.m === "number" && Number.isFinite(o.m) && o.m > 0 ? Math.floor(o.m) : 0;
   return out;
 }
 

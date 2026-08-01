@@ -10,7 +10,7 @@
 // would lie about the corpus.
 
 import { el, clear } from "../../../shared/ui/dom";
-import { withStatusGlyph } from "../../../shared/ui/format";
+import { fileTypeChip, withStatusGlyph } from "../../../shared/ui/format";
 import { draggableRow } from "../../../shared/ui/dragList";
 import { showLoading } from "../loading";
 import { detectHost } from "../runtime";
@@ -18,13 +18,14 @@ import { paletteMap, resolvePaletteColor } from "../../../shared/palette";
 import { textOn } from "../../../shared/tokens";
 import { appPalettes } from "../store/config";
 import { browsePage, driveIdFor, searchPage } from "./data";
-import { ListColumn, mountDocList } from "./listView";
+import { DocList, ListColumn, mountDocList } from "./listView";
+import { mountDocTiles } from "./docsTiles";
 import {
   DocRow,
-  extGlyph,
   formatWhen,
   isNonCurrentStatus,
   pdfViewUrlFor,
+  splitNameForEllipsis,
   taxonomySearchProperty,
 } from "./rows";
 import { DocLibrary, docsConfig } from "./docsStore";
@@ -300,22 +301,23 @@ export function mountDocs(
     const actionNeeded = el("button", "app-btn app-docs-actionneeded", "Action needed") as HTMLButtonElement;
     actionNeeded.setAttribute("aria-disabled", "true");
     actionNeeded.title = "Arrives with document control (a later phase).";
-    const nonCurrent = el("label", "app-docs-check app-docs-noncurrent");
-    const nonCurrentBox = el("input", "") as HTMLInputElement;
-    nonCurrentBox.type = "checkbox";
-    nonCurrent.append(nonCurrentBox, document.createTextNode(" Include drafts & superseded"));
-    if (bootView) nonCurrentBox.checked = bootView.nonCurrent;
+    // toggles that used to be toolbar checkboxes ride the register
+    // kebab from V3 — state only here
+    let showNonCurrent = bootView?.nonCurrent ?? false;
+    let modifiedDays = bootView?.modifiedDays ?? 0;
+    const modifiedIso = (): string | undefined =>
+      modifiedDays > 0
+        ? new Date(Date.now() - modifiedDays * 86400000).toISOString()
+        : undefined;
 
     // secondary actions (share the current filter as a player link,
     // export the register) live behind one kebab — the app's convention
     const topKebab = el("button", "app-kebab app-docs-topkebab", "⋮") as HTMLButtonElement;
     topKebab.title = "More actions";
-    top.append(searchWrap, scopeBtn, actionNeeded, nonCurrent, topKebab);
+    top.append(searchWrap, scopeBtn, actionNeeded);
     if (favMode) {
       scopeBtn.style.display = "none";
       actionNeeded.style.display = "none";
-      nonCurrent.style.display = "none";
-      topKebab.style.display = "none";
     }
     wrap.appendChild(top);
 
@@ -805,16 +807,77 @@ export function mountDocs(
       });
     }
 
-    // ---- the list ------------------------------------------------------
+    // ---- the register pane ---------------------------------------------
     const main = el("div", "app-docs-main");
     bodyRow.appendChild(main);
+
+    // title row (Vault V3): what you are looking at + the register's own
+    // controls — Filters (badged), List/Tiles, the kebab
+    const titleRow = el("div", "app-docs-titlerow");
+    const titleBlock = el("div", "app-docs-titleblock");
+    const h1 = el("h2", "app-docs-h1", "");
+    const crumb = el("div", "app-docs-crumb", "");
+    titleBlock.append(h1, crumb);
+    const filtersBtn = el("button", "app-btn app-docs-filtersbtn", "Filters") as HTMLButtonElement;
+    filtersBtn.title = "Filter the register by its configured columns";
+    const seg = el("div", "app-docs-seg");
+    seg.setAttribute("role", "group");
+    seg.setAttribute("aria-label", "Register view");
+    const segList = el("button", "app-docs-segbtn", "List") as HTMLButtonElement;
+    const segTiles = el("button", "app-docs-segbtn", "Tiles") as HTMLButtonElement;
+    seg.append(segList, segTiles);
+    titleRow.append(titleBlock, el("div", "app-docs-titlegap"), filtersBtn, seg, topKebab);
+    if (favMode) {
+      filtersBtn.style.display = "none";
+      seg.style.display = "none";
+      topKebab.style.display = "none";
+    }
+    main.appendChild(titleRow);
+
+    const libNames = favMode
+      ? "Favourites"
+      : current
+        ? current.config.title || current.name
+        : allSelected
+          ? "All documents"
+          : selectedIds
+              .map((id) => byListId.get(id.toLowerCase()))
+              .filter((l): l is DocLibrary => l !== undefined)
+              .map((l) => l.config.title || l.name)
+              .join(" & ");
+    const paintTitle = () => {
+      const f = filterFor(groupBy) ?? filters[0] ?? null;
+      h1.textContent = f
+        ? `${f.node.labels[f.node.labels.length - 1]} — ${libNames}`
+        : libNames;
+      crumb.textContent = f ? f.node.labels.join(" › ") : "";
+      crumb.style.display = f ? "" : "none";
+      const active = filters.length + (modifiedDays > 0 ? 1 : 0);
+      filtersBtn.textContent = active > 0 ? `Filters · ${active}` : "Filters";
+      filtersBtn.classList.toggle("app-docs-filtersbtn-on", active > 0);
+    };
+
     const filterBar = el("div", "app-docs-filterbar");
     main.appendChild(filterBar);
     const status = el("div", "app-docs-status");
     main.appendChild(status);
 
     const paintChips = () => {
+      paintTitle();
       clear(filterBar);
+      if (modifiedDays > 0) {
+        const chip = el("span", "app-docs-orgchip");
+        chip.appendChild(document.createTextNode(`Modified: last ${modifiedDays} days`));
+        const x = el("button", "app-docs-orgchip-x", "×") as HTMLButtonElement;
+        x.title = "Clear the modified filter";
+        x.addEventListener("click", () => {
+          modifiedDays = 0;
+          paintChips();
+          void load(true);
+        });
+        chip.appendChild(x);
+        filterBar.appendChild(chip);
+      }
       for (const f of filters) {
         const chip = el("span", "app-docs-orgchip");
         chip.appendChild(
@@ -883,6 +946,123 @@ export function mountDocs(
     };
     paintChips();
 
+    // ---- Filters popover (Vault V3) ------------------------------------
+    // The popover is the EDITOR; applied state keeps painting as the chip
+    // row. Pills are the app's filter-chip treatment; one term per column
+    // (a pick includes its subtree — the shipped semantics), AND across
+    // columns. Counts stay honest: they ride the chips/tree, loaded-rows
+    // only.
+    filtersBtn.addEventListener("click", () => {
+      if (menu) {
+        closeMenu();
+        return;
+      }
+      menu = el("div", "app-docs-menu app-docs-filterpop");
+      const body = el("div", "app-docs-filterpop-body");
+      menu.appendChild(body);
+      const paintPop = () => {
+        clear(body);
+        const group = (label: string): HTMLElement => {
+          const g = el("div", "app-docs-fgroup");
+          g.appendChild(el("div", "app-docs-fgroup-label", label));
+          body.appendChild(g);
+          return g;
+        };
+        const cols: string[] = [];
+        if (app.orgSetId !== "" && orgProps.length > 0) cols.push("");
+        cols.push(...taxCols.keys());
+        for (const col of cols) {
+          const g = group(colLabel(col));
+          const pills = el("div", "app-docs-fpills");
+          g.appendChild(pills);
+          pills.appendChild(el("span", "app-field-hint", "Loading…"));
+          const setId = setFor(col);
+          void fetchTermPaths(app.siteUrl, setId, 4, 60).then(({ nodes, error }) => {
+            if (dead || !menu || !menu.contains(pills)) return;
+            clear(pills);
+            if (error !== "" || nodes.length === 0) {
+              pills.appendChild(el("span", "app-field-hint", "No terms."));
+              return;
+            }
+            const active = filterFor(col);
+            // top two levels as pills; a deeper active pick still shows
+            const shallow = nodes.filter((n) => n.labels.length <= 2);
+            const deepPick =
+              active && !shallow.some((n) => n.id === active.node.id)
+                ? [active.node]
+                : [];
+            const CAP = 14;
+            let shown = [...deepPick, ...shallow];
+            const capped = shown.length > CAP;
+            if (capped) shown = shown.slice(0, CAP);
+            for (const n of shown) {
+              const on = active?.node.id === n.id;
+              const pb = el(
+                "button",
+                `app-docs-fpill${on ? " app-docs-fpill-on" : ""}`,
+                n.labels[n.labels.length - 1]
+              ) as HTMLButtonElement;
+              pb.title = n.labels.join(" › ");
+              pb.setAttribute("aria-pressed", String(on));
+              pb.addEventListener("click", () => {
+                applyFilter(col, on ? null : n, nodes);
+                paintPop();
+              });
+              pills.appendChild(pb);
+            }
+            if (capped) {
+              pills.appendChild(
+                el("span", "app-field-hint", "Deeper terms live in the Browse-by tree")
+              );
+            }
+          });
+        }
+        const mg = group("Modified");
+        const mp = el("div", "app-docs-fpills");
+        mg.appendChild(mp);
+        for (const [days, label] of [
+          [0, "Any time"],
+          [7, "Last 7 days"],
+          [30, "Last 30 days"],
+          [90, "Last 90 days"],
+        ] as const) {
+          const on = modifiedDays === days;
+          const pb = el(
+            "button",
+            `app-docs-fpill${on ? " app-docs-fpill-on" : ""}`,
+            label
+          ) as HTMLButtonElement;
+          pb.setAttribute("aria-pressed", String(on));
+          pb.addEventListener("click", () => {
+            modifiedDays = days;
+            paintChips();
+            void load(true);
+            paintPop();
+          });
+          mp.appendChild(pb);
+        }
+        const foot = el("div", "app-docs-fpop-foot");
+        const clearAll = el("button", "app-btn", "Clear all") as HTMLButtonElement;
+        clearAll.addEventListener("click", () => {
+          filters = [];
+          modifiedDays = 0;
+          paintTreeSelection();
+          paintChips();
+          void load(true);
+          paintPop();
+        });
+        const doneB = el("button", "app-btn app-btn-primary", "Done") as HTMLButtonElement;
+        doneB.addEventListener("click", () => closeMenu());
+        foot.append(clearAll, doneB);
+        body.appendChild(foot);
+      };
+      paintPop();
+      const r = filtersBtn.getBoundingClientRect();
+      menu.style.top = `${r.bottom + 4}px`;
+      menu.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - 420))}px`;
+      document.body.appendChild(menu);
+    });
+
     const statusCol = current?.config.columns.find((c) => c.role === "status") ?? null;
     // glyph + word so status reads under any colour-vision (finding 5);
     // the fill still follows the site's configured status palette
@@ -900,16 +1080,40 @@ export function mountDocs(
       return chip;
     };
 
+    const ownerColCfg = current?.config.columns.find((c) => c.role === "owner") ?? null;
+    /** Initials avatar + the full owner text (Vault V3 row anatomy). */
+    const ownerCell = (v: string): HTMLElement => {
+      const first = v.split(";")[0].trim();
+      const initials = first
+        .split(/\s+/)
+        .slice(0, 2)
+        .map((w) => w[0]?.toUpperCase() ?? "")
+        .join("");
+      const cell = el("span", "app-docs-ownercell");
+      cell.title = v;
+      cell.append(
+        el("span", "app-docs-avatar", initials === "" ? "•" : initials),
+        el("span", "app-docs-ownername", v)
+      );
+      return cell;
+    };
+
     const nameCol: ListColumn<DocRow> = {
       key: "name",
       label: "Document",
-      width: "minmax(220px, 2fr)",
+      width: "minmax(190px, 3fr)",
+      sortKey: "name",
       render: (row) => {
         const cell = el("span", "app-docs-namecell");
-        cell.append(
-          el("span", "app-docs-glyph", extGlyph(row.ext)),
-          el("span", "app-docs-name", row.name)
+        // the stem ellipsizes, the extension never does (finding 6)
+        const { stem, ext } = splitNameForEllipsis(row.name);
+        const nm = el("span", "app-docs-name");
+        nm.title = row.name;
+        nm.append(
+          el("span", "app-docs-namestem", stem),
+          el("span", "app-docs-nameext", ext)
         );
+        cell.append(fileTypeChip(row.ext), nm);
         return cell;
       },
     };
@@ -930,95 +1134,199 @@ export function mountDocs(
     const modifiedCol: ListColumn<DocRow> = {
       key: "modified",
       label: "Modified",
-      width: "110px",
+      width: "124px",
+      sortKey: "modified",
       render: (row) => formatWhen(row.modified),
     };
 
     // the view's own column set beats the library default (Phase 3a —
     // carried by saved views and shared links; [] = default)
     const chosenColumns = bootView?.columns ?? [];
-    const columns: ListColumn<DocRow>[] = [nameCol];
-    if (current) {
-      const byInternal = new Map(current.config.columns.map((c) => [c.internal, c]));
-      const shown: { internal: string; label: string; role: string }[] = [];
-      if (chosenColumns.length > 0) {
-        for (const internal of chosenColumns) {
-          if (internal === "Modified") {
-            shown.push({ internal: "Modified", label: "Modified", role: "" });
+    /** Column set for the current width bucket (Vault V3: the status
+     *  column drops out first as the pane narrows, then owner and the
+     *  other configured columns — name and Modified always survive). */
+    const buildColumns = (): ListColumn<DocRow>[] => {
+      const columns: ListColumn<DocRow>[] = [nameCol];
+      if (current) {
+        const byInternal = new Map(current.config.columns.map((c) => [c.internal, c]));
+        const shown: { internal: string; label: string; role: string }[] = [];
+        if (chosenColumns.length > 0) {
+          for (const internal of chosenColumns) {
+            if (internal === "Modified") {
+              shown.push({ internal: "Modified", label: "Modified", role: "" });
+              continue;
+            }
+            const c = byInternal.get(internal);
+            if (c && c.available) {
+              shown.push({ internal, label: c.label !== "" ? c.label : internal, role: c.role });
+            }
+          }
+        } else {
+          for (const c of current.config.columns) {
+            if (!c.inDefault) continue;
+            shown.push({
+              internal: c.internal,
+              label: c.label !== "" ? c.label : c.internal,
+              role: c.role,
+            });
+          }
+        }
+        for (const c of shown) {
+          if (c.internal === "Modified") {
+            columns.push(modifiedCol);
             continue;
           }
-          const c = byInternal.get(internal);
-          if (c && c.available) {
-            shown.push({ internal, label: c.label !== "" ? c.label : internal, role: c.role });
-          }
+          if (bucket !== "full" && c.role === "status") continue;
+          if (bucket === "narrow" && c.internal !== "Modified") continue;
+          const live = c.internal;
+          const role = c.role;
+          columns.push({
+            key: live,
+            label: c.label,
+            render: (row) => {
+              const v = row.values[live] ?? "";
+              if (v === "") return "";
+              if (role === "status") return statusChip(v);
+              if (role === "owner") return ownerCell(v);
+              return v;
+            },
+          });
+        }
+        if (!shown.some((c) => c.internal === "Modified")) {
+          columns.push(modifiedCol);
         }
       } else {
-        for (const c of current.config.columns) {
-          if (!c.inDefault) continue;
-          shown.push({
-            internal: c.internal,
-            label: c.label !== "" ? c.label : c.internal,
-            role: c.role,
+        if (bucket !== "narrow") {
+          columns.push({
+            key: "library",
+            label: "Library",
+            width: "minmax(110px, 1fr)",
+            render: (row) => {
+              const lib = byListId.get(row.listId);
+              return lib ? lib.config.title || lib.name : "";
+            },
           });
         }
-      }
-      for (const c of shown) {
-        if (c.internal === "Modified") {
-          columns.push(modifiedCol);
-          continue;
-        }
-        const live = c.internal;
-        const role = c.role;
-        columns.push({
-          key: live,
-          label: c.label,
-          render: (row) => {
-            const v = row.values[live] ?? "";
-            if (v === "") return "";
-            return role === "status" ? statusChip(v) : v;
-          },
-        });
-      }
-      if (!shown.some((c) => c.internal === "Modified")) {
         columns.push(modifiedCol);
       }
-    } else {
-      columns.push(
-        {
-          key: "library",
-          label: "Library",
-          width: "minmax(110px, 1fr)",
-          render: (row) => {
-            const lib = byListId.get(row.listId);
-            return lib ? lib.config.title || lib.name : "";
-          },
-        },
-        modifiedCol
-      );
-    }
-    columns.push(kebabCol);
+      columns.push(kebabCol);
+      return columns;
+    };
 
-    const list = mountDocList<DocRow>(main, {
-      columns,
-      emptyText: "No documents here yet.",
-      onRow: (row) => {
-        const lib = byListId.get(row.listId) ?? current;
-        // the drive is per LIBRARY, and the PDF routes need it — resolve
-        // before opening (cached, so only the first open of a library pays)
-        void driveIdFor(app.siteUrl, row.listId || lib?.listId || "").then((driveId) => {
-          if (dead) return;
-          openDocViewer({
-            site: app.siteUrl,
-            row,
-            driveId,
-            libraryName: lib ? lib.config.title || lib.name : "",
-            askToWork: lib?.libType === "working",
-          });
+    const onRowOpen = (row: DocRow) => {
+      const lib = byListId.get(row.listId) ?? current;
+      // the drive is per LIBRARY, and the PDF routes need it — resolve
+      // before opening (cached, so only the first open of a library pays)
+      void driveIdFor(app.siteUrl, row.listId || lib?.listId || "").then((driveId) => {
+        if (dead) return;
+        openDocViewer({
+          site: app.siteUrl,
+          row,
+          driveId,
+          libraryName: lib ? lib.config.title || lib.name : "",
+          askToWork: lib?.libType === "working",
         });
-      },
-      onNearEnd: () => void loadMore(),
-    });
+      });
+    };
+
+    // ---- the register: one host, two views (Vault V3) ------------------
+    // Sort and the Modified window are server-side; switching view or
+    // density rebuilds the component and re-seats the loaded rows.
+    const listHost = el("div", "app-docs-registerhost");
+    main.appendChild(listHost);
+    let sort: { key: string; asc: boolean } = { key: "modified", asc: false };
+    let sortTouched = false; // search keeps relevance until sort is chosen
+    let viewMode: "list" | "tiles" = uiState.viewMode === "tiles" ? "tiles" : "list";
+    let density: "comfortable" | "compact" =
+      uiState.density === "compact" ? "compact" : "comfortable";
+    let bucket: "full" | "mid" | "narrow" = "full";
+
+    const emptyExtra = (): HTMLElement | null => {
+      if (filters.length === 0 && modifiedDays === 0 && query.trim() === "") return null;
+      const b = el("button", "app-btn app-docs-clearfilters", "Clear all filters") as HTMLButtonElement;
+      b.addEventListener("click", () => {
+        filters = [];
+        modifiedDays = 0;
+        query = "";
+        search.value = "";
+        paintTreeSelection();
+        paintChips();
+        void load(true);
+      });
+      return b;
+    };
+
+    let list: DocList<DocRow>;
+    const buildRegister = () => {
+      const prev: DocRow[] = list !== undefined ? list.rows() : [];
+      list?.destroy();
+      list =
+        viewMode === "tiles"
+          ? mountDocTiles(listHost, {
+              onRow: onRowOpen,
+              onNearEnd: () => void loadMore(),
+              emptyText: "No documents here yet.",
+              emptyExtra,
+              statusChip: statusCol ? statusChip : null,
+              statusColumn: statusCol?.internal ?? "",
+              ownerColumn: ownerColCfg?.internal ?? "",
+            })
+          : mountDocList<DocRow>(listHost, {
+              columns: buildColumns(),
+              onRow: onRowOpen,
+              onNearEnd: () => void loadMore(),
+              emptyText: "No documents here yet.",
+              emptyExtra,
+              sort,
+              onSort: (key) => {
+                sort = sort.key === key ? { key, asc: !sort.asc } : { key, asc: key === "name" };
+                sortTouched = true;
+                buildRegister();
+                void load(true);
+              },
+              density,
+            });
+      if (prev.length > 0) list.setRows(prev);
+    };
+    buildRegister();
     const loadedRows = (): DocRow[] => list.rows();
+
+    const paintSeg = () => {
+      segList.classList.toggle("app-docs-segbtn-on", viewMode === "list");
+      segTiles.classList.toggle("app-docs-segbtn-on", viewMode === "tiles");
+      segList.setAttribute("aria-pressed", String(viewMode === "list"));
+      segTiles.setAttribute("aria-pressed", String(viewMode === "tiles"));
+    };
+    paintSeg();
+    segList.addEventListener("click", () => {
+      if (viewMode === "list") return;
+      viewMode = "list";
+      persistUi({ viewMode });
+      paintSeg();
+      buildRegister();
+    });
+    segTiles.addEventListener("click", () => {
+      if (viewMode === "tiles") return;
+      viewMode = "tiles";
+      persistUi({ viewMode });
+      paintSeg();
+      buildRegister();
+    });
+
+    // width buckets: the pane, not the window — the hub splits the screen
+    const bucketFor = (w: number): "full" | "mid" | "narrow" =>
+      w < 380 ? "narrow" : w < 560 ? "mid" : "full";
+    const ro = new ResizeObserver((entries) => {
+      const w = entries[0]?.contentRect.width ?? 0;
+      if (w === 0) return;
+      const b = bucketFor(w);
+      if (b !== bucket) {
+        bucket = b;
+        if (viewMode === "list") buildRegister();
+      }
+    });
+    ro.observe(main);
+    innerCleanups.push(() => ro.disconnect());
 
     // ---- kebab menu ----------------------------------------------------
     let menu: HTMLElement | null = null;
@@ -1118,7 +1426,7 @@ export function mountDocs(
     let done = false;
 
     const applyNonCurrent = (rows: DocRow[]): DocRow[] => {
-      if (nonCurrentBox.checked || !statusCol) return rows;
+      if (showNonCurrent || !statusCol) return rows;
       return rows.filter((r) => !isNonCurrentStatus(r.values[statusCol.internal] ?? ""));
     };
 
@@ -1188,6 +1496,9 @@ export function mountDocs(
           rowLimit: PAGE,
           startRow,
           searchContents,
+          byModified: sortTouched && sort.key === "modified" ? true : undefined,
+          sortAsc: sortTouched ? sort.asc : undefined,
+          modifiedAfterIso: modifiedIso(),
           termFilters:
             filters.length > 0
               ? filters.map((f) => ({ properties: propsFor(f.col), termIds: f.ids }))
@@ -1199,7 +1510,11 @@ export function mountDocs(
         done = page.rows.length < PAGE;
         paintStatus(page.total, page.error);
       } else {
-        const page = await browsePage(app.siteUrl, current!.listId, nextToken);
+        const page = await browsePage(app.siteUrl, current!.listId, nextToken, {
+          sortName: sort.key === "name",
+          asc: sort.asc,
+          modifiedAfterIso: modifiedIso(),
+        });
         if (dead || gen !== generation) return;
         list.append(applyNonCurrent(page.rows));
         nextToken = page.next;
@@ -1218,14 +1533,6 @@ export function mountDocs(
       if (debounce !== null) clearTimeout(debounce);
       debounce = setTimeout(() => void load(true), 300);
     });
-    nonCurrentBox.addEventListener("change", () => void load(true));
-    // the heuristic toggle only bites where a status column is mapped
-    if (!statusCol) {
-      nonCurrentBox.disabled = true;
-      nonCurrent.title = current
-        ? "Map a column to the Approval status role in Settings → Documents first"
-        : "Applies inside a library with a status column mapped";
-    }
 
     // ---- share + register export ---------------------------------------
     const currentView = (): DocView => {
@@ -1235,7 +1542,8 @@ export function mountDocs(
         listId: current?.listId ?? "",
         query: query.trim(),
         contents: searchContents,
-        nonCurrent: nonCurrentBox.checked,
+        nonCurrent: showNonCurrent,
+        modifiedDays,
         // the organisation keeps its own slot so pre-3a links stay valid
         orgTermId: org?.node.id ?? "",
         orgPath: org?.node.labels ?? [],
@@ -1404,13 +1712,17 @@ export function mountDocs(
         return;
       }
       menu = el("div", "app-docs-menu");
-      const item = (label: string, title: string, onPick: () => void) => {
+      const item = (label: string, title: string, onPick: (() => void) | null) => {
         const b = el("button", "app-docs-menuitem", label) as HTMLButtonElement;
         b.title = title;
-        b.addEventListener("click", () => {
-          closeMenu();
-          onPick();
-        });
+        if (onPick) {
+          b.addEventListener("click", () => {
+            closeMenu();
+            onPick();
+          });
+        } else {
+          b.disabled = true;
+        }
         menu!.appendChild(b);
       };
       if (current) {
@@ -1420,6 +1732,32 @@ export function mountDocs(
           chooseColumns
         );
       }
+      // presentation toggles relocated from the toolbar (Vault V3)
+      if (viewMode === "list") {
+        item(
+          `${density === "compact" ? "✓ " : ""}Compact rows`,
+          "Denser rows — more of the register on screen.",
+          () => {
+            density = density === "compact" ? "comfortable" : "compact";
+            persistUi({ density });
+            buildRegister();
+          }
+        );
+      }
+      item(
+        `${showNonCurrent ? "✓ " : ""}Show drafts & superseded`,
+        statusCol
+          ? "Include non-current documents in the register."
+          : current
+            ? "Map a column to the Approval status role in Settings → Documents first"
+            : "Applies inside a library with a status column mapped",
+        statusCol
+          ? () => {
+              showNonCurrent = !showNonCurrent;
+              void load(true);
+            }
+          : null
+      );
       item(
         "Copy link to this view",
         "A link that opens Documents exactly as you see it now.",

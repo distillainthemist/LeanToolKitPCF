@@ -1862,6 +1862,168 @@ button.app-docs-navterm.app-docs-navterm-on {
   border: none; background: none; cursor: pointer; font-size: 14px;
   padding: 0 2px; color: #444;
 }
+/* ---- Vault V3: title row, filters popover, register (list + tiles) --- */
+.app-docs-titlerow { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.app-docs-titleblock { min-width: 0; }
+.app-docs-h1 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.app-docs-crumb { font-size: 12px; color: #6d675c; margin-top: 2px; }
+.app-docs-titlegap { flex: 1; }
+.app-docs-filtersbtn { white-space: nowrap; font-size: 12.5px; }
+.app-docs-filtersbtn-on {
+  background: color-mix(in srgb, var(--app-accent, #2563eb) 10%, #fff);
+  border-color: var(--app-accent, #2563eb);
+  color: var(--app-accent, #2563eb);
+  font-weight: 600;
+}
+.app-docs-seg { display: inline-flex; border: 1px solid #ddd; border-radius: 8px; overflow: hidden; }
+.app-docs-segbtn {
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 12.5px;
+  padding: 0 14px;
+  min-height: 42px; /* ≥36 inside the 44px frame */
+  cursor: pointer;
+  color: #57534a;
+}
+.app-docs-segbtn + .app-docs-segbtn { border-left: 1px solid #ddd; }
+.app-docs-segbtn-on {
+  background: var(--app-accent, #2563eb);
+  color: #fff;
+  font-weight: 600;
+}
+.app-docs-registerhost { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+/* document cell: chip + stem-ellipsis so the extension survives. The
+   cells must be FLEX (not inline-flex): an inline-flex child grows to
+   its content and the grid cell just clips it — the extension would be
+   the first thing to vanish */
+.app-docs-namecell { display: flex; gap: 8px; align-items: center; min-width: 0; max-width: 100%; }
+.app-docs-namecell .ltk-filetype-chip { flex: none; }
+.app-docs-name { display: flex; min-width: 0; }
+.app-docs-namestem { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.app-docs-nameext { flex: none; white-space: nowrap; }
+.app-docs-ownercell { display: flex; gap: 6px; align-items: center; min-width: 0; max-width: 100%; }
+.app-docs-avatar {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 700;
+  background: color-mix(in srgb, var(--app-accent, #2563eb) 14%, #fff);
+  color: var(--app-accent, #2563eb);
+}
+.app-docs-ownername { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* density: comfortable 44px floor, compact gated at 36px (finding 2) */
+.app-doclist-row { min-height: 44px; }
+.app-doclist-compact .app-doclist-row { min-height: 36px; padding-top: 2px; padding-bottom: 2px; }
+/* sortable header cells */
+.app-doclist-h { text-align: left; }
+button.app-doclist-hsort {
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 11.5px;
+  color: #6b6b6b;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+}
+button.app-doclist-hsort:hover { color: var(--app-accent, #2563eb); }
+.app-doclist-hsort-on { font-weight: 700; color: var(--app-accent, #2563eb) !important; }
+/* tiles */
+.app-doctiles-wrap { flex: 1; min-height: 0; overflow-y: auto; }
+.app-doctiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 10px;
+  align-content: start;
+}
+.app-doctile {
+  border: 1px solid #e5e5e5;
+  border-radius: 6px;
+  background: #fff;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.app-doctile:hover { border-color: var(--app-accent, #2563eb); }
+.app-doctile-band {
+  height: 68px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.app-doctile-bandext { font-size: 18px; font-weight: 800; letter-spacing: 0.06em; }
+.app-doctile-body { padding: 8px 10px 10px; display: flex; flex-direction: column; gap: 6px; }
+.app-doctile-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.app-doctile-name { display: flex; min-width: 0; font-size: 13px; font-weight: 600; }
+.app-doctile-stem { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.app-doctile-ext { flex: none; white-space: nowrap; }
+.app-doctile-meta { font-size: 11.5px; color: #6d675c; }
+/* filters popover */
+.app-docs-filterpop { width: min(400px, 92vw); }
+.app-docs-filterpop-body { max-height: min(480px, 70vh); overflow-y: auto; padding: 6px; }
+.app-docs-fgroup { margin-bottom: 10px; }
+.app-docs-fgroup-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #6d675c;
+  margin-bottom: 4px;
+}
+.app-docs-fpills { display: flex; flex-wrap: wrap; gap: 6px; }
+.app-docs-fpill {
+  border: 1px solid #d5d1c8;
+  background: #fff;
+  border-radius: 999px;
+  font: inherit;
+  font-size: 12px;
+  padding: 0 12px;
+  min-height: 36px; /* dense secondary floor */
+  cursor: pointer;
+  color: #444;
+}
+.app-docs-fpill:hover { border-color: var(--app-accent, #2563eb); color: var(--app-accent, #2563eb); }
+.app-docs-fpill-on {
+  background: color-mix(in srgb, var(--app-accent, #2563eb) 12%, #fff);
+  border-color: var(--app-accent, #2563eb);
+  color: var(--app-accent, #2563eb);
+  font-weight: 600;
+}
+.app-docs-fpop-foot {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 4px 2px;
+  border-top: 1px solid #eee;
+  margin-top: 4px;
+}
+/* empty-state recovery (Vault V3) */
+.app-docs-clearfilters {
+  display: block;
+  margin-top: 10px;
+  background: color-mix(in srgb, var(--app-accent, #2563eb) 10%, #fff);
+  border-color: var(--app-accent, #2563eb);
+  color: var(--app-accent, #2563eb);
+}
+
 .app-docs-viewrow { display: flex; gap: 2px; align-items: center; }
 .app-docs-viewrow .app-docs-navterm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .app-docs-viewbtn { border: none; background: none; cursor: pointer; font-size: 13px; color: #666; padding: 2px 4px; border-radius: 4px; flex: none; }

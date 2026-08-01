@@ -4,6 +4,7 @@
 
 import { spRequest } from "./sp";
 import {
+  BrowseOpts,
   DocRow,
   ItemsPage,
   PresignedUrls,
@@ -51,9 +52,10 @@ export function driveIdFor(site: string, listId: string): Promise<string> {
 export async function browsePage(
   site: string,
   listId: string,
-  next = ""
+  next = "",
+  opts: BrowseOpts = {}
 ): Promise<ItemsPage & { error: string }> {
-  const uri = next === "" ? buildBrowseUri(listId) : next;
+  const uri = next === "" ? buildBrowseUri(listId, 50, opts) : next;
   const r = await spRequest(site, "GET", uri);
   if (!r.ok) return { rows: [], next: "", error: r.status };
   return { ...parseItemsPage(r.data, site, listId), error: "" };

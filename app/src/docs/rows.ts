@@ -42,14 +42,38 @@ export function extGlyph(ext: string): string {
 
 // ---- browse mode (list REST) -------------------------------------------
 
+/** Server-side presentation options (Vault V3): sort and the Modified
+ *  window apply at the source in BOTH modes — a client sort or filter
+ *  over a partial page would lie about the corpus. */
+export interface BrowseOpts {
+  /** Sort by filename instead of Modified. */
+  sortName?: boolean;
+  asc?: boolean;
+  /** Only documents modified on/after this ISO instant. */
+  modifiedAfterIso?: string;
+}
+
 /** The items page URI for a library (server-paged; folders excluded). */
-export function buildBrowseUri(listId: string, top = 50): string {
+export function buildBrowseUri(listId: string, top = 50, opts: BrowseOpts = {}): string {
+  const dir = opts.asc ? "asc" : "desc";
+  const orderBy = opts.sortName ? `FileLeafRef ${dir}` : `Modified ${dir}`;
+  const filter =
+    "FSObjType eq 0" +
+    (opts.modifiedAfterIso ? ` and Modified ge datetime'${opts.modifiedAfterIso}'` : "");
   return (
     `_api/web/lists(guid'${listId}')/items` +
     `?$select=Id,UniqueId,FileRef,FileLeafRef,Modified,FSObjType` +
     `&$expand=FieldValuesAsText` +
-    `&$filter=FSObjType eq 0&$orderby=Modified desc&$top=${top}`
+    `&$filter=${filter}&$orderby=${orderBy}&$top=${top}`
   );
+}
+
+/** Split a filename so the extension can survive any width: the stem
+ *  end-ellipsizes in CSS, the extension never shrinks (finding 6). */
+export function splitNameForEllipsis(name: string): { stem: string; ext: string } {
+  const dot = name.lastIndexOf(".");
+  if (dot <= 0 || dot === name.length - 1) return { stem: name, ext: "" };
+  return { stem: name.slice(0, dot), ext: name.slice(dot) };
 }
 
 export interface ItemsPage {
@@ -109,8 +133,12 @@ export interface SearchOpts {
   listIds: string[];
   rowLimit?: number;
   startRow?: number;
-  /** Sort newest-first instead of by relevance (the browse-ish default). */
+  /** Sort by Modified instead of by relevance (the browse-ish default). */
   byModified?: boolean;
+  /** With byModified: oldest-first instead of newest-first. */
+  sortAsc?: boolean;
+  /** Only documents modified on/after this ISO date (KQL range). */
+  modifiedAfterIso?: string;
   /**
    * Match the text of the documents themselves, not just their names and
    * titles. Off by default: SharePoint's free-text search is full-text
@@ -199,6 +227,9 @@ export function buildSearchBody(text: string, opts: SearchOpts): string {
     const parts = tf.properties.flatMap((p) => tf.termIds.map((t) => `${p}:${t}`));
     terms.push(parts.length === 1 ? parts[0] : `(${parts.join(" OR ")})`);
   }
+  if (opts.modifiedAfterIso) {
+    terms.push(`LastModifiedTime>=${opts.modifiedAfterIso.slice(0, 10)}`);
+  }
   const request: Record<string, unknown> = {
     Querytext: terms.join(" "),
     RowLimit: opts.rowLimit ?? 50,
@@ -218,7 +249,7 @@ export function buildSearchBody(text: string, opts: SearchOpts): string {
   };
   if (opts.byModified || words.length === 0) {
     request.SortList = {
-      results: [{ Property: "LastModifiedTime", Direction: 1 }],
+      results: [{ Property: "LastModifiedTime", Direction: opts.sortAsc ? 0 : 1 }],
     };
   }
   return JSON.stringify({ request });

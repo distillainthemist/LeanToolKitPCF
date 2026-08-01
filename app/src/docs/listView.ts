@@ -12,6 +12,8 @@ export interface ListColumn<T> {
   render: (row: T) => string | HTMLElement;
   /** Grid width (CSS track), default "1fr". */
   width?: string;
+  /** Set to make this column's header a sort control (Vault V3). */
+  sortKey?: string;
 }
 
 export interface DocListOptions<T> {
@@ -20,6 +22,14 @@ export interface DocListOptions<T> {
   /** Called when the scroll approaches the end (guard re-entry yourself). */
   onNearEnd: () => void;
   emptyText: string;
+  /** Active sort, painted in the header (server-side — the caller
+   *  reloads; this component only reports clicks via onSort). */
+  sort?: { key: string; asc: boolean } | null;
+  onSort?: (key: string) => void;
+  /** Row density: comfortable 44px (default) or compact 36px floor. */
+  density?: "comfortable" | "compact";
+  /** Extra element under the empty message (e.g. "Clear all filters"). */
+  emptyExtra?: () => HTMLElement | null;
 }
 
 export interface DocList<T> {
@@ -47,9 +57,27 @@ export function mountDocList<T>(host: HTMLElement, opts: DocListOptions<T>): Doc
   wrap.append(header, bodyWrap);
   host.appendChild(wrap);
 
+  if (opts.density === "compact") wrap.classList.add("app-doclist-compact");
   const tracks = opts.columns.map((c) => c.width ?? "1fr").join(" ");
   header.style.gridTemplateColumns = tracks;
-  for (const c of opts.columns) header.appendChild(el("span", "app-doclist-h", c.label));
+  for (const c of opts.columns) {
+    if (c.sortKey !== undefined && opts.onSort) {
+      const sortKey = c.sortKey;
+      const active = opts.sort?.key === sortKey;
+      const b = el(
+        "button",
+        `app-doclist-h app-doclist-hsort${active ? " app-doclist-hsort-on" : ""}`,
+        `${c.label}${active ? (opts.sort?.asc ? " \u25b4" : " \u25be") : ""}`
+      ) as HTMLButtonElement;
+      b.title = active
+        ? "Reverse the sort"
+        : `Sort by ${c.label.toLowerCase()}`;
+      b.addEventListener("click", () => opts.onSort?.(sortKey));
+      header.appendChild(b);
+    } else {
+      header.appendChild(el("span", "app-doclist-h", c.label));
+    }
+  }
 
   let n = 0;
   let held: T[] = [];
@@ -77,7 +105,10 @@ export function mountDocList<T>(host: HTMLElement, opts: DocListOptions<T>): Doc
   const empty = () => {
     const existing = body.querySelector(".app-doclist-empty");
     if (n === 0 && !existing) {
-      body.appendChild(el("div", "app-doclist-empty", opts.emptyText));
+      const box = el("div", "app-doclist-empty", opts.emptyText);
+      const extra = opts.emptyExtra?.();
+      if (extra) box.appendChild(extra);
+      body.appendChild(box);
     } else if (n > 0 && existing) {
       existing.remove();
     }

@@ -26,6 +26,7 @@ describe("view link payload", () => {
       filters: [{ col: "DMSProcess", termId: "p3", path: ["Casting", "Rodding"] }],
       columns: ["DMSStatus", "Modified"],
       groupBy: "DMSProcess",
+      modifiedDays: 30,
     };
     const back = decodeDocView(encodeDocView(v));
     expect(back).toEqual({ ...v, name: "" });
@@ -40,6 +41,7 @@ describe("view link payload", () => {
     expect(v.filters).toEqual([]);
     expect(v.columns).toEqual([]);
     expect(v.groupBy).toBe("");
+    expect(v.modifiedDays).toBe(0);
     // and a filter entry missing its column or term is dropped, not kept broken
     const partial = decodeDocView('{"f":[{"c":"DMSProcess"},{"c":"A","t":"t1"}]}');
     expect(partial.filters).toEqual([{ col: "A", termId: "t1", path: [] }]);
