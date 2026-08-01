@@ -45,6 +45,36 @@ export const STATUS_PALETTE = {
   blocked: "#d13438",
 };
 
+/**
+ * File-type hue coding (Documents, Vault plan D0): each family keys to a
+ * colour the toolkit already owns (STATUS_PALETTE / the named-colour set)
+ * — chips derive their fill and text from these via tint()/readableShade(),
+ * so no new hex enters the palette.
+ */
+export const FILE_TYPE_HUES = {
+  word: "#2b88d8", // blue (STATUS_PALETTE.inProgress)
+  excel: "#107c10", // green (STATUS_PALETTE.done)
+  powerpoint: "#ca5010", // orange
+  pdf: "#d13438", // red (STATUS_PALETTE.blocked)
+  image: "#8764b8", // purple
+  cad: "#038387", // teal
+  other: "#808080", // grey
+} as const;
+
+export type FileTypeFamily = keyof typeof FILE_TYPE_HUES;
+
+/** Extension → hue family ("" and unknown extensions read as `other`). */
+export function fileTypeFamily(ext: string): FileTypeFamily {
+  const e = ext.trim().toLowerCase();
+  if (/^docx?$|^docm$|^dotx?$|^rtf$|^odt$/.test(e)) return "word";
+  if (/^xlsx?$|^xlsm$|^xlsb$|^csv$|^ods$/.test(e)) return "excel";
+  if (/^pptx?$|^pptm$|^ppsx?$|^odp$/.test(e)) return "powerpoint";
+  if (e === "pdf") return "pdf";
+  if (/^png$|^jpe?g$|^gif$|^svg$|^bmp$|^webp$|^heic$|^tiff?$/.test(e)) return "image";
+  if (/^dwg$|^dxf$|^dgn$|^step$|^stp$/.test(e)) return "cad";
+  return "other";
+}
+
 /** Spacing grid (px). All layout should use multiples of GRID. */
 export const GRID = 4;
 
@@ -158,9 +188,9 @@ export function textOn(fill: string): string {
  * A readable *coloured* text shade derived from a status colour — dark enough
  * to pass on a 10 % tint of itself (the Fishbone chip trick, generalised).
  */
-export function readableShade(color: string): string {
+export function readableShade(color: string, maxLum = 0.3): string {
   let out = color;
-  for (let i = 0; i < 6 && luminance(out) > 0.3; i++) {
+  for (let i = 0; i < 8 && luminance(out) > maxLum; i++) {
     out = shade(out, 0.25);
   }
   return out;

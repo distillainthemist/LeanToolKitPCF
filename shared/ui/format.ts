@@ -6,6 +6,7 @@
 // DOM and in stored SVG snapshots (which inline only the base CSS).
 
 import { el } from "./dom";
+import { FILE_TYPE_HUES, fileTypeFamily, readableShade, tint } from "../tokens";
 
 export type DueTone = "overdue" | "today" | "future" | "none";
 
@@ -77,6 +78,58 @@ export function statusChip(text: string, tone: ChipTone): HTMLElement {
   chip.style.fontSize = "12px";
   chip.style.fontWeight = "600";
   chip.style.lineHeight = "1.6";
+  chip.style.whiteSpace = "nowrap";
+  return chip;
+}
+
+/**
+ * Document status → glyph (Vault plan D0, finding 5): status must read
+ * from glyph + word alone, never colour. Status values are site-configured
+ * free text, so the match is by normalised keyword; unknown values get no
+ * glyph (the word still carries the state). Order matters — "Pending
+ * approval" must hit ◐ before "approved" could, and vocabulary stays in
+ * step with rows.ts isNonCurrentStatus.
+ */
+export function statusGlyph(value: string): string {
+  const v = value.trim().toLowerCase();
+  if (v === "") return "";
+  if (/check(ed)?[ -]?out/.test(v)) return "🔒";
+  if (/supersed|obsolete|retired/.test(v)) return "⚠";
+  if (/(in|under|for)[ -]review|awaiting|pending/.test(v)) return "◐";
+  if (/\bretain|retention/.test(v)) return "●";
+  if (/\bdraft\b|work in progress/.test(v)) return "○";
+  if (/approved|current|published|effective/.test(v)) return "✓";
+  return "";
+}
+
+/** Prefix a status value with its glyph ("◐ In review"); pass-through
+ *  when no glyph maps. */
+export function withStatusGlyph(value: string): string {
+  const g = statusGlyph(value);
+  return g === "" ? value : `${g} ${value}`;
+}
+
+/**
+ * File-type chip ("DOCX", "PDF" …) — hue-coded per family from
+ * FILE_TYPE_HUES, fill and text derived through the app's own colour
+ * engine. Inline-styled for the same snapshot-safety as statusChip.
+ */
+export function fileTypeChip(ext: string): HTMLElement {
+  const base = FILE_TYPE_HUES[fileTypeFamily(ext)];
+  const label = ext.trim() === "" ? "FILE" : ext.trim().toUpperCase();
+  const chip = el("span", "ltk-filetype-chip", label);
+  chip.style.background = tint(base, 0.88);
+  // 0.15 luminance cap: ≥4.5:1 on the near-white tint even at this
+  // small size (the default 0.3 cap only reaches ~3.5:1 on some hues)
+  chip.style.color = readableShade(base, 0.15);
+  chip.style.display = "inline-flex";
+  chip.style.alignItems = "center";
+  chip.style.justifyContent = "center";
+  chip.style.borderRadius = "4px";
+  chip.style.padding = "1px 6px";
+  chip.style.fontSize = "10.5px";
+  chip.style.fontWeight = "700";
+  chip.style.letterSpacing = "0.03em";
   chip.style.whiteSpace = "nowrap";
   return chip;
 }

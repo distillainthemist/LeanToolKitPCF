@@ -63,3 +63,46 @@ describe("dueTone", () => {
     expect(dueTone("none")).toBe("neutral");
   });
 });
+
+describe("statusGlyph", () => {
+  it("maps the Vault vocabulary (glyph + word, finding 5)", async () => {
+    const { statusGlyph } = await import("../../../shared/ui/format");
+    expect(statusGlyph("Approved")).toBe("✓");
+    expect(statusGlyph("Current")).toBe("✓");
+    expect(statusGlyph("Retained")).toBe("●");
+    expect(statusGlyph("In review")).toBe("◐");
+    expect(statusGlyph("Pending approval")).toBe("◐"); // pending beats approved
+    expect(statusGlyph("Awaiting sign-off")).toBe("◐");
+    expect(statusGlyph("Superseded")).toBe("⚠");
+    expect(statusGlyph("Obsolete")).toBe("⚠"); // isNonCurrentStatus vocabulary
+    expect(statusGlyph("Draft")).toBe("○");
+    expect(statusGlyph("Checked out")).toBe("🔒");
+  });
+  it("leaves unknown site values bare — the word still carries the state", async () => {
+    const { statusGlyph, withStatusGlyph } = await import("../../../shared/ui/format");
+    expect(statusGlyph("Quarantined")).toBe("");
+    expect(statusGlyph("")).toBe("");
+    expect(withStatusGlyph("Quarantined")).toBe("Quarantined");
+    expect(withStatusGlyph("In review")).toBe("◐ In review");
+  });
+  it("does not read 'Reviewed' as in-review", async () => {
+    const { statusGlyph } = await import("../../../shared/ui/format");
+    expect(statusGlyph("Reviewed")).toBe("");
+  });
+});
+
+describe("fileTypeFamily", () => {
+  it("hue-codes the Vault file families", async () => {
+    const { fileTypeFamily } = await import("../../../shared/tokens");
+    expect(fileTypeFamily("docx")).toBe("word");
+    expect(fileTypeFamily("DOC")).toBe("word");
+    expect(fileTypeFamily("xlsx")).toBe("excel");
+    expect(fileTypeFamily("csv")).toBe("excel");
+    expect(fileTypeFamily("pptx")).toBe("powerpoint");
+    expect(fileTypeFamily("pdf")).toBe("pdf");
+    expect(fileTypeFamily("png")).toBe("image");
+    expect(fileTypeFamily("dwg")).toBe("cad");
+    expect(fileTypeFamily("zip")).toBe("other");
+    expect(fileTypeFamily("")).toBe("other");
+  });
+});

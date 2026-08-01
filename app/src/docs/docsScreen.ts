@@ -10,6 +10,7 @@
 // would lie about the corpus.
 
 import { el, clear } from "../../../shared/ui/dom";
+import { withStatusGlyph } from "../../../shared/ui/format";
 import { draggableRow } from "../../../shared/ui/dragList";
 import { showLoading } from "../loading";
 import { detectHost } from "../runtime";
@@ -642,8 +643,10 @@ export function mountDocs(
     paintChips();
 
     const statusCol = current?.config.columns.find((c) => c.role === "status") ?? null;
+    // glyph + word so status reads under any colour-vision (finding 5);
+    // the fill still follows the site's configured status palette
     const statusChip = (value: string): HTMLElement => {
-      const chip = el("span", "app-docs-chip", value);
+      const chip = el("span", "app-docs-chip", withStatusGlyph(value));
       const color = resolvePaletteColor(
         states,
         current?.config.statusColors[value] ?? "",

@@ -1562,6 +1562,34 @@ input[type="color"].app-color:disabled { opacity: 0.4; cursor: default; }
   white-space: nowrap;
 }
 
+/* ---- Standard Documents — Vault design, style mapping (plan V0) ----
+   The Document Vault v3 prototype is the STRUCTURE source for the docs
+   section; its theme is not. Every Vault region maps to a style the app
+   already owns — only the right-hand side may appear below:
+
+     Vault accent + tints      → var(--app-accent) / the site theme accent
+                                  and the app's existing tinted-selection
+                                  and filter-chip treatments (color-mix)
+     Vault cool greys          → the app neutrals already in this file
+                                  (page #faf9f7-family, hairline #e5e5e5,
+                                  muted #6d675c) — no new grey values
+     Vault radii / shadows     → the app card (6px, hairline border),
+                                  popover/menu styles (.app-docs-menu,
+                                  .app-menu) — no new shadow recipes
+     Vault type scale          → the app scale (TYPE in shared/tokens.ts):
+                                  same hierarchy (H1 / uppercase section
+                                  labels / row name / meta), app sizes,
+                                  weights, and font stack only
+     Vault file-type chips     → FILE_TYPE_HUES (shared/tokens.ts) via
+                                  fileTypeChip (shared/ui/format.ts)
+     Vault status colours      → site-configured status palette + glyphs
+                                  via withStatusGlyph (glyph + word,
+                                  never colour alone)
+     Vault amber "attention"   → CHIP_TONES.amber — ALERT channel only
+                                  (Action needed, due-soon), never for
+                                  selection states
+*/
+
 /* ---- Standard Documents settings (plan Phase 1) ---- */
 .app-docs-siterow { display: flex; gap: 8px; align-items: center; }
 .app-docs-siterow .app-input { flex: 1; }
