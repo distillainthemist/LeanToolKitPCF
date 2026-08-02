@@ -387,23 +387,12 @@ export function mountDocs(
       const only = el("button", "app-docs-only", "Only") as HTMLButtonElement;
       only.setAttribute("aria-label", `Only ${lib.config.title || lib.name}`);
       only.addEventListener("click", () => switchTo([lib.listId]));
-      row.append(box, name, el("span", "app-field-hint", lib.libType), only);
+      row.append(box, name, only);
       libCard.card.appendChild(row);
     }
-
-    // ---- favourites (pinned pseudo-row under the libraries) ------------
-    const favLink = el(
-      "button",
-      `app-docs-librow2 app-docs-favrow${favMode ? " app-docs-librow2-on" : ""}`
-    ) as HTMLButtonElement;
-    favLink.appendChild(el("span", "app-docs-libname2", "★ Favourites"));
-    const favHint = el("span", "app-field-hint", "");
-    favLink.appendChild(favHint);
-    favLink.addEventListener("click", () => {
-      pendingFav = true;
-      remount();
-    });
-    libCard.card.appendChild(favLink);
+    // (the ★ Favourites row and the libType subtitles were cut — Ben,
+    // 2026-08-02; favourite toggles remain in the kebab and overlay, and
+    // the favMode machinery stays for a future entry point)
 
     // saved views moved OUT of this pane (Ben, 2026-08-01) — they live
     // in the register kebab now; the nav is libraries + browse-by only
@@ -412,7 +401,6 @@ export function mountDocs(
         if (dead) return;
         favs = p.favorites;
         savedViews = p.views;
-        favHint.textContent = favs.length === 0 ? "" : String(favs.length);
         if (favMode) void load(true); // favourites arrived — paint them
       });
     }
@@ -1084,7 +1072,6 @@ export function mountDocs(
       });
       if (!dead) {
         favs = next;
-        favHint.textContent = favs.length === 0 ? "" : String(favs.length);
         if (favMode) void load(true);
       }
       return next.some((f) => f.uniqueId === row.uniqueId);
