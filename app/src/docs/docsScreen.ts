@@ -1049,7 +1049,8 @@ export function mountDocs(
               if (v === "") return "";
               if (role === "status") return statusChip(v);
               if (role === "owner") return ownerCell(v);
-              return v;
+              // RLDAS date fields arrive as ISO — humanize them
+              return /^\d{4}-\d{2}-\d{2}T/.test(v) ? formatWhen(v) : v;
             },
           });
         }
@@ -1318,7 +1319,8 @@ export function mountDocs(
     let knownTotal: number | null = null;
 
     const applyNonCurrent = (rows: DocRow[]): DocRow[] => {
-      if (showNonCurrent || !statusCol) return rows;
+      // a working library IS drafts — hiding non-current would blank it
+      if (showNonCurrent || !statusCol || current?.libType === "working") return rows;
       return rows.filter((r) => !isNonCurrentStatus(r.values[statusCol.internal] ?? ""));
     };
 
