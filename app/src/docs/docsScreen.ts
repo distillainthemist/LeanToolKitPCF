@@ -40,7 +40,8 @@ import {
   taxonomySearchProperty,
 } from "./rows";
 import { DocLibrary, docsConfig } from "./docsStore";
-import { TermNode, fetchTermPaths } from "./sp";
+import { emptySiteDictionary, paletteEntryFor, siteKey } from "./model";
+import { TermNode, fetchTermPaths, fetchTermsInSet } from "./sp";
 import { currentViewer } from "../runtime";
 import { viewerPerson } from "../store/people";
 import { docsViewUrl, takePendingDocView } from "../links";
@@ -929,15 +930,51 @@ export function mountDocs(
     });
 
     const statusCol = current?.config.columns.find((c) => c.role === "status") ?? null;
+    /** The site's shared palettes (C2) — one colour and glyph per term
+     *  value, so every library that uses the set reads the same. */
+    const siteDict = app.sites[siteKey(app.siteUrl)] ?? emptySiteDictionary();
+    /** Lowercased term label → GUID for the status set. The palette is
+     *  keyed by GUID, and this is what lets a RENAMED term keep its
+     *  colour: the row paints the new label, which resolves here to the
+     *  id the palette already holds. Until it answers (or if it never
+     *  does), matching falls back to the label stored beside each entry,
+     *  so colours are never withheld waiting on a round trip. */
+    const labelToId = new Map<string, string>();
+    if (statusCol !== null && statusCol.termSetId !== "") {
+      void fetchTermsInSet(app.siteUrl, statusCol.termSetId).then((r) => {
+        const rows = Array.isArray((r.data as { value?: unknown[] })?.value)
+          ? ((r.data as { value: unknown[] }).value as Record<string, unknown>[])
+          : [];
+        for (const t of rows) {
+          const labels = t.labels as { name?: string; isDefault?: boolean }[] | undefined;
+          const def = Array.isArray(labels) ? (labels.find((l) => l.isDefault) ?? labels[0]) : undefined;
+          const name = (def?.name ?? "").trim().toLowerCase();
+          if (name !== "" && typeof t.id === "string") labelToId.set(name, t.id);
+        }
+        // rows already on screen were painted before the ids landed
+        if (!dead && labelToId.size > 0) buildRegister();
+      });
+    }
+
     // glyph + word so status reads under any colour-vision (finding 5);
-    // the fill still follows the site's configured status palette
+    // both now come from the site palette, falling back to the built-in
+    // vocabulary when a site has not set a glyph of its own
     const statusChip = (value: string): HTMLElement => {
-      const chip = el("span", "app-docs-chip", withStatusGlyph(value));
-      const color = resolvePaletteColor(
-        states,
-        current?.config.statusColors[value] ?? "",
-        ""
+      const col = statusCol;
+      const entry = paletteEntryFor(
+        siteDict,
+        col?.termSetId ?? "",
+        col?.internal ?? "",
+        value,
+        labelToId
       );
+      const glyph = entry?.glyph ?? "";
+      const chip = el(
+        "span",
+        "app-docs-chip",
+        glyph !== "" ? `${glyph} ${value}` : withStatusGlyph(value)
+      );
+      const color = resolvePaletteColor(states, entry?.color ?? "", "");
       if (color !== "") {
         chip.style.background = color;
         chip.style.color = textOn(color);

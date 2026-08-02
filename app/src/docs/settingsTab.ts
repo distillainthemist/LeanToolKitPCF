@@ -11,6 +11,7 @@
 
 import { appPalettes } from "../store/config";
 import { el, clear } from "../../../shared/ui/dom";
+import { statusGlyph } from "../../../shared/ui/format";
 import {
   AppDocsConfig,
   COLUMN_ROLES,
@@ -21,16 +22,21 @@ import {
   LibraryConfig,
   LibrarySchema,
   LibraryType,
+  SiteColumn,
   SiteDictionary,
   SpField,
   SpLibrary,
+  TermPalette,
   buildSiteDictionary,
+  colourableSets,
   emptySiteDictionary,
   fieldsFromResponse,
   librariesFromLists,
   mergeColumns,
   orgDrift,
   orgTreePaths,
+  paletteKeyFor,
+  rekeyPaletteToTerms,
   resolveLibraryConfig,
   seedDefaultColumns,
   siteKey,
@@ -194,6 +200,10 @@ export async function renderDocsSettings(body: HTMLElement, ctx: Ctx): Promise<v
     }
     const { dictionary: synced, carriers } = syncSiteDictionary(dict, schemas);
     app.sites[key] = synced;
+    // the palettes section needs the live schema to tell a Choice column
+    // from a taxonomy one, and repaints whenever the dictionary does
+    liveByInternal.clear();
+    for (const sc of schemas) for (const f of sc.fields) liveByInternal.set(f.internal, f);
 
     if (migrated.length > 0) {
       dictBox.appendChild(
@@ -278,6 +288,207 @@ export async function renderDocsSettings(body: HTMLElement, ctx: Ctx): Promise<v
       grid.appendChild(where);
     }
     dictBox.appendChild(grid);
+    paintPalettes();
+  };
+
+  // ---- term sets & colours (C2) ----------------------------------------
+  // One palette per TERM SET, not per library: the same set used by three
+  // libraries had three colour maps free to disagree, and they were keyed
+  // by label, so renaming a term detached its colour silently.
+  body.appendChild(section("Term sets & colours"));
+  body.appendChild(
+    note(
+      "A colour and a glyph per value, set once for the term set — every library " +
+        "using that set follows. Colours come from Branding's state palette, so a " +
+        "document status and a board status of the same name look alike. The glyph " +
+        "carries as much as the colour: status has to read without relying on colour."
+    )
+  );
+  const palBox = el("div", "");
+  body.appendChild(palBox);
+
+  /** Live schema by internal name, filled by the dictionary pass — it is
+   *  what tells a Choice column from a taxonomy one. */
+  const liveByInternal = new Map<string, SpField>();
+  /** Term values per set, read once each per settings visit. */
+  const termsBySet = new Map<string, Promise<{ id: string; label: string }[]>>();
+
+  const termsInSet = (setId: string): Promise<{ id: string; label: string }[]> => {
+    let hit = termsBySet.get(setId);
+    if (hit === undefined) {
+      hit = fetchTermsInSet(app.siteUrl, setId).then((r) => {
+        const rows = Array.isArray((r.data as { value?: unknown[] })?.value)
+          ? ((r.data as { value: unknown[] }).value as Record<string, unknown>[])
+          : [];
+        return rows
+          .map((t) => {
+            const labels = t.labels as { name?: string; isDefault?: boolean }[] | undefined;
+            const def = Array.isArray(labels)
+              ? (labels.find((l) => l.isDefault) ?? labels[0])
+              : undefined;
+            return { id: typeof t.id === "string" ? t.id : "", label: (def?.name ?? "").trim() };
+          })
+          .filter((t) => t.id !== "" && t.label !== "");
+      });
+      hit.catch(() => termsBySet.delete(setId));
+      termsBySet.set(setId, hit);
+    }
+    return hit;
+  };
+
+  /** The stored palette for a key, created on first colour. */
+  const paletteAt = (key: string): TermPalette => {
+    const d = dictionary();
+    let p = d.palettes.find((x) => x.setId === key);
+    if (p === undefined) {
+      p = { setId: key, setName: "", entries: {} };
+      d.palettes.push(p);
+    }
+    return p;
+  };
+
+  const paletteCard = (key: string, setId: string, cols: SiteColumn[]): HTMLElement => {
+    const box = el("div", "app-docs-palcard");
+    const head = el("button", "app-docs-palhead") as HTMLButtonElement;
+    const name = cols
+      .map((c) => (c.label !== "" ? c.label : (liveByInternal.get(c.internal)?.title ?? c.internal)))
+      .join(", ");
+    const caret = el("span", "app-docs-palcaret", "▸");
+    const count = el("span", "app-field-hint", "");
+    const paintCount = () => {
+      const n = Object.keys(paletteAt(key).entries).length;
+      count.textContent = n === 0 ? "no colours set" : `${n} value${n === 1 ? "" : "s"} coloured`;
+    };
+    paintCount();
+    head.append(caret, el("span", "app-docs-palname", name), count);
+    const rows = el("div", "app-docs-palbody");
+    rows.style.display = "none";
+    let filled = false;
+    head.addEventListener("click", () => {
+      const open = rows.style.display === "none";
+      rows.style.display = open ? "" : "none";
+      caret.textContent = open ? "▾" : "▸";
+      if (open && !filled) {
+        filled = true;
+        void fill();
+      }
+    });
+
+    /** One value's colour + glyph. `entryKey` is the term GUID where
+     *  there is one, so a renamed term keeps its colour. */
+    const drawRow = (entryKey: string, label: string) => {
+      const row = el("div", "app-docs-statusrow");
+      row.appendChild(el("span", "app-docs-statusval", label));
+      const pal = paletteAt(key);
+      const pick = el("select", "app-input") as HTMLSelectElement;
+      const none = el("option", "", "— no colour —") as HTMLOptionElement;
+      none.value = "";
+      pick.appendChild(none);
+      for (const p of palettes.states) {
+        const o = el("option", "", p.label) as HTMLOptionElement;
+        o.value = p.key;
+        pick.appendChild(o);
+      }
+      pick.value = pal.entries[entryKey]?.color ?? "";
+      const swatch = el("span", "app-docs-statusswatch");
+      const paintSwatch = () => {
+        const hit = palettes.states.find((p) => p.key === pick.value);
+        swatch.style.background = hit?.color ?? "transparent";
+      };
+      paintSwatch();
+      const glyph = el("input", "app-input app-docs-palglyph") as HTMLInputElement;
+      glyph.maxLength = 2;
+      // the placeholder shows what the built-in vocabulary would use, so
+      // a site only types a glyph where it wants a different one
+      glyph.placeholder = statusGlyph(label) || "—";
+      glyph.value = pal.entries[entryKey]?.glyph ?? "";
+      glyph.title = "Shown before the value; blank uses the built-in match";
+      const write = () => {
+        const p = paletteAt(key);
+        if (pick.value === "" && glyph.value.trim() === "") delete p.entries[entryKey];
+        else p.entries[entryKey] = { color: pick.value, glyph: glyph.value.trim(), label };
+        paintSwatch();
+        paintCount();
+        ctx.markDirty();
+      };
+      pick.addEventListener("change", write);
+      glyph.addEventListener("input", write);
+      row.append(pick, swatch, glyph);
+      rows.appendChild(row);
+    };
+
+    const fill = async () => {
+      clear(rows);
+      rows.appendChild(el("div", "app-field-hint", "Reading values…"));
+      let values: { key: string; label: string }[];
+      if (setId !== "") {
+        const terms = await termsInSet(setId);
+        // colours migrated from the old per-library maps are keyed by
+        // label; now that the term store has answered, key them properly
+        const fixed = rekeyPaletteToTerms(paletteAt(key), terms);
+        const d = dictionary();
+        d.palettes = d.palettes.map((p) => (p.setId === key ? fixed : p));
+        values = terms.map((t) => ({ key: t.id, label: t.label }));
+      } else {
+        // a Choice column has no GUIDs — its own text is the key
+        const choices = cols.flatMap((c) => liveByInternal.get(c.internal)?.choices ?? []);
+        values = [...new Set(choices)].map((v) => ({ key: v, label: v }));
+      }
+      clear(rows);
+      if (values.length === 0) {
+        rows.appendChild(note("No values could be read for this column."));
+        return;
+      }
+      for (const v of values) drawRow(v.key, v.label);
+      // a colour against a value the column no longer offers is invisible
+      // and un-removable; C4 reports these, and this clears them
+      const known = new Set(values.map((v) => v.key));
+      const stale = Object.entries(paletteAt(key).entries).filter(([k]) => !known.has(k));
+      if (stale.length > 0) {
+        const warn = note(
+          `Not offered by this column any more: ${stale
+            .map(([k, e]) => (e.label !== "" ? e.label : k))
+            .join(", ")}`
+        );
+        const drop = el("button", "app-btn", "Remove") as HTMLButtonElement;
+        drop.addEventListener("click", () => {
+          const p = paletteAt(key);
+          for (const [k] of stale) delete p.entries[k];
+          ctx.markDirty();
+          paintCount();
+          void fill();
+        });
+        warn.appendChild(drop);
+        rows.appendChild(warn);
+      }
+    };
+
+    box.append(head, rows);
+    return box;
+  };
+
+  const paintPalettes = () => {
+    clear(palBox);
+    const dict = dictionary();
+    const sets = colourableSets(dict);
+    // Choice columns are colourable too, and only the live schema knows
+    // which columns those are
+    const choiceCols = dict.columns.filter(
+      (c) =>
+        c.available &&
+        c.termSetId === "" &&
+        (liveByInternal.get(c.internal)?.choices.length ?? 0) > 0
+    );
+    if (sets.length === 0 && choiceCols.length === 0) {
+      palBox.appendChild(
+        note("Nothing to colour yet — this appears once the libraries above have loaded.")
+      );
+      return;
+    }
+    for (const s of sets) palBox.appendChild(paletteCard(s.key, s.setId, s.columns));
+    for (const c of choiceCols) {
+      palBox.appendChild(paletteCard(paletteKeyFor("", c.internal), "", [c]));
+    }
   };
 
   // ---- libraries section -----------------------------------------------
@@ -405,125 +616,9 @@ export async function renderDocsSettings(body: HTMLElement, ctx: Ctx): Promise<v
     }
     host.appendChild(grid);
 
-    // ---- status colours -------------------------------------------------
-    // The values come from the COLUMN, never from typing: a Choice column
-    // carries its own choices, and a managed-metadata column names a term
-    // set whose terms we read. Nothing to keep in step by hand, and no way
-    // to map a colour onto a value the column cannot hold.
-    const statusBox = el("div", "");
-    host.appendChild(statusBox);
-
-    const paintStatus = () => {
-      clear(statusBox);
-      const statusCol = lib.config.columns.find((c) => c.role === "status");
-      if (!statusCol) return;
-      const field = liveByName.get(statusCol.internal);
-      statusBox.appendChild(el("div", "app-field-label", "Status colours"));
-      const kind = field?.isTaxonomy
-        ? "managed metadata"
-        : field?.choices.length
-          ? "choice column"
-          : "";
-      statusBox.appendChild(
-        note(
-          `Each value of ${field?.title ?? statusCol.internal}` +
-            (kind !== "" ? ` (${kind})` : "") +
-            " takes a state colour from Branding — one truth for what a colour means."
-        )
-      );
-      const rows = el("div", "app-dept-list");
-      statusBox.appendChild(rows);
-
-      /** One value → colour row. `value` is fixed: it comes from the column. */
-      const drawRow = (value: string) => {
-        const row = el("div", "app-docs-statusrow");
-        row.appendChild(el("span", "app-docs-statusval", value));
-        const pick = el("select", "app-input") as HTMLSelectElement;
-        const none = el("option", "", "— no colour —") as HTMLOptionElement;
-        none.value = "";
-        pick.appendChild(none);
-        for (const p of palettes.states) {
-          const o = el("option", "", p.label) as HTMLOptionElement;
-          o.value = p.key;
-          pick.appendChild(o);
-        }
-        pick.value = lib.config.statusColors[value] ?? "";
-        const swatch = el("span", "app-docs-statusswatch");
-        const paintSwatch = () => {
-          const hit = palettes.states.find((p) => p.key === pick.value);
-          swatch.style.background = hit?.color ?? "transparent";
-        };
-        paintSwatch();
-        pick.addEventListener("change", () => {
-          if (pick.value === "") delete lib.config.statusColors[value];
-          else lib.config.statusColors[value] = pick.value;
-          paintSwatch();
-          ctx.markDirty();
-        });
-        row.append(pick, swatch);
-        rows.appendChild(row);
-      };
-
-      const drawValues = (values: string[]) => {
-        clear(rows);
-        if (values.length === 0) {
-          rows.appendChild(
-            note(
-              "No values could be read from this column — check it is a choice or " +
-                "managed-metadata column, then reopen this library."
-            )
-          );
-          return;
-        }
-        for (const v of values) drawRow(v);
-        // colours saved against values the column no longer offers would
-        // be invisible and un-removable, so surface them for cleanup
-        const stale = Object.keys(lib.config.statusColors).filter((v) => !values.includes(v));
-        if (stale.length > 0) {
-          const warn = note(`Not in this column any more: ${stale.join(", ")}`);
-          const drop = el("button", "app-btn", "Remove") as HTMLButtonElement;
-          drop.addEventListener("click", () => {
-            for (const v of stale) delete lib.config.statusColors[v];
-            ctx.markDirty();
-            drawValues(values);
-          });
-          warn.appendChild(drop);
-          rows.appendChild(warn);
-        }
-      };
-
-      if (field?.isTaxonomy) {
-        if (field.termSetId === "") {
-          rows.appendChild(
-            note(
-              "This is a managed-metadata column, but SharePoint did not report its " +
-                "term set — pick the set under Term store above and reopen the library."
-            )
-          );
-          return;
-        }
-        rows.appendChild(el("div", "app-field-hint", "Reading the term set…"));
-        void fetchTermsInSet(app.siteUrl, field.termSetId).then((r) => {
-          const terms = Array.isArray((r.data as { value?: unknown[] })?.value)
-            ? ((r.data as { value: unknown[] }).value as Record<string, unknown>[])
-            : [];
-          drawValues(
-            terms
-              .map((t) => {
-                const labels = t.labels as { name?: string; isDefault?: boolean }[] | undefined;
-                const def = Array.isArray(labels)
-                  ? (labels.find((l) => l.isDefault) ?? labels[0])
-                  : undefined;
-                return (def?.name ?? "").trim();
-              })
-              .filter((n) => n !== "")
-          );
-        });
-      } else {
-        drawValues(field?.choices ?? Object.keys(lib.config.statusColors));
-      }
-    };
-    paintStatus();
+    // Colours used to be set here, once per library. They now live under
+    // "Term sets & colours" — one palette per term set, so every library
+    // using that set reads the same (C2).
   };
 
   const paintLibraries = () => {

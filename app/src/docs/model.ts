@@ -115,6 +115,11 @@ export interface SiteColumn {
 export interface PaletteEntry {
   color: string;
   glyph: string;
+  /** The term's label when it was configured. Kept beside the GUID key
+   *  for two reasons: the settings editor can name a value without a
+   *  term-store round trip, and a register that has not yet resolved
+   *  labels → GUIDs can still match the row it is painting. */
+  label: string;
 }
 
 export interface TermPalette {
@@ -282,7 +287,7 @@ function parseSiteDictionary(o: Record<string, unknown>): SiteDictionary {
           const color = asStr(e.color);
           const glyph = asStr(e.glyph);
           if (color === "" && glyph === "") continue;
-          entries[key] = { color, glyph };
+          entries[key] = { color, glyph, label: asStr(e.label) };
         }
       }
       dict.palettes.push({ setId, setName: asStr(pal.setName), entries });
@@ -415,8 +420,11 @@ export function buildSiteDictionary(
     if (statusCol === undefined) continue;
     const entries = bySet.get(key) ?? {};
     for (const [value, color] of Object.entries(lib.config.statusColors)) {
-      // first library to colour a value wins; later ones do not overwrite
-      entries[value] ??= { color, glyph: "" };
+      // first library to colour a value wins; later ones do not overwrite.
+      // The key is the LABEL, because that is how colours were stored —
+      // C2 re-keys to term GUIDs once the term store has been read, and
+      // the label rides along so the lookup works either way.
+      entries[value] ??= { color, glyph: "", label: value };
     }
     if (Object.keys(entries).length > 0) bySet.set(key, entries);
   }
@@ -458,18 +466,111 @@ export function resolveLibraryConfig(
   return { ...cfg, columns };
 }
 
-/** Colour + glyph for one value of a column, from the site palettes.
- *  `setId` is the column's term set, or "" for a Choice column, in which
- *  case the palette keyed `choice:<internal>` answers. */
+/** The palette a column draws on: its term set, or — for a Choice
+ *  column, which has no GUIDs — one keyed by the column itself. */
+export function paletteKeyFor(setId: string, internal: string): string {
+  return setId !== "" ? setId : `choice:${internal}`;
+}
+
+export function paletteFor(
+  dict: SiteDictionary,
+  setId: string,
+  internal: string
+): TermPalette | null {
+  const key = paletteKeyFor(setId, internal);
+  return dict.palettes.find((p) => p.setId === key) ?? null;
+}
+
+/**
+ * Colour + glyph for one value of a column.
+ *
+ * The register paints LABELS ("Approved") while a taxonomy palette is
+ * keyed by term GUID, so the lookup bridges the two: an exact key hit
+ * first (a Choice value, or a GUID handed in directly), then the
+ * label → GUID map when the term store has been read, and finally the
+ * label stored beside the entry. That last step is what keeps colours
+ * painting before — or without — a term-store round trip.
+ */
 export function paletteEntryFor(
   dict: SiteDictionary,
   setId: string,
   internal: string,
-  value: string
+  value: string,
+  labelToId?: Map<string, string>
 ): PaletteEntry | null {
-  const key = setId !== "" ? setId : `choice:${internal}`;
-  const pal = dict.palettes.find((p) => p.setId === key);
-  return pal?.entries[value.trim()] ?? null;
+  const pal = paletteFor(dict, setId, internal);
+  if (pal === null) return null;
+  const v = value.trim();
+  if (v === "") return null;
+  const direct = pal.entries[v];
+  if (direct !== undefined) return direct;
+  const id = labelToId?.get(v.toLowerCase());
+  if (id !== undefined && pal.entries[id] !== undefined) return pal.entries[id];
+  const lower = v.toLowerCase();
+  for (const e of Object.values(pal.entries)) {
+    if (e.label !== "" && e.label.trim().toLowerCase() === lower) return e;
+  }
+  return null;
+}
+
+/** The columns worth colouring, grouped by the palette they share —
+ *  what the settings editor lists. Two columns on the same term set are
+ *  one palette, which is the whole point of doing this once. */
+export interface ColourableSet {
+  /** Palette key (term set id, or choice:<internal>). */
+  key: string;
+  /** "" for a Choice column. */
+  setId: string;
+  /** Every dictionary column that draws on it. */
+  columns: SiteColumn[];
+}
+
+/**
+ * Re-key one palette from labels to term GUIDs, now that the term store
+ * has been read. Colours migrated from the old per-library maps arrive
+ * keyed by label — fine for a Choice column, brittle for taxonomy,
+ * where a rename detaches the colour and two sets can share a label
+ * (this site has two distinct "Maintenance" terms). Entries whose label
+ * matches no term are left exactly as they are: they may belong to a
+ * value the column no longer offers, which is Health's business to
+ * report, not this function's to delete.
+ */
+export function rekeyPaletteToTerms(
+  pal: TermPalette,
+  terms: { id: string; label: string }[]
+): TermPalette {
+  const byLabel = new Map(terms.map((t) => [t.label.trim().toLowerCase(), t.id]));
+  const entries: Record<string, PaletteEntry> = {};
+  for (const [key, entry] of Object.entries(pal.entries)) {
+    const isId = byLabel.has(key.trim().toLowerCase()) === false && /^[0-9a-f-]{36}$/i.test(key);
+    if (isId) {
+      entries[key] = entry;
+      continue;
+    }
+    const id = byLabel.get(key.trim().toLowerCase());
+    if (id === undefined) {
+      entries[key] = entry; // no such term — keep, do not guess
+      continue;
+    }
+    entries[id] = { ...entry, label: entry.label !== "" ? entry.label : key };
+  }
+  return { ...pal, entries };
+}
+
+export function colourableSets(dict: SiteDictionary): ColourableSet[] {
+  const out = new Map<string, ColourableSet>();
+  for (const c of dict.columns) {
+    if (!c.available) continue;
+    // a column with no term set is colourable only if it is a Choice
+    // column, and only the live schema knows that — the caller filters
+    // those in; here, a term set is the qualifier
+    if (c.termSetId === "") continue;
+    const key = paletteKeyFor(c.termSetId, c.internal);
+    const hit = out.get(key);
+    if (hit) hit.columns.push(c);
+    else out.set(key, { key, setId: c.termSetId, columns: [c] });
+  }
+  return [...out.values()];
 }
 
 // ---- SharePoint response mapping ---------------------------------------

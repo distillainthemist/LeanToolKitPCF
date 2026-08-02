@@ -403,7 +403,7 @@ describe("site column dictionary", () => {
       sites: {
         "https://x.sharepoint.com/sites/dev": {
           columns: [{ internal: "DMSStatus", label: "Status", role: "status", available: true, termSetId: "set-9" }],
-          palettes: [{ setId: "set-9", setName: "Approval", entries: { Approved: { color: "good", glyph: "✓" } } }],
+          palettes: [{ setId: "set-9", setName: "Approval", entries: { Approved: { color: "good", glyph: "✓", label: "Approved" } } }],
         },
       },
     };
@@ -461,5 +461,65 @@ describe("dictionary ↔ live schema sync (C1)", () => {
       [{ listId: "1", name: "L", fields: [spField("DMSTags")] }]
     );
     expect(dictionary.columns[0].termSetId).toBe("kept");
+  });
+});
+
+describe("term set palettes (C2)", () => {
+  const pal = (entries: Record<string, { color: string; glyph: string; label: string }>) => ({
+    setId: "set-9",
+    setName: "",
+    entries,
+  });
+
+  it("re-keys migrated label colours onto term GUIDs, keeping unknowns", async () => {
+    const { rekeyPaletteToTerms } = await import("../docs/model");
+    const out = rekeyPaletteToTerms(
+      pal({
+        Approved: { color: "good", glyph: "", label: "Approved" },
+        Retired: { color: "neutral", glyph: "", label: "Retired" },
+      }),
+      [{ id: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee", label: "Approved" }]
+    );
+    // the term that exists moves onto its GUID...
+    expect(out.entries["aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"].color).toBe("good");
+    expect(out.entries.Approved).toBeUndefined();
+    // ...and one with no matching term is KEPT, not guessed away: it may
+    // belong to a value the column no longer offers, which Health reports
+    expect(out.entries.Retired.color).toBe("neutral");
+  });
+
+  it("keeps a colour when the term is renamed — the point of GUID keys", async () => {
+    const { paletteEntryFor } = await import("../docs/model");
+    const dict = {
+      columns: [],
+      palettes: [pal({ "term-1": { color: "good", glyph: "✓", label: "Approved" } })],
+    };
+    // the register now paints the NEW label; the live term store maps it
+    // back to the id the palette already holds
+    const renamed = new Map([["issued", "term-1"]]);
+    expect(paletteEntryFor(dict, "set-9", "DMSStatus", "Issued", renamed)?.color).toBe("good");
+    // and with no map yet, the label stored beside the entry still matches
+    expect(paletteEntryFor(dict, "set-9", "DMSStatus", "Approved")?.glyph).toBe("✓");
+    // an unknown value stays uncoloured rather than borrowing one
+    expect(paletteEntryFor(dict, "set-9", "DMSStatus", "Nonsense")).toBeNull();
+  });
+
+  it("groups columns sharing a term set into one palette", async () => {
+    const { colourableSets } = await import("../docs/model");
+    const sets = colourableSets({
+      columns: [
+        { internal: "DMSStatus", label: "", role: "status", available: true, termSetId: "set-9" },
+        { internal: "DMSDocumentStatus", label: "", role: "", available: true, termSetId: "set-9" },
+        { internal: "DMSImportance", label: "", role: "importance", available: true, termSetId: "set-3" },
+        { internal: "Hidden", label: "", role: "", available: false, termSetId: "set-4" },
+        { internal: "PlainText", label: "", role: "", available: true, termSetId: "" },
+      ],
+      palettes: [],
+    });
+    // two columns, one set, ONE palette — the whole point
+    expect(sets.map((s) => s.key)).toEqual(["set-9", "set-3"]);
+    expect(sets[0].columns.map((c) => c.internal)).toEqual(["DMSStatus", "DMSDocumentStatus"]);
+    // an unavailable column brings nothing to colour, nor does plain text
+    expect(sets.some((s) => s.key === "set-4")).toBe(false);
   });
 });
