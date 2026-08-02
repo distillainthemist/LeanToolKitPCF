@@ -210,6 +210,46 @@ export function mountDocs(
         ? null
         : (byListId.get(selectedIds[0].toLowerCase()) ?? null);
 
+    // ---- what a column MEANS (C3) ---------------------------------------
+    // Every question below used to be asked of `current`, which is null
+    // the moment two libraries are ticked — so the union register lost
+    // its status, owner and type columns entirely, and the data layer
+    // stopped even requesting them (the plan's finding F2). A column's
+    // meaning belongs to the site, so it is answered by the dictionary
+    // and holds however many libraries are in view.
+    const siteDict = app.sites[siteKey(app.siteUrl)] ?? emptySiteDictionary();
+    const dictBy = new Map(siteDict.columns.map((c) => [c.internal, c]));
+    /** The libraries whose rows can appear right now. */
+    const viewLibs = (): DocLibrary[] =>
+      scopeAll ? libraries : libraries.filter((l) => isSelected(l.listId));
+    const roleOf = (internal: string): string => dictBy.get(internal)?.role ?? "";
+    const labelOf = (internal: string): string => {
+      const c = dictBy.get(internal);
+      return c && c.label !== "" ? c.label : internal;
+    };
+    const internalForRole = (role: string): string =>
+      siteDict.columns.find((c) => c.role === role)?.internal ?? "";
+    const statusInternal = internalForRole("status");
+    const ownerInternal = internalForRole("owner");
+    /**
+     * The register's columns: the view's own choice when there is one,
+     * otherwise every column any library in view opens with — in
+     * dictionary order, so two libraries never disagree about sequence.
+     * A row whose library lacks a column simply shows nothing there.
+     */
+    const defaultInternals = (): string[] => {
+      const libs = viewLibs();
+      const wanted = new Set<string>();
+      for (const lib of libs) {
+        for (const c of lib.config.columns) if (c.inDefault) wanted.add(c.internal);
+      }
+      const out = siteDict.columns
+        .filter((c) => c.available && wanted.has(c.internal))
+        .map((c) => c.internal);
+      // a site with no dictionary yet (nothing exposed) still browses
+      return out.length > 0 ? out : [...wanted];
+    };
+
     const persistUi = (patch: Partial<DocUiPrefs>) => {
       if (whoId === "") return;
       uiState = { ...uiState, ...patch };
@@ -929,10 +969,9 @@ export function mountDocs(
       document.body.appendChild(menu);
     });
 
-    const statusCol = current?.config.columns.find((c) => c.role === "status") ?? null;
-    /** The site's shared palettes (C2) — one colour and glyph per term
-     *  value, so every library that uses the set reads the same. */
-    const siteDict = app.sites[siteKey(app.siteUrl)] ?? emptySiteDictionary();
+    /** The status column, from the dictionary — so it is found whether
+     *  one library is in view or five (C3). */
+    const statusCol = statusInternal !== "" ? (dictBy.get(statusInternal) ?? null) : null;
     /** Lowercased term label → GUID for the status set. The palette is
      *  keyed by GUID, and this is what lets a RENAMED term keep its
      *  colour: the row paints the new label, which resolves here to the
@@ -982,7 +1021,7 @@ export function mountDocs(
       return chip;
     };
 
-    const ownerColCfg = current?.config.columns.find((c) => c.role === "owner") ?? null;
+    const ownerColCfg = ownerInternal !== "" ? (dictBy.get(ownerInternal) ?? null) : null;
     /** Initials avatar + the full owner text (Vault V3 row anatomy). */
     const ownerCell = (v: string): HTMLElement => {
       const first = v.split(";")[0].trim();
@@ -1047,69 +1086,47 @@ export function mountDocs(
      *  other configured columns — name and Modified always survive). */
     const buildColumns = (): ListColumn<DocRow>[] => {
       const columns: ListColumn<DocRow>[] = [nameCol];
-      if (current) {
-        const byInternal = new Map(current.config.columns.map((c) => [c.internal, c]));
-        const shown: { internal: string; label: string; role: string }[] = [];
-        if (chosenColumns.length > 0) {
-          for (const internal of chosenColumns) {
-            if (internal === "Modified") {
-              shown.push({ internal: "Modified", label: "Modified", role: "" });
-              continue;
-            }
-            const c = byInternal.get(internal);
-            if (c && c.available) {
-              shown.push({ internal, label: c.label !== "" ? c.label : internal, role: c.role });
-            }
-          }
-        } else {
-          for (const c of current.config.columns) {
-            if (!c.inDefault) continue;
-            shown.push({
-              internal: c.internal,
-              label: c.label !== "" ? c.label : c.internal,
-              role: c.role,
-            });
-          }
-        }
-        for (const c of shown) {
-          if (c.internal === "Modified") {
-            columns.push(modifiedCol);
-            continue;
-          }
-          if (bucket !== "full" && c.role === "status") continue;
-          if (bucket === "narrow" && c.internal !== "Modified") continue;
-          const live = c.internal;
-          const role = c.role;
-          columns.push({
-            key: live,
-            label: c.label,
-            render: (row) => {
-              const v = row.values[live] ?? "";
-              if (v === "") return "";
-              if (role === "status") return statusChip(v);
-              if (role === "owner") return ownerCell(v);
-              // RLDAS date fields arrive as ISO — humanize them
-              return /^\d{4}-\d{2}-\d{2}T/.test(v) ? formatWhen(v) : v;
-            },
-          });
-        }
-        if (!shown.some((c) => c.internal === "Modified")) {
-          columns.push(modifiedCol);
-        }
-      } else {
-        if (bucket !== "narrow") {
-          columns.push({
-            key: "library",
-            label: "Library",
-            width: "minmax(110px, 1fr)",
-            render: (row) => {
-              const lib = byListId.get(row.listId);
-              return lib ? lib.config.title || lib.name : "";
-            },
-          });
-        }
-        columns.push(modifiedCol);
+      // which columns to show is a VIEW question (the chooser, or what
+      // the libraries in view open with); what each one means is the
+      // dictionary's answer, so this holds for any number of libraries
+      const wanted =
+        chosenColumns.length > 0
+          ? chosenColumns.filter((i) => i === "Modified" || dictBy.get(i)?.available === true)
+          : defaultInternals();
+      // more than one library in view: say which one each row came from
+      if (viewLibs().length > 1 && bucket !== "narrow") {
+        columns.push({
+          key: "library",
+          label: "Library",
+          width: "minmax(110px, 1fr)",
+          render: (row) => {
+            const lib = byListId.get(row.listId);
+            return lib ? lib.config.title || lib.name : "";
+          },
+        });
       }
+      for (const internal of wanted) {
+        if (internal === "Modified") {
+          columns.push(modifiedCol);
+          continue;
+        }
+        const role = roleOf(internal);
+        if (bucket !== "full" && role === "status") continue;
+        if (bucket === "narrow") continue;
+        columns.push({
+          key: internal,
+          label: labelOf(internal),
+          render: (row) => {
+            const v = row.values[internal] ?? "";
+            if (v === "") return "";
+            if (role === "status") return statusChip(v);
+            if (role === "owner") return ownerCell(v);
+            // RLDAS date fields arrive as ISO — humanize them
+            return /^\d{4}-\d{2}-\d{2}T/.test(v) ? formatWhen(v) : v;
+          },
+        });
+      }
+      if (!wanted.includes("Modified")) columns.push(modifiedCol);
       columns.push(kebabCol);
       return columns;
     };
@@ -1375,9 +1392,18 @@ export function mountDocs(
     let contentsNote: "" | "capped" | "failed" = "";
 
     const applyNonCurrent = (rows: DocRow[]): DocRow[] => {
-      // a working library IS drafts — hiding non-current would blank it
-      if (showNonCurrent || !statusCol || current?.libType === "working") return rows;
-      return rows.filter((r) => !isNonCurrentStatus(r.values[statusCol.internal] ?? ""));
+      if (showNonCurrent || !statusCol) return rows;
+      // a working library IS drafts, so hiding non-current would blank
+      // it — decided per ROW, because a union can mix a working library
+      // with controlled ones in the same list (C3)
+      const working = new Set(
+        libraries.filter((l) => l.libType === "working").map((l) => l.listId.toLowerCase())
+      );
+      return rows.filter(
+        (r) =>
+          working.has(r.listId.toLowerCase()) ||
+          !isNonCurrentStatus(r.values[statusCol.internal] ?? "")
+      );
     };
 
     const paintStatus = (total: number | null, error: string) => {
@@ -1528,18 +1554,21 @@ export function mountDocs(
             // 2026-08-02), so "every available column" is not requestable
             const fieldsFor = (): string[] => {
               const out = new Set<string>();
-              if (lib && current && lib.listId === current.listId) {
-                const cols = lib.config.columns;
-                const shown =
-                  chosenColumns.length > 0
-                    ? chosenColumns
-                    : cols.filter((c) => c.inDefault).map((c) => c.internal);
-                for (const internal of shown) {
-                  if (internal !== "Modified") out.add(internal);
-                }
-                for (const c of cols) {
-                  if (c.role === "status" || c.role === "owner") out.add(c.internal);
-                }
+              // EVERY library in view gets the register's columns, not
+              // just the one that happened to be "current" — that test
+              // is why a multi-library browse fetched no DMS fields at
+              // all and rendered three bare columns (C3).
+              const carried = new Set((lib?.config.columns ?? []).map((c) => c.internal));
+              const shown =
+                chosenColumns.length > 0 ? chosenColumns : defaultInternals();
+              for (const internal of shown) {
+                // asking a library for a column it does not carry is a
+                // guaranteed 400 from RLDAS, so each feed asks only for
+                // what its own list actually has
+                if (internal !== "Modified" && carried.has(internal)) out.add(internal);
+              }
+              for (const internal of [statusInternal, ownerInternal]) {
+                if (internal !== "" && carried.has(internal)) out.add(internal);
               }
               for (const c of groupBy === "" ? [...orgCols] : [groupBy]) out.add(c);
               return [...out];
@@ -1744,8 +1773,6 @@ export function mountDocs(
      *  choice rides the view state, so saved views and shared links
      *  carry it (spec: "users can add/remove available columns"). */
     const chooseColumns = () => {
-      if (!current) return;
-      const lib = current;
       const scrim = el("div", "app-docs-scrim");
       const dialog = el("div", "app-docs-dialog app-docs-chooser");
       scrim.appendChild(dialog);
@@ -1758,15 +1785,13 @@ export function mountDocs(
       const body = el("div", "app-docs-propsbody");
       dialog.appendChild(body);
       const effective =
-        chosenColumns.length > 0
-          ? chosenColumns
-          : [
-              ...lib.config.columns.filter((c) => c.inDefault).map((c) => c.internal),
-              "Modified",
-            ];
+        chosenColumns.length > 0 ? chosenColumns : [...defaultInternals(), "Modified"];
+      // offerable = what the site says is available AND some library in
+      // view actually carries; the chooser opens whatever the scope
+      const carried = new Set(viewLibs().flatMap((l) => l.config.columns.map((c) => c.internal)));
       const entries = [
-        ...lib.config.columns
-          .filter((c) => c.available)
+        ...siteDict.columns
+          .filter((c) => c.available && carried.has(c.internal))
           .map((c) => ({ internal: c.internal, label: c.label !== "" ? c.label : c.internal })),
         { internal: "Modified", label: "Modified" },
       ];
@@ -1847,13 +1872,13 @@ export function mountDocs(
         }
         menu!.appendChild(b);
       };
-      if (current) {
-        item(
-          "Choose columns…",
-          "Add or remove this view's columns from the library's available set.",
-          chooseColumns
-        );
-      }
+      // offered whatever the scope now: the columns come from the site's
+      // mapping, so the chooser works across libraries too (C3)
+      item(
+        "Choose columns…",
+        "Add or remove this view's columns from the site's available set.",
+        chooseColumns
+      );
       // presentation toggles relocated from the toolbar (Vault V3)
       if (viewMode === "list") {
         item(
