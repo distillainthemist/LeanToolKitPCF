@@ -17,7 +17,7 @@ import { detectHost } from "../runtime";
 import { paletteMap, resolvePaletteColor } from "../../../shared/palette";
 import { textOn } from "../../../shared/tokens";
 import { appPalettes } from "../store/config";
-import { browsePage, driveIdFor, searchPage } from "./data";
+import { browsePage, driveIdFor, listItemCount, searchPage } from "./data";
 import { DocList, ListColumn, mountDocList } from "./listView";
 import { mountDocTiles } from "./docsTiles";
 import {
@@ -1302,6 +1302,8 @@ export function mountDocs(
       done: boolean;
     }
     let feeds: BrowseFeed[] = [];
+    /** Library-total for plain browsing ("50 of 150"); null = unknown. */
+    let knownTotal: number | null = null;
 
     const applyNonCurrent = (rows: DocRow[]): DocRow[] => {
       if (showNonCurrent || !statusCol) return rows;
@@ -1323,12 +1325,17 @@ export function mountDocs(
         return;
       }
       const docs = (k: number) => `${k} document${k === 1 ? "" : "s"}`;
-      status.textContent =
-        query.trim() === "" && current && filters.length === 0
-          ? docs(n)
-          : total !== null && total > n
-            ? `${docs(n)} of ${total} matching`
-            : `${docs(n)} matching`;
+      // plain browsing shows the LIBRARY total up front (ItemCount), so
+      // the number does not creep up as pages load (Ben, 2026-08-02)
+      const plainBrowse =
+        query.trim() === "" && filters.length === 0 && !lastUsedSearch;
+      status.textContent = plainBrowse
+        ? total !== null && total > n
+          ? `${docs(n)} of ${total}`
+          : docs(n)
+        : total !== null && total > n
+          ? `${docs(n)} of ${total} matching`
+          : `${docs(n)} matching`;
     };
 
     const load = async (reset: boolean) => {
@@ -1360,18 +1367,35 @@ export function mountDocs(
         list.setRows([]);
       }
       list.setLoading(true);
-      // search mode ONLY for what list REST cannot do: text queries and
-      // taxonomy filters ride the index; everything else — including a
-      // multi-library scope — browses list REST directly (Ben,
-      // 2026-08-02: the union merge means no waiting on the crawl)
-      const useSearch = query.trim() !== "" || filters.length > 0;
+      // search-INDEX mode ONLY for what list REST cannot do: taxonomy
+      // filters, and the contents-depth toggle (reading inside
+      // documents). Plain text queries ride REST substringof over
+      // name/Title — timely, no crawl dependence (Ben, 2026-08-02).
+      const useSearch = (query.trim() !== "" && searchContents) || filters.length > 0;
       lastUsedSearch = useSearch;
       const browseIds = scopeAll ? allListIds : selectedIds;
+      const words = query.trim() === "" ? undefined : query.trim().split(/\s+/);
       const browseOpts = () => ({
         sortName: sort.key === "name",
         asc: sort.asc,
         modifiedAfterIso: modifiedIso(),
+        nameWords: words,
       });
+      // the up-front total for plain browsing (library ItemCounts)
+      if (reset) {
+        knownTotal = null;
+        if (!useSearch && words === undefined && modifiedDays === 0) {
+          void Promise.all(browseIds.map((id) => listItemCount(app.siteUrl, id))).then(
+            (counts) => {
+              if (dead || gen !== generation) return;
+              if (!counts.some((c) => c < 0)) {
+                knownTotal = counts.reduce((a, b) => a + b, 0);
+                paintStatus(knownTotal, "");
+              }
+            }
+          );
+        }
+      }
       if (useSearch) {
         const startRow = nextToken === "" ? 0 : Number(nextToken);
         // never unscoped: the library in view, the ticked set, or every
@@ -1398,7 +1422,7 @@ export function mountDocs(
         list.append(applyNonCurrent(page.rows));
         nextToken = page.next;
         done = page.next === "";
-        paintStatus(null, page.error);
+        paintStatus(knownTotal, page.error);
       } else {
         // multi-library UNION over list REST: one server-sorted feed per
         // library, k-way merged client-side — a feed's buffer refills
@@ -1430,7 +1454,7 @@ export function mountDocs(
         }
         list.append(applyNonCurrent(rowsOut));
         done = feeds.every((f) => f.done && f.buf.length === 0);
-        paintStatus(null, feedError);
+        paintStatus(knownTotal, feedError);
       }
       list.setLoading(false);
       inFlight = false;

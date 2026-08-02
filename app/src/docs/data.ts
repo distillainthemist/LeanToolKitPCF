@@ -48,6 +48,28 @@ export function driveIdFor(site: string, listId: string): Promise<string> {
   return hit;
 }
 
+/** A library's total item count (session-cached) — the up-front "N
+ *  documents" total for plain browsing. -1 = unavailable, caller skips
+ *  the total rather than guessing. Includes items in folders, so it is
+ *  an honest LIBRARY total, not a strict row count. */
+const itemCounts = new Map<string, Promise<number>>();
+
+export function listItemCount(site: string, listId: string): Promise<number> {
+  const key = `${site}|${listId.toLowerCase()}`;
+  let hit = itemCounts.get(key);
+  if (hit === undefined) {
+    hit = spRequest(site, "GET", `_api/web/lists(guid'${listId}')?$select=ItemCount`).then(
+      (r) => {
+        const n = (r.data as { ItemCount?: unknown } | null)?.ItemCount;
+        return r.ok && typeof n === "number" ? n : -1;
+      }
+    );
+    hit.catch(() => itemCounts.delete(key));
+    itemCounts.set(key, hit);
+  }
+  return hit;
+}
+
 /** First (or next: pass the previous page's `next`) browse page. */
 export async function browsePage(
   site: string,

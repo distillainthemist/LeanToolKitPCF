@@ -51,15 +51,25 @@ export interface BrowseOpts {
   asc?: boolean;
   /** Only documents modified on/after this ISO instant. */
   modifiedAfterIso?: string;
+  /** Words that must EACH appear in the file name or Title — the
+   *  index-free quick search (REST substringof). The contents-depth
+   *  toggle stays on the search index, which is the only thing that
+   *  can read inside documents. */
+  nameWords?: string[];
 }
 
 /** The items page URI for a library (server-paged; folders excluded). */
 export function buildBrowseUri(listId: string, top = 50, opts: BrowseOpts = {}): string {
   const dir = opts.asc ? "asc" : "desc";
   const orderBy = opts.sortName ? `FileLeafRef ${dir}` : `Modified ${dir}`;
-  const filter =
+  let filter =
     "FSObjType eq 0" +
     (opts.modifiedAfterIso ? ` and Modified ge datetime'${opts.modifiedAfterIso}'` : "");
+  for (const raw of opts.nameWords ?? []) {
+    const w = raw.replace(/'/g, "''").trim();
+    if (w === "") continue;
+    filter += ` and (substringof('${w}',FileLeafRef) or substringof('${w}',Title))`;
+  }
   return (
     `_api/web/lists(guid'${listId}')/items` +
     `?$select=Id,UniqueId,FileRef,FileLeafRef,Modified,FSObjType` +

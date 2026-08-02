@@ -485,6 +485,18 @@ describe("Vault V3 server-side presentation", () => {
     ) as { request: { Querytext: string } };
     expect(body.request.Querytext).toContain("LastModifiedTime>=2026-07-01");
   });
+  it("quick search rides REST: substringof per word over name/Title", async () => {
+    const { buildBrowseUri } = await import("../docs/rows");
+    const uri = buildBrowseUri("L1", 50, { nameWords: ["crane", "pre-start"] });
+    expect(uri).toContain("(substringof('crane',FileLeafRef) or substringof('crane',Title))");
+    expect(uri).toContain(
+      "(substringof('pre-start',FileLeafRef) or substringof('pre-start',Title))"
+    );
+    // quotes are doubled, empties dropped — no broken OData
+    const quoted = buildBrowseUri("L1", 50, { nameWords: ["o'brien", "  "] });
+    expect(quoted).toContain("substringof('o''brien',FileLeafRef)");
+    expect(quoted).not.toContain("substringof('',");
+  });
   it("splits filenames so the extension survives (finding 6)", async () => {
     const { splitNameForEllipsis } = await import("../docs/rows");
     expect(splitNameForEllipsis("Crane Pre-start Checklist Form.docx")).toEqual({
