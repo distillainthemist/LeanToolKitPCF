@@ -128,14 +128,23 @@ export interface TermPalette {
   entries: Record<string, PaletteEntry>;
 }
 
+/**
+ * The columns a library of each type opens with (C5). Held once for the
+ * site so exposing a library and choosing "Controlled records" leaves it
+ * configured, instead of every library being ticked out by hand.
+ * Internal names, in view order; an absent type falls back to the roles.
+ */
+export type ViewTemplates = Partial<Record<LibraryType, string[]>>;
+
 /** Everything one SharePoint site's libraries share. */
 export interface SiteDictionary {
   columns: SiteColumn[];
   palettes: TermPalette[];
+  templates: ViewTemplates;
 }
 
 export function emptySiteDictionary(): SiteDictionary {
-  return { columns: [], palettes: [] };
+  return { columns: [], palettes: [], templates: {} };
 }
 
 /** App-level docs config (ben_configjson on the "__app__" row). */
@@ -293,6 +302,13 @@ function parseSiteDictionary(o: Record<string, unknown>): SiteDictionary {
       dict.palettes.push({ setId, setName: asStr(pal.setName), entries });
     }
   }
+  if (o.templates && typeof o.templates === "object") {
+    for (const [type, list] of Object.entries(o.templates as Record<string, unknown>)) {
+      if (!LIBRARY_TYPES.some((t) => t.key === type) || !Array.isArray(list)) continue;
+      const internals = list.map(asStr).filter((v) => v !== "");
+      if (internals.length > 0) dict.templates[type as LibraryType] = internals;
+    }
+  }
   return dict;
 }
 
@@ -315,6 +331,11 @@ function serializeSiteDictionary(dict: SiteDictionary): Record<string, unknown> 
       entries: p.entries,
     }));
   }
+  const templates: Record<string, string[]> = {};
+  for (const [type, list] of Object.entries(dict.templates)) {
+    if (Array.isArray(list) && list.length > 0) templates[type] = list;
+  }
+  if (Object.keys(templates).length > 0) o.templates = templates;
   return o;
 }
 
@@ -801,14 +822,63 @@ export function syncSiteDictionary(
  *  the list appends anyway. Never touches a config someone has ticked. */
 export function seedDefaultColumns(cfg: LibraryConfig, libType: string): LibraryConfig {
   if (cfg.columns.some((c) => c.inDefault)) return cfg;
-  const roles = new Set(["docType", "owner", "status"]);
-  if (libType === "standard" || libType === "record") roles.add("effectiveDate");
+  const roles = new Set(rolesForType(libType));
   return {
     ...cfg,
     columns: cfg.columns.map((c) =>
       roles.has(c.role) ? { ...c, inDefault: true } : c
     ),
   };
+}
+
+/** The roles a type's register opens with, absent a template. */
+function rolesForType(libType: string): string[] {
+  const roles = ["docType", "owner", "status"];
+  if (libType === "standard" || libType === "record") roles.push("effectiveDate");
+  return roles;
+}
+
+/**
+ * A type's view template (C5): what was configured for it, or — when
+ * nothing has been — the columns its roles imply, in dictionary order.
+ * Returning the implied set rather than nothing is what lets the editor
+ * show a type's starting point without first making someone invent one.
+ */
+export function templateFor(dict: SiteDictionary, libType: LibraryType): string[] {
+  const stored = dict.templates[libType];
+  if (stored !== undefined && stored.length > 0) {
+    // a template naming a column the site dropped would silently tick
+    // nothing, so it is filtered against the dictionary on the way out
+    const known = new Set(dict.columns.filter((c) => c.available).map((c) => c.internal));
+    const kept = stored.filter((i) => i === "Modified" || known.has(i));
+    if (kept.length > 0) return kept;
+  }
+  const roles = new Set(rolesForType(libType));
+  return dict.columns.filter((c) => c.available && roles.has(c.role)).map((c) => c.internal);
+}
+
+/**
+ * Set a library's view to exactly these columns. Unlike
+ * seedDefaultColumns this REPLACES the ticks — it runs when someone
+ * applies a template on purpose, so leaving old ticks behind would make
+ * the result neither the template nor what was there before.
+ */
+export function applyViewTemplate(cfg: LibraryConfig, internals: string[]): LibraryConfig {
+  const want = new Set(internals);
+  return {
+    ...cfg,
+    columns: cfg.columns.map((c) => ({ ...c, inDefault: want.has(c.internal) })),
+  };
+}
+
+/** Does this library already open with exactly the template's columns?
+ *  Order is a view detail; membership is what "matches" means here. */
+export function matchesTemplate(cfg: LibraryConfig, internals: string[]): boolean {
+  const want = new Set(internals.filter((i) => i !== "Modified"));
+  const have = new Set(cfg.columns.filter((c) => c.inDefault).map((c) => c.internal));
+  if (want.size !== have.size) return false;
+  for (const i of want) if (!have.has(i)) return false;
+  return true;
 }
 
 // ---- configuration health (C4) -----------------------------------------

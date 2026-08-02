@@ -27,6 +27,7 @@ import {
   SpField,
   SpLibrary,
   TermPalette,
+  applyViewTemplate,
   buildSiteDictionary,
   colourableSets,
   emptySiteDictionary,
@@ -39,8 +40,10 @@ import {
   paletteKeyFor,
   rekeyPaletteToTerms,
   resolveLibraryConfig,
+  matchesTemplate,
   seedDefaultColumns,
   siteKey,
+  templateFor,
   syncSiteDictionary,
 } from "./model";
 import {
@@ -293,6 +296,7 @@ export async function renderDocsSettings(body: HTMLElement, ctx: Ctx): Promise<v
     }
     dictBox.appendChild(grid);
     paintPalettes();
+    paintTemplates();
     paintHealth();
   };
 
@@ -496,6 +500,112 @@ export async function renderDocsSettings(body: HTMLElement, ctx: Ctx): Promise<v
     }
   };
 
+  // ---- view templates (C5) ---------------------------------------------
+  // What a library of each type opens with, held once for the site: a
+  // newly exposed library is configured the moment its type is chosen,
+  // instead of being ticked out by hand every time.
+  body.appendChild(section("View templates"));
+  body.appendChild(
+    note(
+      "The columns a library opens with, per library type. A library exposed below " +
+        "picks these up as soon as you choose its type; changing a template here can " +
+        "be applied to the libraries already using it."
+    )
+  );
+  const tmplBox = el("div", "");
+  body.appendChild(tmplBox);
+  let tmplType: LibraryType = "standard";
+
+  const paintTemplates = () => {
+    clear(tmplBox);
+    const dict = dictionary();
+    if (dict.columns.length === 0) {
+      tmplBox.appendChild(note("Load the libraries below first."));
+      return;
+    }
+    const pick = el("select", "app-input") as HTMLSelectElement;
+    for (const t of LIBRARY_TYPES) {
+      const o = el("option", "", t.label) as HTMLOptionElement;
+      o.value = t.key;
+      pick.appendChild(o);
+    }
+    pick.value = tmplType;
+    pick.addEventListener("change", () => {
+      tmplType = pick.value as LibraryType;
+      paintTemplates();
+    });
+    tmplBox.appendChild(field("Library type", pick));
+
+    const chosen = new Set(templateFor(dict, tmplType));
+    const grid = el("div", "app-docs-viewcols");
+    grid.append(
+      el("span", "app-docs-colhead", "Column"),
+      el("span", "app-docs-colhead", "Role"),
+      el("span", "app-docs-colhead", "Opens with")
+    );
+    for (const c of dict.columns) {
+      if (!c.available) continue;
+      // a template is about the columns that carry meaning; the rest are
+      // still choosable per view, just not worth a template row
+      if (c.role === "" && !chosen.has(c.internal)) continue;
+      grid.appendChild(
+        el(
+          "span",
+          "app-docs-colname",
+          `${c.label !== "" ? c.label : (liveByInternal.get(c.internal)?.title ?? c.internal)} · ${c.internal}`
+        )
+      );
+      grid.appendChild(
+        el("span", "app-docs-colrole", COLUMN_ROLES.find((r) => r.key === c.role)?.label ?? "—")
+      );
+      const box = el("input", "") as HTMLInputElement;
+      box.type = "checkbox";
+      box.checked = chosen.has(c.internal);
+      box.addEventListener("change", () => {
+        const next = new Set(templateFor(dictionary(), tmplType));
+        if (box.checked) next.add(c.internal);
+        else next.delete(c.internal);
+        // stored in dictionary order, so every library of this type
+        // opens with the same sequence
+        dictionary().templates[tmplType] = dictionary()
+          .columns.filter((x) => next.has(x.internal))
+          .map((x) => x.internal);
+        ctx.markDirty();
+        paintTemplates();
+      });
+      grid.appendChild(box);
+    }
+    tmplBox.appendChild(grid);
+
+    // applying is explicit and says what it will change — a template is
+    // a starting point, and a library may have been tuned since
+    const mine = exposed.filter((l) => l.libType === tmplType);
+    const differs = mine.filter((l) => !matchesTemplate(l.config, [...chosen]));
+    const row = el("div", "app-docs-siterow");
+    const apply = el("button", "app-btn", "Apply to these libraries") as HTMLButtonElement;
+    apply.disabled = differs.length === 0;
+    apply.addEventListener("click", () => {
+      for (const lib of differs) lib.config = applyViewTemplate(lib.config, [...chosen]);
+      ctx.markDirty();
+      paintLibraries();
+      paintTemplates();
+    });
+    row.appendChild(apply);
+    tmplBox.appendChild(row);
+    tmplBox.appendChild(
+      note(
+        mine.length === 0
+          ? "No library of this type is exposed yet."
+          : differs.length === 0
+            ? mine.length === 1
+              ? "The one library of this type already opens with these columns."
+              : `All ${mine.length} libraries of this type already open with these columns.`
+            : `Would change ${differs.map((l) => l.config.title || l.name).join(", ")} — ` +
+              `${mine.length - differs.length} of ${mine.length} already match.`
+      )
+    );
+  };
+
   // ---- libraries section -----------------------------------------------
   body.appendChild(section("Libraries"));
   const libsNote = note(
@@ -552,13 +662,14 @@ export async function renderDocsSettings(body: HTMLElement, ctx: Ctx): Promise<v
     type.value = lib.libType;
     type.addEventListener("change", () => {
       lib.libType = type.value as LibraryType;
-      // an untouched column set follows the type's register defaults
-      const seeded = seedDefaultColumns(lib.config, lib.libType);
-      if (seeded !== lib.config) {
-        lib.config = seeded;
+      // a library nobody has ticked columns for takes the type's
+      // template — which is the point of choosing a type (C5)
+      if (!lib.config.columns.some((c) => c.inDefault)) {
+        lib.config = applyViewTemplate(lib.config, templateFor(dictionary(), lib.libType));
         void configPanel(lib, host); // repaint the grid's ticks
       }
       ctx.markDirty();
+      paintTemplates(); // the "would change" count follows the type
     });
     host.appendChild(
       field(

@@ -391,7 +391,7 @@ describe("site column dictionary", () => {
     // an empty dictionary must change nothing (a fresh deployment)
     expect(resolveLibraryConfig(cfg, emptySiteDictionary())).toEqual(cfg);
     // and an unknown column is kept as-is rather than vanishing mid-upgrade
-    const dict = { columns: [{ internal: "Other", label: "", role: "", available: true, termSetId: "" }], palettes: [] };
+    const dict = { columns: [{ internal: "Other", label: "", role: "", available: true, termSetId: "" }], palettes: [], templates: {} };
     expect(resolveLibraryConfig(cfg, dict).columns[0].role).toBe("tags");
   });
 
@@ -404,6 +404,7 @@ describe("site column dictionary", () => {
         "https://x.sharepoint.com/sites/dev": {
           columns: [{ internal: "DMSStatus", label: "Status", role: "status", available: true, termSetId: "set-9" }],
           palettes: [{ setId: "set-9", setName: "Approval", entries: { Approved: { color: "good", glyph: "✓", label: "Approved" } } }],
+          templates: { record: ["DMSStatus"] },
         },
       },
     };
@@ -436,6 +437,7 @@ describe("dictionary ↔ live schema sync (C1)", () => {
         { internal: "Retired", label: "Gone", role: "tags", available: true, termSetId: "" },
       ],
       palettes: [],
+      templates: {},
     };
     const { dictionary, carriers } = syncSiteDictionary(stored, [
       { listId: "1", name: "Standards", fields: [spField("DMSStatus", "set-9"), spField("DMSOwner")] },
@@ -457,7 +459,7 @@ describe("dictionary ↔ live schema sync (C1)", () => {
   it("keeps a stored term set when the live read cannot see one", async () => {
     const { syncSiteDictionary } = await import("../docs/model");
     const { dictionary } = syncSiteDictionary(
-      { columns: [{ internal: "DMSTags", label: "", role: "tags", available: true, termSetId: "kept" }], palettes: [] },
+      { columns: [{ internal: "DMSTags", label: "", role: "tags", available: true, termSetId: "kept" }], palettes: [], templates: {} },
       [{ listId: "1", name: "L", fields: [spField("DMSTags")] }]
     );
     expect(dictionary.columns[0].termSetId).toBe("kept");
@@ -493,6 +495,7 @@ describe("term set palettes (C2)", () => {
     const dict = {
       columns: [],
       palettes: [pal({ "term-1": { color: "good", glyph: "✓", label: "Approved" } })],
+      templates: {},
     };
     // the register now paints the NEW label; the live term store maps it
     // back to the id the palette already holds
@@ -507,6 +510,7 @@ describe("term set palettes (C2)", () => {
   it("groups columns sharing a term set into one palette", async () => {
     const { colourableSets } = await import("../docs/model");
     const sets = colourableSets({
+      templates: {},
       columns: [
         { internal: "DMSStatus", label: "", role: "status", available: true, termSetId: "set-9" },
         { internal: "DMSDocumentStatus", label: "", role: "", available: true, termSetId: "set-9" },
@@ -543,7 +547,7 @@ describe("configuration health (C4)", () => {
     const { dictionaryHealth } = await import("../docs/model");
     const found = dictionaryHealth({
       ...base,
-      dict: { columns: [sc("A", "status"), sc("B", "status"), sc("C", "owner")], palettes: [] },
+      dict: { columns: [sc("A", "status"), sc("B", "status"), sc("C", "owner")], palettes: [], templates: {} },
     });
     const dup = found.find((f) => f.title.includes("mapped to 2 columns"));
     expect(dup?.level).toBe("warn");
@@ -557,7 +561,7 @@ describe("configuration health (C4)", () => {
     const { dictionaryHealth } = await import("../docs/model");
     const found = dictionaryHealth({
       ...base,
-      dict: { columns: [sc("DMSOwner", "owner"), sc("Noise")], palettes: [] },
+      dict: { columns: [sc("DMSOwner", "owner"), sc("Noise")], palettes: [], templates: {} },
       carriers: new Map([
         ["DMSOwner", ["Standards"]],
         ["Noise", ["Standards"]],
@@ -578,6 +582,7 @@ describe("configuration health (C4)", () => {
     const found = dictionaryHealth({
       ...base,
       dict: {
+        templates: {},
         columns: [sc("Stage", "status")],
         palettes: [
           {
@@ -611,6 +616,7 @@ describe("configuration health (C4)", () => {
         dict: {
           columns: [sc("A", "status"), sc("B", "owner"), sc("C", "docType")],
           palettes: [],
+          templates: {},
         },
         carriers: new Map([
           ["A", ["One"]],
@@ -620,5 +626,70 @@ describe("configuration health (C4)", () => {
         libraries: [{ name: "One", columns: [dictCol("A", "", "", { inDefault: true })] }],
       })
     ).toEqual([]);
+  });
+});
+
+describe("view templates (C5)", () => {
+  const sc = (internal: string, role = "") => ({
+    internal,
+    label: "",
+    role,
+    available: true,
+    termSetId: "",
+  });
+  const dict = {
+    columns: [sc("DMSType", "docType"), sc("DMSOwner", "owner"), sc("DMSStatus", "status"), sc("Notes")],
+    palettes: [],
+    templates: {},
+  };
+
+  it("falls back to the roles a type implies, in dictionary order", async () => {
+    const { templateFor } = await import("../docs/model");
+    // nothing configured: standards open with type, owner, status
+    expect(templateFor(dict, "standard")).toEqual(["DMSType", "DMSOwner", "DMSStatus"]);
+    // a plain column is not implied by any role
+    expect(templateFor(dict, "standard")).not.toContain("Notes");
+  });
+
+  it("prefers a stored template but drops columns the site dropped", async () => {
+    const { templateFor } = await import("../docs/model");
+    const withTmpl = { ...dict, templates: { record: ["DMSOwner", "Vanished", "Notes"] } };
+    expect(templateFor(withTmpl, "record")).toEqual(["DMSOwner", "Notes"]);
+    // and a template emptied by that filtering falls back rather than
+    // leaving a library with no columns at all
+    const stale = { ...dict, templates: { record: ["Vanished"] } };
+    expect(templateFor(stale, "record").length).toBeGreaterThan(0);
+  });
+
+  it("applying REPLACES the ticks, and matching ignores order", async () => {
+    const { applyViewTemplate, matchesTemplate } = await import("../docs/model");
+    const cfg = {
+      title: "",
+      renditionPath: "",
+      statusColors: {},
+      columns: [
+        dictCol("DMSType", "", "", { inDefault: true }),
+        dictCol("DMSOwner", "", "", { inDefault: false }),
+      ],
+    };
+    const out = applyViewTemplate(cfg, ["DMSOwner"]);
+    // the old tick is cleared, not merged — otherwise the result is
+    // neither the template nor what was there before
+    expect(out.columns.map((c) => c.inDefault)).toEqual([false, true]);
+    expect(matchesTemplate(out, ["DMSOwner"])).toBe(true);
+    expect(matchesTemplate(out, ["DMSOwner", "Modified"])).toBe(true);
+    expect(matchesTemplate(out, ["DMSType"])).toBe(false);
+  });
+
+  it("round-trips templates through the app config", async () => {
+    const { parseAppDocsConfig, serializeAppDocsConfig, emptyAppDocsConfig } = await import("../docs/model");
+    const cfg = {
+      ...emptyAppDocsConfig(),
+      sites: { "https://x/sites/d": { ...dict, templates: { working: ["DMSOwner"], bogus: ["X"] } } },
+    };
+    const back = parseAppDocsConfig(serializeAppDocsConfig(cfg as never));
+    expect(back.sites["https://x/sites/d"].templates.working).toEqual(["DMSOwner"]);
+    // an unknown library type is not a template
+    expect((back.sites["https://x/sites/d"].templates as Record<string, unknown>).bogus).toBeUndefined();
   });
 });
