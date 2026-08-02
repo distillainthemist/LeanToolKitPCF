@@ -56,10 +56,10 @@ export function mountDocTiles(host: HTMLElement, opts: DocTilesOptions): DocList
     if (statusVal !== "" && opts.statusChip) chips.appendChild(opts.statusChip(statusVal));
     body.appendChild(chips);
 
-    const { stem, ext } = splitNameForEllipsis(row.name);
+    const { stem } = splitNameForEllipsis(row.name);
     const name = el("div", "app-doctile-name");
     name.title = row.name;
-    name.append(el("span", "app-doctile-stem", stem), el("span", "app-doctile-ext", ext));
+    name.append(el("span", "app-doctile-stem", stem));
     body.appendChild(name);
 
     const metaBits: string[] = [];

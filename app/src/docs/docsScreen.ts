@@ -479,8 +479,10 @@ export function mountDocs(
     };
 
     // ---- the tree ------------------------------------------------------
-    let groupBy = bootView?.groupBy ?? "";
-    if (groupBy !== "" && !taxCols.has(groupBy)) groupBy = "";
+    // the tree is FIXED to the organisation hierarchy (Ben, 2026-08-02:
+    // with the Filters popover covering every column, a configurable
+    // group-by was redundant) — saved views' groupBy is ignored
+    const groupBy = "";
     let treeNodes: TermNode[] = [];
     const treeButtons = new Map<string, HTMLElement>();
     const countSpans = new Map<string, HTMLElement>();
@@ -543,22 +545,13 @@ export function mountDocs(
     // full-height left column per the Vault design), its tree scrolling
     const treeCard = el("section", "app-docs-navcard app-docs-navcard-fill");
     const treeHead = el("div", "app-docs-navhead");
-    treeHead.appendChild(el("span", "app-docs-navheadlabel", "Browse by"));
+    treeHead.appendChild(el("span", "app-docs-navheadlabel", "Folders"));
     treeCard.appendChild(treeHead);
 
     /** Persisted collapse state per term set (Vault V1). */
     const persistCollapse = (setId: string) => {
       persistUi({ collapsed: { ...uiState.collapsed, [setId]: [...collapsed] } });
     };
-    const groupSel = el("select", "app-input app-docs-groupby") as HTMLSelectElement;
-    const groupOpt = (value: string, label: string) => {
-      const o = el("option", "", label) as HTMLOptionElement;
-      o.value = value;
-      groupSel.appendChild(o);
-    };
-    if (app.orgSetId !== "") groupOpt("", "Organisation");
-    for (const [internal, meta] of taxCols) groupOpt(internal, meta.label);
-    groupSel.value = groupBy;
     const treeBox = el("div", "app-docs-navorgbox");
 
     const paintTree = () => {
@@ -668,12 +661,6 @@ export function mountDocs(
       });
     };
 
-    groupSel.addEventListener("change", () => {
-      groupBy = groupSel.value;
-      treeNodes = []; // collapse state re-boots from prefs in paintTree
-      paintTree();
-    });
-
     // keyboard: Up/Down walk the visible rows, Left/Right drive the
     // focused row's caret (Vault V1 accept criterion)
     treeBox.addEventListener("keydown", (e) => {
@@ -700,8 +687,7 @@ export function mountDocs(
       }
     });
 
-    if (app.orgSetId !== "" || taxCols.size > 0) {
-      if (taxCols.size > 0) treeCard.appendChild(groupSel);
+    if (app.orgSetId !== "") {
       treeCard.appendChild(treeBox);
       nav.appendChild(treeCard);
       paintTree();
@@ -966,14 +952,12 @@ export function mountDocs(
       sortKey: "name",
       render: (row) => {
         const cell = el("span", "app-docs-namecell");
-        // the stem ellipsizes, the extension never does (finding 6)
-        const { stem, ext } = splitNameForEllipsis(row.name);
+        // extension dropped from the display (Ben, 2026-08-02) — the
+        // file-type chip carries it; the full filename stays in title
+        const { stem } = splitNameForEllipsis(row.name);
         const nm = el("span", "app-docs-name");
         nm.title = row.name;
-        nm.append(
-          el("span", "app-docs-namestem", stem),
-          el("span", "app-docs-nameext", ext)
-        );
+        nm.append(el("span", "app-docs-namestem", stem));
         cell.append(fileTypeChip(row.ext), nm);
         return cell;
       },

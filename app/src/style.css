@@ -1626,7 +1626,7 @@ input[type="color"].app-color:disabled { opacity: 0.4; cursor: default; }
 .app-docs-noncurrent { margin: 0; white-space: nowrap; }
 .app-docs-body { display: flex; gap: 14px; flex: 1; min-height: 0; }
 .app-docs-nav {
-  width: 248px;
+  width: 276px; /* room for tree indent + counts beside the scrollbar */
   flex: none;
   display: flex;
   flex-direction: column;
@@ -1637,7 +1637,7 @@ input[type="color"].app-color:disabled { opacity: 0.4; cursor: default; }
 /* doubled class beats .app-docs-navcard's own margin at equal
    specificity further down the file (the Users-grid lesson) */
 .app-docs-navcard.app-docs-navcard-fill { flex: 1; min-height: 0; display: flex; flex-direction: column; margin-bottom: 0; }
-.app-docs-navcard-fill .app-docs-navorgbox { flex: 1; min-height: 0; overflow-y: auto; }
+.app-docs-navcard-fill .app-docs-navorgbox { flex: 1; min-height: 0; overflow-y: auto; scrollbar-gutter: stable; padding-right: 2px; }
 /* Vault V1: the nav is three cards — LIBRARIES / SAVED VIEWS / BROWSE BY
    — in the app's card language (hairline border, no shadow) */
 .app-docs-navcard {
@@ -1723,7 +1723,7 @@ input[type="color"].app-color:disabled { opacity: 0.4; cursor: default; }
 .app-docs-librow2:focus-within .app-docs-only { display: inline-flex; }
 .app-docs-favrow { border: none; background: none; font: inherit; cursor: pointer; text-align: left; }
 .app-docs-favrow .app-docs-libname2 { padding-left: 28px; } /* aligns with names past the checkboxes */
-.app-docs-navcount { flex: none; font-size: 11px; color: #6d675c; padding-right: 4px; }
+.app-docs-navcount { flex: none; font-size: 11px; color: #6d675c; padding-right: 8px; }
 .app-docs-navorg { margin: 14px 0 4px; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.04em; color: #6b6b6b; }
 .app-docs-navterm { font-size: 12.5px; color: #8a8a8a; padding: 2px 0; cursor: not-allowed; }
 .app-docs-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
@@ -1740,7 +1740,7 @@ input[type="color"].app-color:disabled { opacity: 0.4; cursor: default; }
 .app-doclist-sentinel { height: 1px; }
 .app-docs-namecell { display: inline-flex; gap: 8px; align-items: center; min-width: 0; }
 .app-docs-name { overflow: hidden; text-overflow: ellipsis; }
-.app-docs-chip { padding: 1px 8px; border-radius: 9px; font-size: 12px; background: #eee; }
+.app-docs-chip { padding: 4px 11px; border-radius: 999px; font-size: 12px; background: #eee; display: inline-block; }
 .app-docs-kebab {
   border: none; background: none; cursor: pointer; font-size: 16px; padding: 2px 8px;
   min-width: 36px; min-height: 36px; /* dense floor (V5 audit) */
@@ -1881,7 +1881,6 @@ button.app-docs-navterm.app-docs-navterm-on {
   width: 44px; min-height: 44px; flex: none; font-size: 10px; padding: 0; text-align: center;
 }
 .app-docs-caret-none { width: 44px; flex: none; display: inline-block; }
-.app-docs-groupby { font-size: 12px; padding: 3px 6px; margin: 2px 0 4px; width: 100%; }
 /* the saved-views menu (register kebab) */
 .app-docs-viewsmenu { width: 280px; }
 .app-docs-saverow { display: flex; gap: 6px; padding: 4px; }

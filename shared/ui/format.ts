@@ -126,7 +126,7 @@ export function fileTypeChip(ext: string): HTMLElement {
   chip.style.alignItems = "center";
   chip.style.justifyContent = "center";
   chip.style.borderRadius = "4px";
-  chip.style.padding = "1px 6px";
+  chip.style.padding = "4px 7px"; // a little taller (Ben, 2026-08-02)
   chip.style.fontSize = "10.5px";
   chip.style.fontWeight = "700";
   chip.style.letterSpacing = "0.03em";
