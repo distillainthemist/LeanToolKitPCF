@@ -139,14 +139,90 @@ export async function presignedUrls(
   driveId: string,
   row: DocRow
 ): Promise<PresignedUrls & { error: string }> {
-  if (driveId === "") return { downloadUrl: "", thumbUrl: "", error: "drive unknown" };
+  if (driveId === "")
+    return { downloadUrl: "", thumbUrl: "", tileThumbUrl: "", error: "drive unknown" };
   const r = await spRequest(
     site,
     "GET",
     `_api/v2.0/drives/${driveId}/items/${row.uniqueId}?expand=thumbnails`
   );
-  if (!r.ok) return { downloadUrl: "", thumbUrl: "", error: r.status };
+  if (!r.ok) return { downloadUrl: "", thumbUrl: "", tileThumbUrl: "", error: r.status };
   return { ...presignedFromItem(r.data), error: "" };
+}
+
+/**
+ * Tile thumbnails (Ben, 2026-08-02: real page-one images in the tiles
+ * view) — the presigned page-one URL, which the tile paints in a frame
+ * rather than an <img>; see docsTiles for why the player leaves that the
+ * only door open.
+ *
+ * Two costs are managed here rather than in the view: it is one request
+ * per document, so results are cached for the session (a tile that
+ * scrolls back into view never asks again), and at most four are in
+ * flight at once, so a page of tiles cannot starve the register's own
+ * paging of connector capacity. "" means no thumbnail — the caller keeps
+ * its file-type placeholder rather than showing a broken image.
+ */
+const tileThumbs = new Map<string, Promise<string>>();
+const THUMB_PARALLEL = 4;
+let thumbsInFlight = 0;
+const thumbQueue: (() => void)[] = [];
+
+function takeThumbSlot(): Promise<void> {
+  if (thumbsInFlight < THUMB_PARALLEL) {
+    thumbsInFlight++;
+    return Promise.resolve();
+  }
+  return new Promise<void>((resolve) => {
+    thumbQueue.push(() => {
+      thumbsInFlight++;
+      resolve();
+    });
+  });
+}
+
+function releaseThumbSlot(): void {
+  thumbsInFlight--;
+  thumbQueue.shift()?.();
+}
+
+/** Consecutive empty answers before the register stops asking: a host
+ *  that refuses one thumbnail refuses them all, and a page of tiles must
+ *  not spend fifty round trips proving it. Reset by any success. */
+const THUMB_GIVE_UP = 3;
+let thumbMisses = 0;
+
+export function tileThumbFor(site: string, row: DocRow): Promise<string> {
+  if (thumbMisses >= THUMB_GIVE_UP) return Promise.resolve("");
+  const key = `${site}|${row.uniqueId}`;
+  let hit = tileThumbs.get(key);
+  if (hit === undefined) {
+    hit = (async () => {
+      await takeThumbSlot();
+      try {
+        const url = await presignedThumb(site, row);
+        if (url === "") thumbMisses++;
+        else thumbMisses = 0;
+        return url;
+      } finally {
+        releaseThumbSlot();
+      }
+    })();
+    hit.catch(() => tileThumbs.delete(key));
+    tileThumbs.set(key, hit);
+  }
+  return hit;
+}
+
+/** One document's presigned page-one image URL ("" when it has none).
+ *  The TILE size: a frame shows an image at its natural size (no
+ *  shrink-to-fit inside a frame), so the full-size rendering would fill
+ *  a tile with two lines of text. */
+async function presignedThumb(site: string, row: DocRow): Promise<string> {
+  const driveId = await driveIdFor(site, row.listId);
+  if (driveId === "") return "";
+  const p = await presignedUrls(site, driveId, row);
+  return p.tileThumbUrl;
 }
 
 /** Full text projection of one document's fields (properties pane) —

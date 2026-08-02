@@ -326,13 +326,31 @@ export function openDocViewer(opts: ViewerOpts): void {
    *  URL for office files, fetched-to-blob bytes for a PDF (its
    *  presigned URL is attachment-disposed, but it answers CORS `*`).
    *  "" = nothing cookie-free available. */
+  /** Why the preview could not be built — shown under the placeholder so
+   *  a blocked tenant is diagnosable without a browser console. */
+  let previewWhy = "";
+
   const cookieFreeSrc = async (): Promise<string> => {
     const p = await presigned();
-    if (row.ext !== "pdf") return transformPdfUrl(p.thumbUrl, row.ext);
-    if (p.downloadUrl === "") return "";
+    if (p.error !== "") {
+      previewWhy = `SharePoint refused the preview lookup: ${p.error.slice(0, 140)}`;
+      return "";
+    }
+    if (row.ext !== "pdf") {
+      const src = transformPdfUrl(p.thumbUrl, row.ext);
+      if (src === "") previewWhy = "SharePoint returned no rendering for this file.";
+      return src;
+    }
+    if (p.downloadUrl === "") {
+      previewWhy = "SharePoint returned no download link for this file.";
+      return "";
+    }
     try {
       const res = await fetch(p.downloadUrl);
-      if (!res.ok) return "";
+      if (!res.ok) {
+        previewWhy = `Fetching the file answered ${res.status}.`;
+        return "";
+      }
       const bytes = await res.blob();
       if (blobUrl !== "") URL.revokeObjectURL(blobUrl);
       blobUrl = URL.createObjectURL(
@@ -341,8 +359,34 @@ export function openDocViewer(opts: ViewerOpts): void {
       return blobUrl;
     } catch {
       // a player CSP connect-src could refuse the fetch
+      previewWhy = "This app was not allowed to fetch the file bytes (browser policy).";
       return "";
     }
+  };
+
+  /**
+   * Between the frame and the placeholder: the presigned page-one image.
+   * An <img> is governed by the page's img-src, NOT connect-src — and it
+   * is connect-src that stops the player fetching file bytes — so this
+   * survives where the blob route cannot. Resolves null when the image
+   * is unavailable or also refused.
+   */
+  const showImage = (src: string): Promise<HTMLImageElement | null> =>
+    new Promise<HTMLImageElement | null>((resolve) => {
+      const img = el("img", "app-docs-previmg") as HTMLImageElement;
+      img.alt = `First page of ${row.name}`;
+      img.addEventListener("load", () => resolve(img));
+      img.addEventListener("error", () => resolve(null));
+      img.src = src;
+    });
+
+  const pageImage = async (): Promise<HTMLImageElement | null> => {
+    const p = await presigned();
+    if (p.thumbUrl !== "") {
+      const direct = await showImage(p.thumbUrl);
+      if (direct) return direct;
+    }
+    return null;
   };
 
   /** No cookie-free source: an honest placeholder, never a frame that
@@ -362,6 +406,9 @@ export function openDocViewer(opts: ViewerOpts): void {
         "Open PDF shows the document in its own tab, where sign-in always works."
       )
     );
+    // the reason, when there is one: a preview that fails the same way
+    // for every document is a tenant setting, not a broken file
+    if (previewWhy !== "") ph.appendChild(el("div", "app-field-hint", previewWhy));
     stage.appendChild(ph);
   };
 
@@ -371,11 +418,30 @@ export function openDocViewer(opts: ViewerOpts): void {
     void (async () => {
       const src = await cookieFreeSrc();
       if (!stage.isConnected) return;
-      clear(stage);
       if (src === "") {
+        const img = await pageImage();
+        if (!stage.isConnected) return;
+        clear(stage);
+        if (img) {
+          stage.appendChild(img);
+          return;
+        }
+        // img-src refuses SharePoint's media host in the player, but
+        // frame-src allows it — the same page image, framed
+        const p = await presigned();
+        if (!stage.isConnected) return;
+        if (p.thumbUrl !== "") {
+          const shot = el("iframe", "app-docs-viewframe") as HTMLIFrameElement;
+          shot.src = p.thumbUrl;
+          shot.title = `First page of ${row.name}`;
+          stage.appendChild(shot);
+          return;
+        }
+        previewWhy += " The page image was refused as well.";
         paintPlaceholder();
         return;
       }
+      clear(stage);
       const frame = el("iframe", "app-docs-viewframe") as HTMLIFrameElement;
       frame.src = src;
       frame.title = row.name;

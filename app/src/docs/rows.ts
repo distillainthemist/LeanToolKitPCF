@@ -101,6 +101,16 @@ export interface RenderQueryOpts {
   modifiedAfterIso?: string;
   /** Words that must EACH appear in the file name or Title. */
   nameWords?: string[];
+  /**
+   * List item ids the search index says match INSIDE the documents —
+   * OR'd with the name match, never ANDed. This is what makes "match
+   * contents" a superset of the name search rather than a different
+   * answer: CAML can only see field values, the index can only see text,
+   * so a document qualifies if either engine likes it (Ben, 2026-08-02:
+   * "heat" found 6 by name but 4 by contents, because the index matches
+   * whole words by prefix and cannot see the "heat" inside "Preheat").
+   */
+  idIn?: number[];
   /** Per filter: OR of label Eqs across the given columns (a term and
    *  its subtree, matched by display label); filters AND together. */
   termFilters?: { cols: string[]; labels: string[] }[];
@@ -117,16 +127,31 @@ export function buildRenderViewXml(opts: RenderQueryOpts = {}): string {
       `<Geq><FieldRef Name="Modified"/><Value Type="DateTime" IncludeTimeValue="TRUE" StorageTZ="TRUE">${xmlEsc(opts.modifiedAfterIso)}</Value></Geq>`
     );
   }
+  const nameParts: string[] = [];
   for (const raw of opts.nameWords ?? []) {
     const w = raw.trim();
     if (w === "") continue;
-    clauses.push(
+    nameParts.push(
       camlJoin("Or", [
         `<Contains><FieldRef Name="FileLeafRef"/><Value Type="File">${xmlEsc(w)}</Value></Contains>`,
         `<Contains><FieldRef Name="Title"/><Value Type="Text">${xmlEsc(w)}</Value></Contains>`,
       ])
     );
   }
+  // every word must be in the name, OR the index found the words inside
+  // the document — the two engines union, so turning contents matching
+  // on can only ever ADD documents
+  const nameTree = camlJoin("And", nameParts);
+  const ids = (opts.idIn ?? []).filter((n) => Number.isInteger(n) && n > 0);
+  const idTree =
+    ids.length === 0
+      ? ""
+      : `<In><FieldRef Name="ID"/><Values>` +
+        ids.map((n) => `<Value Type="Counter">${n}</Value>`).join("") +
+        `</Values></In>`;
+  const match =
+    nameTree !== "" && idTree !== "" ? camlJoin("Or", [nameTree, idTree]) : nameTree || idTree;
+  if (match !== "") clauses.push(match);
   for (const tf of opts.termFilters ?? []) {
     const eqs = tf.cols.flatMap((col) =>
       tf.labels.map(
@@ -564,6 +589,9 @@ export interface PresignedUrls {
   downloadUrl: string;
   /** page-one image on the media-transform service. */
   thumbUrl: string;
+  /** the same image at tile size — a register of 50 tiles must not pull
+   *  50 full-size renders (medium, falling back to small then large). */
+  tileThumbUrl: string;
 }
 
 export function presignedFromItem(data: unknown): PresignedUrls {
@@ -572,10 +600,15 @@ export function presignedFromItem(data: unknown): PresignedUrls {
   const thumbs = Array.isArray(o.thumbnails)
     ? (o.thumbnails as Record<string, unknown>[])
     : [];
-  const large = (thumbs[0]?.large ?? null) as { url?: unknown } | null;
+  const sized = (key: string): string => {
+    const s = (thumbs[0]?.[key] ?? null) as { url?: unknown } | null;
+    return s !== null && typeof s.url === "string" ? s.url : "";
+  };
+  const large = sized("large");
   return {
     downloadUrl: typeof dl === "string" ? dl : "",
-    thumbUrl: large !== null && typeof large.url === "string" ? large.url : "",
+    thumbUrl: large,
+    tileThumbUrl: sized("medium") || sized("small") || large,
   };
 }
 

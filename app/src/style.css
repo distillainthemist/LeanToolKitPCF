@@ -1788,6 +1788,19 @@ input[type="color"].app-color:disabled { opacity: 0.4; cursor: default; }
 .app-docs-detailactions .app-btn { justify-content: center; }
 .app-docs-detailprops { display: flex; flex-direction: column; gap: 6px; }
 .app-docs-detailprops .app-field-label { margin-top: 8px; }
+/* page-one image preview: fits the stage, never crops the page */
+.app-docs-previmg {
+  flex: 1;
+  min-height: 0;
+  margin: 10px 0 0;
+  align-self: center;
+  max-width: 100%;
+  object-fit: contain;
+  object-position: top center;
+  border-radius: 6px;
+  border: 1px solid #e5e5e5;
+  background: #fff;
+}
 .app-docs-prevph {
   flex: 1;
   margin: 10px 0 0;
@@ -2015,8 +2028,32 @@ button.app-doclist-hsort:hover { color: var(--app-accent, #2563eb); }
   display: flex;
   align-items: center;
   justify-content: center;
+  position: relative;
+  overflow: hidden;
 }
 .app-doctile-bandext { font-size: 18px; font-weight: 800; letter-spacing: 0.06em; }
+/* page-one thumbnails need room to read as a page — but only once one
+   has actually painted, so a host that refuses them keeps tidy tiles */
+.app-doctiles-thumbs .app-doctile-band { height: 132px; }
+/* the real page-one image, once it loads, over the file-type placeholder:
+   anchored to the top so a document reads from its first line, and faded
+   in so a slow thumbnail never flashes the tile */
+.app-doctile-thumb {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  pointer-events: none; /* the tile is the button, not the picture */
+  opacity: 0;
+  transition: opacity 0.18s ease-out;
+  background: #fff;
+}
+.app-doctile-band-shown .app-doctile-thumb { opacity: 1; }
+.app-doctile-band-shown .app-doctile-bandext { visibility: hidden; }
+@media (prefers-reduced-motion: reduce) {
+  .app-doctile-thumb { transition: none; }
+}
 .app-doctile-body { padding: 8px 10px 10px; display: flex; flex-direction: column; gap: 6px; }
 .app-doctile-chips { display: flex; gap: 6px; flex-wrap: wrap; }
 .app-doctile-name { display: flex; min-width: 0; font-size: 13px; font-weight: 600; }

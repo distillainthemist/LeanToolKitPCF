@@ -333,10 +333,27 @@ describe("presentation helpers", () => {
     expect(presignedFromItem(item)).toEqual({
       downloadUrl: "https://x.sharepoint.com/dl?tempauth=t",
       thumbUrl: "https://r-mediap.svc.ms/transform/thumbnail?cs=abc",
+      // no medium or small in this set: the tile falls back to large
+      tileThumbUrl: "https://r-mediap.svc.ms/transform/thumbnail?cs=abc",
     });
+    // tiles prefer the medium rendering — 50 tiles must not pull 50
+    // full-size images
+    expect(
+      presignedFromItem({
+        thumbnails: [{ small: { url: "s" }, medium: { url: "m" }, large: { url: "l" } }],
+      })
+    ).toEqual({ downloadUrl: "", thumbUrl: "l", tileThumbUrl: "m" });
     // partial and broken shapes degrade to "" rather than throwing
-    expect(presignedFromItem({ thumbnails: [] })).toEqual({ downloadUrl: "", thumbUrl: "" });
-    expect(presignedFromItem(null)).toEqual({ downloadUrl: "", thumbUrl: "" });
+    expect(presignedFromItem({ thumbnails: [] })).toEqual({
+      downloadUrl: "",
+      thumbUrl: "",
+      tileThumbUrl: "",
+    });
+    expect(presignedFromItem(null)).toEqual({
+      downloadUrl: "",
+      thumbUrl: "",
+      tileThumbUrl: "",
+    });
   });
 
   it("turns the transform thumbnail into a transform PDF — office only", () => {
@@ -442,6 +459,33 @@ describe("RenderListDataAsStream (register browse feed)", () => {
     expect(xml).toContain("<And>");
     expect(buildRenderViewXml({ nameWords: ["a<b"] })).toContain("a&lt;b");
     expect(buildRenderViewXml({})).not.toContain("<Where>");
+  });
+  it("unions the index's content hits with the name match, never narrows", async () => {
+    const { buildRenderViewXml } = await import("../docs/rows");
+    const both = buildRenderViewXml({
+      nameWords: ["heat"],
+      idIn: [12, 40],
+      termFilters: [{ cols: ["DMSOrganisation"], labels: ["Bell Bay"] }],
+    });
+    // name match OR the content ids — a name-only hit like "Preheat"
+    // survives the depth toggle, which is the whole point
+    expect(both).toContain(
+      '<In><FieldRef Name="ID"/><Values><Value Type="Counter">12</Value>' +
+        '<Value Type="Counter">40</Value></Values></In>'
+    );
+    expect(both).toContain("<Or><Or><Contains");
+    // filters still AND over the union, so a filtered view stays filtered
+    expect(both).toContain('<And><Or><Or><Contains');
+    expect(both).toContain('<Eq><FieldRef Name="DMSOrganisation"/>');
+    // no ids (index cold or unreachable) degrades to the name match
+    const nameOnly = buildRenderViewXml({ nameWords: ["heat"], idIn: [] });
+    expect(nameOnly).not.toContain("<In>");
+    expect(nameOnly).toContain('<Value Type="File">heat</Value>');
+    // ids without words (never sent today) still build a valid Where
+    const idsOnly = buildRenderViewXml({ idIn: [7] });
+    expect(idsOnly).toContain('<Where><In><FieldRef Name="ID"/>');
+    // junk ids cannot smuggle anything into the CAML
+    expect(buildRenderViewXml({ idIn: [0, -3, 1.5, NaN] })).not.toContain("<Where>");
   });
   it("parses rows: taxonomy labels, person titles, ISO Modified, skips folders", async () => {
     const { parseRenderPage } = await import("../docs/rows");

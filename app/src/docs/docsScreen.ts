@@ -17,7 +17,14 @@ import { detectHost } from "../runtime";
 import { paletteMap, resolvePaletteColor } from "../../../shared/palette";
 import { textOn } from "../../../shared/tokens";
 import { appPalettes } from "../store/config";
-import { browsePage, driveIdFor, listItemCount, renderListPage, searchPage } from "./data";
+import {
+  browsePage,
+  driveIdFor,
+  listItemCount,
+  renderListPage,
+  searchPage,
+  tileThumbFor,
+} from "./data";
 import { DocList, ListColumn, mountDocList } from "./listView";
 import { mountDocTiles } from "./docsTiles";
 import {
@@ -64,6 +71,16 @@ let pendingLibs: string[] | null = null;
 import { openDocViewer } from "./viewer";
 
 const PAGE = 50;
+
+/**
+ * How many content matches the index may contribute to one search.
+ * CAML's `In` operator carries at most 500 values, and postquery returns
+ * at most 500 rows a page — so 500 is both engines' natural ceiling.
+ * Ranked by relevance, so a truncated set is the BEST content matches,
+ * and the status line says when it truncated rather than implying the
+ * answer was complete.
+ */
+const CONTENT_HITS = 500;
 
 export interface DocsMountOpts {
   /** Inside the hub's Documents tab: no page title, and navigation
@@ -272,8 +289,9 @@ export function mountDocs(
       ) as HTMLButtonElement;
       depth.title =
         "Off, search matches document names and titles — how you look for " +
-        "something you know exists. On, it matches everything the index " +
-        "knows: the text inside every document and the value of every field.";
+        "something you know exists. On, it ALSO matches what the index " +
+        "reads inside each document, so it can only add results, never " +
+        "take them away.";
       depth.addEventListener("click", () => {
         closeMenu();
         searchContents = !searchContents;
@@ -498,15 +516,15 @@ export function mountDocs(
     };
 
     // Loaded-row counts (Ben, 2026-08-01: speed first, live counts can
-    // come later). Browse rows carry every column as display text, so a
-    // term's count = loaded rows whose group-by column holds its label;
-    // search rows carry no field text, so counts stay blank there rather
-    // than lie. Scoped honestly via the title attribute.
-    let lastUsedSearch = false;
+    // come later). Every rendered row now comes from the browse feed and
+    // carries its columns as display text, so a term's count = loaded
+    // rows whose group-by column holds its label — including under a
+    // contents search. Favourites carry no field values, so they count
+    // nothing rather than lie. Scoped honestly via the title attribute.
     const paintTreeCounts = () => {
       if (countSpans.size === 0) return;
       const cols = groupBy === "" ? [...orgCols] : [groupBy];
-      const rows = lastUsedSearch || favMode ? [] : loadedRows();
+      const rows = favMode ? [] : loadedRows();
       const tally = tallyTermCounts(rows, cols);
       for (const n of treeNodes) {
         const span = countSpans.get(n.id);
@@ -1119,8 +1137,9 @@ export function mountDocs(
     // density rebuilds the component and re-seats the loaded rows.
     const listHost = el("div", "app-docs-registerhost");
     main.appendChild(listHost);
+    // every row is rendered by the browse feed, so the chosen sort always
+    // applies — there is no relevance order left to preserve
     let sort: { key: string; asc: boolean } = { key: "modified", asc: false };
-    let sortTouched = false; // search keeps relevance until sort is chosen
     let viewMode: "list" | "tiles" = uiState.viewMode === "tiles" ? "tiles" : "list";
     let density: "comfortable" | "compact" =
       uiState.density === "compact" ? "compact" : "comfortable";
@@ -1155,6 +1174,7 @@ export function mountDocs(
               statusChip: statusCol ? statusChip : null,
               statusColumn: statusCol?.internal ?? "",
               ownerColumn: ownerColCfg?.internal ?? "",
+              thumbUrlFor: (row) => tileThumbFor(app.siteUrl, row),
             })
           : mountDocList<DocRow>(listHost, {
               columns: buildColumns(),
@@ -1165,7 +1185,6 @@ export function mountDocs(
               sort,
               onSort: (key) => {
                 sort = sort.key === key ? { key, asc: !sort.asc } : { key, asc: key === "name" };
-                sortTouched = true;
                 buildRegister();
                 void load(true);
               },
@@ -1287,9 +1306,12 @@ export function mountDocs(
 
     // ---- data flow -----------------------------------------------------
     let generation = 0;
-    let nextToken = ""; // browse: next uri; search: startRow as string
     let inFlight = false;
     let done = false;
+    /** A reset asked for while a load was in flight (typing during a
+     *  page): replayed when the load finishes, or the keystroke that
+     *  landed mid-flight would silently never be queried. */
+    let pendingReset = false;
     /** Per-library feed state for the browse union (RenderListDataAsStream). */
     interface BrowseFeed {
       listId: string;
@@ -1301,6 +1323,13 @@ export function mountDocs(
     let feeds: BrowseFeed[] = [];
     /** Library-total for plain browsing ("50 of 150"); null = unknown. */
     let knownTotal: number | null = null;
+    /** listId (lowercase) → item ids the index matched inside documents,
+     *  resolved once per reset and OR'd into every page's CAML. */
+    let contentIds = new Map<string, number[]>();
+    /** Honesty about the content half: "" fine, "capped" the index had
+     *  more matches than one CAML In can carry, "failed" the index did
+     *  not answer (name matching still stands). */
+    let contentsNote: "" | "capped" | "failed" = "";
 
     const applyNonCurrent = (rows: DocRow[]): DocRow[] => {
       // a working library IS drafts — hiding non-current would blank it
@@ -1325,19 +1354,39 @@ export function mountDocs(
       const docs = (k: number) => `${k} document${k === 1 ? "" : "s"}`;
       // plain browsing shows the LIBRARY total up front (ItemCount), so
       // the number does not creep up as pages load (Ben, 2026-08-02)
-      const plainBrowse =
-        query.trim() === "" && filters.length === 0 && !lastUsedSearch;
-      status.textContent = plainBrowse
-        ? total !== null && total > n
-          ? `${docs(n)} of ${total}`
-          : docs(n)
-        : total !== null && total > n
-          ? `${docs(n)} of ${total} matching`
-          : `${docs(n)} matching`;
+      const plainBrowse = query.trim() === "" && filters.length === 0;
+      const note =
+        contentsNote === "capped"
+          ? ` · top ${CONTENT_HITS} content matches`
+          : contentsNote === "failed"
+            ? " · contents search unavailable"
+            : "";
+      status.textContent =
+        (plainBrowse
+          ? total !== null && total > n
+            ? `${docs(n)} of ${total}`
+            : docs(n)
+          : total !== null && total > n
+            ? `${docs(n)} of ${total} matching`
+            : `${docs(n)} matching`) + note;
+    };
+
+    /** End of a load: drop the lock, then replay a reset that arrived
+     *  mid-flight (the caller was turned away to keep one loader). */
+    const finish = () => {
+      inFlight = false;
+      if (pendingReset && !dead) {
+        pendingReset = false;
+        void load(true);
+      }
     };
 
     const load = async (reset: boolean) => {
-      if (inFlight || (done && !reset)) return;
+      if (inFlight) {
+        if (reset) pendingReset = true;
+        return;
+      }
+      if (done && !reset) return;
       // favourites are local rows — no query, no paging
       if (favMode) {
         list.setRows(
@@ -1359,28 +1408,26 @@ export function mountDocs(
       inFlight = true;
       const gen = reset ? ++generation : generation;
       if (reset) {
-        nextToken = "";
         done = false;
         feeds = [];
         list.setRows([]);
       }
       list.setLoading(true);
-      // RenderListDataAsStream serves EVERYTHING except the
-      // contents-depth toggle: it is the modern-view engine, returns
-      // display-ready labels, and CAMLs name search, the Modified
-      // window and taxonomy label filters server-side per library.
-      // The search index's one irreplaceable job is reading inside
-      // documents — and index rows carry no field text, which is why
-      // routing filters through it blanked the register's columns
-      // (Ben, 2026-08-02).
+      // RenderListDataAsStream renders EVERYTHING: it is the modern-view
+      // engine, returns display-ready labels, and CAMLs name search, the
+      // Modified window and taxonomy label filters server-side per
+      // library. The search index's one irreplaceable job is reading
+      // INSIDE documents, and its rows carry no field text — so it feeds
+      // item ids into the CAML rather than rendering rows of its own
+      // (routing rows through it blanked the register's columns —
+      // Ben, 2026-08-02).
       const browseIds = scopeAll ? allListIds : selectedIds;
-      const useSearch = query.trim() !== "" && searchContents;
-      lastUsedSearch = useSearch;
       const words = query.trim() === "" ? undefined : query.trim().split(/\s+/);
+      const wantContents = words !== undefined && searchContents;
       // the up-front total for plain browsing (library ItemCounts)
       if (reset) {
         knownTotal = null;
-        if (!useSearch && words === undefined && modifiedDays === 0 && filters.length === 0) {
+        if (words === undefined && modifiedDays === 0 && filters.length === 0) {
           void Promise.all(browseIds.map((id) => listItemCount(app.siteUrl, id))).then(
             (counts) => {
               if (dead || gen !== generation) return;
@@ -1392,27 +1439,38 @@ export function mountDocs(
           );
         }
       }
-      if (useSearch) {
-        const startRow = nextToken === "" ? 0 : Number(nextToken);
-        // never unscoped: the library in view, the ticked set, or every
-        // library this site exposes — the corpus is what was configured,
-        // not the whole SharePoint tenant
-        const page = await searchPage(app.siteUrl, query, {
-          listIds: browseIds,
-          rowLimit: PAGE,
-          startRow,
-          searchContents,
-          byModified: sortTouched && sort.key === "modified" ? true : undefined,
-          sortAsc: sortTouched ? sort.asc : undefined,
-          modifiedAfterIso: modifiedIso(),
-          termFilters: filters.map((f) => ({ properties: propsFor(f.col), termIds: f.ids })),
-        });
-        if (dead || gen !== generation) return;
-        list.append(applyNonCurrent(page.rows));
-        nextToken = String(startRow + page.rows.length);
-        done = page.rows.length < PAGE;
-        paintStatus(page.total, page.error);
-      } else {
+      // "Match contents & every field" resolves to a set of item ids the
+      // index matched inside the documents; those ids ride every page's
+      // CAML alongside the name match, so the depth toggle can only ever
+      // ADD documents to the name-only answer. Resolved once per reset —
+      // the ids are baked into each feed's ViewXml.
+      if (reset) {
+        contentIds = new Map();
+        contentsNote = "";
+        if (wantContents) {
+          const hits = await searchPage(app.siteUrl, query, {
+            listIds: browseIds,
+            rowLimit: CONTENT_HITS,
+            startRow: 0,
+            searchContents: true,
+            modifiedAfterIso: modifiedIso(),
+            termFilters: filters.map((f) => ({ properties: propsFor(f.col), termIds: f.ids })),
+          });
+          if (dead || gen !== generation) return finish();
+          if (hits.error !== "") {
+            contentsNote = "failed";
+          } else {
+            for (const r of hits.rows) {
+              if (r.id <= 0 || r.listId === "") continue;
+              const bucket = contentIds.get(r.listId) ?? [];
+              bucket.push(r.id);
+              contentIds.set(r.listId, bucket);
+            }
+            if (hits.total > hits.rows.length) contentsNote = "capped";
+          }
+        }
+      }
+      {
         // browse via RenderListDataAsStream (single library or union):
         // display-ready values for every field type, with name search,
         // the Modified window and taxonomy label filters all CAML'd
@@ -1448,6 +1506,7 @@ export function mountDocs(
               asc: sort.asc,
               modifiedAfterIso: modifiedIso(),
               nameWords: words,
+              idIn: contentIds.get(id.toLowerCase()) ?? [],
               termFilters: filters.map((f) => ({
                 cols: f.col === "" ? [...orgCols] : [f.col],
                 labels: [...f.labels],
@@ -1475,7 +1534,7 @@ export function mountDocs(
         const rowsOut: DocRow[] = [];
         while (rowsOut.length < PAGE) {
           await Promise.all(feeds.map(fill));
-          if (dead || gen !== generation) return;
+          if (dead || gen !== generation) return finish();
           const i = pickBrowseHead(feeds.map((f) => f.buf), cmp);
           if (i < 0) break;
           rowsOut.push(feeds[i].buf.shift()!);
@@ -1485,8 +1544,8 @@ export function mountDocs(
         paintStatus(knownTotal, feedError);
       }
       list.setLoading(false);
-      inFlight = false;
       paintTreeCounts();
+      finish();
     };
     const loadMore = () => load(false);
 

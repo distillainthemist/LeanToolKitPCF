@@ -3,12 +3,14 @@
 // owner/modified) in the app's card styling, satisfying the same
 // DocList contract as listView so the screen can swap views freely.
 //
-// The thumbnail area is the file-type placeholder, NOT a live render:
-// SharePoint's thumbnail endpoints are cookie-authenticated and the
-// player iframe carries no SharePoint cookies (the v0.23 lesson), so a
-// wall of tiles would be a wall of broken images. The document overlay
-// does the real per-document render, where one presigned fetch is
-// affordable.
+// The thumbnail area paints the file-type placeholder first and swaps in
+// the real page-one image when one arrives (Ben, 2026-08-02). It cannot
+// use SharePoint's cookie-authenticated thumbnail URLs — the player
+// iframe carries no SharePoint cookies (the v0.23 lesson), which is what
+// made a wall of tiles a wall of broken images — so it asks the caller
+// for the same PRESIGNED url the document overlay uses. Requests are
+// lazy (a tile asks only once it nears the viewport) and the placeholder
+// stays put for anything SharePoint cannot render.
 
 import { el, clear } from "../../../shared/ui/dom";
 import { fileTypeChip } from "../../../shared/ui/format";
@@ -27,6 +29,9 @@ export interface DocTilesOptions {
   /** Configured internal names ("" = not configured). */
   statusColumn?: string;
   ownerColumn?: string;
+  /** Presigned page-one image for a row, "" when there is none. Called
+   *  at most once per tile, as the tile nears the viewport. */
+  thumbUrlFor?: (row: DocRow) => Promise<string>;
 }
 
 export function mountDocTiles(host: HTMLElement, opts: DocTilesOptions): DocList<DocRow> {
@@ -39,6 +44,46 @@ export function mountDocTiles(host: HTMLElement, opts: DocTilesOptions): DocList
 
   let held: DocRow[] = [];
 
+  // Lazy thumbnails: the band asks for its image only once it is within
+  // a screen of the viewport, so scrolling past a hundred tiles costs
+  // nothing for the ones never seen.
+  const bandRows = new WeakMap<Element, DocRow>();
+  const paintThumb = (band: HTMLElement, row: DocRow) => {
+    void opts.thumbUrlFor?.(row).then((url) => {
+      if (url === "" || !band.isConnected) return;
+      // A FRAME, not an <img>: measured in the hosted player 2026-08-02 —
+      // the page's policy refuses SharePoint's media host to img-src and
+      // fetch alike, but allows it to frame-src (which is what makes the
+      // document overlay's preview work). Same picture, the one door the
+      // player leaves open. Inert: no pointer events, no tab stop, so the
+      // tile underneath stays a plain button.
+      const frame = el("iframe", "app-doctile-thumb") as HTMLIFrameElement;
+      frame.setAttribute("aria-hidden", "true");
+      frame.setAttribute("tabindex", "-1");
+      frame.setAttribute("scrolling", "no");
+      frame.loading = "lazy";
+      frame.addEventListener("load", () => {
+        band.classList.add("app-doctile-band-shown");
+        // the band only grows to page proportions once a page actually
+        // paints — a host that refuses thumbnails keeps compact tiles
+        grid.classList.add("app-doctiles-thumbs");
+      });
+      frame.src = url;
+      band.appendChild(frame);
+    });
+  };
+  const thumbObserver = new IntersectionObserver(
+    (entries) => {
+      for (const e of entries) {
+        if (!e.isIntersecting) continue;
+        thumbObserver.unobserve(e.target);
+        const row = bandRows.get(e.target);
+        if (row) paintThumb(e.target as HTMLElement, row);
+      }
+    },
+    { root: wrap, rootMargin: "400px" }
+  );
+
   const tile = (row: DocRow): HTMLElement => {
     const card = el("button", "app-doctile") as HTMLButtonElement;
     const base = FILE_TYPE_HUES[fileTypeFamily(row.ext)];
@@ -48,6 +93,10 @@ export function mountDocTiles(host: HTMLElement, opts: DocTilesOptions): DocList
     bandExt.style.color = readableShade(base, 0.15);
     band.appendChild(bandExt);
     card.appendChild(band);
+    if (opts.thumbUrlFor) {
+      bandRows.set(band, row);
+      thumbObserver.observe(band);
+    }
 
     const body = el("div", "app-doctile-body");
     const chips = el("div", "app-doctile-chips");
@@ -103,6 +152,9 @@ export function mountDocTiles(host: HTMLElement, opts: DocTilesOptions): DocList
   empty();
   return {
     setRows: (rows) => {
+      // the outgoing tiles are about to leave the DOM — stop watching
+      // them before they do (appendRows re-observes the new ones)
+      thumbObserver.disconnect();
       clear(grid);
       held = [];
       appendRows(rows);
@@ -116,6 +168,7 @@ export function mountDocTiles(host: HTMLElement, opts: DocTilesOptions): DocList
     rows: () => held,
     destroy: () => {
       observer.disconnect();
+      thumbObserver.disconnect();
       wrap.remove();
     },
   };
