@@ -17,7 +17,7 @@ import { detectHost } from "../runtime";
 import { paletteMap, resolvePaletteColor } from "../../../shared/palette";
 import { textOn } from "../../../shared/tokens";
 import { appPalettes } from "../store/config";
-import { browsePage, driveIdFor, indexWarm, listItemCount, renderListPage, searchPage } from "./data";
+import { browsePage, driveIdFor, listItemCount, renderListPage, searchPage } from "./data";
 import { DocList, ListColumn, mountDocList } from "./listView";
 import { mountDocTiles } from "./docsTiles";
 import {
@@ -1379,25 +1379,16 @@ export function mountDocs(
         list.setRows([]);
       }
       list.setLoading(true);
-      // INDEX-FIRST with REST fallback (Ben, 2026-08-02): queries and
-      // taxonomy filters prefer the search index — it scales past the
-      // list view threshold and filters by term GUID — but while the
-      // crawl hasn't caught up with a library (indexWarm), the same
-      // request rides REST instead: substringof over name/Title, and
-      // the subtree-label walk for term filters. The contents-depth
-      // toggle is index-only (nothing else reads inside documents);
-      // plain browsing is REST-only (paging needs no index).
+      // RenderListDataAsStream serves EVERYTHING except the
+      // contents-depth toggle: it is the modern-view engine, returns
+      // display-ready labels, and CAMLs name search, the Modified
+      // window and taxonomy label filters server-side per library.
+      // The search index's one irreplaceable job is reading inside
+      // documents — and index rows carry no field text, which is why
+      // routing filters through it blanked the register's columns
+      // (Ben, 2026-08-02).
       const browseIds = scopeAll ? allListIds : selectedIds;
-      const contentsMode = query.trim() !== "" && searchContents;
-      let useSearch = contentsMode;
-      if (!contentsMode && (query.trim() !== "" || filters.length > 0)) {
-        const warms = await Promise.all(browseIds.map((id) => indexWarm(app.siteUrl, id)));
-        if (dead || gen !== generation) {
-          inFlight = false;
-          return;
-        }
-        useSearch = warms.every(Boolean);
-      }
+      const useSearch = query.trim() !== "" && searchContents;
       lastUsedSearch = useSearch;
       const words = query.trim() === "" ? undefined : query.trim().split(/\s+/);
       // the up-front total for plain browsing (library ItemCounts)
