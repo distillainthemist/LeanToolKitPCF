@@ -214,6 +214,32 @@ export function tileThumbFor(site: string, row: DocRow): Promise<string> {
   return hit;
 }
 
+/**
+ * A page-one rendering at a CHOSEN size — the drive API's custom
+ * `c{w}x{h}` thumbnail (probed 2026-08-02: `large` caps at 800px, while
+ * c1600x1600 comes back at 1600). The overlay asks for twice the size it
+ * will display at, because a framed image renders at its natural size
+ * with no shrink-to-fit: two device pixels per CSS pixel is what makes
+ * the preview sharp. "" when the document has no rendering.
+ */
+export async function pagePreviewUrl(
+  site: string,
+  driveId: string,
+  row: DocRow,
+  width: number,
+  height: number
+): Promise<string> {
+  if (driveId === "") return "";
+  const box = `c${Math.round(width)}x${Math.round(height)}`;
+  const r = await spRequest(
+    site,
+    "GET",
+    `_api/v2.0/drives/${driveId}/items/${row.uniqueId}/thumbnails/0/${box}`
+  );
+  const u = (r.data as { url?: unknown } | null)?.url;
+  return r.ok && typeof u === "string" ? u : "";
+}
+
 /** One document's presigned page-one image URL ("" when it has none).
  *  The TILE size: a frame shows an image at its natural size (no
  *  shrink-to-fit inside a frame), so the full-size rendering would fill

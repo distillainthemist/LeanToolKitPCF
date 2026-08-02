@@ -1278,22 +1278,28 @@ export function mountDocs(
           void favToggleFor(row)();
         });
       }
-      // readers get the PDF rendering, never the editable source
-      const pdfUrl = () =>
-        driveIdFor(app.siteUrl, row.listId || lib?.listId || "").then((d) =>
-          pdfViewUrlFor(app.siteUrl, d, row)
-        );
-      item("Open PDF ↗", () => {
-        // opened synchronously with about:blank so the popup blocker sees
-        // a user gesture, then pointed at the URL once the drive resolves
-        const tab = window.open("", "_blank", "noopener");
-        void pdfUrl().then((u) => {
-          if (tab) tab.location.href = u;
-          else window.open(u, "_blank", "noopener");
-        });
+      // readers get the PDF rendering, never the editable source.
+      // A LINK, not a button running window.open: `window.open("",
+      // "_blank", "noopener")` returns null — that is what noopener
+      // means — so the old handler had nothing to point at, and the
+      // retry that fired when the drive resolved was no longer a user
+      // gesture, so the popup blocker ate it and the item did nothing
+      // (Ben, 2026-08-02). The link carries the site-scoped viewer URL
+      // immediately and upgrades to the converted-PDF one when the drive
+      // resolves — a cached lookup, so normally before the click.
+      let bestPdf = pdfViewUrlFor(app.siteUrl, "", row);
+      const openPdf = el("a", "app-docs-menuitem", "Open PDF ↗") as HTMLAnchorElement;
+      openPdf.href = bestPdf;
+      openPdf.target = "_blank";
+      openPdf.rel = "noopener";
+      openPdf.addEventListener("click", () => closeMenu());
+      menu.appendChild(openPdf);
+      void driveIdFor(app.siteUrl, row.listId || lib?.listId || "").then((d) => {
+        bestPdf = pdfViewUrlFor(app.siteUrl, d, row);
+        openPdf.href = bestPdf;
       });
       item("Copy PDF link", () => {
-        void pdfUrl().then((u) => navigator.clipboard.writeText(u));
+        void navigator.clipboard.writeText(bestPdf);
       });
       if (lib?.libType === "working") {
         item("Request check-out", null, "Document control arrives in a later phase");

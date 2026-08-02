@@ -30,7 +30,7 @@ import {
   sourceUrlFor,
   transformPdfUrl,
 } from "./rows";
-import { itemDetails, itemVersions, presignedUrls } from "./data";
+import { itemDetails, itemVersions, pagePreviewUrl, presignedUrls } from "./data";
 
 interface ViewerOpts {
   site: string;
@@ -427,14 +427,37 @@ export function openDocViewer(opts: ViewerOpts): void {
           return;
         }
         // img-src refuses SharePoint's media host in the player, but
-        // frame-src allows it — the same page image, framed
+        // frame-src allows it — the same page image, framed. A frame
+        // paints an image at its NATURAL size, so a sharp preview means
+        // asking for twice the display size and scaling the frame back
+        // down: same layout, two device pixels per CSS pixel (Ben,
+        // 2026-08-02: "quite low res").
+        const box = stage.getBoundingClientRect();
+        const w = Math.max(320, Math.round(box.width));
+        const h = Math.max(320, Math.round(box.height));
+        // The requested box FITS the page inside it, so the tall limit
+        // must be the loose one: the stage is wider than it is tall, and
+        // asking for 2w x 2h let the height bind a portrait page and came
+        // back at a third of the size. 2w by the service's ceiling makes
+        // the WIDTH bind — the page fills the stage exactly, as before,
+        // at twice the pixels, and the frame clips what runs past.
+        const big = await pagePreviewUrl(site, opts.driveId, row, w * 2, 2048);
+        if (!stage.isConnected) return;
         const p = await presigned();
         if (!stage.isConnected) return;
-        if (p.thumbUrl !== "") {
-          const shot = el("iframe", "app-docs-viewframe") as HTMLIFrameElement;
-          shot.src = p.thumbUrl;
+        const shotUrl = big !== "" ? big : p.thumbUrl;
+        if (shotUrl !== "") {
+          const shotBox = el("div", "app-docs-shotbox");
+          const shot = el("iframe", "app-docs-viewshot") as HTMLIFrameElement;
           shot.title = `First page of ${row.name}`;
-          stage.appendChild(shot);
+          if (big !== "") {
+            shot.style.width = `${w * 2}px`;
+            shot.style.height = `${h * 2}px`;
+            shot.style.transform = "scale(0.5)";
+          }
+          shot.src = shotUrl;
+          shotBox.appendChild(shot);
+          stage.appendChild(shotBox);
           return;
         }
         previewWhy += " The page image was refused as well.";
