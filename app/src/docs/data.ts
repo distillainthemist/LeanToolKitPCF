@@ -70,6 +70,33 @@ export function listItemCount(site: string, listId: string): Promise<number> {
   return hit;
 }
 
+/**
+ * Is the search index warm for this library? (Index-first routing,
+ * Ben 2026-08-02: queries and taxonomy filters prefer the index — it
+ * scales past the list view threshold and filters by term GUID — but
+ * fall back to the REST walk while the crawl hasn't caught up.)
+ * Warm = the index answers at least one document for the list, or the
+ * list is empty (nothing to miss either way). A search error reads as
+ * cold. Warm answers cache for the session; cold ones re-check after a
+ * few minutes so a landing crawl gets noticed.
+ */
+const warmth = new Map<string, { at: number; warm: boolean }>();
+const COLD_RECHECK_MS = 5 * 60_000;
+
+export async function indexWarm(site: string, listId: string): Promise<boolean> {
+  const key = `${site}|${listId.toLowerCase()}`;
+  const hit = warmth.get(key);
+  if (hit && (hit.warm || Date.now() - hit.at < COLD_RECHECK_MS)) return hit.warm;
+  const [page, count] = await Promise.all([
+    searchPage(site, "", { listIds: [listId], rowLimit: 1 }),
+    listItemCount(site, listId),
+  ]);
+  const warm =
+    count === 0 || (page.error === "" && (page.total > 0 || page.rows.length > 0));
+  warmth.set(key, { at: Date.now(), warm });
+  return warm;
+}
+
 /** First (or next: pass the previous page's `next`) browse page. */
 export async function browsePage(
   site: string,

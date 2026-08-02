@@ -17,7 +17,7 @@ import { detectHost } from "../runtime";
 import { paletteMap, resolvePaletteColor } from "../../../shared/palette";
 import { textOn } from "../../../shared/tokens";
 import { appPalettes } from "../store/config";
-import { browsePage, driveIdFor, listItemCount, searchPage } from "./data";
+import { browsePage, driveIdFor, indexWarm, listItemCount, searchPage } from "./data";
 import { DocList, ListColumn, mountDocList } from "./listView";
 import { mountDocTiles } from "./docsTiles";
 import {
@@ -1378,15 +1378,26 @@ export function mountDocs(
         list.setRows([]);
       }
       list.setLoading(true);
-      // the search INDEX serves only the contents-depth toggle (reading
-      // inside documents — nothing else can). Text queries ride REST
-      // substringof; taxonomy filters ride REST as a subtree-label match
-      // over the browse rows' display text (Ben, 2026-08-02: timely
-      // results beat GUID exactness while the crawl lags; the index
-      // path keeps GUID filtering for contents-depth searches).
-      const useSearch = query.trim() !== "" && searchContents;
-      lastUsedSearch = useSearch;
+      // INDEX-FIRST with REST fallback (Ben, 2026-08-02): queries and
+      // taxonomy filters prefer the search index — it scales past the
+      // list view threshold and filters by term GUID — but while the
+      // crawl hasn't caught up with a library (indexWarm), the same
+      // request rides REST instead: substringof over name/Title, and
+      // the subtree-label walk for term filters. The contents-depth
+      // toggle is index-only (nothing else reads inside documents);
+      // plain browsing is REST-only (paging needs no index).
       const browseIds = scopeAll ? allListIds : selectedIds;
+      const contentsMode = query.trim() !== "" && searchContents;
+      let useSearch = contentsMode;
+      if (!contentsMode && (query.trim() !== "" || filters.length > 0)) {
+        const warms = await Promise.all(browseIds.map((id) => indexWarm(app.siteUrl, id)));
+        if (dead || gen !== generation) {
+          inFlight = false;
+          return;
+        }
+        useSearch = warms.every(Boolean);
+      }
+      lastUsedSearch = useSearch;
       const words = query.trim() === "" ? undefined : query.trim().split(/\s+/);
       const browseOpts = () => ({
         sortName: sort.key === "name",
@@ -1415,7 +1426,7 @@ export function mountDocs(
         // library this site exposes — the corpus is what was configured,
         // not the whole SharePoint tenant
         const page = await searchPage(app.siteUrl, query, {
-          listIds: scopeAll ? allListIds : current ? [current.listId] : selectedIds,
+          listIds: browseIds,
           rowLimit: PAGE,
           startRow,
           searchContents,
