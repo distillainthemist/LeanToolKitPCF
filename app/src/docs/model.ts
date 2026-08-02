@@ -637,6 +637,61 @@ export function suggestRoles(cols: ColumnConfig[]): ColumnConfig[] {
   );
 }
 
+/** One library's live schema, for the dictionary sync. */
+export interface LibrarySchema {
+  listId: string;
+  /** Display name, for "carried by" in the settings table. */
+  name: string;
+  fields: SpField[];
+}
+
+/**
+ * Reconcile the site dictionary with what SharePoint actually reports
+ * across EVERY exposed library — the dictionary's equivalent of
+ * mergeColumns. Stored entries win on label and role (someone chose
+ * them); the live schema wins on term set (SharePoint is the record);
+ * columns no library carries any more are dropped; new ones append with
+ * a suggested role.
+ *
+ * Also answers which libraries carry each column, so the settings table
+ * can say "in 2 of 3 libraries" — the quiet way a missing column in one
+ * library becomes visible.
+ */
+export function syncSiteDictionary(
+  dict: SiteDictionary,
+  schemas: LibrarySchema[]
+): { dictionary: SiteDictionary; carriers: Map<string, string[]> } {
+  const carriers = new Map<string, string[]>();
+  const liveByName = new Map<string, SpField>();
+  for (const s of schemas) {
+    for (const f of s.fields) {
+      liveByName.set(f.internal, f);
+      const who = carriers.get(f.internal) ?? [];
+      who.push(s.name);
+      carriers.set(f.internal, who);
+    }
+  }
+  const out: SiteColumn[] = [];
+  const taken = new Set<string>();
+  for (const c of dict.columns) {
+    const f = liveByName.get(c.internal);
+    if (f === undefined) continue; // no library carries it any more
+    taken.add(c.internal);
+    out.push({ ...c, termSetId: f.termSetId !== "" ? f.termSetId : c.termSetId });
+  }
+  for (const [internal, f] of liveByName) {
+    if (taken.has(internal)) continue;
+    out.push({
+      internal,
+      label: "",
+      role: ROLE_BY_INTERNAL[internal] ?? "",
+      available: true,
+      termSetId: f.termSetId,
+    });
+  }
+  return { dictionary: { ...dict, columns: out }, carriers };
+}
+
 /** The spec's core register view, seeded from column roles when a
  *  library has no default ticks at all (first configure, or a type
  *  change before anyone chose columns): document type, owner, status —

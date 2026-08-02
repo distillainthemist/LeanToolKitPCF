@@ -15,19 +15,26 @@ import {
   AppDocsConfig,
   COLUMN_ROLES,
   ColumnConfig,
+  DictionaryConflict,
   DriftReport,
   LIBRARY_TYPES,
   LibraryConfig,
+  LibrarySchema,
   LibraryType,
+  SiteDictionary,
   SpField,
   SpLibrary,
+  buildSiteDictionary,
+  emptySiteDictionary,
   fieldsFromResponse,
   librariesFromLists,
   mergeColumns,
   orgDrift,
   orgTreePaths,
+  resolveLibraryConfig,
   seedDefaultColumns,
-  suggestRoles,
+  siteKey,
+  syncSiteDictionary,
 } from "./model";
 import {
   fetchFields,
@@ -112,6 +119,7 @@ export async function renderDocsSettings(body: HTMLElement, ctx: Ctx): Promise<v
     invalidateTermPaths(); // a changed group/set must not serve the old tree
     ctx.markClean();
     paintLibraries();
+    void paintDictionary();
   };
   ctx.registerSave(save);
 
@@ -134,6 +142,143 @@ export async function renderDocsSettings(body: HTMLElement, ctx: Ctx): Promise<v
   const siteRow = el("div", "app-docs-siterow");
   siteRow.append(siteInput, loadLibs);
   body.appendChild(field("Site URL", siteRow));
+
+  // ---- document columns: the site dictionary (C1) -----------------------
+  // These libraries share SharePoint SITE columns, so what a column is
+  // called and what it means belong to the site, not to each library
+  // that happens to carry it. Mapped once here; every library follows.
+  body.appendChild(section("Document columns"));
+  body.appendChild(
+    note(
+      "Every library on this site draws on the same site columns, so a column means " +
+        "the same thing everywhere. Set its display name and document-management role " +
+        "once here — each library then chooses only which of them its own view shows."
+    )
+  );
+  const dictBox = el("div", "");
+  body.appendChild(dictBox);
+
+  const dictKey = () => siteKey(app.siteUrl);
+  const dictionary = (): SiteDictionary =>
+    (app.sites[dictKey()] ??= emptySiteDictionary());
+  /** What the silent migration had to choose between, for the badges. */
+  let migrated: DictionaryConflict[] = [];
+
+  const paintDictionary = async () => {
+    clear(dictBox);
+    if (app.siteUrl === "" || exposed.length === 0) {
+      dictBox.appendChild(
+        note("Expose a library below first — its columns are what there is to map.")
+      );
+      return;
+    }
+    dictBox.appendChild(el("div", "app-loading-line", "Reading columns from every library…"));
+    const schemas: LibrarySchema[] = await Promise.all(
+      exposed.map(async (lib) => ({
+        listId: lib.listId,
+        name: lib.config.title !== "" ? lib.config.title : lib.name,
+        fields: await loadFields(lib),
+      }))
+    );
+    clear(dictBox);
+
+    const key = dictKey();
+    let dict = app.sites[key] ?? emptySiteDictionary();
+    if (dict.columns.length === 0) {
+      // first open since the upgrade: adopt what the libraries already
+      // say, majority winning, and remember every disagreement so the
+      // silent migration is still answerable for its choices
+      const built = buildSiteDictionary(exposed);
+      dict = built.dictionary;
+      migrated = built.conflicts;
+    }
+    const { dictionary: synced, carriers } = syncSiteDictionary(dict, schemas);
+    app.sites[key] = synced;
+
+    if (migrated.length > 0) {
+      dictBox.appendChild(
+        note(
+          `${migrated.length} column${migrated.length === 1 ? "" : "s"} were mapped ` +
+            "differently in different libraries. The most common answer was kept — " +
+            "the ones marked below are worth a look."
+        )
+      );
+    }
+
+    const grid = el("div", "app-docs-dict");
+    grid.append(
+      el("span", "app-docs-colhead", "SharePoint column"),
+      el("span", "app-docs-colhead", "Display as"),
+      el("span", "app-docs-colhead", "Available"),
+      el("span", "app-docs-colhead", "Role"),
+      el("span", "app-docs-colhead", "In libraries")
+    );
+    for (const col of synced.columns) {
+      const live = schemas
+        .flatMap((s) => s.fields)
+        .find((f) => f.internal === col.internal);
+      const clash = migrated.filter((m) => m.internal === col.internal);
+      if (clash.length > 0) {
+        grid.appendChild(
+          el(
+            "div",
+            "app-docs-dictwarn",
+            clash
+              .map(
+                (m) =>
+                  `${col.internal}: libraries disagreed on ${m.field} (` +
+                  m.values.map((v) => `${v.value === "" ? "—" : v.value} ×${v.count}`).join(", ") +
+                  `) — kept “${m.chosen === "" ? "—" : m.chosen}”`
+              )
+              .join(" · ")
+          )
+        );
+      }
+      grid.appendChild(
+        el("span", "app-docs-colname", `${live?.title ?? col.internal} · ${col.internal}`)
+      );
+      const label = el("input", "app-input") as HTMLInputElement;
+      label.placeholder = live?.title ?? col.internal;
+      label.value = col.label;
+      label.addEventListener("input", () => {
+        col.label = label.value.trim();
+        ctx.markDirty();
+      });
+      grid.appendChild(label);
+      const avail = el("input", "") as HTMLInputElement;
+      avail.type = "checkbox";
+      avail.checked = col.available;
+      avail.title = "Offered in the column picker in every library";
+      avail.addEventListener("change", () => {
+        col.available = avail.checked;
+        ctx.markDirty();
+      });
+      grid.appendChild(avail);
+      const role = el("select", "app-input") as HTMLSelectElement;
+      for (const r of COLUMN_ROLES) {
+        const o = el("option", "", r.label) as HTMLOptionElement;
+        o.value = r.key;
+        role.appendChild(o);
+      }
+      role.value = COLUMN_ROLES.some((r) => r.key === col.role) ? col.role : "";
+      role.addEventListener("change", () => {
+        col.role = role.value;
+        ctx.markDirty();
+      });
+      grid.appendChild(role);
+      // which libraries actually carry it — a column missing from one
+      // library is the quiet kind of drift, so it is stated plainly
+      const who = carriers.get(col.internal) ?? [];
+      const where = el(
+        "span",
+        `app-docs-colwhere${who.length < exposed.length ? " app-docs-colwhere-part" : ""}`,
+        who.length === exposed.length ? `All ${who.length}` : `${who.length} of ${exposed.length}`
+      );
+      where.title = who.length > 0 ? who.join(", ") : "No library carries this column";
+      grid.appendChild(where);
+    }
+    dictBox.appendChild(grid);
+  };
 
   // ---- libraries section -----------------------------------------------
   body.appendChild(section("Libraries"));
@@ -165,9 +310,11 @@ export async function renderDocsSettings(body: HTMLElement, ctx: Ctx): Promise<v
     if (live.length === 0) {
       host.appendChild(note("Columns could not be loaded (see the site URL, or try again in the hosted app)."));
     }
-    // merge live schema, fill unset roles from the spec's DMS* names,
-    // then seed the register defaults if nobody has ticked columns yet
-    lib.config.columns = suggestRoles(mergeColumns(lib.config.columns, live));
+    // merge the live schema, then let the site dictionary say what each
+    // column IS (label, role, availability); this library decides only
+    // which of them its own register shows
+    lib.config.columns = mergeColumns(lib.config.columns, live);
+    lib.config = resolveLibraryConfig(lib.config, dictionary());
     lib.config = seedDefaultColumns(lib.config, lib.libType);
     const liveByName = new Map(live.map((f) => [f.internal, f]));
 
@@ -220,37 +367,33 @@ export async function renderDocsSettings(body: HTMLElement, ctx: Ctx): Promise<v
       )
     );
 
-    // columns table
-    host.appendChild(el("div", "app-field-label", "Columns"));
-    const grid = el("div", "app-docs-cols");
+    // view columns — the ONE column decision that is this library's own
+    host.appendChild(el("div", "app-field-label", "View columns"));
+    host.appendChild(
+      note(
+        "Which columns this library's register opens with. Names and roles come from " +
+          "Document columns above, so they read the same in every library."
+      )
+    );
+    const grid = el("div", "app-docs-viewcols");
     grid.append(
-      el("span", "app-docs-colhead", "SharePoint column"),
-      el("span", "app-docs-colhead", "Display as"),
-      el("span", "app-docs-colhead", "Available"),
-      el("span", "app-docs-colhead", "Default"),
-      el("span", "app-docs-colhead", "Role")
+      el("span", "app-docs-colhead", "Column"),
+      el("span", "app-docs-colhead", "Role"),
+      el("span", "app-docs-colhead", "Default view")
     );
     for (const col of lib.config.columns) {
+      // a column the site does not offer is not a view choice here
+      if (!col.available) continue;
       const liveField = liveByName.get(col.internal);
+      const shown = col.label !== "" ? col.label : (liveField?.title ?? col.internal);
+      grid.appendChild(el("span", "app-docs-colname", `${shown} · ${col.internal}`));
       grid.appendChild(
-        el("span", "app-docs-colname", `${liveField?.title ?? col.internal} · ${col.internal}`)
+        el(
+          "span",
+          "app-docs-colrole",
+          COLUMN_ROLES.find((r) => r.key === col.role)?.label ?? "—"
+        )
       );
-      const label = el("input", "app-input") as HTMLInputElement;
-      label.placeholder = liveField?.title ?? col.internal;
-      label.value = col.label;
-      label.addEventListener("input", () => {
-        col.label = label.value.trim();
-        ctx.markDirty();
-      });
-      grid.appendChild(label);
-      const avail = el("input", "") as HTMLInputElement;
-      avail.type = "checkbox";
-      avail.checked = col.available;
-      avail.addEventListener("change", () => {
-        col.available = avail.checked;
-        ctx.markDirty();
-      });
-      grid.appendChild(avail);
       const def = el("input", "") as HTMLInputElement;
       def.type = "checkbox";
       def.checked = col.inDefault;
@@ -259,19 +402,6 @@ export async function renderDocsSettings(body: HTMLElement, ctx: Ctx): Promise<v
         ctx.markDirty();
       });
       grid.appendChild(def);
-      const role = el("select", "app-input") as HTMLSelectElement;
-      for (const r of COLUMN_ROLES) {
-        const o = el("option", "", r.label) as HTMLOptionElement;
-        o.value = r.key;
-        role.appendChild(o);
-      }
-      role.value = COLUMN_ROLES.some((r) => r.key === col.role) ? col.role : "";
-      role.addEventListener("change", () => {
-        col.role = role.value;
-        ctx.markDirty();
-        paintStatus();
-      });
-      grid.appendChild(role);
     }
     host.appendChild(grid);
 
@@ -491,6 +621,9 @@ export async function renderDocsSettings(body: HTMLElement, ctx: Ctx): Promise<v
     })();
   });
   paintLibraries();
+  // the dictionary is built from what the exposed libraries carry, so it
+  // paints after them and repaints whenever that set changes
+  void paintDictionary();
 
   // ---- term store section ----------------------------------------------
   body.appendChild(section("Term store"));

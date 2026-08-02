@@ -417,3 +417,49 @@ describe("site column dictionary", () => {
     expect(Object.keys(messy.sites)).toEqual(["https://x.sharepoint.com/sites/dev"]);
   });
 });
+
+describe("dictionary ↔ live schema sync (C1)", () => {
+  const spField = (internal: string, termSetId = "") => ({
+    internal,
+    title: internal.replace(/^DMS/, ""),
+    type: termSetId === "" ? "Text" : "TaxonomyFieldType",
+    choices: [] as string[],
+    isTaxonomy: termSetId !== "",
+    termSetId,
+  });
+
+  it("keeps chosen mappings, appends new columns, drops vanished ones", async () => {
+    const { syncSiteDictionary } = await import("../docs/model");
+    const stored = {
+      columns: [
+        { internal: "DMSStatus", label: "Status", role: "status", available: true, termSetId: "" },
+        { internal: "Retired", label: "Gone", role: "tags", available: true, termSetId: "" },
+      ],
+      palettes: [],
+    };
+    const { dictionary, carriers } = syncSiteDictionary(stored, [
+      { listId: "1", name: "Standards", fields: [spField("DMSStatus", "set-9"), spField("DMSOwner")] },
+      { listId: "2", name: "Records", fields: [spField("DMSStatus", "set-9")] },
+    ]);
+    const names = dictionary.columns.map((c) => c.internal);
+    // a hand-chosen mapping survives; a column no library carries goes
+    expect(names).toEqual(["DMSStatus", "DMSOwner"]);
+    expect(dictionary.columns[0].label).toBe("Status");
+    // SharePoint is the record for the term set
+    expect(dictionary.columns[0].termSetId).toBe("set-9");
+    // a new column arrives with its role already suggested from the spec
+    expect(dictionary.columns[1].role).toBe("owner");
+    // and the settings table can say who actually carries what
+    expect(carriers.get("DMSStatus")).toEqual(["Standards", "Records"]);
+    expect(carriers.get("DMSOwner")).toEqual(["Standards"]);
+  });
+
+  it("keeps a stored term set when the live read cannot see one", async () => {
+    const { syncSiteDictionary } = await import("../docs/model");
+    const { dictionary } = syncSiteDictionary(
+      { columns: [{ internal: "DMSTags", label: "", role: "tags", available: true, termSetId: "kept" }], palettes: [] },
+      [{ listId: "1", name: "L", fields: [spField("DMSTags")] }]
+    );
+    expect(dictionary.columns[0].termSetId).toBe("kept");
+  });
+});
