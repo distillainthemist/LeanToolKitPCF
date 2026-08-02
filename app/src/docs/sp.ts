@@ -79,10 +79,14 @@ export async function spRequest(
       },
     })) as { success?: boolean; data?: unknown; error?: unknown };
     if (r && r.success === false) {
+      // the status line clips long errors — the console keeps the whole
+      // thing for diagnosis (connector errors nest the SP odata.error)
+      console.error("[docs] SharePoint request failed", method, uri, r.error);
       return { ok: false, status: summarizeError(r.error), data: r.error ?? null };
     }
     return { ok: true, status: "", data: (r as { data?: unknown })?.data ?? null };
   } catch (e) {
+    console.error("[docs] SharePoint request threw", method, uri, e);
     return { ok: false, status: String(e), data: null };
   }
 }
