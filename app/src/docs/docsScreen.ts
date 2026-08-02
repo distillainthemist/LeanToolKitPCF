@@ -1444,6 +1444,28 @@ export function mountDocs(
         if (feeds.length === 0) {
           feeds = browseIds.map((id) => {
             const lib = byListId.get(id.toLowerCase());
+            // ONLY the fields the register renders: SharePoint throttles
+            // any query touching >12 lookup-type columns (taxonomy and
+            // person columns all count — Ben's SPQueryThrottledException,
+            // 2026-08-02), so "every available column" is not requestable
+            const fieldsFor = (): string[] => {
+              const out = new Set<string>();
+              if (lib && current && lib.listId === current.listId) {
+                const cols = lib.config.columns;
+                const shown =
+                  chosenColumns.length > 0
+                    ? chosenColumns
+                    : cols.filter((c) => c.inDefault).map((c) => c.internal);
+                for (const internal of shown) {
+                  if (internal !== "Modified") out.add(internal);
+                }
+                for (const c of cols) {
+                  if (c.role === "status" || c.role === "owner") out.add(c.internal);
+                }
+              }
+              for (const c of groupBy === "" ? [...orgCols] : [groupBy]) out.add(c);
+              return [...out];
+            };
             const viewXml = buildRenderViewXml({
               sortName: sort.key === "name",
               asc: sort.asc,
@@ -1453,9 +1475,7 @@ export function mountDocs(
                 cols: f.col === "" ? [...orgCols] : [f.col],
                 labels: [...f.labels],
               })),
-              fields: (lib?.config.columns ?? [])
-                .filter((c) => c.available)
-                .map((c) => c.internal),
+              fields: fieldsFor(),
               rowLimit: PAGE,
             });
             return { listId: id, viewXml, buf: [], next: "", done: false };
