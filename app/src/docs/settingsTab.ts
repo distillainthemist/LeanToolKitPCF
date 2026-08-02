@@ -34,6 +34,7 @@ import {
   librariesFromLists,
   mergeColumns,
   orgDrift,
+  dictionaryHealth,
   orgTreePaths,
   paletteKeyFor,
   rekeyPaletteToTerms,
@@ -169,6 +170,8 @@ export async function renderDocsSettings(body: HTMLElement, ctx: Ctx): Promise<v
     (app.sites[dictKey()] ??= emptySiteDictionary());
   /** What the silent migration had to choose between, for the badges. */
   let migrated: DictionaryConflict[] = [];
+  /** internal → the libraries carrying it, from the last dictionary pass. */
+  let lastCarriers = new Map<string, string[]>();
 
   const paintDictionary = async () => {
     clear(dictBox);
@@ -200,6 +203,7 @@ export async function renderDocsSettings(body: HTMLElement, ctx: Ctx): Promise<v
     }
     const { dictionary: synced, carriers } = syncSiteDictionary(dict, schemas);
     app.sites[key] = synced;
+    lastCarriers = carriers;
     // the palettes section needs the live schema to tell a Choice column
     // from a taxonomy one, and repaints whenever the dictionary does
     liveByInternal.clear();
@@ -289,6 +293,7 @@ export async function renderDocsSettings(body: HTMLElement, ctx: Ctx): Promise<v
     }
     dictBox.appendChild(grid);
     paintPalettes();
+    paintHealth();
   };
 
   // ---- term sets & colours (C2) ----------------------------------------
@@ -831,6 +836,55 @@ export async function renderDocsSettings(body: HTMLElement, ctx: Ctx): Promise<v
     companyLevel,
     document.createTextNode(" The term set starts at company level (skip its top level when comparing)")
   );
+  // ---- health (C4) -----------------------------------------------------
+  // Consolidating the mapping makes divergence findable; this is the
+  // thing that looks. The org drift report and the search-filter
+  // diagnostic move in here too — they were always health checks sitting
+  // in the term store section because that is where they were written.
+  body.appendChild(section("Health"));
+  body.appendChild(
+    note(
+      "What is inconsistent across this site's libraries, and what the app decided " +
+        "on its own. Nothing here changes anything — it points at where to look."
+    )
+  );
+  const healthBox = el("div", "");
+  body.appendChild(healthBox);
+
+  const paintHealth = () => {
+    clear(healthBox);
+    const dict = dictionary();
+    if (dict.columns.length === 0) {
+      healthBox.appendChild(note("Nothing to check yet — load the libraries above."));
+      return;
+    }
+    const findings = dictionaryHealth({
+      dict,
+      conflicts: migrated,
+      carriers: lastCarriers,
+      libraries: exposed.map((l) => ({
+        name: l.config.title !== "" ? l.config.title : l.name,
+        columns: l.config.columns,
+      })),
+      choicesBy: new Map([...liveByInternal].map(([k, f]) => [k, f.choices])),
+    });
+    if (findings.length === 0) {
+      healthBox.appendChild(note("✓ Nothing to report — the libraries agree."));
+      return;
+    }
+    const list = el("div", "app-dept-list");
+    for (const f of findings) {
+      const row = el("div", `app-docs-health app-docs-health-${f.level}`);
+      row.append(
+        el("span", "app-docs-healthmark", f.level === "warn" ? "⚠" : "•"),
+        el("span", "app-docs-healthtitle", f.title),
+        el("span", "app-field-hint", f.detail)
+      );
+      list.appendChild(row);
+    }
+    healthBox.appendChild(list);
+  };
+
   body.appendChild(companyWrap);
 
   const driftBtn = el("button", "app-btn", "Load drift report") as HTMLButtonElement;

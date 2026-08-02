@@ -523,3 +523,102 @@ describe("term set palettes (C2)", () => {
     expect(sets.some((s) => s.key === "set-4")).toBe(false);
   });
 });
+
+describe("configuration health (C4)", () => {
+  const sc = (internal: string, role = "", termSetId = "") => ({
+    internal,
+    label: "",
+    role,
+    available: true,
+    termSetId,
+  });
+  const base = {
+    conflicts: [],
+    carriers: new Map<string, string[]>(),
+    libraries: [] as { name: string; columns: ReturnType<typeof dictCol>[] }[],
+    choicesBy: new Map<string, string[]>(),
+  };
+
+  it("catches a role mapped twice and key roles not mapped at all", async () => {
+    const { dictionaryHealth } = await import("../docs/model");
+    const found = dictionaryHealth({
+      ...base,
+      dict: { columns: [sc("A", "status"), sc("B", "status"), sc("C", "owner")], palettes: [] },
+    });
+    const dup = found.find((f) => f.title.includes("mapped to 2 columns"));
+    expect(dup?.level).toBe("warn");
+    expect(dup?.detail).toContain("A, B");
+    // owner IS mapped, so only document type is reported missing
+    expect(found.some((f) => f.title.includes("No column is mapped as Document type"))).toBe(true);
+    expect(found.some((f) => f.title.includes("No column is mapped as Owner"))).toBe(false);
+  });
+
+  it("names the libraries a meaningful column is missing from", async () => {
+    const { dictionaryHealth } = await import("../docs/model");
+    const found = dictionaryHealth({
+      ...base,
+      dict: { columns: [sc("DMSOwner", "owner"), sc("Noise")], palettes: [] },
+      carriers: new Map([
+        ["DMSOwner", ["Standards"]],
+        ["Noise", ["Standards"]],
+      ]),
+      libraries: [
+        { name: "Standards", columns: [dictCol("DMSOwner", "", "", { inDefault: true })] },
+        { name: "Records", columns: [dictCol("Other", "", "", { inDefault: true })] },
+      ],
+    });
+    const gap = found.find((f) => f.title.startsWith("DMSOwner is missing"));
+    expect(gap?.detail).toContain("Records");
+    // a column with no role is not worth reporting on
+    expect(found.some((f) => f.title.startsWith("Noise"))).toBe(false);
+  });
+
+  it("reports colours for values a choice column dropped, and un-rekeyed palettes", async () => {
+    const { dictionaryHealth } = await import("../docs/model");
+    const found = dictionaryHealth({
+      ...base,
+      dict: {
+        columns: [sc("Stage", "status")],
+        palettes: [
+          {
+            setId: "choice:Stage",
+            setName: "",
+            entries: {
+              Live: { color: "good", glyph: "", label: "Live" },
+              Retired: { color: "neutral", glyph: "", label: "Retired" },
+            },
+          },
+          {
+            setId: "set-9",
+            setName: "",
+            entries: { Approved: { color: "good", glyph: "", label: "Approved" } },
+          },
+        ],
+      },
+      choicesBy: new Map([["Stage", ["Live"]]]),
+    });
+    expect(found.some((f) => f.level === "warn" && f.title.includes("no longer offers"))).toBe(true);
+    // a taxonomy palette still keyed by label is worth a nudge, not a warning
+    const label = found.find((f) => f.title.includes("still keyed by label"));
+    expect(label?.level).toBe("info");
+  });
+
+  it("says nothing when the libraries agree", async () => {
+    const { dictionaryHealth } = await import("../docs/model");
+    expect(
+      dictionaryHealth({
+        ...base,
+        dict: {
+          columns: [sc("A", "status"), sc("B", "owner"), sc("C", "docType")],
+          palettes: [],
+        },
+        carriers: new Map([
+          ["A", ["One"]],
+          ["B", ["One"]],
+          ["C", ["One"]],
+        ]),
+        libraries: [{ name: "One", columns: [dictCol("A", "", "", { inDefault: true })] }],
+      })
+    ).toEqual([]);
+  });
+});

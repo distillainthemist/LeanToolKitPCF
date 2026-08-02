@@ -811,6 +811,135 @@ export function seedDefaultColumns(cfg: LibraryConfig, libType: string): Library
   };
 }
 
+// ---- configuration health (C4) -----------------------------------------
+// The consolidation makes divergence FINDABLE, which only helps if
+// something looks. These checks answer the questions the old per-library
+// settings could not even ask: is a role mapped twice, or not at all; is
+// a column missing from one library; is a colour attached to a value its
+// column no longer offers; and what did the silent migration decide on
+// its own. Pure, so the settings tab only has to paint them.
+
+export interface HealthFinding {
+  /** "warn" = something is wrong or was decided for you; "info" = worth
+   *  knowing, not broken. */
+  level: "warn" | "info";
+  title: string;
+  detail: string;
+}
+
+export interface HealthInput {
+  dict: SiteDictionary;
+  /** What the migration resolved without asking. */
+  conflicts: DictionaryConflict[];
+  /** internal → the libraries that carry it. */
+  carriers: Map<string, string[]>;
+  libraries: { name: string; columns: ColumnConfig[] }[];
+  /** internal → a Choice column's current choices. */
+  choicesBy: Map<string, string[]>;
+}
+
+/** Roles the register and the document overlay actually lean on. */
+const KEY_ROLES = ["status", "owner", "docType"];
+
+export function dictionaryHealth(input: HealthInput): HealthFinding[] {
+  const { dict, conflicts, carriers, libraries, choicesBy } = input;
+  const out: HealthFinding[] = [];
+  const roleLabel = (key: string) =>
+    COLUMN_ROLES.find((r) => r.key === key)?.label ?? key;
+
+  // a role means one column; two is ambiguous and the register just
+  // takes the first, which is not a decision anyone made
+  const byRole = new Map<string, SiteColumn[]>();
+  for (const c of dict.columns) {
+    if (c.role === "") continue;
+    byRole.set(c.role, [...(byRole.get(c.role) ?? []), c]);
+  }
+  for (const [role, cols] of byRole) {
+    if (cols.length > 1) {
+      out.push({
+        level: "warn",
+        title: `${roleLabel(role)} is mapped to ${cols.length} columns`,
+        detail: `${cols.map((c) => c.internal).join(", ")} — the register uses the first, so map the others to something else.`,
+      });
+    }
+  }
+  for (const role of KEY_ROLES) {
+    if (!byRole.has(role) && dict.columns.length > 0) {
+      out.push({
+        level: "info",
+        title: `No column is mapped as ${roleLabel(role)}`,
+        detail: "Set it under Document columns; the register uses it for this site.",
+      });
+    }
+  }
+
+  // a column in some libraries but not others — the drift that used to
+  // be invisible because every library kept its own mapping
+  for (const c of dict.columns) {
+    const who = carriers.get(c.internal) ?? [];
+    if (who.length === 0 || who.length === libraries.length) continue;
+    // only worth saying for columns that carry meaning
+    if (c.role === "") continue;
+    const missing = libraries.filter((l) => !who.includes(l.name)).map((l) => l.name);
+    out.push({
+      level: "info",
+      title: `${c.internal} is missing from ${missing.length} librar${missing.length === 1 ? "y" : "ies"}`,
+      detail: `Not in ${missing.join(", ")} — rows from there will show nothing in that column.`,
+    });
+  }
+
+  for (const c of conflicts) {
+    out.push({
+      level: "warn",
+      title: `${c.internal}: libraries disagreed on ${c.field}`,
+      detail:
+        c.values.map((v) => `${v.value === "" ? "—" : v.value} ×${v.count}`).join(", ") +
+        ` — kept “${c.chosen === "" ? "—" : c.chosen}”.`,
+    });
+  }
+
+  // colours pointing at values that cannot appear
+  for (const p of dict.palettes) {
+    const isChoice = p.setId.startsWith("choice:");
+    if (isChoice) {
+      const internal = p.setId.slice("choice:".length);
+      const choices = new Set(choicesBy.get(internal) ?? []);
+      if (choices.size === 0) continue; // cannot judge without the schema
+      const stale = Object.keys(p.entries).filter((k) => !choices.has(k));
+      if (stale.length > 0) {
+        out.push({
+          level: "warn",
+          title: `${internal} has ${stale.length} colour${stale.length === 1 ? "" : "s"} for values it no longer offers`,
+          detail: `${stale.join(", ")} — open its palette to clear them.`,
+        });
+      }
+      continue;
+    }
+    const byLabel = Object.keys(p.entries).filter((k) => !/^[0-9a-f-]{36}$/i.test(k));
+    if (byLabel.length > 0) {
+      out.push({
+        level: "info",
+        title: `A palette is still keyed by label (${byLabel.length} value${byLabel.length === 1 ? "" : "s"})`,
+        detail:
+          `${byLabel.join(", ")} — open the palette under Term sets & colours once and ` +
+          "they move onto term ids, which survive a rename.",
+      });
+    }
+  }
+
+  for (const lib of libraries) {
+    if (lib.columns.length > 0 && !lib.columns.some((c) => c.inDefault)) {
+      out.push({
+        level: "info",
+        title: `${lib.name} opens with no columns`,
+        detail: "Tick its view columns under Libraries.",
+      });
+    }
+  }
+
+  return out;
+}
+
 // ---- org ↔ term set drift ----------------------------------------------
 
 export interface DriftReport {

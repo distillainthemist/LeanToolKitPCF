@@ -1645,6 +1645,20 @@ input[type="color"].app-color:disabled { opacity: 0.4; cursor: default; }
 .app-docs-palname { font-weight: 600; font-size: 13.5px; flex: 1; min-width: 0; }
 .app-docs-palbody { padding: 4px 12px 12px 32px; }
 .app-docs-palglyph { width: 56px; text-align: center; }
+/* health findings (C4): a mark, a claim, and where to look */
+.app-docs-health {
+  display: grid;
+  grid-template-columns: 18px minmax(200px, auto) 1fr;
+  gap: 2px 8px;
+  align-items: baseline;
+  padding: 7px 8px;
+  border-radius: 5px;
+}
+.app-docs-health-warn { background: #fef3e2; }
+.app-docs-health-info { background: #f6f5f3; }
+.app-docs-healthmark { font-size: 12px; }
+.app-docs-health-warn .app-docs-healthmark { color: #92400e; }
+.app-docs-healthtitle { font-size: 13px; font-weight: 600; }
 .app-docs-colwhere { font-size: 12px; color: #6d675c; }
 /* a column no library carries in full — quiet, not alarming */
 .app-docs-colwhere-part { color: #92400e; }
