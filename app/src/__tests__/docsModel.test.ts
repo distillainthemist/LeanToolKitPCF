@@ -63,6 +63,7 @@ describe("app docs config", () => {
       termGroupName: "DMS",
       orgSetId: "s1",
       orgSetName: "Organisation",
+      sites: {},
     });
     expect(parseAppDocsConfig(raw).siteUrl).toBe("https://x.sharepoint.com/sites/Dev");
     expect(parseAppDocsConfig('{"siteUrl":"https://x/sites/Dev/"}').siteUrl).toBe(
@@ -270,5 +271,149 @@ describe("org drift", () => {
     expect(report.matched).toBe(3);
     expect(report.onlyApp).toEqual([]);
     expect(report.onlyTerms).toEqual([]);
+  });
+});
+
+// ---- settings consolidation, C0 ----------------------------------------
+// The dictionary is what makes a column mean the same thing in every
+// library. The migration into it is SILENT (Ben, 2026-08-02), so these
+// tests carry the weight the Adopt step would otherwise have carried:
+// same inputs → same answer, and nothing lost without a record.
+
+const dictCol = (
+  internal: string,
+  role = "",
+  label = "",
+  extra: Partial<{ available: boolean; inDefault: boolean; termSetId: string }> = {}
+) => ({
+  internal,
+  label,
+  role,
+  available: extra.available ?? true,
+  inDefault: extra.inDefault ?? false,
+  termSetId: extra.termSetId ?? "",
+});
+
+const dictLib = (columns: ReturnType<typeof dictCol>[], statusColors: Record<string, string> = {}) => ({
+  config: { title: "", columns, statusColors, renditionPath: "" },
+});
+
+describe("site column dictionary", () => {
+  it("unions every library's columns, majority winning on role and label", async () => {
+    const { buildSiteDictionary } = await import("../docs/model");
+    const { dictionary, conflicts } = buildSiteDictionary([
+      dictLib([dictCol("DMSStatus", "status", "Status"), dictCol("DMSOwner", "owner", "Owner")]),
+      dictLib([dictCol("DMSStatus", "status", "Status"), dictCol("DMSOwner", "", "")]),
+      dictLib([dictCol("DMSStatus", "status", "Approval"), dictCol("DMSType", "docType", "Type")]),
+    ]);
+    const byName = new Map(dictionary.columns.map((c) => [c.internal, c]));
+    // two libraries said "Status", one said "Approval" — majority wins
+    expect(byName.get("DMSStatus")?.label).toBe("Status");
+    // a role only one library mapped still lands in the dictionary: the
+    // others simply had not been configured, which is the whole problem
+    expect(byName.get("DMSOwner")?.role).toBe("owner");
+    // a column only one library carries is still site-wide
+    expect(byName.get("DMSType")?.role).toBe("docType");
+    // the disagreement is RECORDED, not silently dropped
+    const c = conflicts.find((x) => x.internal === "DMSStatus" && x.field === "label");
+    expect(c?.chosen).toBe("Status");
+    expect(c?.values).toEqual([
+      { value: "Status", count: 2 },
+      { value: "Approval", count: 1 },
+    ]);
+  });
+
+  it("resolves ties the same way every time", async () => {
+    const { buildSiteDictionary } = await import("../docs/model");
+    const run = () =>
+      buildSiteDictionary([
+        dictLib([dictCol("X", "", "Zebra")]),
+        dictLib([dictCol("X", "", "Alpha")]),
+      ]).dictionary.columns[0].label;
+    // one vote each — alphabetically first, and stable across runs
+    expect(run()).toBe("Alpha");
+    expect(run()).toBe(run());
+  });
+
+  it("treats available as a floor, not a vote", async () => {
+    const { buildSiteDictionary } = await import("../docs/model");
+    const { dictionary } = buildSiteDictionary([
+      dictLib([dictCol("X", "", "", { available: false })]),
+      dictLib([dictCol("X", "", "", { available: false })]),
+      dictLib([dictCol("X", "", "", { available: true })]),
+    ]);
+    // hiding a column is a per-library VIEW decision; one library
+    // offering it means the site can offer it
+    expect(dictionary.columns[0].available).toBe(true);
+  });
+
+  it("folds per-library status colours into one palette per term set", async () => {
+    const { buildSiteDictionary, paletteEntryFor } = await import("../docs/model");
+    const { dictionary } = buildSiteDictionary([
+      dictLib([dictCol("DMSStatus", "status", "", { termSetId: "set-9" })], { Approved: "good" }),
+      dictLib([dictCol("DMSStatus", "status", "", { termSetId: "set-9" })], { Draft: "neutral" }),
+    ]);
+    expect(paletteEntryFor(dictionary, "set-9", "DMSStatus", "Approved")?.color).toBe("good");
+    expect(paletteEntryFor(dictionary, "set-9", "DMSStatus", "Draft")?.color).toBe("neutral");
+    // a Choice status column has no term set — keyed by column instead
+    const choice = buildSiteDictionary([
+      dictLib([dictCol("Stage", "status")], { Live: "good" }),
+    ]).dictionary;
+    expect(paletteEntryFor(choice, "", "Stage", "Live")?.color).toBe("good");
+    expect(paletteEntryFor(choice, "", "Stage", "Retired")).toBeNull();
+  });
+
+  it("projects the dictionary onto a library, leaving the view alone", async () => {
+    const { buildSiteDictionary, resolveLibraryConfig } = await import("../docs/model");
+    const { dictionary } = buildSiteDictionary([
+      dictLib([dictCol("DMSStatus", "status", "Status", { termSetId: "set-9" })]),
+    ]);
+    const target = {
+      title: "Records",
+      renditionPath: "",
+      statusColors: {},
+      // this library never mapped the column and hid it
+      columns: [dictCol("DMSStatus", "", "", { available: false, inDefault: true })],
+    };
+    const out = resolveLibraryConfig(target, dictionary);
+    expect(out.columns[0].role).toBe("status");
+    expect(out.columns[0].label).toBe("Status");
+    expect(out.columns[0].available).toBe(true);
+    expect(out.columns[0].termSetId).toBe("set-9");
+    // inDefault is the one per-library decision and survives untouched
+    expect(out.columns[0].inDefault).toBe(true);
+    expect(out.title).toBe("Records");
+  });
+
+  it("keeps a column the dictionary has not heard of, and no-ops when empty", async () => {
+    const { emptySiteDictionary, resolveLibraryConfig } = await import("../docs/model");
+    const cfg = { title: "", renditionPath: "", statusColors: {}, columns: [dictCol("Odd", "tags", "Odd one")] };
+    // an empty dictionary must change nothing (a fresh deployment)
+    expect(resolveLibraryConfig(cfg, emptySiteDictionary())).toEqual(cfg);
+    // and an unknown column is kept as-is rather than vanishing mid-upgrade
+    const dict = { columns: [{ internal: "Other", label: "", role: "", available: true, termSetId: "" }], palettes: [] };
+    expect(resolveLibraryConfig(cfg, dict).columns[0].role).toBe("tags");
+  });
+
+  it("round-trips the dictionary through the app config, keyed per site", async () => {
+    const { parseAppDocsConfig, serializeAppDocsConfig, emptyAppDocsConfig } = await import("../docs/model");
+    const cfg = {
+      ...emptyAppDocsConfig(),
+      siteUrl: "https://x.sharepoint.com/sites/Dev",
+      sites: {
+        "https://x.sharepoint.com/sites/dev": {
+          columns: [{ internal: "DMSStatus", label: "Status", role: "status", available: true, termSetId: "set-9" }],
+          palettes: [{ setId: "set-9", setName: "Approval", entries: { Approved: { color: "good", glyph: "✓" } } }],
+        },
+      },
+    };
+    const back = parseAppDocsConfig(serializeAppDocsConfig(cfg));
+    expect(back.sites["https://x.sharepoint.com/sites/dev"].columns[0].role).toBe("status");
+    expect(back.sites["https://x.sharepoint.com/sites/dev"].palettes[0].entries.Approved.glyph).toBe("✓");
+    // trailing slashes and casing must not fork a site's dictionary
+    const messy = parseAppDocsConfig(
+      JSON.stringify({ sites: { "https://X.sharepoint.com/sites/Dev/": { columns: [{ internal: "A" }] } } })
+    );
+    expect(Object.keys(messy.sites)).toEqual(["https://x.sharepoint.com/sites/dev"]);
   });
 });

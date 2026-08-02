@@ -280,19 +280,34 @@ the natural moment to migrate them onto RLDAS and the resolved config.
 
 ---
 
-## 8. Decisions needed before C0
+## 8. Decisions (settled by Ben, 2026-08-02)
 
-1. **Dictionary scope** — per tenant (one dictionary) or per SharePoint
-   site (F8)? Recommendation: **per site**, keyed by `siteUrl`, since a
-   second site would bring its own site columns; a single-site
-   deployment sees no difference.
-2. **Per-library overrides** — keep as an advanced escape hatch, or make
-   the dictionary absolute? Recommendation: **keep, badged**, so a
-   genuine exception does not force a fork.
-3. **Palette source** — reuse the app state palette (consistent with
-   board statuses) or allow freeform colour per term? Recommendation:
-   **state palette first**, freeform later if asked.
-4. **Adopt timing** — migrate silently on upgrade, or require the admin
-   to press Adopt after reviewing conflicts? Recommendation: **require
-   Adopt**, since majority-wins could otherwise change a live register
-   with no one watching.
+1. **Dictionary scope: per SharePoint site**, keyed by `siteUrl`. Stored
+   as a map on the `__app__` row so a second site simply adds a key
+   (`ben_configjson` is memo(200000) — a 30-column dictionary with
+   palettes is a few kB, no pressure).
+2. **The dictionary is absolute — no per-library overrides.** `overrides`
+   is dropped from `LibraryConfig` entirely; §3.3 above stands minus that
+   field. Consequences accepted, and the pressure valve is the view:
+   - A column meaning something different in one library must change for
+     all — the answer is to fix the site column, not fork the mapping.
+   - What stays per library is **which columns appear in its view**, so a
+     column irrelevant to one library is simply not ticked there.
+   - A library that does not carry a dictionary column just never renders
+     it; no error, no special case.
+3. **Palette source: the app state palette**, the same one board statuses
+   draw from, so a document status and a board status of the same name
+   look identical. Freeform colour only if asked for later.
+4. **Migration is silent — no Adopt step.** Because nothing gates it,
+   three properties are required of the implementation rather than
+   optional:
+   - **Read-time and pure.** `resolveLibrary()` runs on every read and
+     writes nothing; the dictionary is persisted only when an admin saves
+     in Settings. No background writes, and no write-permission surprises
+     for ordinary users.
+   - **Deterministic conflict resolution.** Per column, majority wins on
+     `role` and `label`; a tie resolves to the alphabetically-first
+     non-empty value so the same inputs always give the same answer.
+   - **Nothing lost silently.** Every conflict the migration resolved
+     stays visible in Health (C4), and the old per-library JSON is
+     retained for one release, so a rollback needs no data repair.

@@ -74,6 +74,65 @@ export interface LibraryConfig {
   renditionPath: string;
 }
 
+// ---- the site dictionary (settings consolidation, C0) ------------------
+// A library's columns are SITE columns: the internal name, what the
+// column MEANS (its role) and how it is labelled belong to the site, not
+// to each library that happens to carry it. Holding them per library
+// meant three hand-kept copies free to disagree, and left the register
+// unable to say what a column means when more than one library is in
+// view (docs/leanboard-docs-settings-consolidation-plan.md, F1/F2).
+//
+// The dictionary is ABSOLUTE (Ben, 2026-08-02): no per-library
+// overrides. What stays per library is which of these columns appear in
+// its view.
+
+/** One site column, as the whole site presents it. */
+export interface SiteColumn {
+  /** SharePoint internal name — the identity. */
+  internal: string;
+  /** Display override; "" = use SharePoint's own title. */
+  label: string;
+  /** Document-management role ("" = none). */
+  role: string;
+  /** Offered in the column picker at all. */
+  available: boolean;
+  /** Term set behind a taxonomy column ("" = not taxonomy / unknown). */
+  termSetId: string;
+}
+
+/**
+ * Colour + glyph per value of one term set (or of one Choice column's
+ * choices). Keyed by TERM GUID where there is one — labels rename and
+ * collide, and this site already has two distinct "Maintenance" terms —
+ * falling back to the exact choice text for Choice columns, which have
+ * no GUIDs.
+ *
+ * `glyph` is deliberately part of the palette: status has to read from
+ * glyph and word alone, never colour, so the site vocabulary and its
+ * glyph must be configurable together ("" = fall back to the built-in
+ * keyword matcher in shared/ui/format).
+ */
+export interface PaletteEntry {
+  color: string;
+  glyph: string;
+}
+
+export interface TermPalette {
+  setId: string;
+  setName: string;
+  entries: Record<string, PaletteEntry>;
+}
+
+/** Everything one SharePoint site's libraries share. */
+export interface SiteDictionary {
+  columns: SiteColumn[];
+  palettes: TermPalette[];
+}
+
+export function emptySiteDictionary(): SiteDictionary {
+  return { columns: [], palettes: [] };
+}
+
 /** App-level docs config (ben_configjson on the "__app__" row). */
 export interface AppDocsConfig {
   siteUrl: string;
@@ -81,6 +140,9 @@ export interface AppDocsConfig {
   termGroupName: string;
   orgSetId: string;
   orgSetName: string;
+  /** siteUrl → that site's shared column mapping and palettes. A map,
+   *  so exposing a second site later adds a key rather than a schema. */
+  sites: Record<string, SiteDictionary>;
 }
 
 export const APP_LIST_ID = "__app__";
@@ -92,7 +154,19 @@ export function emptyLibraryConfig(): LibraryConfig {
 }
 
 export function emptyAppDocsConfig(): AppDocsConfig {
-  return { siteUrl: "", termGroupId: "", termGroupName: "", orgSetId: "", orgSetName: "" };
+  return {
+    siteUrl: "",
+    termGroupId: "",
+    termGroupName: "",
+    orgSetId: "",
+    orgSetName: "",
+    sites: {},
+  };
+}
+
+/** A site key that survives trailing slashes and casing. */
+export function siteKey(siteUrl: string): string {
+  return siteUrl.trim().replace(/\/$/, "").toLowerCase();
 }
 
 /** Tolerant parse — "", garbage or partial JSON never throws. */
@@ -163,10 +237,80 @@ export function parseAppDocsConfig(raw: string | null | undefined): AppDocsConfi
     out.termGroupName = asStr(o.termGroupName);
     out.orgSetId = asStr(o.orgSetId);
     out.orgSetName = asStr(o.orgSetName);
+    if (o.sites && typeof o.sites === "object") {
+      for (const [key, val] of Object.entries(o.sites as Record<string, unknown>)) {
+        const k = siteKey(key);
+        if (k === "" || !val || typeof val !== "object") continue;
+        out.sites[k] = parseSiteDictionary(val as Record<string, unknown>);
+      }
+    }
   } catch {
     /* tolerant */
   }
   return out;
+}
+
+function parseSiteDictionary(o: Record<string, unknown>): SiteDictionary {
+  const dict = emptySiteDictionary();
+  if (Array.isArray(o.columns)) {
+    for (const c of o.columns) {
+      if (!c || typeof c !== "object") continue;
+      const col = c as Record<string, unknown>;
+      const internal = asStr(col.internal);
+      if (internal === "") continue;
+      dict.columns.push({
+        internal,
+        label: asStr(col.label),
+        role: asStr(col.role),
+        available: col.available !== false,
+        termSetId: asStr(col.termSetId),
+      });
+    }
+  }
+  if (Array.isArray(o.palettes)) {
+    for (const p of o.palettes) {
+      if (!p || typeof p !== "object") continue;
+      const pal = p as Record<string, unknown>;
+      const setId = asStr(pal.setId);
+      if (setId === "") continue;
+      const entries: Record<string, PaletteEntry> = {};
+      if (pal.entries && typeof pal.entries === "object") {
+        for (const [k, v] of Object.entries(pal.entries as Record<string, unknown>)) {
+          const key = k.trim();
+          if (key === "" || !v || typeof v !== "object") continue;
+          const e = v as Record<string, unknown>;
+          const color = asStr(e.color);
+          const glyph = asStr(e.glyph);
+          if (color === "" && glyph === "") continue;
+          entries[key] = { color, glyph };
+        }
+      }
+      dict.palettes.push({ setId, setName: asStr(pal.setName), entries });
+    }
+  }
+  return dict;
+}
+
+function serializeSiteDictionary(dict: SiteDictionary): Record<string, unknown> {
+  const o: Record<string, unknown> = {};
+  const cols = dict.columns.map((c) => {
+    const col: Record<string, unknown> = { internal: c.internal };
+    if (c.label !== "") col.label = c.label;
+    if (c.role !== "") col.role = c.role;
+    if (!c.available) col.available = false;
+    if (c.termSetId !== "") col.termSetId = c.termSetId;
+    return col;
+  });
+  if (cols.length > 0) o.columns = cols;
+  const pals = dict.palettes.filter((p) => Object.keys(p.entries).length > 0);
+  if (pals.length > 0) {
+    o.palettes = pals.map((p) => ({
+      setId: p.setId,
+      ...(p.setName !== "" ? { setName: p.setName } : {}),
+      entries: p.entries,
+    }));
+  }
+  return o;
 }
 
 export function serializeAppDocsConfig(cfg: AppDocsConfig): string {
@@ -176,7 +320,156 @@ export function serializeAppDocsConfig(cfg: AppDocsConfig): string {
   if (cfg.termGroupName !== "") o.termGroupName = cfg.termGroupName;
   if (cfg.orgSetId !== "") o.orgSetId = cfg.orgSetId;
   if (cfg.orgSetName !== "") o.orgSetName = cfg.orgSetName;
+  const sites: Record<string, unknown> = {};
+  for (const [key, dict] of Object.entries(cfg.sites)) {
+    const body = serializeSiteDictionary(dict);
+    if (Object.keys(body).length > 0) sites[key] = body;
+  }
+  if (Object.keys(sites).length > 0) o.sites = sites;
   return JSON.stringify(o);
+}
+
+// ---- migration: build the dictionary from what libraries already say ---
+
+/** A column where the libraries disagreed, kept for the Health section
+ *  (the migration is silent, so nothing may be lost quietly). */
+export interface DictionaryConflict {
+  internal: string;
+  field: "role" | "label";
+  /** Every distinct non-empty value seen, with how many libraries said it. */
+  values: { value: string; count: number }[];
+  /** What the migration chose. */
+  chosen: string;
+}
+
+/** Majority wins; a tie resolves to the alphabetically-first value so
+ *  the same libraries always migrate to the same answer. */
+function pickWinner(values: string[]): { chosen: string; tally: { value: string; count: number }[] } {
+  const counts = new Map<string, number>();
+  for (const v of values) {
+    if (v === "") continue;
+    counts.set(v, (counts.get(v) ?? 0) + 1);
+  }
+  const tally = [...counts.entries()]
+    .map(([value, count]) => ({ value, count }))
+    .sort((a, b) => (b.count - a.count) || a.value.localeCompare(b.value));
+  return { chosen: tally[0]?.value ?? "", tally };
+}
+
+/**
+ * Union every library's column config into one site dictionary, and
+ * fold each library's statusColors into a palette for the term set
+ * behind its status column.
+ *
+ * Colours arrive keyed by LABEL (that is how they were stored). A label
+ * is a valid key for a Choice column and a poor one for taxonomy, so
+ * they are carried across as-is here and re-keyed to term GUIDs in C2,
+ * where the term store is actually read. Nothing is invented.
+ */
+export function buildSiteDictionary(
+  libraries: { config: LibraryConfig }[]
+): { dictionary: SiteDictionary; conflicts: DictionaryConflict[] } {
+  const dict = emptySiteDictionary();
+  const conflicts: DictionaryConflict[] = [];
+  const seen = new Map<string, { roles: string[]; labels: string[]; termSetIds: string[]; available: boolean[] }>();
+  const order: string[] = [];
+  for (const lib of libraries) {
+    for (const c of lib.config.columns) {
+      let bucket = seen.get(c.internal);
+      if (bucket === undefined) {
+        bucket = { roles: [], labels: [], termSetIds: [], available: [] };
+        seen.set(c.internal, bucket);
+        order.push(c.internal);
+      }
+      bucket.roles.push(c.role);
+      bucket.labels.push(c.label);
+      bucket.termSetIds.push(c.termSetId);
+      bucket.available.push(c.available);
+    }
+  }
+  for (const internal of order) {
+    const b = seen.get(internal)!;
+    const role = pickWinner(b.roles);
+    const label = pickWinner(b.labels);
+    for (const [field, pick] of [["role", role], ["label", label]] as const) {
+      if (pick.tally.length > 1) {
+        conflicts.push({ internal, field, values: pick.tally, chosen: pick.chosen });
+      }
+    }
+    dict.columns.push({
+      internal,
+      label: label.chosen,
+      role: role.chosen,
+      // available is a floor, not a vote: a column any library offered
+      // stays offerable, since hiding it is a per-library view decision
+      available: b.available.some((a) => a),
+      termSetId: pickWinner(b.termSetIds).chosen,
+    });
+  }
+  // status colours → a palette per term set (labels as keys for now)
+  const bySet = new Map<string, Record<string, PaletteEntry>>();
+  for (const lib of libraries) {
+    const statusCol = lib.config.columns.find((c) => c.role === "status");
+    const setId = statusCol?.termSetId ?? "";
+    const key = setId !== "" ? setId : `choice:${statusCol?.internal ?? ""}`;
+    if (statusCol === undefined) continue;
+    const entries = bySet.get(key) ?? {};
+    for (const [value, color] of Object.entries(lib.config.statusColors)) {
+      // first library to colour a value wins; later ones do not overwrite
+      entries[value] ??= { color, glyph: "" };
+    }
+    if (Object.keys(entries).length > 0) bySet.set(key, entries);
+  }
+  for (const [setId, entries] of bySet) {
+    dict.palettes.push({ setId, setName: "", entries });
+  }
+  return { dictionary: dict, conflicts };
+}
+
+/**
+ * The dictionary projected back onto one library — today's
+ * LibraryConfig shape, so every consumer keeps its interface.
+ *
+ * The dictionary decides label, role, available and term set; the
+ * library decides only which columns its view shows. A dictionary column
+ * the library does not carry is dropped (SharePoint is the record); a
+ * column the library carries that the dictionary has not heard of is
+ * kept, unmapped, so nothing disappears from a view mid-upgrade.
+ */
+export function resolveLibraryConfig(
+  cfg: LibraryConfig,
+  dict: SiteDictionary
+): LibraryConfig {
+  if (dict.columns.length === 0) return cfg;
+  const byInternal = new Map(dict.columns.map((c) => [c.internal, c]));
+  const columns = cfg.columns.map((c) => {
+    const site = byInternal.get(c.internal);
+    if (site === undefined) return c;
+    return {
+      internal: c.internal,
+      label: site.label,
+      role: site.role,
+      available: site.available,
+      termSetId: site.termSetId !== "" ? site.termSetId : c.termSetId,
+      // the ONE per-library decision
+      inDefault: c.inDefault,
+    };
+  });
+  return { ...cfg, columns };
+}
+
+/** Colour + glyph for one value of a column, from the site palettes.
+ *  `setId` is the column's term set, or "" for a Choice column, in which
+ *  case the palette keyed `choice:<internal>` answers. */
+export function paletteEntryFor(
+  dict: SiteDictionary,
+  setId: string,
+  internal: string,
+  value: string
+): PaletteEntry | null {
+  const key = setId !== "" ? setId : `choice:${internal}`;
+  const pal = dict.palettes.find((p) => p.setId === key);
+  return pal?.entries[value.trim()] ?? null;
 }
 
 // ---- SharePoint response mapping ---------------------------------------
