@@ -68,6 +68,37 @@ export function buildBrowseUri(listId: string, top = 50, opts: BrowseOpts = {}):
   );
 }
 
+/** Row comparator for the multi-library browse union: server-side sort
+ *  order per feed, replicated client-side for the merge. Modified holds
+ *  ISO-ish strings, so string compare orders correctly. */
+export function browseComparator(
+  key: "name" | "modified",
+  asc: boolean
+): (a: DocRow, b: DocRow) => number {
+  return (a, b) => {
+    const c =
+      key === "name"
+        ? a.name.localeCompare(b.name, undefined, { sensitivity: "base" })
+        : (a.modified || "").localeCompare(b.modified || "");
+    return asc ? c : -c;
+  };
+}
+
+/** K-way merge pick: index of the buffer whose head sorts first, -1
+ *  when every buffer is empty. Callers must refill any empty buffer
+ *  that still has pages BEFORE picking, or its rows are skipped. */
+export function pickBrowseHead(
+  buffers: DocRow[][],
+  cmp: (a: DocRow, b: DocRow) => number
+): number {
+  let best = -1;
+  for (let i = 0; i < buffers.length; i++) {
+    if (buffers[i].length === 0) continue;
+    if (best === -1 || cmp(buffers[i][0], buffers[best][0]) < 0) best = i;
+  }
+  return best;
+}
+
 /** Loaded-row term counts (Vault V1, honest counts): how many of the
  *  loaded rows carry each term label in the given columns. Taxonomy
  *  display text is ";"-separated for multi-value; matching is

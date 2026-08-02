@@ -22,9 +22,11 @@ import { DocList, ListColumn, mountDocList } from "./listView";
 import { mountDocTiles } from "./docsTiles";
 import {
   DocRow,
+  browseComparator,
   formatWhen,
   isNonCurrentStatus,
   pdfViewUrlFor,
+  pickBrowseHead,
   splitNameForEllipsis,
   tallyTermCounts,
   taxonomySearchProperty,
@@ -1292,6 +1294,14 @@ export function mountDocs(
     let nextToken = ""; // browse: next uri; search: startRow as string
     let inFlight = false;
     let done = false;
+    /** Per-library feed state for the multi-library browse union. */
+    interface BrowseFeed {
+      listId: string;
+      buf: DocRow[];
+      next: string;
+      done: boolean;
+    }
+    let feeds: BrowseFeed[] = [];
 
     const applyNonCurrent = (rows: DocRow[]): DocRow[] => {
       if (showNonCurrent || !statusCol) return rows;
@@ -1346,14 +1356,22 @@ export function mountDocs(
       if (reset) {
         nextToken = "";
         done = false;
+        feeds = [];
         list.setRows([]);
       }
       list.setLoading(true);
-      // any taxonomy filter forces search mode: list REST cannot filter
-      // by taxonomy, the index can
-      const useSearch =
-        query.trim() !== "" || current === null || scopeAll || filters.length > 0;
+      // search mode ONLY for what list REST cannot do: text queries and
+      // taxonomy filters ride the index; everything else — including a
+      // multi-library scope — browses list REST directly (Ben,
+      // 2026-08-02: the union merge means no waiting on the crawl)
+      const useSearch = query.trim() !== "" || filters.length > 0;
       lastUsedSearch = useSearch;
+      const browseIds = scopeAll ? allListIds : selectedIds;
+      const browseOpts = () => ({
+        sortName: sort.key === "name",
+        asc: sort.asc,
+        modifiedAfterIso: modifiedIso(),
+      });
       if (useSearch) {
         const startRow = nextToken === "" ? 0 : Number(nextToken);
         // never unscoped: the library in view, the ticked set, or every
@@ -1367,27 +1385,52 @@ export function mountDocs(
           byModified: sortTouched && sort.key === "modified" ? true : undefined,
           sortAsc: sortTouched ? sort.asc : undefined,
           modifiedAfterIso: modifiedIso(),
-          termFilters:
-            filters.length > 0
-              ? filters.map((f) => ({ properties: propsFor(f.col), termIds: f.ids }))
-              : undefined,
+          termFilters: filters.map((f) => ({ properties: propsFor(f.col), termIds: f.ids })),
         });
         if (dead || gen !== generation) return;
         list.append(applyNonCurrent(page.rows));
         nextToken = String(startRow + page.rows.length);
         done = page.rows.length < PAGE;
         paintStatus(page.total, page.error);
-      } else {
-        const page = await browsePage(app.siteUrl, current!.listId, nextToken, {
-          sortName: sort.key === "name",
-          asc: sort.asc,
-          modifiedAfterIso: modifiedIso(),
-        });
+      } else if (browseIds.length === 1) {
+        const page = await browsePage(app.siteUrl, browseIds[0], nextToken, browseOpts());
         if (dead || gen !== generation) return;
         list.append(applyNonCurrent(page.rows));
         nextToken = page.next;
         done = page.next === "";
         paintStatus(null, page.error);
+      } else {
+        // multi-library UNION over list REST: one server-sorted feed per
+        // library, k-way merged client-side — a feed's buffer refills
+        // whenever it drains mid-page, so the merge never skips rows
+        if (feeds.length === 0) {
+          feeds = browseIds.map((id) => ({ listId: id, buf: [], next: "", done: false }));
+        }
+        let feedError = "";
+        const fill = async (f: BrowseFeed) => {
+          if (f.done || f.buf.length > 0) return;
+          const page = await browsePage(app.siteUrl, f.listId, f.next, browseOpts());
+          f.buf.push(...page.rows);
+          f.next = page.next;
+          if (page.error !== "") {
+            feedError = page.error;
+            f.done = true;
+          } else if (page.next === "") {
+            f.done = true;
+          }
+        };
+        const cmp = browseComparator(sort.key === "name" ? "name" : "modified", sort.asc);
+        const rowsOut: DocRow[] = [];
+        while (rowsOut.length < PAGE) {
+          await Promise.all(feeds.map(fill));
+          if (dead || gen !== generation) return;
+          const i = pickBrowseHead(feeds.map((f) => f.buf), cmp);
+          if (i < 0) break;
+          rowsOut.push(feeds[i].buf.shift()!);
+        }
+        list.append(applyNonCurrent(rowsOut));
+        done = feeds.every((f) => f.done && f.buf.length === 0);
+        paintStatus(null, feedError);
       }
       list.setLoading(false);
       inFlight = false;

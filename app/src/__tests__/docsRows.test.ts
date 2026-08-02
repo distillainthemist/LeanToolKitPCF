@@ -419,6 +419,45 @@ describe("Vault V5 hardening units", () => {
   });
 });
 
+describe("multi-library browse union (REST, no index)", () => {
+  const row = (name: string, modified: string) => ({
+    id: 1, uniqueId: name, name, ext: "pdf", serverUrl: "/x", listId: "l",
+    modified, values: {},
+  });
+  it("merges per-library feeds newest-first and drains them fully", async () => {
+    const { browseComparator, pickBrowseHead } = await import("../docs/rows");
+    const cmp = browseComparator("modified", false);
+    const a = [row("a1", "2026-08-01T10:00:00Z"), row("a2", "2026-07-01T10:00:00Z")];
+    const b = [row("b1", "2026-08-02T10:00:00Z"), row("b2", "2026-07-15T10:00:00Z")];
+    const out: string[] = [];
+    const buffers = [a, b];
+    for (;;) {
+      const i = pickBrowseHead(buffers, cmp);
+      if (i < 0) break;
+      out.push(buffers[i].shift()!.name);
+    }
+    expect(out).toEqual(["b1", "a1", "b2", "a2"]);
+  });
+  it("sorts by name ascending case-insensitively when asked", async () => {
+    const { browseComparator, pickBrowseHead } = await import("../docs/rows");
+    const cmp = browseComparator("name", true);
+    const buffers = [[row("bravo", "")], [row("Alpha", ""), row("charlie", "")]];
+    const out: string[] = [];
+    for (;;) {
+      const i = pickBrowseHead(buffers, cmp);
+      if (i < 0) break;
+      out.push(buffers[i].shift()!.name);
+    }
+    expect(out).toEqual(["Alpha", "bravo", "charlie"]);
+  });
+  it("returns -1 only when every buffer is empty", async () => {
+    const { browseComparator, pickBrowseHead } = await import("../docs/rows");
+    const cmp = browseComparator("modified", false);
+    expect(pickBrowseHead([[], []], cmp)).toBe(-1);
+    expect(pickBrowseHead([[], [row("x", "2026-01-01")]], cmp)).toBe(1);
+  });
+});
+
 describe("Vault V3 server-side presentation", () => {
   it("browse URI carries sort and the modified window", async () => {
     const { buildBrowseUri } = await import("../docs/rows");
