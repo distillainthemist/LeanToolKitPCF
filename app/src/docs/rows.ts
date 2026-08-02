@@ -78,22 +78,141 @@ export function buildBrowseUri(listId: string, top = 50, opts: BrowseOpts = {}):
   );
 }
 
-/** Does a browse row carry ANY of the given term labels in the given
- *  columns? (REST-path taxonomy filtering: browse rows hold display
- *  text, ";"-separated for multi-value; labels arrive lowercased.
- *  Label matching can cross-match same-named terms in different
- *  branches — the GUID-exact filter lives on the search-index path.) */
-export function rowMatchesTerms(
-  row: DocRow,
-  cols: string[],
-  labels: Set<string>
-): boolean {
-  for (const col of cols) {
-    for (const part of (row.values[col] ?? "").split(";")) {
-      if (labels.has(part.trim().toLowerCase())) return true;
-    }
+// ---- RenderListDataAsStream (the register's browse feed) ---------------
+// The endpoint modern list views use: display-ready values for every
+// field type (FieldValuesAsText renders taxonomy/person fields
+// erratically depending on projection shape — measured on the dev DMS
+// libraries 2026-08-02), and CAML pushes name search, the Modified
+// window and taxonomy label filters SERVER-side per library.
+
+const xmlEsc = (s: string): string =>
+  s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;").replace(/'/g, "&apos;");
+
+/** CAML And/Or take exactly two children — fold a list into a tree. */
+function camlJoin(op: "And" | "Or", parts: string[]): string {
+  if (parts.length === 0) return "";
+  return parts.reduce((acc, p) => (acc === "" ? p : `<${op}>${acc}${p}</${op}>`), "");
+}
+
+export interface RenderQueryOpts {
+  sortName?: boolean;
+  asc?: boolean;
+  modifiedAfterIso?: string;
+  /** Words that must EACH appear in the file name or Title. */
+  nameWords?: string[];
+  /** Per filter: OR of label Eqs across the given columns (a term and
+   *  its subtree, matched by display label); filters AND together. */
+  termFilters?: { cols: string[]; labels: string[] }[];
+  /** DMS internals to return beyond the core file fields. */
+  fields?: string[];
+  rowLimit?: number;
+}
+
+/** The ViewXml for one library's server-filtered, server-sorted page. */
+export function buildRenderViewXml(opts: RenderQueryOpts = {}): string {
+  const clauses: string[] = [];
+  if (opts.modifiedAfterIso) {
+    clauses.push(
+      `<Geq><FieldRef Name="Modified"/><Value Type="DateTime" IncludeTimeValue="TRUE" StorageTZ="TRUE">${xmlEsc(opts.modifiedAfterIso)}</Value></Geq>`
+    );
   }
-  return false;
+  for (const raw of opts.nameWords ?? []) {
+    const w = raw.trim();
+    if (w === "") continue;
+    clauses.push(
+      camlJoin("Or", [
+        `<Contains><FieldRef Name="FileLeafRef"/><Value Type="File">${xmlEsc(w)}</Value></Contains>`,
+        `<Contains><FieldRef Name="Title"/><Value Type="Text">${xmlEsc(w)}</Value></Contains>`,
+      ])
+    );
+  }
+  for (const tf of opts.termFilters ?? []) {
+    const eqs = tf.cols.flatMap((col) =>
+      tf.labels.map(
+        (l) => `<Eq><FieldRef Name="${xmlEsc(col)}"/><Value Type="Text">${xmlEsc(l)}</Value></Eq>`
+      )
+    );
+    if (eqs.length > 0) clauses.push(camlJoin("Or", eqs));
+  }
+  const where = clauses.length > 0 ? `<Where>${camlJoin("And", clauses)}</Where>` : "";
+  const order = `<OrderBy><FieldRef Name="${opts.sortName ? "FileLeafRef" : "Modified"}" Ascending="${opts.asc ? "TRUE" : "FALSE"}"/></OrderBy>`;
+  const core = ["FileLeafRef", "FileRef", "Modified", "UniqueId", "ID", "FSObjType"];
+  const fields = [...core, ...(opts.fields ?? []).filter((f) => !core.includes(f))]
+    .map((f) => `<FieldRef Name="${xmlEsc(f)}"/>`)
+    .join("");
+  return (
+    `<View><Query>${where}${order}</Query>` +
+    `<ViewFields>${fields}</ViewFields>` +
+    `<RowLimit Paged="TRUE">${opts.rowLimit ?? 50}</RowLimit></View>`
+  );
+}
+
+/** One RenderListDataAsStream value as display text: taxonomy comes as
+ *  [{Label}], people as [{title}], the rest as strings. */
+function renderText(v: unknown): string {
+  if (v === null || v === undefined) return "";
+  if (Array.isArray(v)) {
+    return v
+      .map((e) => {
+        if (e && typeof e === "object") {
+          const o = e as Record<string, unknown>;
+          return String(o.Label ?? o.lookupValue ?? o.title ?? "");
+        }
+        return String(e);
+      })
+      .filter((s) => s !== "")
+      .join("; ");
+  }
+  if (typeof v === "object") {
+    const o = v as Record<string, unknown>;
+    return String(o.Label ?? o.lookupValue ?? o.title ?? "");
+  }
+  return String(v);
+}
+
+export interface RenderPage {
+  rows: DocRow[];
+  /** Opaque paging query string ("?Paged=TRUE&..."), "" when done. */
+  next: string;
+}
+
+/** Parse a RenderListDataAsStream response into DocRows. */
+export function parseRenderPage(raw: unknown, listId: string): RenderPage {
+  const data = (raw ?? {}) as Record<string, unknown>;
+  const rowsIn = Array.isArray(data.Row) ? (data.Row as Record<string, unknown>[]) : [];
+  const rows: DocRow[] = [];
+  for (const r of rowsIn) {
+    const name = typeof r.FileLeafRef === "string" ? r.FileLeafRef : "";
+    if (name === "" || String(r.FSObjType ?? "0") !== "0") continue;
+    const values: Record<string, string> = {};
+    for (const [k, v] of Object.entries(r)) {
+      if (k.startsWith("_") || k.endsWith(".") || k.includes(".")) continue;
+      const text = renderText(v);
+      if (text !== "") values[k] = text;
+    }
+    // "Modified." carries ISO when DatesInUtc is set; display otherwise
+    const isoDot = typeof r["Modified."] === "string" ? (r["Modified."] as string) : "";
+    let modified = "";
+    if (isoDot !== "" && !Number.isNaN(Date.parse(isoDot))) {
+      modified = isoDot;
+    } else {
+      const t = Date.parse(String(r.Modified ?? ""));
+      if (!Number.isNaN(t)) modified = new Date(t).toISOString();
+    }
+    rows.push({
+      id: Number(r.ID ?? 0) || 0,
+      uniqueId: String(r.UniqueId ?? "").replace(/^\{|\}$/g, "").toLowerCase(),
+      name,
+      ext: extOf(name),
+      serverUrl: typeof r.FileRef === "string" ? r.FileRef : "",
+      listId: listId.toLowerCase(),
+      modified,
+      values,
+    });
+  }
+  const next = typeof data.NextHref === "string" ? data.NextHref : "";
+  return { rows, next };
 }
 
 /** Row comparator for the multi-library browse union: server-side sort

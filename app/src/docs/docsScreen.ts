@@ -17,17 +17,17 @@ import { detectHost } from "../runtime";
 import { paletteMap, resolvePaletteColor } from "../../../shared/palette";
 import { textOn } from "../../../shared/tokens";
 import { appPalettes } from "../store/config";
-import { browsePage, driveIdFor, indexWarm, listItemCount, searchPage } from "./data";
+import { browsePage, driveIdFor, indexWarm, listItemCount, renderListPage, searchPage } from "./data";
 import { DocList, ListColumn, mountDocList } from "./listView";
 import { mountDocTiles } from "./docsTiles";
 import {
   DocRow,
   browseComparator,
+  buildRenderViewXml,
   formatWhen,
   isNonCurrentStatus,
   pdfViewUrlFor,
   pickBrowseHead,
-  rowMatchesTerms,
   splitNameForEllipsis,
   tallyTermCounts,
   taxonomySearchProperty,
@@ -1305,9 +1305,10 @@ export function mountDocs(
     let nextToken = ""; // browse: next uri; search: startRow as string
     let inFlight = false;
     let done = false;
-    /** Per-library feed state for the multi-library browse union. */
+    /** Per-library feed state for the browse union (RenderListDataAsStream). */
     interface BrowseFeed {
       listId: string;
+      viewXml: string;
       buf: DocRow[];
       next: string;
       done: boolean;
@@ -1399,12 +1400,6 @@ export function mountDocs(
       }
       lastUsedSearch = useSearch;
       const words = query.trim() === "" ? undefined : query.trim().split(/\s+/);
-      const browseOpts = () => ({
-        sortName: sort.key === "name",
-        asc: sort.asc,
-        modifiedAfterIso: modifiedIso(),
-        nameWords: words,
-      });
       // the up-front total for plain browsing (library ItemCounts)
       if (reset) {
         knownTotal = null;
@@ -1441,20 +1436,35 @@ export function mountDocs(
         done = page.rows.length < PAGE;
         paintStatus(page.total, page.error);
       } else {
-        // browse over list REST (single library or union): one
-        // server-sorted feed per library, k-way merged client-side — a
-        // feed's buffer refills whenever it drains mid-page, so the
-        // merge never skips rows. Taxonomy filters apply here as the
-        // subtree-label predicate; the loop keeps pulling pages until
-        // the page fills or the corpus is exhausted, so the filter
-        // covers the whole register, never just the loaded rows.
+        // browse via RenderListDataAsStream (single library or union):
+        // display-ready values for every field type, with name search,
+        // the Modified window and taxonomy label filters all CAML'd
+        // SERVER-side per library; feeds k-way merge client-side and a
+        // drained buffer refills mid-page so the merge never skips rows
         if (feeds.length === 0) {
-          feeds = browseIds.map((id) => ({ listId: id, buf: [], next: "", done: false }));
+          feeds = browseIds.map((id) => {
+            const lib = byListId.get(id.toLowerCase());
+            const viewXml = buildRenderViewXml({
+              sortName: sort.key === "name",
+              asc: sort.asc,
+              modifiedAfterIso: modifiedIso(),
+              nameWords: words,
+              termFilters: filters.map((f) => ({
+                cols: f.col === "" ? [...orgCols] : [f.col],
+                labels: [...f.labels],
+              })),
+              fields: (lib?.config.columns ?? [])
+                .filter((c) => c.available)
+                .map((c) => c.internal),
+              rowLimit: PAGE,
+            });
+            return { listId: id, viewXml, buf: [], next: "", done: false };
+          });
         }
         let feedError = "";
         const fill = async (f: BrowseFeed) => {
           if (f.done || f.buf.length > 0) return;
-          const page = await browsePage(app.siteUrl, f.listId, f.next, browseOpts());
+          const page = await renderListPage(app.siteUrl, f.listId, f.viewXml, f.next);
           f.buf.push(...page.rows);
           f.next = page.next;
           if (page.error !== "") {
@@ -1464,10 +1474,6 @@ export function mountDocs(
             f.done = true;
           }
         };
-        const matchesFilters = (row: DocRow): boolean =>
-          filters.every((f) =>
-            rowMatchesTerms(row, f.col === "" ? [...orgCols] : [f.col], f.labels)
-          );
         const cmp = browseComparator(sort.key === "name" ? "name" : "modified", sort.asc);
         const rowsOut: DocRow[] = [];
         while (rowsOut.length < PAGE) {
@@ -1475,8 +1481,7 @@ export function mountDocs(
           if (dead || gen !== generation) return;
           const i = pickBrowseHead(feeds.map((f) => f.buf), cmp);
           if (i < 0) break;
-          const row = feeds[i].buf.shift()!;
-          if (matchesFilters(row)) rowsOut.push(row);
+          rowsOut.push(feeds[i].buf.shift()!);
         }
         list.append(applyNonCurrent(rowsOut));
         done = feeds.every((f) => f.done && f.buf.length === 0);

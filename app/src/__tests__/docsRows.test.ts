@@ -419,19 +419,61 @@ describe("Vault V5 hardening units", () => {
   });
 });
 
-describe("REST-path taxonomy filter (subtree-label match)", () => {
-  const row = (values: Record<string, string>) => ({
-    id: 1, uniqueId: "u", name: "n", ext: "pdf", serverUrl: "/x", listId: "l",
-    modified: "", values,
+describe("RenderListDataAsStream (register browse feed)", () => {
+  it("builds ViewXml: order, contains words, term ORs, AND across", async () => {
+    const { buildRenderViewXml } = await import("../docs/rows");
+    const xml = buildRenderViewXml({
+      sortName: false,
+      asc: false,
+      nameWords: ["crane"],
+      termFilters: [
+        { cols: ["DMSOrganisation", "DMSOrgB"], labels: ["Bell Bay", "Casting"] },
+        { cols: ["DMSDocumentType"], labels: ["Procedure"] },
+      ],
+      fields: ["DMSDocumentType"],
+      rowLimit: 50,
+    });
+    expect(xml).toContain('<OrderBy><FieldRef Name="Modified" Ascending="FALSE"/></OrderBy>');
+    expect(xml).toContain('<Contains><FieldRef Name="FileLeafRef"/><Value Type="File">crane</Value></Contains>');
+    // OR spans every (column x label) pair of one filter
+    expect(xml).toContain('<Eq><FieldRef Name="DMSOrgB"/><Value Type="Text">Casting</Value></Eq>');
+    expect(xml).toContain('<Eq><FieldRef Name="DMSDocumentType"/><Value Type="Text">Procedure</Value></Eq>');
+    // filters AND together; escaping holds
+    expect(xml).toContain("<And>");
+    expect(buildRenderViewXml({ nameWords: ["a<b"] })).toContain("a&lt;b");
+    expect(buildRenderViewXml({})).not.toContain("<Where>");
   });
-  it("matches any subtree label in any of the filter's columns", async () => {
-    const { rowMatchesTerms } = await import("../docs/rows");
-    const labels = new Set(["bell bay", "casting", "maintenance"]);
-    expect(rowMatchesTerms(row({ Org: "Casting" }), ["Org"], labels)).toBe(true);
-    expect(rowMatchesTerms(row({ Org: "Potrooms; Casting" }), ["Org"], labels)).toBe(true);
-    expect(rowMatchesTerms(row({ A: "", B: "CASTING" }), ["A", "B"], labels)).toBe(true);
-    expect(rowMatchesTerms(row({ Org: "Potrooms" }), ["Org"], labels)).toBe(false);
-    expect(rowMatchesTerms(row({}), ["Org"], labels)).toBe(false);
+  it("parses rows: taxonomy labels, person titles, ISO Modified, skips folders", async () => {
+    const { parseRenderPage } = await import("../docs/rows");
+    const page = parseRenderPage(
+      {
+        Row: [
+          {
+            ID: "2",
+            UniqueId: "{ABC-9}",
+            FileLeafRef: "Anode Change.pdf",
+            FileRef: "/sites/Dev/L/Anode Change.pdf",
+            FSObjType: "0",
+            Modified: "8/2/2026 1:14 AM",
+            "Modified.": "2026-08-02T08:14:06Z",
+            DMSDocumentType: [{ Label: "Procedure", TermID: "t1" }],
+            DMSOwner: [{ id: "7", title: "Ben Pechey" }],
+            DMSDocumentID: "STD-1000",
+          },
+          { FileLeafRef: "Folder", FSObjType: "1" },
+        ],
+        NextHref: "?Paged=TRUE&p_ID=2",
+      },
+      "L1"
+    );
+    expect(page.rows).toHaveLength(1);
+    const r = page.rows[0];
+    expect(r.uniqueId).toBe("abc-9");
+    expect(r.modified).toBe("2026-08-02T08:14:06Z");
+    expect(r.values.DMSDocumentType).toBe("Procedure");
+    expect(r.values.DMSOwner).toBe("Ben Pechey");
+    expect(r.values.DMSDocumentID).toBe("STD-1000");
+    expect(page.next).toBe("?Paged=TRUE&p_ID=2");
   });
 });
 

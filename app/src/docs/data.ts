@@ -13,6 +13,7 @@ import {
   buildBrowseUri,
   buildSearchBody,
   parseItemsPage,
+  parseRenderPage,
   presignedFromItem,
   rowsFromSearch,
 } from "./rows";
@@ -108,6 +109,34 @@ export async function browsePage(
   const r = await spRequest(site, "GET", uri);
   if (!r.ok) return { rows: [], next: "", error: r.status };
   return { ...parseItemsPage(r.data, site, listId), error: "" };
+}
+
+/** One RenderListDataAsStream page — the register's browse feed (Vault,
+ *  2026-08-02): display-ready values for every field type, CAML-driven
+ *  server-side search/filter/sort. `next` is the response's opaque
+ *  NextHref query string, appended to the endpoint on the next call. */
+export async function renderListPage(
+  site: string,
+  listId: string,
+  viewXml: string,
+  next = ""
+): Promise<import("./rows").RenderPage & { error: string }> {
+  const r = await spRequest(
+    site,
+    "POST",
+    `_api/web/lists(guid'${listId}')/RenderListDataAsStream${next}`,
+    {
+      headers: {
+        "Content-Type": "application/json;odata=nometadata",
+        Accept: "application/json;odata=nometadata",
+      },
+      body: JSON.stringify({
+        parameters: { RenderOptions: 2, ViewXml: viewXml, DatesInUtc: true },
+      }),
+    }
+  );
+  if (!r.ok) return { rows: [], next: "", error: r.status };
+  return { ...parseRenderPage(r.data, listId), error: "" };
 }
 
 /** One search page (permission-trimmed, bounded to the given libraries).
