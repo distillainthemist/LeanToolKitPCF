@@ -419,6 +419,22 @@ describe("Vault V5 hardening units", () => {
   });
 });
 
+describe("REST-path taxonomy filter (subtree-label match)", () => {
+  const row = (values: Record<string, string>) => ({
+    id: 1, uniqueId: "u", name: "n", ext: "pdf", serverUrl: "/x", listId: "l",
+    modified: "", values,
+  });
+  it("matches any subtree label in any of the filter's columns", async () => {
+    const { rowMatchesTerms } = await import("../docs/rows");
+    const labels = new Set(["bell bay", "casting", "maintenance"]);
+    expect(rowMatchesTerms(row({ Org: "Casting" }), ["Org"], labels)).toBe(true);
+    expect(rowMatchesTerms(row({ Org: "Potrooms; Casting" }), ["Org"], labels)).toBe(true);
+    expect(rowMatchesTerms(row({ A: "", B: "CASTING" }), ["A", "B"], labels)).toBe(true);
+    expect(rowMatchesTerms(row({ Org: "Potrooms" }), ["Org"], labels)).toBe(false);
+    expect(rowMatchesTerms(row({}), ["Org"], labels)).toBe(false);
+  });
+});
+
 describe("multi-library browse union (REST, no index)", () => {
   const row = (name: string, modified: string) => ({
     id: 1, uniqueId: name, name, ext: "pdf", serverUrl: "/x", listId: "l",

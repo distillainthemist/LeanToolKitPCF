@@ -27,6 +27,7 @@ import {
   isNonCurrentStatus,
   pdfViewUrlFor,
   pickBrowseHead,
+  rowMatchesTerms,
   splitNameForEllipsis,
   tallyTermCounts,
   taxonomySearchProperty,
@@ -443,25 +444,35 @@ export function mountDocs(
       col: string;
       node: TermNode;
       ids: string[];
+      /** Lowercased subtree labels — the REST-path label match. */
+      labels: Set<string>;
     }
     let filters: ActiveFilter[] = [];
     const filterFor = (col: string): ActiveFilter | null =>
       filters.find((f) => f.col === col) ?? null;
 
-    const subtreeIdsIn = (nodes: TermNode[], node: TermNode): string[] =>
-      nodes
-        .filter(
-          (n) =>
-            n.id === node.id ||
-            (n.labels.length > node.labels.length &&
-              node.labels.every((l, i) => n.labels[i] === l))
-        )
-        .map((n) => n.id);
-
+    const subtreeIn = (nodes: TermNode[], node: TermNode): TermNode[] =>
+      nodes.filter(
+        (n) =>
+          n.id === node.id ||
+          (n.labels.length > node.labels.length &&
+            node.labels.every((l, i) => n.labels[i] === l))
+      );
     /** Set/replace (node) or clear (null) the filter on one column. */
     const applyFilter = (col: string, node: TermNode | null, nodes: TermNode[]) => {
       filters = filters.filter((f) => f.col !== col);
-      if (node !== null) filters.push({ col, node, ids: subtreeIdsIn(nodes, node) });
+      if (node !== null) {
+        const subtree = subtreeIn(nodes, node);
+        filters.push({
+          col,
+          node,
+          ids: subtree.map((n) => n.id),
+          labels: new Set(
+            // the picked node itself even when the walk missed it
+            [node, ...subtree].map((n) => n.labels[n.labels.length - 1].toLowerCase())
+          ),
+        });
+      }
       paintTreeSelection();
       paintChips();
       void load(true);
@@ -1367,11 +1378,13 @@ export function mountDocs(
         list.setRows([]);
       }
       list.setLoading(true);
-      // search-INDEX mode ONLY for what list REST cannot do: taxonomy
-      // filters, and the contents-depth toggle (reading inside
-      // documents). Plain text queries ride REST substringof over
-      // name/Title — timely, no crawl dependence (Ben, 2026-08-02).
-      const useSearch = (query.trim() !== "" && searchContents) || filters.length > 0;
+      // the search INDEX serves only the contents-depth toggle (reading
+      // inside documents — nothing else can). Text queries ride REST
+      // substringof; taxonomy filters ride REST as a subtree-label match
+      // over the browse rows' display text (Ben, 2026-08-02: timely
+      // results beat GUID exactness while the crawl lags; the index
+      // path keeps GUID filtering for contents-depth searches).
+      const useSearch = query.trim() !== "" && searchContents;
       lastUsedSearch = useSearch;
       const browseIds = scopeAll ? allListIds : selectedIds;
       const words = query.trim() === "" ? undefined : query.trim().split(/\s+/);
@@ -1384,7 +1397,7 @@ export function mountDocs(
       // the up-front total for plain browsing (library ItemCounts)
       if (reset) {
         knownTotal = null;
-        if (!useSearch && words === undefined && modifiedDays === 0) {
+        if (!useSearch && words === undefined && modifiedDays === 0 && filters.length === 0) {
           void Promise.all(browseIds.map((id) => listItemCount(app.siteUrl, id))).then(
             (counts) => {
               if (dead || gen !== generation) return;
@@ -1416,17 +1429,14 @@ export function mountDocs(
         nextToken = String(startRow + page.rows.length);
         done = page.rows.length < PAGE;
         paintStatus(page.total, page.error);
-      } else if (browseIds.length === 1) {
-        const page = await browsePage(app.siteUrl, browseIds[0], nextToken, browseOpts());
-        if (dead || gen !== generation) return;
-        list.append(applyNonCurrent(page.rows));
-        nextToken = page.next;
-        done = page.next === "";
-        paintStatus(knownTotal, page.error);
       } else {
-        // multi-library UNION over list REST: one server-sorted feed per
-        // library, k-way merged client-side — a feed's buffer refills
-        // whenever it drains mid-page, so the merge never skips rows
+        // browse over list REST (single library or union): one
+        // server-sorted feed per library, k-way merged client-side — a
+        // feed's buffer refills whenever it drains mid-page, so the
+        // merge never skips rows. Taxonomy filters apply here as the
+        // subtree-label predicate; the loop keeps pulling pages until
+        // the page fills or the corpus is exhausted, so the filter
+        // covers the whole register, never just the loaded rows.
         if (feeds.length === 0) {
           feeds = browseIds.map((id) => ({ listId: id, buf: [], next: "", done: false }));
         }
@@ -1443,6 +1453,10 @@ export function mountDocs(
             f.done = true;
           }
         };
+        const matchesFilters = (row: DocRow): boolean =>
+          filters.every((f) =>
+            rowMatchesTerms(row, f.col === "" ? [...orgCols] : [f.col], f.labels)
+          );
         const cmp = browseComparator(sort.key === "name" ? "name" : "modified", sort.asc);
         const rowsOut: DocRow[] = [];
         while (rowsOut.length < PAGE) {
@@ -1450,7 +1464,8 @@ export function mountDocs(
           if (dead || gen !== generation) return;
           const i = pickBrowseHead(feeds.map((f) => f.buf), cmp);
           if (i < 0) break;
-          rowsOut.push(feeds[i].buf.shift()!);
+          const row = feeds[i].buf.shift()!;
+          if (matchesFilters(row)) rowsOut.push(row);
         }
         list.append(applyNonCurrent(rowsOut));
         done = feeds.every((f) => f.done && f.buf.length === 0);

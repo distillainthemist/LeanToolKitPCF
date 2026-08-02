@@ -78,6 +78,24 @@ export function buildBrowseUri(listId: string, top = 50, opts: BrowseOpts = {}):
   );
 }
 
+/** Does a browse row carry ANY of the given term labels in the given
+ *  columns? (REST-path taxonomy filtering: browse rows hold display
+ *  text, ";"-separated for multi-value; labels arrive lowercased.
+ *  Label matching can cross-match same-named terms in different
+ *  branches — the GUID-exact filter lives on the search-index path.) */
+export function rowMatchesTerms(
+  row: DocRow,
+  cols: string[],
+  labels: Set<string>
+): boolean {
+  for (const col of cols) {
+    for (const part of (row.values[col] ?? "").split(";")) {
+      if (labels.has(part.trim().toLowerCase())) return true;
+    }
+  }
+  return false;
+}
+
 /** Row comparator for the multi-library browse union: server-side sort
  *  order per feed, replicated client-side for the merge. Modified holds
  *  ISO-ish strings, so string compare orders correctly. */
