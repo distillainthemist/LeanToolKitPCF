@@ -93,10 +93,10 @@ export async function spRequest(
 
 function summarizeError(err: unknown): string {
   if (err == null) return "request failed";
-  if (typeof err === "string") return err.slice(0, 300);
+  if (typeof err === "string") return err.slice(0, 1500);
   const o = err as { message?: unknown; code?: unknown };
   const msg = typeof o.message === "string" ? o.message : JSON.stringify(err);
-  return `${typeof o.code === "string" ? `${o.code}: ` : ""}${msg}`.slice(0, 300);
+  return `${typeof o.code === "string" ? `${o.code}: ` : ""}${msg}`.slice(0, 1500);
 }
 
 // ---- the specific calls Phase 1 needs ----------------------------------
