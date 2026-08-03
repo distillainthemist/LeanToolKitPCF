@@ -361,7 +361,14 @@ export function mountDocs(
     actionNeeded.title = "Arrives with document control (a later phase).";
     // toggles that used to be toolbar checkboxes ride the register
     // kebab from V3 — state only here
-    let showNonCurrent = bootView?.nonCurrent ?? false;
+    /**
+     * "Show only Approved" — ON by default (Ben, 2026-08-03). A
+     * controlled-document register is asked for the approved copy;
+     * everything else is noise until someone says otherwise. Stored as
+     * its inverse so links and saved views written before this keep
+     * meaning what they meant.
+     */
+    let onlyApproved = !(bootView?.nonCurrent ?? false);
     let modifiedDays = bootView?.modifiedDays ?? 0;
     // declared HERE, not in the data-flow section: the register's empty
     // state reads it during the initial mount, and a later `let` would be
@@ -660,9 +667,12 @@ export function mountDocs(
             modifiedAfterIso: modifiedIso(),
             nameWords: words,
             idIn: contentIds.get(lib.listId.toLowerCase()) ?? [],
-            termFilters: filters
-              .filter((f) => f.col !== "")
-              .map((f) => ({ cols: [f.col], labels: [...f.labels] })),
+            termFilters: [
+              ...filters
+                .filter((f) => f.col !== "")
+                .map((f) => ({ cols: [f.col], labels: [...f.labels] })),
+              ...approvedFilterFor(lib.listId),
+            ],
             dateRanges: dateFilters.filter((d) => carried.has(d.col)),
             fields: statusInternal !== "" && carried.has(statusInternal)
               ? [col, statusInternal]
@@ -1028,7 +1038,14 @@ export function mountDocs(
         const orgFilterable = orgCol === undefined || (orgCol.available && orgCol.filterable);
         const cols: string[] = [];
         if (app.orgSetId !== "" && orgProps.length > 0 && orgFilterable) cols.push("");
-        cols.push(...[...taxCols.keys()].filter((c) => filterable.has(c)));
+        cols.push(
+          ...[...taxCols.keys()].filter(
+            (c) =>
+              filterable.has(c) &&
+              // "Show only Approved" IS the status filter while it is on
+              !(onlyApproved && c === statusInternal)
+          )
+        );
         for (const col of cols) {
           const g = group(colLabel(col));
           const pills = el("div", "app-docs-fpills");
@@ -1170,21 +1187,28 @@ export function mountDocs(
      *  does), matching falls back to the label stored beside each entry,
      *  so colours are never withheld waiting on a round trip. */
     const labelToId = new Map<string, string>();
-    if (statusCol !== null && statusCol.termSetId !== "") {
-      void fetchTermsInSet(app.siteUrl, statusCol.termSetId).then((r) => {
-        const rows = Array.isArray((r.data as { value?: unknown[] })?.value)
-          ? ((r.data as { value: unknown[] }).value as Record<string, unknown>[])
-          : [];
-        for (const t of rows) {
-          const labels = t.labels as { name?: string; isDefault?: boolean }[] | undefined;
-          const def = Array.isArray(labels) ? (labels.find((l) => l.isDefault) ?? labels[0]) : undefined;
-          const name = (def?.name ?? "").trim().toLowerCase();
-          if (name !== "" && typeof t.id === "string") labelToId.set(name, t.id);
-        }
-        // rows already on screen were painted before the ids landed
-        if (!dead && labelToId.size > 0) buildRegister();
-      });
-    }
+    /** Read the status vocabulary once: it gives the palette its ids AND
+     *  tells "Show only Approved" which values count as approved. */
+    const readStatusTerms = async (): Promise<void> => {
+      if (statusCol === null || statusCol.termSetId === "") return;
+      const r = await fetchTermsInSet(app.siteUrl, statusCol.termSetId);
+      const rows = Array.isArray((r.data as { value?: unknown[] })?.value)
+        ? ((r.data as { value: unknown[] }).value as Record<string, unknown>[])
+        : [];
+      const labels: string[] = [];
+      for (const t of rows) {
+        const names = t.labels as { name?: string; isDefault?: boolean }[] | undefined;
+        const def = Array.isArray(names) ? (names.find((l) => l.isDefault) ?? names[0]) : undefined;
+        const name = (def?.name ?? "").trim();
+        if (name === "") continue;
+        labels.push(name);
+        if (typeof t.id === "string") labelToId.set(name.toLowerCase(), t.id);
+      }
+      // "approved" is whatever this site's vocabulary calls current —
+      // the same reading the status glyphs use, so ✓ and "only Approved"
+      // can never disagree about what a value means
+      approvedLabels = labels.filter((l) => !isNonCurrentStatus(l));
+    };
 
     // glyph + word so status reads under any colour-vision (finding 5);
     // both now come from the site palette, falling back to the built-in
@@ -1586,8 +1610,32 @@ export function mountDocs(
      *  not answer (name matching still stands). */
     let contentsNote: "" | "capped" | "failed" = "";
 
+    /**
+     * Status values meaning "this is the approved copy", read from the
+     * status column's own term set — never typed here. Empty when the
+     * set cannot be read, and the register then falls back to hiding
+     * non-current rows client-side, which is what it did before.
+     */
+    let approvedLabels: string[] = [];
+    /** A working library IS drafts, so "only Approved" would blank it;
+     *  it keeps showing its own, exactly as the old heuristic allowed. */
+    const skipsApproval = (listId: string): boolean =>
+      byListId.get(listId.toLowerCase())?.libType === "working";
+
+    /** The silent status clause for one library ([] when off, unknown,
+     *  or the library is a working one). */
+    const approvedFilterFor = (listId: string): { cols: string[]; labels: string[] }[] =>
+      onlyApproved &&
+      statusInternal !== "" &&
+      approvedLabels.length > 0 &&
+      !skipsApproval(listId)
+        ? [{ cols: [statusInternal], labels: approvedLabels }]
+        : [];
+
     const applyNonCurrent = (rows: DocRow[]): DocRow[] => {
-      if (showNonCurrent || !statusCol) return rows;
+      // a no-op once the CAML filter carries this; it still covers the
+      // case where the term set could not be read
+      if (!onlyApproved || !statusCol || approvedLabels.length > 0) return rows;
       // a working library IS drafts, so hiding non-current would blank
       // it — decided per ROW, because a union can mix a working library
       // with controlled ones in the same list (C3)
@@ -1626,16 +1674,19 @@ export function mountDocs(
           : contentsNote === "failed"
             ? " · contents search unavailable"
             : "";
-      // filtered: the matching TOTAL when it is known, else what is loaded
-      const matching = matchTotal ?? total;
+      // The counted total wins wherever it is known: the library's raw
+      // ItemCount knows nothing of "Show only Approved", so a plain
+      // browse would otherwise read "50 of 100" while the folders —
+      // counted properly — read 76 (Ben, 2026-08-03).
+      const shown = matchTotal ?? total;
       status.textContent =
         (plainBrowse
-          ? total !== null && total > n
-            ? `${docs(n)} of ${total}`
+          ? shown !== null && shown > n
+            ? `${docs(n)} of ${shown}`
             : docs(n)
-          : matching !== null && matching > n
-            ? `${docs(n)} of ${matching} matching`
-            : `${docs(matching ?? n)} matching`) + note;
+          : shown !== null && shown > n
+            ? `${docs(n)} of ${shown} matching`
+            : `${docs(shown ?? n)} matching`) + note;
     };
 
     /** End of a load: drop the lock, then replay a reset that arrived
@@ -1783,10 +1834,15 @@ export function mountDocs(
               modifiedAfterIso: modifiedIso(),
               nameWords: words,
               idIn: contentIds.get(id.toLowerCase()) ?? [],
-              termFilters: filters.map((f) => ({
-                cols: f.col === "" ? [...orgCols] : [f.col],
-                labels: [...f.labels],
-              })),
+              termFilters: [
+                ...filters.map((f) => ({
+                  cols: f.col === "" ? [...orgCols] : [f.col],
+                  labels: [...f.labels],
+                })),
+                // applied silently: no chip, no filter row — the toggle
+                // says it (Ben, 2026-08-03)
+                ...approvedFilterFor(id),
+              ],
               // only bind a date column the library actually carries
               dateRanges: dateFilters.filter((d) => carried.has(d.col)),
               fields: fieldsFor(),
@@ -1843,7 +1899,7 @@ export function mountDocs(
         listId: current?.listId ?? "",
         query: query.trim(),
         contents: searchContents,
-        nonCurrent: showNonCurrent,
+        nonCurrent: !onlyApproved,
         modifiedDays,
         // the organisation keeps its own slot so pre-3a links stay valid
         orgTermId: org?.node.id ?? "",
@@ -2105,15 +2161,20 @@ export function mountDocs(
         );
       }
       item(
-        `${showNonCurrent ? "✓ " : ""}Show drafts & superseded`,
+        `${onlyApproved ? "✓ " : ""}Show only Approved`,
         statusCol
-          ? "Include non-current documents in the register."
-          : current
-            ? "Map a column to the Approval status role in Settings → Documents first"
-            : "Applies inside a library with a status column mapped",
+          ? "On, the register answers with the approved copy only, and " +
+            "Approval status drops out of Filters — it is already set."
+          : "Map a column to the Approval status role in Settings → Documents first",
         statusCol
           ? () => {
-              showNonCurrent = !showNonCurrent;
+              onlyApproved = !onlyApproved;
+              // turning it on subsumes any status filter someone set by
+              // hand; leaving it there would filter twice, invisibly
+              if (onlyApproved && statusInternal !== "") {
+                filters = filters.filter((f) => f.col !== statusInternal);
+                paintChips();
+              }
               void load(true);
             }
           : null
@@ -2142,7 +2203,10 @@ export function mountDocs(
       document.body.appendChild(menu);
     });
 
-    void load(true);
+    // the status vocabulary first: "Show only Approved" is on by default,
+    // so the very first page should already be filtered rather than
+    // arrive unfiltered and blink
+    void readStatusTerms().finally(() => void load(true));
   })();
 
   return () => {
