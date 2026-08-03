@@ -203,6 +203,7 @@ the connector's typed surface.**
 | What "Add a document" starts from | **Template copy, plus upload only if the spike passes.** |
 | What My tasks lists | **Checked out by me, and my documents due for review** — both computable today from `CheckoutUser` and the owner / next review date roles. Phase 5's approval items append to this queue rather than replacing it. |
 | What check-in asks | **A comment (required) and a minor/major choice.** The comment is what an auditor reads; a check-in with nothing to say is a check-in that explains nothing, so the button stays disabled until there is text. |
+| Review-due standards in My tasks | **View-only until Phase 5** (Ben, 2026-08-04, asked again when 4D surfaced due reviews on documents with no commands). The queue names the work; acting on a standard — periodic review-without-change, or an edit — waits for the approval engine's governed commands. Until then a due review is completed in SharePoint itself. |
 
 ## Sub-phases
 
