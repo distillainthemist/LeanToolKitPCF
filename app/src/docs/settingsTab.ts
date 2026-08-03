@@ -48,6 +48,7 @@ import {
   templateFor,
   syncSiteDictionary,
 } from "./model";
+import type { TermNode } from "./sp";
 import {
   fetchFields,
   fetchLibraries,
@@ -1235,17 +1236,36 @@ export async function renderDocsSettings(body: HTMLElement, ctx: Ctx): Promise<v
       clear(writeBox);
       const list = el("div", "app-dept-list");
       writeBox.appendChild(list);
-      // a real term for the taxonomy write — label AND id, because the
-      // format SharePoint accepts is "Label|<guid>" and a made-up
-      // either half proves nothing
-      const taxCol = dictionary().columns.find((c) => c.termSetId !== "");
-      const walk =
-        taxCol === undefined
-          ? undefined
-          : await fetchTermPaths(app.siteUrl, taxCol.termSetId);
-      // the deepest node walked is the likeliest leaf, and leaves are
-      // what a library tags with
-      const term = walk?.nodes[walk.nodes.length - 1];
+      // A term this column DEMONSTRABLY uses: a label already present in
+      // its documents that also exists in its term set. Then a rejection
+      // can only be about the format — the first runs tested a term that
+      // may simply not have belonged to the column, which proves nothing
+      // either way.
+      let taxCol: SiteColumn | undefined;
+      let term: TermNode | undefined;
+      for (const c of dictionary().columns.filter((x) => x.termSetId !== "")) {
+        const walk = await fetchTermPaths(app.siteUrl, c.termSetId);
+        if (walk.error !== "" || walk.nodes.length === 0) continue;
+        const seen = new Set(
+          (taxProbe.get(c.internal)?.samples ?? [])
+            .flatMap((s) => s.split(";"))
+            .map((s) => s.trim().toLowerCase())
+            .filter((s) => s !== "")
+        );
+        const used = walk.nodes.find((n) =>
+          seen.has((n.labels[n.labels.length - 1] ?? "").trim().toLowerCase())
+        );
+        if (used !== undefined) {
+          taxCol = c;
+          term = used;
+          break;
+        }
+        // fall back to any real term from the first readable set
+        if (taxCol === undefined) {
+          taxCol = c;
+          term = walk.nodes[walk.nodes.length - 1];
+        }
+      }
       const { runWriteProbe } = await import("./writeProbe");
       await runWriteProbe(
         {

@@ -18,6 +18,8 @@ import {
   validateItemErrors,
 } from "./model";
 import type { SpResult } from "./sp";
+import { renderListPage } from "./data";
+import { buildRenderViewXml } from "./rows";
 import {
   addFile,
   addFileBytes,
@@ -158,28 +160,53 @@ export async function runWriteProbe(
         // 4C's metadata form cannot be written until we know which of
         // these this tenant takes.
         const formats = [
-          { how: "Label|id", value: `${tc.label}|${tc.termId}` },
-          { how: "-1;#Label|id", value: `-1;#${tc.label}|${tc.termId}` },
-          { how: "id alone", value: tc.termId },
-          { how: "Label alone", value: tc.label },
+          { how: "Label|id", field: tc.internal, value: `${tc.label}|${tc.termId}` },
+          { how: "-1;#Label|id", field: tc.internal, value: `-1;#${tc.label}|${tc.termId}` },
+          { how: "id alone", field: tc.internal, value: tc.termId },
+          { how: "Label alone", field: tc.internal, value: tc.label },
+          // the hidden note field behind a taxonomy column: the
+          // documented way round a tagging-UI validator that will not
+          // take any form value
+          {
+            how: "the hidden note field",
+            field: `${tc.internal}_0`,
+            value: `-1;#${tc.label}|${tc.termId}`,
+          },
         ];
+
+        /** Did the value LAND, whatever the response said? A 502 from
+         *  the gateway can follow a write SharePoint already made, and
+         *  a format that works is worth finding behind a bad reply. */
+        const landed = async (): Promise<boolean> => {
+          const page = await renderListPage(
+            site,
+            listId,
+            buildRenderViewXml({ idIn: [itemId], fields: [tc.internal], rowLimit: 1 })
+          );
+          const got = (page.rows[0]?.values[tc.internal] ?? "").trim().toLowerCase();
+          return got === tc.label.trim().toLowerCase();
+        };
+
         let accepted = "";
         for (const f of formats) {
           if (accepted !== "") break;
           const tax = await validateUpdateListItem(site, listId, itemId, [
-            { FieldName: tc.internal, FieldValue: f.value },
+            { FieldName: f.field, FieldValue: f.value },
           ]);
           const errs = validateItemErrors(tax.data);
-          const ok = tax.ok && errs.length === 0;
-          if (ok) accepted = f.how;
+          const clean = tax.ok && errs.length === 0;
+          const stuck = await landed();
+          if (clean || stuck) accepted = f.how;
           step(
             `${tc.internal} = “${tc.label}” as ${f.how}`,
-            ok,
-            ok
+            clean || stuck,
+            clean
               ? "accepted"
-              : tax.ok
-                ? errs.map((e) => e.message).join("; ") || "rejected"
-                : say(tax, "")
+              : stuck
+                ? "the reply was an error, but the value LANDED — usable"
+                : tax.ok
+                  ? errs.map((e) => e.message).join("; ") || "rejected"
+                  : say(tax, "")
           );
         }
 
@@ -205,11 +232,16 @@ export async function runWriteProbe(
               tc.label,
               tc.termId
             );
-            if (patched.ok) accepted = "a typed PATCH";
+            const stuck = await landed();
+            if (patched.ok || stuck) accepted = "a typed PATCH";
             step(
               `${tc.internal} = “${tc.label}” as a typed PATCH`,
-              patched.ok,
-              patched.ok ? `accepted (${entity})` : say(patched, "")
+              patched.ok || stuck,
+              patched.ok
+                ? `accepted (${entity})`
+                : stuck
+                  ? "the reply was an error, but the value LANDED — usable"
+                  : say(patched, "")
             );
           }
         }

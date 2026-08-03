@@ -1187,6 +1187,43 @@ export function validateItemErrors(raw: unknown): { field: string; message: stri
   return out;
 }
 
+/**
+ * The sentence inside a SharePoint failure. Errors arrive as JSON
+ * wrapped in JSON — the connector's envelope carrying SharePoint's
+ * odata.error as an escaped string — and showing that raw to a user is
+ * showing them nothing. Digs to the deepest human message it can find
+ * and gives up gracefully, because an unreadable error is still better
+ * than a blank one.
+ */
+export function spErrorText(raw: string): string {
+  const deepest = (value: unknown, depth: number): string => {
+    // a real refusal nests connector envelope → message string → JSON →
+    // odata.error → message → value, so the ceiling has to clear six
+    if (depth > 8) return "";
+    if (typeof value === "string") {
+      const trimmed = value.trim();
+      if (trimmed.startsWith("{")) {
+        try {
+          return deepest(JSON.parse(trimmed), depth + 1) || trimmed;
+        } catch {
+          return trimmed;
+        }
+      }
+      return trimmed;
+    }
+    if (value === null || typeof value !== "object") return "";
+    const o = value as Record<string, unknown>;
+    // odata.error.message.value is the sentence SharePoint wrote
+    for (const key of ["odata.error", "error", "message", "value"]) {
+      const hit = deepest(o[key], depth + 1);
+      if (hit !== "") return hit;
+    }
+    return "";
+  };
+  const text = deepest(raw, 0);
+  return text === "" ? raw.slice(0, 300) : text.slice(0, 300);
+}
+
 /** A single-quoted OData string. SharePoint's own escape is doubling,
  *  and real document names carry apostrophes. Pure, so it lives here
  *  rather than in the transport — quoting is where injection would get

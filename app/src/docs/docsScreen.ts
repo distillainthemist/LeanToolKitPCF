@@ -46,6 +46,7 @@ import {
   paletteEntryFor,
   parseBasePermissions,
   siteKey,
+  spErrorText,
 } from "./model";
 import {
   TermNode,
@@ -1616,11 +1617,44 @@ export function mountDocs(
         title: `${what} did not go through`,
         buttons: [{ label: "Close", kind: "secondary", onClick: () => dlg.close() }],
       });
+      // SharePoint's own sentence, not the JSON-inside-JSON it travels in
       dlg.body.appendChild(
         el(
           "div",
           "app-field-hint",
-          why !== "" ? why : "SharePoint refused it without saying why."
+          why !== "" ? spErrorText(why) : "SharePoint refused it without saying why."
+        )
+      );
+    };
+
+    /**
+     * What SharePoint says about this file RIGHT NOW. The register's row
+     * is a snapshot: the document may have been checked in from Office,
+     * or the check-out discarded in SharePoint, since it was painted —
+     * and acting on the snapshot is what produced "the file is not
+     * checked out" against a button that offered to check it in (Ben,
+     * 2026-08-03). Every command asks first.
+     */
+    const liveCheckout = async (row: DocRow): Promise<"none" | "held" | "unknown"> => {
+      const info = await fetchFileInfo(app.siteUrl, row.serverUrl);
+      if (!info.ok) return "unknown";
+      const t = Number(((info.data ?? {}) as { CheckOutType?: unknown }).CheckOutType ?? 2);
+      return t === 2 ? "none" : "held";
+    };
+
+    const staleNotice = async (row: DocRow, what: string) => {
+      await refreshRow(row);
+      const dlg = openDialog({
+        host: document.body,
+        title: `${what} is no longer available`,
+        buttons: [{ label: "OK", kind: "secondary", onClick: () => dlg.close() }],
+      });
+      dlg.body.appendChild(
+        el(
+          "div",
+          "app-field-hint",
+          "SharePoint says this document is not checked out any more — someone may have " +
+            "checked it in, or it was done from Office. The register has been brought up to date."
         )
       );
     };
@@ -1629,6 +1663,17 @@ export function mountDocs(
       kind: "out" | "undo",
       row: DocRow
     ): Promise<void> => {
+      // ask SharePoint what is true before acting on a painted row
+      const live = await liveCheckout(row);
+      if (kind === "undo" && live === "none") {
+        await staleNotice(row, "Discard");
+        return;
+      }
+      if (kind === "out" && live === "held") {
+        await refreshRow(row);
+        commandFailed("Check-out", "Someone checked this document out first.");
+        return;
+      }
       const res =
         kind === "out"
           ? await checkOutFile(app.siteUrl, row.serverUrl)
@@ -1661,6 +1706,10 @@ export function mountDocs(
               if (text === "") return;
               dlg.close();
               void (async () => {
+                if ((await liveCheckout(row)) === "none") {
+                  await staleNotice(row, "Check-in");
+                  return;
+                }
                 const res = await checkInFile(app.siteUrl, row.serverUrl, text, major);
                 if (!res.ok) commandFailed("Check-in", res.status);
                 else await refreshRow(row);

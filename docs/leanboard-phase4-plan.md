@@ -42,6 +42,27 @@ and `executeAsync` serialises its body as a string. Two consequences:
   document via templates, and upload becomes a documented gap with a
   known cause rather than a mystery.
 
+## Upload from device — closed, 2026-08-03
+
+Four carriages measured on the Dev site, all re-encoding the same 16
+bytes:
+
+| Carriage | Result |
+| --- | --- |
+| REST `Files/add`, string body | 21 bytes for 16 — UTF-8 expansion, exactly the four values above 0x7F doubling |
+| REST `Files/add`, `$content` envelope | 400, "Body parameters missing" — the SDK does not forward a nested object as a body |
+| Connector **Create file**, base64 | 26 bytes for 16 |
+| Connector **Create file**, raw | 29 bytes for 16 |
+
+The cause is structural, not a tenant setting: every door this SDK
+offers serialises the body as a JSON **string**, and a JSON string is
+UTF-16 text. Text survives; bytes do not.
+
+So **4C ships template copy only**, and upload-from-device is a
+documented gap with a known cause rather than an open question. If it is
+ever wanted, the route is a server-side one — a flow or an Azure
+function holding the bytes — not a different call from here.
+
 ## Decisions (Ben, 2026-08-03)
 
 | Question | Decision |

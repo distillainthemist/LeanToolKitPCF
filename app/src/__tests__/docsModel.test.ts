@@ -791,6 +791,26 @@ describe("what a write came back with (Phase 4A)", () => {
     expect([...atob(b64)].map((c) => c.charCodeAt(0))).toEqual([0x25, 0x00, 0x7f, 0x80, 0xff]);
   });
 
+  it("digs SharePoint's own sentence out of JSON inside JSON", async () => {
+    const { spErrorText } = await import("../docs/model");
+    // exactly the shape a check-in refusal arrives in
+    const raw = JSON.stringify({
+      status: 423,
+      message: JSON.stringify({
+        "odata.error": {
+          code: "-2147024738, Microsoft.SharePoint.SPFileCheckOutException",
+          message: { lang: "en-US", value: "The file is not checked out." },
+        },
+      }),
+      source: "https://tenant.sharepoint.com",
+    });
+    expect(spErrorText(raw)).toBe("The file is not checked out.");
+    // plain text passes through; junk never throws and never comes back empty
+    expect(spErrorText("Access denied.")).toBe("Access denied.");
+    expect(spErrorText("{not json")).toBe("{not json");
+    expect(spErrorText("")).toBe("");
+  });
+
   it("quotes the way SharePoint's OData does", async () => {
     const { spQuote } = await import("../docs/model");
     expect(spQuote("O'Brien's draft.docx")).toBe("O''Brien''s draft.docx");
