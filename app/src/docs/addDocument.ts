@@ -25,6 +25,7 @@ import {
 } from "./model";
 import { DocRow, buildRenderViewXml, extOf } from "./rows";
 import { renderListPage } from "./data";
+import { EntraHit, searchEntra } from "../store/people";
 import {
   checkOutFile,
   checkInFile,
@@ -52,11 +53,10 @@ export interface AddDocumentOpts {
   onCreated: (row: DocRow) => void;
 }
 
-/** Field types the form can edit. Person fields are deliberately out in
- *  v1 — a people picker is its own project — and stay settable in
- *  SharePoint. */
+/** Field types the form can edit. */
 const editorKind = (f: SpField): AddFieldValue["kind"] | null => {
   if (f.isTaxonomy) return "taxonomy";
+  if (f.type === "User" || f.type === "UserMulti") return "person";
   if (f.type === "DateTime") return "date";
   if (f.choices.length > 0) return "choice";
   if (f.type === "Text" || f.type === "Note") return "text";
@@ -194,6 +194,94 @@ export function openAddDocument(opts: AddDocumentOpts): void {
             };
           },
           isEmpty: () => sel.value === "",
+        });
+        continue;
+      }
+
+      if (kind === "person") {
+        // the app's one people pattern (screens/people.ts): debounced
+        // Entra search with a sequence guard, results as rows to pick
+        const multi = f.type === "UserMulti";
+        const picked: { email: string; name: string }[] = [];
+        const box = el("div", "app-docs-ppl");
+        const chips = el("div", "app-docs-pplchips");
+        const search = el("input", "app-input") as HTMLInputElement;
+        search.placeholder = multi ? "Search people to add…" : "Search for a person…";
+        const hitsBox = el("div", "app-docs-pplhits");
+        box.append(chips, search, hitsBox);
+
+        const paintChips = () => {
+          clear(chips);
+          for (const p of picked) {
+            const chip = el("span", "app-docs-pplchip");
+            chip.appendChild(el("span", "", p.name));
+            const off = el("button", "app-docs-pplchipx", "✕") as HTMLButtonElement;
+            off.setAttribute("aria-label", `Remove ${p.name}`);
+            off.addEventListener("click", () => {
+              picked.splice(picked.indexOf(p), 1);
+              paintChips();
+              sync();
+            });
+            chip.appendChild(off);
+            chips.appendChild(chip);
+          }
+          chips.style.display = picked.length > 0 ? "" : "none";
+        };
+        paintChips();
+
+        const renderHits = (hits: EntraHit[]) => {
+          clear(hitsBox);
+          for (const h of hits.filter((x) => x.mail !== "").slice(0, 8)) {
+            const row = el("button", "app-docs-pplhit") as HTMLButtonElement;
+            row.type = "button";
+            row.append(
+              el("span", "app-docs-pplhitname", h.displayName),
+              el("span", "app-field-hint", h.mail)
+            );
+            row.addEventListener("click", () => {
+              if (!multi) picked.length = 0;
+              if (!picked.some((p) => p.email.toLowerCase() === h.mail.toLowerCase())) {
+                picked.push({ email: h.mail, name: h.displayName });
+              }
+              search.value = "";
+              clear(hitsBox);
+              paintChips();
+              sync();
+            });
+            hitsBox.appendChild(row);
+          }
+        };
+
+        let searchSeq = 0;
+        let timer = 0;
+        search.addEventListener("input", () => {
+          window.clearTimeout(timer);
+          const q = search.value.trim();
+          if (q === "") {
+            clear(hitsBox);
+            return;
+          }
+          timer = window.setTimeout(() => {
+            const seq = ++searchSeq;
+            void searchEntra(q).then(
+              (hits) => {
+                if (seq === searchSeq) renderHits(hits);
+              },
+              () => {
+                if (seq !== searchSeq) return;
+                clear(hitsBox);
+                hitsBox.appendChild(el("div", "app-field-hint", "People search failed."));
+              }
+            );
+          }, 350);
+        });
+
+        metaBox.appendChild(fieldRow(labelOf(f) + star, box));
+        editors.push({
+          field: f,
+          kind,
+          read: () => ({ internal: f.internal, kind: "person", people: [...picked] }),
+          isEmpty: () => picked.length === 0,
         });
         continue;
       }

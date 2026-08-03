@@ -878,8 +878,45 @@ describe("add a document — the write recipe (4C)", () => {
       { internal: "B", kind: "date", text: "" },
       { internal: "C", kind: "taxonomy", label: "", termId: "" },
       { internal: "D", kind: "taxonomy", label: "Orphan", termId: "" },
+      { internal: "E", kind: "person", people: [] },
+      { internal: "F", kind: "person", people: [{ email: "  ", name: "No address" }] },
     ]);
     expect(formValues).toEqual([]);
+    expect(Object.keys(patch)).toEqual([]);
+  });
+
+  it("people travel as claims keys through the forms engine", async () => {
+    const { splitAddWrites } = await import("../docs/model");
+    const { formValues, patch } = splitAddWrites([
+      {
+        internal: "DMSOwner",
+        kind: "person",
+        people: [{ email: "Ben@Pechey.com", name: "Ben" }],
+      },
+      {
+        internal: "DMSApprovers",
+        kind: "person",
+        people: [
+          { email: "a@pechey.com", name: "A" },
+          { email: "b@pechey.com", name: "B" },
+        ],
+      },
+    ]);
+    // single and multi are the same shape — a JSON array of claims keys,
+    // resolved server-side; emails lowercased on the way through
+    expect(formValues).toEqual([
+      {
+        FieldName: "DMSOwner",
+        FieldValue: JSON.stringify([{ Key: "i:0#.f|membership|ben@pechey.com" }]),
+      },
+      {
+        FieldName: "DMSApprovers",
+        FieldValue: JSON.stringify([
+          { Key: "i:0#.f|membership|a@pechey.com" },
+          { Key: "i:0#.f|membership|b@pechey.com" },
+        ]),
+      },
+    ]);
     expect(Object.keys(patch)).toEqual([]);
   });
 

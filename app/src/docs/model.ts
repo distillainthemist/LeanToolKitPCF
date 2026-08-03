@@ -1287,7 +1287,7 @@ export function bytesToBase64(bytes: Uint8Array): string {
 /** One filled-in editor from the add form. */
 export interface AddFieldValue {
   internal: string;
-  kind: "text" | "choice" | "date" | "taxonomy";
+  kind: "text" | "choice" | "date" | "taxonomy" | "person";
   /** text/choice/date payload (date is YYYY-MM-DD). */
   text?: string;
   /** taxonomy payload. */
@@ -1295,6 +1295,8 @@ export interface AddFieldValue {
   termId?: string;
   /** taxonomy only: a multi-value column takes an ARRAY of one. */
   multi?: boolean;
+  /** person payload — emails resolve through the claims key. */
+  people?: { email: string; name: string }[];
 }
 
 export function splitAddWrites(values: AddFieldValue[]): {
@@ -1308,6 +1310,20 @@ export function splitAddWrites(values: AddFieldValue[]): {
       if ((v.label ?? "") === "" || (v.termId ?? "") === "") continue;
       const term = { Value: v.label, TermGuid: v.termId, WssId: -1 };
       patch[v.internal] = v.multi === true ? [term] : term;
+      continue;
+    }
+    if (v.kind === "person") {
+      // the forms engine's own person format: a JSON array of claims
+      // keys, resolved server-side — single and multi are the same
+      // shape, just more entries
+      const people = (v.people ?? []).filter((p) => p.email.trim() !== "");
+      if (people.length === 0) continue;
+      formValues.push({
+        FieldName: v.internal,
+        FieldValue: JSON.stringify(
+          people.map((p) => ({ Key: `i:0#.f|membership|${p.email.trim().toLowerCase()}` }))
+        ),
+      });
       continue;
     }
     const text = (v.text ?? "").trim();

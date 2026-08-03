@@ -2113,6 +2113,27 @@ button.app-docs-navterm.app-docs-navterm-on {
 .app-docs-addstatus { min-height: 18px; font-size: 12px; color: #57534a; }
 .app-docs-addstatus-warn { color: #a4262c; }
 
+/* people picker (4C) — chips above, search below, hits inline */
+.app-docs-ppl { display: flex; flex-direction: column; gap: 6px; }
+.app-docs-pplchips { display: flex; flex-wrap: wrap; gap: 6px; }
+.app-docs-pplchip {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 12px; padding: 2px 6px 2px 10px; border-radius: 12px;
+  background: var(--app-accent-soft, #e6f0ff); color: var(--app-accent, #12467b);
+}
+.app-docs-pplchipx {
+  border: none; background: none; cursor: pointer; font-size: 11px;
+  color: inherit; padding: 2px; line-height: 1;
+}
+.app-docs-pplhits { display: flex; flex-direction: column; }
+.app-docs-pplhit {
+  display: flex; justify-content: space-between; gap: 10px; align-items: baseline;
+  border: none; background: none; cursor: pointer; text-align: left;
+  padding: 6px 8px; border-radius: 4px; font-size: 13px;
+}
+.app-docs-pplhit:hover { background: #f2f1ee; }
+.app-docs-pplhitname { font-weight: 600; }
+
 /* document control (Phase 4B): checked-out state reads at a glance, and
    YOURS reads differently, because it is the only one you can act on */
 .app-docs-lock {
