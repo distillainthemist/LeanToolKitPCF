@@ -83,7 +83,7 @@ export function openAddDocument(opts: AddDocumentOpts): void {
   // Visible build marker: three "stuck" reports in a row turned out to
   // involve at least one stale player bundle, and the marker settles
   // "which code is this" from a screenshot alone. Bump per revision.
-  const BUILD = "b9";
+  const BUILD = "b10";
 
   let creating = false;
   const dlg = openDialog({
@@ -486,30 +486,6 @@ export function openAddDocument(opts: AddDocumentOpts): void {
     );
   };
 
-  /**
-   * One call given the time it actually needs. File-endpoint calls on a
-   * fresh copy are SLOW, not broken — an abandoned CheckOut from an
-   * earlier run landed server-side a minute later (that is why run
-   * two's document ended up checked out). Abandon-and-retry piles up
-   * late-landing duplicates; the honest cure is one call, narrated
-   * while SharePoint settles the file.
-   */
-  const patient = async (base: string, p: Promise<Sp>, totalMs = 120_000): Promise<Sp | null> => {
-    const started = Date.now();
-    let done = false;
-    void p.finally(() => {
-      done = true;
-    });
-    const tick = window.setInterval(() => {
-      if (done) return;
-      const s = Math.round((Date.now() - started) / 1000);
-      if (s >= 10) status(`${base} — SharePoint is still settling the new file (${s}s)…`);
-    }, 5_000);
-    const r = await timed<Sp | null>(p, totalMs, null);
-    window.clearInterval(tick);
-    return r;
-  };
-
   const create = async () => {
     if (creating) return;
     const tpl = tplRows.get(tplSel.value);
@@ -566,99 +542,66 @@ export function openAddDocument(opts: AddDocumentOpts): void {
     if (!idRes.ok) return fail("Created, but could not read the new document back", idRes.status);
     const itemId = Number(idRes.data);
 
-    // ONE forms-engine call — SharePoint's own path for completing a
-    // just-created document (bNewDocumentUpdate: true, the document
-    // information panel's write). It bypasses the require-check-out
-    // rule and finishes the document, so in the good case NOTHING here
-    // touches the file door that stalls on fresh copies. The copy
-    // arrives checked in; this call leaves it that way.
+    // Probe run six's sequence, exactly — the one path every call of
+    // which is PROVEN on this tenant. The copy arrives checked in, and
+    // on a require-check-out library every write against it is refused
+    // ("not checked out", b9's run) — bNewDocumentUpdate does NOT
+    // bypass the rule (the probe write that seemed to prove it rode an
+    // addFile auto-check-out). And the check-out call itself never
+    // actually hung: the five "hangs" were all the placeholder crash.
+    // So: check out → forms engine for text/choice/person/dates →
+    // connector term objects → check in with the comment.
+    status("Taking the check-out…");
+    const out = await timedRetry("Check-out", () => checkOutFile(site, newUrl));
+    // "already checked out" on a minute-old name can only be us
+    const held = out.ok || /checked out/i.test(spErrorText(out.status));
+    if (!held) return fail("Created, but could not check out to set properties", out.status);
+
     const writes = newDocumentWrites(editors.map((e) => e.read()), localeId);
-    let taxFallback = false;
-    if (writes.formValues.length > 0) {
+    const vuliValues = writes.formValues.filter(
+      (f) => !writes.taxInternals.includes(f.FieldName)
+    );
+    if (vuliValues.length > 0) {
       status("Writing properties…");
       const res = await timedRetry("Writing properties", () =>
-        validateUpdateListItem(site, lib.listId, itemId, writes.formValues, true)
+        validateUpdateListItem(site, lib.listId, itemId, vuliValues, false)
       );
       const errs = validateItemErrors(res.data);
-      const taxErrs = errs.filter((e) => writes.taxInternals.includes(e.field));
-      const otherErrs = errs.filter((e) => !writes.taxInternals.includes(e.field));
-      if (otherErrs.length > 0) {
+      if (!res.ok || errs.length > 0) {
         return fail(
-          "Created, but some properties were refused",
-          otherErrs.map((e) => `${e.field}: ${e.message}`).join("; ")
+          "Created, but some properties were refused (it stays checked out to you)",
+          errs.map((e) => `${e.field}: ${e.message}`).join("; ") || res.status
         );
-      }
-      if (!res.ok || taxErrs.length > 0) {
-        if (writes.taxInternals.length === 0) {
-          return fail("Created, but the properties write failed", res.status);
-        }
-        // The whole call failing with taxonomy aboard reads as the
-        // known masked check-out exception; a field-level refusal is
-        // the tagging validator. Either way: re-run WITHOUT the term
-        // columns (this is the proven-bare path), then send the terms
-        // through the fallback below.
-        taxFallback = true;
-        const bare = writes.formValues.filter(
-          (f) => !writes.taxInternals.includes(f.FieldName)
-        );
-        if (bare.length > 0) {
-          const res2 = await timedRetry("Writing properties", () =>
-            validateUpdateListItem(site, lib.listId, itemId, bare, true)
-          );
-          const errs2 = validateItemErrors(res2.data);
-          if (!res2.ok || errs2.length > 0) {
-            return fail(
-              "Created, but some properties were refused",
-              errs2.map((e) => `${e.field}: ${e.message}`).join("; ") || res2.status
-            );
-          }
-        }
       }
     }
-
-    // Fallback for the term columns alone, on the probe-proven route:
-    // held check-out → connector term object → check-in. File-door
-    // calls are SLOW on a fresh copy (five runs), so each gets one
-    // patient narrated attempt, never abandon-and-retry — a duplicate
-    // landing late would re-check-out the document after its check-in.
-    if (taxFallback && Object.keys(writes.patch).length > 0) {
-      status("Taking the check-out…");
-      const out = await patient("Taking the check-out", checkOutFile(site, newUrl));
-      if (out === null) {
-        return fail(
-          "The term columns need a check-out, and it never answered",
-          "The document exists with its other properties set. Give SharePoint a minute, " +
-            "then set the term columns from the register (check out, edit, check in)."
-        );
-      }
-      // "already checked out" on a name that did not exist a minute ago
-      // can only be us — a previous attempt's call landing late
-      const held = out.ok || /checked out/i.test(spErrorText(out.status));
-      if (!held) return fail("Created, but could not check out for the term columns", out.status);
-
+    if (Object.keys(writes.patch).length > 0) {
       status("Writing the term columns…");
       const res = await timedRetry("Writing the term columns", () =>
         connectorPatchItem(site, lib.listId, itemId, writes.patch)
       );
       if (!res.ok) {
-        return fail("Created, but the term columns were refused (it stays checked out to you)", res.status);
-      }
-
-      status("Checking in…");
-      const cin = await patient(
-        "Checking in",
-        checkInFile(site, newUrl, `Created from template “${tpl.name}”`, false)
-      );
-      if (cin === null) {
         return fail(
-          "Check-in never answered",
-          "The document exists and the properties are set — check the library: if it " +
-            "still shows checked out to you, check it in from the register."
+          "Created, but the term columns were refused (it stays checked out to you)",
+          res.status
         );
       }
-      if (!cin.ok && !/not checked out/i.test(spErrorText(cin.status))) {
-        return fail("Created, but check-in was refused (it stays checked out to you)", cin.status);
-      }
+    }
+
+    status("Checking in…");
+    const cin = await timed<Sp | null>(
+      checkInFile(site, newUrl, `Created from template “${tpl.name}”`, false),
+      25_000,
+      null
+    );
+    if (cin === null) {
+      return fail(
+        "Check-in never answered",
+        "The document exists and the properties are set — check the library: if it " +
+          "still shows checked out to you, check it in from the register."
+      );
+    }
+    if (!cin.ok && !/not checked out/i.test(spErrorText(cin.status))) {
+      return fail("Created, but check-in was refused (it stays checked out to you)", cin.status);
     }
 
     // hand the finished row back the way the register reads rows — and

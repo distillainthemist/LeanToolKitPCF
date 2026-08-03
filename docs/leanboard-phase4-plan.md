@@ -168,19 +168,26 @@ elapsed counter (a counter that stops is a frozen runtime, a counter
 that climbs is a slow call — the reports could not tell these apart).
 Instrument before theorising.
 
+**Two more corrections before the flow settled (b9/b10, 2026-08-04):**
+the forms engine validates dates in the SITE's regional short format,
+not ISO ("Enter a date like this: 2/23/2012" — and the one refused
+field aborted the whole write), so dates are formatted per the site's
+`RegionalSettings.LocaleId`. And `bNewDocumentUpdate: true` does NOT
+bypass require-check-out — the probe write that seemed to prove it rode
+an `addFile` auto-check-out; a `copyto` file arrives checked in, and
+every write against it is refused "not checked out". The flag's real
+measured behaviour stands: it CHECKS IN as part of the write. Ordinary
+edits pass false.
+
 **4C's final shape** (Ben's critical-review push, which is what forced
 the find): copy → itemId via RLDAS (list door, newest first, exact
-name) → ONE forms-engine call — `ValidateUpdateListItem` with
-`bNewDocumentUpdate: true`, SharePoint's own document-information-panel
-path, which bypasses the require-check-out rule (probe run four proved
-it on this tenant) and completes the document with no separate
-check-in — carrying every field, taxonomy included as the
-flow-standard `Label|guid`. Only if the tagging validator refuses the
-term columns does the fallback engage for those columns alone: one
-patient narrated `CheckOut()`, the connector term object (probe run
-six's route), one patient check-in whose "not checked out" reads as
-"nothing to release". **Phase 5 should also complete new files through
-the forms engine.**
+name) → `CheckOut()` (which never actually hung — every "hang" was the
+placeholder crash) → `ValidateUpdateListItem(false)` for text, choice,
+person (claims JSON) and locale-formatted dates → connector `PatchItem`
+term objects → `CheckIn` with the "Created from template" comment.
+Probe run six's proven sequence, verbatim. **Phase 5 builds its status
+writes on the same pair: forms engine under a held check-out, terms via
+the connector's typed surface.**
 
 ## Decisions (Ben, 2026-08-03)
 
