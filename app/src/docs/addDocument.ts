@@ -53,8 +53,23 @@ export interface AddDocumentOpts {
   onCreated: (row: DocRow) => void;
 }
 
+/** Columns SharePoint manages itself — fine in a VIEW, nonsense in this
+ *  form ("Checked out to" rendered as an editable person picker, Ben,
+ *  2026-08-04). The dictionary auto-appends new live fields as
+ *  available, so availability alone cannot be the test. */
+const SYSTEM_FIELDS = new Set([
+  "CheckoutUser",
+  "Author",
+  "Editor",
+  "Modified",
+  "Created",
+  "FileLeafRef",
+  "FileSizeDisplay",
+]);
+
 /** Field types the form can edit. */
 const editorKind = (f: SpField): AddFieldValue["kind"] | null => {
+  if (SYSTEM_FIELDS.has(f.internal)) return null;
   if (f.isTaxonomy) return "taxonomy";
   if (f.type === "User" || f.type === "UserMulti") return "person";
   if (f.type === "DateTime") return "date";
@@ -368,6 +383,26 @@ export function openAddDocument(opts: AddDocumentOpts): void {
     statusLine.classList.toggle("app-docs-addstatus-warn", warn);
   };
 
+  /** A step that never answers must NAME itself instead of leaving the
+   *  dialog on one message forever ("Setting properties…" for a minute,
+   *  Ben, 2026-08-04) — the SDK's connector calls hang rather than
+   *  reject when something goes sideways, so every await races a clock. */
+  const timed = async <T>(what: string, p: Promise<T>, dead: T): Promise<T> => {
+    let clock = 0;
+    const timeout = new Promise<T>((resolve) => {
+      clock = window.setTimeout(() => resolve(dead), 25_000);
+    });
+    const r = await Promise.race([p, timeout]);
+    window.clearTimeout(clock);
+    return r;
+  };
+  const timedSp = (what: string, p: Promise<{ ok: boolean; status: string; data: unknown }>) =>
+    timed(what, p, {
+      ok: false,
+      status: `${what} did not answer within 25 seconds`,
+      data: null as unknown,
+    });
+
   const create = async () => {
     if (creating) return;
     const tpl = tplRows.get(tplSel.value);
@@ -384,21 +419,21 @@ export function openAddDocument(opts: AddDocumentOpts): void {
     };
 
     status("Copying the template…");
-    const rootRes = await fetchListRoot(site, lib.listId);
+    const rootRes = await timedSp("Finding the library root", fetchListRoot(site, lib.listId));
     const root = String(
       ((rootRes.data ?? {}) as { ServerRelativeUrl?: unknown }).ServerRelativeUrl ?? ""
     );
     if (root === "") return fail("Could not find the library", rootRes.status);
     const fileName = `${clean}.${tpl.ext}`;
     const newUrl = `${root}/${fileName}`;
-    const copy = await copyFileTo(site, tpl.serverUrl, newUrl);
+    const copy = await timedSp("The copy", copyFileTo(site, tpl.serverUrl, newUrl));
     if (!copy.ok) return fail("Copy refused (a document with this name may already exist)", copy.status);
 
     // From here the document EXISTS — a failure below leaves it checked
     // out to its creator, and the message says so instead of pretending
     // nothing happened.
-    status("Setting properties…");
-    const idRes = await fetchFileItemId(site, newUrl);
+    status("Reading the new document back…");
+    const idRes = await timedSp("Reading the new document", fetchFileItemId(site, newUrl));
     const itemId = Number(((idRes.data ?? {}) as { Id?: unknown }).Id ?? 0);
     if (itemId <= 0) {
       return fail("Created, but could not read the new document back", idRes.status);
@@ -406,17 +441,22 @@ export function openAddDocument(opts: AddDocumentOpts): void {
 
     // a require-check-out library hands the copy back already checked
     // out to us; otherwise take the check-out explicitly (probe rule)
-    const info = await fetchFileInfo(site, newUrl);
+    status("Taking the check-out…");
+    const info = await timedSp("Reading the check-out state", fetchFileInfo(site, newUrl));
     const held =
       info.ok && Number(((info.data ?? {}) as { CheckOutType?: unknown }).CheckOutType ?? 2) !== 2;
     if (!held) {
-      const out = await checkOutFile(site, newUrl);
+      const out = await timedSp("Check-out", checkOutFile(site, newUrl));
       if (!out.ok) return fail("Created, but could not check out to set properties", out.status);
     }
 
     const { formValues, patch } = splitAddWrites(editors.map((e) => e.read()));
     if (formValues.length > 0) {
-      const res = await validateUpdateListItem(site, lib.listId, itemId, formValues, false);
+      status("Writing properties…");
+      const res = await timedSp(
+        "Writing properties",
+        validateUpdateListItem(site, lib.listId, itemId, formValues, false)
+      );
       const errs = validateItemErrors(res.data);
       if (!res.ok || errs.length > 0) {
         return fail(
@@ -426,29 +466,42 @@ export function openAddDocument(opts: AddDocumentOpts): void {
       }
     }
     if (Object.keys(patch).length > 0) {
-      const res = await connectorPatchItem(site, lib.listId, itemId, patch);
+      status("Writing terms & dates…");
+      const res = await timedSp(
+        "Writing terms & dates",
+        connectorPatchItem(site, lib.listId, itemId, patch)
+      );
       if (!res.ok) {
         return fail("Created, but the term columns were refused (it stays checked out to you)", res.status);
       }
     }
 
     status("Checking in…");
-    const cin = await checkInFile(site, newUrl, `Created from template “${tpl.name}”`, false);
+    const cin = await timedSp(
+      "Check-in",
+      checkInFile(site, newUrl, `Created from template “${tpl.name}”`, false)
+    );
     if (!cin.ok) {
       // classic cause: a required column the form could not edit —
       // SharePoint's own sentence names it
       return fail("Created, but check-in was refused (it stays checked out to you)", cin.status);
     }
 
-    // hand the finished row back the way the register reads rows
-    const page = await renderListPage(
-      site,
-      lib.listId,
-      buildRenderViewXml({
-        idIn: [itemId],
-        fields: lib.config.columns.filter((c) => c.available).map((c) => c.internal),
-        rowLimit: 1,
-      })
+    // hand the finished row back the way the register reads rows — and
+    // even if this read stalls, the document is DONE, so close anyway
+    status("Opening…");
+    const page = await timed(
+      "Reading the finished row",
+      renderListPage(
+        site,
+        lib.listId,
+        buildRenderViewXml({
+          idIn: [itemId],
+          fields: lib.config.columns.filter((c) => c.available).map((c) => c.internal),
+          rowLimit: 1,
+        })
+      ),
+      { rows: [] as DocRow[], next: "", error: "timed out" }
     );
     dlg.close();
     const row = page.rows[0];
