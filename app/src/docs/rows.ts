@@ -275,6 +275,64 @@ export function pickBrowseHead(
  *  loaded rows carry each term label in the given columns. Taxonomy
  *  display text is ";"-separated for multi-value; matching is
  *  case-insensitive on the exact label. Keyed by lowercased label. */
+/**
+ * Loaded-row counts per tree node, INCLUDING everything below it (Ben,
+ * 2026-08-03): a site shows what its departments and areas hold, not
+ * just documents pinned at site level, which is what "Pacific 6" looked
+ * like when its areas held forty.
+ *
+ * Counted by row membership, not by summing children: a document tagged
+ * both "Bell Bay" and "Casting" is ONE document in Bell Bay's count, and
+ * summing would have said two.
+ *
+ * The known limit: rows carry term LABELS, not ids, so two terms sharing
+ * a label in different branches (this site has two "Maintenance") cannot
+ * be told apart, and a row under either counts for both. That ambiguity
+ * already existed in the per-node counts; it is not made worse by
+ * including descendants, and the counts stay scoped as "loaded so far".
+ */
+export function tallySubtreeCounts(
+  rows: DocRow[],
+  cols: string[],
+  nodes: { id: string; labels: string[] }[]
+): Map<string, number> {
+  const SEP = " ";
+  const path = (labels: string[]) => labels.map((l) => l.trim().toLowerCase()).join(SEP);
+  // each row's labels, once
+  const rowLabels = rows.map((r) => {
+    const set = new Set<string>();
+    for (const col of cols) {
+      for (const part of (r.values[col] ?? "").split(";")) {
+        const label = part.trim().toLowerCase();
+        if (label !== "") set.add(label);
+      }
+    }
+    return set;
+  });
+  const out = new Map<string, number>();
+  for (const node of nodes) {
+    const prefix = path(node.labels);
+    const wanted = new Set<string>();
+    for (const other of nodes) {
+      const p = path(other.labels);
+      if (p === prefix || p.startsWith(prefix + SEP)) {
+        wanted.add(other.labels[other.labels.length - 1].trim().toLowerCase());
+      }
+    }
+    let n = 0;
+    for (const labels of rowLabels) {
+      for (const w of wanted) {
+        if (labels.has(w)) {
+          n++;
+          break;
+        }
+      }
+    }
+    out.set(node.id, n);
+  }
+  return out;
+}
+
 export function tallyTermCounts(rows: DocRow[], cols: string[]): Map<string, number> {
   const tally = new Map<string, number>();
   for (const r of rows) {

@@ -169,3 +169,39 @@ export async function saveDocLibrary(lib: {
 export async function deleteDocLibrary(rowId: string): Promise<void> {
   await Ben_ltkdoclibrariesService.delete(rowId);
 }
+
+/**
+ * Warm the Documents caches in the background (Ben, 2026-08-03).
+ *
+ * The tab's slowest step is not the documents — it is the term walk
+ * behind the folder tree and the filter pills, which costs a round trip
+ * per level per set. Everything it touches is session-cached, so paying
+ * for it while someone reads the hub makes opening Documents feel
+ * instant, and paying twice costs nothing.
+ *
+ * Deliberately unobtrusive: it is called AFTER the first screen paints,
+ * it never rejects (a warm-up that surfaced an error would be worse than
+ * no warm-up), and it holds no UI. If the user opens Documents mid-flight
+ * the screen simply awaits the same cached promises.
+ */
+export async function warmDocsCaches(): Promise<void> {
+  try {
+    const { app, libraries } = await docsConfig();
+    if (app.siteUrl === "" || libraries.length === 0) return;
+    const { fetchTermPaths } = await import("./sp");
+    const sets = new Set<string>();
+    if (app.orgSetId !== "") sets.add(app.orgSetId);
+    for (const lib of libraries) {
+      for (const c of lib.config.columns) {
+        if (c.available && c.termSetId !== "") sets.add(c.termSetId);
+      }
+    }
+    // same depth/request caps the screen uses, so these are the very
+    // promises it will find waiting rather than a near-miss
+    await Promise.all(
+      [...sets].map((setId) => fetchTermPaths(app.siteUrl, setId, 4, 60).catch(() => null))
+    );
+  } catch {
+    /* a warm-up never fails loudly */
+  }
+}

@@ -614,3 +614,51 @@ describe("Vault V3 server-side presentation", () => {
     expect(splitNameForEllipsis("dot.")).toEqual({ stem: "dot.", ext: "" });
   });
 });
+
+describe("folder counts include everything below (2026-08-03)", () => {
+  const row = (org: string) => ({
+    id: 0,
+    uniqueId: "u",
+    name: "n",
+    ext: "pdf",
+    serverUrl: "/s",
+    listId: "l",
+    modified: "",
+    values: { Org: org },
+  });
+  const nodes = [
+    { id: "pac", labels: ["Pacific"] },
+    { id: "bb", labels: ["Pacific", "Bell Bay"] },
+    { id: "cast", labels: ["Pacific", "Bell Bay", "Casting"] },
+    { id: "boy", labels: ["Pacific", "Boyne"] },
+  ];
+
+  it("rolls descendants up, counting each document once", async () => {
+    const { tallySubtreeCounts } = await import("../docs/rows");
+    const t = tallySubtreeCounts(
+      [row("Casting"), row("Bell Bay"), row("Boyne"), row("Pacific")],
+      ["Org"],
+      nodes
+    );
+    // Pacific holds all four; Bell Bay its own plus Casting's
+    expect(t.get("pac")).toBe(4);
+    expect(t.get("bb")).toBe(2);
+    expect(t.get("cast")).toBe(1);
+    expect(t.get("boy")).toBe(1);
+  });
+
+  it("counts a document tagged at two levels once, not twice", async () => {
+    const { tallySubtreeCounts } = await import("../docs/rows");
+    // summing children would have said 2 for Bell Bay
+    const t = tallySubtreeCounts([row("Bell Bay; Casting")], ["Org"], nodes);
+    expect(t.get("bb")).toBe(1);
+    expect(t.get("pac")).toBe(1);
+  });
+
+  it("gives a leaf with nothing under it its own count", async () => {
+    const { tallySubtreeCounts } = await import("../docs/rows");
+    const t = tallySubtreeCounts([row("Boyne")], ["Org"], nodes);
+    expect(t.get("boy")).toBe(1);
+    expect(t.get("bb")).toBe(0);
+  });
+});

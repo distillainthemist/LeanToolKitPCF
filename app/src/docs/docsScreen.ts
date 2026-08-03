@@ -18,7 +18,6 @@ import { paletteMap, resolvePaletteColor } from "../../../shared/palette";
 import { textOn } from "../../../shared/tokens";
 import { appPalettes } from "../store/config";
 import {
-  browsePage,
   driveIdFor,
   listItemCount,
   renderListPage,
@@ -36,7 +35,7 @@ import {
   pdfViewUrlFor,
   pickBrowseHead,
   splitNameForEllipsis,
-  tallyTermCounts,
+  tallySubtreeCounts,
   taxonomySearchProperty,
 } from "./rows";
 import { DocLibrary, docsConfig } from "./docsStore";
@@ -566,13 +565,18 @@ export function mountDocs(
       if (countSpans.size === 0) return;
       const cols = groupBy === "" ? [...orgCols] : [groupBy];
       const rows = favMode ? [] : loadedRows();
-      const tally = tallyTermCounts(rows, cols);
+      // a site counts what its departments and areas hold, not only what
+      // was pinned at site level (Ben, 2026-08-03)
+      const tally = tallySubtreeCounts(rows, cols, treeNodes);
       for (const n of treeNodes) {
         const span = countSpans.get(n.id);
         if (!span) continue;
-        const count = tally.get(n.labels[n.labels.length - 1].toLowerCase()) ?? 0;
+        const count = tally.get(n.id) ?? 0;
         span.textContent = rows.length > 0 && count > 0 ? String(count) : "";
-        span.title = "In the documents loaded so far";
+        span.title =
+          n.labels.length > 0
+            ? `Documents loaded so far in ${n.labels[n.labels.length - 1]} and everything under it`
+            : "In the documents loaded so far";
       }
     };
 
@@ -1719,25 +1723,30 @@ export function mountDocs(
       void (async () => {
         exporting = true;
         status.textContent = "Exporting…";
-        const scopeLibs = current
-          ? [current]
-          : libraries.filter((l) => isSelected(l.listId));
-        // the union of configured available columns, labelled
-        const cols: { internal: string; label: string }[] = [];
-        for (const lib of scopeLibs) {
-          for (const c of lib.config.columns) {
-            if (!c.available) continue;
-            if (!cols.some((x) => x.internal === c.internal)) {
-              cols.push({ internal: c.internal, label: c.label || c.internal });
-            }
-          }
-        }
+        const scopeLibs = viewLibs();
+        // the register's own columns, named as the site names them —
+        // an export that disagreed with the screen it came from would be
+        // its own small lie
+        const wanted = chosenColumns.length > 0 ? chosenColumns : defaultInternals();
+        const cols = wanted
+          .filter((i) => i !== "Modified")
+          .map((i) => ({ internal: i, label: labelOf(i) }));
         const rows: string[][] = [];
         let truncated = false;
+        // RLDAS, like the register (C3b): FieldValuesAsText renders
+        // taxonomy as WssIds and drops whole columns depending on the
+        // projection, so the old export could differ from the screen
         for (const lib of scopeLibs) {
+          const carried = new Set(lib.config.columns.map((c) => c.internal));
+          const viewXml = buildRenderViewXml({
+            sortName: sort.key === "name",
+            asc: sort.asc,
+            fields: cols.map((c) => c.internal).filter((i) => carried.has(i)),
+            rowLimit: 100,
+          });
           let next = "";
           for (;;) {
-            const page = await browsePage(app.siteUrl, lib.listId, next);
+            const page = await renderListPage(app.siteUrl, lib.listId, viewXml, next);
             for (const r of page.rows) {
               if (rows.length >= EXPORT_CAP) {
                 truncated = true;

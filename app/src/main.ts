@@ -228,3 +228,26 @@ async function onHashChange(): Promise<void> {
 
 window.addEventListener("hashchange", () => void onHashChange());
 route();
+
+// Warm the Documents caches once the first screen is up (Ben,
+// 2026-08-03). The folder tree and filter pills are a term-store walk —
+// a round trip per level per set — and it is the slowest part of opening
+// the tab. It is session-cached, so doing it while someone reads the hub
+// makes Documents open on already-loaded data, and opening the tab
+// mid-flight simply awaits the same promises.
+//
+// It must not compete with the app's own start: this waits for the
+// browser to be idle (or two seconds), imports DYNAMICALLY so the docs
+// modules stay off the startup bundle and the import gate holds, and
+// swallows everything — a warm-up is never worth an error.
+{
+  const warm = () => {
+    void import("./docs/docsStore")
+      .then((m) => m.warmDocsCaches())
+      .catch(() => undefined);
+  };
+  const idle = (window as { requestIdleCallback?: (cb: () => void, o?: object) => number })
+    .requestIdleCallback;
+  if (typeof idle === "function") idle(warm, { timeout: 4000 });
+  else setTimeout(warm, 2000);
+}

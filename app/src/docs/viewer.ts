@@ -412,9 +412,27 @@ export function openDocViewer(opts: ViewerOpts): void {
     stage.appendChild(ph);
   };
 
+  /** The waiting state: a spinner, not a bare white box. It stays until
+   *  the FRAME itself paints — resolving the URL is only half the wait,
+   *  and the rendering service is the slower half (Ben, 2026-08-03). */
+  const spinner = (): HTMLElement => {
+    const box = el("div", "app-docs-prevload");
+    box.append(el("div", "app-loading-spinner"), el("span", "", "Loading preview…"));
+    return box;
+  };
+  /** Reveal `frame` once it loads, dropping `wait`; a frame that never
+   *  fires load (a blocked host) leaves the spinner, which is honest. */
+  const showWhenLoaded = (frame: HTMLIFrameElement, wait: HTMLElement) => {
+    frame.style.visibility = "hidden";
+    frame.addEventListener("load", () => {
+      wait.remove();
+      frame.style.visibility = "";
+    });
+  };
+
   const paintPreview = () => {
     clear(stage);
-    stage.appendChild(el("div", "app-loading-line", "Loading preview…"));
+    stage.appendChild(spinner());
     void (async () => {
       const src = await cookieFreeSrc();
       if (!stage.isConnected) return;
@@ -455,9 +473,11 @@ export function openDocViewer(opts: ViewerOpts): void {
             shot.style.height = `${h * 2}px`;
             shot.style.transform = "scale(0.5)";
           }
+          const wait = spinner();
+          showWhenLoaded(shot, wait);
           shot.src = shotUrl;
           shotBox.appendChild(shot);
-          stage.appendChild(shotBox);
+          stage.append(wait, shotBox);
           return;
         }
         previewWhy += " The page image was refused as well.";
@@ -466,9 +486,11 @@ export function openDocViewer(opts: ViewerOpts): void {
       }
       clear(stage);
       const frame = el("iframe", "app-docs-viewframe") as HTMLIFrameElement;
-      frame.src = src;
       frame.title = row.name;
-      stage.appendChild(frame);
+      const wait = spinner();
+      showWhenLoaded(frame, wait);
+      frame.src = src;
+      stage.append(wait, frame);
     })();
   };
 

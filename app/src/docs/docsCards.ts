@@ -15,10 +15,11 @@ import { el, clear } from "../../../shared/ui/dom";
 import { renderTitleBar, parsePrompts } from "../../../shared/ui/chrome";
 import { applyThemeVars } from "../../../shared/tokens";
 import { docsConfig, DocLibrary } from "./docsStore";
-import { searchPage, browsePage } from "./data";
+import { searchPage, renderListPage } from "./data";
 import { fetchTermPaths } from "./sp";
 import {
   DocRow,
+  buildRenderViewXml,
   extGlyph,
   formatWhen,
   taxonomySearchProperty,
@@ -209,8 +210,18 @@ async function paintHealth(
     reviewColSeen = true;
     let next = "";
     let taken = 0;
+    // RLDAS, like the register (C3b): the old FieldValuesAsText path
+    // rendered dates and taxonomy inconsistently depending on the
+    // projection, so a card could disagree with the screen behind it.
+    // Only the review date is needed — one field, no lookup pressure.
+    const viewXml = buildRenderViewXml({
+      sortName: false,
+      asc: true,
+      fields: [reviewCol.internal],
+      rowLimit: 100,
+    });
     for (;;) {
-      const page = await browsePage(scope.site, lib.listId, next);
+      const page = await renderListPage(scope.site, lib.listId, viewXml, next);
       if (page.error !== "") return note(body, `Documents refused: ${page.error}`);
       for (const row of page.rows) {
         scanned++;
