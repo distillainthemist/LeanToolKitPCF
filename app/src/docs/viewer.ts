@@ -59,6 +59,19 @@ interface ViewerOpts {
   /** Favourite wiring (null/absent = viewer identity unknown). toggle
    *  resolves to the new state. */
   favorite?: { isFav: () => boolean; toggle: () => Promise<boolean> } | null;
+  /**
+   * Document control (Phase 4B), absent where a document is not meant to
+   * be worked on. The screen owns the commands — it holds the permission
+   * answers and the row refresh — so the viewer only paints what it is
+   * told and calls back. `state` is re-read on each paint so the buttons
+   * follow a check-out made from the register behind it.
+   */
+  control?: {
+    state: () => { checkedOut: boolean; mine: boolean; by: string };
+    checkOut: () => Promise<void>;
+    checkIn: () => void;
+    discard: () => void;
+  } | null;
 }
 
 function overlay(
@@ -203,6 +216,36 @@ export function openDocViewer(opts: ViewerOpts): void {
     });
   });
   actions.append(copy);
+  // document control sits with the other actions, not in a menu: when a
+  // document is checked out to you, checking it back in is the thing you
+  // came here to do
+  if (opts.control) {
+    const ctl = opts.control;
+    const outBtn = el("button", "app-btn") as HTMLButtonElement;
+    const inBtn = el("button", "app-btn app-btn-primary", "Check in…") as HTMLButtonElement;
+    const dropBtn = el("button", "app-btn", "Discard check-out") as HTMLButtonElement;
+    const held = el("span", "app-docs-heldby");
+    const paint = () => {
+      const s = ctl.state();
+      outBtn.textContent = "Check out";
+      outBtn.style.display = s.checkedOut ? "none" : "";
+      inBtn.style.display = s.checkedOut && s.mine ? "" : "none";
+      dropBtn.style.display = s.checkedOut && s.mine ? "" : "none";
+      held.textContent = s.checkedOut && !s.mine ? `🔒 Checked out by ${s.by}` : "";
+      held.style.display = held.textContent === "" ? "none" : "";
+    };
+    outBtn.addEventListener("click", () => {
+      outBtn.disabled = true;
+      void ctl.checkOut().finally(() => {
+        outBtn.disabled = false;
+        paint();
+      });
+    });
+    inBtn.addEventListener("click", () => ctl.checkIn());
+    dropBtn.addEventListener("click", () => ctl.discard());
+    paint();
+    actions.append(outBtn, inBtn, dropBtn, held);
+  }
   if (opts.favorite) {
     const fav = opts.favorite;
     const favBtn = el("button", "app-btn app-docs-favbtn") as HTMLButtonElement;

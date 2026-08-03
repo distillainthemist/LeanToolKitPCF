@@ -19,6 +19,13 @@ export interface DocRow {
   modified: string;
   /** FieldValuesAsText projection (browse mode; {} in search mode). */
   values: Record<string, string>;
+  /** Who holds this document checked out — name and email, both empty
+   *  when it is not checked out. Email is what identifies "me": display
+   *  names collide, and two people called Ben would each be offered the
+   *  other's check-in (Phase 4B). Only asked for in libraries that can
+   *  be written to, so a read-only register carries no extra lookup. */
+  checkoutName?: string;
+  checkoutEmail?: string;
 }
 
 const asStr = (v: unknown): string => (typeof v === "string" ? v : "");
@@ -239,7 +246,14 @@ export function parseRenderPage(raw: unknown, listId: string): RenderPage {
       const t = Date.parse(String(r.Modified ?? ""));
       if (!Number.isNaN(t)) modified = new Date(t).toISOString();
     }
+    // a person field arrives as [{title, email, …}]; the collapsed text
+    // in `values` loses the email, which is the half that identifies me
+    const checkout = Array.isArray(r.CheckoutUser)
+      ? ((r.CheckoutUser as unknown[])[0] as Record<string, unknown> | undefined)
+      : undefined;
     rows.push({
+      checkoutName: asStr(checkout?.title),
+      checkoutEmail: asStr(checkout?.email).toLowerCase(),
       id: Number(r.ID ?? 0) || 0,
       uniqueId: String(r.UniqueId ?? "").replace(/^\{|\}$/g, "").toLowerCase(),
       name,

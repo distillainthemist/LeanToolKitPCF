@@ -27,8 +27,10 @@ import {
   copyFileTo,
   fetchFileInfo,
   fetchFileItemId,
+  fetchListEntityType,
   fetchListPermissions,
   fetchListRoot,
+  patchTaxonomyField,
   recycleFile,
   undoCheckOut,
   validateUpdateListItem,
@@ -102,6 +104,13 @@ export async function runWriteProbe(
 
     // one stamp per run, so a probe left behind by a failed run is
     // recognisable and never collides with this one
+    // the same folder said two ways: REST addresses it server-relative
+    // ("/sites/Dev/Lib"), the connector's file operations site-relative
+    // ("/Lib")
+    const sitePath = new URL(site).pathname.replace(/\/$/, "");
+    const siteRelative =
+      sitePath !== "" && root.startsWith(sitePath) ? root.slice(sitePath.length) : root;
+
     const stamp = String(Date.now());
     const textName = `LeanBoard write probe ${stamp}.txt`;
     const textUrl = `${root}/${textName}`;
@@ -173,6 +182,37 @@ export async function runWriteProbe(
                 : say(tax, "")
           );
         }
+
+        // The documented REST route, tried when form values fail: a
+        // typed TaxonomyFieldValue in a verbose PATCH. Different code
+        // path entirely — it never touches the tagging-UI validator
+        // that rejected all four shapes above.
+        if (accepted === "") {
+          const et = await fetchListEntityType(site, listId);
+          const entity = String(
+            ((et.data ?? {}) as { ListItemEntityTypeFullName?: unknown })
+              .ListItemEntityTypeFullName ?? ""
+          );
+          if (entity === "") {
+            step("Typed PATCH", false, `could not read the list entity type: ${say(et, "")}`);
+          } else {
+            const patched = await patchTaxonomyField(
+              site,
+              listId,
+              itemId,
+              entity,
+              tc.internal,
+              tc.label,
+              tc.termId
+            );
+            if (patched.ok) accepted = "a typed PATCH";
+            step(
+              `${tc.internal} = “${tc.label}” as a typed PATCH`,
+              patched.ok,
+              patched.ok ? `accepted (${entity})` : say(patched, "")
+            );
+          }
+        }
         step(
           "Write a term",
           accepted !== "",
@@ -220,15 +260,19 @@ export async function runWriteProbe(
         ext: "b64.bin",
         send: (name) => addFileBytes(site, root, name, PROBE_BYTES),
       },
+      // "Root folder is not found" on the first attempt was my path, not
+      // the tenant's: this operation wants a path relative to the SITE,
+      // where the REST surface wants the server-relative one.
       {
         how: "connector Create file, base64",
         ext: "conn64.bin",
-        send: (name) => connectorCreateFile(site, root, name, bytesToBase64(PROBE_BYTES)),
+        send: (name) => connectorCreateFile(site, siteRelative, name, bytesToBase64(PROBE_BYTES)),
       },
       {
         how: "connector Create file, raw",
         ext: "connraw.bin",
-        send: (name) => connectorCreateFile(site, root, name, bytesToBinaryString(PROBE_BYTES)),
+        send: (name) =>
+          connectorCreateFile(site, siteRelative, name, bytesToBinaryString(PROBE_BYTES)),
       },
     ];
     let uploadWorks = false;

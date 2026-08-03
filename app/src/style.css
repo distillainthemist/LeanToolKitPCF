@@ -2089,6 +2089,17 @@ button.app-docs-navterm.app-docs-navterm-on {
 .app-docs-name { display: flex; min-width: 0; }
 .app-docs-namestem { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .app-docs-nameext { flex: none; white-space: nowrap; }
+/* document control (Phase 4B): checked-out state reads at a glance, and
+   YOURS reads differently, because it is the only one you can act on */
+.app-docs-lock {
+  flex: none; font-size: 11px; padding: 1px 6px; border-radius: 10px;
+  background: var(--app-surface-2, #eee); color: var(--app-fg-muted, #555);
+  white-space: nowrap;
+}
+.app-docs-lock-mine { background: var(--app-accent-soft, #e6f0ff); color: var(--app-accent, #12467b); }
+.app-docs-heldby { font-size: 12px; color: var(--app-fg-muted, #555); align-self: center; }
+.app-docs-cicomment { width: 100%; box-sizing: border-box; resize: vertical; }
+.app-docs-cikinds { display: flex; flex-direction: column; gap: 4px; margin-top: 10px; }
 .app-docs-ownercell { display: flex; gap: 6px; align-items: center; min-width: 0; max-width: 100%; }
 .app-docs-avatar {
   flex: none;

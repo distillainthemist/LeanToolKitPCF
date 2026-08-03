@@ -332,6 +332,52 @@ export function recycleFile(site: string, url: string): Promise<SpResult> {
  * subtly wrong. Field-level failures come back per field rather than
  * failing the whole call, so the form can point at the offending row.
  */
+/**
+ * A taxonomy value written the documented REST way: a typed
+ * TaxonomyFieldValue in a verbose PATCH. Needs the list's item entity
+ * type, which is why it takes one — SharePoint refuses an untyped body
+ * on this route. Kept alongside ValidateUpdateListItem rather than
+ * replacing it: form values handle every other column type, and this
+ * one only exists because the tagging-UI validator rejected all four
+ * documented form-value shapes on this tenant (measured 2026-08-03).
+ */
+export function patchTaxonomyField(
+  site: string,
+  listId: string,
+  itemId: number,
+  entityType: string,
+  field: string,
+  label: string,
+  termId: string
+): Promise<SpResult> {
+  return spRequest(site, "POST", `_api/web/lists(guid'${listId}')/items(${itemId})`, {
+    headers: {
+      "Content-Type": "application/json;odata=verbose",
+      Accept: "application/json;odata=verbose",
+      "X-HTTP-Method": "MERGE",
+      "IF-MATCH": "*",
+    },
+    body: JSON.stringify({
+      __metadata: { type: entityType },
+      [field]: {
+        __metadata: { type: "SP.Taxonomy.TaxonomyFieldValue" },
+        Label: label,
+        TermGuid: termId,
+        WssId: -1,
+      },
+    }),
+  });
+}
+
+/** The entity type name a verbose PATCH has to declare. */
+export function fetchListEntityType(site: string, listId: string): Promise<SpResult> {
+  return spRequest(
+    site,
+    "GET",
+    `_api/web/lists(guid'${listId}')?$select=ListItemEntityTypeFullName`
+  );
+}
+
 export function validateUpdateListItem(
   site: string,
   listId: string,

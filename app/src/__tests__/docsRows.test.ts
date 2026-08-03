@@ -519,6 +519,31 @@ describe("RenderListDataAsStream (register browse feed)", () => {
     expect(r.values.DMSDocumentID).toBe("STD-1000");
     expect(page.next).toBe("?Paged=TRUE&p_ID=2");
   });
+
+  it("keeps the check-out holder's EMAIL, not just their name (4B)", async () => {
+    const { parseRenderPage } = await import("../docs/rows");
+    const page = parseRenderPage(
+      {
+        Row: [
+          {
+            ID: "5",
+            FileLeafRef: "Draft.docx",
+            FSObjType: "0",
+            CheckoutUser: [{ id: "7", title: "Ben O'Brien", email: "Ben@Pechey.com" }],
+          },
+          { ID: "6", FileLeafRef: "Free.docx", FSObjType: "0" },
+        ],
+      },
+      "L1"
+    );
+    // lowercased, because "checked out by me" compares it to the
+    // viewer's own address and casing differs between the two sources
+    expect(page.rows[0].checkoutEmail).toBe("ben@pechey.com");
+    expect(page.rows[0].checkoutName).toBe("Ben O'Brien");
+    // not checked out reads as empty, never undefined-by-accident
+    expect(page.rows[1].checkoutName).toBe("");
+    expect(page.rows[1].checkoutEmail).toBe("");
+  });
 });
 
 describe("multi-library browse union (REST, no index)", () => {

@@ -39,8 +39,25 @@ import {
   taxonomySearchProperty,
 } from "./rows";
 import { DocLibrary, docsConfig } from "./docsStore";
-import { emptySiteDictionary, isDateColumn, paletteEntryFor, siteKey } from "./model";
-import { TermNode, fetchTermPaths, fetchTermsInSet } from "./sp";
+import {
+  BasePermissions,
+  emptySiteDictionary,
+  isDateColumn,
+  paletteEntryFor,
+  parseBasePermissions,
+  siteKey,
+} from "./model";
+import {
+  TermNode,
+  checkInFile,
+  checkOutFile,
+  fetchFileInfo,
+  fetchListPermissions,
+  fetchTermPaths,
+  fetchTermsInSet,
+  undoCheckOut,
+} from "./sp";
+import { openDialog } from "../../../shared/ui/dialog";
 import { currentViewer } from "../runtime";
 import { viewerPerson } from "../store/people";
 import { docsViewUrl, takePendingDocView } from "../links";
@@ -178,6 +195,9 @@ export function mountDocs(
     pendingLibs = null;
 
     const whoId = currentViewer()?.objectId ?? "";
+    /** Who I am to SharePoint. Email, because that is what a person
+     *  field carries back and what makes "checked out by me" reliable. */
+    const myEmail = (currentViewer()?.email ?? "").toLowerCase();
     let favs: FavDoc[] = [];
     let savedViews: DocView[] = [];
 
@@ -1274,6 +1294,20 @@ export function mountDocs(
         nm.title = row.name;
         nm.append(el("span", "app-docs-namestem", stem));
         cell.append(fileTypeChip(row.ext), nm);
+        // checked out is a state worth seeing without opening anything,
+        // and MINE is the only actionable case — so it reads differently
+        if ((row.checkoutName ?? "") !== "") {
+          const mine = isMine(row);
+          const lock = el(
+            "span",
+            `app-docs-lock${mine ? " app-docs-lock-mine" : ""}`,
+            mine ? "✎ you" : `🔒 ${row.checkoutName}`
+          );
+          lock.title = mine
+            ? "You have this checked out"
+            : `Checked out by ${row.checkoutName}`;
+          cell.append(lock);
+        }
         return cell;
       },
     };
@@ -1403,6 +1437,20 @@ export function mountDocs(
                   isFav: () => favs.some((f) => f.uniqueId === row.uniqueId),
                   toggle: favToggleFor(row),
                 },
+          control: canWriteIn(lib)
+            ? {
+                // read live: a check-out made in the register behind the
+                // overlay has to move these buttons too
+                state: () => ({
+                  checkedOut: (row.checkoutName ?? "") !== "",
+                  mine: isMine(row),
+                  by: row.checkoutName ?? "",
+                }),
+                checkOut: () => runCommand("out", row),
+                checkIn: () => openCheckIn(row),
+                discard: () => openDiscard(row),
+              }
+            : null,
         });
       });
     };
@@ -1507,6 +1555,173 @@ export function mountDocs(
     ro.observe(main);
     innerCleanups.push(() => ro.disconnect());
 
+    // ---- document control (Phase 4B) -------------------------------------
+    // Check-out, check-in and discard. Three rules hold the whole thing
+    // together: only libraries meant to be worked on offer them; only
+    // SharePoint decides whether the write lands; and afterwards the row
+    // is re-read from list REST, never from the index, because the index
+    // lags and a command's own result must not be a guess.
+
+    /** listId → what SharePoint says this user may do. Primed for the
+     *  writable libraries at mount, so the kebab can answer instantly. */
+    const permsByLib = new Map<string, BasePermissions>();
+
+    const canWriteIn = (lib: DocLibrary | null | undefined): boolean =>
+      lib != null &&
+      (lib.libType === "working" || lib.libType === "revision") &&
+      (permsByLib.get(lib.listId.toLowerCase())?.edit ?? false);
+
+    /** Mine by EMAIL. Display names collide, and two people called Ben
+     *  would each be offered the other's check-in. */
+    const isMine = (row: DocRow): boolean =>
+      myEmail !== "" && (row.checkoutEmail ?? "") === myEmail;
+
+    void Promise.all(
+      libraries
+        .filter((l) => l.libType === "working" || l.libType === "revision")
+        .map(async (l) => {
+          const r = await fetchListPermissions(app.siteUrl, l.listId);
+          if (r.ok) permsByLib.set(l.listId.toLowerCase(), parseBasePermissions(r.data));
+        })
+    );
+
+    /** Re-read one document's check-out state and repaint just it. A
+     *  full reload would lose the scroll position and re-ask for
+     *  everything, to answer a question about one row. */
+    const refreshRow = async (row: DocRow) => {
+      const info = await fetchFileInfo(app.siteUrl, row.serverUrl);
+      if (!info.ok) return;
+      const d = (info.data ?? {}) as { CheckOutType?: unknown };
+      // CheckOutType 2 means "not checked out"; anything else needs the
+      // holder's name, which only the list row carries
+      if (Number(d.CheckOutType ?? 2) === 2) {
+        row.checkoutName = "";
+        row.checkoutEmail = "";
+      } else {
+        const page = await renderListPage(
+          app.siteUrl,
+          row.listId,
+          buildRenderViewXml({ idIn: [row.id], fields: ["CheckoutUser"], rowLimit: 1 })
+        );
+        const fresh = page.rows[0];
+        row.checkoutName = fresh?.checkoutName ?? "";
+        row.checkoutEmail = fresh?.checkoutEmail ?? "";
+      }
+      list?.setRows(list.rows());
+    };
+
+    const commandFailed = (what: string, why: string) => {
+      const dlg = openDialog({
+        host: document.body,
+        title: `${what} did not go through`,
+        buttons: [{ label: "Close", kind: "secondary", onClick: () => dlg.close() }],
+      });
+      dlg.body.appendChild(
+        el(
+          "div",
+          "app-field-hint",
+          why !== "" ? why : "SharePoint refused it without saying why."
+        )
+      );
+    };
+
+    const runCommand = async (
+      kind: "out" | "undo",
+      row: DocRow
+    ): Promise<void> => {
+      const res =
+        kind === "out"
+          ? await checkOutFile(app.siteUrl, row.serverUrl)
+          : await undoCheckOut(app.siteUrl, row.serverUrl);
+      if (!res.ok) {
+        commandFailed(kind === "out" ? "Check-out" : "Discard", res.status);
+        return;
+      }
+      await refreshRow(row);
+    };
+
+    /** Check-in asks for a comment and REQUIRES it (Ben, 2026-08-03):
+     *  the entry an auditor reads is worth more than a keystroke saved,
+     *  so the button stays disabled until there is something to read. */
+    const openCheckIn = (row: DocRow) => {
+      let major = false;
+      const comment = el("textarea", "app-input app-docs-cicomment") as HTMLTextAreaElement;
+      comment.rows = 3;
+      comment.placeholder = "What changed?";
+      const dlg = openDialog({
+        host: document.body,
+        title: `Check in ${row.name}`,
+        buttons: [
+          { label: "Cancel", kind: "secondary", onClick: () => dlg.close() },
+          {
+            label: "Check in",
+            kind: "primary",
+            onClick: () => {
+              const text = comment.value.trim();
+              if (text === "") return;
+              dlg.close();
+              void (async () => {
+                const res = await checkInFile(app.siteUrl, row.serverUrl, text, major);
+                if (!res.ok) commandFailed("Check-in", res.status);
+                else await refreshRow(row);
+              })();
+            },
+          },
+        ],
+      });
+      const submit = dlg.root.querySelector(".ltk-btn-primary") as HTMLButtonElement | null;
+      const sync = () => {
+        if (submit) submit.disabled = comment.value.trim() === "";
+      };
+      comment.addEventListener("input", sync);
+      sync();
+      const kinds = el("div", "app-docs-cikinds");
+      for (const opt of [
+        { label: "Minor version — still a draft", value: false },
+        { label: "Major version", value: true },
+      ]) {
+        const wrap = el("label", "app-docs-check");
+        const radio = el("input", "") as HTMLInputElement;
+        radio.type = "radio";
+        radio.name = "ltk-checkin-kind";
+        radio.checked = opt.value === major;
+        radio.addEventListener("change", () => {
+          major = opt.value;
+        });
+        wrap.append(radio, document.createTextNode(` ${opt.label}`));
+        kinds.appendChild(wrap);
+      }
+      dlg.body.append(el("div", "app-field-label", "Comment"), comment, kinds);
+      comment.focus();
+    };
+
+    /** Discarding destroys the edits made under the check-out and
+     *  SharePoint keeps no copy — so it confirms, and says that. */
+    const openDiscard = (row: DocRow) => {
+      const dlg = openDialog({
+        host: document.body,
+        title: `Discard your check-out of ${row.name}?`,
+        buttons: [
+          { label: "Keep it checked out", kind: "secondary", onClick: () => dlg.close() },
+          {
+            label: "Discard",
+            kind: "danger",
+            onClick: () => {
+              dlg.close();
+              void runCommand("undo", row);
+            },
+          },
+        ],
+      });
+      dlg.body.appendChild(
+        el(
+          "div",
+          "app-field-hint",
+          "Everything changed since the check-out is lost. SharePoint keeps no copy of it."
+        )
+      );
+    };
+
     // ---- kebab menu ----------------------------------------------------
     let menu: HTMLElement | null = null;
     const closeMenu = () => {
@@ -1576,8 +1791,19 @@ export function mountDocs(
       item("Copy PDF link", () => {
         void navigator.clipboard.writeText(bestPdf);
       });
-      if (lib?.libType === "working") {
-        item("Request check-out", null, "Document control arrives in a later phase");
+      // Phase 4B: the commands themselves. Offered only where a document
+      // is meant to be worked on — controlled standards and records keep
+      // their lifecycle for Phase 5, so nothing here can edit one.
+      if (canWriteIn(lib)) {
+        const held = (row.checkoutName ?? "") !== "";
+        if (!held) {
+          item("Check out", () => void runCommand("out", row));
+        } else if (isMine(row)) {
+          item("Check in…", () => openCheckIn(row));
+          item("Discard check-out", () => openDiscard(row));
+        } else {
+          item(`Checked out by ${row.checkoutName}`, null, "Only they can check it in");
+        }
       }
       const r = anchor.getBoundingClientRect();
       menu.style.top = `${r.bottom + 4}px`;
@@ -1822,6 +2048,14 @@ export function mountDocs(
                 if (internal !== "" && carried.has(internal)) out.add(internal);
               }
               for (const c of groupBy === "" ? [...orgCols] : [groupBy]) out.add(c);
+              // who holds it checked out — asked for ONLY where documents
+              // can be worked on. It is a person field, so it is a lookup,
+              // and this tenant throttles a view past twelve of those
+              // (Phase 0). A read-only register pays nothing for 4B.
+              const feedLib = byListId.get(id.toLowerCase());
+              if (feedLib?.libType === "working" || feedLib?.libType === "revision") {
+                out.add("CheckoutUser");
+              }
               return [...out];
             };
             const viewXml = buildRenderViewXml({
