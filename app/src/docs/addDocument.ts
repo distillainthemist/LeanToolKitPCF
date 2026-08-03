@@ -79,14 +79,32 @@ const editorKind = (f: SpField): AddFieldValue["kind"] | null => {
 export function openAddDocument(opts: AddDocumentOpts): void {
   const { site, host } = opts;
 
+  // Visible build marker: three "stuck" reports in a row turned out to
+  // involve at least one stale player bundle, and the marker settles
+  // "which code is this" from a screenshot alone. Bump per revision.
+  const BUILD = "b7";
+
   let creating = false;
   const dlg = openDialog({
     host,
-    title: "Add a document",
+    title: `Add a document · ${BUILD}`,
     buttons: [
       { label: "Cancel", kind: "secondary", onClick: () => { if (!creating) dlg.close(); } },
-      { label: "Create", kind: "primary", onClick: () => void create() },
+      {
+        label: "Create",
+        kind: "primary",
+        // a THROW anywhere in the flow must become a visible failure —
+        // an unhandled rejection freezes the dialog on its last status
+        // line forever, indistinguishable from a hung call
+        onClick: () =>
+          void create().catch((e: unknown) => {
+            creating = false;
+            status(`Unexpected failure: ${String(e).slice(0, 300)}`, true);
+            sync();
+          }),
+      },
     ],
+    onClose: () => stopHeartbeat(),
   });
   const createBtn = dlg.root.querySelector(".ltk-btn-primary") as HTMLButtonElement;
 
@@ -376,10 +394,27 @@ export function openAddDocument(opts: AddDocumentOpts): void {
   })();
 
   // ---- create ----------------------------------------------------------
+  let statusBase = "";
+  let statusStarted = 0;
   const status = (text: string, warn = false) => {
+    statusBase = text;
+    statusStarted = Date.now();
     statusLine.textContent = text;
     statusLine.classList.toggle("app-docs-addstatus-warn", warn);
   };
+
+  // Heartbeat: while a create runs, the current step's line ticks its
+  // elapsed seconds every second. A counter that stops counting is a
+  // frozen runtime; a counter that climbs is a slow call — and three
+  // "stuck" reports could not tell those apart (2026-08-04).
+  const heartbeat = window.setInterval(() => {
+    if (!creating || statusBase === "") return;
+    const s = Math.round((Date.now() - statusStarted) / 1000);
+    if (s >= 2 && !statusLine.classList.contains("app-docs-addstatus-warn")) {
+      statusLine.textContent = `${statusBase} (${s}s)`;
+    }
+  }, 1_000);
+  const stopHeartbeat = () => window.clearInterval(heartbeat);
 
   /** A step that never answers must NAME itself instead of leaving the
    *  dialog on one message forever ("Setting properties…" for a minute,
