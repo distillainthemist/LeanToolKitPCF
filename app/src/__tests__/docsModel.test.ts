@@ -631,6 +631,92 @@ describe("configuration health (C4)", () => {
   });
 });
 
+describe("taxonomy values against their term set (2026-08-03)", () => {
+  const LABELS = ["Pacific", "Bell Bay", "Casting", "Maintenance"];
+  const probe = (samples: string[], extra: Record<string, unknown> = {}) => ({
+    samples,
+    labels: LABELS,
+    ...extra,
+  });
+
+  it("says nothing when the values are terms — even if only some rows are tagged", async () => {
+    const { taxProbeFinding } = await import("../docs/model");
+    expect(taxProbeFinding("DMSOrg", probe(["Casting", "Bell Bay; Casting"]))).toBeNull();
+    // a value nobody recognises alongside one we do is somebody's typo,
+    // not a broken column
+    expect(taxProbeFinding("DMSOrg", probe(["Casting", "Whatever"]))).toBeNull();
+  });
+
+  it("names the display-value setting when every value is a full path", async () => {
+    const { taxProbeFinding } = await import("../docs/model");
+    // the production failure: folders dead, nothing in the UI to say why
+    const f = taxProbeFinding("DMSOrg", probe(["Pacific:Bell Bay:Casting", "Pacific:Boyne"]));
+    expect(f?.level).toBe("warn");
+    expect(f?.title).toContain("whole term path");
+    expect(f?.detail).toContain("Pacific:Bell Bay:Casting");
+    expect(f?.detail).toContain("Display term label in the field");
+    // the internal name is what the admin looks for in Site columns,
+    // even when a display override is set
+    expect(taxProbeFinding("DMSOrg", probe(["Pacific | Casting"]), "Organisation")?.detail).toContain(
+      "DMSOrg"
+    );
+  });
+
+  it("distinguishes the wrong term set from a path", async () => {
+    const { taxProbeFinding } = await import("../docs/model");
+    const f = taxProbeFinding("DMSOrg", probe(["Vessel 4", "Vessel 7"]));
+    expect(f?.title).toContain("no value matches");
+    expect(f?.detail).toContain("wrong term set");
+  });
+
+  it("holds its tongue when it cannot know", async () => {
+    const { taxProbeFinding } = await import("../docs/model");
+    // nothing tagged yet
+    expect(taxProbeFinding("DMSOrg", probe([]))).toBeNull();
+    expect(taxProbeFinding("DMSOrg", probe(["", " ; "]))).toBeNull();
+    // no term set read — nothing to compare against
+    expect(taxProbeFinding("DMSOrg", { samples: ["Casting"], labels: [] })).toBeNull();
+    // a truncated walk cannot prove a value is unknown, but a path still
+    // looks like a path
+    expect(taxProbeFinding("DMSOrg", probe(["Vessel 4"], { partial: true }))).toBeNull();
+    expect(
+      taxProbeFinding("DMSOrg", probe(["Pacific:Casting"], { partial: true }))?.title
+    ).toContain("whole term path");
+  });
+
+  it("puts the finding first, ahead of the drift reports", async () => {
+    const { dictionaryHealth } = await import("../docs/model");
+    const col = {
+      internal: "DMSOrg",
+      label: "",
+      role: "orgUnit",
+      available: true,
+      termSetId: "set-1",
+      isDate: false,
+      filterable: true,
+    };
+    const found = dictionaryHealth({
+      conflicts: [],
+      carriers: new Map<string, string[]>(),
+      libraries: [],
+      choicesBy: new Map<string, string[]>(),
+      dict: { columns: [col], palettes: [], templates: {} },
+      taxProbe: new Map([["DMSOrg", probe(["Pacific:Casting"])]]),
+    });
+    expect(found[0].title).toContain("whole term path");
+    // no probe at all = the check simply does not run
+    expect(
+      dictionaryHealth({
+        conflicts: [],
+        carriers: new Map<string, string[]>(),
+        libraries: [],
+        choicesBy: new Map<string, string[]>(),
+        dict: { columns: [col], palettes: [], templates: {} },
+      }).some((f) => f.title.includes("term path"))
+    ).toBe(false);
+  });
+});
+
 describe("view templates (C5)", () => {
   const sc = (internal: string, role = "") => ({
     internal,

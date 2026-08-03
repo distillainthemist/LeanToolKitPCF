@@ -932,13 +932,107 @@ export interface HealthInput {
   libraries: { name: string; columns: ColumnConfig[] }[];
   /** internal → a Choice column's current choices. */
   choicesBy: Map<string, string[]>;
+  /** internal → what a taxonomy column's cells hold against what its
+   *  term set offers. Absent = not probed, and the check stays quiet. */
+  taxProbe?: Map<string, TaxProbe>;
+}
+
+/** A sample of one taxonomy column's live values, and the labels it is
+ *  supposed to draw on. */
+export interface TaxProbe {
+  /** Cell texts as the register renders them (`renderText`), any number
+   *  of rows; empty means nothing is tagged yet. */
+  samples: string[];
+  /** Every label the term set offers, at every level walked. */
+  labels: string[];
+  /** The term walk hit its limit, so an unrecognised value might simply
+   *  be a term we never read — only the path SHAPE can be concluded. */
+  partial?: boolean;
+}
+
+/**
+ * Separators seen when SharePoint renders a term PATH instead of a term.
+ * `;` is deliberately absent: the register splits on it already, so a
+ * `;`-joined path arrives as ordinary labels and nothing breaks.
+ */
+const PATH_SEPARATORS = [":", "|", "/", "\\", ">", "›", "»"];
+
+const normLabel = (s: string) => s.trim().toLowerCase();
+
+/** Does `value` end in one of `labels`, behind a separator? That is the
+ *  signature of a full path: the leaf is right, the rest is prefix. */
+function endsWithLabel(value: string, labels: Set<string>): boolean {
+  for (const l of labels) {
+    if (l === "" || value.length <= l.length || !value.endsWith(l)) continue;
+    const before = value.charAt(value.length - l.length - 1);
+    if (PATH_SEPARATORS.includes(before) || before === " ") return true;
+  }
+  return false;
+}
+
+/**
+ * The check that would have saved a production deployment (Ben, another
+ * tenant, 2026-08-03): its folders pane did nothing at all, because the
+ * managed metadata columns were set to *Display the entire path to the
+ * term in the field*. LeanBoard matches a term's own LABEL — the folder
+ * tally splits a cell on `;` and compares leaf labels, and picking a
+ * folder filters with CAML `<Eq>` on that label — so against path text
+ * every folder counts zero and every folder click returns nothing, with
+ * no error anywhere to say why.
+ *
+ * So: if NOTHING a column holds is a term the set offers, something is
+ * wrong. Which thing it is, the shape tells us — a value ending in a
+ * real label behind a separator is a path; anything else points at the
+ * column being mapped to the wrong set.
+ *
+ * Deliberately silent when even one value matches: a partly-tagged
+ * library is normal, and the failure this catches matches nothing.
+ */
+export function taxProbeFinding(
+  internal: string,
+  probe: TaxProbe,
+  displayName = ""
+): HealthFinding | null {
+  const shown = displayName !== "" ? displayName : internal;
+  const labels = new Set(probe.labels.map(normLabel).filter((l) => l !== ""));
+  if (labels.size === 0) return null; // nothing to compare against
+  const values = probe.samples
+    .flatMap((s) => s.split(";"))
+    .map((raw) => ({ raw: raw.trim(), key: normLabel(raw) }))
+    .filter((v) => v.key !== "");
+  if (values.length === 0) return null; // nothing tagged yet
+  if (values.some((v) => labels.has(v.key))) return null; // matching as expected
+
+  const quote = (s: string) => `“${s.length > 60 ? `${s.slice(0, 57)}…` : s}”`;
+  const pathish = values.find((v) => endsWithLabel(v.key, labels));
+  if (pathish !== undefined) {
+    return {
+      level: "warn",
+      title: `${shown} shows the whole term path, not the term`,
+      detail:
+        `Values read like ${quote(pathish.raw)}. Folders built on this column count ` +
+        "zero and picking one returns nothing, because LeanBoard matches a term's own " +
+        `label. Fix it in SharePoint: Site settings → Site columns → ${internal} → ` +
+        "Display value → “Display term label in the field”.",
+    };
+  }
+  if (probe.partial === true) return null; // the walk was truncated; cannot say
+  return {
+    level: "warn",
+    title: `${shown}: no value matches its term set`,
+    detail:
+      `Sampled ${quote(values[0].raw)}, which is not one of the ${labels.size} terms in ` +
+      "the set mapped to this column. Either the column points at the wrong term set " +
+      "under Document columns, or its values are written some other way — either way " +
+      "its folders and filters come back empty.",
+  };
 }
 
 /** Roles the register and the document overlay actually lean on. */
 const KEY_ROLES = ["status", "owner", "docType"];
 
 export function dictionaryHealth(input: HealthInput): HealthFinding[] {
-  const { dict, conflicts, carriers, libraries, choicesBy } = input;
+  const { dict, conflicts, carriers, libraries, choicesBy, taxProbe } = input;
   const out: HealthFinding[] = [];
   const roleLabel = (key: string) =>
     COLUMN_ROLES.find((r) => r.key === key)?.label ?? key;
@@ -1021,6 +1115,16 @@ export function dictionaryHealth(input: HealthInput): HealthFinding[] {
           "they move onto term ids, which survive a rename.",
       });
     }
+  }
+
+  // values that no term set recognises — first among the warnings when
+  // it fires, because everything else here is drift and this one is a
+  // whole pane silently doing nothing
+  for (const c of dict.columns) {
+    const probe = taxProbe?.get(c.internal);
+    if (probe === undefined) continue;
+    const finding = taxProbeFinding(c.internal, probe, c.label);
+    if (finding !== null) out.unshift(finding);
   }
 
   for (const lib of libraries) {

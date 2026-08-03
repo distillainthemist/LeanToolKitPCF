@@ -52,6 +52,11 @@ Check it for every column the site dictionary maps to a role
 (organisation, status, document type) — Settings → Documents →
 Document columns lists them.
 
+Since v0.29.0 the app checks itself: Settings → Documents → **Health**
+samples a page from each library and warns *"<column> shows the whole
+term path, not the term"* with this remedy in it, so a deployment that
+gets this wrong says so instead of showing empty folders.
+
 ## Install / update steps
 
 1. Import `LeanBoard_<tag>_managed.zip` (maker portal →

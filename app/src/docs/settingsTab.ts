@@ -26,6 +26,7 @@ import {
   SiteDictionary,
   SpField,
   SpLibrary,
+  TaxProbe,
   TermPalette,
   applyViewTemplate,
   buildSiteDictionary,
@@ -67,8 +68,8 @@ import {
 } from "./docsStore";
 import { parseOrgTree } from "../../../shared/schema/meeting";
 import { orgJson } from "../store/config";
-import { searchPage } from "./data";
-import { taxonomySearchProperty } from "./rows";
+import { renderListPage, searchPage } from "./data";
+import { buildRenderViewXml, taxonomySearchProperty } from "./rows";
 
 interface Ctx {
   markDirty: () => void;
@@ -315,6 +316,8 @@ export async function renderDocsSettings(body: HTMLElement, ctx: Ctx): Promise<v
     paintPalettes();
     paintTemplates();
     paintHealth();
+    // repaints itself when it lands — nothing waits on it
+    void runTaxProbe();
   };
 
   // ---- term sets & colours (C2) ----------------------------------------
@@ -979,6 +982,51 @@ export async function renderDocsSettings(body: HTMLElement, ctx: Ctx): Promise<v
   const healthBox = el("div", "");
   body.appendChild(healthBox);
 
+  // What the taxonomy columns actually HOLD. Everything else in Health
+  // is answerable from configuration; this one needs to look at the
+  // documents, because the failure it catches — a column rendering the
+  // whole term path — is invisible in the settings and fatal to the
+  // folders pane (a production tenant lost its folders to it,
+  // 2026-08-03). One page per library, once per settings visit.
+  const PROBE_ROWS = 40;
+  let taxProbe = new Map<string, TaxProbe>();
+  let probedFor = "";
+
+  const runTaxProbe = async () => {
+    const dict = dictionary();
+    const cols = dict.columns.filter((c) => c.termSetId !== "" && c.available);
+    const key = `${dictKey()}|${exposed.map((l) => l.listId).join(",")}|${cols
+      .map((c) => c.internal)
+      .join(",")}`;
+    if (key === probedFor || cols.length === 0 || exposed.length === 0) return;
+    probedFor = key;
+    const xml = buildRenderViewXml({
+      fields: cols.map((c) => c.internal),
+      rowLimit: PROBE_ROWS,
+    });
+    const [pages, walks] = await Promise.all([
+      Promise.all(exposed.map((l) => renderListPage(app.siteUrl, l.listId, xml))),
+      Promise.all(cols.map((c) => fetchTermPaths(app.siteUrl, c.termSetId))),
+    ]);
+    const next = new Map<string, TaxProbe>();
+    cols.forEach((c, i) => {
+      const walk = walks[i];
+      if (walk.error !== "" || walk.nodes.length === 0) return;
+      const samples = pages
+        .flatMap((p) => p.rows.map((r) => r.values[c.internal] ?? ""))
+        .filter((v) => v !== "");
+      next.set(c.internal, {
+        samples,
+        // every level's label, not just the leaves: a document can be
+        // tagged at any depth
+        labels: [...new Set(walk.nodes.flatMap((n) => n.labels))],
+        partial: walk.truncated,
+      });
+    });
+    taxProbe = next;
+    paintHealth();
+  };
+
   const paintHealth = () => {
     clear(healthBox);
     const dict = dictionary();
@@ -995,6 +1043,7 @@ export async function renderDocsSettings(body: HTMLElement, ctx: Ctx): Promise<v
         columns: l.config.columns,
       })),
       choicesBy: new Map([...liveByInternal].map(([k, f]) => [k, f.choices])),
+      taxProbe,
     });
     if (findings.length === 0) {
       healthBox.appendChild(note("✓ Nothing to report — the libraries agree."));

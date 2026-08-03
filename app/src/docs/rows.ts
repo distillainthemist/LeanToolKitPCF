@@ -310,7 +310,7 @@ export function tallySubtreeCounts(
   cols: string[],
   nodes: { id: string; labels: string[] }[]
 ): Map<string, number> {
-  const SEP = " ";
+  const SEP = "\u0000"; // labels contain spaces; a NUL cannot appear in one
   const path = (labels: string[]) => labels.map((l) => l.trim().toLowerCase()).join(SEP);
   // each row's labels, once
   const rowLabels = rows.map((r) => {
