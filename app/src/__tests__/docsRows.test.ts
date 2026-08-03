@@ -520,6 +520,28 @@ describe("RenderListDataAsStream (register browse feed)", () => {
     expect(page.next).toBe("?Paged=TRUE&p_ID=2");
   });
 
+  it("asks about ME without ever fetching who I am (4D)", async () => {
+    const { buildRenderViewXml } = await import("../docs/rows");
+    // CAML's <UserID/> IS the signed-in user — the query says "me"
+    const held = buildRenderViewXml({ checkedOutToMe: true });
+    expect(held).toContain(
+      '<Eq><FieldRef Name="CheckoutUser" LookupId="TRUE"/><Value Type="Integer"><UserID/></Value></Eq>'
+    );
+    const due = buildRenderViewXml({
+      personIsMe: "DMSOwner",
+      dueWithinDays: { col: "DMSNextReviewDate", days: 30 },
+    });
+    expect(due).toContain('<FieldRef Name="DMSOwner" LookupId="TRUE"/>');
+    expect(due).toContain(
+      '<Leq><FieldRef Name="DMSNextReviewDate"/><Value Type="DateTime"><Today OffsetDays="30"/></Value></Leq>'
+    );
+    // both clauses AND together — one question, not two lists
+    expect(due).toContain("<And>");
+    // blank column = no clause, never broken CAML
+    expect(buildRenderViewXml({ personIsMe: " " })).not.toContain("<Where>");
+    expect(buildRenderViewXml({ dueWithinDays: { col: "", days: 5 } })).not.toContain("<Where>");
+  });
+
   it("keeps the check-out holder's EMAIL, not just their name (4B)", async () => {
     const { parseRenderPage } = await import("../docs/rows");
     const page = parseRenderPage(

@@ -2104,6 +2104,33 @@ button.app-docs-navterm.app-docs-navterm-on {
 }
 .app-dlghost .ltk-dialog { box-shadow: 0 8px 32px rgba(0, 0, 0, 0.28); }
 
+/* My tasks (Phase 4D) — the V2 Action-needed slot, live */
+.app-docs-actionneeded-hot {
+  background: var(--app-accent-soft, #e6f0ff);
+  color: var(--app-accent, #12467b);
+  font-weight: 600;
+}
+.app-docs-tasksscrim { position: fixed; inset: 0; z-index: 9000; }
+.app-docs-taskspanel {
+  position: fixed; width: min(380px, calc(100vw - 24px));
+  max-height: min(60vh, 480px); overflow-y: auto;
+  background: #fff; border: 1px solid #ddd9d1; border-radius: 8px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.18); padding: 10px 12px;
+}
+.app-docs-taskshead { font-weight: 700; margin-bottom: 6px; }
+.app-docs-tasksgroup {
+  font-size: 11px; font-weight: 600; letter-spacing: 0.04em;
+  text-transform: uppercase; color: #57534a; margin: 10px 0 4px;
+}
+.app-docs-taskrow {
+  display: flex; flex-direction: column; gap: 1px; width: 100%;
+  border: none; background: none; cursor: pointer; text-align: left;
+  padding: 6px 8px; border-radius: 5px;
+}
+.app-docs-taskrow:hover { background: #f2f1ee; }
+.app-docs-taskname { font-size: 13px; font-weight: 600; }
+.app-docs-taskoverdue { color: #a4262c; }
+
 /* dictionary row reorder — order = how properties read everywhere */
 .app-docs-colmove { display: flex; gap: 2px; align-self: center; }
 .app-docs-movebtn {

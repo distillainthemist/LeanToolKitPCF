@@ -304,6 +304,7 @@ export function mountDocs(
       siteDict.columns.find((c) => c.role === role)?.internal ?? "";
     const statusInternal = internalForRole("status");
     const ownerInternal = internalForRole("owner");
+    const reviewInternal = internalForRole("nextReviewDate");
     /**
      * The register's columns: the view's own choice when there is one,
      * otherwise every column any library in view opens with — in
@@ -418,13 +419,152 @@ export function mountDocs(
       document.body.appendChild(menu);
     });
 
-    // ---- Action needed — placeholder only (Ben, 2026-08-01) ------------
-    // The live control (awaiting review / review due / checked out)
-    // arrives with document control in Phase 4; the button holds its
-    // final toolbar position so the layout doesn't shuffle later.
-    const actionNeeded = el("button", "app-btn app-docs-actionneeded", "Action needed") as HTMLButtonElement;
-    actionNeeded.setAttribute("aria-disabled", "true");
-    actionNeeded.title = "Arrives with document control (a later phase).";
+    // ---- My tasks (Phase 4D) -------------------------------------------
+    // The V2 "Action needed" placeholder, live. A QUERY, not a store:
+    // documents checked out to me (any exposed library) and documents I
+    // own whose review date is due — both answered by SharePoint's own
+    // columns via CAML <UserID/>, so there is no state to go stale and
+    // nothing to sweep. Checking a document in makes it leave the list
+    // because the list never existed anywhere else.
+    const actionNeeded = el("button", "app-btn app-docs-actionneeded", "My tasks") as HTMLButtonElement;
+    actionNeeded.title = "Documents checked out to you, and your documents due for review";
+
+    interface TaskRow {
+      row: DocRow;
+      libName: string;
+      why: string;
+      overdue: boolean;
+    }
+    /** "Near" for a review date: due within this many days counts. */
+    const REVIEW_HORIZON_DAYS = 30;
+
+    const fetchMyTasks = async (): Promise<{ held: TaskRow[]; review: TaskRow[] }> => {
+      const held: TaskRow[] = [];
+      const review: TaskRow[] = [];
+      const nameOf = (l: DocLibrary) => l.config.title || l.name;
+      await Promise.all(
+        libraries.map(async (l) => {
+          const page = await renderListPage(
+            app.siteUrl,
+            l.listId,
+            buildRenderViewXml({ checkedOutToMe: true, fields: ["CheckoutUser"], rowLimit: 30 })
+          );
+          for (const row of page.rows) {
+            held.push({ row, libName: nameOf(l), why: "Checked out to you", overdue: false });
+          }
+        })
+      );
+      if (reviewInternal !== "" && ownerInternal !== "") {
+        const carriers = libraries.filter((l) => {
+          const set = new Set(l.config.columns.map((c) => c.internal));
+          return set.has(reviewInternal) && set.has(ownerInternal);
+        });
+        await Promise.all(
+          carriers.map(async (l) => {
+            const page = await renderListPage(
+              app.siteUrl,
+              l.listId,
+              buildRenderViewXml({
+                personIsMe: ownerInternal,
+                dueWithinDays: { col: reviewInternal, days: REVIEW_HORIZON_DAYS },
+                fields: [reviewInternal],
+                rowLimit: 30,
+              })
+            );
+            for (const row of page.rows) {
+              const when = row.values[reviewInternal] ?? "";
+              // membership in the list is SharePoint's (server-side
+              // Today+offset); this flag only colours the row, and
+              // Date.parse of a display date is a heuristic that may
+              // misread day-first locales — acceptable for a colour
+              const t = Date.parse(when);
+              const overdue = !Number.isNaN(t) && t < Date.now();
+              review.push({
+                row,
+                libName: nameOf(l),
+                why: when === "" ? "Review due" : overdue ? `Review overdue · ${when}` : `Review due · ${when}`,
+                overdue,
+              });
+            }
+          })
+        );
+      }
+      return { held, review };
+    };
+
+    let tasksBadgeGen = 0;
+    const paintTasksBadge = (n: number) => {
+      actionNeeded.textContent = n > 0 ? `My tasks · ${n}` : "My tasks";
+      actionNeeded.classList.toggle("app-docs-actionneeded-hot", n > 0);
+    };
+    /** Recounted in the background — at mount, and after every command
+     *  that can change the answer (check-out/in/discard, add). */
+    const refreshTasksBadge = () => {
+      const gen = ++tasksBadgeGen;
+      void fetchMyTasks().then(({ held, review }) => {
+        if (dead || gen !== tasksBadgeGen) return;
+        paintTasksBadge(held.length + review.length);
+      });
+    };
+    refreshTasksBadge();
+
+    actionNeeded.addEventListener("click", () => {
+      const scrim = el("div", "app-docs-tasksscrim");
+      const panel = el("div", "app-docs-taskspanel");
+      const closePanel = () => {
+        scrim.remove();
+        document.removeEventListener("keydown", onTasksKey, true);
+      };
+      const onTasksKey = (e: KeyboardEvent) => {
+        if (e.key === "Escape") {
+          e.stopPropagation();
+          closePanel();
+        }
+      };
+      document.addEventListener("keydown", onTasksKey, true);
+      scrim.addEventListener("pointerdown", (e) => {
+        if (e.target === scrim) closePanel();
+      });
+      const r = actionNeeded.getBoundingClientRect();
+      panel.style.top = `${r.bottom + 6}px`;
+      panel.style.right = `${Math.max(8, window.innerWidth - r.right)}px`;
+      const bodyEl = el("div", "app-docs-tasksbody");
+      bodyEl.appendChild(el("div", "app-loading-line", "Asking SharePoint…"));
+      panel.append(el("div", "app-docs-taskshead", "My tasks"), bodyEl);
+      scrim.appendChild(panel);
+      document.body.appendChild(scrim);
+      void fetchMyTasks().then(({ held, review }) => {
+        if (!scrim.isConnected) return;
+        clear(bodyEl);
+        paintTasksBadge(held.length + review.length);
+        if (held.length + review.length === 0) {
+          bodyEl.appendChild(el("div", "app-field-hint", "Nothing needs you."));
+          return;
+        }
+        const group = (title: string, rows: TaskRow[]) => {
+          if (rows.length === 0) return;
+          bodyEl.appendChild(el("div", "app-docs-tasksgroup", `${title} (${rows.length})`));
+          for (const t of rows) {
+            const b = el("button", "app-docs-taskrow") as HTMLButtonElement;
+            b.append(
+              el("span", "app-docs-taskname", t.row.name),
+              el(
+                "span",
+                `app-field-hint${t.overdue ? " app-docs-taskoverdue" : ""}`,
+                `${t.libName} · ${t.why}`
+              )
+            );
+            b.addEventListener("click", () => {
+              closePanel();
+              onRowOpen(t.row);
+            });
+            bodyEl.appendChild(b);
+          }
+        };
+        group("Checked out to you", held);
+        group("Review due", review);
+      });
+    });
     // toggles that used to be toolbar checkboxes ride the register
     // kebab from V3 — state only here
     /**
@@ -1007,6 +1147,7 @@ export function mountDocs(
           host: dialogHost,
           onCreated: (row) => {
             void load(true);
+            refreshTasksBadge();
             onRowOpen(row);
           },
         });
@@ -1683,6 +1824,8 @@ export function mountDocs(
       }
       list?.setRows(list.rows());
       viewerRepaint?.();
+      // a command that changes checkout state changes the My tasks count
+      refreshTasksBadge();
     };
 
     const commandFailed = (what: string, why: string) => {

@@ -129,6 +129,16 @@ export interface RenderQueryOpts {
   /** DMS internals to return beyond the core file fields. */
   fields?: string[];
   rowLimit?: number;
+  // ---- My tasks (Phase 4D): questions about ME, answered server-side.
+  // CAML's <UserID/> is the signed-in user, so no lookup id ever has to
+  // be fetched or stored — the query itself says "me".
+  /** Only documents checked out to the current user. */
+  checkedOutToMe?: boolean;
+  /** A person column that must be the current user (e.g. the owner). */
+  personIsMe?: string;
+  /** A date column due on or before today + days (days may be 0 for
+   *  "already due", and the clause skips rows with no date at all). */
+  dueWithinDays?: { col: string; days: number };
 }
 
 /** The ViewXml for one library's server-filtered, server-sorted page. */
@@ -180,6 +190,22 @@ export function buildRenderViewXml(opts: RenderQueryOpts = {}): string {
       )
     );
     if (eqs.length > 0) clauses.push(camlJoin("Or", eqs));
+  }
+  if (opts.checkedOutToMe === true) {
+    clauses.push(
+      '<Eq><FieldRef Name="CheckoutUser" LookupId="TRUE"/><Value Type="Integer"><UserID/></Value></Eq>'
+    );
+  }
+  if ((opts.personIsMe ?? "").trim() !== "") {
+    clauses.push(
+      `<Eq><FieldRef Name="${xmlEsc((opts.personIsMe ?? "").trim())}" LookupId="TRUE"/><Value Type="Integer"><UserID/></Value></Eq>`
+    );
+  }
+  const due = opts.dueWithinDays;
+  if (due !== undefined && due.col.trim() !== "") {
+    clauses.push(
+      `<Leq><FieldRef Name="${xmlEsc(due.col.trim())}"/><Value Type="DateTime"><Today OffsetDays="${Math.round(due.days)}"/></Value></Leq>`
+    );
   }
   const where = clauses.length > 0 ? `<Where>${camlJoin("And", clauses)}</Where>` : "";
   const order = `<OrderBy><FieldRef Name="${opts.sortName ? "FileLeafRef" : "Modified"}" Ascending="${opts.asc ? "TRUE" : "FALSE"}"/></OrderBy>`;
