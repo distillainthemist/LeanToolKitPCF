@@ -1334,6 +1334,45 @@ export function splitAddWrites(values: AddFieldValue[]): {
   return { formValues, patch };
 }
 
+/**
+ * Everything the add form captured, as ONE ValidateUpdateListItem call
+ * with bNewDocumentUpdate: true — SharePoint's own "document
+ * information panel" path for a just-created document. It bypasses a
+ * require-check-out rule (probe run four: the bare text write went
+ * through while every other route demanded a check-out) and completes
+ * the document without a separate check-in — which is what lets a new
+ * document be finished WITHOUT ever calling through the file door that
+ * stalls on fresh copies (five runs, 2026-08-04).
+ *
+ * Taxonomy rides as the flow-standard "Label|guid" form value; dates as
+ * ISO text; person as claims JSON. `taxInternals` and `patch` exist for
+ * the fallback: if the tagging validator refuses the taxonomy form
+ * values, those columns alone retry through the connector's term-object
+ * route under a held check-out — the route probe run six proved.
+ */
+export function newDocumentWrites(values: AddFieldValue[]): {
+  formValues: { FieldName: string; FieldValue: string }[];
+  taxInternals: string[];
+  patch: Record<string, unknown>;
+} {
+  const base = splitAddWrites(values);
+  const formValues = [...base.formValues];
+  const taxInternals: string[] = [];
+  const patch: Record<string, unknown> = {};
+  for (const v of values) {
+    if (v.kind === "date" && (v.text ?? "").trim() !== "") {
+      formValues.push({ FieldName: v.internal, FieldValue: (v.text ?? "").trim() });
+    }
+    if (v.kind === "taxonomy" && (v.label ?? "") !== "" && (v.termId ?? "") !== "") {
+      taxInternals.push(v.internal);
+      formValues.push({ FieldName: v.internal, FieldValue: `${v.label}|${v.termId}` });
+      const term = { Value: v.label, TermGuid: v.termId, WssId: -1 };
+      patch[v.internal] = v.multi === true ? [term] : term;
+    }
+  }
+  return { formValues, taxInternals, patch };
+}
+
 /** A file name SharePoint will take: forbidden characters dropped,
  *  leading/trailing dots and spaces trimmed. Empty means "not a name". */
 export function sanitizeFileName(name: string): string {

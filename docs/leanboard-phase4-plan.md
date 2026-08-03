@@ -160,13 +160,24 @@ arrives **checked in** (runs four and five in SharePoint), so on a
 require-check-out library the check-out genuinely must be taken before
 the term write (probe run four's refusal).
 
-4C therefore: itemId via the register's own RLDAS read (list door,
-newest first, exact name); ONE patient `CheckOut()` (up to 120 s,
-narrated every 5 s, never retried); metadata through item doors; ONE
-patient check-in, whose "not checked out" refusal reads as "nothing to
-release". **Phase 5 must remember this**: any command that copies
-(renditions, supersede) gives file-door calls on the fresh copy one
-patient attempt each, never abandon-and-retry.
+4C's final shape (Ben's critical-review push, 2026-08-04): the file
+door is not merely slowed around — it is DESIGNED OUT. The composition
+error was mine: SharePoint's own path for completing a just-created
+document is `ValidateUpdateListItem` with `bNewDocumentUpdate: true`
+(the document information panel's write), which bypasses the
+require-check-out rule (probe run four's bare text write proved it on
+this tenant) and finishes the document with no separate check-in. So:
+copy → itemId via RLDAS (list door, newest first, exact name) → ONE
+forms-engine call carrying everything, taxonomy included as the
+flow-standard `Label|guid`. Only if the tagging validator refuses the
+term columns does the fallback engage, for those columns alone: one
+patient `CheckOut()` (up to 120 s, narrated, never retried — an
+abandoned duplicate landing late would re-check-out the document after
+its check-in), connector term object, one patient check-in whose "not
+checked out" reads as "nothing to release". **Phase 5 must remember
+this**: complete new files through the forms engine, and give any
+unavoidable file-door call on a fresh copy one patient attempt, never
+abandon-and-retry.
 
 ## Decisions (Ben, 2026-08-03)
 

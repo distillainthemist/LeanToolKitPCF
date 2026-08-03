@@ -18,9 +18,9 @@ import {
   SiteColumn,
   SpField,
   fieldsFromResponse,
+  newDocumentWrites,
   sanitizeFileName,
   spErrorText,
-  splitAddWrites,
   validateItemErrors,
 } from "./model";
 import { DocRow, buildRenderViewXml, extOf } from "./rows";
@@ -501,72 +501,99 @@ export function openAddDocument(opts: AddDocumentOpts): void {
     if (!idRes.ok) return fail("Created, but could not read the new document back", idRes.status);
     const itemId = Number(idRes.data);
 
-    // The check-out IS needed: the copy arrives checked IN (runs four
-    // and five, confirmed in SharePoint), and on a require-check-out
-    // library the term write is refused without one (probe run four).
-    // It rides the file door, which is slow on a fresh copy — so one
-    // patient call, never abandon-and-retry: a duplicate landing late
-    // would re-check-out the document after the check-in below.
-    status("Taking the check-out…");
-    const out = await patient("Taking the check-out", checkOutFile(site, newUrl));
-    if (out === null) {
-      return fail(
-        "The check-out never answered",
-        "SharePoint is still settling the new file. The document exists — give it a " +
-          "minute, then set its properties from the register (check out, edit, check in)."
-      );
-    }
-    // "already checked out" on a name that did not exist a minute ago
-    // can only be us — a previous attempt's call landing late
-    const held = out.ok || /checked out/i.test(spErrorText(out.status));
-    if (!held) return fail("Created, but could not check out to set properties", out.status);
-
-    const { formValues, patch } = splitAddWrites(editors.map((e) => e.read()));
-    if (formValues.length > 0) {
+    // ONE forms-engine call — SharePoint's own path for completing a
+    // just-created document (bNewDocumentUpdate: true, the document
+    // information panel's write). It bypasses the require-check-out
+    // rule and finishes the document, so in the good case NOTHING here
+    // touches the file door that stalls on fresh copies. The copy
+    // arrives checked in; this call leaves it that way.
+    const writes = newDocumentWrites(editors.map((e) => e.read()));
+    let taxFallback = false;
+    if (writes.formValues.length > 0) {
       status("Writing properties…");
       const res = await timedRetry("Writing properties", () =>
-        validateUpdateListItem(site, lib.listId, itemId, formValues, false)
+        validateUpdateListItem(site, lib.listId, itemId, writes.formValues, true)
       );
       const errs = validateItemErrors(res.data);
-      if (!res.ok || errs.length > 0) {
+      const taxErrs = errs.filter((e) => writes.taxInternals.includes(e.field));
+      const otherErrs = errs.filter((e) => !writes.taxInternals.includes(e.field));
+      if (otherErrs.length > 0) {
         return fail(
-          "Created, but some properties were refused (it stays checked out to you)",
-          errs.map((e) => `${e.field}: ${e.message}`).join("; ") || res.status
+          "Created, but some properties were refused",
+          otherErrs.map((e) => `${e.field}: ${e.message}`).join("; ")
         );
       }
+      if (!res.ok || taxErrs.length > 0) {
+        if (writes.taxInternals.length === 0) {
+          return fail("Created, but the properties write failed", res.status);
+        }
+        // The whole call failing with taxonomy aboard reads as the
+        // known masked check-out exception; a field-level refusal is
+        // the tagging validator. Either way: re-run WITHOUT the term
+        // columns (this is the proven-bare path), then send the terms
+        // through the fallback below.
+        taxFallback = true;
+        const bare = writes.formValues.filter(
+          (f) => !writes.taxInternals.includes(f.FieldName)
+        );
+        if (bare.length > 0) {
+          const res2 = await timedRetry("Writing properties", () =>
+            validateUpdateListItem(site, lib.listId, itemId, bare, true)
+          );
+          const errs2 = validateItemErrors(res2.data);
+          if (!res2.ok || errs2.length > 0) {
+            return fail(
+              "Created, but some properties were refused",
+              errs2.map((e) => `${e.field}: ${e.message}`).join("; ") || res2.status
+            );
+          }
+        }
+      }
     }
-    if (Object.keys(patch).length > 0) {
-      status("Writing terms & dates…");
-      const res = await timedRetry("Writing terms & dates", () =>
-        connectorPatchItem(site, lib.listId, itemId, patch)
+
+    // Fallback for the term columns alone, on the probe-proven route:
+    // held check-out → connector term object → check-in. File-door
+    // calls are SLOW on a fresh copy (five runs), so each gets one
+    // patient narrated attempt, never abandon-and-retry — a duplicate
+    // landing late would re-check-out the document after its check-in.
+    if (taxFallback && Object.keys(writes.patch).length > 0) {
+      status("Taking the check-out…");
+      const out = await patient("Taking the check-out", checkOutFile(site, newUrl));
+      if (out === null) {
+        return fail(
+          "The term columns need a check-out, and it never answered",
+          "The document exists with its other properties set. Give SharePoint a minute, " +
+            "then set the term columns from the register (check out, edit, check in)."
+        );
+      }
+      // "already checked out" on a name that did not exist a minute ago
+      // can only be us — a previous attempt's call landing late
+      const held = out.ok || /checked out/i.test(spErrorText(out.status));
+      if (!held) return fail("Created, but could not check out for the term columns", out.status);
+
+      status("Writing the term columns…");
+      const res = await timedRetry("Writing the term columns", () =>
+        connectorPatchItem(site, lib.listId, itemId, writes.patch)
       );
       if (!res.ok) {
         return fail("Created, but the term columns were refused (it stays checked out to you)", res.status);
       }
-    }
 
-    // Check-in also rides the file door: one patient call, no blind
-    // retry — a first attempt landing late would make a retry fail
-    // "not checked out", which is success wearing an error.
-    status("Checking in…");
-    const cin = await patient(
-      "Checking in",
-      checkInFile(site, newUrl, `Created from template “${tpl.name}”`, false)
-    );
-    if (cin === null) {
-      return fail(
-        "Check-in never answered",
-        "The document exists and the properties are set — check the library: if it still " +
-          "shows checked out to you, check it in from the register."
+      status("Checking in…");
+      const cin = await patient(
+        "Checking in",
+        checkInFile(site, newUrl, `Created from template “${tpl.name}”`, false)
       );
-    }
-    // "not checked out" here is not a failure: a library without the
-    // require-check-out rule never issued one, so there is nothing to
-    // release and the document is simply done
-    if (!cin.ok && !/not checked out/i.test(spErrorText(cin.status))) {
-      // classic cause: a required column the form could not edit —
-      // SharePoint's own sentence names it
-      return fail("Created, but check-in was refused (it stays checked out to you)", cin.status);
+      if (cin === null) {
+        return fail(
+          "Check-in never answered",
+          "The document exists and the properties are set — check the library: if it " +
+            "still shows checked out to you, check it in from the register."
+        );
+      }
+      if (!cin.ok && !/not checked out/i.test(spErrorText(cin.status))) {
+        return fail("Created, but check-in was refused (it stays checked out to you)", cin.status);
+      }
     }
 
     // hand the finished row back the way the register reads rows — and

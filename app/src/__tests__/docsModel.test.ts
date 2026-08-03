@@ -920,6 +920,40 @@ describe("add a document — the write recipe (4C)", () => {
     expect(Object.keys(patch)).toEqual([]);
   });
 
+  it("a new document completes in ONE forms-engine call", async () => {
+    const { newDocumentWrites } = await import("../docs/model");
+    const { formValues, taxInternals, patch } = newDocumentWrites([
+      { internal: "Title", kind: "text", text: "Weighbridge plan" },
+      { internal: "DMSEffective", kind: "date", text: "2026-09-01" },
+      { internal: "DMSDocumentStatus", kind: "taxonomy", label: "Draft", termId: "t-1" },
+      { internal: "DMSOrg", kind: "taxonomy", label: "Casting", termId: "t-2", multi: true },
+      { internal: "DMSOwner", kind: "person", people: [{ email: "ben@pechey.com", name: "B" }] },
+    ]);
+    // everything becomes a form value — dates as ISO text, taxonomy as
+    // the flow-standard Label|guid, person as claims JSON
+    expect(formValues).toEqual([
+      { FieldName: "Title", FieldValue: "Weighbridge plan" },
+      {
+        FieldName: "DMSOwner",
+        FieldValue: JSON.stringify([{ Key: "i:0#.f|membership|ben@pechey.com" }]),
+      },
+      { FieldName: "DMSEffective", FieldValue: "2026-09-01" },
+      { FieldName: "DMSDocumentStatus", FieldValue: "Draft|t-1" },
+      { FieldName: "DMSOrg", FieldValue: "Casting|t-2" },
+    ]);
+    // the fallback knows which columns are taxonomy, and holds the
+    // proven term-object shapes for exactly those
+    expect(taxInternals).toEqual(["DMSDocumentStatus", "DMSOrg"]);
+    expect(patch).toEqual({
+      DMSDocumentStatus: { Value: "Draft", TermGuid: "t-1", WssId: -1 },
+      DMSOrg: [{ Value: "Casting", TermGuid: "t-2", WssId: -1 }],
+    });
+    // nothing filled in = nothing to write, nothing to fall back to
+    const empty = newDocumentWrites([{ internal: "X", kind: "taxonomy", label: "", termId: "" }]);
+    expect(empty.formValues).toEqual([]);
+    expect(empty.taxInternals).toEqual([]);
+  });
+
   it("makes a name SharePoint will take", async () => {
     const { sanitizeFileName } = await import("../docs/model");
     expect(sanitizeFileName('Q3: "Casting" <plan>?')).toBe("Q3 Casting plan");
