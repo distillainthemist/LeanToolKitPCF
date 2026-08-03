@@ -488,7 +488,14 @@ export function validateUpdateListItem(
   site: string,
   listId: string,
   itemId: number,
-  values: { FieldName: string; FieldValue: string }[]
+  values: { FieldName: string; FieldValue: string }[],
+  // NOT a harmless default: bNewDocumentUpdate=true means "the write
+  // straight after an upload" and SharePoint CHECKS THE FILE IN as part
+  // of it. Hardcoded true, it silently released the probe's check-out
+  // between the text write and the taxonomy writes, which then all
+  // failed "not checked out" — five runs to catch (2026-08-03).
+  // Ordinary edits pass false.
+  newDocument = false
 ): Promise<SpResult> {
   return spRequest(
     site,
@@ -496,7 +503,7 @@ export function validateUpdateListItem(
     `_api/web/lists(guid'${listId}')/items(${itemId})/ValidateUpdateListItem`,
     {
       headers: { "Content-Type": "application/json;odata=nometadata" },
-      body: JSON.stringify({ formValues: values, bNewDocumentUpdate: true }),
+      body: JSON.stringify({ formValues: values, bNewDocumentUpdate: newDocument }),
     }
   );
 }

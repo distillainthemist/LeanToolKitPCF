@@ -144,17 +144,24 @@ export async function runWriteProbe(
     const itemId = Number(((idRes.data ?? {}) as { Id?: unknown }).Id ?? 0);
     step("Find its list item", itemId > 0, itemId > 0 ? `item ${itemId}` : say(idRes, ""));
 
-    // Check out BEFORE touching metadata. Run four found the answer
-    // hiding in plain sight: the connector's term write was refused
-    // with "you must first check out this document" — the library
-    // demands check-out for edits, the probe wrote metadata bare, and
-    // the 502s were the same refusal dying unhandled inside the REST
-    // routes (a plain text write slips through because
-    // bNewDocumentUpdate bypasses the rule; the taxonomy path's extra
-    // item update does not). So metadata is probed the way 4C will
-    // actually write it: inside a check-out / check-in bracket.
-    const out = await checkOutFile(site, textUrl);
-    step("Check out", out.ok, say(out, "checked out"));
+    // Hold a check-out for the whole metadata block. Two run-earned
+    // rules live here: a require-check-out library hands a REST-created
+    // file back ALREADY checked out to its creator (run five's "already
+    // checked out by…" was us), so take the check-out however it comes;
+    // and every write below passes bNewDocumentUpdate=false, because
+    // true CHECKS THE FILE IN mid-probe — that one boolean faked three
+    // runs of taxonomy failures.
+    const pre = await fetchFileInfo(site, textUrl);
+    const preHeld =
+      pre.ok && Number(((pre.data ?? {}) as { CheckOutType?: unknown }).CheckOutType ?? 2) !== 2;
+    let held = preHeld;
+    if (preHeld) {
+      step("Check out", true, "created already checked out — the library requires check-out");
+    } else {
+      const out = await checkOutFile(site, textUrl);
+      held = out.ok;
+      step("Check out", out.ok, say(out, "checked out"));
+    }
 
     if (itemId > 0) {
       const titled = await validateUpdateListItem(site, listId, itemId, [
@@ -331,7 +338,7 @@ export async function runWriteProbe(
       }
     }
 
-    if (out.ok) {
+    if (held) {
       const cin = await checkInFile(site, textUrl, "LeanBoard write probe", false);
       step("Check in (comment, minor)", cin.ok, say(cin, "checked in as a minor version"));
     }

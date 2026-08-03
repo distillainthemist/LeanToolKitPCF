@@ -117,6 +117,23 @@ check-out. The "expanded reference" payload shape IS rejected by the
 validator (measured), so the term-object shape `{Value, TermGuid,
 WssId: -1}` is the one the connector's surface takes.
 
+**Run five closed the case (2026-08-03): the saboteur was
+`bNewDocumentUpdate: true`.** Run five's contradictions — check-out
+failing "already checked out by us" while every taxonomy write failed
+"not checked out", and run four's check-out succeeding AFTER the
+metadata attempts — admit exactly one reading: (a) a require-check-out
+library hands a REST-created file back already checked out to its
+creator, and (b) `bNewDocumentUpdate: true`, which our
+validateUpdateListItem hardcoded, is the "write straight after upload"
+mode and CHECKS THE FILE IN as part of the write. So the probe's own
+Title write released the check-out every run, and the taxonomy writes
+that followed were refused truthfully. Probe v6: take the check-out
+however it arrives (pre-held or explicit), pass
+bNewDocumentUpdate=false everywhere, check in explicitly at the end.
+Consequence for 4B/4C: metadata writes always ride a held check-out
+with newDocument=false; the flag is opt-in only for a deliberate
+write-and-release straight after an upload.
+
 **Reserve, if all seven fail:** CSOM through
 `/_vti_bin/client.svc/ProcessQuery` — the XML protocol the SharePoint
 UI itself uses for taxonomy. Heavier to build, but it does not share a
