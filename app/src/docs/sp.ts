@@ -260,6 +260,57 @@ export function addFileBytes(
   );
 }
 
+/**
+ * The connector's own **Create file** operation — a different door from
+ * HttpRequest, declared the same way. Worth trying precisely because its
+ * body parameter IS a file's content rather than a REST body: Power
+ * Platform transmits binary parameters base64-encoded on the wire, so a
+ * base64 string handed to a file-typed parameter can land as the bytes
+ * it decodes to. Whether this SDK forwards it that way is what 4A's
+ * third carriage measures.
+ */
+export async function connectorCreateFile(
+  site: string,
+  folder: string,
+  name: string,
+  content: string
+): Promise<SpResult> {
+  declare();
+  const info = dataSourcesInfo as unknown as { documents: { apis: Record<string, unknown> } };
+  info.documents.apis["CreateFile"] ??= {
+    path: "/{connectionId}/datasets/{dataset}/files",
+    method: "POST",
+    parameters: [
+      { name: "connectionId", in: "path", required: true, type: "string" },
+      { name: "dataset", in: "path", required: true, type: "string" },
+      { name: "folderPath", in: "query", required: true, type: "string" },
+      { name: "name", in: "query", required: true, type: "string" },
+      { name: "body", in: "body", required: true, type: "string" },
+    ],
+    responseInfo: { "200": { type: "object" } },
+  };
+  try {
+    const r = (await getClient(dataSourcesInfo).executeAsync<object, unknown>({
+      connectorOperation: {
+        tableName: "documents",
+        operationName: "CreateFile",
+        parameters: {
+          dataset: site.replace(/\/$/, ""),
+          folderPath: folder,
+          name,
+          body: content,
+        },
+      },
+    })) as { success?: boolean; data?: unknown; error?: unknown };
+    if (r && r.success === false) {
+      return { ok: false, status: summarizeError(r.error), data: r.error ?? null };
+    }
+    return { ok: true, status: "", data: (r as { data?: unknown })?.data ?? null };
+  } catch (e) {
+    return { ok: false, status: String(e), data: null };
+  }
+}
+
 export function fetchFileInfo(site: string, url: string): Promise<SpResult> {
   return spRequest(site, "GET", `${filePath(url)}?$select=Length,CheckOutType,Name`);
 }

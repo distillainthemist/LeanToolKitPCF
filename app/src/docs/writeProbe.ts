@@ -11,13 +11,19 @@
 // Phase 4 ships: a deployment where writes are blocked says so in one
 // click, instead of failing later at a user's first check-out.
 
-import { bytesToBinaryString, parseBasePermissions, validateItemErrors } from "./model";
+import {
+  bytesToBase64,
+  bytesToBinaryString,
+  parseBasePermissions,
+  validateItemErrors,
+} from "./model";
 import type { SpResult } from "./sp";
 import {
   addFile,
   addFileBytes,
   checkInFile,
   checkOutFile,
+  connectorCreateFile,
   copyFileTo,
   fetchFileInfo,
   fetchFileItemId,
@@ -137,28 +143,43 @@ export async function runWriteProbe(
       // rather than only that one of them failed.
       const tc = input.taxColumn;
       if (tc !== undefined) {
-        const attempts = [
-          { how: "label|id", value: `${tc.label}|${tc.termId}` },
-          { how: "label alone", value: tc.label },
+        // Every documented format, each reported on its own line. One
+        // line per attempt because the FIRST run collapsed them into
+        // the last error and hid what the real candidate said — and
+        // 4C's metadata form cannot be written until we know which of
+        // these this tenant takes.
+        const formats = [
+          { how: "Label|id", value: `${tc.label}|${tc.termId}` },
+          { how: "-1;#Label|id", value: `-1;#${tc.label}|${tc.termId}` },
+          { how: "id alone", value: tc.termId },
+          { how: "Label alone", value: tc.label },
         ];
-        let done = false;
-        let last = "";
-        for (const a of attempts) {
-          if (done) break;
+        let accepted = "";
+        for (const f of formats) {
+          if (accepted !== "") break;
           const tax = await validateUpdateListItem(site, listId, itemId, [
-            { FieldName: tc.internal, FieldValue: a.value },
+            { FieldName: tc.internal, FieldValue: f.value },
           ]);
           const errs = validateItemErrors(tax.data);
-          if (tax.ok && errs.length === 0) {
-            step(`Write metadata (term “${tc.label}”)`, true, `accepted as ${a.how}`);
-            done = true;
-          } else {
-            last = tax.ok
-              ? `${a.how}: ${errs.map((e) => e.message).join("; ") || "rejected"}`
-              : `${a.how}: ${say(tax, "")}`;
-          }
+          const ok = tax.ok && errs.length === 0;
+          if (ok) accepted = f.how;
+          step(
+            `${tc.internal} = “${tc.label}” as ${f.how}`,
+            ok,
+            ok
+              ? "accepted"
+              : tax.ok
+                ? errs.map((e) => e.message).join("; ") || "rejected"
+                : say(tax, "")
+          );
         }
-        if (!done) step(`Write metadata (term “${tc.label}”)`, false, last);
+        step(
+          "Write a term",
+          accepted !== "",
+          accepted !== ""
+            ? `${accepted} is the format 4C's metadata form will send`
+            : "no format accepted — 4C's metadata form cannot write taxonomy columns yet"
+        );
       }
     }
 
@@ -198,6 +219,16 @@ export async function runWriteProbe(
         how: "base64 envelope",
         ext: "b64.bin",
         send: (name) => addFileBytes(site, root, name, PROBE_BYTES),
+      },
+      {
+        how: "connector Create file, base64",
+        ext: "conn64.bin",
+        send: (name) => connectorCreateFile(site, root, name, bytesToBase64(PROBE_BYTES)),
+      },
+      {
+        how: "connector Create file, raw",
+        ext: "connraw.bin",
+        send: (name) => connectorCreateFile(site, root, name, bytesToBinaryString(PROBE_BYTES)),
       },
     ];
     let uploadWorks = false;
