@@ -68,6 +68,10 @@ interface ViewerOpts {
    */
   control?: {
     state: () => { checkedOut: boolean; mine: boolean; by: string };
+    /** Hands the screen a repaint to call whenever it changes the
+     *  document's state — a command runs through the screen's own
+     *  dialogs, so the overlay cannot know it finished otherwise. */
+    register?: (repaint: () => void) => void;
     checkOut: () => Promise<void>;
     checkIn: () => void;
     discard: () => void;
@@ -244,6 +248,7 @@ export function openDocViewer(opts: ViewerOpts): void {
     inBtn.addEventListener("click", () => ctl.checkIn());
     dropBtn.addEventListener("click", () => ctl.discard());
     paint();
+    ctl.register?.(paint);
     actions.append(outBtn, inBtn, dropBtn, held);
   }
   if (opts.favorite) {

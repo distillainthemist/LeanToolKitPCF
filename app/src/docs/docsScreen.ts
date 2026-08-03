@@ -1410,6 +1410,8 @@ export function mountDocs(
       void driveIdFor(app.siteUrl, row.listId || lib?.listId || "").then((driveId) => {
         if (dead) return;
         const libStatusCol = lib?.config.columns.find((c) => c.role === "status") ?? null;
+        // a previous overlay's repaint must not outlive it
+        viewerRepaint = null;
         openDocViewer({
           site: app.siteUrl,
           row,
@@ -1447,6 +1449,9 @@ export function mountDocs(
                   mine: isMine(row),
                   by: row.checkoutName ?? "",
                 }),
+                register: (repaint) => {
+                  viewerRepaint = repaint;
+                },
                 checkOut: () => runCommand("out", row),
                 checkIn: () => openCheckIn(row),
                 discard: () => openDiscard(row),
@@ -1567,6 +1572,19 @@ export function mountDocs(
      *  writable libraries at mount, so the kebab can answer instantly. */
     const permsByLib = new Map<string, BasePermissions>();
 
+    /** One host for every command dialog, carrying the toolkit's colour
+     *  variables — see .app-dlghost. Created once, reused, so nothing
+     *  accumulates on the body. */
+    const dialogHost = el("div", "app-dlghost");
+    document.body.appendChild(dialogHost);
+    innerCleanups.push(() => dialogHost.remove());
+
+    /** The open document overlay's repaint, while one is open. A command
+     *  run from the overlay changes state the overlay is showing, so it
+     *  has to hear about it — discarding a check-out left "Check in…"
+     *  sitting there otherwise (Ben, 2026-08-03). */
+    let viewerRepaint: (() => void) | null = null;
+
     const canWriteIn = (lib: DocLibrary | null | undefined): boolean =>
       lib != null &&
       (lib.libType === "working" || lib.libType === "revision") &&
@@ -1609,11 +1627,12 @@ export function mountDocs(
         row.checkoutEmail = fresh?.checkoutEmail ?? "";
       }
       list?.setRows(list.rows());
+      viewerRepaint?.();
     };
 
     const commandFailed = (what: string, why: string) => {
       const dlg = openDialog({
-        host: document.body,
+        host: dialogHost,
         title: `${what} did not go through`,
         buttons: [{ label: "Close", kind: "secondary", onClick: () => dlg.close() }],
       });
@@ -1645,7 +1664,7 @@ export function mountDocs(
     const staleNotice = async (row: DocRow, what: string) => {
       await refreshRow(row);
       const dlg = openDialog({
-        host: document.body,
+        host: dialogHost,
         title: `${what} is no longer available`,
         buttons: [{ label: "OK", kind: "secondary", onClick: () => dlg.close() }],
       });
@@ -1694,7 +1713,7 @@ export function mountDocs(
       comment.rows = 3;
       comment.placeholder = "What changed?";
       const dlg = openDialog({
-        host: document.body,
+        host: dialogHost,
         title: `Check in ${row.name}`,
         buttons: [
           { label: "Cancel", kind: "secondary", onClick: () => dlg.close() },
@@ -1748,7 +1767,7 @@ export function mountDocs(
      *  SharePoint keeps no copy — so it confirms, and says that. */
     const openDiscard = (row: DocRow) => {
       const dlg = openDialog({
-        host: document.body,
+        host: dialogHost,
         title: `Discard your check-out of ${row.name}?`,
         buttons: [
           { label: "Keep it checked out", kind: "secondary", onClick: () => dlg.close() },

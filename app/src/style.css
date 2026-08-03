@@ -2089,6 +2089,21 @@ button.app-docs-navterm.app-docs-navterm-on {
 .app-docs-name { display: flex; min-width: 0; }
 .app-docs-namestem { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .app-docs-nameext { flex: none; white-space: nowrap; }
+/* openDialog paints itself with the TOOLKIT's variables, which the card
+   host sets on a .ltk-root — and a dialog opened from one of the app's
+   own screens has no card above it, so every colour resolved to nothing
+   and the box came out transparent (Ben, 2026-08-03). The host supplies
+   them itself. */
+.app-dlghost {
+  --ltk-bg: #ffffff;
+  --ltk-fg: #26241f;
+  --ltk-muted: #57534a;
+  --ltk-hairline: #ddd9d1;
+  --ltk-accent: var(--app-accent, #2563eb);
+  --ltk-font: "Segoe UI", system-ui, sans-serif;
+}
+.app-dlghost .ltk-dialog { box-shadow: 0 8px 32px rgba(0, 0, 0, 0.28); }
+
 /* document control (Phase 4B): checked-out state reads at a glance, and
    YOURS reads differently, because it is the only one you can act on */
 .app-docs-lock {
