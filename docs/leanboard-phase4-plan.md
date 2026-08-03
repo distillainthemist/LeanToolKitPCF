@@ -141,43 +141,46 @@ code path with any of the above, and it rides the same connector
 transport. Phase 5's approval engine depends on this answer; nothing
 shipped is affected either way.
 
-## The fresh-copy file lock (measured 2026-08-04, four runs)
+## The five "hangs" — post-mortem (2026-08-04)
 
-Four consecutive add-a-document runs stalled, each on the first call
-through the FILE door after `copyto` — `GetFileByServerRelativePath`
-reads (`ListItemAllFields` included) and `CheckOut()` alike — while
-LIST/ITEM-door calls on the same document (RLDAS,
-`ValidateUpdateListItem`, connector `PatchItem`) answered promptly
-every time.
+Five consecutive add-a-document runs appeared to hang mid-flow, and two
+theories were built and torn down (a fresh-copy file lock; slow-but-
+alive file-door calls) before the b7 build's throw-guard surfaced the
+actual cause in one run:
 
-The corrected reading, after run four: file-door calls on a fresh copy
-are **slow, not dead** — SharePoint settles the copy for a minute or
-more and the calls eventually land. Run two's document "checked out to
-me" was our own abandoned `CheckOut()` landing late, which also means
-**abandon-and-retry is dangerous on file operations**: a late duplicate
-can re-check-out a document after its check-in. And the copy itself
-arrives **checked in** (runs four and five in SharePoint), so on a
-require-check-out library the check-out genuinely must be taken before
-the term write (probe run four's refusal).
+**`JSON.parse("—")`.** The taxonomy select's placeholder option was
+created without an explicit `value`, and an `<option>` with no value
+attribute returns its TEXT as its value — so with any term select left
+at "—" (the default), reading the editors threw synchronously between
+two awaits. An unhandled rejection freezes the dialog on whatever
+status line was last painted, which varied by build — every "hang",
+including the one where the document ended up checked out (the
+`CheckOut()` had answered; the crash came after it), is fully explained
+by this. **No evidence of a slow or locked file door survives.** The
+supporting bug: choice selects had the same valueless "—", which would
+have WRITTEN "—" as the chosen value.
 
-4C's final shape (Ben's critical-review push, 2026-08-04): the file
-door is not merely slowed around — it is DESIGNED OUT. The composition
-error was mine: SharePoint's own path for completing a just-created
-document is `ValidateUpdateListItem` with `bNewDocumentUpdate: true`
-(the document information panel's write), which bypasses the
-require-check-out rule (probe run four's bare text write proved it on
-this tenant) and finishes the document with no separate check-in. So:
-copy → itemId via RLDAS (list door, newest first, exact name) → ONE
-forms-engine call carrying everything, taxonomy included as the
+Lessons, encoded in the code: placeholder options always carry
+`value=""` (helper in addDocument.ts); the create flow's entry catches
+every throw into a visible "Unexpected failure: …"; the dialog carries
+a build marker (stale player bundles muddied two reports) and a ticking
+elapsed counter (a counter that stops is a frozen runtime, a counter
+that climbs is a slow call — the reports could not tell these apart).
+Instrument before theorising.
+
+**4C's final shape** (Ben's critical-review push, which is what forced
+the find): copy → itemId via RLDAS (list door, newest first, exact
+name) → ONE forms-engine call — `ValidateUpdateListItem` with
+`bNewDocumentUpdate: true`, SharePoint's own document-information-panel
+path, which bypasses the require-check-out rule (probe run four proved
+it on this tenant) and completes the document with no separate
+check-in — carrying every field, taxonomy included as the
 flow-standard `Label|guid`. Only if the tagging validator refuses the
-term columns does the fallback engage, for those columns alone: one
-patient `CheckOut()` (up to 120 s, narrated, never retried — an
-abandoned duplicate landing late would re-check-out the document after
-its check-in), connector term object, one patient check-in whose "not
-checked out" reads as "nothing to release". **Phase 5 must remember
-this**: complete new files through the forms engine, and give any
-unavoidable file-door call on a fresh copy one patient attempt, never
-abandon-and-retry.
+term columns does the fallback engage for those columns alone: one
+patient narrated `CheckOut()`, the connector term object (probe run
+six's route), one patient check-in whose "not checked out" reads as
+"nothing to release". **Phase 5 should also complete new files through
+the forms engine.**
 
 ## Decisions (Ben, 2026-08-03)
 

@@ -82,7 +82,7 @@ export function openAddDocument(opts: AddDocumentOpts): void {
   // Visible build marker: three "stuck" reports in a row turned out to
   // involve at least one stale player bundle, and the marker settles
   // "which code is this" from a screenshot alone. Bump per revision.
-  const BUILD = "b7";
+  const BUILD = "b8";
 
   let creating = false;
   const dlg = openDialog({
@@ -111,6 +111,16 @@ export function openAddDocument(opts: AddDocumentOpts): void {
   const body = dlg.body;
   body.classList.add("app-docs-addbody");
 
+  /** A placeholder option MUST carry an explicit empty value: an
+   *  <option> without one returns its TEXT as its value, and the "—"
+   *  placeholder fed JSON.parse("—") — the crash behind every "stuck"
+   *  create (found via the b7 throw-guard, 2026-08-04). */
+  const placeholder = (sel: HTMLSelectElement, label: string) => {
+    const o = el("option", "", label) as HTMLOptionElement;
+    o.value = "";
+    sel.appendChild(o);
+  };
+
   // ---- target + template + name ----------------------------------------
   const targetSel = el("select", "app-input") as HTMLSelectElement;
   for (const t of opts.targets) {
@@ -120,7 +130,7 @@ export function openAddDocument(opts: AddDocumentOpts): void {
   }
 
   const tplSel = el("select", "app-input") as HTMLSelectElement;
-  tplSel.appendChild(el("option", "", "Loading templates…"));
+  placeholder(tplSel, "Loading templates…");
   tplSel.disabled = true;
   /** template rows by uniqueId, filled by the load below. */
   const tplRows = new Map<string, DocRow>();
@@ -197,7 +207,7 @@ export function openAddDocument(opts: AddDocumentOpts): void {
         const setId = opts.dictBy.get(f.internal)?.termSetId || f.termSetId;
         if (setId === "") continue;
         const sel = el("select", "app-input") as HTMLSelectElement;
-        sel.appendChild(el("option", "", "—"));
+        placeholder(sel, "—");
         void fetchTermPaths(site, setId).then((walk) => {
           for (const n of walk.nodes) {
             const o = el(
@@ -215,7 +225,16 @@ export function openAddDocument(opts: AddDocumentOpts): void {
           field: f,
           kind,
           read: () => {
-            const v = sel.value === "" ? { label: "", termId: "" } : (JSON.parse(sel.value) as { label: string; termId: string });
+            let v = { label: "", termId: "" };
+            if (sel.value !== "") {
+              // defensive twin of the placeholder fix — a value that is
+              // not our JSON must read as "nothing picked", never throw
+              try {
+                v = JSON.parse(sel.value) as { label: string; termId: string };
+              } catch {
+                v = { label: "", termId: "" };
+              }
+            }
             return {
               internal: f.internal,
               kind: "taxonomy",
@@ -320,7 +339,9 @@ export function openAddDocument(opts: AddDocumentOpts): void {
       let control: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement;
       if (kind === "choice") {
         const sel = el("select", "app-input") as HTMLSelectElement;
-        sel.appendChild(el("option", "", "—"));
+        // explicit empty value, or "—" itself would be WRITTEN as the
+        // chosen value — same defect as the taxonomy placeholder
+        placeholder(sel, "—");
         for (const choice of f.choices) {
           const o = el("option", "", choice) as HTMLOptionElement;
           o.value = choice;
@@ -380,7 +401,7 @@ export function openAddDocument(opts: AddDocumentOpts): void {
       if (group.childElementCount > 0) tplSel.appendChild(group);
     }
     if (!any) {
-      tplSel.appendChild(el("option", "", "No templates — expose a template library first"));
+      placeholder(tplSel, "No templates — expose a template library first");
       tplSel.value = "";
     } else {
       tplSel.disabled = false;
