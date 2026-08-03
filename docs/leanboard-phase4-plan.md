@@ -1,5 +1,11 @@
 # Phase 4 — Light document control
 
+> The write knowledge this phase earned — the create/set-properties
+> recipe, every measured dead end, and the lessons — is consolidated in
+> **[sharepoint-writes.md](sharepoint-writes.md)**. Read that before
+> building any new write feature; the sections below record how it was
+> learned.
+
 The first phase that **writes**. Everything shipped through v0.29.0 reads;
 from here LeanBoard changes documents, so the design question stops being
 "can we render this" and starts being "what happens when this fails
