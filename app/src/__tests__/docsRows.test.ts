@@ -703,3 +703,57 @@ describe("date range filters (2026-08-03)", () => {
     expect(xml).toContain('Name="Due"');
   });
 });
+
+describe("folder totals count documents, not tags (2026-08-03)", () => {
+  const row = (id: number, org: string) => ({
+    id,
+    uniqueId: `u${id}`,
+    name: `n${id}`,
+    ext: "pdf",
+    serverUrl: "/s",
+    listId: "l",
+    modified: "",
+    values: { Org: org },
+  });
+  const nodes = [
+    { id: "pac", labels: ["Pacific"] },
+    { id: "bb", labels: ["Pacific", "Bell Bay"] },
+    { id: "cast", labels: ["Pacific", "Bell Bay", "Casting"] },
+    { id: "bbm", labels: ["Pacific", "Bell Bay", "Maintenance"] },
+    { id: "boy", labels: ["Pacific", "Boyne"] },
+    { id: "boym", labels: ["Pacific", "Boyne", "Maintenance"] },
+  ];
+
+  it("counts a document once however many tags put it in a folder", async () => {
+    const { tallySubtreeCounts } = await import("../docs/rows");
+    // this is the case that made a grouped count report 112 documents in
+    // a scope holding 100: grouping counts (document, term) PAIRS
+    const t = tallySubtreeCounts(
+      [row(1, "Bell Bay; Casting"), row(2, "Casting"), row(3, "Boyne")],
+      ["Org"],
+      nodes
+    );
+    expect(t.get("pac")).toBe(3);
+    expect(t.get("bb")).toBe(2);
+    expect(t.get("cast")).toBe(2);
+    expect(t.get("boy")).toBe(1);
+  });
+
+  it("a parent never counts more than the documents beneath it", async () => {
+    const { tallySubtreeCounts } = await import("../docs/rows");
+    const rows = Array.from({ length: 10 }, (_, i) => row(i, i % 2 ? "Casting" : "Boyne"));
+    const t = tallySubtreeCounts(rows, ["Org"], nodes);
+    expect(t.get("pac")).toBe(10);
+    expect((t.get("bb") ?? 0) + (t.get("boy") ?? 0)).toBe(10);
+  });
+
+  it("a label in two branches counts for both — the known limit", async () => {
+    const { tallySubtreeCounts } = await import("../docs/rows");
+    // rows carry labels, not term ids, so this site's two "Maintenance"
+    // terms cannot be told apart; the ancestor still counts it once
+    const t = tallySubtreeCounts([row(1, "Maintenance")], ["Org"], nodes);
+    expect(t.get("bbm")).toBe(1);
+    expect(t.get("boym")).toBe(1);
+    expect(t.get("pac")).toBe(1);
+  });
+});

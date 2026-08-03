@@ -73,6 +73,14 @@ import { openDocViewer } from "./viewer";
 const PAGE = 50;
 
 /**
+ * How many rows the folder counts may read per library. They are ids and
+ * one column, so this is cheap — but a library past the cap would report
+ * a floor as if it were a total, and the tree falls back to counting
+ * loaded rows instead of overstating.
+ */
+const COUNT_CAP = 2000;
+
+/**
  * How many content matches the index may contribute to one search.
  * CAML's `In` operator carries at most 500 values, and postquery returns
  * at most 500 rows a page — so 500 is both engines' natural ceiling.
@@ -586,23 +594,93 @@ export function mountDocs(
     // rows whose group-by column holds its label — including under a
     // contents search. Favourites carry no field values, so they count
     // nothing rather than lie. Scoped honestly via the title attribute.
+    /** Totals per node from the index (null until they answer, or when
+     *  they cannot). Counting LOADED rows made the numbers climb as you
+     *  scrolled — a progress report where a total was meant (Ben,
+     *  2026-08-03). */
+    let treeTotals: Map<string, number> | null = null;
+
     const paintTreeCounts = () => {
       if (countSpans.size === 0) return;
       const cols = groupBy === "" ? [...orgCols] : [groupBy];
       const rows = favMode ? [] : loadedRows();
       // a site counts what its departments and areas hold, not only what
       // was pinned at site level (Ben, 2026-08-03)
-      const tally = tallySubtreeCounts(rows, cols, treeNodes);
+      const tally = treeTotals ?? tallySubtreeCounts(rows, cols, treeNodes);
+      const whole = treeTotals !== null;
       for (const n of treeNodes) {
         const span = countSpans.get(n.id);
         if (!span) continue;
         const count = tally.get(n.id) ?? 0;
-        span.textContent = rows.length > 0 && count > 0 ? String(count) : "";
-        span.title =
+        span.textContent = (whole || rows.length > 0) && count > 0 ? String(count) : "";
+        const where =
           n.labels.length > 0
-            ? `Documents loaded so far in ${n.labels[n.labels.length - 1]} and everything under it`
-            : "In the documents loaded so far";
+            ? `${n.labels[n.labels.length - 1]} and everything under it`
+            : "this folder";
+        span.title = whole
+          ? `Documents in ${where}`
+          : `Documents loaded so far in ${where}`;
       }
+    };
+
+    /**
+     * Ask the index for a count per organisation term — one request for
+     * the whole tree, matching the register's current scope, query and
+     * term filters.
+     *
+     * Date bounds are the exception: they are CAML-only (a custom date
+     * column has no dependable managed property), so with one applied
+     * the totals would overstate. Rather than show a number that
+     * disagrees with the list, the tree falls back to counting loaded
+     * rows and says so in the tooltip.
+     */
+    const refreshTreeTotals = (gen: number) => {
+      const libs = viewLibs();
+      if (favMode || treeNodes.length === 0 || libs.length === 0) {
+        treeTotals = null;
+        paintTreeCounts();
+        return;
+      }
+      const words = query.trim() === "" ? undefined : query.trim().split(/\s+/);
+      // One id-and-organisation page per library, then count DOCUMENTS —
+      // not (document, term) pairs. Grouping counts pairs, which made a
+      // parent read 112 where its libraries held 100: a document tagged
+      // in two areas is still one document (Ben, 2026-08-03). Same Where
+      // as the register, so the totals answer the same question the list
+      // does; only the folder's own filter is left out, or picking one
+      // folder would zero every other count.
+      void Promise.all(
+        libs.map((lib) => {
+          const col = [...orgCols].find((c) =>
+            lib.config.columns.some((x) => x.internal === c)
+          );
+          if (col === undefined) return Promise.resolve({ rows: [], next: "", error: "" });
+          const carried = new Set(lib.config.columns.map((c) => c.internal));
+          const viewXml = buildRenderViewXml({
+            modifiedAfterIso: modifiedIso(),
+            nameWords: words,
+            idIn: contentIds.get(lib.listId.toLowerCase()) ?? [],
+            termFilters: filters
+              .filter((f) => f.col !== "")
+              .map((f) => ({ cols: [f.col], labels: [...f.labels] })),
+            dateRanges: dateFilters.filter((d) => carried.has(d.col)),
+            fields: [col],
+            rowLimit: COUNT_CAP,
+          });
+          return renderListPage(app.siteUrl, lib.listId, viewXml);
+        })
+      ).then((pages) => {
+        if (dead || gen !== generation) return;
+        // a library with more than the cap would report a floor dressed
+        // as a total, so the tree says "loaded so far" instead
+        const truncated = pages.some((p) => p.next !== "" || p.error !== "");
+        const rows = pages.flatMap((p) => p.rows);
+        treeTotals =
+          truncated || rows.length === 0
+            ? null
+            : tallySubtreeCounts(rows, [...orgCols], treeNodes);
+        paintTreeCounts();
+      });
     };
 
     /** Deepest term whose label path matches the viewer's own site /
@@ -1725,6 +1803,7 @@ export function mountDocs(
       }
       list.setLoading(false);
       paintTreeCounts();
+      if (reset) refreshTreeTotals(gen);
       finish();
     };
     const loadMore = () => load(false);

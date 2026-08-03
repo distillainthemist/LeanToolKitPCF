@@ -747,3 +747,4 @@ export function formatWhen(iso: string): string {
   const d = new Date(t);
   return `${d.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })}`;
 }
+
