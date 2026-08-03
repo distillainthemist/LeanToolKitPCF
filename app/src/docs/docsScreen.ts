@@ -924,14 +924,19 @@ export function mountDocs(
           body.appendChild(g);
           return g;
         };
-        // the site says which columns filter (Ben, 2026-08-03); the
-        // organisation keeps its own slot because the Folders pane
-        // drives it
+        // the site says which columns filter (Ben, 2026-08-03)
         const filterable = new Set(
           siteDict.columns.filter((c) => c.available && c.filterable).map((c) => c.internal)
         );
+        // …and the organisation obeys that too. It used to be exempt
+        // because the Folders pane drives it, which meant unticking it
+        // in Settings changed nothing (Ben's screenshot). Unknown to the
+        // dictionary = still shown, so a site that has never opened the
+        // new settings keeps the pane it had.
+        const orgCol = siteDict.columns.find((c) => orgCols.has(c.internal));
+        const orgFilterable = orgCol === undefined || (orgCol.available && orgCol.filterable);
         const cols: string[] = [];
-        if (app.orgSetId !== "" && orgProps.length > 0) cols.push("");
+        if (app.orgSetId !== "" && orgProps.length > 0 && orgFilterable) cols.push("");
         cols.push(...[...taxCols.keys()].filter((c) => filterable.has(c)));
         for (const col of cols) {
           const g = group(colLabel(col));
