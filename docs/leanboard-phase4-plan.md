@@ -141,6 +141,27 @@ code path with any of the above, and it rides the same connector
 transport. Phase 5's approval engine depends on this answer; nothing
 shipped is affected either way.
 
+## The fresh-copy file lock (measured 2026-08-04)
+
+Three consecutive add-a-document runs hung, each on the first call to
+touch the FILE object after `copyto`: `GetFileByServerRelativePath`
+reads and `CheckOut()` alike sat unanswered for a minute or more, while
+ITEM-endpoint calls on the same document (`ListItemAllFields`,
+`ValidateUpdateListItem`, connector `PatchItem`) answered promptly every
+time. Reading: SharePoint holds a server-side lock on a freshly copied
+file during post-processing; file endpoints block on it, item endpoints
+do not.
+
+Consequences, baked into 4C: after a copy, touch only item endpoints —
+no check-out call (a require-check-out library hands the copy back
+already checked out to its creator, and a library without the rule takes
+item writes bare), no file-info read, metadata straight in, then one
+check-in whose "not checked out" refusal is read as "nothing to
+release". Every step races a clock and safe steps retry once, so a
+stall names itself instead of holding the dialog. **Phase 5 must
+remember this**: any command that copies (renditions, supersede) waits
+on item endpoints, not file endpoints, for the copy to settle.
+
 ## Decisions (Ben, 2026-08-03)
 
 | Question | Decision |
