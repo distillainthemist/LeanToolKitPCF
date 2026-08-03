@@ -988,6 +988,35 @@ describe("add a document — the write recipe (4C)", () => {
     expect(sortByDictionary([], dict)).toEqual([]);
   });
 
+  it("lists libraries standards-first, the way the site reads", async () => {
+    const { sortLibrariesForDisplay } = await import("../docs/model");
+    const lib = (libType: string, name: string, title = "") => ({
+      libType,
+      name,
+      config: { title },
+    });
+    const sorted = sortLibrariesForDisplay([
+      lib("template", "Templates"),
+      lib("record", "Records"),
+      lib("working", "Working Documents"),
+      lib("standard", "Standards"),
+      lib("revision", "Standards Revision"),
+    ]);
+    expect(sorted.map((l) => l.name)).toEqual([
+      "Standards",
+      "Working Documents",
+      "Standards Revision",
+      "Records",
+      "Templates",
+    ]);
+    // same type: display name decides, and the display override wins
+    const two = sortLibrariesForDisplay([
+      lib("working", "ZZZ internal", "Alpha docs"),
+      lib("working", "Beta docs"),
+    ]);
+    expect(two.map((l) => l.config.title || l.name)).toEqual(["Alpha docs", "Beta docs"]);
+  });
+
   it("makes a name SharePoint will take", async () => {
     const { sanitizeFileName } = await import("../docs/model");
     expect(sanitizeFileName('Q3: "Casting" <plan>?')).toBe("Q3 Casting plan");

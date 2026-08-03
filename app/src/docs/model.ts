@@ -1430,6 +1430,32 @@ export function sortByDictionary(internals: string[], dictOrder: string[]): stri
   );
 }
 
+/** How library types read in the nav, top to bottom (Ben, 2026-08-04:
+ *  Standards, Working Documents, Records, Templates). Revision sits
+ *  with working — it holds checked-out copies of standards mid-edit. */
+const LIBRARY_DISPLAY_RANK: Record<string, number> = {
+  standard: 0,
+  working: 1,
+  revision: 2,
+  record: 3,
+  template: 4,
+};
+
+/** Libraries in display order: by type rank, then by display name —
+ *  the one order the nav pane, scope pickers and the add form share. */
+export function sortLibrariesForDisplay<
+  T extends { libType: string; name: string; config: { title: string } },
+>(libs: T[]): T[] {
+  return [...libs].sort((a, b) => {
+    const rank =
+      (LIBRARY_DISPLAY_RANK[a.libType] ?? 9) - (LIBRARY_DISPLAY_RANK[b.libType] ?? 9);
+    if (rank !== 0) return rank;
+    return (a.config.title || a.name)
+      .toLowerCase()
+      .localeCompare((b.config.title || b.name).toLowerCase());
+  });
+}
+
 /** A file name SharePoint will take: forbidden characters dropped,
  *  leading/trailing dots and spaces trimmed. Empty means "not a name". */
 export function sanitizeFileName(name: string): string {

@@ -47,6 +47,7 @@ import {
   parseBasePermissions,
   siteKey,
   sortByDictionary,
+  sortLibrariesForDisplay,
   spErrorText,
 } from "./model";
 import {
@@ -164,7 +165,10 @@ export function mountDocs(
     stopLoading();
     if (dead) return;
 
-    const { app, libraries } = cfg;
+    const { app } = cfg;
+    // display order everywhere libraries are listed: standards, working,
+    // revision, records, templates — then by name (Ben, 2026-08-04)
+    const libraries = sortLibrariesForDisplay(cfg.libraries);
     if (app.siteUrl === "" || libraries.length === 0) {
       if (!opts.embedded) wrap.appendChild(el("h2", "app-docs-title", "Documents"));
       wrap.appendChild(
@@ -1418,10 +1422,16 @@ export function mountDocs(
       // which columns to show is a VIEW question (the chooser, or what
       // the libraries in view open with); what each one means is the
       // dictionary's answer, so this holds for any number of libraries
-      const wanted =
+      // the chooser and view templates decide WHICH columns show; the
+      // dictionary decides their ORDER, so columns sit in the same
+      // relative sequence whatever is hidden (Ben, 2026-08-04).
+      // Modified is unknown to the dictionary, so it lands last.
+      const wanted = sortByDictionary(
         chosenColumns.length > 0
           ? chosenColumns.filter((i) => i === "Modified" || dictBy.get(i)?.available === true)
-          : defaultInternals();
+          : defaultInternals(),
+        [...dictBy.keys()]
+      );
       // more than one library in view: say which one each row came from
       if (viewLibs().length > 1 && bucket !== "narrow") {
         columns.push({
@@ -2327,10 +2337,13 @@ export function mountDocs(
         exporting = true;
         status.textContent = "Exporting…";
         const scopeLibs = viewLibs();
-        // the register's own columns, named as the site names them —
-        // an export that disagreed with the screen it came from would be
-        // its own small lie
-        const wanted = chosenColumns.length > 0 ? chosenColumns : defaultInternals();
+        // the register's own columns, named as the site names them and
+        // in the same dictionary order — an export that disagreed with
+        // the screen it came from would be its own small lie
+        const wanted = sortByDictionary(
+          chosenColumns.length > 0 ? chosenColumns : defaultInternals(),
+          [...dictBy.keys()]
+        );
         const cols = wanted
           .filter((i) => i !== "Modified")
           .map((i) => ({ internal: i, label: labelOf(i) }));
