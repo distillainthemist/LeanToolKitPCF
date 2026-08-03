@@ -32,7 +32,6 @@ import {
   connectorPatchItem,
   copyFileTo,
   fetchFields,
-  fetchFileInfo,
   fetchFileItemId,
   fetchListRoot,
   fetchTermPaths,
@@ -387,21 +386,41 @@ export function openAddDocument(opts: AddDocumentOpts): void {
    *  dialog on one message forever ("Setting properties…" for a minute,
    *  Ben, 2026-08-04) — the SDK's connector calls hang rather than
    *  reject when something goes sideways, so every await races a clock. */
-  const timed = async <T>(what: string, p: Promise<T>, dead: T): Promise<T> => {
+  const timed = async <T>(p: Promise<T>, ms: number, dead: T): Promise<T> => {
     let clock = 0;
     const timeout = new Promise<T>((resolve) => {
-      clock = window.setTimeout(() => resolve(dead), 25_000);
+      clock = window.setTimeout(() => resolve(dead), ms);
     });
     const r = await Promise.race([p, timeout]);
     window.clearTimeout(clock);
     return r;
   };
-  const timedSp = (what: string, p: Promise<{ ok: boolean; status: string; data: unknown }>) =>
-    timed(what, p, {
-      ok: false,
-      status: `${what} did not answer within 25 seconds`,
-      data: null as unknown,
-    });
+
+  type Sp = { ok: boolean; status: string; data: unknown };
+
+  /**
+   * One call, retried once when it goes silent — run two hung on a GET
+   * identical to one that had answered two steps earlier (Ben,
+   * 2026-08-04), so the hangs are intermittent and a fresh attempt is
+   * the cure. Only steps that repeat safely come through here; the
+   * abandoned first call landing late is harmless for all of them
+   * (reads, a second check-out, the same values written twice).
+   */
+  const timedRetry = async (what: string, make: () => Promise<Sp>): Promise<Sp> => {
+    const first = await timed<Sp | null>(make(), 12_000, null);
+    if (first !== null) return first;
+    status(`${statusLine.textContent} (no answer — retrying)`);
+    const second = await timed<Sp | null>(make(), 20_000, null);
+    return (
+      second ?? {
+        ok: false,
+        status:
+          `${what} never answered (two attempts). The document may still exist in the ` +
+          "library — check it there before trying again.",
+        data: null,
+      }
+    );
+  };
 
   const create = async () => {
     if (creating) return;
@@ -419,42 +438,49 @@ export function openAddDocument(opts: AddDocumentOpts): void {
     };
 
     status("Copying the template…");
-    const rootRes = await timedSp("Finding the library root", fetchListRoot(site, lib.listId));
+    const rootRes = await timedRetry("Finding the library root", () =>
+      fetchListRoot(site, lib.listId)
+    );
     const root = String(
       ((rootRes.data ?? {}) as { ServerRelativeUrl?: unknown }).ServerRelativeUrl ?? ""
     );
     if (root === "") return fail("Could not find the library", rootRes.status);
     const fileName = `${clean}.${tpl.ext}`;
     const newUrl = `${root}/${fileName}`;
-    const copy = await timedSp("The copy", copyFileTo(site, tpl.serverUrl, newUrl));
+    // safe to retry: boverwrite=false means a landed-late first attempt
+    // just makes the second one fail "already exists", which is caught
+    // by reading the file back rather than trusted blindly
+    const copy = await timedRetry("The copy", () => copyFileTo(site, tpl.serverUrl, newUrl));
     if (!copy.ok) return fail("Copy refused (a document with this name may already exist)", copy.status);
 
     // From here the document EXISTS — a failure below leaves it checked
     // out to its creator, and the message says so instead of pretending
     // nothing happened.
     status("Reading the new document back…");
-    const idRes = await timedSp("Reading the new document", fetchFileItemId(site, newUrl));
+    const idRes = await timedRetry("Reading the new document", () =>
+      fetchFileItemId(site, newUrl)
+    );
     const itemId = Number(((idRes.data ?? {}) as { Id?: unknown }).Id ?? 0);
     if (itemId <= 0) {
       return fail("Created, but could not read the new document back", idRes.status);
     }
 
-    // a require-check-out library hands the copy back already checked
-    // out to us; otherwise take the check-out explicitly (probe rule)
+    // Take the check-out by ATTEMPTING it — no state read first. Run two
+    // hung on that read while SharePoint already showed the file checked
+    // out to its creator; for a file that did not exist a moment ago,
+    // the attempt itself is decisive: success means we took it,
+    // "already checked out" means we hold it from the copy.
     status("Taking the check-out…");
-    const info = await timedSp("Reading the check-out state", fetchFileInfo(site, newUrl));
-    const held =
-      info.ok && Number(((info.data ?? {}) as { CheckOutType?: unknown }).CheckOutType ?? 2) !== 2;
-    if (!held) {
-      const out = await timedSp("Check-out", checkOutFile(site, newUrl));
-      if (!out.ok) return fail("Created, but could not check out to set properties", out.status);
+    const out = await timedRetry("Check-out", () => checkOutFile(site, newUrl));
+    const alreadyOurs = !out.ok && /checked out/i.test(spErrorText(out.status));
+    if (!out.ok && !alreadyOurs) {
+      return fail("Created, but could not check out to set properties", out.status);
     }
 
     const { formValues, patch } = splitAddWrites(editors.map((e) => e.read()));
     if (formValues.length > 0) {
       status("Writing properties…");
-      const res = await timedSp(
-        "Writing properties",
+      const res = await timedRetry("Writing properties", () =>
         validateUpdateListItem(site, lib.listId, itemId, formValues, false)
       );
       const errs = validateItemErrors(res.data);
@@ -467,8 +493,7 @@ export function openAddDocument(opts: AddDocumentOpts): void {
     }
     if (Object.keys(patch).length > 0) {
       status("Writing terms & dates…");
-      const res = await timedSp(
-        "Writing terms & dates",
+      const res = await timedRetry("Writing terms & dates", () =>
         connectorPatchItem(site, lib.listId, itemId, patch)
       );
       if (!res.ok) {
@@ -476,11 +501,23 @@ export function openAddDocument(opts: AddDocumentOpts): void {
       }
     }
 
+    // Check-in is the ONE step not retried blindly: a first attempt that
+    // landed late would make the retry fail "not checked out" — which is
+    // success wearing an error. Single attempt; that specific refusal
+    // after a silence is read for what it is.
     status("Checking in…");
-    const cin = await timedSp(
-      "Check-in",
-      checkInFile(site, newUrl, `Created from template “${tpl.name}”`, false)
+    const cin = await timed<Sp | null>(
+      checkInFile(site, newUrl, `Created from template “${tpl.name}”`, false),
+      25_000,
+      null
     );
+    if (cin === null) {
+      return fail(
+        "Check-in never answered",
+        "The document exists and the properties are set — check the library: if it still " +
+          "shows checked out to you, check it in from the register."
+      );
+    }
     if (!cin.ok) {
       // classic cause: a required column the form could not edit —
       // SharePoint's own sentence names it
@@ -491,7 +528,6 @@ export function openAddDocument(opts: AddDocumentOpts): void {
     // even if this read stalls, the document is DONE, so close anyway
     status("Opening…");
     const page = await timed(
-      "Reading the finished row",
       renderListPage(
         site,
         lib.listId,
@@ -501,6 +537,7 @@ export function openAddDocument(opts: AddDocumentOpts): void {
           rowLimit: 1,
         })
       ),
+      15_000,
       { rows: [] as DocRow[], next: "", error: "timed out" }
     );
     dlg.close();
