@@ -259,7 +259,15 @@ export function parseRenderPage(raw: unknown, listId: string): RenderPage {
     if (name === "" || String(r.FSObjType ?? "0") !== "0") continue;
     const values: Record<string, string> = {};
     for (const [k, v] of Object.entries(r)) {
-      if (k.startsWith("_") || k.endsWith(".") || k.includes(".")) continue;
+      // "Column." is RLDAS's ISO twin of a date column (DatesInUtc) —
+      // kept under its dotted key, because the display text is in the
+      // SITE's locale and re-parsing that is a guess (Phase 4D)
+      if (!k.startsWith("_") && k.endsWith(".") && !k.slice(0, -1).includes(".")) {
+        const iso = typeof v === "string" ? v : "";
+        if (iso !== "" && !Number.isNaN(Date.parse(iso))) values[k] = iso;
+        continue;
+      }
+      if (k.startsWith("_") || k.includes(".")) continue;
       const text = renderText(v);
       if (text !== "") values[k] = text;
     }
@@ -786,5 +794,20 @@ export function formatWhen(iso: string): string {
   if (Number.isNaN(t)) return iso;
   const d = new Date(t);
   return `${d.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })}`;
+}
+
+const MONTHS_SHORT = [
+  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+];
+
+/** dd-MMM-yyyy (Ben, 2026-08-04) — built by hand from LOCAL date parts,
+ *  so it reads identically whatever the viewer's or the site's locale,
+ *  and a UTC-midnight date never shifts a day for an AEST viewer. */
+export function formatDayMonthYear(iso: string): string {
+  const t = Date.parse(iso);
+  if (iso === "" || Number.isNaN(t)) return iso;
+  const d = new Date(t);
+  return `${String(d.getDate()).padStart(2, "0")}-${MONTHS_SHORT[d.getMonth()]}-${d.getFullYear()}`;
 }
 

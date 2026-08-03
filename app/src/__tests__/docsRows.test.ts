@@ -520,6 +520,34 @@ describe("RenderListDataAsStream (register browse feed)", () => {
     expect(page.next).toBe("?Paged=TRUE&p_ID=2");
   });
 
+  it("keeps a date column's ISO twin, and reads it as dd-MMM-yyyy (4D)", async () => {
+    const { parseRenderPage, formatDayMonthYear } = await import("../docs/rows");
+    const page = parseRenderPage(
+      {
+        Row: [
+          {
+            ID: "3",
+            FileLeafRef: "Std.pdf",
+            FSObjType: "0",
+            DMSNextReviewDate: "9/1/2026",
+            "DMSNextReviewDate.": "2026-09-01T00:00:00Z",
+            // a dotted key that is NOT a date stays out of values
+            "Org.COUNT.group": "4",
+          },
+        ],
+      },
+      "L1"
+    );
+    // display text in the site's locale AND the real value, both kept
+    expect(page.rows[0].values.DMSNextReviewDate).toBe("9/1/2026");
+    expect(page.rows[0].values["DMSNextReviewDate."]).toBe("2026-09-01T00:00:00Z");
+    expect(page.rows[0].values["Org.COUNT.group"]).toBeUndefined();
+    // the format Ben reads: dd-MMM-yyyy, from local date parts
+    expect(formatDayMonthYear("2026-09-01T10:00:00+10:00")).toBe("01-Sep-2026");
+    expect(formatDayMonthYear("")).toBe("");
+    expect(formatDayMonthYear("not a date")).toBe("not a date");
+  });
+
   it("asks about ME without ever fetching who I am (4D)", async () => {
     const { buildRenderViewXml } = await import("../docs/rows");
     // CAML's <UserID/> IS the signed-in user — the query says "me"

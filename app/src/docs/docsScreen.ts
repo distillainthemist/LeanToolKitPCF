@@ -30,6 +30,7 @@ import {
   DocRow,
   browseComparator,
   buildRenderViewXml,
+  formatDayMonthYear,
   formatWhen,
   isNonCurrentStatus,
   pdfViewUrlFor,
@@ -455,7 +456,11 @@ export function mountDocs(
         })
       );
       if (reviewInternal !== "" && ownerInternal !== "") {
+        // review cycles belong to STANDARDS (Ben, 2026-08-04) — a
+        // working document or record carrying the columns is not on a
+        // review cadence, so its dates are noise here
         const carriers = libraries.filter((l) => {
+          if (l.libType !== "standard") return false;
           const set = new Set(l.config.columns.map((c) => c.internal));
           return set.has(reviewInternal) && set.has(ownerInternal);
         });
@@ -472,17 +477,24 @@ export function mountDocs(
               })
             );
             for (const row of page.rows) {
-              const when = row.values[reviewInternal] ?? "";
-              // membership in the list is SharePoint's (server-side
-              // Today+offset); this flag only colours the row, and
-              // Date.parse of a display date is a heuristic that may
-              // misread day-first locales — acceptable for a colour
-              const t = Date.parse(when);
+              // the ISO twin ("Column.") is the real value; the display
+              // text is a site-locale guess we only fall back to
+              const iso = row.values[`${reviewInternal}.`] ?? "";
+              const disp = row.values[reviewInternal] ?? "";
+              const t = Date.parse(iso !== "" ? iso : disp);
+              const when = Number.isNaN(t)
+                ? disp
+                : formatDayMonthYear(new Date(t).toISOString());
               const overdue = !Number.isNaN(t) && t < Date.now();
               review.push({
                 row,
                 libName: nameOf(l),
-                why: when === "" ? "Review due" : overdue ? `Review overdue · ${when}` : `Review due · ${when}`,
+                why:
+                  when === ""
+                    ? "Review due"
+                    : overdue
+                      ? `Review overdue · ${when}`
+                      : `Review due · ${when}`,
                 overdue,
               });
             }
