@@ -662,3 +662,44 @@ describe("folder counts include everything below (2026-08-03)", () => {
     expect(t.get("bb")).toBe(0);
   });
 });
+
+describe("date range filters (2026-08-03)", () => {
+  it("bounds a date column, either end optional, end-date inclusive", async () => {
+    const { buildRenderViewXml } = await import("../docs/rows");
+    const both = buildRenderViewXml({
+      dateRanges: [{ col: "DMSEffectiveDate", from: "2025-01-01", to: "2025-03-31" }],
+    });
+    expect(both).toContain(
+      '<Geq><FieldRef Name="DMSEffectiveDate"/><Value Type="DateTime" IncludeTimeValue="TRUE" StorageTZ="TRUE">2025-01-01T00:00:00Z</Value></Geq>'
+    );
+    // the whole end day counts — a column holding midnight would
+    // otherwise drop documents dated ON the end date
+    expect(both).toContain("2025-03-31T23:59:59Z");
+    // "everything since March" is a valid question
+    const openEnded = buildRenderViewXml({
+      dateRanges: [{ col: "DMSEffectiveDate", from: "2025-03-01", to: "" }],
+    });
+    expect(openEnded).toContain("2025-03-01T00:00:00Z");
+    expect(openEnded).not.toContain("Leq");
+    // an empty range contributes no clause at all
+    expect(buildRenderViewXml({ dateRanges: [{ col: "X", from: "", to: "" }] })).not.toContain(
+      "<Where>"
+    );
+    expect(buildRenderViewXml({ dateRanges: [{ col: "", from: "2025-01-01", to: "" }] })).not.toContain(
+      "<Where>"
+    );
+  });
+
+  it("ANDs a date bound with the term filters and the name search", async () => {
+    const { buildRenderViewXml } = await import("../docs/rows");
+    const xml = buildRenderViewXml({
+      nameWords: ["pump"],
+      termFilters: [{ cols: ["Org"], labels: ["Bell Bay"] }],
+      dateRanges: [{ col: "Due", from: "2025-01-01", to: "" }],
+    });
+    expect(xml).toContain("<And>");
+    expect(xml).toContain('<Value Type="File">pump</Value>');
+    expect(xml).toContain('<Value Type="Text">Bell Bay</Value>');
+    expect(xml).toContain('Name="Due"');
+  });
+});

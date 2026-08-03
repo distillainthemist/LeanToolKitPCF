@@ -39,7 +39,7 @@ import {
   taxonomySearchProperty,
 } from "./rows";
 import { DocLibrary, docsConfig } from "./docsStore";
-import { emptySiteDictionary, paletteEntryFor, siteKey } from "./model";
+import { emptySiteDictionary, isDateColumn, paletteEntryFor, siteKey } from "./model";
 import { TermNode, fetchTermPaths, fetchTermsInSet } from "./sp";
 import { currentViewer } from "../runtime";
 import { viewerPerson } from "../store/people";
@@ -490,6 +490,13 @@ export function mountDocs(
         }
       }
     }
+    /** Date columns the site left filterable — the from/to rows in the
+     *  Filters pane (Ben, 2026-08-03). */
+    const dateCols = (): { internal: string; label: string }[] =>
+      siteDict.columns
+        .filter((c) => c.available && c.filterable && isDateColumn(c))
+        .map((c) => ({ internal: c.internal, label: c.label !== "" ? c.label : c.internal }));
+
     /** col "" = the organisation (its own slot in links). */
     const colLabel = (col: string): string =>
       col === "" ? "Organisation" : (taxCols.get(col)?.label ?? col);
@@ -508,6 +515,24 @@ export function mountDocs(
     let filters: ActiveFilter[] = [];
     const filterFor = (col: string): ActiveFilter | null =>
       filters.find((f) => f.col === col) ?? null;
+
+    /** From/to bounds per date column (Ben, 2026-08-03). Either end may
+     *  be blank; an entry with both blank is dropped rather than kept as
+     *  a filter that filters nothing. */
+    interface DateFilter {
+      col: string;
+      from: string;
+      to: string;
+    }
+    let dateFilters: DateFilter[] = (bootView?.dates ?? []).map((d) => ({ ...d }));
+    const dateFor = (col: string): DateFilter | null =>
+      dateFilters.find((d) => d.col === col) ?? null;
+    const setDateFilter = (col: string, from: string, to: string) => {
+      dateFilters = dateFilters.filter((d) => d.col !== col);
+      if (from !== "" || to !== "") dateFilters.push({ col, from, to });
+      paintChips();
+      void load(true);
+    };
 
     const subtreeIn = (nodes: TermNode[], node: TermNode): TermNode[] =>
       nodes.filter(
@@ -814,7 +839,7 @@ export function mountDocs(
         : libNames;
       crumb.textContent = f ? f.node.labels.join(" › ") : "";
       crumb.style.display = f ? "" : "none";
-      const active = filters.length + (modifiedDays > 0 ? 1 : 0);
+      const active = filters.length + dateFilters.length + (modifiedDays > 0 ? 1 : 0);
       filtersBtn.textContent = active > 0 ? `Filters · ${active}` : "Filters";
       filtersBtn.classList.toggle("app-docs-filtersbtn-on", active > 0);
     };
@@ -841,6 +866,10 @@ export function mountDocs(
         filterBar.appendChild(chip);
       }
       for (const f of filters) {
+        // the organisation has no chip: the Folders pane is that filter,
+        // shows the selection and clears it, so a chip said it twice
+        // (Ben, 2026-08-03)
+        if (f.col === "") continue;
         const chip = el("span", "app-docs-orgchip");
         chip.appendChild(
           document.createTextNode(`${colLabel(f.col)}: ${f.node.labels.join(" › ")}`)
@@ -848,6 +877,23 @@ export function mountDocs(
         const x = el("button", "app-docs-orgchip-x", "×") as HTMLButtonElement;
         x.title = `Clear the ${colLabel(f.col)} filter`;
         x.addEventListener("click", () => applyFilter(f.col, null, []));
+        chip.appendChild(x);
+        filterBar.appendChild(chip);
+      }
+      for (const d of dateFilters) {
+        const name = siteDict.columns.find((c) => c.internal === d.col);
+        const label = name && name.label !== "" ? name.label : d.col;
+        const when =
+          d.from !== "" && d.to !== ""
+            ? `${d.from} to ${d.to}`
+            : d.from !== ""
+              ? `from ${d.from}`
+              : `up to ${d.to}`;
+        const chip = el("span", "app-docs-orgchip");
+        chip.appendChild(document.createTextNode(`${label}: ${when}`));
+        const x = el("button", "app-docs-orgchip-x", "×") as HTMLButtonElement;
+        x.title = `Clear the ${label} filter`;
+        x.addEventListener("click", () => setDateFilter(d.col, "", ""));
         chip.appendChild(x);
         filterBar.appendChild(chip);
       }
@@ -878,9 +924,15 @@ export function mountDocs(
           body.appendChild(g);
           return g;
         };
+        // the site says which columns filter (Ben, 2026-08-03); the
+        // organisation keeps its own slot because the Folders pane
+        // drives it
+        const filterable = new Set(
+          siteDict.columns.filter((c) => c.available && c.filterable).map((c) => c.internal)
+        );
         const cols: string[] = [];
         if (app.orgSetId !== "" && orgProps.length > 0) cols.push("");
-        cols.push(...taxCols.keys());
+        cols.push(...[...taxCols.keys()].filter((c) => filterable.has(c)));
         for (const col of cols) {
           const g = group(colLabel(col));
           const pills = el("div", "app-docs-fpills");
@@ -927,6 +979,44 @@ export function mountDocs(
             }
           });
         }
+        // date columns: a from/to pair each (Ben, 2026-08-03). Native
+        // date inputs, so the platform's own picker and keyboard entry
+        // come for free — and blank means unbounded at that end.
+        for (const dc of dateCols()) {
+          const g = group(dc.label);
+          const row = el("div", "app-docs-fdates");
+          const cur = dateFor(dc.internal);
+          const from = el("input", "app-input app-docs-fdate") as HTMLInputElement;
+          from.type = "date";
+          from.value = cur?.from ?? "";
+          from.setAttribute("aria-label", `${dc.label} from`);
+          const to = el("input", "app-input app-docs-fdate") as HTMLInputElement;
+          to.type = "date";
+          to.value = cur?.to ?? "";
+          to.setAttribute("aria-label", `${dc.label} to`);
+          const push = () => {
+            setDateFilter(dc.internal, from.value.trim(), to.value.trim());
+            paintPop();
+          };
+          from.addEventListener("change", push);
+          to.addEventListener("change", push);
+          row.append(
+            el("span", "app-field-hint", "from"),
+            from,
+            el("span", "app-field-hint", "to"),
+            to
+          );
+          if (cur) {
+            const clear = el("button", "app-docs-fpill", "Clear") as HTMLButtonElement;
+            clear.addEventListener("click", () => {
+              setDateFilter(dc.internal, "", "");
+              paintPop();
+            });
+            row.appendChild(clear);
+          }
+          g.appendChild(row);
+        }
+
         const mg = group("Modified");
         const mp = el("div", "app-docs-fpills");
         mg.appendChild(mp);
@@ -955,6 +1045,7 @@ export function mountDocs(
         const clearAll = el("button", "app-btn", "Clear all") as HTMLButtonElement;
         clearAll.addEventListener("click", () => {
           filters = [];
+          dateFilters = [];
           modifiedDays = 0;
           paintTreeSelection();
           paintChips();
@@ -1427,7 +1518,8 @@ export function mountDocs(
       const docs = (k: number) => `${k} document${k === 1 ? "" : "s"}`;
       // plain browsing shows the LIBRARY total up front (ItemCount), so
       // the number does not creep up as pages load (Ben, 2026-08-02)
-      const plainBrowse = query.trim() === "" && filters.length === 0;
+      const plainBrowse =
+        query.trim() === "" && filters.length === 0 && dateFilters.length === 0;
       const note =
         contentsNote === "capped"
           ? ` · top ${CONTENT_HITS} content matches`
@@ -1500,7 +1592,12 @@ export function mountDocs(
       // the up-front total for plain browsing (library ItemCounts)
       if (reset) {
         knownTotal = null;
-        if (words === undefined && modifiedDays === 0 && filters.length === 0) {
+        if (
+          words === undefined &&
+          modifiedDays === 0 &&
+          filters.length === 0 &&
+          dateFilters.length === 0
+        ) {
           void Promise.all(browseIds.map((id) => listItemCount(app.siteUrl, id))).then(
             (counts) => {
               if (dead || gen !== generation) return;
@@ -1556,13 +1653,13 @@ export function mountDocs(
             // any query touching >12 lookup-type columns (taxonomy and
             // person columns all count — Ben's SPQueryThrottledException,
             // 2026-08-02), so "every available column" is not requestable
+            const carried = new Set((lib?.config.columns ?? []).map((c) => c.internal));
             const fieldsFor = (): string[] => {
               const out = new Set<string>();
               // EVERY library in view gets the register's columns, not
               // just the one that happened to be "current" — that test
               // is why a multi-library browse fetched no DMS fields at
               // all and rendered three bare columns (C3).
-              const carried = new Set((lib?.config.columns ?? []).map((c) => c.internal));
               const shown =
                 chosenColumns.length > 0 ? chosenColumns : defaultInternals();
               for (const internal of shown) {
@@ -1587,6 +1684,8 @@ export function mountDocs(
                 cols: f.col === "" ? [...orgCols] : [f.col],
                 labels: [...f.labels],
               })),
+              // only bind a date column the library actually carries
+              dateRanges: dateFilters.filter((d) => carried.has(d.col)),
               fields: fieldsFor(),
               rowLimit: PAGE,
             });
@@ -1650,6 +1749,7 @@ export function mountDocs(
           .map((f) => ({ col: f.col, termId: f.node.id, path: f.node.labels })),
         columns: chosenColumns,
         groupBy,
+        dates: dateFilters.map((d) => ({ ...d })),
       };
     };
     const copyViewLink = () => {

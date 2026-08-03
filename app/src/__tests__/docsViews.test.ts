@@ -27,6 +27,7 @@ describe("view link payload", () => {
       columns: ["DMSStatus", "Modified"],
       groupBy: "DMSProcess",
       modifiedDays: 30,
+      dates: [{ col: "DMSEffectiveDate", from: "2025-01-01", to: "2025-03-31" }],
     };
     const back = decodeDocView(encodeDocView(v));
     expect(back).toEqual({ ...v, name: "" });
@@ -120,5 +121,24 @@ describe("DocUiPrefs (Vault V1, ben_docuijson)", () => {
   it("serializes the empty state compactly", async () => {
     const { serializeDocUiPrefs, emptyDocUiPrefs } = await import("../docs/views");
     expect(serializeDocUiPrefs(emptyDocUiPrefs())).toBe("{}");
+  });
+});
+
+describe("date filters ride the view (2026-08-03)", () => {
+  it("survives a round trip and drops entries that bound nothing", async () => {
+    const { decodeDocView, encodeDocView, emptyDocView } = await import("../docs/views");
+    const v = {
+      ...emptyDocView(),
+      dates: [
+        { col: "DMSEffectiveDate", from: "2025-01-01", to: "" },
+        { col: "DMSRetainUntil", from: "", to: "2030-12-31" },
+      ],
+    };
+    expect(decodeDocView(encodeDocView(v)).dates).toEqual(v.dates);
+    // a saved view whose date filter bounds neither end is not a filter
+    const junk = decodeDocView(
+      encodeDocView({ ...emptyDocView(), dates: [{ col: "X", from: "", to: "" }] })
+    );
+    expect(junk.dates).toEqual([]);
   });
 });

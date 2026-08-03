@@ -114,6 +114,11 @@ export interface RenderQueryOpts {
   /** Per filter: OR of label Eqs across the given columns (a term and
    *  its subtree, matched by display label); filters AND together. */
   termFilters?: { cols: string[]; labels: string[] }[];
+  /** From/to bounds on date columns (Ben, 2026-08-03). Either end may be
+   *  blank — "everything since March" is as valid a question as a closed
+   *  window. `to` is inclusive of the whole day: a date column holding
+   *  midnight would otherwise drop documents dated ON the end date. */
+  dateRanges?: { col: string; from: string; to: string }[];
   /** DMS internals to return beyond the core file fields. */
   fields?: string[];
   rowLimit?: number;
@@ -152,6 +157,15 @@ export function buildRenderViewXml(opts: RenderQueryOpts = {}): string {
   const match =
     nameTree !== "" && idTree !== "" ? camlJoin("Or", [nameTree, idTree]) : nameTree || idTree;
   if (match !== "") clauses.push(match);
+  for (const dr of opts.dateRanges ?? []) {
+    const col = dr.col.trim();
+    if (col === "") continue;
+    const bound = (op: "Geq" | "Leq", iso: string) =>
+      `<${op}><FieldRef Name="${xmlEsc(col)}"/>` +
+      `<Value Type="DateTime" IncludeTimeValue="TRUE" StorageTZ="TRUE">${xmlEsc(iso)}</Value></${op}>`;
+    if (dr.from.trim() !== "") clauses.push(bound("Geq", `${dr.from.trim()}T00:00:00Z`));
+    if (dr.to.trim() !== "") clauses.push(bound("Leq", `${dr.to.trim()}T23:59:59Z`));
+  }
   for (const tf of opts.termFilters ?? []) {
     const eqs = tf.cols.flatMap((col) =>
       tf.labels.map(
@@ -500,6 +514,9 @@ export function buildSearchBody(text: string, opts: SearchOpts): string {
   else if (ids.length > 1) {
     terms.push(`(${ids.map((id) => `ListID:${id}`).join(" OR ")})`);
   }
+  // date bounds are NOT sent to the index: since the contents union, the
+  // index only nominates ids and CAML does every bit of the filtering,
+  // so a KQL range here would narrow the nominations for no gain
   for (const tf of opts.termFilters ?? []) {
     if (tf.properties.length === 0 || tf.termIds.length === 0) continue;
     const parts = tf.properties.flatMap((p) => tf.termIds.map((t) => `${p}:${t}`));

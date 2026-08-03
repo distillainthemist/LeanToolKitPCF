@@ -98,6 +98,17 @@ export interface SiteColumn {
   available: boolean;
   /** Term set behind a taxonomy column ("" = not taxonomy / unknown). */
   termSetId: string;
+  /** A date column, from the live schema — what makes a from/to filter
+   *  possible (Ben, 2026-08-03). */
+  isDate: boolean;
+  /**
+   * Offered in the register's Filters pane. Filterable columns used to
+   * be "every taxonomy column", which put sets nobody filters by in the
+   * pane and left no way to say so; now the site chooses (Ben). Defaults
+   * to true for the columns that CAN filter — taxonomy and dates — so
+   * the pane starts where it always was.
+   */
+  filterable: boolean;
 }
 
 /**
@@ -278,6 +289,8 @@ function parseSiteDictionary(o: Record<string, unknown>): SiteDictionary {
         role: asStr(col.role),
         available: col.available !== false,
         termSetId: asStr(col.termSetId),
+        isDate: col.isDate === true,
+        filterable: col.filterable !== false,
       });
     }
   }
@@ -320,6 +333,8 @@ function serializeSiteDictionary(dict: SiteDictionary): Record<string, unknown> 
     if (c.role !== "") col.role = c.role;
     if (!c.available) col.available = false;
     if (c.termSetId !== "") col.termSetId = c.termSetId;
+    if (c.isDate) col.isDate = true;
+    if (!c.filterable) col.filterable = false;
     return col;
   });
   if (cols.length > 0) o.columns = cols;
@@ -430,6 +445,10 @@ export function buildSiteDictionary(
       // stays offerable, since hiding it is a per-library view decision
       available: b.available.some((a) => a),
       termSetId: pickWinner(b.termSetIds).chosen,
+      // the old per-library config knew nothing of either; the live
+      // schema fills isDate on the next settings visit
+      isDate: false,
+      filterable: true,
     });
   }
   // status colours → a palette per term set (labels as keys for now)
@@ -799,7 +818,11 @@ export function syncSiteDictionary(
     const f = liveByName.get(c.internal);
     if (f === undefined) continue; // no library carries it any more
     taken.add(c.internal);
-    out.push({ ...c, termSetId: f.termSetId !== "" ? f.termSetId : c.termSetId });
+    out.push({
+      ...c,
+      termSetId: f.termSetId !== "" ? f.termSetId : c.termSetId,
+      isDate: isDateField(f),
+    });
   }
   for (const [internal, f] of liveByName) {
     if (taken.has(internal)) continue;
@@ -809,6 +832,9 @@ export function syncSiteDictionary(
       role: ROLE_BY_INTERNAL[internal] ?? "",
       available: true,
       termSetId: f.termSetId,
+      isDate: isDateField(f),
+      // a column that cannot filter is not offered as one
+      filterable: f.termSetId !== "" || isDateField(f),
     });
   }
   return { dictionary: { ...dict, columns: out }, carriers };
@@ -1065,3 +1091,19 @@ export function orgTreePaths(
   }
   return out;
 }
+
+/** SharePoint's date column types — what a from/to filter can bind to. */
+export function isDateField(f: SpField): boolean {
+  return f.type === "DateTime";
+}
+
+/** Roles that ARE dates by definition. The live schema stamps isDate on
+ *  the next settings visit, but a role already says as much — so a site
+ *  that mapped its effective date gets date filters without waiting to
+ *  re-save the dictionary. */
+const DATE_ROLES = new Set(["effectiveDate", "nextReviewDate", "retainUntil"]);
+
+export function isDateColumn(c: SiteColumn): boolean {
+  return c.isDate || DATE_ROLES.has(c.role);
+}
+

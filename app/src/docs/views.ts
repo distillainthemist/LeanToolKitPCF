@@ -37,6 +37,16 @@ export interface DocView {
   groupBy: string;
   /** Modified-within window in days (0 = any time) — Vault V3. */
   modifiedDays: number;
+  /** From/to bounds on date columns (Ben, 2026-08-03). A saved view that
+   *  dropped its date window would open showing more than it promised. */
+  dates: DocDateFilter[];
+}
+
+export interface DocDateFilter {
+  col: string;
+  /** yyyy-mm-dd; "" = unbounded at that end. */
+  from: string;
+  to: string;
 }
 
 export function emptyDocView(): DocView {
@@ -52,6 +62,7 @@ export function emptyDocView(): DocView {
     columns: [],
     groupBy: "",
     modifiedDays: 0,
+    dates: [],
   };
 }
 
@@ -72,6 +83,9 @@ function viewToJson(v: DocView): Record<string, unknown> {
   if (v.columns.length > 0) o.k = v.columns;
   if (v.groupBy !== "") o.g = v.groupBy;
   if (v.modifiedDays > 0) o.m = v.modifiedDays;
+  if (v.dates.length > 0) {
+    o.dt = v.dates.map((d) => ({ c: d.col, f: d.from, t: d.to }));
+  }
   return o;
 }
 
@@ -103,6 +117,18 @@ function viewFromJson(raw: unknown): DocView {
   out.groupBy = asStr(o.g);
   out.modifiedDays =
     typeof o.m === "number" && Number.isFinite(o.m) && o.m > 0 ? Math.floor(o.m) : 0;
+  if (Array.isArray(o.dt)) {
+    for (const item of o.dt as unknown[]) {
+      if (!item || typeof item !== "object") continue;
+      const d = item as Record<string, unknown>;
+      const col = asStr(d.c);
+      const from = asStr(d.f);
+      const to = asStr(d.t);
+      // a bound-less entry is not a filter
+      if (col === "" || (from === "" && to === "")) continue;
+      out.dates.push({ col, from, to });
+    }
+  }
   return out;
 }
 

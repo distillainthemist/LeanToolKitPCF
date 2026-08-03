@@ -391,7 +391,7 @@ describe("site column dictionary", () => {
     // an empty dictionary must change nothing (a fresh deployment)
     expect(resolveLibraryConfig(cfg, emptySiteDictionary())).toEqual(cfg);
     // and an unknown column is kept as-is rather than vanishing mid-upgrade
-    const dict = { columns: [{ internal: "Other", label: "", role: "", available: true, termSetId: "" }], palettes: [], templates: {} };
+    const dict = { columns: [{ internal: "Other", label: "", role: "", available: true, termSetId: "", isDate: false, filterable: true }], palettes: [], templates: {} };
     expect(resolveLibraryConfig(cfg, dict).columns[0].role).toBe("tags");
   });
 
@@ -402,7 +402,7 @@ describe("site column dictionary", () => {
       siteUrl: "https://x.sharepoint.com/sites/Dev",
       sites: {
         "https://x.sharepoint.com/sites/dev": {
-          columns: [{ internal: "DMSStatus", label: "Status", role: "status", available: true, termSetId: "set-9" }],
+          columns: [{ internal: "DMSStatus", label: "Status", role: "status", available: true, termSetId: "set-9", isDate: false, filterable: true }],
           palettes: [{ setId: "set-9", setName: "Approval", entries: { Approved: { color: "good", glyph: "✓", label: "Approved" } } }],
           templates: { record: ["DMSStatus"] },
         },
@@ -433,8 +433,8 @@ describe("dictionary ↔ live schema sync (C1)", () => {
     const { syncSiteDictionary } = await import("../docs/model");
     const stored = {
       columns: [
-        { internal: "DMSStatus", label: "Status", role: "status", available: true, termSetId: "" },
-        { internal: "Retired", label: "Gone", role: "tags", available: true, termSetId: "" },
+        { internal: "DMSStatus", label: "Status", role: "status", available: true, termSetId: "", isDate: false, filterable: true },
+        { internal: "Retired", label: "Gone", role: "tags", available: true, termSetId: "", isDate: false, filterable: true },
       ],
       palettes: [],
       templates: {},
@@ -459,7 +459,7 @@ describe("dictionary ↔ live schema sync (C1)", () => {
   it("keeps a stored term set when the live read cannot see one", async () => {
     const { syncSiteDictionary } = await import("../docs/model");
     const { dictionary } = syncSiteDictionary(
-      { columns: [{ internal: "DMSTags", label: "", role: "tags", available: true, termSetId: "kept" }], palettes: [], templates: {} },
+      { columns: [{ internal: "DMSTags", label: "", role: "tags", available: true, termSetId: "kept", isDate: false, filterable: true }], palettes: [], templates: {} },
       [{ listId: "1", name: "L", fields: [spField("DMSTags")] }]
     );
     expect(dictionary.columns[0].termSetId).toBe("kept");
@@ -512,11 +512,11 @@ describe("term set palettes (C2)", () => {
     const sets = colourableSets({
       templates: {},
       columns: [
-        { internal: "DMSStatus", label: "", role: "status", available: true, termSetId: "set-9" },
-        { internal: "DMSDocumentStatus", label: "", role: "", available: true, termSetId: "set-9" },
-        { internal: "DMSImportance", label: "", role: "importance", available: true, termSetId: "set-3" },
-        { internal: "Hidden", label: "", role: "", available: false, termSetId: "set-4" },
-        { internal: "PlainText", label: "", role: "", available: true, termSetId: "" },
+        { internal: "DMSStatus", label: "", role: "status", available: true, termSetId: "set-9", isDate: false, filterable: true },
+        { internal: "DMSDocumentStatus", label: "", role: "", available: true, termSetId: "set-9", isDate: false, filterable: true },
+        { internal: "DMSImportance", label: "", role: "importance", available: true, termSetId: "set-3", isDate: false, filterable: true },
+        { internal: "Hidden", label: "", role: "", available: false, termSetId: "set-4", isDate: false, filterable: true },
+        { internal: "PlainText", label: "", role: "", available: true, termSetId: "", isDate: false, filterable: true },
       ],
       palettes: [],
     });
@@ -535,6 +535,8 @@ describe("configuration health (C4)", () => {
     role,
     available: true,
     termSetId,
+    isDate: false,
+    filterable: true,
   });
   const base = {
     conflicts: [],
@@ -636,6 +638,8 @@ describe("view templates (C5)", () => {
     role,
     available: true,
     termSetId: "",
+    isDate: false,
+    filterable: true,
   });
   const dict = {
     columns: [sc("DMSType", "docType"), sc("DMSOwner", "owner"), sc("DMSStatus", "status"), sc("Notes")],

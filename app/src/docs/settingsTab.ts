@@ -32,6 +32,7 @@ import {
   colourableSets,
   emptySiteDictionary,
   fieldsFromResponse,
+  isDateColumn,
   librariesFromLists,
   mergeColumns,
   orgDrift,
@@ -227,6 +228,7 @@ export async function renderDocsSettings(body: HTMLElement, ctx: Ctx): Promise<v
       el("span", "app-docs-colhead", "SharePoint column"),
       el("span", "app-docs-colhead", "Display as"),
       el("span", "app-docs-colhead", "Available"),
+      el("span", "app-docs-colhead", "Filter"),
       el("span", "app-docs-colhead", "Role"),
       el("span", "app-docs-colhead", "In libraries")
     );
@@ -271,6 +273,21 @@ export async function renderDocsSettings(body: HTMLElement, ctx: Ctx): Promise<v
         ctx.markDirty();
       });
       grid.appendChild(avail);
+      // only a column that CAN filter is worth offering as one: a term
+      // set to pick from, or a date to bound (Ben, 2026-08-03)
+      const canFilter = col.termSetId !== "" || isDateColumn(col);
+      const filt = el("input", "") as HTMLInputElement;
+      filt.type = "checkbox";
+      filt.checked = canFilter && col.filterable;
+      filt.disabled = !canFilter;
+      filt.title = canFilter
+        ? "Offered in the register's Filters pane"
+        : "Only managed-metadata and date columns can filter";
+      filt.addEventListener("change", () => {
+        col.filterable = filt.checked;
+        ctx.markDirty();
+      });
+      grid.appendChild(filt);
       const role = el("select", "app-input") as HTMLSelectElement;
       for (const r of COLUMN_ROLES) {
         const o = el("option", "", r.label) as HTMLOptionElement;
