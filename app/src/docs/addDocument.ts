@@ -27,7 +27,6 @@ import { DocRow, buildRenderViewXml, extOf } from "./rows";
 import { renderListPage } from "./data";
 import { EntraHit, searchEntra } from "../store/people";
 import {
-  checkOutFile,
   checkInFile,
   connectorPatchItem,
   copyFileTo,
@@ -465,18 +464,15 @@ export function openAddDocument(opts: AddDocumentOpts): void {
       return fail("Created, but could not read the new document back", idRes.status);
     }
 
-    // Take the check-out by ATTEMPTING it — no state read first. Run two
-    // hung on that read while SharePoint already showed the file checked
-    // out to its creator; for a file that did not exist a moment ago,
-    // the attempt itself is decisive: success means we took it,
-    // "already checked out" means we hold it from the copy.
-    status("Taking the check-out…");
-    const out = await timedRetry("Check-out", () => checkOutFile(site, newUrl));
-    const alreadyOurs = !out.ok && /checked out/i.test(spErrorText(out.status));
-    if (!out.ok && !alreadyOurs) {
-      return fail("Created, but could not check out to set properties", out.status);
-    }
-
+    // NO check-out call, and no state read either. Three runs hung
+    // here, each on the first call to touch the FILE object after the
+    // copy — a fresh copy is server-side locked for a while, file
+    // endpoints block on that lock, and item endpoints do not (the
+    // itemId read above answered promptly every run). Nor is the call
+    // needed: a require-check-out library hands the copy back already
+    // checked out to its creator (run two, confirmed in SharePoint),
+    // and a library without the rule takes item writes bare. Metadata
+    // goes straight in through ITEM endpoints.
     const { formValues, patch } = splitAddWrites(editors.map((e) => e.read()));
     if (formValues.length > 0) {
       status("Writing properties…");
@@ -518,7 +514,10 @@ export function openAddDocument(opts: AddDocumentOpts): void {
           "shows checked out to you, check it in from the register."
       );
     }
-    if (!cin.ok) {
+    // "not checked out" here is not a failure: a library without the
+    // require-check-out rule never issued one, so there is nothing to
+    // release and the document is simply done
+    if (!cin.ok && !/not checked out/i.test(spErrorText(cin.status))) {
       // classic cause: a required column the form could not edit —
       // SharePoint's own sentence names it
       return fail("Created, but check-in was refused (it stays checked out to you)", cin.status);
