@@ -14,6 +14,7 @@
 import { getClient } from "@microsoft/power-apps/data";
 import { dataSourcesInfo } from "../../.power/schemas/appschemas/dataSourcesInfo";
 import { termTreeOrder } from "./rows";
+import { spQuote } from "./model";
 
 // the import is for side effect typing only — the data source must exist
 // in the app for the connection to be present at runtime
@@ -144,6 +145,125 @@ export function fetchTermSets(site: string, groupId: string): Promise<SpResult> 
     "GET",
     `_api/v2.1/termStore/groups/${groupId}/sets?$select=id,localizedNames`,
     { headers: { Accept: "application/json" } }
+  );
+}
+
+// ---- writes (Phase 4A) -------------------------------------------------
+// Everything below CHANGES a document. Each is one site-scoped REST call
+// as the signed-in user, so SharePoint's own permissions are the gate and
+// the UI only decides what to offer — a user who should not be able to
+// check a document out gets SharePoint's refusal, not ours.
+//
+// Paths go through GetFileByServerRelativePath(decodedUrl='…') rather
+// than the older …ByServerRelativeUrl: it is the one that survives the
+// apostrophes, ampersands and accents real document names carry.
+
+const filePath = (serverRelativeUrl: string) =>
+  `_api/web/GetFileByServerRelativePath(decodedUrl='${spQuote(serverRelativeUrl)}')`;
+const folderPath = (serverRelativeUrl: string) =>
+  `_api/web/GetFolderByServerRelativePath(decodedUrl='${spQuote(serverRelativeUrl)}')`;
+
+/** What the signed-in user may do in a library, as SharePoint sees it. */
+export function fetchListPermissions(site: string, listId: string): Promise<SpResult> {
+  return spRequest(site, "GET", `_api/web/lists(guid'${listId}')/EffectiveBasePermissions`);
+}
+
+/** A library's root folder — where an added document lands. */
+export function fetchListRoot(site: string, listId: string): Promise<SpResult> {
+  return spRequest(
+    site,
+    "GET",
+    `_api/web/lists(guid'${listId}')/RootFolder?$select=ServerRelativeUrl`
+  );
+}
+
+export function checkOutFile(site: string, url: string): Promise<SpResult> {
+  return spRequest(site, "POST", `${filePath(url)}/CheckOut()`);
+}
+
+/** `major` writes a 1.0-style version; minor keeps it a draft. The
+ *  comment is required by the UI, not by SharePoint — an entry an
+ *  auditor reads is worth more than a keystroke saved (Ben). */
+export function checkInFile(
+  site: string,
+  url: string,
+  comment: string,
+  major: boolean
+): Promise<SpResult> {
+  return spRequest(
+    site,
+    "POST",
+    `${filePath(url)}/CheckIn(comment='${spQuote(comment)}',checkintype=${major ? 1 : 0})`
+  );
+}
+
+/** Discards the check-out AND the edits made under it — SharePoint keeps
+ *  no copy, so every caller confirms first. */
+export function undoCheckOut(site: string, url: string): Promise<SpResult> {
+  return spRequest(site, "POST", `${filePath(url)}/UndoCheckOut()`);
+}
+
+/** Server-side copy: no bytes cross the wire, which is what makes the
+ *  template route certain where upload is not. */
+export function copyFileTo(site: string, url: string, newUrl: string): Promise<SpResult> {
+  return spRequest(
+    site,
+    "POST",
+    `${filePath(url)}/copyto(strnewurl='${spQuote(newUrl)}',boverwrite=false)`
+  );
+}
+
+/** Add a file from content the caller holds. Text is certain; bytes are
+ *  what 4A's probe exists to settle. */
+export function addFile(
+  site: string,
+  folder: string,
+  name: string,
+  body: string
+): Promise<SpResult> {
+  return spRequest(
+    site,
+    "POST",
+    `${folderPath(folder)}/Files/add(url='${spQuote(name)}',overwrite=true)`,
+    { body }
+  );
+}
+
+export function fetchFileInfo(site: string, url: string): Promise<SpResult> {
+  return spRequest(site, "GET", `${filePath(url)}?$select=Length,CheckOutType,Name`);
+}
+
+/** The list item behind a file — its id is what metadata writes address. */
+export function fetchFileItemId(site: string, url: string): Promise<SpResult> {
+  return spRequest(site, "GET", `${filePath(url)}/ListItemAllFields?$select=Id`);
+}
+
+export function recycleFile(site: string, url: string): Promise<SpResult> {
+  return spRequest(site, "POST", `${filePath(url)}/recycle()`);
+}
+
+/**
+ * Metadata written the way SharePoint writes it itself. Taxonomy, date,
+ * choice and person all arrive as DISPLAY TEXT and SharePoint coerces
+ * them — the alternative is a PATCH per field type plus hidden note
+ * fields for taxonomy, which is exactly the code that gets a term set
+ * subtly wrong. Field-level failures come back per field rather than
+ * failing the whole call, so the form can point at the offending row.
+ */
+export function validateUpdateListItem(
+  site: string,
+  listId: string,
+  itemId: number,
+  values: { FieldName: string; FieldValue: string }[]
+): Promise<SpResult> {
+  return spRequest(
+    site,
+    "POST",
+    `_api/web/lists(guid'${listId}')/items(${itemId})/ValidateUpdateListItem`,
+    {
+      headers: { "Content-Type": "application/json;odata=nometadata" },
+      body: JSON.stringify({ formValues: values, bNewDocumentUpdate: true }),
+    }
   );
 }
 

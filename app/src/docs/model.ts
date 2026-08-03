@@ -1140,6 +1140,72 @@ export function dictionaryHealth(input: HealthInput): HealthFinding[] {
   return out;
 }
 
+// ---- writes: what came back (Phase 4A) ---------------------------------
+// Parsing only. The calls live in sp.ts; these turn their answers into
+// something the UI can act on, and are the part worth testing.
+
+export interface BasePermissions {
+  add: boolean;
+  edit: boolean;
+  /** Deleting a document is recycling it — recoverable, but still the
+   *  permission SharePoint checks for a discard. */
+  remove: boolean;
+}
+
+/**
+ * SharePoint's effective permissions arrive as a 64-bit mask split in
+ * two decimal strings. Everything Phase 4 needs sits in the low word:
+ * AddListItems 0x2, EditListItems 0x4, DeleteListItems 0x8. The `| 0`
+ * that JS applies to a bitwise operand is safe here precisely because
+ * the bits we test are the low ones — a full-control mask arriving as
+ * -1 still answers every question correctly.
+ */
+export function parseBasePermissions(raw: unknown): BasePermissions {
+  const o = (raw ?? {}) as Record<string, unknown>;
+  const inner = (o.EffectiveBasePermissions ?? o.d ?? o) as Record<string, unknown>;
+  const low = Number((inner as { Low?: unknown }).Low ?? 0);
+  if (!Number.isFinite(low)) return { add: false, edit: false, remove: false };
+  return {
+    add: (low & 0x2) !== 0,
+    edit: (low & 0x4) !== 0,
+    remove: (low & 0x8) !== 0,
+  };
+}
+
+/** The fields ValidateUpdateListItem refused, with SharePoint's own
+ *  reason. An empty list means every value was accepted. */
+export function validateItemErrors(raw: unknown): { field: string; message: string }[] {
+  const rows = Array.isArray((raw as { value?: unknown[] })?.value)
+    ? ((raw as { value: unknown[] }).value as Record<string, unknown>[])
+    : [];
+  const out: { field: string; message: string }[] = [];
+  for (const r of rows) {
+    const message = asStr(r.ErrorMessage);
+    if (r.HasException !== true && message === "") continue;
+    out.push({ field: asStr(r.FieldName), message: message || "rejected" });
+  }
+  return out;
+}
+
+/** A single-quoted OData string. SharePoint's own escape is doubling,
+ *  and real document names carry apostrophes. Pure, so it lives here
+ *  rather than in the transport — quoting is where injection would get
+ *  in, and it is worth a test that runs without the SDK. */
+export const spQuote = (s: string): string => s.replace(/'/g, "''");
+
+/**
+ * Bytes as a string the JSON transport can carry: one character per
+ * byte, no code point above 0xFF. This is the whole question 4A's
+ * binary step asks — if the connector re-encodes it as UTF-8, every
+ * byte above 0x7F becomes two and the file lands the wrong length,
+ * which is why the probe checks Length rather than trusting a 200.
+ */
+export function bytesToBinaryString(bytes: Uint8Array): string {
+  let s = "";
+  for (const b of bytes) s += String.fromCharCode(b);
+  return s;
+}
+
 // ---- org ↔ term set drift ----------------------------------------------
 
 export interface DriftReport {

@@ -717,6 +717,75 @@ describe("taxonomy values against their term set (2026-08-03)", () => {
   });
 });
 
+describe("what a write came back with (Phase 4A)", () => {
+  it("reads the permissions Phase 4 actually needs", async () => {
+    const { parseBasePermissions } = await import("../docs/model");
+    // add + edit + delete, as decimal strings the way SharePoint sends them
+    expect(parseBasePermissions({ High: "432", Low: "14" })).toEqual({
+      add: true,
+      edit: true,
+      remove: true,
+    });
+    // read-only: view without add or edit
+    expect(parseBasePermissions({ Low: "1" })).toEqual({
+      add: false,
+      edit: false,
+      remove: false,
+    });
+    // full control arrives as a mask JS turns negative — the low bits
+    // still have to answer correctly
+    expect(parseBasePermissions({ Low: "4294967295" })).toEqual({
+      add: true,
+      edit: true,
+      remove: true,
+    });
+    // wrapped, or absent, or nonsense — never a throw, never a yes
+    expect(parseBasePermissions({ d: { Low: "4" } }).edit).toBe(true);
+    expect(parseBasePermissions(null)).toEqual({ add: false, edit: false, remove: false });
+    expect(parseBasePermissions({ Low: "not a number" }).add).toBe(false);
+  });
+
+  it("surfaces the fields SharePoint refused, and only those", async () => {
+    const { validateItemErrors } = await import("../docs/model");
+    const errs = validateItemErrors({
+      value: [
+        { FieldName: "Title", FieldValue: "x", HasException: false, ErrorMessage: null },
+        {
+          FieldName: "DMSOrg",
+          FieldValue: "Nowhere",
+          HasException: true,
+          ErrorMessage: "The given value is not present in the term set.",
+        },
+        // an exception with no message still has to be reported
+        { FieldName: "DMSType", HasException: true, ErrorMessage: null },
+      ],
+    });
+    expect(errs).toEqual([
+      { field: "DMSOrg", message: "The given value is not present in the term set." },
+      { field: "DMSType", message: "rejected" },
+    ]);
+    expect(validateItemErrors({ value: [] })).toEqual([]);
+    expect(validateItemErrors(null)).toEqual([]);
+  });
+
+  it("carries bytes as one character each, so a re-encode is visible", async () => {
+    const { bytesToBinaryString } = await import("../docs/model");
+    const bytes = new Uint8Array([0x25, 0x00, 0x7f, 0x80, 0xff]);
+    const s = bytesToBinaryString(bytes);
+    expect(s.length).toBe(bytes.length);
+    expect([...s].map((c) => c.charCodeAt(0))).toEqual([0x25, 0x00, 0x7f, 0x80, 0xff]);
+    // the failure the probe is looking for: UTF-8 turns the two bytes
+    // above 0x7F into two each, so five bytes land as seven
+    expect(new TextEncoder().encode(s).length).toBe(7);
+  });
+
+  it("quotes the way SharePoint's OData does", async () => {
+    const { spQuote } = await import("../docs/model");
+    expect(spQuote("O'Brien's draft.docx")).toBe("O''Brien''s draft.docx");
+    expect(spQuote("plain.docx")).toBe("plain.docx");
+  });
+});
+
 describe("view templates (C5)", () => {
   const sc = (internal: string, role = "") => ({
     internal,

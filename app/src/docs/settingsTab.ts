@@ -178,8 +178,13 @@ export async function renderDocsSettings(body: HTMLElement, ctx: Ctx): Promise<v
   /** internal → the libraries carrying it, from the last dictionary pass. */
   let lastCarriers = new Map<string, string[]>();
 
+  /** Set by the Write access section far below, which only exists once
+   *  the whole tab is built — the dictionary paints before then. */
+  let fillWriteSel: () => void = () => {};
+
   const paintDictionary = async () => {
     clear(dictBox);
+    fillWriteSel();
     if (app.siteUrl === "" || exposed.length === 0) {
       dictBox.appendChild(
         note("Expose a library below first — its columns are what there is to map.")
@@ -1174,6 +1179,89 @@ export async function renderDocsSettings(body: HTMLElement, ctx: Ctx): Promise<v
       );
       list("In LeanBoard only", report.onlyApp);
       list("In the term set only", report.onlyTerms);
+    })();
+  });
+
+  // ---- write access (Phase 4A) -----------------------------------------
+  // Phase 4 is the first phase that writes, and one path in it is
+  // unproven: a file's bytes through a connector that serialises its
+  // body as a string. This asks the tenant instead of guessing, and it
+  // is explicit about what it does — it creates files and recycles them,
+  // in a library the admin picks, never in a controlled one.
+  body.appendChild(section("Write access"));
+  body.appendChild(
+    note(
+      "Runs the whole write surface — create, metadata, check-out, check-in, discard, " +
+        "server-side copy and a raw-byte upload — against a probe file it creates and " +
+        "then recycles. Working and revision libraries only: nothing controlled is touched."
+    )
+  );
+  const writeSel = el("select", "app-input") as HTMLSelectElement;
+  const writeBtn = el("button", "app-btn", "Test write access") as HTMLButtonElement;
+  const writeRow = el("div", "app-docs-siterow");
+  writeRow.append(writeSel, writeBtn);
+  body.appendChild(writeRow);
+  const writeBox = el("div", "");
+  body.appendChild(writeBox);
+
+  fillWriteSel = () => {
+    const writable = exposed.filter(
+      (l) => l.libType === "working" || l.libType === "revision"
+    );
+    clear(writeSel);
+    for (const l of writable) {
+      const o = el(
+        "option",
+        "",
+        l.config.title !== "" ? l.config.title : l.name
+      ) as HTMLOptionElement;
+      o.value = l.listId;
+      writeSel.appendChild(o);
+    }
+    if (writable.length === 0) {
+      writeSel.appendChild(el("option", "", "No working or revision library exposed"));
+    }
+    writeSel.disabled = writable.length === 0;
+    writeBtn.disabled = writable.length === 0;
+  };
+  fillWriteSel();
+
+  writeBtn.addEventListener("click", () => {
+    void (async () => {
+      const listId = writeSel.value;
+      if (listId === "" || app.siteUrl === "") return;
+      writeBtn.disabled = true;
+      writeBtn.textContent = "Testing…";
+      clear(writeBox);
+      const list = el("div", "app-dept-list");
+      writeBox.appendChild(list);
+      // a real term for the taxonomy write, borrowed from the health
+      // probe's walk — a made-up label proves nothing
+      const withTerms = dictionary()
+        .columns.map((c) => ({ col: c, labels: taxProbe.get(c.internal)?.labels ?? [] }))
+        .find((x) => x.col.termSetId !== "" && x.labels.length > 0);
+      const { runWriteProbe } = await import("./writeProbe");
+      await runWriteProbe(
+        {
+          site: app.siteUrl,
+          listId,
+          taxColumn:
+            withTerms === undefined
+              ? undefined
+              : { internal: withTerms.col.internal, label: withTerms.labels[0] },
+        },
+        (s) => {
+          const row = el("div", `app-docs-health app-docs-health-${s.ok ? "info" : "warn"}`);
+          row.append(
+            el("span", "app-docs-healthmark", s.ok ? "✓" : "⚠"),
+            el("span", "app-docs-healthtitle", s.name),
+            el("span", "app-field-hint", s.detail)
+          );
+          list.appendChild(row);
+        }
+      );
+      writeBtn.disabled = false;
+      writeBtn.textContent = "Test write access";
     })();
   });
 }
