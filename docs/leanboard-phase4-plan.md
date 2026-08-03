@@ -141,26 +141,32 @@ code path with any of the above, and it rides the same connector
 transport. Phase 5's approval engine depends on this answer; nothing
 shipped is affected either way.
 
-## The fresh-copy file lock (measured 2026-08-04)
+## The fresh-copy file lock (measured 2026-08-04, four runs)
 
-Three consecutive add-a-document runs hung, each on the first call to
-touch the FILE object after `copyto`: `GetFileByServerRelativePath`
-reads and `CheckOut()` alike sat unanswered for a minute or more, while
-ITEM-endpoint calls on the same document (`ListItemAllFields`,
-`ValidateUpdateListItem`, connector `PatchItem`) answered promptly every
-time. Reading: SharePoint holds a server-side lock on a freshly copied
-file during post-processing; file endpoints block on it, item endpoints
-do not.
+Four consecutive add-a-document runs stalled, each on the first call
+through the FILE door after `copyto` — `GetFileByServerRelativePath`
+reads (`ListItemAllFields` included) and `CheckOut()` alike — while
+LIST/ITEM-door calls on the same document (RLDAS,
+`ValidateUpdateListItem`, connector `PatchItem`) answered promptly
+every time.
 
-Consequences, baked into 4C: after a copy, touch only item endpoints —
-no check-out call (a require-check-out library hands the copy back
-already checked out to its creator, and a library without the rule takes
-item writes bare), no file-info read, metadata straight in, then one
-check-in whose "not checked out" refusal is read as "nothing to
-release". Every step races a clock and safe steps retry once, so a
-stall names itself instead of holding the dialog. **Phase 5 must
-remember this**: any command that copies (renditions, supersede) waits
-on item endpoints, not file endpoints, for the copy to settle.
+The corrected reading, after run four: file-door calls on a fresh copy
+are **slow, not dead** — SharePoint settles the copy for a minute or
+more and the calls eventually land. Run two's document "checked out to
+me" was our own abandoned `CheckOut()` landing late, which also means
+**abandon-and-retry is dangerous on file operations**: a late duplicate
+can re-check-out a document after its check-in. And the copy itself
+arrives **checked in** (runs four and five in SharePoint), so on a
+require-check-out library the check-out genuinely must be taken before
+the term write (probe run four's refusal).
+
+4C therefore: itemId via the register's own RLDAS read (list door,
+newest first, exact name); ONE patient `CheckOut()` (up to 120 s,
+narrated every 5 s, never retried); metadata through item doors; ONE
+patient check-in, whose "not checked out" refusal reads as "nothing to
+release". **Phase 5 must remember this**: any command that copies
+(renditions, supersede) gives file-door calls on the fresh copy one
+patient attempt each, never abandon-and-retry.
 
 ## Decisions (Ben, 2026-08-03)
 

@@ -28,10 +28,10 @@ import { renderListPage } from "./data";
 import { EntraHit, searchEntra } from "../store/people";
 import {
   checkInFile,
+  checkOutFile,
   connectorPatchItem,
   copyFileTo,
   fetchFields,
-  fetchFileItemId,
   fetchListRoot,
   fetchTermPaths,
   validateUpdateListItem,
@@ -421,6 +421,30 @@ export function openAddDocument(opts: AddDocumentOpts): void {
     );
   };
 
+  /**
+   * One call given the time it actually needs. File-endpoint calls on a
+   * fresh copy are SLOW, not broken — an abandoned CheckOut from an
+   * earlier run landed server-side a minute later (that is why run
+   * two's document ended up checked out). Abandon-and-retry piles up
+   * late-landing duplicates; the honest cure is one call, narrated
+   * while SharePoint settles the file.
+   */
+  const patient = async (base: string, p: Promise<Sp>, totalMs = 120_000): Promise<Sp | null> => {
+    const started = Date.now();
+    let done = false;
+    void p.finally(() => {
+      done = true;
+    });
+    const tick = window.setInterval(() => {
+      if (done) return;
+      const s = Math.round((Date.now() - started) / 1000);
+      if (s >= 10) status(`${base} — SharePoint is still settling the new file (${s}s)…`);
+    }, 5_000);
+    const r = await timed<Sp | null>(p, totalMs, null);
+    window.clearInterval(tick);
+    return r;
+  };
+
   const create = async () => {
     if (creating) return;
     const tpl = tplRows.get(tplSel.value);
@@ -455,24 +479,48 @@ export function openAddDocument(opts: AddDocumentOpts): void {
     // From here the document EXISTS — a failure below leaves it checked
     // out to its creator, and the message says so instead of pretending
     // nothing happened.
+    // The itemId comes from the LIST door, not the file door —
+    // GetFileByServerRelativePath/ListItemAllFields stalled on run four
+    // exactly like every other file-endpoint call on a fresh copy. The
+    // register's own read (Modified desc) puts the newest file first.
     status("Reading the new document back…");
-    const idRes = await timedRetry("Reading the new document", () =>
-      fetchFileItemId(site, newUrl)
-    );
-    const itemId = Number(((idRes.data ?? {}) as { Id?: unknown }).Id ?? 0);
-    if (itemId <= 0) {
-      return fail("Created, but could not read the new document back", idRes.status);
-    }
+    const idRes = await timedRetry("Reading the new document", async () => {
+      const page = await renderListPage(site, lib.listId, buildRenderViewXml({ rowLimit: 25 }));
+      const hit = page.rows.find((r) => r.name.toLowerCase() === fileName.toLowerCase());
+      return hit !== undefined
+        ? { ok: true, status: "", data: hit.id }
+        : {
+            ok: false,
+            status:
+              page.error !== ""
+                ? page.error
+                : "the new document has not appeared in the register yet",
+            data: null,
+          };
+    });
+    if (!idRes.ok) return fail("Created, but could not read the new document back", idRes.status);
+    const itemId = Number(idRes.data);
 
-    // NO check-out call, and no state read either. Three runs hung
-    // here, each on the first call to touch the FILE object after the
-    // copy — a fresh copy is server-side locked for a while, file
-    // endpoints block on that lock, and item endpoints do not (the
-    // itemId read above answered promptly every run). Nor is the call
-    // needed: a require-check-out library hands the copy back already
-    // checked out to its creator (run two, confirmed in SharePoint),
-    // and a library without the rule takes item writes bare. Metadata
-    // goes straight in through ITEM endpoints.
+    // The check-out IS needed: the copy arrives checked IN (runs four
+    // and five, confirmed in SharePoint), and on a require-check-out
+    // library the term write is refused without one (probe run four).
+    // It rides the file door, which is slow on a fresh copy — so one
+    // patient call, never abandon-and-retry: a duplicate landing late
+    // would re-check-out the document after the check-in below.
+    status("Taking the check-out…");
+    const out = await patient("Taking the check-out", checkOutFile(site, newUrl));
+    if (out === null) {
+      return fail(
+        "The check-out never answered",
+        "SharePoint is still settling the new file. The document exists — give it a " +
+          "minute, then set its properties from the register (check out, edit, check in)."
+      );
+    }
+    // "already checked out" on a name that did not exist a minute ago
+    // can only be us — a previous attempt's call landing late
+    const held = out.ok || /checked out/i.test(spErrorText(out.status));
+    if (!held) return fail("Created, but could not check out to set properties", out.status);
+
     const { formValues, patch } = splitAddWrites(editors.map((e) => e.read()));
     if (formValues.length > 0) {
       status("Writing properties…");
@@ -497,15 +545,13 @@ export function openAddDocument(opts: AddDocumentOpts): void {
       }
     }
 
-    // Check-in is the ONE step not retried blindly: a first attempt that
-    // landed late would make the retry fail "not checked out" — which is
-    // success wearing an error. Single attempt; that specific refusal
-    // after a silence is read for what it is.
+    // Check-in also rides the file door: one patient call, no blind
+    // retry — a first attempt landing late would make a retry fail
+    // "not checked out", which is success wearing an error.
     status("Checking in…");
-    const cin = await timed<Sp | null>(
-      checkInFile(site, newUrl, `Created from template “${tpl.name}”`, false),
-      25_000,
-      null
+    const cin = await patient(
+      "Checking in",
+      checkInFile(site, newUrl, `Created from template “${tpl.name}”`, false)
     );
     if (cin === null) {
       return fail(
