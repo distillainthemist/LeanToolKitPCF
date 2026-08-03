@@ -1350,7 +1350,47 @@ export function splitAddWrites(values: AddFieldValue[]): {
  * values, those columns alone retry through the connector's term-object
  * route under a held check-out — the route probe run six proved.
  */
-export function newDocumentWrites(values: AddFieldValue[]): {
+/** LCID → BCP 47, for the locales a Pechey deployment is likely to
+ *  meet. Anything unmapped falls back to en-US — which is also what a
+ *  fresh SharePoint site ships with. */
+const LCID_TAGS: Record<number, string> = {
+  1033: "en-US",
+  2057: "en-GB",
+  3081: "en-AU",
+  5129: "en-NZ",
+  4105: "en-CA",
+  1031: "de-DE",
+  1036: "fr-FR",
+  3082: "es-ES",
+  1040: "it-IT",
+  1043: "nl-NL",
+  1046: "pt-BR",
+  1041: "ja-JP",
+  2052: "zh-CN",
+};
+
+/**
+ * An ISO date (YYYY-MM-DD) in the SITE's short date format — the only
+ * shape the forms engine validates ("Enter a date like this: 2/23/2012",
+ * measured 2026-08-04; the refusal also aborted the whole write, so one
+ * wrong date cost every other column). Parsed by parts, never through
+ * Date.parse, so no timezone can shift the day.
+ */
+export function formatDateForLocale(iso: string, localeId: number): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso.trim());
+  if (m === null) return iso.trim();
+  const tag = LCID_TAGS[localeId] ?? "en-US";
+  return new Intl.DateTimeFormat(tag, {
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+  }).format(new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
+}
+
+export function newDocumentWrites(
+  values: AddFieldValue[],
+  localeId = 1033
+): {
   formValues: { FieldName: string; FieldValue: string }[];
   taxInternals: string[];
   patch: Record<string, unknown>;
@@ -1361,7 +1401,10 @@ export function newDocumentWrites(values: AddFieldValue[]): {
   const patch: Record<string, unknown> = {};
   for (const v of values) {
     if (v.kind === "date" && (v.text ?? "").trim() !== "") {
-      formValues.push({ FieldName: v.internal, FieldValue: (v.text ?? "").trim() });
+      formValues.push({
+        FieldName: v.internal,
+        FieldValue: formatDateForLocale((v.text ?? "").trim(), localeId),
+      });
     }
     if (v.kind === "taxonomy" && (v.label ?? "") !== "" && (v.termId ?? "") !== "") {
       taxInternals.push(v.internal);

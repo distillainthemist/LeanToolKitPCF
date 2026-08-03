@@ -508,6 +508,13 @@ export function validateUpdateListItem(
   );
 }
 
+/** The site's regional settings — the forms engine validates dates in
+ *  the SITE's short date format, not ISO ("Enter a date like this:
+ *  2/23/2012", measured 2026-08-04), so a date write needs to know. */
+export function fetchRegionalSettings(site: string): Promise<SpResult> {
+  return spRequest(site, "GET", "_api/web/RegionalSettings?$select=LocaleId");
+}
+
 /** One term level: children of a set (parentId "") or of a term. */
 export function fetchTermChildren(
   site: string,

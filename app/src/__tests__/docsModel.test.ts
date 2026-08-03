@@ -929,15 +929,16 @@ describe("add a document — the write recipe (4C)", () => {
       { internal: "DMSOrg", kind: "taxonomy", label: "Casting", termId: "t-2", multi: true },
       { internal: "DMSOwner", kind: "person", people: [{ email: "ben@pechey.com", name: "B" }] },
     ]);
-    // everything becomes a form value — dates as ISO text, taxonomy as
-    // the flow-standard Label|guid, person as claims JSON
+    // everything becomes a form value — dates in the SITE's short
+    // format (the validator's only accepted shape), taxonomy as the
+    // flow-standard Label|guid, person as claims JSON
     expect(formValues).toEqual([
       { FieldName: "Title", FieldValue: "Weighbridge plan" },
       {
         FieldName: "DMSOwner",
         FieldValue: JSON.stringify([{ Key: "i:0#.f|membership|ben@pechey.com" }]),
       },
-      { FieldName: "DMSEffective", FieldValue: "2026-09-01" },
+      { FieldName: "DMSEffective", FieldValue: "9/1/2026" },
       { FieldName: "DMSDocumentStatus", FieldValue: "Draft|t-1" },
       { FieldName: "DMSOrg", FieldValue: "Casting|t-2" },
     ]);
@@ -952,6 +953,22 @@ describe("add a document — the write recipe (4C)", () => {
     const empty = newDocumentWrites([{ internal: "X", kind: "taxonomy", label: "", termId: "" }]);
     expect(empty.formValues).toEqual([]);
     expect(empty.taxInternals).toEqual([]);
+  });
+
+  it("writes dates the way the site's locale reads them", async () => {
+    const { formatDateForLocale } = await import("../docs/model");
+    // the measured refusal: "Enter a date like this: 2/23/2012" — en-US
+    expect(formatDateForLocale("2026-09-01", 1033)).toBe("9/1/2026");
+    // day-first locales put the day first (padding is the ICU's
+    // business, the ORDER is ours to guarantee)
+    const au = formatDateForLocale("2026-09-01", 3081).match(/\d+/g)?.map(Number);
+    expect(au).toEqual([1, 9, 2026]);
+    // parsed by parts: no timezone shift can move the day
+    expect(formatDateForLocale("2026-01-01", 1033)).toBe("1/1/2026");
+    // an unknown locale falls back to en-US; a non-ISO string passes
+    // through untouched for the validator to judge
+    expect(formatDateForLocale("2026-09-01", 99999)).toBe("9/1/2026");
+    expect(formatDateForLocale("tomorrow", 1033)).toBe("tomorrow");
   });
 
   it("makes a name SharePoint will take", async () => {

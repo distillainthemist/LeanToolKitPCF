@@ -33,6 +33,7 @@ import {
   copyFileTo,
   fetchFields,
   fetchListRoot,
+  fetchRegionalSettings,
   fetchTermPaths,
   validateUpdateListItem,
 } from "./sp";
@@ -82,7 +83,7 @@ export function openAddDocument(opts: AddDocumentOpts): void {
   // Visible build marker: three "stuck" reports in a row turned out to
   // involve at least one stale player bundle, and the marker settles
   // "which code is this" from a screenshot alone. Bump per revision.
-  const BUILD = "b8";
+  const BUILD = "b9";
 
   let creating = false;
   const dlg = openDialog({
@@ -120,6 +121,14 @@ export function openAddDocument(opts: AddDocumentOpts): void {
     o.value = "";
     sel.appendChild(o);
   };
+
+  // the forms engine validates dates in the SITE's short format, so the
+  // site's locale is read once per dialog; en-US until it answers
+  let localeId = 1033;
+  void fetchRegionalSettings(site).then((r) => {
+    const v = Number(((r.data ?? {}) as { LocaleId?: unknown }).LocaleId ?? 0);
+    if (v > 0) localeId = v;
+  });
 
   // ---- target + template + name ----------------------------------------
   const targetSel = el("select", "app-input") as HTMLSelectElement;
@@ -563,7 +572,7 @@ export function openAddDocument(opts: AddDocumentOpts): void {
     // rule and finishes the document, so in the good case NOTHING here
     // touches the file door that stalls on fresh copies. The copy
     // arrives checked in; this call leaves it that way.
-    const writes = newDocumentWrites(editors.map((e) => e.read()));
+    const writes = newDocumentWrites(editors.map((e) => e.read()), localeId);
     let taxFallback = false;
     if (writes.formValues.length > 0) {
       status("Writing properties…");
