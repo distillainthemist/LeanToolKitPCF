@@ -779,6 +779,18 @@ describe("what a write came back with (Phase 4A)", () => {
     expect(new TextEncoder().encode(s).length).toBe(7);
   });
 
+  it("base64 carries the same bytes through a JSON body unharmed", async () => {
+    const { bytesToBase64 } = await import("../docs/model");
+    const bytes = new Uint8Array([0x25, 0x00, 0x7f, 0x80, 0xff]);
+    const b64 = bytesToBase64(bytes);
+    // ASCII only, so nothing downstream can re-encode it — that is the
+    // whole point of the envelope
+    expect(/^[A-Za-z0-9+/=]+$/.test(b64)).toBe(true);
+    expect(new TextEncoder().encode(b64).length).toBe(b64.length);
+    // and it round-trips to exactly what went in
+    expect([...atob(b64)].map((c) => c.charCodeAt(0))).toEqual([0x25, 0x00, 0x7f, 0x80, 0xff]);
+  });
+
   it("quotes the way SharePoint's OData does", async () => {
     const { spQuote } = await import("../docs/model");
     expect(spQuote("O'Brien's draft.docx")).toBe("O''Brien''s draft.docx");

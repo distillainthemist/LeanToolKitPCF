@@ -1206,6 +1206,19 @@ export function bytesToBinaryString(bytes: Uint8Array): string {
   return s;
 }
 
+/**
+ * The same bytes, base64'd. Power Platform's own envelope for binary
+ * inside a JSON body is `{"$content-type":…, "$content": <base64>}` —
+ * which is the one carriage a JSON transport cannot damage, because
+ * every character in it is already ASCII. Measured on this tenant
+ * 2026-08-03: a plain string body arrives UTF-8 re-encoded (16 bytes
+ * sent, 21 stored), so base64 is not an optimisation here, it is the
+ * only route bytes could survive.
+ */
+export function bytesToBase64(bytes: Uint8Array): string {
+  return btoa(bytesToBinaryString(bytes));
+}
+
 // ---- org ↔ term set drift ----------------------------------------------
 
 export interface DriftReport {

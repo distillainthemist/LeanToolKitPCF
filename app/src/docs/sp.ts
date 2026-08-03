@@ -14,7 +14,7 @@
 import { getClient } from "@microsoft/power-apps/data";
 import { dataSourcesInfo } from "../../.power/schemas/appschemas/dataSourcesInfo";
 import { termTreeOrder } from "./rows";
-import { spQuote } from "./model";
+import { bytesToBase64, spQuote } from "./model";
 
 // the import is for side effect typing only — the data source must exist
 // in the app for the connection to be present at runtime
@@ -56,7 +56,14 @@ export async function spRequest(
   site: string,
   method: "GET" | "POST" | "PATCH" | "DELETE",
   uri: string,
-  opts: { headers?: Record<string, string>; body?: string } = {}
+  opts: {
+    headers?: Record<string, string>;
+    body?: string;
+    /** Bytes, sent in Power Platform's binary envelope instead of as a
+     *  string body — see bytesToBase64 for why a string cannot work. */
+    bytes?: Uint8Array;
+    contentType?: string;
+  } = {}
 ): Promise<SpResult> {
   declare();
   const client = getClient(dataSourcesInfo);
@@ -74,7 +81,16 @@ export async function spRequest(
               Accept: "application/json;odata=nometadata",
               ...(opts.headers ?? {}),
             },
-            ...(opts.body !== undefined ? { body: opts.body } : {}),
+            ...(opts.bytes !== undefined
+              ? {
+                  body: {
+                    "$content-type": opts.contentType ?? "application/octet-stream",
+                    $content: bytesToBase64(opts.bytes),
+                  },
+                }
+              : opts.body !== undefined
+                ? { body: opts.body }
+                : {}),
           },
         },
       },
@@ -226,6 +242,21 @@ export function addFile(
     "POST",
     `${folderPath(folder)}/Files/add(url='${spQuote(name)}',overwrite=true)`,
     { body }
+  );
+}
+
+/** The same add, carrying real bytes rather than text. */
+export function addFileBytes(
+  site: string,
+  folder: string,
+  name: string,
+  bytes: Uint8Array
+): Promise<SpResult> {
+  return spRequest(
+    site,
+    "POST",
+    `${folderPath(folder)}/Files/add(url='${spQuote(name)}',overwrite=true)`,
+    { bytes }
   );
 }
 

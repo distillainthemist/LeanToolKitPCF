@@ -1235,20 +1235,30 @@ export async function renderDocsSettings(body: HTMLElement, ctx: Ctx): Promise<v
       clear(writeBox);
       const list = el("div", "app-dept-list");
       writeBox.appendChild(list);
-      // a real term for the taxonomy write, borrowed from the health
-      // probe's walk — a made-up label proves nothing
-      const withTerms = dictionary()
-        .columns.map((c) => ({ col: c, labels: taxProbe.get(c.internal)?.labels ?? [] }))
-        .find((x) => x.col.termSetId !== "" && x.labels.length > 0);
+      // a real term for the taxonomy write — label AND id, because the
+      // format SharePoint accepts is "Label|<guid>" and a made-up
+      // either half proves nothing
+      const taxCol = dictionary().columns.find((c) => c.termSetId !== "");
+      const walk =
+        taxCol === undefined
+          ? undefined
+          : await fetchTermPaths(app.siteUrl, taxCol.termSetId);
+      // the deepest node walked is the likeliest leaf, and leaves are
+      // what a library tags with
+      const term = walk?.nodes[walk.nodes.length - 1];
       const { runWriteProbe } = await import("./writeProbe");
       await runWriteProbe(
         {
           site: app.siteUrl,
           listId,
           taxColumn:
-            withTerms === undefined
+            taxCol === undefined || term === undefined
               ? undefined
-              : { internal: withTerms.col.internal, label: withTerms.labels[0] },
+              : {
+                  internal: taxCol.internal,
+                  label: term.labels[term.labels.length - 1],
+                  termId: term.id,
+                },
         },
         (s) => {
           const row = el("div", `app-docs-health app-docs-health-${s.ok ? "info" : "warn"}`);

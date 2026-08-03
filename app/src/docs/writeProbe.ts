@@ -12,8 +12,10 @@
 // click, instead of failing later at a user's first check-out.
 
 import { bytesToBinaryString, parseBasePermissions, validateItemErrors } from "./model";
+import type { SpResult } from "./sp";
 import {
   addFile,
+  addFileBytes,
   checkInFile,
   checkOutFile,
   copyFileTo,
@@ -37,8 +39,9 @@ export interface ProbeInput {
   site: string;
   listId: string;
   /** A taxonomy column and one real term from its set, when the site has
-   *  one. The awkward write, and the one 4C's metadata form leans on. */
-  taxColumn?: { internal: string; label: string };
+   *  one. The awkward write, and the one 4C's metadata form leans on —
+   *  the id matters, because a bare label is what SharePoint rejects. */
+  taxColumn?: { internal: string; label: string; termId: string };
 }
 
 /** The bytes the upload step sends. Deliberately not text: 0x80–0xFF are
@@ -127,20 +130,35 @@ export async function runWriteProbe(
           : say(titled, "")
       );
 
-      // the write 4C actually depends on: SharePoint coercing a LABEL
-      // into a term, rather than us assembling a TaxonomyFieldValue
-      if (input.taxColumn !== undefined) {
-        const tax = await validateUpdateListItem(site, listId, itemId, [
-          { FieldName: input.taxColumn.internal, FieldValue: input.taxColumn.label },
-        ]);
-        const taxErrs = validateItemErrors(tax.data);
-        step(
-          `Write metadata (term “${input.taxColumn.label}”)`,
-          tax.ok && taxErrs.length === 0,
-          tax.ok
-            ? taxErrs.map((e) => `${e.field}: ${e.message}`).join("; ") || "accepted"
-            : say(tax, "")
-        );
+      // The write 4C actually depends on. A bare label is what the
+      // tagging UI's own error is complaining about ("not formatted
+      // correctly", measured 2026-08-03) — the format is Label|<guid>.
+      // Both are tried, so the answer says which one this tenant takes
+      // rather than only that one of them failed.
+      const tc = input.taxColumn;
+      if (tc !== undefined) {
+        const attempts = [
+          { how: "label|id", value: `${tc.label}|${tc.termId}` },
+          { how: "label alone", value: tc.label },
+        ];
+        let done = false;
+        let last = "";
+        for (const a of attempts) {
+          if (done) break;
+          const tax = await validateUpdateListItem(site, listId, itemId, [
+            { FieldName: tc.internal, FieldValue: a.value },
+          ]);
+          const errs = validateItemErrors(tax.data);
+          if (tax.ok && errs.length === 0) {
+            step(`Write metadata (term “${tc.label}”)`, true, `accepted as ${a.how}`);
+            done = true;
+          } else {
+            last = tax.ok
+              ? `${a.how}: ${errs.map((e) => e.message).join("; ") || "rejected"}`
+              : `${a.how}: ${say(tax, "")}`;
+          }
+        }
+        if (!done) step(`Write metadata (term “${tc.label}”)`, false, last);
       }
     }
 
@@ -165,25 +183,53 @@ export async function runWriteProbe(
     step("Server-side copy", copy.ok, say(copy, "copied — this is the template route"));
     if (copy.ok) created.push(copyUrl);
 
-    // THE question 4A exists to answer
-    const binName = `LeanBoard write probe ${stamp}.bin`;
-    const binUrl = `${root}/${binName}`;
-    const bin = await addFile(site, root, binName, bytesToBinaryString(PROBE_BYTES));
-    if (bin.ok) {
-      created.push(binUrl);
-      const binInfo = await fetchFileInfo(site, binUrl);
-      const got = Number(((binInfo.data ?? {}) as { Length?: unknown }).Length ?? -1);
-      step(
-        "Upload raw bytes",
-        got === PROBE_BYTES.length,
-        got === PROBE_BYTES.length
-          ? `${got} bytes, exactly as sent — upload from device is on`
-          : `${got} bytes for ${PROBE_BYTES.length} sent — the transport re-encoded them, so ` +
-            "upload from device stays out of 4C"
+    // THE question 4A exists to answer. Two carriages, because the first
+    // one's failure was diagnostic rather than final: a string body is
+    // re-encoded as UTF-8 (16 sent, 21 stored, measured on Dev
+    // 2026-08-03), so the bytes are tried again inside Power Platform's
+    // own binary envelope, where every character is already ASCII.
+    const carriages: { how: string; ext: string; send: (name: string) => Promise<SpResult> }[] = [
+      {
+        how: "string body",
+        ext: "bin",
+        send: (name) => addFile(site, root, name, bytesToBinaryString(PROBE_BYTES)),
+      },
+      {
+        how: "base64 envelope",
+        ext: "b64.bin",
+        send: (name) => addFileBytes(site, root, name, PROBE_BYTES),
+      },
+    ];
+    let uploadWorks = false;
+    for (const c of carriages) {
+      if (uploadWorks) break;
+      const name = `LeanBoard write probe ${stamp}.${c.ext}`;
+      const url = `${root}/${name}`;
+      const res = await c.send(name);
+      if (!res.ok) {
+        step(`Upload raw bytes (${c.how})`, false, say(res, ""));
+        continue;
+      }
+      created.push(url);
+      const got = Number(
+        ((await fetchFileInfo(site, url)).data as { Length?: unknown })?.Length ?? -1
       );
-    } else {
-      step("Upload raw bytes", false, `${say(bin, "")} — upload from device stays out of 4C`);
+      uploadWorks = got === PROBE_BYTES.length;
+      step(
+        `Upload raw bytes (${c.how})`,
+        uploadWorks,
+        uploadWorks
+          ? `${got} bytes, exactly as sent`
+          : `${got} bytes for ${PROBE_BYTES.length} sent — re-encoded in transit`
+      );
     }
+    step(
+      "Upload from device",
+      uploadWorks,
+      uploadWorks
+        ? "a carriage that preserves bytes exists — 4C can accept an upload"
+        : "no carriage preserves bytes — 4C ships template copy only"
+    );
   } finally {
     // whatever happened above, leave the library as we found it
     let recycled = 0;
