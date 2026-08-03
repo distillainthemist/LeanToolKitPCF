@@ -664,7 +664,9 @@ export function mountDocs(
               .filter((f) => f.col !== "")
               .map((f) => ({ cols: [f.col], labels: [...f.labels] })),
             dateRanges: dateFilters.filter((d) => carried.has(d.col)),
-            fields: [col],
+            fields: statusInternal !== "" && carried.has(statusInternal)
+              ? [col, statusInternal]
+              : [col],
             rowLimit: COUNT_CAP,
           });
           return renderListPage(app.siteUrl, lib.listId, viewXml);
@@ -674,12 +676,23 @@ export function mountDocs(
         // a library with more than the cap would report a floor dressed
         // as a total, so the tree says "loaded so far" instead
         const truncated = pages.some((p) => p.next !== "" || p.error !== "");
-        const rows = pages.flatMap((p) => p.rows);
-        treeTotals =
-          truncated || rows.length === 0
-            ? null
-            : tallySubtreeCounts(rows, [...orgCols], treeNodes);
+        // the register hides drafts and superseded documents unless
+        // asked; a total that counted them would describe a longer list
+        // than the one on screen
+        const rows = applyNonCurrent(pages.flatMap((p) => p.rows));
+        if (truncated || rows.length === 0) {
+          treeTotals = null;
+          matchTotal = null;
+        } else {
+          treeTotals = tallySubtreeCounts(rows, [...orgCols], treeNodes);
+          // with a folder picked, the matching total IS that folder's
+          // count — the query deliberately leaves the folder filter out
+          // so every other folder still counts
+          const picked = filterFor("");
+          matchTotal = picked ? (treeTotals.get(picked.node.id) ?? 0) : rows.length;
+        }
         paintTreeCounts();
+        paintStatus(knownTotal, "");
       });
     };
 
@@ -1561,6 +1574,10 @@ export function mountDocs(
     let feeds: BrowseFeed[] = [];
     /** Library-total for plain browsing ("50 of 150"); null = unknown. */
     let knownTotal: number | null = null;
+    /** How many documents match the current filters — from the same
+     *  query the folder counts use, so "40 of 100 matching" is a total
+     *  and not a count of what has scrolled by (Ben, 2026-08-03). */
+    let matchTotal: number | null = null;
     /** listId (lowercase) → item ids the index matched inside documents,
      *  resolved once per reset and OR'd into every page's CAML. */
     let contentIds = new Map<string, number[]>();
@@ -1609,14 +1626,16 @@ export function mountDocs(
           : contentsNote === "failed"
             ? " · contents search unavailable"
             : "";
+      // filtered: the matching TOTAL when it is known, else what is loaded
+      const matching = matchTotal ?? total;
       status.textContent =
         (plainBrowse
           ? total !== null && total > n
             ? `${docs(n)} of ${total}`
             : docs(n)
-          : total !== null && total > n
-            ? `${docs(n)} of ${total} matching`
-            : `${docs(n)} matching`) + note;
+          : matching !== null && matching > n
+            ? `${docs(n)} of ${matching} matching`
+            : `${docs(matching ?? n)} matching`) + note;
     };
 
     /** End of a load: drop the lock, then replay a reset that arrived
@@ -1675,6 +1694,7 @@ export function mountDocs(
       // the up-front total for plain browsing (library ItemCounts)
       if (reset) {
         knownTotal = null;
+        matchTotal = null;
         if (
           words === undefined &&
           modifiedDays === 0 &&
