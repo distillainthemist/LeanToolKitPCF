@@ -2104,6 +2104,15 @@ button.app-docs-navterm.app-docs-navterm-on {
 }
 .app-dlghost .ltk-dialog { box-shadow: 0 8px 32px rgba(0, 0, 0, 0.28); }
 
+/* add a document (Phase 4C) */
+.app-docs-addbtn { white-space: nowrap; }
+.app-docs-addbody { display: flex; flex-direction: column; gap: 10px; max-height: min(64vh, 560px); overflow-y: auto; text-align: left; }
+.app-docs-addfield { display: flex; flex-direction: column; gap: 3px; }
+.app-docs-addfield .app-input { width: 100%; box-sizing: border-box; }
+.app-docs-addmeta { display: flex; flex-direction: column; gap: 10px; border-top: 1px solid #ddd9d1; padding-top: 10px; }
+.app-docs-addstatus { min-height: 18px; font-size: 12px; color: #57534a; }
+.app-docs-addstatus-warn { color: #a4262c; }
+
 /* document control (Phase 4B): checked-out state reads at a glance, and
    YOURS reads differently, because it is the only one you can act on */
 .app-docs-lock {

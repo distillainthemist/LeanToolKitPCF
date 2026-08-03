@@ -147,8 +147,8 @@ describe("SharePoint response mapping", () => {
         { internal: "Vanished", label: "", available: true, inDefault: false, role: "", termSetId: "" },
       ],
       [
-        { internal: "Title", title: "Name", type: "Text", choices: [], isTaxonomy: false, termSetId: "" },
-        { internal: "DMSStatus", title: "Status", type: "Choice", choices: [], isTaxonomy: false, termSetId: "" },
+        { internal: "Title", title: "Name", type: "Text", choices: [], isTaxonomy: false, termSetId: "" , required: false },
+        { internal: "DMSStatus", title: "Status", type: "Choice", choices: [], isTaxonomy: false, termSetId: "" , required: false },
       ]
     );
     expect(merged.map((c) => c.internal)).toEqual(["DMSStatus", "Title"]);
@@ -170,8 +170,8 @@ describe("SharePoint response mapping", () => {
         { internal: "DMSTags", label: "", available: true, inDefault: false, role: "tags", termSetId: "kept-set" },
       ],
       [
-        { internal: "DMSOrgUnit", title: "Org", type: "TaxonomyFieldType", choices: [], isTaxonomy: true, termSetId: "new-set" },
-        { internal: "DMSTags", title: "Tags", type: "TaxonomyFieldTypeMulti", choices: [], isTaxonomy: true, termSetId: "" },
+        { internal: "DMSOrgUnit", title: "Org", type: "TaxonomyFieldType", choices: [], isTaxonomy: true, termSetId: "new-set" , required: false },
+        { internal: "DMSTags", title: "Tags", type: "TaxonomyFieldTypeMulti", choices: [], isTaxonomy: true, termSetId: "" , required: false },
       ]
     );
     expect(merged[0].termSetId).toBe("new-set");
@@ -427,6 +427,7 @@ describe("dictionary ↔ live schema sync (C1)", () => {
     choices: [] as string[],
     isTaxonomy: termSetId !== "",
     termSetId,
+    required: false,
   });
 
   it("keeps chosen mappings, appends new columns, drops vanished ones", async () => {
@@ -845,6 +846,49 @@ describe("what a write came back with (Phase 4A)", () => {
     const { spQuote } = await import("../docs/model");
     expect(spQuote("O'Brien's draft.docx")).toBe("O''Brien''s draft.docx");
     expect(spQuote("plain.docx")).toBe("plain.docx");
+  });
+});
+
+describe("add a document — the write recipe (4C)", () => {
+  it("routes each kind through the surface the probe proved", async () => {
+    const { splitAddWrites } = await import("../docs/model");
+    const { formValues, patch } = splitAddWrites([
+      { internal: "Title", kind: "text", text: "  Weighbridge plan  " },
+      { internal: "DMSDocumentType", kind: "choice", text: "Procedure" },
+      { internal: "DMSEffective", kind: "date", text: "2026-09-01" },
+      { internal: "DMSDocumentStatus", kind: "taxonomy", label: "Draft", termId: "t-1" },
+      { internal: "DMSOrg", kind: "taxonomy", label: "Casting", termId: "t-2", multi: true },
+    ]);
+    // text + choice: ValidateUpdateListItem, trimmed
+    expect(formValues).toEqual([
+      { FieldName: "Title", FieldValue: "Weighbridge plan" },
+      { FieldName: "DMSDocumentType", FieldValue: "Procedure" },
+    ]);
+    // terms: the one accepted shape (probe run six); multi = array of one
+    expect(patch.DMSDocumentStatus).toEqual({ Value: "Draft", TermGuid: "t-1", WssId: -1 });
+    expect(patch.DMSOrg).toEqual([{ Value: "Casting", TermGuid: "t-2", WssId: -1 }]);
+    // dates ride the tabular surface as ISO, not a locale guess
+    expect(patch.DMSEffective).toBe("2026-09-01");
+  });
+
+  it("an empty editor writes nothing at all", async () => {
+    const { splitAddWrites } = await import("../docs/model");
+    const { formValues, patch } = splitAddWrites([
+      { internal: "A", kind: "text", text: "   " },
+      { internal: "B", kind: "date", text: "" },
+      { internal: "C", kind: "taxonomy", label: "", termId: "" },
+      { internal: "D", kind: "taxonomy", label: "Orphan", termId: "" },
+    ]);
+    expect(formValues).toEqual([]);
+    expect(Object.keys(patch)).toEqual([]);
+  });
+
+  it("makes a name SharePoint will take", async () => {
+    const { sanitizeFileName } = await import("../docs/model");
+    expect(sanitizeFileName('Q3: "Casting" <plan>?')).toBe("Q3 Casting plan");
+    expect(sanitizeFileName("  trailing dots... ")).toBe("trailing dots");
+    expect(sanitizeFileName("###")).toBe("");
+    expect(sanitizeFileName("plain name")).toBe("plain name");
   });
 });
 

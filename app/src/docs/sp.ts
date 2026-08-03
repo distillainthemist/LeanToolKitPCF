@@ -135,7 +135,7 @@ export function fetchFields(site: string, listId: string): Promise<SpResult> {
     site,
     "GET",
     `_api/web/lists(guid'${listId}')/fields?$filter=Hidden eq false` +
-      `&$select=InternalName,Title,TypeAsString,Choices,TermSetId,SchemaXml`
+      `&$select=InternalName,Title,TypeAsString,Choices,TermSetId,SchemaXml,Required`
   );
 }
 

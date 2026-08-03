@@ -199,6 +199,46 @@ export function mountDocs(
     /** Who I am to SharePoint. Email, because that is what a person
      *  field carries back and what makes "checked out by me" reliable. */
     const myEmail = (currentViewer()?.email ?? "").toLowerCase();
+
+    // ---- document control state (Phase 4B/4C) ---------------------------
+    // Declared up here because the toolbar reads it synchronously while
+    // it is being built; the commands themselves live further down.
+
+    /** listId → what SharePoint says this user may do. Primed for the
+     *  writable libraries at mount, so the kebab can answer instantly. */
+    const permsByLib = new Map<string, BasePermissions>();
+
+    const permsReady = Promise.all(
+      libraries
+        .filter((l) => l.libType === "working" || l.libType === "revision")
+        .map(async (l) => {
+          const r = await fetchListPermissions(app.siteUrl, l.listId);
+          if (r.ok) permsByLib.set(l.listId.toLowerCase(), parseBasePermissions(r.data));
+        })
+    );
+
+    /** One host for every command dialog, carrying the toolkit's colour
+     *  variables — see .app-dlghost. Created once, reused, so nothing
+     *  accumulates on the body. */
+    const dialogHost = el("div", "app-dlghost");
+    document.body.appendChild(dialogHost);
+    innerCleanups.push(() => dialogHost.remove());
+
+    /** The open document overlay's repaint, while one is open. A command
+     *  run from the overlay changes state the overlay is showing, so it
+     *  has to hear about it — discarding a check-out left "Check in…"
+     *  sitting there otherwise (Ben, 2026-08-03). */
+    let viewerRepaint: (() => void) | null = null;
+
+    const canWriteIn = (lib: DocLibrary | null | undefined): boolean =>
+      lib != null &&
+      (lib.libType === "working" || lib.libType === "revision") &&
+      (permsByLib.get(lib.listId.toLowerCase())?.edit ?? false);
+
+    /** Mine by EMAIL. Display names collide, and two people called Ben
+     *  would each be offered the other's check-in. */
+    const isMine = (row: DocRow): boolean =>
+      myEmail !== "" && (row.checkoutEmail ?? "") === myEmail;
     let favs: FavDoc[] = [];
     let savedViews: DocView[] = [];
 
@@ -935,7 +975,39 @@ export function mountDocs(
     const segList = el("button", "app-docs-segbtn", "List") as HTMLButtonElement;
     const segTiles = el("button", "app-docs-segbtn", "Tiles") as HTMLButtonElement;
     seg.append(segList, segTiles);
-    titleRow.append(titleBlock, el("div", "app-docs-titlegap"), filtersBtn, seg, topKebab);
+    // Add a document (Phase 4C) — appears once SharePoint's permission
+    // answers arrive and only if somewhere writable exists to add to
+    const addBtn = el("button", "app-btn app-btn-primary app-docs-addbtn", "＋ Add document") as HTMLButtonElement;
+    addBtn.style.display = "none";
+    void permsReady.then(() => {
+      const canAdd = libraries.some(
+        (l) =>
+          (l.libType === "working" || l.libType === "revision") &&
+          (permsByLib.get(l.listId.toLowerCase())?.add ?? false)
+      );
+      if (canAdd && !favMode) addBtn.style.display = "";
+    });
+    addBtn.addEventListener("click", () => {
+      void (async () => {
+        const { openAddDocument } = await import("./addDocument");
+        openAddDocument({
+          site: app.siteUrl,
+          targets: libraries.filter(
+            (l) =>
+              (l.libType === "working" || l.libType === "revision") &&
+              (permsByLib.get(l.listId.toLowerCase())?.add ?? false)
+          ),
+          templates: libraries.filter((l) => l.libType === "template"),
+          dictBy,
+          host: dialogHost,
+          onCreated: (row) => {
+            void load(true);
+            onRowOpen(row);
+          },
+        });
+      })();
+    });
+    titleRow.append(titleBlock, el("div", "app-docs-titlegap"), addBtn, filtersBtn, seg, topKebab);
     if (favMode) {
       filtersBtn.style.display = "none";
       seg.style.display = "none";
@@ -1561,48 +1633,15 @@ export function mountDocs(
     ro.observe(main);
     innerCleanups.push(() => ro.disconnect());
 
-    // ---- document control (Phase 4B) -------------------------------------
+    // ---- document control (Phase 4B): the commands -----------------------
     // Check-out, check-in and discard. Three rules hold the whole thing
     // together: only libraries meant to be worked on offer them; only
     // SharePoint decides whether the write lands; and afterwards the row
     // is re-read from list REST, never from the index, because the index
     // lags and a command's own result must not be a guess.
-
-    /** listId → what SharePoint says this user may do. Primed for the
-     *  writable libraries at mount, so the kebab can answer instantly. */
-    const permsByLib = new Map<string, BasePermissions>();
-
-    /** One host for every command dialog, carrying the toolkit's colour
-     *  variables — see .app-dlghost. Created once, reused, so nothing
-     *  accumulates on the body. */
-    const dialogHost = el("div", "app-dlghost");
-    document.body.appendChild(dialogHost);
-    innerCleanups.push(() => dialogHost.remove());
-
-    /** The open document overlay's repaint, while one is open. A command
-     *  run from the overlay changes state the overlay is showing, so it
-     *  has to hear about it — discarding a check-out left "Check in…"
-     *  sitting there otherwise (Ben, 2026-08-03). */
-    let viewerRepaint: (() => void) | null = null;
-
-    const canWriteIn = (lib: DocLibrary | null | undefined): boolean =>
-      lib != null &&
-      (lib.libType === "working" || lib.libType === "revision") &&
-      (permsByLib.get(lib.listId.toLowerCase())?.edit ?? false);
-
-    /** Mine by EMAIL. Display names collide, and two people called Ben
-     *  would each be offered the other's check-in. */
-    const isMine = (row: DocRow): boolean =>
-      myEmail !== "" && (row.checkoutEmail ?? "") === myEmail;
-
-    void Promise.all(
-      libraries
-        .filter((l) => l.libType === "working" || l.libType === "revision")
-        .map(async (l) => {
-          const r = await fetchListPermissions(app.siteUrl, l.listId);
-          if (r.ok) permsByLib.set(l.listId.toLowerCase(), parseBasePermissions(r.data));
-        })
-    );
+    // (The shared state — permsByLib, permsReady, dialogHost — lives up
+    // near the top of the mount: the toolbar's Add button reads it
+    // synchronously long before this section runs.)
 
     /** Re-read one document's check-out state and repaint just it. A
      *  full reload would lose the scroll position and re-ask for

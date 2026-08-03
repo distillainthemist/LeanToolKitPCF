@@ -651,6 +651,9 @@ export interface SpField {
   /** The term set behind a taxonomy column, when SharePoint reports it —
    *  this is what makes the colour mapping automatic rather than typed. */
   termSetId: string;
+  /** SharePoint's own Required flag — what the add-a-document form
+   *  enforces before submit (Phase 4C). */
+  required: boolean;
 }
 
 /** Field types SharePoint uses for managed metadata (single and multi). */
@@ -709,6 +712,7 @@ export function fieldsFromResponse(raw: unknown): SpField[] {
       choices,
       isTaxonomy: TAXONOMY_TYPES.has(type),
       termSetId: TAXONOMY_TYPES.has(type) ? termSetOf(r) : "",
+      required: r.Required === true,
     });
   }
   return out;
@@ -1269,6 +1273,58 @@ export function bytesToBinaryString(bytes: Uint8Array): string {
  */
 export function bytesToBase64(bytes: Uint8Array): string {
   return btoa(bytesToBinaryString(bytes));
+}
+
+// ---- add a document: the write recipe (Phase 4C) -----------------------
+// Six probe runs bought this split, so it is pure and tested rather
+// than inlined in a dialog. Text and choice go through
+// ValidateUpdateListItem (proven; display-text coercion is its job).
+// Terms and dates go through the connector's typed item surface —
+// terms because {Value, TermGuid, WssId:-1} is the one accepted shape,
+// dates because ISO through the tabular surface beats guessing the
+// site's display locale in a form value.
+
+/** One filled-in editor from the add form. */
+export interface AddFieldValue {
+  internal: string;
+  kind: "text" | "choice" | "date" | "taxonomy";
+  /** text/choice/date payload (date is YYYY-MM-DD). */
+  text?: string;
+  /** taxonomy payload. */
+  label?: string;
+  termId?: string;
+  /** taxonomy only: a multi-value column takes an ARRAY of one. */
+  multi?: boolean;
+}
+
+export function splitAddWrites(values: AddFieldValue[]): {
+  formValues: { FieldName: string; FieldValue: string }[];
+  patch: Record<string, unknown>;
+} {
+  const formValues: { FieldName: string; FieldValue: string }[] = [];
+  const patch: Record<string, unknown> = {};
+  for (const v of values) {
+    if (v.kind === "taxonomy") {
+      if ((v.label ?? "") === "" || (v.termId ?? "") === "") continue;
+      const term = { Value: v.label, TermGuid: v.termId, WssId: -1 };
+      patch[v.internal] = v.multi === true ? [term] : term;
+      continue;
+    }
+    const text = (v.text ?? "").trim();
+    if (text === "") continue; // an empty editor writes nothing
+    if (v.kind === "date") patch[v.internal] = text;
+    else formValues.push({ FieldName: v.internal, FieldValue: text });
+  }
+  return { formValues, patch };
+}
+
+/** A file name SharePoint will take: forbidden characters dropped,
+ *  leading/trailing dots and spaces trimmed. Empty means "not a name". */
+export function sanitizeFileName(name: string): string {
+  return name
+    .replace(/[~"#%&*:<>?/\\{|}]/g, "")
+    .replace(/\s+/g, " ")
+    .replace(/^[. ]+|[. ]+$/g, "");
 }
 
 // ---- org ↔ term set drift ----------------------------------------------
