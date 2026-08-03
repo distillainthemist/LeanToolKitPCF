@@ -46,6 +46,7 @@ import {
   paletteEntryFor,
   parseBasePermissions,
   siteKey,
+  sortByDictionary,
   spErrorText,
 } from "./model";
 import {
@@ -1500,8 +1501,13 @@ export function mountDocs(
           linkColumns: (lib?.config.columns ?? [])
             .filter((c) => c.role === "linkedDocuments")
             .map((c) => c.internal),
+          // dictionary order — the same order the add form uses,
+          // adjustable under Settings → Documents → Document columns
           columns: lib
-            ? lib.config.columns.filter((c) => c.available).map((c) => c.internal)
+            ? sortByDictionary(
+                lib.config.columns.filter((c) => c.available).map((c) => c.internal),
+                [...dictBy.keys()]
+              )
             : undefined,
           statusValue: libStatusCol ? (row.values[libStatusCol.internal] ?? "") : "",
           statusChipFor: statusChip,

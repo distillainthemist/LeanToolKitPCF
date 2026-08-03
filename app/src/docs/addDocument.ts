@@ -20,6 +20,7 @@ import {
   fieldsFromResponse,
   newDocumentWrites,
   sanitizeFileName,
+  sortByDictionary,
   spErrorText,
   validateItemErrors,
 } from "./model";
@@ -83,7 +84,7 @@ export function openAddDocument(opts: AddDocumentOpts): void {
   // Visible build marker: three "stuck" reports in a row turned out to
   // involve at least one stale player bundle, and the marker settles
   // "which code is this" from a screenshot alone. Bump per revision.
-  const BUILD = "b10";
+  const BUILD = "b11";
 
   let creating = false;
   const dlg = openDialog({
@@ -155,7 +156,10 @@ export function openAddDocument(opts: AddDocumentOpts): void {
     if (extra) wrap.appendChild(extra);
     return wrap;
   };
-  if (opts.targets.length > 1) body.appendChild(fieldRow("Into library", targetSel));
+  // always shown, even with one option — WHERE a document lands is
+  // information the person adding it should see, not infer (Ben,
+  // 2026-08-04)
+  body.appendChild(fieldRow("Into library", targetSel));
   body.appendChild(fieldRow("From template", tplSel));
   body.appendChild(fieldRow("Name", nameInput, nameExt));
 
@@ -203,9 +207,16 @@ export function openAddDocument(opts: AddDocumentOpts): void {
     const byInternal = new Map(fields.map((f) => [f.internal, f]));
     clear(metaBox);
 
-    // the library's own view order decides the form; availability is the
-    // site's word for "a person should see this column"
-    for (const c of lib.config.columns.filter((x) => x.available)) {
+    // the SITE DICTIONARY's row order decides the form — the same order
+    // the viewer's properties pane uses, adjustable under Settings →
+    // Documents → Document columns; availability is the site's word for
+    // "a person should see this column"
+    const dictOrder = [...opts.dictBy.keys()];
+    const available = new Map(
+      lib.config.columns.filter((x) => x.available).map((x) => [x.internal, x])
+    );
+    for (const internal of sortByDictionary([...available.keys()], dictOrder)) {
+      const c = available.get(internal)!;
       const f = byInternal.get(c.internal);
       if (f === undefined) continue;
       const kind = editorKind(f);

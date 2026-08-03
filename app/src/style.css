@@ -1610,7 +1610,7 @@ input[type="color"].app-color:disabled { opacity: 0.4; cursor: default; }
    role · which libraries carry it */
 .app-docs-dict {
   display: grid;
-  grid-template-columns: minmax(150px, 1.3fr) minmax(110px, 1fr) auto auto minmax(140px, 1fr) minmax(110px, 0.8fr);
+  grid-template-columns: auto minmax(150px, 1.3fr) minmax(110px, 1fr) auto auto minmax(140px, 1fr) minmax(110px, 0.8fr);
   gap: 4px 10px;
   align-items: center;
   margin: 6px 0 12px;
@@ -2103,6 +2103,15 @@ button.app-docs-navterm.app-docs-navterm-on {
   --ltk-font: "Segoe UI", system-ui, sans-serif;
 }
 .app-dlghost .ltk-dialog { box-shadow: 0 8px 32px rgba(0, 0, 0, 0.28); }
+
+/* dictionary row reorder — order = how properties read everywhere */
+.app-docs-colmove { display: flex; gap: 2px; align-self: center; }
+.app-docs-movebtn {
+  border: none; background: none; cursor: pointer; padding: 0 2px;
+  font-size: 11px; color: #57534a; line-height: 1.4;
+}
+.app-docs-movebtn:disabled { opacity: 0.25; cursor: default; }
+.app-docs-movebtn:hover:not(:disabled) { color: #26241f; }
 
 /* add a document (Phase 4C) */
 .app-docs-addbtn { white-space: nowrap; }

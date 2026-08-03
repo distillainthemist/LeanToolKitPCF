@@ -1416,6 +1416,20 @@ export function newDocumentWrites(
   return { formValues, taxInternals, patch };
 }
 
+/**
+ * Internals in the SITE DICTIONARY's order — the one ordering the add
+ * form and the viewer's properties pane share (Ben, 2026-08-04). The
+ * dictionary's row order is the site's word for "how properties read";
+ * anything the dictionary does not know keeps its relative place at the
+ * end (stable sort).
+ */
+export function sortByDictionary(internals: string[], dictOrder: string[]): string[] {
+  const idx = new Map(dictOrder.map((n, i) => [n, i]));
+  return [...internals].sort(
+    (a, b) => (idx.get(a) ?? Number.MAX_SAFE_INTEGER) - (idx.get(b) ?? Number.MAX_SAFE_INTEGER)
+  );
+}
+
 /** A file name SharePoint will take: forbidden characters dropped,
  *  leading/trailing dots and spaces trimmed. Empty means "not a name". */
 export function sanitizeFileName(name: string): string {

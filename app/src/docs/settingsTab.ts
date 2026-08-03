@@ -230,8 +230,14 @@ export async function renderDocsSettings(body: HTMLElement, ctx: Ctx): Promise<v
       );
     }
 
+    const gridHost = el("div", "");
+    dictBox.appendChild(gridHost);
+    // rebuilt in place on reorder — no refetch of any library's fields
+    const paintGrid = () => {
+    clear(gridHost);
     const grid = el("div", "app-docs-dict");
     grid.append(
+      el("span", "app-docs-colhead", ""),
       el("span", "app-docs-colhead", "SharePoint column"),
       el("span", "app-docs-colhead", "Display as"),
       el("span", "app-docs-colhead", "Available"),
@@ -260,6 +266,27 @@ export async function renderDocsSettings(body: HTMLElement, ctx: Ctx): Promise<v
           )
         );
       }
+      // row order = how properties read, in the add form and the
+      // viewer's properties pane alike (Ben, 2026-08-04)
+      const move = el("span", "app-docs-colmove");
+      const arrow = (dir: -1 | 1, glyph: string) => {
+        const b = el("button", "app-docs-movebtn", glyph) as HTMLButtonElement;
+        const at = synced.columns.indexOf(col);
+        b.disabled = dir === -1 ? at === 0 : at === synced.columns.length - 1;
+        b.setAttribute("aria-label", `Move ${col.internal} ${dir === -1 ? "up" : "down"}`);
+        b.addEventListener("click", () => {
+          const from = synced.columns.indexOf(col);
+          const to = from + dir;
+          if (to < 0 || to >= synced.columns.length) return;
+          synced.columns.splice(from, 1);
+          synced.columns.splice(to, 0, col);
+          ctx.markDirty();
+          paintGrid();
+        });
+        return b;
+      };
+      move.append(arrow(-1, "▲"), arrow(1, "▼"));
+      grid.appendChild(move);
       grid.appendChild(
         el("span", "app-docs-colname", `${live?.title ?? col.internal} · ${col.internal}`)
       );
@@ -318,7 +345,9 @@ export async function renderDocsSettings(body: HTMLElement, ctx: Ctx): Promise<v
       where.title = who.length > 0 ? who.join(", ") : "No library carries this column";
       grid.appendChild(where);
     }
-    dictBox.appendChild(grid);
+    gridHost.appendChild(grid);
+    };
+    paintGrid();
     paintPalettes();
     paintTemplates();
     paintHealth();

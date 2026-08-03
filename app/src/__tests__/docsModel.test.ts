@@ -971,6 +971,23 @@ describe("add a document — the write recipe (4C)", () => {
     expect(formatDateForLocale("tomorrow", 1033)).toBe("tomorrow");
   });
 
+  it("orders properties the way the dictionary reads (form + preview)", async () => {
+    const { sortByDictionary } = await import("../docs/model");
+    const dict = ["DMSDocumentID", "DMSDocumentType", "DMSStatus", "DMSOwner"];
+    expect(sortByDictionary(["DMSOwner", "DMSStatus", "DMSDocumentID"], dict)).toEqual([
+      "DMSDocumentID",
+      "DMSStatus",
+      "DMSOwner",
+    ]);
+    // unknown to the dictionary = keep relative order, at the end
+    expect(sortByDictionary(["Zeta", "DMSOwner", "Alpha"], dict)).toEqual([
+      "DMSOwner",
+      "Zeta",
+      "Alpha",
+    ]);
+    expect(sortByDictionary([], dict)).toEqual([]);
+  });
+
   it("makes a name SharePoint will take", async () => {
     const { sanitizeFileName } = await import("../docs/model");
     expect(sanitizeFileName('Q3: "Casting" <plan>?')).toBe("Q3 Casting plan");
