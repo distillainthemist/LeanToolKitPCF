@@ -671,7 +671,7 @@ export function mountDocs(
               ...filters
                 .filter((f) => f.col !== "")
                 .map((f) => ({ cols: [f.col], labels: [...f.labels] })),
-              ...approvedFilterFor(lib.listId),
+              ...approvedFilterFor(),
             ],
             dateRanges: dateFilters.filter((d) => carried.has(d.col)),
             fields: statusInternal !== "" && carried.has(statusInternal)
@@ -940,7 +940,13 @@ export function mountDocs(
         : libNames;
       crumb.textContent = f ? f.node.labels.join(" › ") : "";
       crumb.style.display = f ? "" : "none";
-      const active = filters.length + dateFilters.length + (modifiedDays > 0 ? 1 : 0);
+      // the organisation is not counted: the Folders pane IS that
+      // selection and shows it, so "Filters · 1" for a picked folder
+      // pointed at a pane that had nothing set in it (Ben, 2026-08-03)
+      const active =
+        filters.filter((f) => f.col !== "").length +
+        dateFilters.length +
+        (modifiedDays > 0 ? 1 : 0);
       filtersBtn.textContent = active > 0 ? `Filters · ${active}` : "Filters";
       filtersBtn.classList.toggle("app-docs-filtersbtn-on", active > 0);
     };
@@ -1617,18 +1623,16 @@ export function mountDocs(
      * non-current rows client-side, which is what it did before.
      */
     let approvedLabels: string[] = [];
-    /** A working library IS drafts, so "only Approved" would blank it;
-     *  it keeps showing its own, exactly as the old heuristic allowed. */
-    const skipsApproval = (listId: string): boolean =>
-      byListId.get(listId.toLowerCase())?.libType === "working";
-
-    /** The silent status clause for one library ([] when off, unknown,
-     *  or the library is a working one). */
-    const approvedFilterFor = (listId: string): { cols: string[]; labels: string[] }[] =>
-      onlyApproved &&
-      statusInternal !== "" &&
-      approvedLabels.length > 0 &&
-      !skipsApproval(listId)
+    /**
+     * The silent status clause ([] when the toggle is off or the status
+     * vocabulary could not be read). It applies to EVERY library,
+     * working ones included (Ben, 2026-08-03): "only Approved" that
+     * quietly excused a library would be answering a different question
+     * there — a working library simply shows nothing until its drafts
+     * are approved, which is the honest answer.
+     */
+    const approvedFilterFor = (): { cols: string[]; labels: string[] }[] =>
+      onlyApproved && statusInternal !== "" && approvedLabels.length > 0
         ? [{ cols: [statusInternal], labels: approvedLabels }]
         : [];
 
@@ -1636,17 +1640,9 @@ export function mountDocs(
       // a no-op once the CAML filter carries this; it still covers the
       // case where the term set could not be read
       if (!onlyApproved || !statusCol || approvedLabels.length > 0) return rows;
-      // a working library IS drafts, so hiding non-current would blank
-      // it — decided per ROW, because a union can mix a working library
-      // with controlled ones in the same list (C3)
-      const working = new Set(
-        libraries.filter((l) => l.libType === "working").map((l) => l.listId.toLowerCase())
-      );
-      return rows.filter(
-        (r) =>
-          working.has(r.listId.toLowerCase()) ||
-          !isNonCurrentStatus(r.values[statusCol.internal] ?? "")
-      );
+      // every library, working ones included — the fallback has to mean
+      // what the CAML filter means
+      return rows.filter((r) => !isNonCurrentStatus(r.values[statusCol.internal] ?? ""));
     };
 
     const paintStatus = (total: number | null, error: string) => {
@@ -1841,7 +1837,7 @@ export function mountDocs(
                 })),
                 // applied silently: no chip, no filter row — the toggle
                 // says it (Ben, 2026-08-03)
-                ...approvedFilterFor(id),
+                ...approvedFilterFor(),
               ],
               // only bind a date column the library actually carries
               dateRanges: dateFilters.filter((d) => carried.has(d.col)),
