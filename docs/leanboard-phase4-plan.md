@@ -63,6 +63,51 @@ documented gap with a known cause rather than an open question. If it is
 ever wanted, the route is a server-side one — a flow or an Azure
 function holding the bytes — not a different call from here.
 
+## Taxonomy writes — analysis after three runs (2026-08-03)
+
+The question: can LeanBoard set a managed metadata column? Ben ruled out
+Power Automate and converting status to Choice — the answer has to be a
+native write from the app.
+
+**What three probe runs establish.** The transport is innocent: Title
+writes land through the identical call. The tagging-UI validator
+rejects three magic-string forms outright (`-1;#Label|id`, id alone,
+label alone). The two documented-correct routes — `Label|id` as a form
+value, and a typed TaxonomyFieldValue MERGE — both die as 502
+BadGateway, meaning they validated and failed later, either server-side
+or at the gateway. And two findings were self-inflicted probe defects:
+the guessed note-field name (`<internal>_0`) was an ArgumentException
+because that column does not exist, and every error was clipped at 200
+characters — exactly before `innerError`, where the connector nests
+SharePoint's actual sentence.
+
+**Was the connector used correctly?** Mostly. `HttpRequest` +
+`ValidateUpdateListItem` is the canonical flow technique and should
+work. But three real gaps: (1) the connector's own typed item surface —
+`PatchItem`, what the flow "Update item" action calls, where a term is
+an object `{Value, TermGuid, WssId}` and Microsoft maintains the
+serialisation — was never used; (2) the typed MERGE rode on an
+`X-HTTP-Method` override header the gateway may strip, turning it into
+a malformed CREATE (a true PATCH verb avoids the header entirely);
+(3) the hidden note field's real name lives in the taxonomy column's
+SchemaXml (`TextField="{guid}"`) and must be resolved, not guessed.
+
+**Probe v4** therefore tries, in order of likelihood: connector
+PatchItem (two payload shapes) → resolved note field with
+`-1;#Label|guid` → `Label|id` re-measured with full errors → typed
+value with a true PATCH verb → the old POST+MERGE for comparison →
+Graph-style fields PATCH on the v2.0 drive surface. Every attempt reads
+the column back afterwards, so a write that lands behind a bad reply
+still counts, and errors surface up to 500 characters through
+spErrorText.
+
+**Reserve, if all seven fail:** CSOM through
+`/_vti_bin/client.svc/ProcessQuery` — the XML protocol the SharePoint
+UI itself uses for taxonomy. Heavier to build, but it does not share a
+code path with any of the above, and it rides the same connector
+transport. Phase 5's approval engine depends on this answer; nothing
+shipped is affected either way.
+
 ## Decisions (Ben, 2026-08-03)
 
 | Question | Decision |

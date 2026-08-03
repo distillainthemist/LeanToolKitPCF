@@ -334,12 +334,19 @@ export function recycleFile(site: string, url: string): Promise<SpResult> {
  */
 /**
  * A taxonomy value written the documented REST way: a typed
- * TaxonomyFieldValue in a verbose PATCH. Needs the list's item entity
+ * TaxonomyFieldValue in a verbose MERGE. Needs the list's item entity
  * type, which is why it takes one — SharePoint refuses an untyped body
  * on this route. Kept alongside ValidateUpdateListItem rather than
  * replacing it: form values handle every other column type, and this
  * one only exists because the tagging-UI validator rejected all four
  * documented form-value shapes on this tenant (measured 2026-08-03).
+ *
+ * Two verbs on purpose. The classic form is POST plus an
+ * `X-HTTP-Method: MERGE` header — but the apihub gateway forwards a
+ * FILTERED header set, and if it strips the override, SharePoint
+ * receives a bare POST to items(id): an attempted CREATE with a verbose
+ * body, which dies server-side as a 502. A true PATCH verb needs no
+ * override header, so it cannot be broken that way.
  */
 export function patchTaxonomyField(
   site: string,
@@ -348,25 +355,124 @@ export function patchTaxonomyField(
   entityType: string,
   field: string,
   label: string,
-  termId: string
+  termId: string,
+  verb: "PATCH" | "MERGE" = "PATCH"
 ): Promise<SpResult> {
-  return spRequest(site, "POST", `_api/web/lists(guid'${listId}')/items(${itemId})`, {
-    headers: {
-      "Content-Type": "application/json;odata=verbose",
-      Accept: "application/json;odata=verbose",
-      "X-HTTP-Method": "MERGE",
-      "IF-MATCH": "*",
-    },
-    body: JSON.stringify({
-      __metadata: { type: entityType },
-      [field]: {
-        __metadata: { type: "SP.Taxonomy.TaxonomyFieldValue" },
-        Label: label,
-        TermGuid: termId,
-        WssId: -1,
+  return spRequest(
+    site,
+    verb === "PATCH" ? "PATCH" : "POST",
+    `_api/web/lists(guid'${listId}')/items(${itemId})`,
+    {
+      headers: {
+        "Content-Type": "application/json;odata=verbose",
+        Accept: "application/json;odata=verbose",
+        ...(verb === "MERGE" ? { "X-HTTP-Method": "MERGE" } : {}),
+        "IF-MATCH": "*",
       },
-    }),
-  });
+      body: JSON.stringify({
+        __metadata: { type: entityType },
+        [field]: {
+          __metadata: { type: "SP.Taxonomy.TaxonomyFieldValue" },
+          Label: label,
+          TermGuid: termId,
+          WssId: -1,
+        },
+      }),
+    }
+  );
+}
+
+/** One field's full schema — the taxonomy column's SchemaXml names its
+ *  hidden note field (TextField="{guid}"), which cannot be guessed. */
+export function fetchFieldSchema(
+  site: string,
+  listId: string,
+  internal: string
+): Promise<SpResult> {
+  return spRequest(
+    site,
+    "GET",
+    `_api/web/lists(guid'${listId}')/fields/getbyinternalnameortitle('${spQuote(internal)}')?$select=SchemaXml,InternalName`
+  );
+}
+
+/** A field by its GUID — how a TextField reference resolves to a name. */
+export function fetchFieldByGuid(site: string, listId: string, guid: string): Promise<SpResult> {
+  return spRequest(
+    site,
+    "GET",
+    `_api/web/lists(guid'${listId}')/fields(guid'${guid}')?$select=InternalName`
+  );
+}
+
+/**
+ * The connector's own typed item surface — the operation the flow
+ * "Update item" action calls. Untried until now: everything else here
+ * tunnels raw REST through HttpRequest, but THIS is the layer Microsoft
+ * maintains the taxonomy serialisation for (a term travels as an
+ * object, not a magic string), so it is the strongest candidate when
+ * the REST routes fail.
+ */
+export async function connectorPatchItem(
+  site: string,
+  listId: string,
+  itemId: number,
+  item: Record<string, unknown>
+): Promise<SpResult> {
+  declare();
+  const info = dataSourcesInfo as unknown as { documents: { apis: Record<string, unknown> } };
+  info.documents.apis["PatchItem"] ??= {
+    path: "/{connectionId}/datasets/{dataset}/tables/{table}/items/{id}",
+    method: "PATCH",
+    parameters: [
+      { name: "connectionId", in: "path", required: true, type: "string" },
+      { name: "dataset", in: "path", required: true, type: "string" },
+      { name: "table", in: "path", required: true, type: "string" },
+      { name: "id", in: "path", required: true, type: "integer" },
+      { name: "item", in: "body", required: true, type: "object" },
+    ],
+    responseInfo: { "200": { type: "object" } },
+  };
+  try {
+    const r = (await getClient(dataSourcesInfo).executeAsync<object, unknown>({
+      connectorOperation: {
+        tableName: "documents",
+        operationName: "PatchItem",
+        parameters: {
+          dataset: site.replace(/\/$/, ""),
+          table: listId,
+          id: itemId,
+          item,
+        },
+      },
+    })) as { success?: boolean; data?: unknown; error?: unknown };
+    if (r && r.success === false) {
+      return { ok: false, status: summarizeError(r.error), data: r.error ?? null };
+    }
+    return { ok: true, status: "", data: (r as { data?: unknown })?.data ?? null };
+  } catch (e) {
+    return { ok: false, status: String(e), data: null };
+  }
+}
+
+/** Graph-style fields PATCH on the site-scoped v2.0 drive surface — a
+ *  wholly different write pipeline (no tagging-UI validator, no verbose
+ *  CSOM), addressed by file name at the library root. */
+export function patchDriveItemFields(
+  site: string,
+  driveId: string,
+  fileName: string,
+  fields: Record<string, unknown>
+): Promise<SpResult> {
+  return spRequest(
+    site,
+    "PATCH",
+    `_api/v2.0/drives/${driveId}/root:/${encodeURIComponent(fileName)}:/listItem/fields`,
+    {
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify(fields),
+    }
+  );
 }
 
 /** The entity type name a verbose PATCH has to declare. */

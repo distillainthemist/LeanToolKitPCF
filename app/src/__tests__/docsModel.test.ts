@@ -811,6 +811,20 @@ describe("what a write came back with (Phase 4A)", () => {
     expect(spErrorText("")).toBe("");
   });
 
+  it("finds the hidden note field in the taxonomy column's schema", async () => {
+    const { textFieldGuidFromSchema } = await import("../docs/model");
+    // the reference is a GUID attribute, braces and casing SharePoint's
+    const xml =
+      '<Field Type="TaxonomyFieldType" DisplayName="Document status" ' +
+      'TextField="{9A8F1C2D-3B4E-4F5A-8B6C-7D8E9F0A1B2C}" ' +
+      'SspId="{aaaa}" TermSetId="{bbbb}" />';
+    expect(textFieldGuidFromSchema(xml)).toBe("9a8f1c2d-3b4e-4f5a-8b6c-7d8e9f0a1b2c");
+    // no reference = empty, never a guessed name (a guessed name was an
+    // ArgumentException in production, 2026-08-03)
+    expect(textFieldGuidFromSchema('<Field Type="Text" />')).toBe("");
+    expect(textFieldGuidFromSchema("")).toBe("");
+  });
+
   it("quotes the way SharePoint's OData does", async () => {
     const { spQuote } = await import("../docs/model");
     expect(spQuote("O'Brien's draft.docx")).toBe("O''Brien''s draft.docx");

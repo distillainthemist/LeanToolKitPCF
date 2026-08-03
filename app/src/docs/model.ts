@@ -1224,6 +1224,18 @@ export function spErrorText(raw: string): string {
   return text === "" ? raw.slice(0, 300) : text.slice(0, 300);
 }
 
+/**
+ * The hidden note field behind a taxonomy column, from the column's own
+ * SchemaXml: `TextField="{guid}"`. It CANNOT be guessed — a UI-created
+ * column's note field carries a generated name, and guessing
+ * `<internal>_0` bought an ArgumentException and nothing else (measured
+ * 2026-08-03). Empty when the column declares none.
+ */
+export function textFieldGuidFromSchema(schemaXml: string): string {
+  const m = /TextField="\{?([0-9a-fA-F-]{36})\}?"/.exec(schemaXml);
+  return m ? m[1].toLowerCase() : "";
+}
+
 /** A single-quoted OData string. SharePoint's own escape is doubling,
  *  and real document names carry apostrophes. Pure, so it lives here
  *  rather than in the transport — quoting is where injection would get

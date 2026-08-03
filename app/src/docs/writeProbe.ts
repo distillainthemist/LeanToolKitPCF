@@ -15,10 +15,12 @@ import {
   bytesToBase64,
   bytesToBinaryString,
   parseBasePermissions,
+  spErrorText,
+  textFieldGuidFromSchema,
   validateItemErrors,
 } from "./model";
 import type { SpResult } from "./sp";
-import { renderListPage } from "./data";
+import { driveIdFor, renderListPage } from "./data";
 import { buildRenderViewXml } from "./rows";
 import {
   addFile,
@@ -26,12 +28,16 @@ import {
   checkInFile,
   checkOutFile,
   connectorCreateFile,
+  connectorPatchItem,
   copyFileTo,
+  fetchFieldByGuid,
+  fetchFieldSchema,
   fetchFileInfo,
   fetchFileItemId,
   fetchListEntityType,
   fetchListPermissions,
   fetchListRoot,
+  patchDriveItemFields,
   patchTaxonomyField,
   recycleFile,
   undoCheckOut,
@@ -64,8 +70,12 @@ const PROBE_BYTES = new Uint8Array([
 
 const PROBE_TEXT = "LeanBoard write probe — safe to delete.";
 
+// SharePoint's own sentence where one exists, and enough room to read
+// it — the first probe runs clipped at 200 characters, which cut every
+// 502 off exactly at "innerError": { and hid the one line that said
+// what actually failed.
 const say = (r: { ok: boolean; status: string }, good: string) =>
-  r.ok ? good : r.status.slice(0, 200) || "refused";
+  r.ok ? good : spErrorText(r.status).slice(0, 500) || "refused";
 
 /**
  * Runs the probe, reporting each step as it lands so a hang is visible
@@ -154,25 +164,17 @@ export async function runWriteProbe(
       // rather than only that one of them failed.
       const tc = input.taxColumn;
       if (tc !== undefined) {
-        // Every documented format, each reported on its own line. One
-        // line per attempt because the FIRST run collapsed them into
-        // the last error and hid what the real candidate said — and
-        // 4C's metadata form cannot be written until we know which of
-        // these this tenant takes.
-        const formats = [
-          { how: "Label|id", field: tc.internal, value: `${tc.label}|${tc.termId}` },
-          { how: "-1;#Label|id", field: tc.internal, value: `-1;#${tc.label}|${tc.termId}` },
-          { how: "id alone", field: tc.internal, value: tc.termId },
-          { how: "Label alone", field: tc.internal, value: tc.label },
-          // the hidden note field behind a taxonomy column: the
-          // documented way round a tagging-UI validator that will not
-          // take any form value
-          {
-            how: "the hidden note field",
-            field: `${tc.internal}_0`,
-            value: `-1;#${tc.label}|${tc.termId}`,
-          },
-        ];
+        // Taxonomy, fourth revision (2026-08-03). What three runs
+        // established: the transport is fine (Title lands), all four
+        // magic-string form values are REJECTED by the tagging-UI
+        // validator ("-1;#Label|id", id alone, label alone) or die at
+        // the gateway (Label|id, 502), and the guessed note-field name
+        // was an ArgumentException. So this revision (a) keeps only the
+        // one form value worth re-measuring, with its FULL error now
+        // surfaced, and (b) adds the routes never yet tried — above all
+        // the connector's own typed item surface, which is what the
+        // flow "Update item" action uses and the path Microsoft
+        // maintains taxonomy serialisation for.
 
         /** Did the value LAND, whatever the response said? A 502 from
          *  the gateway can follow a write SharePoint already made, and
@@ -187,70 +189,132 @@ export async function runWriteProbe(
           return got === tc.label.trim().toLowerCase();
         };
 
+        const entityType = async (): Promise<string> => {
+          const et = await fetchListEntityType(site, listId);
+          return String(
+            ((et.data ?? {}) as { ListItemEntityTypeFullName?: unknown })
+              .ListItemEntityTypeFullName ?? ""
+          );
+        };
+
+        /** The REAL hidden note field, read from the taxonomy column's
+         *  own SchemaXml — never guessed again. */
+        const noteFieldName = async (): Promise<{ name: string } | { error: string }> => {
+          const schema = await fetchFieldSchema(site, listId, tc.internal);
+          const xml = String(((schema.data ?? {}) as { SchemaXml?: unknown }).SchemaXml ?? "");
+          const guid = textFieldGuidFromSchema(xml);
+          if (guid === "") {
+            return { error: schema.ok ? "the column declares no TextField" : say(schema, "") };
+          }
+          const f = await fetchFieldByGuid(site, listId, guid);
+          const name = String(((f.data ?? {}) as { InternalName?: unknown }).InternalName ?? "");
+          return name !== "" ? { name } : { error: say(f, "TextField resolved to no name") };
+        };
+
+        const attempts: { how: string; run: () => Promise<SpResult> }[] = [
+          {
+            // the strongest candidate: the connector's typed surface,
+            // where a term is an object, not a string
+            how: "connector Update item (term object)",
+            run: () =>
+              connectorPatchItem(site, listId, itemId, {
+                [tc.internal]: { Value: tc.label, TermGuid: tc.termId, WssId: -1 },
+              }),
+          },
+          {
+            how: "connector Update item (expanded reference)",
+            run: () =>
+              connectorPatchItem(site, listId, itemId, {
+                [tc.internal]: {
+                  "@odata.type": "#Microsoft.Azure.Connectors.SharePoint.SPListExpandedReference",
+                  Id: tc.termId,
+                  Value: tc.label,
+                },
+              }),
+          },
+          {
+            how: "the hidden note field, resolved from SchemaXml",
+            run: async () => {
+              const nf = await noteFieldName();
+              if ("error" in nf) return { ok: false, status: `note field: ${nf.error}`, data: null };
+              return validateUpdateListItem(site, listId, itemId, [
+                { FieldName: nf.name, FieldValue: `-1;#${tc.label}|${tc.termId}` },
+              ]);
+            },
+          },
+          {
+            // re-measured with the full error surfaced this time
+            how: "form value Label|id",
+            run: () =>
+              validateUpdateListItem(site, listId, itemId, [
+                { FieldName: tc.internal, FieldValue: `${tc.label}|${tc.termId}` },
+              ]),
+          },
+          {
+            // a true PATCH verb: no X-HTTP-Method header for the
+            // gateway to strip, which is the prime suspect for the
+            // earlier 502 on this route
+            how: "typed value, PATCH verb",
+            run: async () => {
+              const entity = await entityType();
+              if (entity === "")
+                return { ok: false, status: "could not read the list entity type", data: null };
+              return patchTaxonomyField(
+                site, listId, itemId, entity, tc.internal, tc.label, tc.termId, "PATCH"
+              );
+            },
+          },
+          {
+            how: "typed value, POST + MERGE header",
+            run: async () => {
+              const entity = await entityType();
+              if (entity === "")
+                return { ok: false, status: "could not read the list entity type", data: null };
+              return patchTaxonomyField(
+                site, listId, itemId, entity, tc.internal, tc.label, tc.termId, "MERGE"
+              );
+            },
+          },
+          {
+            // a wholly different pipeline: Graph-style fields PATCH on
+            // the v2.0 drive surface this site already answers on
+            how: "v2.0 drive fields PATCH",
+            run: async () => {
+              const driveId = await driveIdFor(site, listId).catch(() => "");
+              if (driveId === "") return { ok: false, status: "no drive id", data: null };
+              return patchDriveItemFields(site, driveId, textName, {
+                [tc.internal]: `${tc.label}|${tc.termId}`,
+              });
+            },
+          },
+        ];
+
         let accepted = "";
-        for (const f of formats) {
+        for (const a of attempts) {
           if (accepted !== "") break;
-          const tax = await validateUpdateListItem(site, listId, itemId, [
-            { FieldName: f.field, FieldValue: f.value },
-          ]);
-          const errs = validateItemErrors(tax.data);
-          const clean = tax.ok && errs.length === 0;
+          const res = await a.run();
+          const errs = validateItemErrors(res.data);
+          const clean = res.ok && errs.length === 0;
           const stuck = await landed();
-          if (clean || stuck) accepted = f.how;
+          if (clean || stuck) accepted = a.how;
           step(
-            `${tc.internal} = “${tc.label}” as ${f.how}`,
+            `${tc.internal} = “${tc.label}” via ${a.how}`,
             clean || stuck,
             clean
               ? "accepted"
               : stuck
                 ? "the reply was an error, but the value LANDED — usable"
-                : tax.ok
+                : res.ok
                   ? errs.map((e) => e.message).join("; ") || "rejected"
-                  : say(tax, "")
+                  : say(res, "")
           );
-        }
-
-        // The documented REST route, tried when form values fail: a
-        // typed TaxonomyFieldValue in a verbose PATCH. Different code
-        // path entirely — it never touches the tagging-UI validator
-        // that rejected all four shapes above.
-        if (accepted === "") {
-          const et = await fetchListEntityType(site, listId);
-          const entity = String(
-            ((et.data ?? {}) as { ListItemEntityTypeFullName?: unknown })
-              .ListItemEntityTypeFullName ?? ""
-          );
-          if (entity === "") {
-            step("Typed PATCH", false, `could not read the list entity type: ${say(et, "")}`);
-          } else {
-            const patched = await patchTaxonomyField(
-              site,
-              listId,
-              itemId,
-              entity,
-              tc.internal,
-              tc.label,
-              tc.termId
-            );
-            const stuck = await landed();
-            if (patched.ok || stuck) accepted = "a typed PATCH";
-            step(
-              `${tc.internal} = “${tc.label}” as a typed PATCH`,
-              patched.ok || stuck,
-              patched.ok
-                ? `accepted (${entity})`
-                : stuck
-                  ? "the reply was an error, but the value LANDED — usable"
-                  : say(patched, "")
-            );
-          }
         }
         step(
           "Write a term",
           accepted !== "",
           accepted !== ""
-            ? `${accepted} is the format 4C's metadata form will send`
-            : "no format accepted — 4C's metadata form cannot write taxonomy columns yet"
+            ? `${accepted} is the route 4C's metadata form will use`
+            : "no route accepted — 4C's metadata form cannot write taxonomy columns yet"
         );
       }
     }
