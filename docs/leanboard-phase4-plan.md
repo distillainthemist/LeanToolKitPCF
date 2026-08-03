@@ -101,6 +101,22 @@ the column back afterwards, so a write that lands behind a bad reply
 still counts, and errors surface up to 500 characters through
 spErrorText.
 
+**Run four's breakthrough (2026-08-03).** The connector's typed
+PatchItem did not reject the term object — SharePoint answered *"The
+file is not checked out. You must first check out this document before
+making changes."* The library requires check-out for edits; the probe
+wrote metadata before its check-out step. This explains the 502s too:
+a bare text write slips through because `bNewDocumentUpdate` bypasses
+the check-out rule, but the taxonomy path performs an extra full item
+update that does not, and the unhandled SPFileCheckOutException is a
+500 the gateway relays as 502. Probe v5 brackets all metadata writes in
+check-out / check-in — the sequence 4C will use anyway. Consequence for
+4C: on require-check-out libraries, add-a-document is copy → check out
+→ write metadata → check in, and metadata edits always ride a
+check-out. The "expanded reference" payload shape IS rejected by the
+validator (measured), so the term-object shape `{Value, TermGuid,
+WssId: -1}` is the one the connector's surface takes.
+
 **Reserve, if all seven fail:** CSOM through
 `/_vti_bin/client.svc/ProcessQuery` — the XML protocol the SharePoint
 UI itself uses for taxonomy. Heavier to build, but it does not share a

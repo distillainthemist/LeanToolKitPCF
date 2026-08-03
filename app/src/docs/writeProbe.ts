@@ -144,6 +144,18 @@ export async function runWriteProbe(
     const itemId = Number(((idRes.data ?? {}) as { Id?: unknown }).Id ?? 0);
     step("Find its list item", itemId > 0, itemId > 0 ? `item ${itemId}` : say(idRes, ""));
 
+    // Check out BEFORE touching metadata. Run four found the answer
+    // hiding in plain sight: the connector's term write was refused
+    // with "you must first check out this document" — the library
+    // demands check-out for edits, the probe wrote metadata bare, and
+    // the 502s were the same refusal dying unhandled inside the REST
+    // routes (a plain text write slips through because
+    // bNewDocumentUpdate bypasses the rule; the taxonomy path's extra
+    // item update does not). So metadata is probed the way 4C will
+    // actually write it: inside a check-out / check-in bracket.
+    const out = await checkOutFile(site, textUrl);
+    step("Check out", out.ok, say(out, "checked out"));
+
     if (itemId > 0) {
       const titled = await validateUpdateListItem(site, listId, itemId, [
         { FieldName: "Title", FieldValue: "LeanBoard write probe" },
@@ -319,8 +331,6 @@ export async function runWriteProbe(
       }
     }
 
-    const out = await checkOutFile(site, textUrl);
-    step("Check out", out.ok, say(out, "checked out"));
     if (out.ok) {
       const cin = await checkInFile(site, textUrl, "LeanBoard write probe", false);
       step("Check in (comment, minor)", cin.ok, say(cin, "checked in as a minor version"));

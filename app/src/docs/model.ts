@@ -1213,8 +1213,11 @@ export function spErrorText(raw: string): string {
     }
     if (value === null || typeof value !== "object") return "";
     const o = value as Record<string, unknown>;
-    // odata.error.message.value is the sentence SharePoint wrote
-    for (const key of ["odata.error", "error", "message", "value"]) {
+    // odata.error.message.value is the sentence SharePoint wrote.
+    // innerError outranks message: the connector's envelope says
+    // message:"BadGateway" at every level while the actual refusal sits
+    // nested inside innerError (measured 2026-08-03, probe run four).
+    for (const key of ["odata.error", "error", "innerError", "message", "value"]) {
       const hit = deepest(o[key], depth + 1);
       if (hit !== "") return hit;
     }

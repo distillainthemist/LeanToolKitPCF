@@ -805,6 +805,22 @@ describe("what a write came back with (Phase 4A)", () => {
       source: "https://tenant.sharepoint.com",
     });
     expect(spErrorText(raw)).toBe("The file is not checked out.");
+    // the gateway's envelope: "BadGateway" at every level, the real
+    // refusal nested in innerError — the sentence must win
+    expect(
+      spErrorText(
+        JSON.stringify({
+          error: {
+            code: 502,
+            message: "BadGateway",
+            innerError: {
+              status: 500,
+              message: "The file is not checked out. You must first check out this document.",
+            },
+          },
+        })
+      )
+    ).toBe("The file is not checked out. You must first check out this document.");
     // plain text passes through; junk never throws and never comes back empty
     expect(spErrorText("Access denied.")).toBe("Access denied.");
     expect(spErrorText("{not json")).toBe("{not json");
