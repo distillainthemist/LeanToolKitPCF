@@ -28,6 +28,30 @@ the portal add is the one-time bridge.
    Apps" → On (allow ~20–25 minutes to propagate).
 3. Users need Power Apps premium licences (code apps requirement).
 
+## SharePoint prerequisites (only if using Standard Documents)
+
+**Every managed metadata column must display the term LABEL, not the
+path.** Site settings → Site columns → *(the column)* → Edit → **Display
+value** → *Display term label in the field*. The alternative, *Display
+the entire path to the term in the field*, silently breaks the folders
+pane.
+
+Measured in a production tenant 2026-08-03: folders were dead until the
+setting was flipped — no app change, no re-push. It bites twice, because
+the app matches on a term's **leaf label**:
+
+- the folder tree's counts read every taxonomy value's `Label` and split
+  it on `;` (`renderText` / `tallySubtreeCounts` in
+  `app/src/docs/rows.ts`). A whole path is one blob that equals no
+  node's label, so every folder counts zero;
+- clicking a folder filters with CAML `<Eq>` on that leaf label
+  (`termFilters`, same file). Against path text it matches nothing, so
+  the register comes back empty.
+
+Check it for every column the site dictionary maps to a role
+(organisation, status, document type) — Settings → Documents →
+Document columns lists them.
+
 ## Install / update steps
 
 1. Import `LeanBoard_<tag>_managed.zip` (maker portal →
