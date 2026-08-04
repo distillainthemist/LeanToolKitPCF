@@ -128,14 +128,36 @@ never per document — no item-level permission sprawl:
 |---|---|---|
 | **Document controllers** | Full Control | Full admin. Merges with the Dataverse super/site-admin role (the fallback that survives a mis-scoped group). |
 | **Document owners/approvers** | Edit on standards | The ELIGIBILITY POOL: pickers for owner/approver/reviewer columns restrict to members. Being in the pool does NOT grant revise rights — those come from being NAMED on the document. |
-| **Document revisors** | Contribute on standards | An **M365 group** people are TEMPORARILY added to when an edit-access request is approved, and removed from when the revision ends. SharePoint enforcement of the grant. |
+| **Temporary document editors** | Contribute on standards | People are TEMPORARILY added when an edit-access request is approved, removed when the revision ends. SharePoint enforcement of the grant. |
 | **General users** | Read on standards, templates AND records; write on working | The main app access group. Working libraries stay writable — Phase 4's flows depend on it. |
 
 **The locked principle:** the grant COLUMN on the document (new
 dictionary role, "Revision editors", person multi) is the
-AUTHORIZATION; revisors-group membership is only the physical ability.
+AUTHORIZATION; editors-group membership is only the physical ability.
 App gates key off the column, never off membership — so a lingering
 membership is detectable drift, not phantom authority.
+
+**Group mechanics (settled with Ben, 2026-08-05):** all three are plain
+SECURITY groups — the access group's own machinery (store/accessGroup:
+Graph passthrough via the Office 365 Groups connector, group OWNERS
+manage membership under delegated permissions, already-there/not-there
+tolerance, last-owner guard) is reused verbatim, and it is measured: it
+runs the app's access group today. Names as Ben will create them:
+**"Document Controllers"**, **"Document Owners & Approvers"**,
+**"Temporary Document Editors"**.
+
+**The ownership hierarchy** (who may trigger adds/removals, Ben
+2026-08-05) — seeded by the app whenever it manages membership, exactly
+like the roster's admin→owner sync today:
+- added to Document Controllers → also made an Entra OWNER of
+  "Document Owners & Approvers" AND "Temporary Document Editors";
+- added to Document Owners & Approvers → also made an Entra OWNER of
+  "Temporary Document Editors" (so any document owner can execute a
+  grant single-handed);
+- removals mirror it (ownership first, last-owner guard throughout).
+Bootstrap: whoever creates the groups (Ben) starts as owner of all
+three — the acting admin must already be an owner of a group to seed
+owners into it.
 
 **Request edit access** (label chosen to not collide with "Request
 revision"): a general user on an approved standard requests with a
@@ -145,10 +167,10 @@ so the ledger is mandatory — its writability by ordinary users needs a
 probe first) → the request surfaces in the OWNER's My tasks ("Access
 requests") → the owner approves in ONE step: grant column written
 (check-out → VULI claims → minor check-in "Revision access granted to
-X — reason") AND requester added to the revisors group. Requires every
-pool member seeded as an Entra OWNER of the revisors group (group
-owners must be individuals — a group cannot own a group): cookbook
-script + drift health check. Decline records and removes the request.
+X — reason") AND requester added to the editors group. The ownership
+hierarchy above makes this possible single-handed (group owners must be
+individuals — a group cannot own a group), with a drift health check
+behind it. Decline records and removes the request.
 
 **The grantee gets**, on THAT document only: Start revision, check-out,
 Edit source, submit for review/approval. Never Approve, never
@@ -157,14 +179,14 @@ retirement.
 **Removal rides every exit** — the owner's Approve (after the major),
 Cancel revision, decline/withdraw, and a manual revoke in the overlay.
 The Approve write also CLEARS the grant column (access is for one
-revision cycle). Health check: revisors-group members with no live
-grant anywhere ("orphaned revisors").
+revision cycle). Health check: editors-group members with no live
+grant anywhere ("orphaned editors").
 
 **Known edges, stated plainly:**
-- M365 membership → SharePoint authorization can take MINUTES to
+- Group membership → SharePoint authorization can take MINUTES to
   propagate: the approval confirmation and the grantee's first refusal
   both say so.
-- During a grant the revisor physically holds Contribute on the WHOLE
+- During a grant the editor physically holds Contribute on the WHOLE
   standards library; only the app narrows it to one document.
   Time-boxed, auditable, strictly better than everyone-writable.
 - Adding a controlled standard from a template becomes physically
@@ -172,10 +194,12 @@ grant anywhere ("orphaned revisors").
   everyone else rather than letting SharePoint refuse late.
 
 Build order:
-- **5G0 (spike):** Graph/connector probe — can a group OWNER add/remove
-  a member of the revisors M365 group as the signed-in user, and can an
-  ordinary user update the shared `__app__` row's ledger? Measured
-  before anything is built on either.
+- **5G0 (spike):** the Graph membership half is already measured — it
+  is the access group's own machinery. Remaining probes: can an
+  ordinary user update the shared `__app__` row's ledger (else: per-user
+  request rows in the prefs table, swept by the owner's queue)? And one
+  run confirming a NON-admin pool member, as editors-group owner, can
+  add/remove a member there.
 - **5G1:** settings maps the three groups; membership plumbing
   (transitive, cached per session, admin fails CLOSED to the Dataverse
   role, pool fails to an explanatory hint); pickers restrict to the
@@ -185,7 +209,7 @@ Build order:
 - **5G3:** approve = column write + group add (+ propagation notice);
   removal on Approve/Cancel/decline + manual revoke; grant-column gates
   (grantee = revise/check-out/submit on that document).
-- **5G4:** health checks (owner-seeding drift, orphaned revisors) +
+- **5G4:** health checks (owner-seeding drift, orphaned editors) +
   the cookbook permission table.
 
 ### 5E — Acknowledgement ledger (SCHEMA release) — PARKED (Ben, 2026-08-05)
