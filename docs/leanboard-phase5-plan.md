@@ -31,19 +31,22 @@ ride check-ins, and nothing needs a byte to cross the wire. My tasks
 existing vocabulary; unit tests on the model.
 
 ### 5B — The commands
-- Two circulations, four moves: **Submit for review** (draft → in
-  review, to the reviewers for content work), **Submit for approval**
-  (in review → awaiting approval — draft may skip straight here when no
-  review round is wanted), **Approve** (awaiting approval → approved,
-  MAJOR check-in), **Request revision** (in review or awaiting approval
-  → draft, with the reason in the comment) — each: check-out →
-  connector term write of the target stage's term → check-in with the
-  command's comment (approve's names the approver). Standards
-  libraries only.
+- Two circulations, each with a NAMED column (Ben, 2026-08-04:
+  reviewers are the `reviewers`-role column, already in the
+  dictionary — `DMSReviewers` auto-maps): **Submit for review** (draft
+  → in review, to the document's named reviewers for content work),
+  **Submit for approval** (in review → awaiting approval — draft may
+  skip straight here when no review round is wanted), **Approve**
+  (awaiting approval → approved, MAJOR check-in), **Request revision**
+  (in review or awaiting approval → draft, with the reason in the
+  comment) — each: check-out → connector term write of the target
+  stage's term → check-in with the command's comment (approve's names
+  the approver). Standards libraries only.
 - Gates: approve needs the acting user among the document's named
   approver(s); when none are named, the OWNER approves; app admins as
   fallback. Owner/approver pickers in the add form source from the
-  controllers group.
+  controllers group; the reviewers picker stays general people search
+  (the group governs owners/approvers, not reviewers).
 - Overlay + kebab actions driven by the document's current stage.
 *Proof:* each command's column writes verified in SharePoint version
 history with the comment; a non-approver sees no Approve.
@@ -52,10 +55,14 @@ history with the comment; a non-approver sees no Approve.
 - **Mark reviewed** on review-due standards (the 4D queue's waiting
   consumer): check-out → next-review-date write (locale format) →
   check-in "Periodic review — no changes".
-- My tasks gains **Awaiting your approval** (approver column is me +
-  status in the in-review stage, all server-side CAML).
-*Proof:* marking reviewed clears the task; submitting puts the document
-in the approver's queue and nowhere else.
+- My tasks gains BOTH circulation queues, symmetric and server-side:
+  **Awaiting your review** (reviewers column is me + status in the
+  in-review stage) and **Awaiting your approval** (approvers column is
+  me — or owner is me when no approvers are named + status in the
+  awaiting-approval stage), all CAML `<UserID/>`.
+*Proof:* marking reviewed clears the task; submitting for review puts
+the document in each named reviewer's queue and nowhere else;
+submitting for approval moves it to the approvers' queues.
 
 ### 5D — Obsolete / supersede
 - **Mark obsolete** on approved documents (term write + comment).
