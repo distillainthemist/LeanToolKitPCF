@@ -1111,7 +1111,13 @@ describe("lifecycle mapping (5A)", () => {
         "t-5": "approved" as const,
       },
     };
-    expect(lifecycleHealth(full, allTerms)).toEqual([]);
+    // the approval road fully mapped: no WARNINGS — retirement's gaps
+    // (superseded/obsolete, 5D) are INFO: visible, not nagging
+    const fullFound = lifecycleHealth(full, allTerms);
+    expect(fullFound.filter((f) => f.level === "warn")).toEqual([]);
+    expect(fullFound.map((f) => f.level)).toEqual(["info", "info"]);
+    expect(fullFound.some((f) => f.title.includes("mapped as Superseded"))).toBe(true);
+    expect(fullFound.some((f) => f.title.includes("mapped as Obsolete"))).toBe(true);
     // no terms readable = nothing to judge
     expect(lifecycleHealth(dict, [])).toEqual([]);
   });
@@ -1193,14 +1199,49 @@ describe("lifecycle commands (5B/5C — the settled workflow)", () => {
   it("approved offers Start revision (gated), which stays checked out", async () => {
     const { lifecycleCommandsFor } = await import("../docs/model");
     const revise = lifecycleCommandsFor("approved", gates({ isOwner: true }));
-    expect(revise.map((c) => c.key)).toEqual(["revise"]);
+    expect(revise[0].key).toBe("revise");
     // the whole revision lives inside the check-out: no check-in, and
     // Discard reverts everything (Ben, 2026-08-04)
     expect(revise[0].staysCheckedOut).toBe(true);
     expect(lifecycleCommandsFor("approved", gates())).toEqual([]);
-    // superseded / obsolete / unmapped: 5D's turf, nothing offered yet
-    expect(lifecycleCommandsFor("superseded", gates({ isAdmin: true }))).toEqual([]);
     expect(lifecycleCommandsFor("", gates({ isAdmin: true }))).toEqual([]);
+  });
+
+  it("retirement (5D): the owner ends a document's life, and can undo it", async () => {
+    const { lifecycleCommandsFor, LIFECYCLE_COMMANDS } = await import("../docs/model");
+    // the owner (or an admin) retires; an approver endorses content —
+    // they don't decide a document's end of life
+    expect(lifecycleCommandsFor("approved", gates({ isOwner: true })).map((c) => c.key)).toEqual([
+      "revise",
+      "markSuperseded",
+      "markObsolete",
+    ]);
+    expect(lifecycleCommandsFor("approved", gates({ isAdmin: true })).map((c) => c.key)).toEqual([
+      "revise",
+      "markSuperseded",
+      "markObsolete",
+    ]);
+    expect(lifecycleCommandsFor("approved", gates({ isApprover: true })).map((c) => c.key)).toEqual([
+      "revise",
+    ]);
+    // both retired stages offer the road back — to the owner or an admin
+    expect(lifecycleCommandsFor("superseded", gates({ isOwner: true })).map((c) => c.key)).toEqual([
+      "reinstate",
+    ]);
+    expect(lifecycleCommandsFor("obsolete", gates({ isAdmin: true })).map((c) => c.key)).toEqual([
+      "reinstate",
+    ]);
+    expect(lifecycleCommandsFor("superseded", gates())).toEqual([]);
+    expect(lifecycleCommandsFor("obsolete", gates({ isApprover: true }))).toEqual([]);
+    // all three are minor status writes with a REQUIRED reason — the
+    // superseded reason names the successor, and the approved major is
+    // never disturbed, which is why reinstate needs no re-approval
+    const by = Object.fromEntries(LIFECYCLE_COMMANDS.map((c) => [c.key, c]));
+    for (const k of ["markSuperseded", "markObsolete", "reinstate"] as const) {
+      expect(by[k].major).toBe(false);
+      expect(by[k].needsReason).toBe(true);
+    }
+    expect(by.reinstate.to).toBe("approved");
   });
 
   it("revision demands its reason", async () => {

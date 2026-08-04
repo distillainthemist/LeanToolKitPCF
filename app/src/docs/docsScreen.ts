@@ -364,6 +364,12 @@ export function mountDocs(
       const emails = (col: string): string[] =>
         col === "" ? [] : (row.values[`${col}#email`] ?? "").split(";").filter((s) => s !== "");
       const approvers = emails(approversInternal);
+      const owners = emails(ownerInternal);
+      // an owner named as their own (sole) approver adds no second
+      // step — their sign-off is already the mandatory finale, so only
+      // approvers OUTSIDE the owner list create the endorse round and
+      // submission otherwise goes straight to the owner's stage
+      const outsideApprovers = approvers.filter((e) => !owners.includes(e));
       // reviewers named = the review round is mandatory; display text is
       // the fallback signal when the email projection is absent
       const hasReviewers =
@@ -372,9 +378,9 @@ export function mountDocs(
           (row.values[reviewersInternal] ?? "").trim() !== "");
       return {
         isApprover: myEmail !== "" && approvers.includes(myEmail),
-        hasApprovers: approvers.length > 0,
+        hasApprovers: outsideApprovers.length > 0,
         hasReviewers,
-        isOwner: myEmail !== "" && emails(ownerInternal).includes(myEmail),
+        isOwner: myEmail !== "" && owners.includes(myEmail),
         isAdmin: meIsAdmin,
       };
     };
@@ -742,9 +748,15 @@ export function mountDocs(
       // admins stand in at either step, but a queue of everyone else's
       // approvals would drown them — admins act from the register
 
-      // review due — my standards, date within the horizon
+      // review due — my standards, date within the horizon. Scoped to
+      // the APPROVED stage where the site maps one (5D): a retired or
+      // mid-revision standard has no periodic review to chase.
       if (reviewInternal !== "" && ownerInternal !== "") {
+        const approvedLabels = statusInternal !== "" ? labelsForStage("approved") : [];
         for (const l of carrying(standards, reviewInternal, ownerInternal)) {
+          const scoped =
+            approvedLabels.length > 0 &&
+            l.config.columns.some((c) => c.internal === statusInternal);
           jobs.push(
             (async () => {
               const page = await renderListPage(
@@ -753,6 +765,9 @@ export function mountDocs(
                 buildRenderViewXml({
                   personIsMe: ownerInternal,
                   dueWithinDays: { col: reviewInternal, days: REVIEW_HORIZON_DAYS },
+                  termFilters: scoped
+                    ? [{ cols: [statusInternal], labels: approvedLabels }]
+                    : undefined,
                   fields: [reviewInternal, ...gateFields],
                   rowLimit: 30,
                 })

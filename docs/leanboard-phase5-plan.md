@@ -98,11 +98,26 @@ history with the comment; a non-approver sees no Approve.
 the document in each named reviewer's queue and nowhere else;
 submitting for approval moves it to the approvers' queues.
 
-### 5D — Obsolete / supersede
-- **Mark obsolete** on approved documents (term write + comment).
-- Supersede rides approval of a successor; v1 keeps it manual (obsolete
-  the old, comment names the successor). Linked-documents column
-  optional.
+### 5D — Obsolete / supersede (BUILT 2026-08-04)
+- **Mark superseded** and **Mark obsolete** on approved standards —
+  owner or admin only (approvers endorse content; they don't decide a
+  document's end of life). Both demand a reason: the superseded reason
+  NAMES the successor, which is v1's whole audit trail (no
+  linked-documents column yet). Minor check-ins — the approved major is
+  never disturbed.
+- **Reinstate** from either retired stage (owner/admin, reason
+  required) — a status write back to approved, no re-approval, because
+  the approved major sat untouched underneath.
+- Retired stages generate no tasks; the review-due queue is scoped to
+  the APPROVED stage where the site maps one (a retired or mid-revision
+  standard has no periodic review to chase).
+- Health: unmapped Superseded/Obsolete report as **info** (visible, not
+  nagging) — the approval road's five stages stay warnings.
+- Same session: **sole-owner-approver fix** — `hasApprovers` now means
+  an approver OUTSIDE the owner list. An owner named as their own
+  (sole) approver goes straight to Awaiting owner approval; the
+  endorse round only exists when someone else must sign first (Ben,
+  2026-08-04).
 
 ### 5E — Acknowledgement ledger (SCHEMA release)
 - `ben_ltkdocack` through the schema pipeline — the first schema change

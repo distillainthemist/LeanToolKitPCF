@@ -164,7 +164,7 @@ export function emptySiteDictionary(): SiteDictionary {
 }
 
 // ---- lifecycle (Phase 5A) ----------------------------------------------
-// The approval engine's vocabulary. Five stages, fixed: commands move a
+// The approval engine's vocabulary. Seven stages, fixed: commands move a
 // document BETWEEN stages; which term expresses a stage is this site's
 // choice, made once in Settings → Documents → Lifecycle.
 
@@ -231,8 +231,8 @@ export function termsForStage(dict: SiteDictionary, stage: LifecycleStage): stri
     .map(([id]) => id);
 }
 
-// ---- lifecycle commands (Phase 5B) -------------------------------------
-// Four moves between the stages. Pure: WHICH commands a document offers
+// ---- lifecycle commands (Phase 5B, retirement 5D) -----------------------
+// The moves between the stages. Pure: WHICH commands a document offers
 // is decided here from its stage and the acting user's standing; the
 // screen only paints and the write layer only executes.
 
@@ -241,7 +241,10 @@ export type LifecycleCommandKey =
   | "submitApproval"
   | "approve"
   | "requestRevision"
-  | "revise";
+  | "revise"
+  | "markSuperseded"
+  | "markObsolete"
+  | "reinstate";
 
 export interface LifecycleCommandDef {
   key: LifecycleCommandKey;
@@ -317,12 +320,48 @@ export const LIFECYCLE_COMMANDS: LifecycleCommandDef[] = [
     primary: false,
     staysCheckedOut: true,
   },
+  {
+    // retirement (5D): superseded = replaced by another document — the
+    // reason NAMES the successor, which is the whole audit trail v1
+    // keeps (no linked-documents column yet)
+    key: "markSuperseded",
+    label: "Mark superseded",
+    to: "superseded",
+    major: false,
+    comment: "Superseded",
+    needsReason: true,
+    primary: false,
+  },
+  {
+    key: "markObsolete",
+    label: "Mark obsolete",
+    to: "obsolete",
+    major: false,
+    comment: "Marked obsolete",
+    needsReason: true,
+    primary: false,
+  },
+  {
+    // the mistake-recovery road back: retirement is minor check-ins all
+    // the way, so the approved MAJOR was never disturbed — reinstating
+    // is a status write, not a re-approval
+    key: "reinstate",
+    label: "Reinstate",
+    to: "approved",
+    major: false,
+    comment: "Reinstated",
+    needsReason: true,
+    primary: false,
+  },
 ];
 
 export interface LifecycleGates {
   /** The acting user is named in the approvers column. */
   isApprover: boolean;
-  /** The document names ANY approver at all. */
+  /** The document names an approver OTHER than the owner. The owner's
+   *  sign-off is already the mandatory last step, so an owner listed as
+   *  their own (sole) approver adds no second step — only an OUTSIDE
+   *  approver creates the endorse round (Ben, 2026-08-04). */
   hasApprovers: boolean;
   /** The document names ANY reviewer — which makes the review round
    *  MANDATORY before approval (Ben, 2026-08-04). */
@@ -344,7 +383,11 @@ export interface LifecycleGates {
  *   owner's stage;
  * - admins can stand in at either approval step (deadlock-breaker);
  * - starting the next revision of an approved document is as gated as
- *   approving it was.
+ *   approving it was;
+ * - retirement (5D): the owner or an admin marks an approved document
+ *   superseded (the reason names the successor) or obsolete, and can
+ *   reinstate either — all minor status writes, the approved major
+ *   stays untouched in history.
  * Submissions are otherwise open to anyone who can write — SharePoint's
  * permissions are the real gate there. Returned defs are CLONES with
  * `to`/`major` resolved for this context; run them as given.
@@ -377,10 +420,21 @@ export function lifecycleCommandsFor(
       return g.isOwner || g.isAdmin
         ? [by("approve"), by("requestRevision")]
         : [by("requestRevision")];
-    case "approved":
-      return g.isOwner || g.isApprover || g.isAdmin ? [by("revise")] : [];
+    case "approved": {
+      // revision is open to anyone gated into approval; RETIRING a
+      // document is the owner's call (or an admin's) — approvers
+      // endorse content, they don't decide a document's end of life
+      const out: LifecycleCommandDef[] = [];
+      if (g.isOwner || g.isApprover || g.isAdmin) out.push(by("revise"));
+      if (g.isOwner || g.isAdmin) out.push(by("markSuperseded"), by("markObsolete"));
+      return out;
+    }
+    case "superseded":
+    case "obsolete":
+      // retirement's undo (5D): the approved major is intact underneath
+      return g.isOwner || g.isAdmin ? [by("reinstate")] : [];
     default:
-      return []; // superseded / obsolete / unmapped: 5D's turf
+      return []; // unmapped
   }
 }
 
@@ -422,21 +476,21 @@ export function lifecycleHealth(
   }
   // every stage the WORKFLOW moves through needs a term, or the command
   // that targets it is silently withheld — "no Approve button" with no
-  // explanation anywhere (Ben, 2026-08-04). Superseded/obsolete wait
-  // for 5D and are not demanded yet.
+  // explanation anywhere (Ben, 2026-08-04). The approval road warns;
+  // retirement (superseded/obsolete, 5D) is optional, so its gaps are
+  // info — visible, not nagging.
   if (Object.keys(dict.lifecycle ?? {}).length > 0) {
-    const needed: LifecycleStage[] = [
+    const demanded = new Set<LifecycleStage>([
       "draft",
       "inReview",
       "inApproval",
       "inOwnerApproval",
       "approved",
-    ];
-    for (const stage of needed) {
+    ]);
+    for (const { key: stage, label } of LIFECYCLE_STAGES) {
       if (statusTerms.some((t) => stageOfTerm(dict, t.id) === stage)) continue;
-      const label = LIFECYCLE_STAGES.find((s) => s.key === stage)?.label ?? stage;
       out.push({
-        level: "warn",
+        level: demanded.has(stage) ? "warn" : "info",
         title: `No status term is mapped as ${label}`,
         detail:
           `Commands that move documents to “${label}” are withheld until a term maps ` +
