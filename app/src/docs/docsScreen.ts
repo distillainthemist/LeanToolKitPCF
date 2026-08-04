@@ -222,7 +222,11 @@ export function mountDocs(
 
     const permsReady = Promise.all(
       libraries
-        .filter((l) => l.libType === "working" || l.libType === "revision")
+        // standards included since 5C+: content edits ride check-out
+        // while a standard is in a content stage (draft / in review)
+        .filter(
+          (l) => l.libType === "working" || l.libType === "revision" || l.libType === "standard"
+        )
         .map(async (l) => {
           const r = await fetchListPermissions(app.siteUrl, l.listId);
           if (r.ok) permsByLib.set(l.listId.toLowerCase(), parseBasePermissions(r.data));
@@ -248,6 +252,20 @@ export function mountDocs(
       lib != null &&
       (lib.libType === "working" || lib.libType === "revision") &&
       (permsByLib.get(lib.listId.toLowerCase())?.edit ?? false);
+
+    /** Where check-out/check-in/discard are offered. Working and
+     *  revision libraries always (4B); a STANDARD joins them while it is
+     *  in a CONTENT stage — draft or in review — which is how a version
+     *  update gets edited (Ben, 2026-08-04). Approved and
+     *  awaiting-approval standards change only through lifecycle
+     *  commands. */
+    const canEditContent = (lib: DocLibrary | null | undefined, row: DocRow): boolean => {
+      if (canWriteIn(lib)) return true;
+      if (lib?.libType !== "standard") return false;
+      if (!(permsByLib.get(lib.listId.toLowerCase())?.edit ?? false)) return false;
+      const stage = stageOfRow(row);
+      return stage === "draft" || stage === "inReview";
+    };
 
     /** Mine by EMAIL. Display names collide, and two people called Ben
      *  would each be offered the other's check-in. */
@@ -373,6 +391,30 @@ export function mountDocs(
           targetTerm: target,
           statusInternal,
           actorName: currentViewer()?.name ?? "",
+          host: dialogHost,
+          onDone: () => void refreshRow(row),
+        });
+      });
+    };
+
+    /** Mark reviewed, offered on the ROW (overlay + kebab, Ben
+     *  2026-08-04): an APPROVED standard with a review column, for its
+     *  owner or an admin — due or not, an early review is still a
+     *  review. The queue's button is the same dialog. */
+    const canMarkReviewedRow = (row: DocRow, lib: DocLibrary | null | undefined): boolean => {
+      if (lib?.libType !== "standard" || reviewInternal === "") return false;
+      if (!lib.config.columns.some((c) => c.internal === reviewInternal)) return false;
+      if (stageOfRow(row) !== "approved") return false;
+      const g = lifecycleGatesFor(row);
+      return g.isOwner || g.isAdmin;
+    };
+    const openMarkReviewedRow = (row: DocRow) => {
+      void import("./lifecycleCmds").then(({ openMarkReviewed }) => {
+        openMarkReviewed({
+          site: app.siteUrl,
+          listId: row.listId,
+          row,
+          reviewInternal,
           host: dialogHost,
           onDone: () => void refreshRow(row),
         });
@@ -1901,7 +1943,7 @@ export function mountDocs(
                   isFav: () => favs.some((f) => f.uniqueId === row.uniqueId),
                   toggle: favToggleFor(row),
                 },
-          control: canWriteIn(lib)
+          control: canEditContent(lib, row)
             ? {
                 // read live: a check-out made in the register behind the
                 // overlay has to move these buttons too
@@ -1921,13 +1963,21 @@ export function mountDocs(
           lifecycle:
             lib?.libType === "standard"
               ? {
-                  actions: () =>
-                    lifecycleActionsFor(row, lib).map((c) => ({
+                  actions: () => [
+                    ...lifecycleActionsFor(row, lib).map((c) => ({
                       key: c.key,
                       label: c.label,
                       primary: c.primary,
                     })),
+                    ...(canMarkReviewedRow(row, lib)
+                      ? [{ key: "markReviewed", label: "Mark reviewed…", primary: false }]
+                      : []),
+                  ],
                   run: (key) => {
+                    if (key === "markReviewed") {
+                      openMarkReviewedRow(row);
+                      return;
+                    }
                     const cmd = lifecycleActionsFor(row, lib).find((c) => c.key === key);
                     if (cmd !== undefined) runLifecycle(row, cmd);
                   },
@@ -2314,7 +2364,7 @@ export function mountDocs(
       // Phase 4B: the commands themselves. Offered only where a document
       // is meant to be worked on — controlled standards and records keep
       // their lifecycle for Phase 5, so nothing here can edit one.
-      if (canWriteIn(lib)) {
+      if (canEditContent(lib, row)) {
         const held = (row.checkoutName ?? "") !== "";
         if (!held) {
           item("Check out", () => void runCommand("out", row));
@@ -2328,6 +2378,9 @@ export function mountDocs(
       // lifecycle commands (Phase 5B) — standards move between stages
       for (const cmd of lifecycleActionsFor(row, lib)) {
         item(`${cmd.label}…`, () => runLifecycle(row, cmd));
+      }
+      if (canMarkReviewedRow(row, lib)) {
+        item("Mark reviewed…", () => openMarkReviewedRow(row));
       }
       const r = anchor.getBoundingClientRect();
       menu.style.top = `${r.bottom + 4}px`;
@@ -2577,7 +2630,13 @@ export function mountDocs(
               // and this tenant throttles a view past twelve of those
               // (Phase 0). A read-only register pays nothing for 4B.
               const feedLib = byListId.get(id.toLowerCase());
-              if (feedLib?.libType === "working" || feedLib?.libType === "revision") {
+              if (
+                feedLib?.libType === "working" ||
+                feedLib?.libType === "revision" ||
+                // standards too since 5C+: content edits ride check-out
+                // while a standard is in a content stage
+                feedLib?.libType === "standard"
+              ) {
                 out.add("CheckoutUser");
               }
               // the approve gate reads the approvers column's EMAILS, so

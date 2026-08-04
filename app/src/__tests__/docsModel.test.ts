@@ -1132,8 +1132,17 @@ describe("lifecycle commands (5B)", () => {
       "submitApproval",
       "requestRevision",
     ]);
-    // approved and beyond: 5D's turf, nothing offered yet
-    expect(lifecycleCommandsFor("approved", gates({ isAdmin: true }))).toEqual([]);
+    // approved: the road back into work — Start revision, as gated as
+    // approving was (owner / approver / admin); bystanders get nothing
+    expect(lifecycleCommandsFor("approved", gates({ isAdmin: true })).map((c) => c.key)).toEqual([
+      "revise",
+    ]);
+    expect(lifecycleCommandsFor("approved", gates({ isOwner: true })).map((c) => c.key)).toEqual([
+      "revise",
+    ]);
+    expect(lifecycleCommandsFor("approved", gates())).toEqual([]);
+    // superseded / obsolete / unmapped: 5D's turf, nothing offered yet
+    expect(lifecycleCommandsFor("superseded", gates({ isAdmin: true }))).toEqual([]);
     expect(lifecycleCommandsFor("", gates({ isAdmin: true }))).toEqual([]);
   });
 

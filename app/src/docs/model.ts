@@ -234,7 +234,8 @@ export type LifecycleCommandKey =
   | "submitReview"
   | "submitApproval"
   | "approve"
-  | "requestRevision";
+  | "requestRevision"
+  | "revise";
 
 export interface LifecycleCommandDef {
   key: LifecycleCommandKey;
@@ -289,6 +290,19 @@ export const LIFECYCLE_COMMANDS: LifecycleCommandDef[] = [
     needsReason: true,
     primary: false,
   },
+  {
+    // the road back into work: an APPROVED standard re-enters draft to
+    // begin its next version (Ben, 2026-08-04 — "how do I initiate a
+    // version update?"). The approved majors stay in history; content
+    // edits then ride check-out/check-in until re-approval.
+    key: "revise",
+    label: "Start revision",
+    to: "draft",
+    major: false,
+    comment: "Revision started",
+    needsReason: false,
+    primary: false,
+  },
 ];
 
 export interface LifecycleGates {
@@ -324,8 +338,11 @@ export function lifecycleCommandsFor(
       return [by("submitApproval"), by("requestRevision")];
     case "inApproval":
       return mayApprove ? [by("approve"), by("requestRevision")] : [by("requestRevision")];
+    case "approved":
+      // starting the next version is as controlled as approving this one
+      return mayApprove ? [by("revise")] : [];
     default:
-      return []; // approved / superseded / obsolete / unmapped: 5D's turf
+      return []; // superseded / obsolete / unmapped: 5D's turf
   }
 }
 
