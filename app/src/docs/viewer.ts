@@ -76,6 +76,14 @@ interface ViewerOpts {
     checkIn: () => void;
     discard: () => void;
   } | null;
+  /** Lifecycle commands (Phase 5B) — standards only. The screen decides
+   *  WHICH commands the document's stage and this user's standing
+   *  allow; the viewer paints buttons and calls back. */
+  lifecycle?: {
+    actions: () => { key: string; label: string; primary: boolean }[];
+    run: (key: string) => void;
+    register?: (repaint: () => void) => void;
+  } | null;
 }
 
 function overlay(
@@ -250,6 +258,28 @@ export function openDocViewer(opts: ViewerOpts): void {
     paint();
     ctl.register?.(paint);
     actions.append(outBtn, inBtn, dropBtn, held);
+  }
+  // lifecycle commands sit with the actions: a standard awaiting your
+  // approval opens with Approve one click away
+  if (opts.lifecycle) {
+    const lc = opts.lifecycle;
+    const box = el("div", "app-docs-lifebtns");
+    const paint = () => {
+      clear(box);
+      for (const a of lc.actions()) {
+        const b = el(
+          "button",
+          `app-btn${a.primary ? " app-btn-primary" : ""}`,
+          a.label
+        ) as HTMLButtonElement;
+        b.addEventListener("click", () => lc.run(a.key));
+        box.appendChild(b);
+      }
+      box.style.display = box.childElementCount > 0 ? "" : "none";
+    };
+    paint();
+    lc.register?.(paint);
+    actions.appendChild(box);
   }
   if (opts.favorite) {
     const fav = opts.favorite;

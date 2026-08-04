@@ -270,6 +270,18 @@ export function parseRenderPage(raw: unknown, listId: string): RenderPage {
       if (k.startsWith("_") || k.includes(".")) continue;
       const text = renderText(v);
       if (text !== "") values[k] = text;
+      // person columns ALSO keep their emails, under "<col>#email" —
+      // display names collide, and the approve gate compares the acting
+      // user by address (Phase 5B), exactly as "checked out by me" does
+      if (Array.isArray(v)) {
+        const emails = v
+          .map((e) =>
+            e && typeof e === "object" ? asStr((e as Record<string, unknown>).email) : ""
+          )
+          .filter((s) => s !== "")
+          .map((s) => s.toLowerCase());
+        if (emails.length > 0) values[`${k}#email`] = emails.join(";");
+      }
     }
     // "Modified." carries ISO when DatesInUtc is set; display otherwise
     const isoDot = typeof r["Modified."] === "string" ? (r["Modified."] as string) : "";

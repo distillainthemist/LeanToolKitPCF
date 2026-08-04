@@ -225,6 +225,122 @@ export function termsForStage(dict: SiteDictionary, stage: LifecycleStage): stri
     .map(([id]) => id);
 }
 
+// ---- lifecycle commands (Phase 5B) -------------------------------------
+// Four moves between the stages. Pure: WHICH commands a document offers
+// is decided here from its stage and the acting user's standing; the
+// screen only paints and the write layer only executes.
+
+export type LifecycleCommandKey =
+  | "submitReview"
+  | "submitApproval"
+  | "approve"
+  | "requestRevision";
+
+export interface LifecycleCommandDef {
+  key: LifecycleCommandKey;
+  label: string;
+  /** The stage the command moves the document TO. */
+  to: LifecycleStage;
+  /** Approve is the one MAJOR check-in — the version an auditor reads. */
+  major: boolean;
+  /** The default check-in comment; a typed reason appends to it. */
+  comment: string;
+  /** requestRevision demands its reason — a rejection that explains
+   *  nothing teaches nothing. */
+  needsReason: boolean;
+  /** Rendered as the primary (filled) button. */
+  primary: boolean;
+}
+
+export const LIFECYCLE_COMMANDS: LifecycleCommandDef[] = [
+  {
+    key: "submitReview",
+    label: "Submit for review",
+    to: "inReview",
+    major: false,
+    comment: "Submitted for review",
+    needsReason: false,
+    primary: true,
+  },
+  {
+    key: "submitApproval",
+    label: "Submit for approval",
+    to: "inApproval",
+    major: false,
+    comment: "Submitted for approval",
+    needsReason: false,
+    primary: true,
+  },
+  {
+    key: "approve",
+    label: "Approve",
+    to: "approved",
+    major: true,
+    comment: "Approved",
+    needsReason: false,
+    primary: true,
+  },
+  {
+    key: "requestRevision",
+    label: "Request revision",
+    to: "draft",
+    major: false,
+    comment: "Revision requested",
+    needsReason: true,
+    primary: false,
+  },
+];
+
+export interface LifecycleGates {
+  /** The acting user is named in the approvers column. */
+  isApprover: boolean;
+  /** The document names ANY approver at all. */
+  hasApprovers: boolean;
+  /** The acting user is the owner. */
+  isOwner: boolean;
+  /** Site or super admin — the fallback that prevents deadlock. */
+  isAdmin: boolean;
+}
+
+/**
+ * The commands a document at `stage` offers this user. Submissions are
+ * open to anyone who can write (SharePoint's permissions are the real
+ * gate there); Approve is gated: the named approver(s) — or the OWNER
+ * when none are named — with admins as the fallback (Ben, 2026-08-04).
+ * A draft may go straight to approval when no review round is wanted.
+ */
+export function lifecycleCommandsFor(
+  stage: LifecycleStage | "",
+  g: LifecycleGates
+): LifecycleCommandDef[] {
+  const by = (k: LifecycleCommandKey) => LIFECYCLE_COMMANDS.find((c) => c.key === k)!;
+  const mayApprove = g.isApprover || (!g.hasApprovers && g.isOwner) || g.isAdmin;
+  switch (stage) {
+    case "draft":
+      return [by("submitReview"), by("submitApproval")];
+    case "inReview":
+      return [by("submitApproval"), by("requestRevision")];
+    case "inApproval":
+      return mayApprove ? [by("approve"), by("requestRevision")] : [by("requestRevision")];
+    default:
+      return []; // approved / superseded / obsolete / unmapped: 5D's turf
+  }
+}
+
+/** The TERM a command writes for its target stage: the first mapped
+ *  term that actually exists in the set (label + id — the connector's
+ *  term object needs both). Null = the stage is unmapped, and the
+ *  command must not be offered. */
+export function termForStage(
+  dict: SiteDictionary,
+  stage: LifecycleStage,
+  terms: { id: string; label: string }[]
+): { id: string; label: string } | null {
+  const mapped = new Set(termsForStage(dict, stage));
+  const hit = terms.find((t) => mapped.has(t.id.trim().toLowerCase()));
+  return hit ?? null;
+}
+
 /**
  * The findings the Lifecycle section reports into Health: terms with no
  * stage (a command cannot move what it cannot name), and a mapping with

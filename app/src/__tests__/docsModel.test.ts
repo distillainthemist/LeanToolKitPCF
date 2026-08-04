@@ -1113,6 +1113,81 @@ describe("lifecycle mapping (5A)", () => {
   });
 });
 
+describe("lifecycle commands (5B)", () => {
+  const gates = (over: Partial<Record<string, boolean>> = {}) => ({
+    isApprover: false,
+    hasApprovers: false,
+    isOwner: false,
+    isAdmin: false,
+    ...over,
+  });
+
+  it("offers the moves each stage allows", async () => {
+    const { lifecycleCommandsFor } = await import("../docs/model");
+    expect(lifecycleCommandsFor("draft", gates()).map((c) => c.key)).toEqual([
+      "submitReview",
+      "submitApproval",
+    ]);
+    expect(lifecycleCommandsFor("inReview", gates()).map((c) => c.key)).toEqual([
+      "submitApproval",
+      "requestRevision",
+    ]);
+    // approved and beyond: 5D's turf, nothing offered yet
+    expect(lifecycleCommandsFor("approved", gates({ isAdmin: true }))).toEqual([]);
+    expect(lifecycleCommandsFor("", gates({ isAdmin: true }))).toEqual([]);
+  });
+
+  it("gates Approve: approvers, then the owner when none named, then admins", async () => {
+    const { lifecycleCommandsFor } = await import("../docs/model");
+    const keys = (g: ReturnType<typeof gates>) =>
+      lifecycleCommandsFor("inApproval", g).map((c) => c.key);
+    // a named approver approves
+    expect(keys(gates({ isApprover: true, hasApprovers: true }))).toEqual([
+      "approve",
+      "requestRevision",
+    ]);
+    // named approvers EXCLUDE a non-approver owner
+    expect(keys(gates({ hasApprovers: true, isOwner: true }))).toEqual(["requestRevision"]);
+    // no approvers named → the owner signs off
+    expect(keys(gates({ isOwner: true }))).toEqual(["approve", "requestRevision"]);
+    // admins never deadlock
+    expect(keys(gates({ hasApprovers: true, isAdmin: true }))).toEqual([
+      "approve",
+      "requestRevision",
+    ]);
+    // a bystander can only send it back
+    expect(keys(gates())).toEqual(["requestRevision"]);
+  });
+
+  it("approve is the one MAJOR check-in, and revision demands its reason", async () => {
+    const { LIFECYCLE_COMMANDS } = await import("../docs/model");
+    const by = Object.fromEntries(LIFECYCLE_COMMANDS.map((c) => [c.key, c]));
+    expect(by.approve.major).toBe(true);
+    expect(by.submitReview.major).toBe(false);
+    expect(by.requestRevision.needsReason).toBe(true);
+    expect(by.approve.needsReason).toBe(false);
+  });
+
+  it("resolves the term a command writes, or refuses to offer it", async () => {
+    const { termForStage } = await import("../docs/model");
+    const dict = {
+      columns: [],
+      palettes: [],
+      templates: {},
+      lifecycle: { "t-appr": "approved" as const, "t-gone": "inReview" as const },
+    };
+    const terms = [
+      { id: "T-APPR", label: "Approved" },
+      { id: "t-draft", label: "Draft" },
+    ];
+    // id casing tolerated; label comes back real-cased for the write
+    expect(termForStage(dict, "approved", terms)).toEqual({ id: "T-APPR", label: "Approved" });
+    // mapped to a term the set no longer has = null, command withheld
+    expect(termForStage(dict, "inReview", terms)).toBeNull();
+    expect(termForStage(dict, "obsolete", terms)).toBeNull();
+  });
+});
+
 describe("view templates (C5)", () => {
   const sc = (internal: string, role = "") => ({
     internal,

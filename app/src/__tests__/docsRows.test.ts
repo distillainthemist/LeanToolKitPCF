@@ -570,6 +570,37 @@ describe("RenderListDataAsStream (register browse feed)", () => {
     expect(buildRenderViewXml({ dueWithinDays: { col: "", days: 5 } })).not.toContain("<Where>");
   });
 
+  it("person columns carry their emails under <col>#email (5B)", async () => {
+    const { parseRenderPage } = await import("../docs/rows");
+    const page = parseRenderPage(
+      {
+        Row: [
+          {
+            ID: "9",
+            FileLeafRef: "Std.pdf",
+            FSObjType: "0",
+            DMSApprovers: [
+              { id: "1", title: "Ben Pechey", email: "Ben@Pechey.com" },
+              { id: "2", title: "Ada L", email: "ada@pechey.com" },
+            ],
+            DMSOwner: [{ id: "3", title: "No Address" }],
+            DMSTags: [{ Label: "Awesome", TermID: "t1" }],
+          },
+        ],
+      },
+      "L1"
+    );
+    const v = page.rows[0].values;
+    // display text unchanged; emails lowercased beside it — the approve
+    // gate compares addresses, never display names
+    expect(v.DMSApprovers).toBe("Ben Pechey; Ada L");
+    expect(v["DMSApprovers#email"]).toBe("ben@pechey.com;ada@pechey.com");
+    // a person with no address contributes no email key; taxonomy
+    // arrays never grow one
+    expect(v["DMSOwner#email"]).toBeUndefined();
+    expect(v["DMSTags#email"]).toBeUndefined();
+  });
+
   it("keeps the check-out holder's EMAIL, not just their name (4B)", async () => {
     const { parseRenderPage } = await import("../docs/rows");
     const page = parseRenderPage(

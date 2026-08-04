@@ -42,14 +42,19 @@ import {
 import { DocLibrary, docsConfig } from "./docsStore";
 import {
   BasePermissions,
+  LifecycleCommandDef,
+  LifecycleStage,
   emptySiteDictionary,
   isDateColumn,
+  lifecycleCommandsFor,
   paletteEntryFor,
   parseBasePermissions,
   siteKey,
   sortByDictionary,
   sortLibrariesForDisplay,
   spErrorText,
+  stageOfTerm,
+  termForStage,
 } from "./model";
 import {
   TermNode,
@@ -230,11 +235,13 @@ export function mountDocs(
     document.body.appendChild(dialogHost);
     innerCleanups.push(() => dialogHost.remove());
 
-    /** The open document overlay's repaint, while one is open. A command
-     *  run from the overlay changes state the overlay is showing, so it
-     *  has to hear about it — discarding a check-out left "Check in…"
-     *  sitting there otherwise (Ben, 2026-08-03). */
-    let viewerRepaint: (() => void) | null = null;
+    /** The open document overlay's repaints, while one is open. A
+     *  command run from the overlay changes state the overlay is
+     *  showing, so it has to hear about it — discarding a check-out
+     *  left "Check in…" sitting there otherwise (Ben, 2026-08-03). A
+     *  SET since 5B: the control row and the lifecycle row each
+     *  register their own. */
+    const viewerRepaints = new Set<() => void>();
 
     const canWriteIn = (lib: DocLibrary | null | undefined): boolean =>
       lib != null &&
@@ -306,6 +313,69 @@ export function mountDocs(
     const statusInternal = internalForRole("status");
     const ownerInternal = internalForRole("owner");
     const reviewInternal = internalForRole("nextReviewDate");
+    const approversInternal = internalForRole("approvers");
+
+    // ---- lifecycle commands (Phase 5B) ---------------------------------
+    // Standards move between stages; everything here derives from the
+    // row the register already holds. Stage: status label → term id →
+    // mapped stage. Gates: person-column EMAILS (names collide), admin
+    // standing fetched once.
+    let meIsAdmin = false;
+    if (whoId !== "") {
+      void viewerPerson(whoId).then(
+        (p) => {
+          meIsAdmin = p?.role === "superadmin" || p?.role === "siteadmin";
+        },
+        () => {}
+      );
+    }
+    /** The status set's terms, id + real-cased label — filled by
+     *  readStatusTerms; what termForStage resolves a write against. */
+    const statusTermList: { id: string; label: string }[] = [];
+
+    const stageOfRow = (row: DocRow): LifecycleStage | "" => {
+      if (statusInternal === "") return "";
+      const label = (row.values[statusInternal] ?? "").split(";")[0].trim().toLowerCase();
+      if (label === "") return "";
+      const id = labelToId.get(label);
+      return id !== undefined ? stageOfTerm(siteDict, id) : "";
+    };
+    const lifecycleGatesFor = (row: DocRow) => {
+      const emails = (col: string): string[] =>
+        col === "" ? [] : (row.values[`${col}#email`] ?? "").split(";").filter((s) => s !== "");
+      const approvers = emails(approversInternal);
+      return {
+        isApprover: myEmail !== "" && approvers.includes(myEmail),
+        hasApprovers: approvers.length > 0,
+        isOwner: myEmail !== "" && emails(ownerInternal).includes(myEmail),
+        isAdmin: meIsAdmin,
+      };
+    };
+    /** The commands this row offers this user — only ever for standards,
+     *  and only commands whose target stage has a mapped, existing term. */
+    const lifecycleActionsFor = (row: DocRow, lib: DocLibrary | null | undefined) => {
+      if (lib?.libType !== "standard" || statusInternal === "") return [];
+      return lifecycleCommandsFor(stageOfRow(row), lifecycleGatesFor(row)).filter(
+        (c) => termForStage(siteDict, c.to, statusTermList) !== null
+      );
+    };
+    const runLifecycle = (row: DocRow, cmd: LifecycleCommandDef) => {
+      const target = termForStage(siteDict, cmd.to, statusTermList);
+      if (target === null) return;
+      void import("./lifecycleCmds").then(({ openLifecycleCommand }) => {
+        openLifecycleCommand({
+          site: app.siteUrl,
+          listId: row.listId,
+          row,
+          command: cmd,
+          targetTerm: target,
+          statusInternal,
+          actorName: currentViewer()?.name ?? "",
+          host: dialogHost,
+          onDone: () => void refreshRow(row),
+        });
+      });
+    };
     /**
      * The register's columns: the view's own choice when there is one,
      * otherwise every column any library in view opens with — in
@@ -1453,13 +1523,17 @@ export function mountDocs(
         ? ((r.data as { value: unknown[] }).value as Record<string, unknown>[])
         : [];
       const labels: string[] = [];
+      statusTermList.length = 0;
       for (const t of rows) {
         const names = t.labels as { name?: string; isDefault?: boolean }[] | undefined;
         const def = Array.isArray(names) ? (names.find((l) => l.isDefault) ?? names[0]) : undefined;
         const name = (def?.name ?? "").trim();
         if (name === "") continue;
         labels.push(name);
-        if (typeof t.id === "string") labelToId.set(name.toLowerCase(), t.id);
+        if (typeof t.id === "string") {
+          labelToId.set(name.toLowerCase(), t.id);
+          statusTermList.push({ id: t.id, label: name });
+        }
       }
       // "approved" is whatever this site's vocabulary calls current —
       // the same reading the status glyphs use, so ✓ and "only Approved"
@@ -1647,7 +1721,7 @@ export function mountDocs(
         if (dead) return;
         const libStatusCol = lib?.config.columns.find((c) => c.role === "status") ?? null;
         // a previous overlay's repaint must not outlive it
-        viewerRepaint = null;
+        viewerRepaints.clear();
         openDocViewer({
           site: app.siteUrl,
           row,
@@ -1691,13 +1765,31 @@ export function mountDocs(
                   by: row.checkoutName ?? "",
                 }),
                 register: (repaint) => {
-                  viewerRepaint = repaint;
+                  viewerRepaints.add(repaint);
                 },
                 checkOut: () => runCommand("out", row),
                 checkIn: () => openCheckIn(row),
                 discard: () => openDiscard(row),
               }
             : null,
+          lifecycle:
+            lib?.libType === "standard"
+              ? {
+                  actions: () =>
+                    lifecycleActionsFor(row, lib).map((c) => ({
+                      key: c.key,
+                      label: c.label,
+                      primary: c.primary,
+                    })),
+                  run: (key) => {
+                    const cmd = lifecycleActionsFor(row, lib).find((c) => c.key === key);
+                    if (cmd !== undefined) runLifecycle(row, cmd);
+                  },
+                  register: (repaint) => {
+                    viewerRepaints.add(repaint);
+                  },
+                }
+              : null,
         });
       });
     };
@@ -1812,30 +1904,34 @@ export function mountDocs(
     // near the top of the mount: the toolbar's Add button reads it
     // synchronously long before this section runs.)
 
-    /** Re-read one document's check-out state and repaint just it. A
-     *  full reload would lose the scroll position and re-ask for
-     *  everything, to answer a question about one row. */
+    /** Re-read one document's live state — check-out, status, the gate
+     *  columns — and repaint just it. A full reload would lose the
+     *  scroll position and re-ask for everything, to answer a question
+     *  about one row. One list-door call since 5B: lifecycle commands
+     *  change status and version, not only the check-out. */
     const refreshRow = async (row: DocRow) => {
-      const info = await fetchFileInfo(app.siteUrl, row.serverUrl);
-      if (!info.ok) return;
-      const d = (info.data ?? {}) as { CheckOutType?: unknown };
-      // CheckOutType 2 means "not checked out"; anything else needs the
-      // holder's name, which only the list row carries
-      if (Number(d.CheckOutType ?? 2) === 2) {
-        row.checkoutName = "";
-        row.checkoutEmail = "";
-      } else {
-        const page = await renderListPage(
-          app.siteUrl,
-          row.listId,
-          buildRenderViewXml({ idIn: [row.id], fields: ["CheckoutUser"], rowLimit: 1 })
-        );
-        const fresh = page.rows[0];
-        row.checkoutName = fresh?.checkoutName ?? "";
-        row.checkoutEmail = fresh?.checkoutEmail ?? "";
+      const fields = [statusInternal, ownerInternal, approversInternal, "CheckoutUser"].filter(
+        (f) => f !== ""
+      );
+      const page = await renderListPage(
+        app.siteUrl,
+        row.listId,
+        buildRenderViewXml({ idIn: [row.id], fields, rowLimit: 1 })
+      );
+      const fresh = page.rows[0];
+      if (fresh !== undefined) {
+        row.checkoutName = fresh.checkoutName ?? "";
+        row.checkoutEmail = fresh.checkoutEmail ?? "";
+        for (const f of fields) {
+          if (f === "CheckoutUser") continue;
+          row.values[f] = fresh.values[f] ?? "";
+          const emailKey = `${f}#email`;
+          if (fresh.values[emailKey] !== undefined) row.values[emailKey] = fresh.values[emailKey];
+          else delete row.values[emailKey];
+        }
       }
       list?.setRows(list.rows());
-      viewerRepaint?.();
+      for (const rp of viewerRepaints) rp();
       // a command that changes checkout state changes the My tasks count
       refreshTasksBadge();
     };
@@ -2082,6 +2178,10 @@ export function mountDocs(
         } else {
           item(`Checked out by ${row.checkoutName}`, null, "Only they can check it in");
         }
+      }
+      // lifecycle commands (Phase 5B) — standards move between stages
+      for (const cmd of lifecycleActionsFor(row, lib)) {
+        item(`${cmd.label}…`, () => runLifecycle(row, cmd));
       }
       const r = anchor.getBoundingClientRect();
       menu.style.top = `${r.bottom + 4}px`;
@@ -2333,6 +2433,16 @@ export function mountDocs(
               const feedLib = byListId.get(id.toLowerCase());
               if (feedLib?.libType === "working" || feedLib?.libType === "revision") {
                 out.add("CheckoutUser");
+              }
+              // the approve gate reads the approvers column's EMAILS, so
+              // standards feeds carry it (another lookup — scoped to the
+              // one library type that needs it, same throttle logic)
+              if (
+                feedLib?.libType === "standard" &&
+                approversInternal !== "" &&
+                carried.has(approversInternal)
+              ) {
+                out.add(approversInternal);
               }
               return [...out];
             };
