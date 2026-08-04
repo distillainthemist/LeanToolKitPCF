@@ -9,9 +9,20 @@
 
 import { el } from "../../../shared/ui/dom";
 import { openDialog } from "../../../shared/ui/dialog";
-import { LifecycleCommandDef, spErrorText } from "./model";
+import {
+  LifecycleCommandDef,
+  formatDateForLocale,
+  spErrorText,
+  validateItemErrors,
+} from "./model";
 import { DocRow } from "./rows";
-import { checkInFile, checkOutFile, connectorPatchItem } from "./sp";
+import {
+  checkInFile,
+  checkOutFile,
+  connectorPatchItem,
+  fetchRegionalSettings,
+  validateUpdateListItem,
+} from "./sp";
 
 export interface LifecycleRunOpts {
   site: string;
@@ -142,6 +153,122 @@ export function openLifecycleCommand(opts: LifecycleRunOpts): void {
       checkInFile(site, row.serverUrl, comment, command.major),
       "Check-in"
     );
+    if (!cin.ok && !/not checked out/i.test(spErrorText(cin.status))) {
+      return fail("Check-in was refused (the document stays checked out)", cin.status);
+    }
+
+    dlg.close();
+    opts.onDone();
+  };
+}
+
+// ---- Mark reviewed (Phase 5C) ------------------------------------------
+// The review-due queue's own command: a periodic review WITHOUT content
+// change. Stamps the next review date (the forms engine takes dates in
+// the site's regional format only — cookbook rule) and checks in with
+// the comment an auditor expects to find.
+
+export interface MarkReviewedOpts {
+  site: string;
+  listId: string;
+  row: DocRow;
+  /** The next-review-date column's internal name. */
+  reviewInternal: string;
+  host: HTMLElement;
+  onDone: () => void;
+}
+
+export function openMarkReviewed(opts: MarkReviewedOpts): void {
+  const { site, row } = opts;
+  let running = false;
+
+  const dlg = openDialog({
+    host: opts.host,
+    title: `Mark reviewed — ${row.name}`,
+    buttons: [
+      { label: "Cancel", kind: "secondary", onClick: () => { if (!running) dlg.close(); } },
+      { label: "Mark reviewed", kind: "primary", onClick: () => void run() },
+    ],
+  });
+  const goBtn = dlg.root.querySelector(".ltk-btn-primary") as HTMLButtonElement;
+
+  dlg.body.appendChild(
+    el(
+      "div",
+      "app-field-hint",
+      "Records a periodic review with no content change: the next review date is set " +
+        "and the version history gains the review comment."
+    )
+  );
+  const dateInput = el("input", "app-input") as HTMLInputElement;
+  dateInput.type = "date";
+  // the default cadence: a year from today, local date parts
+  const next = new Date(Date.now() + 365 * 86400000);
+  dateInput.value = `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, "0")}-${String(next.getDate()).padStart(2, "0")}`;
+  const note = el("textarea", "app-input app-docs-cicomment") as HTMLTextAreaElement;
+  note.rows = 2;
+  note.placeholder = "Comment (optional)";
+  dlg.body.append(
+    el("div", "app-field-label", "Next review date"),
+    dateInput,
+    el("div", "app-field-label", "Comment"),
+    note
+  );
+  const status = el("div", "app-docs-addstatus");
+  dlg.body.appendChild(status);
+
+  const sync = () => {
+    goBtn.disabled = running || dateInput.value === "";
+  };
+  dateInput.addEventListener("input", sync);
+  sync();
+
+  const fail = (what: string, why: string) => {
+    status.textContent = `${what}: ${spErrorText(why).slice(0, 300)}`;
+    status.classList.add("app-docs-addstatus-warn");
+    running = false;
+    sync();
+  };
+
+  const run = async () => {
+    if (running || dateInput.value === "") return;
+    running = true;
+    sync();
+    status.classList.remove("app-docs-addstatus-warn");
+
+    status.textContent = "Reading the site's date format…";
+    const regional = await timed(fetchRegionalSettings(site), "The regional settings read");
+    const localeId = Number(((regional.data ?? {}) as { LocaleId?: unknown }).LocaleId ?? 0) || 1033;
+
+    status.textContent = "Taking the check-out…";
+    const out = await timed(checkOutFile(site, row.serverUrl), "Check-out");
+    if (!out.ok && !/checked out/i.test(spErrorText(out.status))) {
+      return fail("Could not check out", out.status);
+    }
+
+    status.textContent = "Setting the next review date…";
+    const res = await timed(
+      validateUpdateListItem(
+        site,
+        opts.listId,
+        row.id,
+        [{ FieldName: opts.reviewInternal, FieldValue: formatDateForLocale(dateInput.value, localeId) }],
+        false
+      ),
+      "The date write"
+    );
+    const errs = validateItemErrors(res.data);
+    if (!res.ok || errs.length > 0) {
+      return fail(
+        "The date write was refused (the document stays checked out)",
+        errs.map((e) => `${e.field}: ${e.message}`).join("; ") || res.status
+      );
+    }
+
+    status.textContent = "Checking in…";
+    const extra = note.value.trim();
+    const comment = extra !== "" ? `Periodic review — no changes — ${extra}` : "Periodic review — no changes";
+    const cin = await timed(checkInFile(site, row.serverUrl, comment, false), "Check-in");
     if (!cin.ok && !/not checked out/i.test(spErrorText(cin.status))) {
       return fail("Check-in was refused (the document stays checked out)", cin.status);
     }

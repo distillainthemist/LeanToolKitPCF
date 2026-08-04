@@ -2142,6 +2142,7 @@ button.app-docs-navterm.app-docs-navterm-on {
 .app-docs-taskrow:hover { background: #f2f1ee; }
 .app-docs-taskname { font-size: 13px; font-weight: 600; }
 .app-docs-taskoverdue { color: #a4262c; }
+.app-docs-taskact { align-self: flex-start; margin-top: 4px; font-size: 12px; padding: 3px 10px; }
 
 /* dictionary row reorder — order = how properties read everywhere */
 .app-docs-colmove { display: flex; gap: 2px; align-self: center; }

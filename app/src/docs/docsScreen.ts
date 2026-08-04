@@ -55,6 +55,7 @@ import {
   spErrorText,
   stageOfTerm,
   termForStage,
+  termsForStage,
 } from "./model";
 import {
   TermNode,
@@ -314,6 +315,7 @@ export function mountDocs(
     const ownerInternal = internalForRole("owner");
     const reviewInternal = internalForRole("nextReviewDate");
     const approversInternal = internalForRole("approvers");
+    const reviewersInternal = internalForRole("reviewers");
 
     // ---- lifecycle commands (Phase 5B) ---------------------------------
     // Standards move between stages; everything here derives from the
@@ -505,74 +507,176 @@ export function mountDocs(
       libName: string;
       why: string;
       overdue: boolean;
+      /** review-due rows carry an inline Mark reviewed action (5C). */
+      canMarkReviewed?: boolean;
+    }
+    interface MyTasks {
+      toApprove: TaskRow[];
+      toReview: TaskRow[];
+      held: TaskRow[];
+      review: TaskRow[];
     }
     /** "Near" for a review date: due within this many days counts. */
     const REVIEW_HORIZON_DAYS = 30;
 
-    const fetchMyTasks = async (): Promise<{ held: TaskRow[]; review: TaskRow[] }> => {
-      const held: TaskRow[] = [];
-      const review: TaskRow[] = [];
+    const fetchMyTasks = async (): Promise<MyTasks> => {
+      const out: MyTasks = { toApprove: [], toReview: [], held: [], review: [] };
       const nameOf = (l: DocLibrary) => l.config.title || l.name;
-      await Promise.all(
-        libraries.map(async (l) => {
-          const page = await renderListPage(
-            app.siteUrl,
-            l.listId,
-            buildRenderViewXml({ checkedOutToMe: true, fields: ["CheckoutUser"], rowLimit: 30 })
-          );
-          for (const row of page.rows) {
-            held.push({ row, libName: nameOf(l), why: "Checked out to you", overdue: false });
-          }
-        })
-      );
-      if (reviewInternal !== "" && ownerInternal !== "") {
-        // review cycles belong to STANDARDS (Ben, 2026-08-04) — a
-        // working document or record carrying the columns is not on a
-        // review cadence, so its dates are noise here
-        const carriers = libraries.filter((l) => {
-          if (l.libType !== "standard") return false;
+      /** every column the opened overlay's gates and chips lean on — a
+       *  task row is one click from Approve, so it must arrive armed */
+      const gateFields = [
+        statusInternal,
+        ownerInternal,
+        approversInternal,
+        reviewersInternal,
+      ].filter((f) => f !== "");
+      const labelsForStage = (stage: LifecycleStage): string[] => {
+        const ids = new Set(termsForStage(siteDict, stage));
+        return statusTermList
+          .filter((t) => ids.has(t.id.trim().toLowerCase()))
+          .map((t) => t.label);
+      };
+      const standards = libraries.filter((l) => l.libType === "standard");
+      const carrying = (libs: DocLibrary[], ...cols: string[]) =>
+        libs.filter((l) => {
           const set = new Set(l.config.columns.map((c) => c.internal));
-          return set.has(reviewInternal) && set.has(ownerInternal);
+          return cols.every((c) => set.has(c));
         });
-        await Promise.all(
-          carriers.map(async (l) => {
+      const jobs: Promise<void>[] = [];
+
+      // checked out to me — any exposed library
+      for (const l of libraries) {
+        jobs.push(
+          (async () => {
             const page = await renderListPage(
               app.siteUrl,
               l.listId,
               buildRenderViewXml({
-                personIsMe: ownerInternal,
-                dueWithinDays: { col: reviewInternal, days: REVIEW_HORIZON_DAYS },
-                fields: [reviewInternal],
+                checkedOutToMe: true,
+                fields: ["CheckoutUser", ...gateFields],
                 rowLimit: 30,
               })
             );
             for (const row of page.rows) {
-              // the ISO twin ("Column.") is the real value; the display
-              // text is a site-locale guess we only fall back to
-              const iso = row.values[`${reviewInternal}.`] ?? "";
-              const disp = row.values[reviewInternal] ?? "";
-              const t = Date.parse(iso !== "" ? iso : disp);
-              const when = Number.isNaN(t)
-                ? disp
-                : formatDayMonthYear(new Date(t).toISOString());
-              const overdue = !Number.isNaN(t) && t < Date.now();
-              review.push({
-                row,
-                libName: nameOf(l),
-                why:
-                  when === ""
-                    ? "Review due"
-                    : overdue
-                      ? `Review overdue · ${when}`
-                      : `Review due · ${when}`,
-                overdue,
-              });
+              out.held.push({ row, libName: nameOf(l), why: "Checked out to you", overdue: false });
             }
-          })
+          })()
         );
       }
-      return { held, review };
+
+      // the two circulations (5C) — symmetric, standards only. Approval
+      // matches approvers OR owner (two queries, deduped): the queue
+      // must agree with the gate, and the owner always retains sign-off.
+      const inReviewLabels = statusInternal !== "" ? labelsForStage("inReview") : [];
+      const inApprovalLabels = statusInternal !== "" ? labelsForStage("inApproval") : [];
+      if (reviewersInternal !== "" && inReviewLabels.length > 0) {
+        for (const l of carrying(standards, reviewersInternal, statusInternal)) {
+          jobs.push(
+            (async () => {
+              const page = await renderListPage(
+                app.siteUrl,
+                l.listId,
+                buildRenderViewXml({
+                  personIsMe: reviewersInternal,
+                  termFilters: [{ cols: [statusInternal], labels: inReviewLabels }],
+                  fields: gateFields,
+                  rowLimit: 30,
+                })
+              );
+              for (const row of page.rows) {
+                out.toReview.push({
+                  row,
+                  libName: nameOf(l),
+                  why: "Awaiting your review",
+                  overdue: false,
+                });
+              }
+            })()
+          );
+        }
+      }
+      if (inApprovalLabels.length > 0) {
+        const seen = new Set<string>();
+        for (const col of [approversInternal, ownerInternal].filter((c) => c !== "")) {
+          for (const l of carrying(standards, col, statusInternal)) {
+            jobs.push(
+              (async () => {
+                const page = await renderListPage(
+                  app.siteUrl,
+                  l.listId,
+                  buildRenderViewXml({
+                    personIsMe: col,
+                    termFilters: [{ cols: [statusInternal], labels: inApprovalLabels }],
+                    fields: gateFields,
+                    rowLimit: 30,
+                  })
+                );
+                for (const row of page.rows) {
+                  const key = row.uniqueId !== "" ? row.uniqueId : `${row.listId}:${row.id}`;
+                  if (seen.has(key)) continue;
+                  seen.add(key);
+                  out.toApprove.push({
+                    row,
+                    libName: nameOf(l),
+                    why: "Awaiting your approval",
+                    overdue: false,
+                  });
+                }
+              })()
+            );
+          }
+        }
+      }
+
+      // review due — my standards, date within the horizon
+      if (reviewInternal !== "" && ownerInternal !== "") {
+        for (const l of carrying(standards, reviewInternal, ownerInternal)) {
+          jobs.push(
+            (async () => {
+              const page = await renderListPage(
+                app.siteUrl,
+                l.listId,
+                buildRenderViewXml({
+                  personIsMe: ownerInternal,
+                  dueWithinDays: { col: reviewInternal, days: REVIEW_HORIZON_DAYS },
+                  fields: [reviewInternal, ...gateFields],
+                  rowLimit: 30,
+                })
+              );
+              for (const row of page.rows) {
+                // the ISO twin ("Column.") is the real value; the display
+                // text is a site-locale guess we only fall back to
+                const iso = row.values[`${reviewInternal}.`] ?? "";
+                const disp = row.values[reviewInternal] ?? "";
+                const t = Date.parse(iso !== "" ? iso : disp);
+                const when = Number.isNaN(t)
+                  ? disp
+                  : formatDayMonthYear(new Date(t).toISOString());
+                const overdue = !Number.isNaN(t) && t < Date.now();
+                out.review.push({
+                  row,
+                  libName: nameOf(l),
+                  why:
+                    when === ""
+                      ? "Review due"
+                      : overdue
+                        ? `Review overdue · ${when}`
+                        : `Review due · ${when}`,
+                  overdue,
+                  canMarkReviewed: true,
+                });
+              }
+            })()
+          );
+        }
+      }
+
+      await Promise.all(jobs);
+      return out;
     };
+
+    const taskCount = (t: MyTasks) =>
+      t.toApprove.length + t.toReview.length + t.held.length + t.review.length;
 
     let tasksBadgeGen = 0;
     const paintTasksBadge = (n: number) => {
@@ -580,15 +684,31 @@ export function mountDocs(
       actionNeeded.classList.toggle("app-docs-actionneeded-hot", n > 0);
     };
     /** Recounted in the background — at mount, and after every command
-     *  that can change the answer (check-out/in/discard, add). */
+     *  that can change the answer (check-out/in/discard, add, lifecycle). */
     const refreshTasksBadge = () => {
       const gen = ++tasksBadgeGen;
-      void fetchMyTasks().then(({ held, review }) => {
+      void fetchMyTasks().then((t) => {
         if (dead || gen !== tasksBadgeGen) return;
-        paintTasksBadge(held.length + review.length);
+        paintTasksBadge(taskCount(t));
       });
     };
     refreshTasksBadge();
+
+    /** Mark reviewed (5C) — the review-due queue's own command: stamps
+     *  the next review date and checks in "Periodic review — no
+     *  changes". Lives in the lazy lifecycle chunk. */
+    const openMarkReviewed = (t: TaskRow, onDone: () => void) => {
+      void import("./lifecycleCmds").then(({ openMarkReviewed: openDlg }) => {
+        openDlg({
+          site: app.siteUrl,
+          listId: t.row.listId,
+          row: t.row,
+          reviewInternal,
+          host: dialogHost,
+          onDone,
+        });
+      });
+    };
 
     actionNeeded.addEventListener("click", () => {
       const scrim = el("div", "app-docs-tasksscrim");
@@ -611,41 +731,67 @@ export function mountDocs(
       panel.style.top = `${r.bottom + 6}px`;
       panel.style.right = `${Math.max(8, window.innerWidth - r.right)}px`;
       const bodyEl = el("div", "app-docs-tasksbody");
-      bodyEl.appendChild(el("div", "app-loading-line", "Asking SharePoint…"));
       panel.append(el("div", "app-docs-taskshead", "My tasks"), bodyEl);
       scrim.appendChild(panel);
       document.body.appendChild(scrim);
-      void fetchMyTasks().then(({ held, review }) => {
-        if (!scrim.isConnected) return;
+
+      const reload = () => {
         clear(bodyEl);
-        paintTasksBadge(held.length + review.length);
-        if (held.length + review.length === 0) {
-          bodyEl.appendChild(el("div", "app-field-hint", "Nothing needs you."));
-          return;
-        }
-        const group = (title: string, rows: TaskRow[]) => {
-          if (rows.length === 0) return;
-          bodyEl.appendChild(el("div", "app-docs-tasksgroup", `${title} (${rows.length})`));
-          for (const t of rows) {
-            const b = el("button", "app-docs-taskrow") as HTMLButtonElement;
-            b.append(
-              el("span", "app-docs-taskname", t.row.name),
-              el(
-                "span",
-                `app-field-hint${t.overdue ? " app-docs-taskoverdue" : ""}`,
-                `${t.libName} · ${t.why}`
-              )
-            );
-            b.addEventListener("click", () => {
-              closePanel();
-              onRowOpen(t.row);
-            });
-            bodyEl.appendChild(b);
+        bodyEl.appendChild(el("div", "app-loading-line", "Asking SharePoint…"));
+        void fetchMyTasks().then((t) => {
+          if (!scrim.isConnected) return;
+          clear(bodyEl);
+          paintTasksBadge(taskCount(t));
+          if (taskCount(t) === 0) {
+            bodyEl.appendChild(el("div", "app-field-hint", "Nothing needs you."));
+            return;
           }
-        };
-        group("Checked out to you", held);
-        group("Review due", review);
-      });
+          const group = (title: string, rows: TaskRow[]) => {
+            if (rows.length === 0) return;
+            bodyEl.appendChild(el("div", "app-docs-tasksgroup", `${title} (${rows.length})`));
+            for (const tr of rows) {
+              const rowEl = el("div", "app-docs-taskrow");
+              rowEl.setAttribute("role", "button");
+              rowEl.tabIndex = 0;
+              const open = () => {
+                closePanel();
+                onRowOpen(tr.row);
+              };
+              rowEl.addEventListener("click", open);
+              rowEl.addEventListener("keydown", (e) => {
+                if (e.key === "Enter") open();
+              });
+              rowEl.append(
+                el("span", "app-docs-taskname", tr.row.name),
+                el(
+                  "span",
+                  `app-field-hint${tr.overdue ? " app-docs-taskoverdue" : ""}`,
+                  `${tr.libName} · ${tr.why}`
+                )
+              );
+              if (tr.canMarkReviewed === true && reviewInternal !== "") {
+                const act = el("button", "app-btn app-docs-taskact", "Mark reviewed…") as HTMLButtonElement;
+                act.addEventListener("click", (e) => {
+                  e.stopPropagation();
+                  openMarkReviewed(tr, () => {
+                    refreshTasksBadge();
+                    reload();
+                  });
+                });
+                rowEl.appendChild(act);
+              }
+              bodyEl.appendChild(rowEl);
+            }
+          };
+          // most actionable first: sign-off, then review work, then
+          // your own held documents, then the review cadence
+          group("Awaiting your approval", t.toApprove);
+          group("Awaiting your review", t.toReview);
+          group("Checked out to you", t.held);
+          group("Review due", t.review);
+        });
+      };
+      reload();
     });
     // toggles that used to be toolbar checkboxes ride the register
     // kebab from V3 — state only here
