@@ -1060,7 +1060,11 @@ describe("lifecycle mapping (5A)", () => {
     const { suggestStageForLabel } = await import("../docs/model");
     expect(suggestStageForLabel("Draft")).toBe("draft");
     expect(suggestStageForLabel("In Review")).toBe("inReview");
-    expect(suggestStageForLabel("Awaiting Approval")).toBe("inReview");
+    expect(suggestStageForLabel("Awaiting Review")).toBe("inReview");
+    // review is content work; approval is sign-off — two circulations,
+    // two stages (Ben, 2026-08-04)
+    expect(suggestStageForLabel("Awaiting Approval")).toBe("inApproval");
+    expect(suggestStageForLabel("In Approval")).toBe("inApproval");
     expect(suggestStageForLabel("Approved")).toBe("approved");
     expect(suggestStageForLabel("Current")).toBe("approved");
     expect(suggestStageForLabel("Superseded")).toBe("superseded");

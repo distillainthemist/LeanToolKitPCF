@@ -10,7 +10,7 @@ ride check-ins, and nothing needs a byte to cross the wire. My tasks
 
 | Question | Decision |
 | --- | --- |
-| Lifecycle vocabulary | **Explicit mapping in settings**: each term in the status set is assigned a stage (draft / in review / approved / superseded / obsolete). Name-based suggestions prefill the mapping; the stored mapping is the law. Keyed by term id, so a rename cannot detach it. |
+| Lifecycle vocabulary | **Explicit mapping in settings**: each term in the status set is assigned a stage — draft / **in review** / **awaiting approval** / approved / superseded / obsolete. Review and approval are distinct circulations (Ben, 2026-08-04): review is content work by reviewers, approval is sign-off by the named approver(s) or, when none are named, the owner. Name-based suggestions prefill the mapping; the stored mapping is the law. Keyed by term id, so a rename cannot detach it. |
 | Who may approve | **The document's approver column, admins as fallback** — plus one Entra group ("document controllers") that governs who can BE an owner/approver: the owner/approver pickers select from its members, and the group carries the SharePoint permissions. Configured like the Users access-control group. |
 | Renditions | **Live PDF only.** The viewer's on-demand conversion is the read path for approved documents. Stored watermarked renditions are impossible client-side (byte transport + CSP, both measured) and become the documented optional deployment flow in the Phase 6 cookbook. |
 | Notification | **My tasks only.** Submit-for-review puts the document in each approver's queue ("Awaiting your approval"); no Teams/Outlook connector, no new connection reference. Push can be its own sub-phase later. |
@@ -31,14 +31,19 @@ ride check-ins, and nothing needs a byte to cross the wire. My tasks
 existing vocabulary; unit tests on the model.
 
 ### 5B — The commands
-- **Submit for review** (draft → in review), **Approve** (in review →
-  approved, MAJOR check-in), **Request revision** (in review → draft) —
-  each: check-out → connector term write of the target stage's term →
-  check-in with the command's comment (approve's comment names the
-  approver). Standards libraries only.
-- Gates: approve needs the acting user in the document's approver
-  column (email match) or an app admin. Owner/approver pickers in the
-  add form source from the controllers group.
+- Two circulations, four moves: **Submit for review** (draft → in
+  review, to the reviewers for content work), **Submit for approval**
+  (in review → awaiting approval — draft may skip straight here when no
+  review round is wanted), **Approve** (awaiting approval → approved,
+  MAJOR check-in), **Request revision** (in review or awaiting approval
+  → draft, with the reason in the comment) — each: check-out →
+  connector term write of the target stage's term → check-in with the
+  command's comment (approve's names the approver). Standards
+  libraries only.
+- Gates: approve needs the acting user among the document's named
+  approver(s); when none are named, the OWNER approves; app admins as
+  fallback. Owner/approver pickers in the add form source from the
+  controllers group.
 - Overlay + kebab actions driven by the document's current stage.
 *Proof:* each command's column writes verified in SharePoint version
 history with the comment; a non-approver sees no Approve.

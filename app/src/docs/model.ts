@@ -168,11 +168,21 @@ export function emptySiteDictionary(): SiteDictionary {
 // document BETWEEN stages; which term expresses a stage is this site's
 // choice, made once in Settings → Documents → Lifecycle.
 
-export type LifecycleStage = "draft" | "inReview" | "approved" | "superseded" | "obsolete";
+export type LifecycleStage =
+  | "draft"
+  | "inReview"
+  | "inApproval"
+  | "approved"
+  | "superseded"
+  | "obsolete";
 
 export const LIFECYCLE_STAGES: { key: LifecycleStage; label: string }[] = [
   { key: "draft", label: "Draft" },
+  // two distinct circulations (Ben, 2026-08-04): review is CONTENT work
+  // — reviewers reviewing and editing — approval is SIGN-OFF, by the
+  // named approver(s) or, when none are named, the owner
   { key: "inReview", label: "In review" },
+  { key: "inApproval", label: "Awaiting approval" },
   { key: "approved", label: "Approved" },
   { key: "superseded", label: "Superseded" },
   { key: "obsolete", label: "Obsolete" },
@@ -192,6 +202,9 @@ export function suggestStageForLabel(label: string): LifecycleStage | "" {
   if (l === "") return "";
   if (/\bsuperseded\b/.test(l)) return "superseded";
   if (/\b(obsolete|retired)\b/.test(l)) return "obsolete";
+  // "approval" (word-bounded, so never "approved") outranks the review
+  // check: "Awaiting Approval" is sign-off, "Awaiting Review" is not
+  if (/\bapproval\b/.test(l)) return "inApproval";
   if (/\b(in review|awaiting|review)\b/.test(l)) return "inReview";
   if (/\bdraft\b/.test(l)) return "draft";
   if (/\b(approved|current)\b/.test(l)) return "approved";
