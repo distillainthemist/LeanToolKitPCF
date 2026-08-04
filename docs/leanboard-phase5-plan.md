@@ -119,7 +119,76 @@ submitting for approval moves it to the approvers' queues.
   endorse round only exists when someone else must sign first (Ben,
   2026-08-04).
 
-### 5E — Acknowledgement ledger (SCHEMA release)
+### 5G — The access model (settled with Ben, 2026-08-05)
+
+Four groups, permissions set ONCE per group in the tenant (cookbook),
+never per document — no item-level permission sprawl:
+
+| Group | SharePoint level | Role |
+|---|---|---|
+| **Document controllers** | Full Control | Full admin. Merges with the Dataverse super/site-admin role (the fallback that survives a mis-scoped group). |
+| **Document owners/approvers** | Edit on standards | The ELIGIBILITY POOL: pickers for owner/approver/reviewer columns restrict to members. Being in the pool does NOT grant revise rights — those come from being NAMED on the document. |
+| **Document revisors** | Contribute on standards | An **M365 group** people are TEMPORARILY added to when an edit-access request is approved, and removed from when the revision ends. SharePoint enforcement of the grant. |
+| **General users** | Read on standards, templates AND records; write on working | The main app access group. Working libraries stay writable — Phase 4's flows depend on it. |
+
+**The locked principle:** the grant COLUMN on the document (new
+dictionary role, "Revision editors", person multi) is the
+AUTHORIZATION; revisors-group membership is only the physical ability.
+App gates key off the column, never off membership — so a lingering
+membership is detectable drift, not phantom authority.
+
+**Request edit access** (label chosen to not collide with "Request
+revision"): a general user on an approved standard requests with a
+required reason → the request lives in an app-side ledger on the shared
+`__app__` row (a read-only requester can write NOTHING in SharePoint,
+so the ledger is mandatory — its writability by ordinary users needs a
+probe first) → the request surfaces in the OWNER's My tasks ("Access
+requests") → the owner approves in ONE step: grant column written
+(check-out → VULI claims → minor check-in "Revision access granted to
+X — reason") AND requester added to the revisors group. Requires every
+pool member seeded as an Entra OWNER of the revisors group (group
+owners must be individuals — a group cannot own a group): cookbook
+script + drift health check. Decline records and removes the request.
+
+**The grantee gets**, on THAT document only: Start revision, check-out,
+Edit source, submit for review/approval. Never Approve, never
+retirement.
+
+**Removal rides every exit** — the owner's Approve (after the major),
+Cancel revision, decline/withdraw, and a manual revoke in the overlay.
+The Approve write also CLEARS the grant column (access is for one
+revision cycle). Health check: revisors-group members with no live
+grant anywhere ("orphaned revisors").
+
+**Known edges, stated plainly:**
+- M365 membership → SharePoint authorization can take MINUTES to
+  propagate: the approval confirmation and the grantee's first refusal
+  both say so.
+- During a grant the revisor physically holds Contribute on the WHOLE
+  standards library; only the app narrows it to one document.
+  Time-boxed, auditable, strictly better than everyone-writable.
+- Adding a controlled standard from a template becomes physically
+  pool-members-only: the add-form hides the standards target for
+  everyone else rather than letting SharePoint refuse late.
+
+Build order:
+- **5G0 (spike):** Graph/connector probe — can a group OWNER add/remove
+  a member of the revisors M365 group as the signed-in user, and can an
+  ordinary user update the shared `__app__` row's ledger? Measured
+  before anything is built on either.
+- **5G1:** settings maps the three groups; membership plumbing
+  (transitive, cached per session, admin fails CLOSED to the Dataverse
+  role, pool fails to an explanatory hint); pickers restrict to the
+  pool; add-form standards target gated.
+- **5G2:** "Revision editors" dictionary role; Request edit access +
+  ledger + owner's Access requests queue + decline.
+- **5G3:** approve = column write + group add (+ propagation notice);
+  removal on Approve/Cancel/decline + manual revoke; grant-column gates
+  (grantee = revise/check-out/submit on that document).
+- **5G4:** health checks (owner-seeding drift, orphaned revisors) +
+  the cookbook permission table.
+
+### 5E — Acknowledgement ledger (SCHEMA release) — PARKED (Ben, 2026-08-05)
 - `ben_ltkdocack` through the schema pipeline — the first schema change
   since v0.25.0. Append-only rows (person, document, version, when).
 - "Acknowledge" for approved documents whose ack-required column says
