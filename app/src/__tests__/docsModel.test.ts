@@ -1073,7 +1073,7 @@ describe("lifecycle mapping (5A)", () => {
     expect(suggestStageForLabel("Banana")).toBe("");
   });
 
-  it("reports the gaps commands would fall into", async () => {
+  it("reports the gaps commands would fall into — every workflow stage", async () => {
     const { lifecycleHealth } = await import("../docs/model");
     const dict = {
       columns: [],
@@ -1087,10 +1087,31 @@ describe("lifecycle mapping (5A)", () => {
     ];
     const found = lifecycleHealth(dict, terms);
     expect(found.some((f) => f.title.includes("without a lifecycle stage"))).toBe(true);
-    expect(found.some((f) => f.title.includes("No status term is mapped as Approved"))).toBe(true);
-    // fully mapped = silence
-    const full = { ...dict, lifecycle: { "t-1": "draft" as const, "t-2": "approved" as const } };
-    expect(lifecycleHealth(full, terms)).toEqual([]);
+    // a stage with no term means its commands are silently withheld —
+    // the "no Approve button" mystery (Ben, 2026-08-04) — so EVERY
+    // workflow stage without a term warns by name
+    expect(found.some((f) => f.title.includes("mapped as Approved"))).toBe(true);
+    expect(found.some((f) => f.title.includes("mapped as Awaiting owner approval"))).toBe(true);
+    expect(found.some((f) => f.title.includes("mapped as In review"))).toBe(true);
+    // silence needs the whole road mapped
+    const allTerms = [
+      { id: "t-1", label: "Draft" },
+      { id: "t-2", label: "In Review" },
+      { id: "t-3", label: "Awaiting Approval" },
+      { id: "t-4", label: "Awaiting Owner Approval" },
+      { id: "t-5", label: "Approved" },
+    ];
+    const full = {
+      ...dict,
+      lifecycle: {
+        "t-1": "draft" as const,
+        "t-2": "inReview" as const,
+        "t-3": "inApproval" as const,
+        "t-4": "inOwnerApproval" as const,
+        "t-5": "approved" as const,
+      },
+    };
+    expect(lifecycleHealth(full, allTerms)).toEqual([]);
     // no terms readable = nothing to judge
     expect(lifecycleHealth(dict, [])).toEqual([]);
   });

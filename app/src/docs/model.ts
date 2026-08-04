@@ -420,15 +420,29 @@ export function lifecycleHealth(
         "approval commands cannot move documents there.",
     });
   }
-  if (
-    Object.keys(dict.lifecycle ?? {}).length > 0 &&
-    !statusTerms.some((t) => stageOfTerm(dict, t.id) === "approved")
-  ) {
-    out.push({
-      level: "warn",
-      title: "No status term is mapped as Approved",
-      detail: "Approve has nowhere to move a document — map one under Lifecycle.",
-    });
+  // every stage the WORKFLOW moves through needs a term, or the command
+  // that targets it is silently withheld — "no Approve button" with no
+  // explanation anywhere (Ben, 2026-08-04). Superseded/obsolete wait
+  // for 5D and are not demanded yet.
+  if (Object.keys(dict.lifecycle ?? {}).length > 0) {
+    const needed: LifecycleStage[] = [
+      "draft",
+      "inReview",
+      "inApproval",
+      "inOwnerApproval",
+      "approved",
+    ];
+    for (const stage of needed) {
+      if (statusTerms.some((t) => stageOfTerm(dict, t.id) === stage)) continue;
+      const label = LIFECYCLE_STAGES.find((s) => s.key === stage)?.label ?? stage;
+      out.push({
+        level: "warn",
+        title: `No status term is mapped as ${label}`,
+        detail:
+          `Commands that move documents to “${label}” are withheld until a term maps ` +
+          "to it — add the term to the status set if needed, then map it under Lifecycle.",
+      });
+    }
   }
   return out;
 }

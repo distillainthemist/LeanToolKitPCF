@@ -2104,8 +2104,10 @@ button.app-docs-navterm.app-docs-navterm-on {
 }
 .app-dlghost .ltk-dialog { box-shadow: 0 8px 32px rgba(0, 0, 0, 0.28); }
 
-/* lifecycle command buttons in the overlay (5B) */
-.app-docs-lifebtns { display: flex; gap: 8px; flex-wrap: wrap; }
+/* lifecycle command buttons in the overlay (5B) — a COLUMN like the
+   action list they sit in, buttons stretching to the full width */
+.app-docs-lifebtns { display: flex; flex-direction: column; gap: 8px; align-self: stretch; }
+.app-docs-lifebtns .app-btn { width: 100%; justify-content: center; }
 
 /* lifecycle mapping (Phase 5A) */
 .app-docs-lifegrid {
