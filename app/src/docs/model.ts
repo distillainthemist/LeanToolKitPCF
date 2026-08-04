@@ -172,6 +172,7 @@ export type LifecycleStage =
   | "draft"
   | "inReview"
   | "inApproval"
+  | "inOwnerApproval"
   | "approved"
   | "superseded"
   | "obsolete";
@@ -179,10 +180,13 @@ export type LifecycleStage =
 export const LIFECYCLE_STAGES: { key: LifecycleStage; label: string }[] = [
   { key: "draft", label: "Draft" },
   // two distinct circulations (Ben, 2026-08-04): review is CONTENT work
-  // — reviewers reviewing and editing — approval is SIGN-OFF, by the
-  // named approver(s) or, when none are named, the owner
+  // — reviewers reviewing and editing — approval is SIGN-OFF. Approval
+  // itself is TWO steps: named approvers endorse first, then the owner
+  // gives the final word (a distinct stage, so it is queryable — the
+  // site adds a term like "Awaiting Owner Approval" for it).
   { key: "inReview", label: "In review" },
   { key: "inApproval", label: "Awaiting approval" },
+  { key: "inOwnerApproval", label: "Awaiting owner approval" },
   { key: "approved", label: "Approved" },
   { key: "superseded", label: "Superseded" },
   { key: "obsolete", label: "Obsolete" },
@@ -203,7 +207,9 @@ export function suggestStageForLabel(label: string): LifecycleStage | "" {
   if (/\bsuperseded\b/.test(l)) return "superseded";
   if (/\b(obsolete|retired)\b/.test(l)) return "obsolete";
   // "approval" (word-bounded, so never "approved") outranks the review
-  // check: "Awaiting Approval" is sign-off, "Awaiting Review" is not
+  // check: "Awaiting Approval" is sign-off, "Awaiting Review" is not —
+  // and "owner" alongside it is the final-sign-off stage
+  if (/\bowner\b/.test(l) && /\bapproval\b/.test(l)) return "inOwnerApproval";
   if (/\bapproval\b/.test(l)) return "inApproval";
   if (/\b(in review|awaiting|review)\b/.test(l)) return "inReview";
   if (/\bdraft\b/.test(l)) return "draft";
@@ -251,6 +257,11 @@ export interface LifecycleCommandDef {
   needsReason: boolean;
   /** Rendered as the primary (filled) button. */
   primary: boolean;
+  /** Start revision only: the status write stays inside the check-out
+   *  and NOTHING is checked in — drafting is solo, and everyone else
+   *  keeps seeing the approved version until a submit checks in
+   *  (Ben, 2026-08-04). Discarding the check-out reverts everything. */
+  staysCheckedOut?: boolean;
 }
 
 export const LIFECYCLE_COMMANDS: LifecycleCommandDef[] = [
@@ -293,8 +304,10 @@ export const LIFECYCLE_COMMANDS: LifecycleCommandDef[] = [
   {
     // the road back into work: an APPROVED standard re-enters draft to
     // begin its next version (Ben, 2026-08-04 — "how do I initiate a
-    // version update?"). The approved majors stay in history; content
-    // edits then ride check-out/check-in until re-approval.
+    // version update?"). Checks OUT to the reviser and stays that way:
+    // the draft status and every edit live inside the check-out, others
+    // keep seeing the approved version, and Discard check-out reverts
+    // the lot. The approved majors stay in history.
     key: "revise",
     label: "Start revision",
     to: "draft",
@@ -302,6 +315,7 @@ export const LIFECYCLE_COMMANDS: LifecycleCommandDef[] = [
     comment: "Revision started",
     needsReason: false,
     primary: false,
+    staysCheckedOut: true,
   },
 ];
 
@@ -310,6 +324,9 @@ export interface LifecycleGates {
   isApprover: boolean;
   /** The document names ANY approver at all. */
   hasApprovers: boolean;
+  /** The document names ANY reviewer — which makes the review round
+   *  MANDATORY before approval (Ben, 2026-08-04). */
+  hasReviewers: boolean;
   /** The acting user is the owner. */
   isOwner: boolean;
   /** Site or super admin — the fallback that prevents deadlock. */
@@ -317,30 +334,51 @@ export interface LifecycleGates {
 }
 
 /**
- * The commands a document at `stage` offers this user. Submissions are
- * open to anyone who can write (SharePoint's permissions are the real
- * gate there); Approve is gated: the OWNER always retains sign-off over
- * their own document, named approver(s) EXTEND that authority rather
- * than replace it, and admins are the deadlock-breaker (Ben,
- * 2026-08-04). A draft may go straight to approval when no review
- * round is wanted.
+ * The commands a document at `stage` offers this user (Ben, 2026-08-04,
+ * the settled workflow):
+ * - review is MANDATORY before approval when the document names
+ *   reviewers — a draft with reviewers cannot skip to approval;
+ * - approval is TWO steps when approvers are named: their endorsement
+ *   (minor) moves it to the owner, whose Approve is the one MAJOR
+ *   check-in; with no approvers named, submission goes straight to the
+ *   owner's stage;
+ * - admins can stand in at either approval step (deadlock-breaker);
+ * - starting the next revision of an approved document is as gated as
+ *   approving it was.
+ * Submissions are otherwise open to anyone who can write — SharePoint's
+ * permissions are the real gate there. Returned defs are CLONES with
+ * `to`/`major` resolved for this context; run them as given.
  */
 export function lifecycleCommandsFor(
   stage: LifecycleStage | "",
   g: LifecycleGates
 ): LifecycleCommandDef[] {
-  const by = (k: LifecycleCommandKey) => LIFECYCLE_COMMANDS.find((c) => c.key === k)!;
-  const mayApprove = g.isApprover || g.isOwner || g.isAdmin;
+  const by = (
+    k: LifecycleCommandKey,
+    over: Partial<LifecycleCommandDef> = {}
+  ): LifecycleCommandDef => ({ ...LIFECYCLE_COMMANDS.find((c) => c.key === k)!, ...over });
+  // where a submission for approval lands: the approvers' step when any
+  // are named, else directly at the owner's
+  const approvalEntry: LifecycleStage = g.hasApprovers ? "inApproval" : "inOwnerApproval";
   switch (stage) {
     case "draft":
-      return [by("submitReview"), by("submitApproval")];
+      return g.hasReviewers
+        ? [by("submitReview")]
+        : [by("submitReview"), by("submitApproval", { to: approvalEntry })];
     case "inReview":
-      return [by("submitApproval"), by("requestRevision")];
+      return [by("submitApproval", { to: approvalEntry }), by("requestRevision")];
     case "inApproval":
-      return mayApprove ? [by("approve"), by("requestRevision")] : [by("requestRevision")];
+      // the approvers' step: an endorsement, minor — the owner's word
+      // is the major
+      return g.isApprover || g.isAdmin
+        ? [by("approve", { to: "inOwnerApproval", major: false }), by("requestRevision")]
+        : [by("requestRevision")];
+    case "inOwnerApproval":
+      return g.isOwner || g.isAdmin
+        ? [by("approve"), by("requestRevision")]
+        : [by("requestRevision")];
     case "approved":
-      // starting the next version is as controlled as approving this one
-      return mayApprove ? [by("revise")] : [];
+      return g.isOwner || g.isApprover || g.isAdmin ? [by("revise")] : [];
     default:
       return []; // superseded / obsolete / unmapped: 5D's turf
   }

@@ -75,6 +75,10 @@ interface ViewerOpts {
     checkOut: () => Promise<void>;
     checkIn: () => void;
     discard: () => void;
+    /** The SOURCE document's Office editor URL ("" = no editor) — the
+     *  revision is edited here, as distinct from the PDF rendering
+     *  (Ben, 2026-08-04). */
+    editUrl?: string;
   } | null;
   /** Lifecycle commands (Phase 5B) — standards only. The screen decides
    *  WHICH commands the document's stage and this user's standing
@@ -258,6 +262,10 @@ export function openDocViewer(opts: ViewerOpts): void {
     paint();
     ctl.register?.(paint);
     actions.append(outBtn, inBtn, dropBtn, held);
+    if ((ctl.editUrl ?? "") !== "") {
+      // the SOURCE, not the PDF: where a revision's edits actually happen
+      actions.append(linkBtn("Edit source ↗", ctl.editUrl ?? "", false));
+    }
   }
   // lifecycle commands sit with the actions: a standard awaiting your
   // approval opens with Approve one click away

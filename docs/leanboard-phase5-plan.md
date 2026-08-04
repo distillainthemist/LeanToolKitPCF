@@ -16,6 +16,39 @@ ride check-ins, and nothing needs a byte to cross the wire. My tasks
 | Notification | **My tasks only.** Submit-for-review puts the document in each approver's queue ("Awaiting your approval"); no Teams/Outlook connector, no new connection reference. Push can be its own sub-phase later. |
 | Review-due standards | Inherited from Phase 4: view-only until this phase's **Mark reviewed** command lands (5C). |
 
+## The settled revision workflow (Ben, 2026-08-04, after 5B/5C review)
+
+Grounded in the visibility constraint: **a checked-out document's
+changes — content and properties — are visible only to the holder**, so
+circulation requires a check-in, and solo drafting benefits from the
+opposite.
+
+1. **Start revision** (approved → draft): checks OUT to the reviser and
+   STAYS checked out — the draft status and every edit live inside the
+   check-out, everyone else keeps seeing the approved version, and
+   **Discard check-out reverts the entire revision**. "Edit source ↗"
+   in the overlay opens the Office editor (the source, not the PDF).
+2. **Submit for review** — MANDATORY before approval when the document
+   names reviewers. The dialog can add reviewers via people search
+   (written to the reviewers column first). Checks in as a MINOR draft:
+   the review circle now sees content + status; reviewers edit via
+   their own check-out/check-in.
+3. **Submit for approval** — lands at the approvers' stage when any are
+   named, else directly at the owner's stage.
+4. **Approval is two steps**: named approvers ENDORSE (minor check-in,
+   status → "Awaiting Owner Approval" — a real term the site adds, so
+   the step is queryable); then the OWNER's Approve is the one MAJOR
+   check-in → approved. Admins stand in at either step.
+5. **Cancel revision** (owner/admin, any mid-cycle stage): restores the
+   last approved MAJOR via version restore — content and status
+   together, abandoned drafts left in history. Pre-circulation, plain
+   Discard check-out already reverts everything.
+6. Queues follow the stages exactly: reviewers see in-review documents,
+   approvers see the endorsement stage, the owner sees the final stage.
+
+Also settled: **standards can be added from a template** like working
+documents (the add form's targets include standards libraries).
+
 ## Sub-phases
 
 ### 5A — Lifecycle model + settings

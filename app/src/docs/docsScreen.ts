@@ -364,9 +364,16 @@ export function mountDocs(
       const emails = (col: string): string[] =>
         col === "" ? [] : (row.values[`${col}#email`] ?? "").split(";").filter((s) => s !== "");
       const approvers = emails(approversInternal);
+      // reviewers named = the review round is mandatory; display text is
+      // the fallback signal when the email projection is absent
+      const hasReviewers =
+        reviewersInternal !== "" &&
+        (emails(reviewersInternal).length > 0 ||
+          (row.values[reviewersInternal] ?? "").trim() !== "");
       return {
         isApprover: myEmail !== "" && approvers.includes(myEmail),
         hasApprovers: approvers.length > 0,
+        hasReviewers,
         isOwner: myEmail !== "" && emails(ownerInternal).includes(myEmail),
         isAdmin: meIsAdmin,
       };
@@ -375,6 +382,8 @@ export function mountDocs(
      *  and only commands whose target stage has a mapped, existing term. */
     const lifecycleActionsFor = (row: DocRow, lib: DocLibrary | null | undefined) => {
       if (lib?.libType !== "standard" || statusInternal === "") return [];
+      // a document checked out to someone ELSE is theirs to move
+      if ((row.checkoutName ?? "") !== "" && !isMine(row)) return [];
       return lifecycleCommandsFor(stageOfRow(row), lifecycleGatesFor(row)).filter(
         (c) => termForStage(siteDict, c.to, statusTermList) !== null
       );
@@ -382,6 +391,22 @@ export function mountDocs(
     const runLifecycle = (row: DocRow, cmd: LifecycleCommandDef) => {
       const target = termForStage(siteDict, cmd.to, statusTermList);
       if (target === null) return;
+      // submit-for-review carries the reviewers picker: the submitter
+      // may widen the circle, and the column is written before the move
+      let reviewersPicker: { internal: string; existing: { email: string; name: string }[] } | undefined;
+      if (cmd.key === "submitReview" && reviewersInternal !== "") {
+        const names = (row.values[reviewersInternal] ?? "")
+          .split(";")
+          .map((s) => s.trim())
+          .filter((s) => s !== "");
+        const mails = (row.values[`${reviewersInternal}#email`] ?? "")
+          .split(";")
+          .filter((s) => s !== "");
+        reviewersPicker = {
+          internal: reviewersInternal,
+          existing: mails.map((email, i) => ({ email, name: names[i] ?? email })),
+        };
+      }
       void import("./lifecycleCmds").then(({ openLifecycleCommand }) => {
         openLifecycleCommand({
           site: app.siteUrl,
@@ -392,6 +417,7 @@ export function mountDocs(
           statusInternal,
           actorName: currentViewer()?.name ?? "",
           host: dialogHost,
+          reviewersPicker,
           onDone: () => void refreshRow(row),
         });
       });
@@ -419,6 +445,45 @@ export function mountDocs(
           onDone: () => void refreshRow(row),
         });
       });
+    };
+
+    /** Cancel revision (Ben, 2026-08-04): a mid-cycle standard the owner
+     *  or an admin abandons — the last approved major is restored,
+     *  content and status together. Not offered while someone ELSE
+     *  holds the check-out. */
+    const canCancelRevision = (row: DocRow, lib: DocLibrary | null | undefined): boolean => {
+      if (lib?.libType !== "standard") return false;
+      const stage = stageOfRow(row);
+      if (
+        stage !== "draft" &&
+        stage !== "inReview" &&
+        stage !== "inApproval" &&
+        stage !== "inOwnerApproval"
+      ) {
+        return false;
+      }
+      if ((row.checkoutName ?? "") !== "" && !isMine(row)) return false;
+      const g = lifecycleGatesFor(row);
+      return g.isOwner || g.isAdmin;
+    };
+    const openCancelRevisionRow = (row: DocRow) => {
+      void import("./lifecycleCmds").then(({ openCancelRevision }) => {
+        openCancelRevision({
+          site: app.siteUrl,
+          row,
+          host: dialogHost,
+          heldByMe: isMine(row),
+          onDone: () => void refreshRow(row),
+        });
+      });
+    };
+
+    /** The SOURCE document's Office editor — as distinct from the PDF
+     *  (Ben, 2026-08-04). Only Office formats have one. */
+    const editSourceUrl = (row: DocRow): string => {
+      const office = new Set(["docx", "doc", "xlsx", "xls", "pptx", "ppt"]);
+      if (!office.has(row.ext) || row.uniqueId === "") return "";
+      return `${app.siteUrl}/_layouts/15/Doc.aspx?sourcedoc={${row.uniqueId}}&action=edit`;
     };
     /**
      * The register's columns: the view's own choice when there is one,
@@ -637,38 +702,45 @@ export function mountDocs(
           );
         }
       }
-      if (inApprovalLabels.length > 0) {
-        const seen = new Set<string>();
-        for (const col of [approversInternal, ownerInternal].filter((c) => c !== "")) {
-          for (const l of carrying(standards, col, statusInternal)) {
-            jobs.push(
-              (async () => {
-                const page = await renderListPage(
-                  app.siteUrl,
-                  l.listId,
-                  buildRenderViewXml({
-                    personIsMe: col,
-                    termFilters: [{ cols: [statusInternal], labels: inApprovalLabels }],
-                    fields: gateFields,
-                    rowLimit: 30,
-                  })
-                );
-                for (const row of page.rows) {
-                  const key = row.uniqueId !== "" ? row.uniqueId : `${row.listId}:${row.id}`;
-                  if (seen.has(key)) continue;
-                  seen.add(key);
-                  out.toApprove.push({
-                    row,
-                    libName: nameOf(l),
-                    why: "Awaiting your approval",
-                    overdue: false,
-                  });
-                }
-              })()
-            );
-          }
+      // approval is TWO steps (Ben, 2026-08-04): approvers see the
+      // endorsement stage, the owner sees the final-word stage — each
+      // queue keys on its own stage, so the sequence enforces itself
+      const inOwnerLabels = statusInternal !== "" ? labelsForStage("inOwnerApproval") : [];
+      const seen = new Set<string>();
+      const approvalQueue = (col: string, labels: string[]) => {
+        if (col === "" || labels.length === 0) return;
+        for (const l of carrying(standards, col, statusInternal)) {
+          jobs.push(
+            (async () => {
+              const page = await renderListPage(
+                app.siteUrl,
+                l.listId,
+                buildRenderViewXml({
+                  personIsMe: col,
+                  termFilters: [{ cols: [statusInternal], labels }],
+                  fields: gateFields,
+                  rowLimit: 30,
+                })
+              );
+              for (const row of page.rows) {
+                const key = row.uniqueId !== "" ? row.uniqueId : `${row.listId}:${row.id}`;
+                if (seen.has(key)) continue;
+                seen.add(key);
+                out.toApprove.push({
+                  row,
+                  libName: nameOf(l),
+                  why: "Awaiting your approval",
+                  overdue: false,
+                });
+              }
+            })()
+          );
         }
-      }
+      };
+      approvalQueue(approversInternal, inApprovalLabels);
+      approvalQueue(ownerInternal, inOwnerLabels);
+      // admins stand in at either step, but a queue of everyone else's
+      // approvals would drown them — admins act from the register
 
       // review due — my standards, date within the horizon
       if (reviewInternal !== "" && ownerInternal !== "") {
@@ -1397,7 +1469,7 @@ export function mountDocs(
     void permsReady.then(() => {
       const canAdd = libraries.some(
         (l) =>
-          (l.libType === "working" || l.libType === "revision") &&
+          (l.libType === "working" || l.libType === "revision" || l.libType === "standard") &&
           (permsByLib.get(l.listId.toLowerCase())?.add ?? false)
       );
       if (canAdd && !favMode) addBtn.style.display = "";
@@ -1409,7 +1481,7 @@ export function mountDocs(
           site: app.siteUrl,
           targets: libraries.filter(
             (l) =>
-              (l.libType === "working" || l.libType === "revision") &&
+              (l.libType === "working" || l.libType === "revision" || l.libType === "standard") &&
               (permsByLib.get(l.listId.toLowerCase())?.add ?? false)
           ),
           templates: libraries.filter((l) => l.libType === "template"),
@@ -1958,6 +2030,7 @@ export function mountDocs(
                 checkOut: () => runCommand("out", row),
                 checkIn: () => openCheckIn(row),
                 discard: () => openDiscard(row),
+                editUrl: editSourceUrl(row),
               }
             : null,
           lifecycle:
@@ -1972,10 +2045,17 @@ export function mountDocs(
                     ...(canMarkReviewedRow(row, lib)
                       ? [{ key: "markReviewed", label: "Mark reviewed…", primary: false }]
                       : []),
+                    ...(canCancelRevision(row, lib)
+                      ? [{ key: "cancelRevision", label: "Cancel revision…", primary: false }]
+                      : []),
                   ],
                   run: (key) => {
                     if (key === "markReviewed") {
                       openMarkReviewedRow(row);
+                      return;
+                    }
+                    if (key === "cancelRevision") {
+                      openCancelRevisionRow(row);
                       return;
                     }
                     const cmd = lifecycleActionsFor(row, lib).find((c) => c.key === key);
@@ -2381,6 +2461,9 @@ export function mountDocs(
       }
       if (canMarkReviewedRow(row, lib)) {
         item("Mark reviewed…", () => openMarkReviewedRow(row));
+      }
+      if (canCancelRevision(row, lib)) {
+        item("Cancel revision…", () => openCancelRevisionRow(row));
       }
       const r = anchor.getBoundingClientRect();
       menu.style.top = `${r.bottom + 4}px`;

@@ -7,8 +7,9 @@
 // demand: commands are rare next to reads, so their bytes are in
 // nobody's chunk until a stage button is pressed.
 
-import { el } from "../../../shared/ui/dom";
+import { clear, el } from "../../../shared/ui/dom";
 import { openDialog } from "../../../shared/ui/dialog";
+import { EntraHit, searchEntra } from "../store/people";
 import {
   LifecycleCommandDef,
   formatDateForLocale,
@@ -20,7 +21,10 @@ import {
   checkInFile,
   checkOutFile,
   connectorPatchItem,
+  fetchFileVersions,
   fetchRegionalSettings,
+  restoreFileVersion,
+  undoCheckOut,
   validateUpdateListItem,
 } from "./sp";
 
@@ -38,7 +42,15 @@ export interface LifecycleRunOpts {
   actorName: string;
   /** Styled dialog host (.app-dlghost). */
   host: HTMLElement;
-  /** Called after the check-in lands, so the screen can re-read the row
+  /** Submit-for-review only: lets the submitter add reviewers via
+   *  people search (Ben, 2026-08-04); additions are WRITTEN to the
+   *  reviewers column before the status moves, so the circulation and
+   *  the column always agree. */
+  reviewersPicker?: {
+    internal: string;
+    existing: { email: string; name: string }[];
+  };
+  /** Called after the command lands, so the screen can re-read the row
    *  and the tasks badge. */
   onDone: () => void;
 }
@@ -81,10 +93,87 @@ export function openLifecycleCommand(opts: LifecycleRunOpts): void {
     el(
       "div",
       "app-field-hint",
-      `Sets the status to “${opts.targetTerm.label}”` +
-        (command.major ? " and records a MAJOR version." : ".")
+      command.staysCheckedOut === true
+        ? `Checks the document out to you and sets it to “${opts.targetTerm.label}”. ` +
+            "Everyone else keeps seeing the approved version until you submit; " +
+            "Discard check-out abandons the revision entirely."
+        : `Sets the status to “${opts.targetTerm.label}”` +
+            (command.major ? " and records a MAJOR version." : ".")
     )
   );
+
+  // additional reviewers (submit-for-review): the app's one people
+  // pattern — debounced Entra search, chips to remove
+  const added: { email: string; name: string }[] = [];
+  if (opts.reviewersPicker !== undefined) {
+    const existing = opts.reviewersPicker.existing;
+    if (existing.length > 0) {
+      dlg.body.appendChild(
+        el("div", "app-field-hint", `Reviewers: ${existing.map((p) => p.name).join(", ")}`)
+      );
+    }
+    const chips = el("div", "app-docs-pplchips");
+    const search = el("input", "app-input") as HTMLInputElement;
+    search.placeholder = "Add reviewers…";
+    const hitsBox = el("div", "app-docs-pplhits");
+    const paintChips = () => {
+      clear(chips);
+      for (const p of added) {
+        const chip = el("span", "app-docs-pplchip");
+        chip.appendChild(el("span", "", p.name));
+        const off = el("button", "app-docs-pplchipx", "✕") as HTMLButtonElement;
+        off.addEventListener("click", () => {
+          added.splice(added.indexOf(p), 1);
+          paintChips();
+        });
+        chip.appendChild(off);
+        chips.appendChild(chip);
+      }
+      chips.style.display = added.length > 0 ? "" : "none";
+    };
+    paintChips();
+    let seq = 0;
+    let timer = 0;
+    search.addEventListener("input", () => {
+      window.clearTimeout(timer);
+      const q = search.value.trim();
+      if (q === "") {
+        clear(hitsBox);
+        return;
+      }
+      timer = window.setTimeout(() => {
+        const mine = ++seq;
+        void searchEntra(q).then(
+          (hits: EntraHit[]) => {
+            if (mine !== seq) return;
+            clear(hitsBox);
+            const taken = new Set(
+              [...existing, ...added].map((p) => p.email.toLowerCase())
+            );
+            for (const h of hits.filter((x) => x.mail !== "").slice(0, 6)) {
+              if (taken.has(h.mail.toLowerCase())) continue;
+              const rowBtn = el("button", "app-docs-pplhit") as HTMLButtonElement;
+              rowBtn.type = "button";
+              rowBtn.append(
+                el("span", "app-docs-pplhitname", h.displayName),
+                el("span", "app-field-hint", h.mail)
+              );
+              rowBtn.addEventListener("click", () => {
+                added.push({ email: h.mail, name: h.displayName });
+                search.value = "";
+                clear(hitsBox);
+                paintChips();
+              });
+              hitsBox.appendChild(rowBtn);
+            }
+          },
+          () => {}
+        );
+      }, 350);
+    });
+    dlg.body.append(chips, search, hitsBox);
+  }
+
   const reason = el("textarea", "app-input app-docs-cicomment") as HTMLTextAreaElement;
   reason.rows = 2;
   reason.placeholder = command.needsReason
@@ -126,11 +215,42 @@ export function openLifecycleCommand(opts: LifecycleRunOpts): void {
     status.textContent = "Taking the check-out…";
     const out = await timed(checkOutFile(site, row.serverUrl), "Check-out");
     if (!out.ok) {
-      // held by the acting user from earlier work is fine; held by
-      // ANYONE on a minute-old… no — this is an existing document, so
-      // someone else's check-out is a real refusal, reported as such
+      // held by the acting user from earlier work is fine — the
+      // sequence continues; held by someone else is a real refusal
       const already = /checked out/i.test(spErrorText(out.status));
       if (!already) return fail("Could not check out", out.status);
+    }
+
+    // additions to the reviewers column go in FIRST, under the same
+    // check-out, claims-key format (the cookbook's person rule)
+    const rp = opts.reviewersPicker;
+    if (rp !== undefined && added.length > 0) {
+      status.textContent = "Adding reviewers…";
+      const everyone = [...rp.existing, ...added];
+      const res = await timed(
+        validateUpdateListItem(
+          site,
+          opts.listId,
+          row.id,
+          [
+            {
+              FieldName: rp.internal,
+              FieldValue: JSON.stringify(
+                everyone.map((p) => ({ Key: `i:0#.f|membership|${p.email.trim().toLowerCase()}` }))
+              ),
+            },
+          ],
+          false
+        ),
+        "The reviewers write"
+      );
+      const errs = validateItemErrors(res.data);
+      if (!res.ok || errs.length > 0) {
+        return fail(
+          "Adding reviewers was refused (the document stays checked out)",
+          errs.map((e) => `${e.field}: ${e.message}`).join("; ") || res.status
+        );
+      }
     }
 
     status.textContent = "Writing the status…";
@@ -148,6 +268,15 @@ export function openLifecycleCommand(opts: LifecycleRunOpts): void {
       return fail("The status write was refused (the document stays checked out)", patch.status);
     }
 
+    // Start revision ENDS here: the draft status and everything after
+    // it live inside the check-out — nothing is published until a
+    // submit checks in
+    if (command.staysCheckedOut === true) {
+      dlg.close();
+      opts.onDone();
+      return;
+    }
+
     status.textContent = "Checking in…";
     const cin = await timed(
       checkInFile(site, row.serverUrl, comment, command.major),
@@ -156,6 +285,92 @@ export function openLifecycleCommand(opts: LifecycleRunOpts): void {
     if (!cin.ok && !/not checked out/i.test(spErrorText(cin.status))) {
       return fail("Check-in was refused (the document stays checked out)", cin.status);
     }
+
+    dlg.close();
+    opts.onDone();
+  };
+}
+
+// ---- Cancel revision ---------------------------------------------------
+// Abandoning a revision AFTER circulation began: minor drafts are
+// checked in and cannot be un-published by a discard, so the last
+// approved MAJOR (N.0) is restored instead — content and status
+// together, with the abandoned drafts left in history where an audit
+// can read them (Ben, 2026-08-04).
+
+export interface CancelRevisionOpts {
+  site: string;
+  row: DocRow;
+  host: HTMLElement;
+  /** The holder's check-out (if the acting user's) is discarded first. */
+  heldByMe: boolean;
+  onDone: () => void;
+}
+
+export function openCancelRevision(opts: CancelRevisionOpts): void {
+  const { site, row } = opts;
+  let running = false;
+
+  const dlg = openDialog({
+    host: opts.host,
+    title: `Cancel revision — ${row.name}`,
+    buttons: [
+      { label: "Keep revising", kind: "secondary", onClick: () => { if (!running) dlg.close(); } },
+      { label: "Cancel revision", kind: "danger", onClick: () => void run() },
+    ],
+  });
+  dlg.body.appendChild(
+    el(
+      "div",
+      "app-field-hint",
+      "Restores the last approved version — content and status together. The abandoned " +
+        "drafts stay in the version history."
+    )
+  );
+  const status = el("div", "app-docs-addstatus");
+  dlg.body.appendChild(status);
+
+  const fail = (what: string, why: string) => {
+    status.textContent = `${what}: ${spErrorText(why).slice(0, 300)}`;
+    status.classList.add("app-docs-addstatus-warn");
+    running = false;
+  };
+
+  const run = async () => {
+    if (running) return;
+    running = true;
+    status.classList.remove("app-docs-addstatus-warn");
+
+    if (opts.heldByMe) {
+      status.textContent = "Discarding your check-out…";
+      const undo = await timed(undoCheckOut(site, row.serverUrl), "Discard");
+      if (!undo.ok && !/not checked out/i.test(spErrorText(undo.status))) {
+        return fail("Could not discard the check-out", undo.status);
+      }
+    }
+
+    status.textContent = "Finding the last approved version…";
+    const vers = await timed(fetchFileVersions(site, row.serverUrl), "The version read");
+    const rows = Array.isArray((vers.data as { value?: unknown[] })?.value)
+      ? ((vers.data as { value: unknown[] }).value as Record<string, unknown>[])
+      : [];
+    const majors = rows
+      .map((v) => String(v.VersionLabel ?? ""))
+      .filter((l) => /^\d+\.0$/.test(l))
+      .sort((a, b) => Number(b.split(".")[0]) - Number(a.split(".")[0]));
+    if (majors.length === 0) {
+      return fail(
+        "Nothing to restore",
+        "This document has no approved (major) version in its history."
+      );
+    }
+
+    status.textContent = `Restoring version ${majors[0]}…`;
+    const restored = await timed(
+      restoreFileVersion(site, row.serverUrl, majors[0]),
+      "The restore"
+    );
+    if (!restored.ok) return fail("The restore was refused", restored.status);
 
     dlg.close();
     opts.onDone();

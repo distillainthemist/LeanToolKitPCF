@@ -1113,69 +1113,78 @@ describe("lifecycle mapping (5A)", () => {
   });
 });
 
-describe("lifecycle commands (5B)", () => {
+describe("lifecycle commands (5B/5C — the settled workflow)", () => {
   const gates = (over: Partial<Record<string, boolean>> = {}) => ({
     isApprover: false,
     hasApprovers: false,
+    hasReviewers: false,
     isOwner: false,
     isAdmin: false,
     ...over,
   });
 
-  it("offers the moves each stage allows", async () => {
+  it("review is mandatory when reviewers are named; approval entry depends on approvers", async () => {
     const { lifecycleCommandsFor } = await import("../docs/model");
-    expect(lifecycleCommandsFor("draft", gates()).map((c) => c.key)).toEqual([
+    // no reviewers: a draft may skip straight to approval
+    const free = lifecycleCommandsFor("draft", gates());
+    expect(free.map((c) => c.key)).toEqual(["submitReview", "submitApproval"]);
+    // no approvers named → submission lands at the OWNER's stage
+    expect(free[1].to).toBe("inOwnerApproval");
+    // approvers named → the endorsement stage first
+    expect(lifecycleCommandsFor("draft", gates({ hasApprovers: true }))[1].to).toBe("inApproval");
+    // reviewers named = review round MANDATORY (Ben, 2026-08-04)
+    expect(lifecycleCommandsFor("draft", gates({ hasReviewers: true })).map((c) => c.key)).toEqual([
       "submitReview",
-      "submitApproval",
     ]);
-    expect(lifecycleCommandsFor("inReview", gates()).map((c) => c.key)).toEqual([
-      "submitApproval",
+    expect(
+      lifecycleCommandsFor("inReview", gates({ hasApprovers: true })).map((c) => c.key)
+    ).toEqual(["submitApproval", "requestRevision"]);
+  });
+
+  it("approval is two steps: approvers endorse (minor), the owner's word is major", async () => {
+    const { lifecycleCommandsFor } = await import("../docs/model");
+    // approvers' step: an approver endorses it ONWARD, as a minor
+    const endorse = lifecycleCommandsFor("inApproval", gates({ isApprover: true, hasApprovers: true }));
+    expect(endorse[0].key).toBe("approve");
+    expect(endorse[0].to).toBe("inOwnerApproval");
+    expect(endorse[0].major).toBe(false);
+    // the owner is NOT gated in at the approvers' step by ownership…
+    expect(
+      lifecycleCommandsFor("inApproval", gates({ hasApprovers: true, isOwner: true })).map((c) => c.key)
+    ).toEqual(["requestRevision"]);
+    // …their word comes at THEIR stage, and it is the major
+    const final = lifecycleCommandsFor("inOwnerApproval", gates({ isOwner: true }));
+    expect(final[0].key).toBe("approve");
+    expect(final[0].to).toBe("approved");
+    expect(final[0].major).toBe(true);
+    // admins stand in at both steps; bystanders can only send it back
+    expect(
+      lifecycleCommandsFor("inApproval", gates({ isAdmin: true }))[0].key
+    ).toBe("approve");
+    expect(
+      lifecycleCommandsFor("inOwnerApproval", gates({ isAdmin: true }))[0].key
+    ).toBe("approve");
+    expect(lifecycleCommandsFor("inOwnerApproval", gates()).map((c) => c.key)).toEqual([
       "requestRevision",
     ]);
-    // approved: the road back into work — Start revision, as gated as
-    // approving was (owner / approver / admin); bystanders get nothing
-    expect(lifecycleCommandsFor("approved", gates({ isAdmin: true })).map((c) => c.key)).toEqual([
-      "revise",
-    ]);
-    expect(lifecycleCommandsFor("approved", gates({ isOwner: true })).map((c) => c.key)).toEqual([
-      "revise",
-    ]);
+  });
+
+  it("approved offers Start revision (gated), which stays checked out", async () => {
+    const { lifecycleCommandsFor } = await import("../docs/model");
+    const revise = lifecycleCommandsFor("approved", gates({ isOwner: true }));
+    expect(revise.map((c) => c.key)).toEqual(["revise"]);
+    // the whole revision lives inside the check-out: no check-in, and
+    // Discard reverts everything (Ben, 2026-08-04)
+    expect(revise[0].staysCheckedOut).toBe(true);
     expect(lifecycleCommandsFor("approved", gates())).toEqual([]);
     // superseded / obsolete / unmapped: 5D's turf, nothing offered yet
     expect(lifecycleCommandsFor("superseded", gates({ isAdmin: true }))).toEqual([]);
     expect(lifecycleCommandsFor("", gates({ isAdmin: true }))).toEqual([]);
   });
 
-  it("gates Approve: the owner always retains it, approvers extend it", async () => {
-    const { lifecycleCommandsFor } = await import("../docs/model");
-    const keys = (g: ReturnType<typeof gates>) =>
-      lifecycleCommandsFor("inApproval", g).map((c) => c.key);
-    // a named approver approves
-    expect(keys(gates({ isApprover: true, hasApprovers: true }))).toEqual([
-      "approve",
-      "requestRevision",
-    ]);
-    // the owner approves WHETHER OR NOT approvers are named (Ben,
-    // 2026-08-04: "the owner always retains it, approvers extend it")
-    expect(keys(gates({ hasApprovers: true, isOwner: true }))).toEqual([
-      "approve",
-      "requestRevision",
-    ]);
-    expect(keys(gates({ isOwner: true }))).toEqual(["approve", "requestRevision"]);
-    // admins never deadlock
-    expect(keys(gates({ hasApprovers: true, isAdmin: true }))).toEqual([
-      "approve",
-      "requestRevision",
-    ]);
-    // a bystander can only send it back
-    expect(keys(gates())).toEqual(["requestRevision"]);
-  });
-
-  it("approve is the one MAJOR check-in, and revision demands its reason", async () => {
+  it("revision demands its reason", async () => {
     const { LIFECYCLE_COMMANDS } = await import("../docs/model");
     const by = Object.fromEntries(LIFECYCLE_COMMANDS.map((c) => [c.key, c]));
-    expect(by.approve.major).toBe(true);
-    expect(by.submitReview.major).toBe(false);
     expect(by.requestRevision.needsReason).toBe(true);
     expect(by.approve.needsReason).toBe(false);
   });

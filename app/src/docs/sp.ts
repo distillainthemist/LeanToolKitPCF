@@ -315,6 +315,23 @@ export function fetchFileInfo(site: string, url: string): Promise<SpResult> {
   return spRequest(site, "GET", `${filePath(url)}?$select=Length,CheckOutType,Name`);
 }
 
+/** A file's version history — what Cancel revision reads to find the
+ *  last approved MAJOR (N.0) to restore. */
+export function fetchFileVersions(site: string, url: string): Promise<SpResult> {
+  return spRequest(site, "GET", `${filePath(url)}/Versions?$select=VersionLabel,Created`);
+}
+
+/** Restore a version by its label ("3.0"). SharePoint records the
+ *  restored copy as a NEW version — the abandoned drafts stay in
+ *  history, which is exactly what an audit trail wants. */
+export function restoreFileVersion(site: string, url: string, label: string): Promise<SpResult> {
+  return spRequest(
+    site,
+    "POST",
+    `${filePath(url)}/Versions/RestoreByLabel(versionlabel='${spQuote(label)}')`
+  );
+}
+
 /** The list item behind a file — its id is what metadata writes address. */
 export function fetchFileItemId(site: string, url: string): Promise<SpResult> {
   return spRequest(site, "GET", `${filePath(url)}/ListItemAllFields?$select=Id`);
