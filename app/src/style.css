@@ -2104,6 +2104,15 @@ button.app-docs-navterm.app-docs-navterm-on {
 }
 .app-dlghost .ltk-dialog { box-shadow: 0 8px 32px rgba(0, 0, 0, 0.28); }
 
+/* lifecycle mapping (Phase 5A) */
+.app-docs-lifegrid {
+  display: grid;
+  grid-template-columns: minmax(160px, 1fr) minmax(150px, 240px);
+  gap: 4px 10px;
+  align-items: center;
+  margin: 8px 0 10px;
+}
+
 /* My tasks (Phase 4D) — the V2 Action-needed slot, live */
 .app-docs-actionneeded-hot {
   background: var(--app-accent-soft, #e6f0ff);

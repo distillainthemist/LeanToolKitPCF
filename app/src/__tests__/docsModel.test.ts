@@ -63,6 +63,8 @@ describe("app docs config", () => {
       termGroupName: "DMS",
       orgSetId: "s1",
       orgSetName: "Organisation",
+      controllersGroupId: "",
+      controllersGroupName: "",
       sites: {},
     });
     expect(parseAppDocsConfig(raw).siteUrl).toBe("https://x.sharepoint.com/sites/Dev");
@@ -1023,6 +1025,87 @@ describe("add a document — the write recipe (4C)", () => {
     expect(sanitizeFileName("  trailing dots... ")).toBe("trailing dots");
     expect(sanitizeFileName("###")).toBe("");
     expect(sanitizeFileName("plain name")).toBe("plain name");
+  });
+});
+
+describe("lifecycle mapping (5A)", () => {
+  it("round-trips through the site dictionary, keyed lowercase", async () => {
+    const { parseAppDocsConfig, serializeAppDocsConfig, emptyAppDocsConfig, stageOfTerm } =
+      await import("../docs/model");
+    const cfg = emptyAppDocsConfig();
+    cfg.siteUrl = "https://x/sites/Dev";
+    cfg.controllersGroupId = "g-1";
+    cfg.controllersGroupName = "Document controllers";
+    cfg.sites["x/sites/dev"] = {
+      columns: [],
+      palettes: [],
+      templates: {},
+      lifecycle: { "aaa-1": "approved", "bbb-2": "draft" },
+    };
+    const back = parseAppDocsConfig(serializeAppDocsConfig(cfg));
+    expect(back.controllersGroupId).toBe("g-1");
+    expect(back.controllersGroupName).toBe("Document controllers");
+    const dict = back.sites["x/sites/dev"];
+    expect(stageOfTerm(dict, "AAA-1")).toBe("approved");
+    expect(stageOfTerm(dict, "bbb-2")).toBe("draft");
+    expect(stageOfTerm(dict, "missing")).toBe("");
+    // junk stages are dropped at parse, never smuggled into the enum
+    const dirty = parseAppDocsConfig(
+      JSON.stringify({ sites: { k: { lifecycle: { x: "nonsense", y: "obsolete" } } } })
+    );
+    expect(dirty.sites.k.lifecycle).toEqual({ y: "obsolete" });
+  });
+
+  it("suggests stages with the approval filter's own vocabulary", async () => {
+    const { suggestStageForLabel } = await import("../docs/model");
+    expect(suggestStageForLabel("Draft")).toBe("draft");
+    expect(suggestStageForLabel("In Review")).toBe("inReview");
+    expect(suggestStageForLabel("Awaiting Approval")).toBe("inReview");
+    expect(suggestStageForLabel("Approved")).toBe("approved");
+    expect(suggestStageForLabel("Current")).toBe("approved");
+    expect(suggestStageForLabel("Superseded")).toBe("superseded");
+    expect(suggestStageForLabel("Retired")).toBe("obsolete");
+    // no opinion is an answer — the admin decides
+    expect(suggestStageForLabel("Banana")).toBe("");
+  });
+
+  it("reports the gaps commands would fall into", async () => {
+    const { lifecycleHealth } = await import("../docs/model");
+    const dict = {
+      columns: [],
+      palettes: [],
+      templates: {},
+      lifecycle: { "t-1": "draft" as const },
+    };
+    const terms = [
+      { id: "t-1", label: "Draft" },
+      { id: "t-2", label: "Approved" },
+    ];
+    const found = lifecycleHealth(dict, terms);
+    expect(found.some((f) => f.title.includes("without a lifecycle stage"))).toBe(true);
+    expect(found.some((f) => f.title.includes("No status term is mapped as Approved"))).toBe(true);
+    // fully mapped = silence
+    const full = { ...dict, lifecycle: { "t-1": "draft" as const, "t-2": "approved" as const } };
+    expect(lifecycleHealth(full, terms)).toEqual([]);
+    // no terms readable = nothing to judge
+    expect(lifecycleHealth(dict, [])).toEqual([]);
+  });
+
+  it("lists a stage's terms — what a command writes", async () => {
+    const { termsForStage } = await import("../docs/model");
+    const dict = {
+      columns: [],
+      palettes: [],
+      templates: {},
+      lifecycle: {
+        "t-1": "approved" as const,
+        "t-2": "approved" as const,
+        "t-3": "draft" as const,
+      },
+    };
+    expect(termsForStage(dict, "approved")).toEqual(["t-1", "t-2"]);
+    expect(termsForStage(dict, "obsolete")).toEqual([]);
+    expect(termsForStage({ columns: [], palettes: [], templates: {} }, "draft")).toEqual([]);
   });
 });
 

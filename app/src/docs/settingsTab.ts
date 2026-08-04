@@ -18,7 +18,12 @@ import {
   ColumnConfig,
   DictionaryConflict,
   DriftReport,
+  HealthFinding,
   LIBRARY_TYPES,
+  LIFECYCLE_STAGES,
+  LifecycleStage,
+  lifecycleHealth,
+  suggestStageForLabel,
   LibraryConfig,
   LibrarySchema,
   LibraryType,
@@ -69,6 +74,7 @@ import {
 } from "./docsStore";
 import { parseOrgTree } from "../../../shared/schema/meeting";
 import { orgJson } from "../store/config";
+import { listCandidateGroups } from "../store/accessGroup";
 import { renderListPage, searchPage } from "./data";
 import { buildRenderViewXml, taxonomySearchProperty } from "./rows";
 
@@ -350,6 +356,7 @@ export async function renderDocsSettings(body: HTMLElement, ctx: Ctx): Promise<v
     paintGrid();
     paintPalettes();
     paintTemplates();
+    paintLifecycle();
     paintHealth();
     // repaints itself when it lands — nothing waits on it
     void runTaxProbe();
@@ -1002,6 +1009,155 @@ export async function renderDocsSettings(body: HTMLElement, ctx: Ctx): Promise<v
     companyLevel,
     document.createTextNode(" The term set starts at company level (skip its top level when comparing)")
   );
+  // ---- lifecycle (Phase 5A) --------------------------------------------
+  // The approval engine's vocabulary. EXPLICIT (Ben, 2026-08-04): the
+  // stored mapping is the law, name-based suggestions only prefill it,
+  // and it is keyed by term ID so a rename cannot detach a stage.
+  body.appendChild(section("Lifecycle"));
+  body.appendChild(
+    note(
+      "Which status term means draft, in review, approved, superseded, obsolete — " +
+        "the approval commands move documents between these stages. Mapped once per " +
+        "site, stored by term id."
+    )
+  );
+
+  const ctlSel = el("select", "app-input") as HTMLSelectElement;
+  {
+    const seed = el(
+      "option",
+      "",
+      app.controllersGroupName !== "" ? app.controllersGroupName : "— not configured —"
+    ) as HTMLOptionElement;
+    seed.value = app.controllersGroupId;
+    ctlSel.appendChild(seed);
+  }
+  const ctlLoad = el("button", "app-btn", "Load groups") as HTMLButtonElement;
+  ctlLoad.addEventListener("click", () => {
+    void (async () => {
+      ctlLoad.disabled = true;
+      ctlLoad.textContent = "Loading…";
+      try {
+        const groups = await listCandidateGroups();
+        clear(ctlSel);
+        const none = el("option", "", "— not configured —") as HTMLOptionElement;
+        none.value = "";
+        ctlSel.appendChild(none);
+        for (const g of groups) {
+          const o = el("option", "", g.name) as HTMLOptionElement;
+          o.value = g.id;
+          if (g.id === app.controllersGroupId) o.selected = true;
+          ctlSel.appendChild(o);
+        }
+      } catch (e) {
+        ctlSel.title = `Could not list groups: ${String(e).slice(0, 200)}`;
+      }
+      ctlLoad.disabled = false;
+      ctlLoad.textContent = "Load groups";
+    })();
+  });
+  ctlSel.addEventListener("change", () => {
+    app.controllersGroupId = ctlSel.value;
+    app.controllersGroupName =
+      ctlSel.value === "" ? "" : (ctlSel.selectedOptions[0]?.textContent ?? "");
+    ctx.markDirty();
+  });
+  const ctlRow = el("div", "app-docs-siterow");
+  ctlRow.append(ctlSel, ctlLoad);
+  body.appendChild(field("Document controllers group", ctlRow));
+  body.appendChild(
+    el(
+      "div",
+      "app-field-hint",
+      "The one Entra security group whose members can be document owners and " +
+        "approvers — the owner and approver pickers select from it, and the group " +
+        "carries the SharePoint permissions."
+    )
+  );
+
+  const lifeBox = el("div", "");
+  body.appendChild(lifeBox);
+  /** Fed into Health by paintHealth — recomputed whenever the mapping
+   *  changes, because an unmapped term is a command that cannot run. */
+  let lifecycleFindings: HealthFinding[] = [];
+
+  const paintLifecycle = () => {
+    void (async () => {
+      clear(lifeBox);
+      const dict = dictionary();
+      const statusCol = dict.columns.find((c) => c.role === "status" && c.termSetId !== "");
+      if (statusCol === undefined) {
+        lifeBox.appendChild(
+          note("Map a managed-metadata column to the Status role first — its term set is what gets staged.")
+        );
+        lifecycleFindings = [];
+        return;
+      }
+      lifeBox.appendChild(el("div", "app-loading-line", "Reading the status terms…"));
+      const terms = await termsInSet(statusCol.termSetId);
+      clear(lifeBox);
+      if (terms.length === 0) {
+        lifeBox.appendChild(note("The status term set has no terms (or could not be read)."));
+        lifecycleFindings = [];
+        return;
+      }
+      const life = (dict.lifecycle ??= {});
+      const recompute = () => {
+        lifecycleFindings = lifecycleHealth(dict, terms);
+        paintHealth();
+      };
+      const grid = el("div", "app-docs-lifegrid");
+      grid.append(
+        el("span", "app-docs-colhead", "Status term"),
+        el("span", "app-docs-colhead", "Lifecycle stage")
+      );
+      for (const t of terms) {
+        const key = t.id.trim().toLowerCase();
+        grid.appendChild(el("span", "app-docs-colname", t.label));
+        const sel = el("select", "app-input") as HTMLSelectElement;
+        const none = el("option", "", "—") as HTMLOptionElement;
+        none.value = "";
+        sel.appendChild(none);
+        for (const s of LIFECYCLE_STAGES) {
+          const o = el("option", "", s.label) as HTMLOptionElement;
+          o.value = s.key;
+          sel.appendChild(o);
+        }
+        sel.value = life[key] ?? "";
+        sel.addEventListener("change", () => {
+          if (sel.value === "") delete life[key];
+          else life[key] = sel.value as LifecycleStage;
+          ctx.markDirty();
+          recompute();
+        });
+        grid.appendChild(sel);
+      }
+      lifeBox.appendChild(grid);
+      // explicit, not silent: suggestions fill only the EMPTY rows, on
+      // request — the same vocabulary the approval filter matches, so
+      // the prefill and the register can never disagree
+      const suggest = el("button", "app-btn", "Suggest stages from names") as HTMLButtonElement;
+      suggest.addEventListener("click", () => {
+        let changed = 0;
+        for (const t of terms) {
+          const key = t.id.trim().toLowerCase();
+          if (life[key] !== undefined) continue;
+          const s = suggestStageForLabel(t.label);
+          if (s !== "") {
+            life[key] = s;
+            changed++;
+          }
+        }
+        if (changed > 0) {
+          ctx.markDirty();
+          paintLifecycle();
+        }
+      });
+      lifeBox.appendChild(suggest);
+      recompute();
+    })();
+  };
+
   // ---- health (C4) -----------------------------------------------------
   // Consolidating the mapping makes divergence findable; this is the
   // thing that looks. The org drift report and the search-filter
@@ -1080,6 +1236,7 @@ export async function renderDocsSettings(body: HTMLElement, ctx: Ctx): Promise<v
       choicesBy: new Map([...liveByInternal].map(([k, f]) => [k, f.choices])),
       taxProbe,
     });
+    findings.push(...lifecycleFindings);
     if (findings.length === 0) {
       healthBox.appendChild(note("✓ Nothing to report — the libraries agree."));
       return;

@@ -152,10 +152,99 @@ export interface SiteDictionary {
   columns: SiteColumn[];
   palettes: TermPalette[];
   templates: ViewTemplates;
+  /** Status term id → lifecycle stage (Phase 5A). Explicit — the stored
+   *  mapping is the law, name suggestions only prefill it — and keyed
+   *  by term ID so a rename cannot detach a stage. Optional so the many
+   *  places that build dictionaries without a lifecycle stay honest. */
+  lifecycle?: Record<string, LifecycleStage>;
 }
 
 export function emptySiteDictionary(): SiteDictionary {
   return { columns: [], palettes: [], templates: {} };
+}
+
+// ---- lifecycle (Phase 5A) ----------------------------------------------
+// The approval engine's vocabulary. Five stages, fixed: commands move a
+// document BETWEEN stages; which term expresses a stage is this site's
+// choice, made once in Settings → Documents → Lifecycle.
+
+export type LifecycleStage = "draft" | "inReview" | "approved" | "superseded" | "obsolete";
+
+export const LIFECYCLE_STAGES: { key: LifecycleStage; label: string }[] = [
+  { key: "draft", label: "Draft" },
+  { key: "inReview", label: "In review" },
+  { key: "approved", label: "Approved" },
+  { key: "superseded", label: "Superseded" },
+  { key: "obsolete", label: "Obsolete" },
+];
+
+const STAGE_KEYS = new Set(LIFECYCLE_STAGES.map((s) => s.key));
+
+/**
+ * The stage a term's NAME suggests — the same vocabulary the register's
+ * "Show only Approved" filter has matched since v0.28.0
+ * (isNonCurrentStatus), so the prefill and the filter can never
+ * disagree about what a term sounds like. "" = no opinion; the admin
+ * decides in settings.
+ */
+export function suggestStageForLabel(label: string): LifecycleStage | "" {
+  const l = label.trim().toLowerCase();
+  if (l === "") return "";
+  if (/\bsuperseded\b/.test(l)) return "superseded";
+  if (/\b(obsolete|retired)\b/.test(l)) return "obsolete";
+  if (/\b(in review|awaiting|review)\b/.test(l)) return "inReview";
+  if (/\bdraft\b/.test(l)) return "draft";
+  if (/\b(approved|current)\b/.test(l)) return "approved";
+  return "";
+}
+
+/** The stage a term is mapped to ("" = unmapped). */
+export function stageOfTerm(dict: SiteDictionary, termId: string): LifecycleStage | "" {
+  const stage = (dict.lifecycle ?? {})[termId.trim().toLowerCase()];
+  return stage !== undefined && STAGE_KEYS.has(stage) ? stage : "";
+}
+
+/** Every term id mapped to a stage — what a command writes (first) and
+ *  what a stage-scoped query matches (all). */
+export function termsForStage(dict: SiteDictionary, stage: LifecycleStage): string[] {
+  return Object.entries(dict.lifecycle ?? {})
+    .filter(([, s]) => s === stage)
+    .map(([id]) => id);
+}
+
+/**
+ * The findings the Lifecycle section reports into Health: terms with no
+ * stage (a command cannot move what it cannot name), and a mapping with
+ * no approved stage at all (the register's approval filter would show
+ * nothing). Pure; the settings tab paints it.
+ */
+export function lifecycleHealth(
+  dict: SiteDictionary,
+  statusTerms: { id: string; label: string }[]
+): HealthFinding[] {
+  if (statusTerms.length === 0) return [];
+  const out: HealthFinding[] = [];
+  const unmapped = statusTerms.filter((t) => stageOfTerm(dict, t.id) === "");
+  if (unmapped.length > 0) {
+    out.push({
+      level: "warn",
+      title: `${unmapped.length} status term${unmapped.length === 1 ? "" : "s"} without a lifecycle stage`,
+      detail:
+        `${unmapped.map((t) => t.label).join(", ")} — map them under Lifecycle, or the ` +
+        "approval commands cannot move documents there.",
+    });
+  }
+  if (
+    Object.keys(dict.lifecycle ?? {}).length > 0 &&
+    !statusTerms.some((t) => stageOfTerm(dict, t.id) === "approved")
+  ) {
+    out.push({
+      level: "warn",
+      title: "No status term is mapped as Approved",
+      detail: "Approve has nowhere to move a document — map one under Lifecycle.",
+    });
+  }
+  return out;
 }
 
 /** App-level docs config (ben_configjson on the "__app__" row). */
@@ -165,6 +254,12 @@ export interface AppDocsConfig {
   termGroupName: string;
   orgSetId: string;
   orgSetName: string;
+  /** The ONE Entra group that governs who can be a document
+   *  owner/approver (Ben, 2026-08-04): the pickers select from its
+   *  members, and the group carries the SharePoint permissions. Same
+   *  shape as the Users access-control group. "" = not configured. */
+  controllersGroupId: string;
+  controllersGroupName: string;
   /** siteUrl → that site's shared column mapping and palettes. A map,
    *  so exposing a second site later adds a key rather than a schema. */
   sites: Record<string, SiteDictionary>;
@@ -185,6 +280,8 @@ export function emptyAppDocsConfig(): AppDocsConfig {
     termGroupName: "",
     orgSetId: "",
     orgSetName: "",
+    controllersGroupId: "",
+    controllersGroupName: "",
     sites: {},
   };
 }
@@ -262,6 +359,8 @@ export function parseAppDocsConfig(raw: string | null | undefined): AppDocsConfi
     out.termGroupName = asStr(o.termGroupName);
     out.orgSetId = asStr(o.orgSetId);
     out.orgSetName = asStr(o.orgSetName);
+    out.controllersGroupId = asStr(o.controllersGroupId);
+    out.controllersGroupName = asStr(o.controllersGroupName);
     if (o.sites && typeof o.sites === "object") {
       for (const [key, val] of Object.entries(o.sites as Record<string, unknown>)) {
         const k = siteKey(key);
@@ -322,6 +421,15 @@ function parseSiteDictionary(o: Record<string, unknown>): SiteDictionary {
       if (internals.length > 0) dict.templates[type as LibraryType] = internals;
     }
   }
+  if (o.lifecycle && typeof o.lifecycle === "object") {
+    const lifecycle: Record<string, LifecycleStage> = {};
+    for (const [id, stage] of Object.entries(o.lifecycle as Record<string, unknown>)) {
+      const key = id.trim().toLowerCase();
+      const s = asStr(stage) as LifecycleStage;
+      if (key !== "" && LIFECYCLE_STAGES.some((x) => x.key === s)) lifecycle[key] = s;
+    }
+    if (Object.keys(lifecycle).length > 0) dict.lifecycle = lifecycle;
+  }
   return dict;
 }
 
@@ -351,6 +459,9 @@ function serializeSiteDictionary(dict: SiteDictionary): Record<string, unknown> 
     if (Array.isArray(list) && list.length > 0) templates[type] = list;
   }
   if (Object.keys(templates).length > 0) o.templates = templates;
+  if (dict.lifecycle !== undefined && Object.keys(dict.lifecycle).length > 0) {
+    o.lifecycle = dict.lifecycle;
+  }
   return o;
 }
 
@@ -361,6 +472,8 @@ export function serializeAppDocsConfig(cfg: AppDocsConfig): string {
   if (cfg.termGroupName !== "") o.termGroupName = cfg.termGroupName;
   if (cfg.orgSetId !== "") o.orgSetId = cfg.orgSetId;
   if (cfg.orgSetName !== "") o.orgSetName = cfg.orgSetName;
+  if (cfg.controllersGroupId !== "") o.controllersGroupId = cfg.controllersGroupId;
+  if (cfg.controllersGroupName !== "") o.controllersGroupName = cfg.controllersGroupName;
   const sites: Record<string, unknown> = {};
   for (const [key, dict] of Object.entries(cfg.sites)) {
     const body = serializeSiteDictionary(dict);
