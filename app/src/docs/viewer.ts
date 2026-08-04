@@ -53,9 +53,16 @@ interface ViewerOpts {
    *  non-noise field renders (the skip set below). */
   columns?: string[];
   /** Status value for this row ("" = none) + the screen's palette-aware
-   *  chip renderer. */
-  statusValue?: string;
+   *  chip renderer. A getter is re-read on every details repaint — a
+   *  lifecycle command changes the status while the overlay is open,
+   *  and the chip must follow it (Ben, 2026-08-04). */
+  statusValue?: string | (() => string);
   statusChipFor?: (value: string) => HTMLElement;
+  /** Hands the screen a repaint for the DETAILS pane — status chip,
+   *  properties, version history — to call after a command changes the
+   *  document. Distinct from control/lifecycle's registers, which only
+   *  repaint their buttons. */
+  register?: (repaint: () => void) => void;
   /** Favourite wiring (null/absent = viewer identity unknown). toggle
    *  resolves to the new state. */
   favorite?: { isFav: () => boolean; toggle: () => Promise<boolean> } | null;
@@ -211,11 +218,14 @@ export function openDocViewer(opts: ViewerOpts): void {
   body.appendChild(aside);
 
   const chips = el("div", "app-docs-detailchips");
-  chips.appendChild(fileTypeChip(row.ext));
-  const statusValue = opts.statusValue ?? "";
-  if (statusValue !== "" && opts.statusChipFor) {
-    chips.appendChild(opts.statusChipFor(statusValue));
-  }
+  const paintChips = () => {
+    clear(chips);
+    chips.appendChild(fileTypeChip(row.ext));
+    const sv =
+      typeof opts.statusValue === "function" ? opts.statusValue() : (opts.statusValue ?? "");
+    if (sv !== "" && opts.statusChipFor) chips.appendChild(opts.statusChipFor(sv));
+  };
+  paintChips();
   aside.appendChild(chips);
   aside.appendChild(el("div", "app-docs-detailtitle", row.name));
   const meta = [opts.libraryName, formatWhen(row.modified)].filter((s) => s !== "");
@@ -321,9 +331,14 @@ export function openDocViewer(opts: ViewerOpts): void {
   propsBox.appendChild(el("div", "app-loading-line", "Loading…"));
   aside.appendChild(propsBox);
 
-  void (async () => {
+  // reloadable: a lifecycle command adds a version and rewrites fields
+  // while the overlay is open — the repaint re-runs the whole loader.
+  // The generation guard drops a slow response overtaken by a newer one.
+  let detailsGen = 0;
+  const loadDetails = async () => {
+    const gen = ++detailsGen;
     const details = await itemDetails(site, row);
-    if (!propsBox.isConnected) return;
+    if (!propsBox.isConnected || gen !== detailsGen) return;
     clear(propsBox);
     propsBox.appendChild(el("div", "app-field-label", "Properties"));
     if (details.error !== "") {
@@ -388,7 +403,7 @@ export function openDocViewer(opts: ViewerOpts): void {
       details.id > 0 && row.listId !== ""
         ? await itemVersions(site, row.listId, details.id)
         : { versions: [], error: "item id unknown" };
-    if (!propsBox.isConnected) return;
+    if (!propsBox.isConnected || gen !== detailsGen) return;
     if (vres.error !== "") {
       propsBox.appendChild(el("div", "app-field-hint", `History unavailable: ${vres.error}`));
       return;
@@ -408,7 +423,12 @@ export function openDocViewer(opts: ViewerOpts): void {
       list.appendChild(line);
     }
     propsBox.appendChild(list);
-  })();
+  };
+  void loadDetails();
+  opts.register?.(() => {
+    paintChips();
+    void loadDetails();
+  });
 
   // ---- preview ---------------------------------------------------------
   // one item lookup, started on first need

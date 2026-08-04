@@ -2021,8 +2021,18 @@ export function mountDocs(
                 [...dictBy.keys()]
               )
             : undefined,
-          statusValue: libStatusCol ? (row.values[libStatusCol.internal] ?? "") : "",
+          // a getter, read on every details repaint: a lifecycle command
+          // rewrites the status while the overlay is open, and the chip
+          // must follow the buttons (Ben, 2026-08-04)
+          statusValue: libStatusCol
+            ? () => row.values[libStatusCol.internal] ?? ""
+            : "",
           statusChipFor: statusChip,
+          // the details pane's own repaint (chip + properties + version
+          // history) — fired by refreshRow alongside the button repaints
+          register: (repaint) => {
+            viewerRepaints.add(repaint);
+          },
           favorite:
             whoId === ""
               ? null
