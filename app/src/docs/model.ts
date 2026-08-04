@@ -305,16 +305,18 @@ export interface LifecycleGates {
 /**
  * The commands a document at `stage` offers this user. Submissions are
  * open to anyone who can write (SharePoint's permissions are the real
- * gate there); Approve is gated: the named approver(s) — or the OWNER
- * when none are named — with admins as the fallback (Ben, 2026-08-04).
- * A draft may go straight to approval when no review round is wanted.
+ * gate there); Approve is gated: the OWNER always retains sign-off over
+ * their own document, named approver(s) EXTEND that authority rather
+ * than replace it, and admins are the deadlock-breaker (Ben,
+ * 2026-08-04). A draft may go straight to approval when no review
+ * round is wanted.
  */
 export function lifecycleCommandsFor(
   stage: LifecycleStage | "",
   g: LifecycleGates
 ): LifecycleCommandDef[] {
   const by = (k: LifecycleCommandKey) => LIFECYCLE_COMMANDS.find((c) => c.key === k)!;
-  const mayApprove = g.isApprover || (!g.hasApprovers && g.isOwner) || g.isAdmin;
+  const mayApprove = g.isApprover || g.isOwner || g.isAdmin;
   switch (stage) {
     case "draft":
       return [by("submitReview"), by("submitApproval")];

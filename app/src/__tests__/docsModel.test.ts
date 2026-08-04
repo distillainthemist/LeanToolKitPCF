@@ -1137,7 +1137,7 @@ describe("lifecycle commands (5B)", () => {
     expect(lifecycleCommandsFor("", gates({ isAdmin: true }))).toEqual([]);
   });
 
-  it("gates Approve: approvers, then the owner when none named, then admins", async () => {
+  it("gates Approve: the owner always retains it, approvers extend it", async () => {
     const { lifecycleCommandsFor } = await import("../docs/model");
     const keys = (g: ReturnType<typeof gates>) =>
       lifecycleCommandsFor("inApproval", g).map((c) => c.key);
@@ -1146,9 +1146,12 @@ describe("lifecycle commands (5B)", () => {
       "approve",
       "requestRevision",
     ]);
-    // named approvers EXCLUDE a non-approver owner
-    expect(keys(gates({ hasApprovers: true, isOwner: true }))).toEqual(["requestRevision"]);
-    // no approvers named → the owner signs off
+    // the owner approves WHETHER OR NOT approvers are named (Ben,
+    // 2026-08-04: "the owner always retains it, approvers extend it")
+    expect(keys(gates({ hasApprovers: true, isOwner: true }))).toEqual([
+      "approve",
+      "requestRevision",
+    ]);
     expect(keys(gates({ isOwner: true }))).toEqual(["approve", "requestRevision"]);
     // admins never deadlock
     expect(keys(gates({ hasApprovers: true, isAdmin: true }))).toEqual([

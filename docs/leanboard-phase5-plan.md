@@ -42,11 +42,12 @@ existing vocabulary; unit tests on the model.
   comment) — each: check-out → connector term write of the target
   stage's term → check-in with the command's comment (approve's names
   the approver). Standards libraries only.
-- Gates: approve needs the acting user among the document's named
-  approver(s); when none are named, the OWNER approves; app admins as
-  fallback. Owner/approver pickers in the add form source from the
-  controllers group; the reviewers picker stays general people search
-  (the group governs owners/approvers, not reviewers).
+- Gates (Ben, 2026-08-04, second reading confirmed): **the owner always
+  retains sign-off over their own document; named approver(s) EXTEND
+  that authority rather than replace it**; app admins are the
+  deadlock-breaker. Owner/approver pickers in the add form source from
+  the controllers group; the reviewers picker stays general people
+  search (the group governs owners/approvers, not reviewers).
 - Overlay + kebab actions driven by the document's current stage.
 *Proof:* each command's column writes verified in SharePoint version
 history with the comment; a non-approver sees no Approve.
