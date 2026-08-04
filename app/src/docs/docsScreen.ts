@@ -2015,14 +2015,22 @@ export function mountDocs(
                   isFav: () => favs.some((f) => f.uniqueId === row.uniqueId),
                   toggle: favToggleFor(row),
                 },
-          control: canEditContent(lib, row)
-            ? {
-                // read live: a check-out made in the register behind the
-                // overlay has to move these buttons too
+          // passed for every library that could EVER edit — a standard
+          // opened as Approved grows its check-out buttons the moment
+          // Start revision puts it in a content stage, without a reopen
+          control:
+            lib != null &&
+            (lib.libType === "working" ||
+              lib.libType === "revision" ||
+              lib.libType === "standard")
+              ? {
+                // read live: a command run behind the overlay has to
+                // move these buttons too
                 state: () => ({
                   checkedOut: (row.checkoutName ?? "") !== "",
                   mine: isMine(row),
                   by: row.checkoutName ?? "",
+                  canEdit: canEditContent(lib, row),
                 }),
                 register: (repaint) => {
                   viewerRepaints.add(repaint);
@@ -2186,9 +2194,16 @@ export function mountDocs(
      *  about one row. One list-door call since 5B: lifecycle commands
      *  change status and version, not only the check-out. */
     const refreshRow = async (row: DocRow) => {
-      const fields = [statusInternal, ownerInternal, approversInternal, "CheckoutUser"].filter(
-        (f) => f !== ""
+      // ONLY columns this library carries — an uncarried field is a
+      // guaranteed RLDAS 400, and a silently failed refresh left the
+      // overlay painting the old stage (Ben, 2026-08-04)
+      const carried = new Set(
+        (byListId.get(row.listId)?.config.columns ?? []).map((c) => c.internal)
       );
+      const fields = [statusInternal, ownerInternal, approversInternal, reviewersInternal].filter(
+        (f) => f !== "" && carried.has(f)
+      );
+      fields.push("CheckoutUser");
       const page = await renderListPage(
         app.siteUrl,
         row.listId,

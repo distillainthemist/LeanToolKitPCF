@@ -67,7 +67,12 @@ interface ViewerOpts {
    * follow a check-out made from the register behind it.
    */
   control?: {
-    state: () => { checkedOut: boolean; mine: boolean; by: string };
+    /** `canEdit` is read on every repaint: a standard's editability
+     *  follows its STAGE (draft/in-review yes, approved no), and a
+     *  command can change the stage while the overlay is open — the
+     *  buttons must appear/disappear without a reopen (Ben,
+     *  2026-08-04). Absent = always editable. */
+    state: () => { checkedOut: boolean; mine: boolean; by: string; canEdit?: boolean };
     /** Hands the screen a repaint to call whenever it changes the
      *  document's state — a command runs through the screen's own
      *  dialogs, so the overlay cannot know it finished otherwise. */
@@ -241,14 +246,18 @@ export function openDocViewer(opts: ViewerOpts): void {
     const inBtn = el("button", "app-btn app-btn-primary", "Check in…") as HTMLButtonElement;
     const dropBtn = el("button", "app-btn", "Discard check-out") as HTMLButtonElement;
     const held = el("span", "app-docs-heldby");
+    const src =
+      (ctl.editUrl ?? "") !== "" ? linkBtn("Edit source ↗", ctl.editUrl ?? "", false) : null;
     const paint = () => {
       const s = ctl.state();
+      const canEdit = s.canEdit !== false;
       outBtn.textContent = "Check out";
-      outBtn.style.display = s.checkedOut ? "none" : "";
-      inBtn.style.display = s.checkedOut && s.mine ? "" : "none";
-      dropBtn.style.display = s.checkedOut && s.mine ? "" : "none";
+      outBtn.style.display = canEdit && !s.checkedOut ? "" : "none";
+      inBtn.style.display = canEdit && s.checkedOut && s.mine ? "" : "none";
+      dropBtn.style.display = canEdit && s.checkedOut && s.mine ? "" : "none";
       held.textContent = s.checkedOut && !s.mine ? `🔒 Checked out by ${s.by}` : "";
       held.style.display = held.textContent === "" ? "none" : "";
+      if (src !== null) src.style.display = canEdit ? "" : "none";
     };
     outBtn.addEventListener("click", () => {
       outBtn.disabled = true;
@@ -262,10 +271,8 @@ export function openDocViewer(opts: ViewerOpts): void {
     paint();
     ctl.register?.(paint);
     actions.append(outBtn, inBtn, dropBtn, held);
-    if ((ctl.editUrl ?? "") !== "") {
-      // the SOURCE, not the PDF: where a revision's edits actually happen
-      actions.append(linkBtn("Edit source ↗", ctl.editUrl ?? "", false));
-    }
+    // the SOURCE, not the PDF: where a revision's edits actually happen
+    if (src !== null) actions.append(src);
   }
   // lifecycle commands sit with the actions: a standard awaiting your
   // approval opens with Approve one click away
