@@ -580,7 +580,49 @@ export function mountDocs(
         });
       });
     };
+    /** A grantee ending access they never used (Ben, 2026-08-06) — the
+     *  relinquish half of the discard-releases rule. Confirmed, then the
+     *  same self-release the discard path runs, with its own comment. */
+    const openEndMyAccess = (row: DocRow) => {
+      const dlg = openDialog({
+        host: dialogHost,
+        title: `End your edit access — ${row.name}?`,
+        buttons: [
+          { label: "Keep access", kind: "secondary", onClick: () => dlg.close() },
+          {
+            label: "End my access",
+            kind: "danger",
+            onClick: () => {
+              dlg.close();
+              void (async () => {
+                const { endOwnGrant } = await import("./accessRequests");
+                const warn = await endOwnGrant({
+                  site: app.siteUrl,
+                  row,
+                  revEditorsInternal,
+                  myEmail,
+                  myName: currentViewer()?.name ?? "",
+                  current: grantEmails(row),
+                  comment: `Edit access relinquished by ${currentViewer()?.name ?? "the grantee"}`,
+                }).catch((e) => `Your edit access was not ended: ${String(e).slice(0, 200)}`);
+                if (warn !== "") commandFailed("Ending edit access", warn);
+                await refreshRow(row);
+                void refreshRequestState(row);
+              })();
+            },
+          },
+        ],
+      });
+      dlg.body.appendChild(
+        el(
+          "div",
+          "app-field-hint",
+          "Releases the grant without a revision — you can request again later."
+        )
+      );
+    };
     const openRequestAccessRow = (row: DocRow) => {
+      const existing = myRequests.get(reqKey(row)) ?? null;
       void import("./accessRequests").then(({ openRequestAccess }) => {
         openRequestAccess({
           doc: { listId: row.listId, itemId: row.id, uniqueId: row.uniqueId, name: row.name },
@@ -589,7 +631,13 @@ export function mountDocs(
             .filter((s) => s !== ""),
           viewer: { id: whoId, name: currentViewer()?.name ?? "", email: myEmail },
           host: dialogHost,
-          existing: myRequests.get(reqKey(row)) ?? null,
+          existing,
+          // ending unused access only makes sense while it is UNUSED —
+          // once revising, the road out is Discard check-out
+          onEndAccess:
+            existing?.granted !== undefined && !isMine(row)
+              ? () => openEndMyAccess(row)
+              : undefined,
           onChanged: () => void refreshRequestState(row),
         });
       });
@@ -1272,6 +1320,21 @@ export function mountDocs(
                       reload();
                     })
                   );
+                });
+                rowEl.appendChild(act);
+              } else if (
+                rt.row !== null &&
+                revEditorsInternal !== "" &&
+                !isMine(rt.row)
+              ) {
+                // unused grant: the grantee's own exit (once revising,
+                // Discard check-out is the road out)
+                const liveRow = rt.row;
+                const act = el("button", "app-btn app-docs-taskact", "End access…") as HTMLButtonElement;
+                act.addEventListener("click", (e) => {
+                  e.stopPropagation();
+                  closePanel();
+                  openEndMyAccess(liveRow);
                 });
                 rowEl.appendChild(act);
               }
@@ -2510,6 +2573,11 @@ export function mountDocs(
                     ...(canRevokeAccess(row, lib)
                       ? [{ key: "revokeAccess", label: "Revoke edit access…", primary: false }]
                       : []),
+                    // the grantee's own exit while the grant is UNUSED —
+                    // once revising, Discard check-out is the road out
+                    ...(discardEndsMyGrant(row) && !isMine(row)
+                      ? [{ key: "endMyAccess", label: "End my edit access…", primary: false }]
+                      : []),
                   ],
                   run: (key) => {
                     if (key === "markReviewed") {
@@ -2526,6 +2594,10 @@ export function mountDocs(
                     }
                     if (key === "revokeAccess") {
                       openRevokeAccessRow(row);
+                      return;
+                    }
+                    if (key === "endMyAccess") {
+                      openEndMyAccess(row);
                       return;
                     }
                     const cmd = lifecycleActionsFor(row, lib).find((c) => c.key === key);

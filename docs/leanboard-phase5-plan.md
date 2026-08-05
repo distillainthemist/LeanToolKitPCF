@@ -287,8 +287,23 @@ Build order:
   control); Access diagnostics probes both routes. sp.ts: sitegroups
   resolve/list/add (plain-then-verbose)/removebyloginname (body form —
   claims never URL-escape).
-- **5G4:** health checks (owner-seeding drift, orphaned editors — now
-  against the SITE group first) + the cookbook permission table.
+- **5G4 — BUILT 2026-08-06.** grantHealth() in accessRequests feeds
+  Settings → Documents → Health: drift BOTH directions, names named —
+  seats with no live grant (standing write access nobody authorized;
+  site group AND the Entra fallback) and grants with no seat (Start
+  revision will be refused — the half-failed-approve incident as a
+  standing check); plus the site group failing to resolve, and an info
+  nudge when no site group is set. The cookbook
+  (docs/deploy-to-new-org.md) gains the access-model permission table:
+  all six groups, their kinds, permissions and settings, the measured
+  immediacy note, and working-libraries-stay-writable in bold. Also
+  same-day (Ben): a grantee can END unused access — "End my edit
+  access…" rides the overlay's lifecycle row and the granted task row
+  (once revising, Discard is the road out, and a grantee's discard
+  releases everything); revoke is now PER-PERSON (the column is written
+  as the remaining list, never cleared over a colleague's grant); My
+  tasks gains "Edit access you granted" — live grants routed by owner
+  email, admins see all, inline one-person Revoke….
 
 ### 5E — Acknowledgement ledger (SCHEMA release) — PARKED (Ben, 2026-08-05)
 - `ben_ltkdocack` through the schema pipeline — the first schema change

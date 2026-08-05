@@ -1040,6 +1040,18 @@ export async function renderDocsSettings(body: HTMLElement, ctx: Ctx): Promise<v
   /** Fed into Health by paintHealth — recomputed whenever the mapping
    *  changes, because an unmapped term is a command that cannot run. */
   let lifecycleFindings: HealthFinding[] = [];
+  /** The 5G4 drift report: seats vs grants, both directions, both
+   *  groups. Filled once per render (fresh reads inside). */
+  let grantFindings: HealthFinding[] = [];
+  void import("./accessRequests").then(({ grantHealth }) =>
+    grantHealth().then(
+      (f) => {
+        grantFindings = f;
+        paintHealth();
+      },
+      () => {}
+    )
+  );
 
   const paintLifecycle = () => {
     void (async () => {
@@ -1197,6 +1209,7 @@ export async function renderDocsSettings(body: HTMLElement, ctx: Ctx): Promise<v
       taxProbe,
     });
     findings.push(...lifecycleFindings);
+    findings.push(...grantFindings);
     if (findings.length === 0) {
       healthBox.appendChild(note("✓ Nothing to report — the libraries agree."));
       return;

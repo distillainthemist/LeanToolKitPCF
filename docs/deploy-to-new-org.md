@@ -57,6 +57,32 @@ samples a page from each library and warns *"<column> shows the whole
 term path, not the term"* with this remedy in it, so a deployment that
 gets this wrong says so instead of showing empty folders.
 
+### The document access model (5G — controlled standards only)
+
+Six groups run controlled-document access. Permissions are set ONCE per
+group; the app never writes SharePoint permissions (it runs flow-free,
+as the signed-in user):
+
+| Group | Kind | Permission | Role |
+| --- | --- | --- | --- |
+| App access group | Entra security | app sharing | Who can open LeanBoard (the roster syncs it). |
+| Document Controllers | Entra security | Full Control on the DMS site | Full document admin — merges with the app's super/site-admin roles. |
+| Document Owners & Approvers | Entra security | Edit on the standards library | The eligibility POOL: owner/approver/reviewer pickers select from its members. Rights on a document come from being NAMED on it. |
+| *(site)* DMSDocumentOwners | SharePoint site group | none | Holds ownership of the editors site group. Members: the two Entra groups above. |
+| *(site)* DMSDocumentEditors | SharePoint site group | **Contribute on the standards library ONLY** (no site-level grant) | Grant approvals seat people here — membership takes effect **immediately** (measured 2026-08-06; the Entra route below propagates in minutes-to-an-hour). Settings: owner = DMSDocumentOwners, membership editable by *Group Owner*, viewable by *Everyone* (the app reads it). |
+| Temporary Document Editors | Entra security | Contribute on the standards library | FALLBACK seat for tenants without the site group. Pool members must be seeded as its Entra OWNERS to execute grants. |
+| General users | (the app access group) | Read on standards, templates and records; write on working libraries | Working libraries MUST stay writable — the working-document flows depend on it. |
+
+Name the site editors group in **Settings → Access control → SharePoint
+editors site group**; link the three Entra groups on the same tab. The
+grant COLUMN ("Revision editors", a person-multi column on the standards
+library mapped under Settings → Documents → Document columns) is the
+AUTHORIZATION; group membership is only the physical ability — the app
+gates off the column, and Settings → Documents → **Health** reports
+drift in both directions (seats with no grant, grants with no seat).
+**Access diagnostics** (Settings → My profile, any user) probes the
+whole chain end to end.
+
 ## Install / update steps
 
 1. Import `LeanBoard_<tag>_managed.zip` (maker portal →

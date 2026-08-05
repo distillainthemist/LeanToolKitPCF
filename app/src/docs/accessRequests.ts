@@ -26,6 +26,7 @@ import {
   checkOutFile,
   fetchFieldSchema,
   fetchSiteGroupByName,
+  fetchSiteGroupUsers,
   removeSiteGroupUser,
   validateUpdateListItem,
 } from "./sp";
@@ -172,6 +173,97 @@ const sameDoc = (e: AccessRequest, uniqueId: string): boolean =>
  */
 const claimsLogin = (email: string): string =>
   `i:0#.f|membership|${email.trim().toLowerCase()}`;
+
+/**
+ * The 5G4 drift report: the ledger is the AUTHORIZATION registry and
+ * the groups are the ABILITY — health is the two agreeing. Names names,
+ * because "1 orphaned seat" is a finding nobody can act on.
+ *  - a seat with no grant = standing write access nobody authorized;
+ *  - a grant with no seat = a grantee whose Start revision will be
+ *    refused (exactly the 2026-08-06 half-failed-approve incident).
+ */
+export async function grantHealth(): Promise<
+  { level: "warn" | "info"; title: string; detail: string }[]
+> {
+  const out: { level: "warn" | "info"; title: string; detail: string }[] = [];
+  const cfg = await appDocsConfig();
+  const granted = (await readLedger()).filter((e) => e.granted !== undefined);
+  const grantedEmails = new Set(granted.map((e) => e.who.email.toLowerCase()));
+
+  if (cfg.spEditorsGroup !== "" && cfg.siteUrl !== "") {
+    const g = await fetchSiteGroupByName(cfg.siteUrl, cfg.spEditorsGroup);
+    const gid = g.ok ? Number(((g.data ?? {}) as { Id?: unknown }).Id ?? 0) : 0;
+    if (gid <= 0) {
+      out.push({
+        level: "warn",
+        title: `The SharePoint editors group "${cfg.spEditorsGroup}" does not resolve`,
+        detail:
+          "Grant approvals cannot seat anyone — check the site group's name under " +
+          "Settings → Access control, or recreate it on the site.",
+      });
+    } else {
+      const r = await fetchSiteGroupUsers(cfg.siteUrl, gid);
+      if (r.ok) {
+        const members = (
+          ((r.data ?? {}) as { value?: { Email?: string; Title?: string }[] }).value ?? []
+        ).filter((u) => (u.Email ?? "") !== "");
+        const orphans = members.filter(
+          (u) => !grantedEmails.has((u.Email ?? "").toLowerCase())
+        );
+        if (orphans.length > 0) {
+          out.push({
+            level: "warn",
+            title: `${orphans.length} editors-group seat${orphans.length === 1 ? "" : "s"} with no live grant`,
+            detail:
+              `${orphans.map((u) => u.Title || u.Email).join(", ")} — standing write access ` +
+              `nobody authorized. Remove them from ${cfg.spEditorsGroup} in SharePoint.`,
+          });
+        }
+        const seated = new Set(members.map((u) => (u.Email ?? "").toLowerCase()));
+        const unseated = granted.filter((e) => !seated.has(e.who.email.toLowerCase()));
+        if (unseated.length > 0) {
+          out.push({
+            level: "warn",
+            title: `${unseated.length} grant${unseated.length === 1 ? "" : "s"} with no editors-group seat`,
+            detail:
+              unseated.map((e) => `${e.who.name} on ${e.name}`).join("; ") +
+              " — their Start revision will be refused. Revoke and re-approve, or add " +
+              `them to ${cfg.spEditorsGroup} in SharePoint.`,
+          });
+        }
+      }
+    }
+  } else {
+    out.push({
+      level: "info",
+      title: "No SharePoint editors site group set",
+      detail:
+        "Grants fall back to the Entra editors group, whose membership can take up " +
+        "to an hour to propagate — set the site group under Settings → Access control.",
+    });
+  }
+
+  // the Entra group is the fallback route — anyone still seated there
+  // without a grant is legacy drift worth sweeping
+  if (cfg.editorsGroupId !== "") {
+    try {
+      const members = await groupMembers(cfg.editorsGroupId);
+      const orphans = members.filter((m) => !grantedEmails.has(m.email.toLowerCase()));
+      if (orphans.length > 0) {
+        out.push({
+          level: "warn",
+          title: `${orphans.length} Entra editors-group member${orphans.length === 1 ? "" : "s"} with no live grant`,
+          detail:
+            `${orphans.map((m) => m.name || m.email).join(", ")} — remove them from ` +
+            `${cfg.editorsGroupName || "the Entra editors group"} in Entra.`,
+        });
+      }
+    } catch {
+      /* an unreadable fallback group is not worth a warning of its own */
+    }
+  }
+  return out;
+}
 
 /** Resolve the SP editors site group's id (0 = not configured/found). */
 async function siteEditorsGroupId(cfg: {
@@ -465,6 +557,9 @@ export async function endOwnGrant(opts: {
   myName: string;
   /** Everyone currently in the column (emails) — self is filtered out. */
   current: string[];
+  /** The check-in comment; defaults to the discard wording. A grantee
+   *  relinquishing UNUSED access passes its own (Ben, 2026-08-06). */
+  comment?: string;
 }): Promise<string> {
   const { site, row } = opts;
   const me = opts.myEmail.trim().toLowerCase();
@@ -498,7 +593,7 @@ export async function endOwnGrant(opts: {
     checkInFile(
       site,
       row.serverUrl,
-      `Edit access ended — check-out discarded by ${opts.myName}`,
+      opts.comment ?? `Edit access ended — check-out discarded by ${opts.myName}`,
       false
     ),
     "Check-in"
@@ -628,6 +723,9 @@ export interface RequestAccessOpts {
   /** An existing request by this user (pending or declined) — the
    *  dialog shows its state instead of a fresh form. */
   existing: AccessRequest | null;
+  /** Offered on the GRANTED state: end your own unused access (Ben,
+   *  2026-08-06) — the screen runs the confirm + release. */
+  onEndAccess?: () => void;
   onChanged: () => void;
 }
 
@@ -641,14 +739,29 @@ export function openRequestAccess(opts: RequestAccessOpts): void {
     const dlg = openDialog({
       host: opts.host,
       title: `Edit access granted — ${opts.doc.name}`,
-      buttons: [{ label: "Close", kind: "primary", onClick: () => dlg.close() }],
+      buttons: [
+        ...(opts.onEndAccess !== undefined
+          ? [
+              {
+                label: "End my access…",
+                kind: "danger" as const,
+                onClick: () => {
+                  dlg.close();
+                  opts.onEndAccess?.();
+                },
+              },
+            ]
+          : []),
+        { label: "Close", kind: "primary", onClick: () => dlg.close() },
+      ],
     });
     dlg.body.appendChild(
       el(
         "div",
         "app-settings-note",
         `${existing.granted.by} granted you one revision cycle — Start revision is ` +
-          "available on the document."
+          "available on the document. Not going to use it? End your access and " +
+          "the grant releases cleanly."
       )
     );
     return;
