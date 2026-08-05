@@ -74,7 +74,6 @@ import {
 } from "./docsStore";
 import { parseOrgTree } from "../../../shared/schema/meeting";
 import { orgJson } from "../store/config";
-import { listCandidateGroups } from "../store/accessGroup";
 import { renderListPage, searchPage } from "./data";
 import { buildRenderViewXml, taxonomySearchProperty } from "./rows";
 
@@ -1022,58 +1021,19 @@ export async function renderDocsSettings(body: HTMLElement, ctx: Ctx): Promise<v
     )
   );
 
-  const ctlSel = el("select", "app-input") as HTMLSelectElement;
   {
-    const seed = el(
-      "option",
-      "",
-      app.controllersGroupName !== "" ? app.controllersGroupName : "— not configured —"
-    ) as HTMLOptionElement;
-    seed.value = app.controllersGroupId;
-    ctlSel.appendChild(seed);
+    // the group linkage moved to Settings → Access control (Ben,
+    // 2026-08-06) — all four groups in one place, searched by keyword
+    const moved = el("div", "app-settings-note");
+    moved.append(
+      app.controllersGroupName !== ""
+        ? `Document controllers group: ${app.controllersGroupName}. Manage the document control groups under `
+        : "The document control groups (controllers, owners & approvers, temporary editors) are linked under ",
+      Object.assign(el("a", "", "Settings → Access control"), { href: "#/settings/access" }),
+      "."
+    );
+    body.appendChild(moved);
   }
-  const ctlLoad = el("button", "app-btn", "Load groups") as HTMLButtonElement;
-  ctlLoad.addEventListener("click", () => {
-    void (async () => {
-      ctlLoad.disabled = true;
-      ctlLoad.textContent = "Loading…";
-      try {
-        const groups = await listCandidateGroups();
-        clear(ctlSel);
-        const none = el("option", "", "— not configured —") as HTMLOptionElement;
-        none.value = "";
-        ctlSel.appendChild(none);
-        for (const g of groups) {
-          const o = el("option", "", g.name) as HTMLOptionElement;
-          o.value = g.id;
-          if (g.id === app.controllersGroupId) o.selected = true;
-          ctlSel.appendChild(o);
-        }
-      } catch (e) {
-        ctlSel.title = `Could not list groups: ${String(e).slice(0, 200)}`;
-      }
-      ctlLoad.disabled = false;
-      ctlLoad.textContent = "Load groups";
-    })();
-  });
-  ctlSel.addEventListener("change", () => {
-    app.controllersGroupId = ctlSel.value;
-    app.controllersGroupName =
-      ctlSel.value === "" ? "" : (ctlSel.selectedOptions[0]?.textContent ?? "");
-    ctx.markDirty();
-  });
-  const ctlRow = el("div", "app-docs-siterow");
-  ctlRow.append(ctlSel, ctlLoad);
-  body.appendChild(field("Document controllers group", ctlRow));
-  body.appendChild(
-    el(
-      "div",
-      "app-field-hint",
-      "The one Entra security group whose members can be document owners and " +
-        "approvers — the owner and approver pickers select from it, and the group " +
-        "carries the SharePoint permissions."
-    )
-  );
 
   const lifeBox = el("div", "");
   body.appendChild(lifeBox);

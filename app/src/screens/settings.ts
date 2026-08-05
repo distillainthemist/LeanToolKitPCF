@@ -25,8 +25,8 @@ import { currentViewer, detectHost } from "../runtime";
 import { EmulatedRole, effectivePerson, setViewAsRole, viewAsRole } from "../viewAs";
 import {
   accessGroup,
+  searchCandidateGroups,
   isGroupOwner,
-  listCandidateGroups,
   saveAccessGroup,
   syncAllAccess,
   SyncReport,
@@ -258,6 +258,11 @@ export function mountSettings(parent: HTMLElement, initialTab = ""): () => void 
       });
     }
     if (me.role === "superadmin") {
+      tabs.push({
+        key: "access",
+        label: "Access control",
+        render: () => renderAccessControl(body, me),
+      });
       tabs.push({ key: "brand", label: "Branding", render: () => renderBranding(body, ctx) });
       tabs.push({
         key: "documents",
@@ -625,24 +630,26 @@ function syncSummary(r: SyncReport): string {
  *  full-screen modal over the next page. */
 function pickOwnedGroup(
   host: HTMLElement,
-  viewerId: string
+  viewerId: string,
+  copy?: { title: string; note: string }
 ): Promise<{ id: string; name: string } | null> {
   return new Promise((resolve) => {
     const overlay = el("div", "app-modal-overlay");
     const box = el("div", "app-modal");
-    box.appendChild(el("div", "app-modal-title", "Choose the access group"));
+    box.appendChild(el("div", "app-modal-title", copy?.title ?? "Choose the access group"));
     box.appendChild(
       el(
         "div",
         "app-modal-note",
-        "Security groups in your organisation (M365 groups can't gate app sharing). You must be an OWNER of the group you pick — that's checked when you select it. Members of the chosen group can open the app; the roster keeps it in sync."
+        copy?.note ??
+          "Security groups in your organisation (M365 groups can't gate app sharing). You must be an OWNER of the group you pick — that's checked when you select it. Members of the chosen group can open the app; the roster keeps it in sync."
       )
     );
     const search = el("input", "app-input") as HTMLInputElement;
     search.type = "search";
-    search.placeholder = "Filter groups…";
+    search.placeholder = "Search groups by name…";
     const list = el("div", "app-group-list");
-    list.appendChild(el("div", "app-settings-note", "Loading groups…"));
+    list.appendChild(el("div", "app-settings-note", "Type to search — matches from the start of the group name."));
     const status = el("div", "app-settings-note", "");
     box.append(search, list, status);
     const footer = el("div", "app-modal-footer");
@@ -688,41 +695,62 @@ function pickOwnedGroup(
           status.textContent = `Couldn't check ownership: ${err instanceof Error ? err.message : String(err)}`;
         });
     };
-    const paint = () => {
+    // server-side keyword search — a large tenant holds thousands of
+    // groups and enumerating them all took forever (Ben, 2026-08-06);
+    // Graph startswith answers in one page. Debounced, sequence-guarded.
+    let seq = 0;
+    const paint = (found: { id: string; name: string }[], q: string) => {
       clear(list);
-      const q = search.value.trim().toLowerCase();
-      const shown = groups.filter((g) => q === "" || g.name.toLowerCase().includes(q));
-      if (shown.length === 0) {
-        list.appendChild(el("div", "app-settings-note", "No groups match."));
+      groups = found;
+      if (q === "") {
+        list.appendChild(
+          el("div", "app-settings-note", "Type to search — matches from the start of the group name.")
+        );
         return;
       }
-      for (const g of shown.slice(0, 30)) {
+      if (found.length === 0) {
+        list.appendChild(el("div", "app-settings-note", `No security groups start with “${q}”.`));
+        return;
+      }
+      for (const g of found) {
         const rowBtn = el("button", "app-group-row") as HTMLButtonElement;
         rowBtn.type = "button";
         rowBtn.appendChild(el("span", "app-people-name", g.name));
         rowBtn.addEventListener("click", () => pick(g));
         list.appendChild(rowBtn);
       }
-      if (shown.length > 30) {
-        list.appendChild(el("div", "app-settings-note", `Showing 30 of ${shown.length} — keep typing.`));
-      }
     };
-    search.addEventListener("input", paint);
-    void listCandidateGroups()
-      .then((g) => {
-        groups = g;
-        paint();
-      })
-      .catch((err) => {
+    let debounce = 0;
+    search.addEventListener("input", () => {
+      window.clearTimeout(debounce);
+      const q = search.value.trim();
+      if (q === "") {
+        seq++;
+        paint([], "");
+        return;
+      }
+      debounce = window.setTimeout(() => {
+        const mySeq = ++seq;
         clear(list);
-        list.appendChild(
-          el(
-            "div",
-            "app-settings-note",
-            `Couldn't list groups: ${err instanceof Error ? err.message : String(err)}`
-          )
-        );
-      });
+        list.appendChild(el("div", "app-loading-line", `Searching for “${q}”…`));
+        searchCandidateGroups(q)
+          .then((found) => {
+            if (mySeq !== seq) return; // a newer keystroke owns the list
+            paint(found, q);
+          })
+          .catch((err) => {
+            if (mySeq !== seq) return;
+            clear(list);
+            list.appendChild(
+              el(
+                "div",
+                "app-settings-note",
+                `Couldn't search groups: ${err instanceof Error ? err.message : String(err)}`
+              )
+            );
+          });
+      }, 350);
+    });
   });
 }
 
@@ -925,6 +953,118 @@ function directoryAddCard(
   return card;
 }
 
+/**
+ * Access control (Ben, 2026-08-06): every group linkage in one place —
+ * the app access group the roster keeps in sync, and the three document
+ * control groups of the 5G access model. All are plain Entra security
+ * groups; each carries its SharePoint permission level (set once in the
+ * tenant, per the deployment cookbook).
+ */
+async function renderAccessControl(body: HTMLElement, me: RosterPerson): Promise<void> {
+  clear(body);
+  let people = await listPeople(true);
+  body.appendChild(
+    accessControlCard(me, () => people, () => void listPeople(true).then((p) => (people = p)))
+  );
+
+  const card = el("div", "app-access-card");
+  card.appendChild(el("div", "app-section", "Document control groups"));
+  card.appendChild(
+    el(
+      "div",
+      "app-settings-note",
+      "Three security groups govern controlled documents: controllers hold full " +
+        "document admin; the owners & approvers group is the pool the owner, " +
+        "approver and reviewer pickers select from; the temporary editors group " +
+        "is joined for the life of an approved edit-access grant and left when " +
+        "the revision ends. You must OWN a group to link it — and per the " +
+        "ownership hierarchy, controllers should own the two groups below " +
+        "theirs, and pool members the editors group, so grants can be executed " +
+        "single-handed."
+    )
+  );
+  body.appendChild(card);
+
+  // stored on the docs app config — DYNAMIC import only (the import
+  // gate bans a static chain from the settings screen into src/docs)
+  const { appDocsConfig, saveAppDocsConfig, invalidateDocsCache } = await import(
+    "../docs/docsStore"
+  );
+  let cfg = await appDocsConfig();
+
+  const groupRow = (
+    label: string,
+    hint: string,
+    read: () => { id: string; name: string },
+    write: (id: string, name: string) => void
+  ) => {
+    const wrap = el("div", "app-settings-row app-access-grouprow");
+    const text = el("div", "");
+    text.appendChild(el("div", "app-user-field-label", label));
+    const current = el("div", "app-settings-note", "");
+    text.appendChild(current);
+    const choose = el("button", "app-btn", "") as HTMLButtonElement;
+    const drop = el("button", "app-link", "Unlink") as HTMLButtonElement;
+    const paint = () => {
+      const g = read();
+      current.textContent = g.id !== "" ? g.name : "Not linked yet.";
+      choose.textContent = g.id !== "" ? "Change…" : "Link group…";
+      drop.style.display = g.id !== "" ? "" : "none";
+    };
+    const save = async (id: string, name: string) => {
+      write(id, name);
+      await saveAppDocsConfig(cfg);
+      invalidateDocsCache();
+      cfg = await appDocsConfig();
+      paint();
+    };
+    choose.addEventListener("click", () => {
+      void (async () => {
+        const g = await pickOwnedGroup(card, me.whoId, {
+          title: `Link the ${label.toLowerCase()} group`,
+          note:
+            `Search your organisation's security groups by name. ${hint} ` +
+            "You must be an OWNER of the group you pick — that's checked on selection.",
+        });
+        if (g) await save(g.id, g.name);
+      })();
+    });
+    drop.addEventListener("click", () => void save("", ""));
+    wrap.append(text, el("span", "app-bar-gap"), choose, drop);
+    card.appendChild(wrap);
+    card.appendChild(el("div", "app-field-hint", hint));
+    paint();
+  };
+
+  groupRow(
+    "Document controllers",
+    "Full document admin — merges with the app's super/site-admin roles.",
+    () => ({ id: cfg.controllersGroupId, name: cfg.controllersGroupName }),
+    (id, name) => {
+      cfg.controllersGroupId = id;
+      cfg.controllersGroupName = name;
+    }
+  );
+  groupRow(
+    "Document owners & approvers",
+    "The eligibility pool: owner, approver and reviewer pickers select from its members. Rights on a document come from being named on it.",
+    () => ({ id: cfg.ownersGroupId, name: cfg.ownersGroupName }),
+    (id, name) => {
+      cfg.ownersGroupId = id;
+      cfg.ownersGroupName = name;
+    }
+  );
+  groupRow(
+    "Temporary document editors",
+    "Joined when an edit-access request is approved, left when the revision ends — the SharePoint enforcement of the grant.",
+    () => ({ id: cfg.editorsGroupId, name: cfg.editorsGroupName }),
+    (id, name) => {
+      cfg.editorsGroupId = id;
+      cfg.editorsGroupName = name;
+    }
+  );
+}
+
 /** Users: search + site/role filters, role + site assignment. */
 async function renderUsers(body: HTMLElement, me: RosterPerson): Promise<void> {
   clear(body);
@@ -944,9 +1084,15 @@ async function renderUsers(body: HTMLElement, me: RosterPerson): Promise<void> {
     draw();
   };
   if (canEdit) {
-    body.appendChild(
-      accessControlCard(me, () => people, () => void reloadPeople())
+    // the access-group card moved to its own tab (Ben, 2026-08-06) —
+    // a pointer keeps the old muscle memory working
+    const moved = el("div", "app-settings-note");
+    moved.append(
+      "Group linkage lives under ",
+      Object.assign(el("a", "", "Access control"), { href: "#/settings/access" }),
+      " now — the app access group and the document control groups together."
     );
+    body.appendChild(moved);
   }
 
   // directory reads (job title + account status) are lazy and cached, so

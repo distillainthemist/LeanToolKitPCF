@@ -508,12 +508,19 @@ export interface AppDocsConfig {
   termGroupName: string;
   orgSetId: string;
   orgSetName: string;
-  /** The ONE Entra group that governs who can be a document
-   *  owner/approver (Ben, 2026-08-04): the pickers select from its
-   *  members, and the group carries the SharePoint permissions. Same
-   *  shape as the Users access-control group. "" = not configured. */
+  /** The 5G access-model groups (Ben, 2026-08-05), all plain Entra
+   *  security groups, each carrying its SharePoint permission level.
+   *  "" = not configured. Controllers = full document admin;
+   *  owners/approvers = the ELIGIBILITY POOL the owner/approver/
+   *  reviewer pickers select from (rights on a document come from
+   *  being NAMED on it); editors = the TEMPORARY group people join
+   *  while an approved edit-access grant is live. */
   controllersGroupId: string;
   controllersGroupName: string;
+  ownersGroupId: string;
+  ownersGroupName: string;
+  editorsGroupId: string;
+  editorsGroupName: string;
   /** siteUrl → that site's shared column mapping and palettes. A map,
    *  so exposing a second site later adds a key rather than a schema. */
   sites: Record<string, SiteDictionary>;
@@ -536,6 +543,10 @@ export function emptyAppDocsConfig(): AppDocsConfig {
     orgSetName: "",
     controllersGroupId: "",
     controllersGroupName: "",
+    ownersGroupId: "",
+    ownersGroupName: "",
+    editorsGroupId: "",
+    editorsGroupName: "",
     sites: {},
   };
 }
@@ -615,6 +626,10 @@ export function parseAppDocsConfig(raw: string | null | undefined): AppDocsConfi
     out.orgSetName = asStr(o.orgSetName);
     out.controllersGroupId = asStr(o.controllersGroupId);
     out.controllersGroupName = asStr(o.controllersGroupName);
+    out.ownersGroupId = asStr(o.ownersGroupId);
+    out.ownersGroupName = asStr(o.ownersGroupName);
+    out.editorsGroupId = asStr(o.editorsGroupId);
+    out.editorsGroupName = asStr(o.editorsGroupName);
     if (o.sites && typeof o.sites === "object") {
       for (const [key, val] of Object.entries(o.sites as Record<string, unknown>)) {
         const k = siteKey(key);
@@ -728,6 +743,10 @@ export function serializeAppDocsConfig(cfg: AppDocsConfig): string {
   if (cfg.orgSetName !== "") o.orgSetName = cfg.orgSetName;
   if (cfg.controllersGroupId !== "") o.controllersGroupId = cfg.controllersGroupId;
   if (cfg.controllersGroupName !== "") o.controllersGroupName = cfg.controllersGroupName;
+  if (cfg.ownersGroupId !== "") o.ownersGroupId = cfg.ownersGroupId;
+  if (cfg.ownersGroupName !== "") o.ownersGroupName = cfg.ownersGroupName;
+  if (cfg.editorsGroupId !== "") o.editorsGroupId = cfg.editorsGroupId;
+  if (cfg.editorsGroupName !== "") o.editorsGroupName = cfg.editorsGroupName;
   const sites: Record<string, unknown> = {};
   for (const [key, dict] of Object.entries(cfg.sites)) {
     const body = serializeSiteDictionary(dict);

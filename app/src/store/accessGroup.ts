@@ -139,33 +139,34 @@ function tolerate(err: unknown, alreadyOk: boolean, groupId: string): void {
 // ---- group discovery ----
 
 /**
- * Candidate access groups: pure SECURITY groups only (M365 groups don't
- * work for app sharing). The connector's Graph passthrough only accepts
- * /groups… paths (not /me/ownedObjects), so ownership cannot be
- * pre-filtered here — every security group in the tenant lists, and
- * ownership is verified when one is picked (isGroupOwner —
- * /groups/{id}/owners IS an allowed path).
+ * Candidate groups by KEYWORD: pure SECURITY groups only (M365 groups
+ * don't work for app sharing, and the document groups are security
+ * groups by design). Server-side `startswith` on the display name — a
+ * large tenant holds thousands of groups, and enumerating them all
+ * (the pre-2026-08-06 behaviour) took forever; Graph v1.0 supports
+ * startswith without the eventual-consistency header the fuller
+ * `$search` would need (the connector passthrough cannot send custom
+ * headers). Ownership cannot be pre-filtered (/me/ownedObjects is not
+ * an allowed passthrough path) — it is verified when a group is picked
+ * (isGroupOwner — /groups/{id}/owners IS allowed).
  */
-export async function listCandidateGroups(): Promise<CandidateGroup[]> {
+export async function searchCandidateGroups(keyword: string): Promise<CandidateGroup[]> {
+  const kw = keyword.trim().replace(/'/g, "''");
+  if (kw === "") return [];
+  const filter = encodeURIComponent(
+    `securityEnabled eq true and startswith(displayName,'${kw}')`
+  );
+  const data = (await graph(
+    "GET",
+    `/groups?$select=id,displayName,securityEnabled,groupTypes&$filter=${filter}&$top=50`
+  )) as {
+    value?: { id?: string; displayName?: string; groupTypes?: string[] }[];
+  };
   const out: CandidateGroup[] = [];
-  let path =
-    "/groups?$select=id,displayName,securityEnabled,groupTypes&$filter=securityEnabled eq true&$top=999";
-  while (path) {
-    const data = (await graph("GET", path)) as {
-      value?: {
-        id?: string;
-        displayName?: string;
-        groupTypes?: string[];
-      }[];
-      "@odata.nextLink"?: string;
-    };
-    for (const g of data.value ?? []) {
-      // groupTypes "Unified" = an M365 group, even when security-enabled
-      if (!g.id || (g.groupTypes ?? []).includes("Unified")) continue;
-      out.push({ id: g.id, name: g.displayName ?? g.id });
-    }
-    const next = data["@odata.nextLink"];
-    path = next ? next.replace("https://graph.microsoft.com/v1.0", "") : "";
+  for (const g of data.value ?? []) {
+    // groupTypes "Unified" = an M365 group, even when security-enabled
+    if (!g.id || (g.groupTypes ?? []).includes("Unified")) continue;
+    out.push({ id: g.id, name: g.displayName ?? g.id });
   }
   return out.sort((a, b) => a.name.localeCompare(b.name));
 }

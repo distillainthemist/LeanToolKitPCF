@@ -65,9 +65,16 @@ describe("app docs config", () => {
       orgSetName: "Organisation",
       controllersGroupId: "",
       controllersGroupName: "",
+      ownersGroupId: "g-owners",
+      ownersGroupName: "Document Owners & Approvers",
+      editorsGroupId: "g-editors",
+      editorsGroupName: "Temporary Document Editors",
       sites: {},
     });
     expect(parseAppDocsConfig(raw).siteUrl).toBe("https://x.sharepoint.com/sites/Dev");
+    // the 5G groups round-trip beside the controllers group
+    expect(parseAppDocsConfig(raw).ownersGroupName).toBe("Document Owners & Approvers");
+    expect(parseAppDocsConfig(raw).editorsGroupId).toBe("g-editors");
     expect(parseAppDocsConfig('{"siteUrl":"https://x/sites/Dev/"}').siteUrl).toBe(
       "https://x/sites/Dev"
     );
