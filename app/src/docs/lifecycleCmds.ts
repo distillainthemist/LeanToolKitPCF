@@ -40,6 +40,10 @@ export interface LifecycleRunOpts {
   statusInternal: string;
   /** Who is acting — approve's comment names them. */
   actorName: string;
+  /** The actor's standing comes from an edit-access GRANT (5G3) — an
+   *  Access-denied check-out then gets the propagation explanation
+   *  instead of a bare refusal (Ben's first grantee run, 2026-08-06). */
+  actingAsEditor?: boolean;
   /** Styled dialog host (.app-dlghost). */
   host: HTMLElement;
   /** Submit-for-review only: lets the submitter add reviewers via
@@ -234,7 +238,19 @@ export function openLifecycleCommand(opts: LifecycleRunOpts): void {
       // held by the acting user from earlier work is fine — the
       // sequence continues; held by someone else is a real refusal
       const already = /checked out/i.test(spErrorText(out.status));
-      if (!already) return fail("Could not check out", out.status);
+      if (!already) {
+        // a freshly granted editor hitting Access denied is almost
+        // always GROUP PROPAGATION, not a broken grant — say so
+        const denied = /access denied|unauthorized/i.test(spErrorText(out.status));
+        const what =
+          opts.actingAsEditor === true && denied
+            ? "Could not check out — your editor access was granted but SharePoint may " +
+              "still be propagating the group membership (try again in a few minutes; " +
+              "if it persists, an admin should confirm the editors group has edit " +
+              "rights on this library)"
+            : "Could not check out";
+        return fail(what, out.status);
+      }
     }
 
     // additions to the reviewers column go in FIRST, under the same

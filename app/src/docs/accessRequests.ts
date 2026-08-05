@@ -46,6 +46,20 @@ export interface AccessRequest {
    *  two documents keeps their editors-group seat until the LAST grant
    *  ends, and "orphaned editors" is a precise health question. */
   granted?: { by: string; when: string };
+  /** The requester has SEEN the granted outcome — until then it counts
+   *  on their tasks badge (news that never highlights never reaches
+   *  anyone, Ben 2026-08-06). */
+  seen?: boolean;
+}
+
+/** Stamp outcomes as seen — called when the panel paints them. */
+export async function markSeen(ids: string[]): Promise<void> {
+  if (ids.length === 0) return;
+  const set = new Set(ids);
+  await mutateLedger(
+    (all) => all.map((e) => (set.has(e.id) ? { ...e, seen: true } : e)),
+    (all) => all.filter((e) => set.has(e.id)).every((e) => e.seen === true)
+  );
 }
 
 export const requestId = (uniqueId: string, whoId: string): string =>

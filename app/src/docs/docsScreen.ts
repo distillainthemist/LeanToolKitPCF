@@ -450,6 +450,7 @@ export function mountDocs(
           targetTerm: target,
           statusInternal,
           actorName: currentViewer()?.name ?? "",
+          actingAsEditor: lifecycleGatesFor(row).isEditor,
           host: dialogHost,
           reviewersPicker,
           // the owner's Approve ends every grant on the document (5G3)
@@ -993,10 +994,13 @@ export function mountDocs(
       t.held.length +
       t.review.length +
       t.requests.length +
-      // of your OWN requests only a decline is actionable (dismiss);
-      // pending is waiting and granted persists for the whole cycle —
-      // counting those would keep the badge hot for weeks
-      t.outgoing.filter((e) => e.declined !== undefined).length;
+      // of your OWN requests: a decline counts until dismissed, and a
+      // grant counts until SEEN — news that never highlights never
+      // reaches anyone. Pending is just waiting; a seen grant persists
+      // quietly for the whole cycle.
+      t.outgoing.filter(
+        (e) => e.declined !== undefined || (e.granted !== undefined && e.seen !== true)
+      ).length;
     /** Everything the panel PAINTS — outgoing rows show in every state
      *  even when none of them counts toward the badge. */
     const taskVisible = (t: MyTasks) => taskCount(t) > 0 || t.outgoing.length > 0;
@@ -1238,6 +1242,19 @@ export function mountDocs(
                 rowEl.appendChild(act);
               }
               bodyEl.appendChild(rowEl);
+            }
+            // painted = seen: the grant stops counting on the badge
+            // (the entry itself lives on for the whole cycle)
+            const unseen = t.outgoing
+              .filter((e) => e.granted !== undefined && e.seen !== true)
+              .map((e) => e.id);
+            if (unseen.length > 0) {
+              void import("./accessRequests").then(({ markSeen }) =>
+                markSeen(unseen).then(
+                  () => refreshTasksBadge(),
+                  () => {}
+                )
+              );
             }
           }
         });
