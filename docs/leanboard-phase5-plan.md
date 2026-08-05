@@ -194,16 +194,31 @@ grant anywhere ("orphaned editors").
   everyone else rather than letting SharePoint refuse late.
 
 Build order:
-- **5G0 (spike):** the Graph membership half is already measured — it
-  is the access group's own machinery. Remaining probes: can an
-  ordinary user update the shared `__app__` row's ledger (else: per-user
-  request rows in the prefs table, swept by the owner's queue)? And one
-  run confirming a NON-admin pool member, as editors-group owner, can
-  add/remove a member there.
-- **5G1:** settings maps the three groups; membership plumbing
-  (transitive, cached per session, admin fails CLOSED to the Dataverse
-  role, pool fails to an explanatory hint); pickers restrict to the
-  pool; add-form standards target gated.
+- **5G0 (spike) — DONE, both probes GREEN (Ben's runs, 2026-08-06,
+  non-admin account marketing@, app role "user"):**
+  - **Ledger:** the ledger lives on its OWN row — `ben_listid
+    "__requests__"` in the doc-libraries table, never the `__app__`
+    config row, so a request write cannot clobber configuration. An
+    ordinary user wrote it, read the entry back, and removed it. The
+    per-user-rows fallback is dead; readLedger/writeLedger in
+    docs/accessProbe.ts are 5G2's transport (last-write-wins — 5G2
+    re-reads, merges, and verifies its write landed).
+  - **Editors group:** a non-admin who is an Entra OWNER of the group
+    self-added, verified by read-back, and self-removed through the
+    connector passthrough. The one-step owner-executed grant is proven.
+    Also measured: a non-owner non-admin can READ memberships — gates
+    and health checks may rely on membership reads from any account.
+  - The probe stays permanently as Settings → My profile → Access
+    diagnostics (any user; would have self-diagnosed the 2026-08-05
+    security-role incident in one click). Probe skips the membership
+    mutation when the runner is already a member — a live grant is
+    never disturbed.
+- **5G1:** ~~settings maps the three groups~~ (DONE 2026-08-06: the
+  Access control tab + keyword group search — startswith only, the
+  passthrough cannot send the eventual-consistency header $search
+  needs). Remaining: membership plumbing (cached per session, admin
+  fails CLOSED to the Dataverse role, pool fails to an explanatory
+  hint); pickers restrict to the pool; add-form standards target gated.
 - **5G2:** "Revision editors" dictionary role; Request edit access +
   ledger + owner's Access requests queue + decline.
 - **5G3:** approve = column write + group add (+ propagation notice);
