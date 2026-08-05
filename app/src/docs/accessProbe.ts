@@ -122,14 +122,27 @@ export async function runAccessProbe(log: (line: string) => void): Promise<void>
     return;
   }
   try {
+    // membership FIRST and plainly — "Start revision shows but check-out
+    // is denied" is answered by exactly this line (member = wait out
+    // propagation; not a member = the grant's group add never landed)
+    const member = await isGroupMember(editorsId, viewer.objectId);
+    log(
+      member
+        ? "OK — editors group: you ARE a member (SharePoint may lag membership by minutes)."
+        : "INFO — editors group: you are NOT a member."
+    );
     const owner = await isGroupOwner(editorsId, viewer.objectId);
     log(
       owner
         ? "OK — you are an Entra OWNER of the editors group."
         : "INFO — you are NOT an owner of the editors group; membership changes below would be refused (the ownership hierarchy seeds owners in 5G3)."
     );
-    if (await isGroupMember(editorsId, viewer.objectId)) {
-      log("SKIP — you are ALREADY a member (a live grant?) — add/remove not attempted, a real membership is never disturbed.");
+    if (member) {
+      log("SKIP — add/remove not attempted while you hold a membership — a live grant is never disturbed.");
+      return;
+    }
+    if (!owner) {
+      log("SKIP — add/remove not attempted (not an owner; the attempt would only be refused).");
       return;
     }
     const { addMember, removeMember } = await import("../store/accessGroup");
