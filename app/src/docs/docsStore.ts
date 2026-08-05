@@ -7,6 +7,7 @@ import { Ben_ltkdoclibrariesService } from "../generated/services/Ben_ltkdoclibr
 import { allWhere, eq, firstWhere, upsertWhere } from "../store/dv";
 import {
   APP_LIST_ID,
+  RESERVED_LIST_IDS,
   AppDocsConfig,
   DictionaryConflict,
   LibraryConfig,
@@ -70,7 +71,9 @@ export function docsConfig(): Promise<{
     const appRow = rows.find((r) => r.ben_listid === APP_LIST_ID);
     const app = parseAppDocsConfig(appRow?.ben_configjson);
     const libraries = rows
-      .filter((r) => (r.ben_listid ?? "") !== APP_LIST_ID && (r.ben_listid ?? "") !== "")
+      .filter(
+        (r) => (r.ben_listid ?? "") !== "" && !RESERVED_LIST_IDS.has(r.ben_listid ?? "")
+      )
       .map(mapRow);
     const conflicts: Record<string, DictionaryConflict[]> = {};
 
@@ -140,7 +143,9 @@ function mapRow(r: {
 export async function listDocLibraries(): Promise<DocLibrary[]> {
   const rows = await allWhere(Ben_ltkdoclibrariesService.getAll);
   return rows
-    .filter((r) => (r.ben_listid ?? "") !== APP_LIST_ID && (r.ben_listid ?? "") !== "")
+    .filter(
+      (r) => (r.ben_listid ?? "") !== "" && !RESERVED_LIST_IDS.has(r.ben_listid ?? "")
+    )
     .map(mapRow);
 }
 

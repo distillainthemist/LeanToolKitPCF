@@ -18,12 +18,13 @@ import { openDialog } from "../../../shared/ui/dialog";
 import { Ben_ltkdoclibrariesService } from "../generated/services/Ben_ltkdoclibrariesService";
 import { eq, firstWhere, upsertWhere } from "../store/dv";
 import { addMember, groupMembers, removeMember } from "../store/accessGroup";
-import { spErrorText, validateItemErrors } from "./model";
+import { REQUESTS_LIST_ID, spErrorText, validateItemErrors } from "./model";
 import { DocRow } from "./rows";
 import { checkInFile, checkOutFile, validateUpdateListItem } from "./sp";
 import { appDocsConfig } from "./docsStore";
 
-const REQUESTS_ROW = "__requests__";
+// one source of truth with the library reads that must SKIP this row
+const REQUESTS_ROW = REQUESTS_LIST_ID;
 
 export interface AccessRequest {
   /** `${uniqueId}:${whoId}` — one live request per document per person. */

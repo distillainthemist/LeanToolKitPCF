@@ -536,6 +536,12 @@ export interface AppDocsConfig {
 }
 
 export const APP_LIST_ID = "__app__";
+/** The access-requests ledger row (5G2) — same table, NOT a library. */
+export const REQUESTS_LIST_ID = "__requests__";
+/** Rows in the doc-libraries table that are storage, not libraries —
+ *  every library read must skip them (the ledger painted as a
+ *  "library" called Access requests ledger, Ben 2026-08-06). */
+export const RESERVED_LIST_IDS = new Set([APP_LIST_ID, REQUESTS_LIST_ID]);
 
 const asStr = (v: unknown): string => (typeof v === "string" ? v.trim() : "");
 
