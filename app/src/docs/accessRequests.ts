@@ -20,7 +20,15 @@ import { eq, firstWhere, upsertWhere } from "../store/dv";
 import { addMember, groupMembers, removeMember } from "../store/accessGroup";
 import { REQUESTS_LIST_ID, spErrorText, validateItemErrors } from "./model";
 import { DocRow } from "./rows";
-import { checkInFile, checkOutFile, fetchFieldSchema, validateUpdateListItem } from "./sp";
+import {
+  addSiteGroupUser,
+  checkInFile,
+  checkOutFile,
+  fetchFieldSchema,
+  fetchSiteGroupByName,
+  removeSiteGroupUser,
+  validateUpdateListItem,
+} from "./sp";
 import { appDocsConfig } from "./docsStore";
 
 // one source of truth with the library reads that must SKIP this row
@@ -162,6 +170,19 @@ const sameDoc = (e: AccessRequest, uniqueId: string): boolean =>
  * grant elsewhere still needs it. Returns a warning ("" = clean) —
  * callers surface it but never fail the command that already landed.
  */
+const claimsLogin = (email: string): string =>
+  `i:0#.f|membership|${email.trim().toLowerCase()}`;
+
+/** Resolve the SP editors site group's id (0 = not configured/found). */
+async function siteEditorsGroupId(cfg: {
+  siteUrl: string;
+  spEditorsGroup: string;
+}): Promise<number> {
+  if (cfg.spEditorsGroup === "" || cfg.siteUrl === "") return 0;
+  const g = await fetchSiteGroupByName(cfg.siteUrl, cfg.spEditorsGroup);
+  return g.ok ? Number(((g.data ?? {}) as { Id?: unknown }).Id ?? 0) : 0;
+}
+
 export async function releaseGrants(uniqueId: string, emails: string[]): Promise<string> {
   const lower = new Set(emails.map((e) => e.trim().toLowerCase()).filter((e) => e !== ""));
   if (lower.size === 0) return "";
@@ -170,28 +191,47 @@ export async function releaseGrants(uniqueId: string, emails: string[]): Promise
     (all) => !all.some((e) => sameDoc(e, uniqueId) && lower.has(e.who.email.toLowerCase()))
   );
   const cfg = await appDocsConfig();
-  if (cfg.editorsGroupId === "") return "";
   const stillGranted = new Set(
     (await readLedger())
       .filter((e) => e.granted !== undefined)
       .map((e) => e.who.email.toLowerCase())
   );
-  const members = await groupMembers(cfg.editorsGroupId);
   const failed: string[] = [];
-  for (const email of lower) {
-    if (stillGranted.has(email)) continue; // another live grant keeps the seat
-    const m = members.find((x) => x.email.toLowerCase() === email);
-    if (m === undefined) continue; // never held a seat (or already gone)
-    try {
-      await removeMember(cfg.editorsGroupId, m.id);
-    } catch {
-      failed.push(email);
+
+  // the SITE group's seat (the instant route, 5G3b) — removing a
+  // non-member is SharePoint's "does not exist" refusal, a fine outcome
+  const gid = await siteEditorsGroupId(cfg).catch(() => 0);
+  if (gid > 0) {
+    for (const email of lower) {
+      if (stillGranted.has(email)) continue; // another live grant keeps the seat
+      const r = await removeSiteGroupUser(cfg.siteUrl, gid, claimsLogin(email));
+      if (!r.ok && !/does not exist|not found/i.test(r.status)) failed.push(email);
     }
   }
-  return failed.length === 0
+
+  // the Entra group's seat (the fallback route, and any legacy grants)
+  if (cfg.editorsGroupId !== "") {
+    try {
+      const members = await groupMembers(cfg.editorsGroupId);
+      for (const email of lower) {
+        if (stillGranted.has(email)) continue;
+        const m = members.find((x) => x.email.toLowerCase() === email);
+        if (m === undefined) continue; // never held a seat (or already gone)
+        try {
+          await removeMember(cfg.editorsGroupId, m.id);
+        } catch {
+          failed.push(email);
+        }
+      }
+    } catch {
+      failed.push("(the Entra editors group could not be read)");
+    }
+  }
+  const who = [...new Set(failed)];
+  return who.length === 0
     ? ""
-    : `The editors-group seat was not released for ${failed.join(", ")} — ` +
-        "remove them in Entra, or Access diagnostics will flag the drift.";
+    : `The editors seat was not released for ${who.join(", ")} — ` +
+        "remove them in SharePoint/Entra, or Access diagnostics will flag the drift.";
 }
 
 /** A tiny timeout wrapper matching lifecycleCmds' — a grant step that
@@ -337,17 +377,40 @@ export function openApproveRequest(opts: ApproveRequestOpts): void {
     }
 
     // the authorization is on the record — the seat and the ledger are
-    // cleanup from here, warned but never a rollback
+    // cleanup from here, warned but never a rollback. The SITE group is
+    // the seat of choice (5G3b, measured 2026-08-06: plain-JSON add,
+    // effective immediately); the Entra group is the fallback route,
+    // which propagates slowly.
     let warn = "";
-    status.textContent = "Adding to the editors group…";
+    let instant = false;
+    status.textContent = "Granting access…";
     try {
       const cfg = await appDocsConfig();
-      if (cfg.editorsGroupId !== "") await addMember(cfg.editorsGroupId, request.who.id);
-      else warn = "No temporary editors group is linked — the grant is app-only. ";
+      const gid = await siteEditorsGroupId(cfg);
+      if (gid > 0) {
+        const added = await addSiteGroupUser(
+          cfg.siteUrl,
+          gid,
+          claimsLogin(request.who.email)
+        );
+        if (added.ok) instant = true;
+        else {
+          warn = `The site-group add was refused (${spErrorText(added.status).slice(
+            0,
+            160
+          )}) — add them to ${cfg.spEditorsGroup} in SharePoint. `;
+        }
+      } else if (cfg.spEditorsGroup !== "") {
+        warn = `The site group "${cfg.spEditorsGroup}" did not resolve — add them to it in SharePoint. `;
+      } else if (cfg.editorsGroupId !== "") {
+        await addMember(cfg.editorsGroupId, request.who.id);
+      } else {
+        warn = "No editors group is configured — the grant is app-only. ";
+      }
     } catch (e) {
-      warn = `The editors-group add was refused (${spErrorText(
+      warn = `The editors add was refused (${spErrorText(
         e instanceof Error ? e.message : String(e)
-      ).slice(0, 160)}) — add them in Entra. `;
+      ).slice(0, 160)}) — add them by hand. `;
     }
     try {
       await markGranted(request.id, opts.actorName);
@@ -362,9 +425,10 @@ export function openApproveRequest(opts: ApproveRequestOpts): void {
       opts.onDone();
       return; // leave the warning readable
     }
-    status.textContent =
-      "Granted. SharePoint can take a few minutes to honour the new group " +
-      "membership — the requester's first check-out may be refused until it lands.";
+    status.textContent = instant
+      ? `Granted — effective immediately. ${request.who.name} can Start revision now.`
+      : "Granted. SharePoint can take a few minutes to honour the new group " +
+        "membership — the requester's first check-out may be refused until it lands.";
     running = false;
     goBtn.style.display = "none";
     opts.onDone();
@@ -503,8 +567,7 @@ export function openRequestAccess(opts: RequestAccessOpts): void {
         "div",
         "app-settings-note",
         `${existing.granted.by} granted you one revision cycle — Start revision is ` +
-          "available on the document. If a check-out is refused, the group " +
-          "membership may still be propagating (a few minutes)."
+          "available on the document."
       )
     );
     return;

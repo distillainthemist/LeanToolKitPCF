@@ -266,8 +266,29 @@ Build order:
   gateFields are now per-library filtered (the grant column may exist
   on standards alone — the refreshRow 400 lesson, applied to every
   queue query).
-- **5G4:** health checks (owner-seeding drift, orphaned editors) +
-  the cookbook permission table.
+- **5G3b — BUILT + MEASURED 2026-08-06: the instant-effect seat.**
+  Ben's grantee run measured the Entra route's propagation at "sign
+  out and wait" — so enforcement moved to a SHAREPOINT SITE GROUP,
+  whose membership is evaluated live per request. Setup (cookbook):
+  site group "DMSDocumentEditors" — Contribute on the standards
+  library ONLY (no site-level permission), membership viewable by
+  Everyone, editable by Group Owner; its OWNER is a second site group
+  "DMSDocumentOwners" whose members are the Entra pool + controllers
+  groups — so any pool member executes grants single-handed through
+  the nested chain. MEASURED (both probe runs green): resolve by name,
+  membership readable by an ordinary user, pool-member self-add via
+  the nested-ownership chain accepted as PLAIN JSON and read back
+  IMMEDIATELY, remove clean; a non-pool member's add = hard 403 (the
+  grantee-can't-self-serve boundary). Approve now seats through the
+  site group ("Granted — effective immediately"); releases remove from
+  BOTH groups (site + Entra, tolerating does-not-exist); the Entra
+  editors group demotes to fallback for tenants without the site
+  group. AppDocsConfig.spEditorsGroup names it (Settings → Access
+  control); Access diagnostics probes both routes. sp.ts: sitegroups
+  resolve/list/add (plain-then-verbose)/removebyloginname (body form —
+  claims never URL-escape).
+- **5G4:** health checks (owner-seeding drift, orphaned editors — now
+  against the SITE group first) + the cookbook permission table.
 
 ### 5E — Acknowledgement ledger (SCHEMA release) — PARKED (Ben, 2026-08-05)
 - `ben_ltkdocack` through the schema pipeline — the first schema change
