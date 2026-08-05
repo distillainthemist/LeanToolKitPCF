@@ -450,12 +450,76 @@ async function markGranted(id: string, by: string): Promise<void> {
   );
 }
 
+/**
+ * A grantee's own exit (Ben, 2026-08-06): discarding the check-out on a
+ * granted document ends the grant with it — self removed from the
+ * column (others' grants stay), a minor check-in records it, and the
+ * seat releases unless another live grant still needs it. Returns a
+ * warning ("" = clean); the discard already landed, so failures warn.
+ */
+export async function endOwnGrant(opts: {
+  site: string;
+  row: DocRow;
+  revEditorsInternal: string;
+  myEmail: string;
+  myName: string;
+  /** Everyone currently in the column (emails) — self is filtered out. */
+  current: string[];
+}): Promise<string> {
+  const { site, row } = opts;
+  const me = opts.myEmail.trim().toLowerCase();
+  const rest = opts.current.filter((e) => e.trim().toLowerCase() !== me);
+  const out = await timedSp(checkOutFile(site, row.serverUrl), "Check-out");
+  if (!out.ok && !/checked out/i.test(spErrorText(out.status))) {
+    return `Your edit access was not ended (check-out refused: ${spErrorText(out.status).slice(0, 160)}) — the owner can Revoke it.`;
+  }
+  const wrote = await timedSp(
+    validateUpdateListItem(
+      site,
+      row.listId,
+      row.id,
+      [
+        {
+          FieldName: opts.revEditorsInternal,
+          FieldValue: rest.length > 0 ? claimsFor(rest) : "[]",
+        },
+      ],
+      false
+    ),
+    "The grant clear"
+  );
+  const errs = validateItemErrors(wrote.data);
+  if (!wrote.ok || errs.length > 0) {
+    return `Your edit access was not ended (${
+      errs.map((e) => `${e.field}: ${e.message}`).join("; ") || spErrorText(wrote.status).slice(0, 160)
+    }) — the owner can Revoke it.`;
+  }
+  const cin = await timedSp(
+    checkInFile(
+      site,
+      row.serverUrl,
+      `Edit access ended — check-out discarded by ${opts.myName}`,
+      false
+    ),
+    "Check-in"
+  );
+  if (!cin.ok && !/not checked out/i.test(spErrorText(cin.status))) {
+    return `Your edit access record was cleared but the check-in was refused: ${spErrorText(cin.status).slice(0, 160)}.`;
+  }
+  return releaseGrants(row.uniqueId, [opts.myEmail]).catch(
+    () => "The seat release did not finish — Access diagnostics will flag any drift."
+  );
+}
+
 export interface RevokeAccessOpts {
   site: string;
   row: DocRow;
   revEditorsInternal: string;
-  /** Current grantees (emails + names for display). */
+  /** The grantees being REVOKED (emails + names for display). */
   editors: { email: string; name: string }[];
+  /** Grantees who KEEP their access — the column is written as this
+   *  list, so a one-person revoke never clears a colleague's grant. */
+  remaining: string[];
   actorName: string;
   host: HTMLElement;
   onDone: () => void;
@@ -506,7 +570,12 @@ export function openRevokeAccess(opts: RevokeAccessOpts): void {
         site,
         row.listId,
         row.id,
-        [{ FieldName: opts.revEditorsInternal, FieldValue: "[]" }],
+        [
+          {
+            FieldName: opts.revEditorsInternal,
+            FieldValue: opts.remaining.length > 0 ? claimsFor(opts.remaining) : "[]",
+          },
+        ],
         false
       ),
       "The grant clear"

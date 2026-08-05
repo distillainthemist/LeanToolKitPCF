@@ -557,18 +557,23 @@ export function mountDocs(
       const g = lifecycleGatesFor(row);
       return g.isOwner || g.isAdmin;
     };
-    const openRevokeAccessRow = (row: DocRow) => {
+    const openRevokeAccessRow = (row: DocRow, only?: { email: string; name: string }) => {
       const names = (row.values[revEditorsInternal] ?? "")
         .split(";")
         .map((s) => s.trim())
         .filter((s) => s !== "");
       const mails = grantEmails(row);
+      const all = mails.map((email, i) => ({ email, name: names[i] ?? email }));
+      // a one-person revoke keeps every other grantee's access intact
+      const revoked = only === undefined ? all : [only];
+      const revokedSet = new Set(revoked.map((e) => e.email.toLowerCase()));
       void import("./accessRequests").then(({ openRevokeAccess }) => {
         openRevokeAccess({
           site: app.siteUrl,
           row,
           revEditorsInternal,
-          editors: mails.map((email, i) => ({ email, name: names[i] ?? email })),
+          editors: revoked,
+          remaining: mails.filter((e) => !revokedSet.has(e.toLowerCase())),
           actorName: currentViewer()?.name ?? "",
           host: dialogHost,
           onDone: () => void refreshRow(row),
@@ -747,6 +752,11 @@ export function mountDocs(
        *  requester never sees teaches nothing, and a granted row OPENS
        *  the document it granted (Ben, 2026-08-06). */
       outgoing: RequestTaskRow[];
+      /** Grants THIS user presides over (owner emails, admins see all)
+       *  — standing visibility with one-click revoke (Ben,
+       *  2026-08-06): access nobody remembers granting is how an audit
+       *  goes wrong. Info only, never counted on the badge. */
+      grantedByMe: RequestTaskRow[];
     }
     /** "Near" for a review date: due within this many days counts. */
     const REVIEW_HORIZON_DAYS = 30;
@@ -759,6 +769,7 @@ export function mountDocs(
         review: [],
         requests: [],
         outgoing: [],
+        grantedByMe: [],
       };
       const nameOf = (l: DocLibrary) => l.config.title || l.name;
       /** every column the opened overlay's gates and chips lean on — a
@@ -890,16 +901,20 @@ export function mountDocs(
           const { readLedger } = await import("./accessRequests");
           const ledger = await readLedger();
           const outgoingEntries = ledger.filter((e) => e.who.id === whoId);
+          const iPreside = (e: (typeof ledger)[number]) =>
+            docAdmin() || e.owners.some((o) => o.toLowerCase() === myEmail);
           const mine = ledger.filter(
-            (e) =>
-              e.declined === undefined &&
-              e.granted === undefined &&
-              (docAdmin() || e.owners.some((o) => o.toLowerCase() === myEmail))
+            (e) => e.declined === undefined && e.granted === undefined && iPreside(e)
           );
-          // one live-row fetch covers BOTH queues — a request row (either
+          // live grants this user presides over — standing visibility
+          // with one-click revoke (their own grants stay in `outgoing`)
+          const presided = ledger.filter(
+            (e) => e.granted !== undefined && e.who.id !== whoId && iPreside(e)
+          );
+          // one live-row fetch covers EVERY queue — a request row (any
           // side) opens the document overlay armed
           type Entry = (typeof ledger)[number];
-          const need = [...mine, ...outgoingEntries];
+          const need = [...mine, ...outgoingEntries, ...presided];
           const byList = new Map<string, Entry[]>();
           for (const e of need) {
             const k = e.listId.toLowerCase();
@@ -930,6 +945,7 @@ export function mountDocs(
           };
           out.requests = mine.map(taskRowOf);
           out.outgoing = outgoingEntries.map(taskRowOf);
+          out.grantedByMe = presided.map(taskRowOf);
         })()
       );
 
@@ -1002,9 +1018,10 @@ export function mountDocs(
       t.outgoing.filter(
         (e) => e.req.declined !== undefined || (e.req.granted !== undefined && e.req.seen !== true)
       ).length;
-    /** Everything the panel PAINTS — outgoing rows show in every state
-     *  even when none of them counts toward the badge. */
-    const taskVisible = (t: MyTasks) => taskCount(t) > 0 || t.outgoing.length > 0;
+    /** Everything the panel PAINTS — outgoing rows and standing grants
+     *  show even when none of them counts toward the badge. */
+    const taskVisible = (t: MyTasks) =>
+      taskCount(t) > 0 || t.outgoing.length > 0 || t.grantedByMe.length > 0;
 
     let tasksBadgeGen = 0;
     const paintTasksBadge = (n: number) => {
@@ -1272,6 +1289,50 @@ export function mountDocs(
                   () => {}
                 )
               );
+            }
+          }
+          // standing grants this user presides over — the easy road to
+          // revoke, and the answer to "who can edit what right now"
+          if (t.grantedByMe.length > 0) {
+            bodyEl.appendChild(
+              el("div", "app-docs-tasksgroup", `Edit access you granted (${t.grantedByMe.length})`)
+            );
+            for (const rt of t.grantedByMe) {
+              const req = rt.req;
+              const rowEl = el("div", "app-docs-taskrow");
+              if (rt.row !== null) {
+                const liveRow = rt.row;
+                rowEl.setAttribute("role", "button");
+                rowEl.tabIndex = 0;
+                const open = () => {
+                  closePanel();
+                  onRowOpen(liveRow);
+                };
+                rowEl.addEventListener("click", open);
+                rowEl.addEventListener("keydown", (e) => {
+                  if (e.key === "Enter") open();
+                });
+              }
+              rowEl.append(
+                el("span", "app-docs-taskname", req.name),
+                el(
+                  "span",
+                  "app-field-hint",
+                  `${req.who.name} · granted ${req.granted?.when.slice(0, 10) ?? ""}`
+                )
+              );
+              if (rt.row !== null && revEditorsInternal !== "") {
+                const liveRow = rt.row;
+                const rev = el("button", "app-btn app-docs-taskact", "Revoke…") as HTMLButtonElement;
+                rev.addEventListener("click", (e) => {
+                  e.stopPropagation();
+                  closePanel();
+                  // one-person revoke: everyone else's grant survives
+                  openRevokeAccessRow(liveRow, { email: req.who.email, name: req.who.name });
+                });
+                rowEl.appendChild(rev);
+              }
+              bodyEl.appendChild(rowEl);
             }
           }
         });
@@ -2734,6 +2795,32 @@ export function mountDocs(
         return;
       }
       await refreshRow(row);
+      // a GRANTEE's discard ends their own grant with it (Ben,
+      // 2026-08-06): self out of the column, seat released unless
+      // another live grant needs it. The discard already landed, so a
+      // failure here warns rather than undoes anything.
+      if (kind === "undo" && discardEndsMyGrant(row)) {
+        const { endOwnGrant } = await import("./accessRequests");
+        const warn = await endOwnGrant({
+          site: app.siteUrl,
+          row,
+          revEditorsInternal,
+          myEmail,
+          myName: currentViewer()?.name ?? "",
+          current: grantEmails(row),
+        }).catch((e) => `Your edit access was not ended: ${String(e).slice(0, 200)}`);
+        if (warn !== "") commandFailed("Ending edit access", warn);
+        await refreshRow(row);
+      }
+    };
+    /** Discarding on a granted standard where I am a grantee (but not
+     *  the owner/an admin — their check-outs are ordinary work). */
+    const discardEndsMyGrant = (row: DocRow): boolean => {
+      const lib = byListId.get(row.listId);
+      if (lib?.libType !== "standard" || revEditorsInternal === "" || myEmail === "") return false;
+      if (!grantEmails(row).includes(myEmail)) return false;
+      const g = lifecycleGatesFor(row);
+      return !g.isOwner && !g.isAdmin && !g.isApprover;
     };
 
     /** Check-in asks for a comment and REQUIRES it (Ben, 2026-08-03):
@@ -2820,6 +2907,15 @@ export function mountDocs(
           "Everything changed since the check-out is lost. SharePoint keeps no copy of it."
         )
       );
+      if (discardEndsMyGrant(row)) {
+        dlg.body.appendChild(
+          el(
+            "div",
+            "app-field-hint",
+            "This also ENDS your edit access on this document — request again if you need another go."
+          )
+        );
+      }
     };
 
     // ---- kebab menu ----------------------------------------------------
