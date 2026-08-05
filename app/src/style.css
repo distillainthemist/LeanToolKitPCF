@@ -2352,3 +2352,17 @@ button.app-doclist-hsort:hover { color: var(--app-accent, #2563eb); }
 .app-docscard-bad { background: #fde7e7; color: #8a1f1f; }
 .app-docscard-warn { background: #fff3d6; color: #7a5a00; }
 .app-docscard-good { background: #e7f5e9; color: #1f6b2d; }
+
+/* Access diagnostics log (5G0) — same quiet monospace as probe output */
+.app-docs-probelog {
+  margin-top: 10px;
+  padding: 12px;
+  background: #f5f5f7;
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 360px;
+  overflow-y: auto;
+}

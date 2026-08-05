@@ -176,6 +176,12 @@ export async function isGroupOwner(groupId: string, viewerId: string): Promise<b
   return (await idSet(groupId, "owners")).has(viewerId);
 }
 
+/** Direct membership check (not transitive — the access model's groups
+ *  hold people, not nested groups). */
+export async function isGroupMember(groupId: string, entraId: string): Promise<boolean> {
+  return (await idSet(groupId, "members")).has(entraId);
+}
+
 // ---- membership operations (all tolerate already/absent states) ----
 
 export async function addMember(groupId: string, entraId: string): Promise<void> {

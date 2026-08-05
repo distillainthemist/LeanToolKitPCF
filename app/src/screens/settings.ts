@@ -607,6 +607,41 @@ async function renderProfile(
       "From your site's roster patterns — crew-linked meetings only show when your crew is on shift."
     )
   );
+
+  // ---- access diagnostics (5G0, kept as a support tool) ----------------
+  // Runnable by ANYONE — the interesting runs are a non-admin's, and a
+  // user who can't see documents can self-diagnose here (the 2026-08-05
+  // security-role incident would have named its cause in one click).
+  body.appendChild(el("div", "app-section", "Access diagnostics"));
+  const diagNote = el(
+    "div",
+    "app-settings-note",
+    "Checks what this account can reach: roster role, group links and " +
+      "memberships, and the document-request plumbing. Safe to run — any " +
+      "test entries are cleaned up."
+  );
+  const diagBtn = el("button", "app-btn", "Run diagnostics") as HTMLButtonElement;
+  const diagOut = el("pre", "app-docs-probelog");
+  diagOut.style.display = "none";
+  diagBtn.addEventListener("click", () => {
+    void (async () => {
+      diagBtn.disabled = true;
+      diagOut.style.display = "";
+      diagOut.textContent = "Running…\n";
+      const log = (line: string) => {
+        diagOut.textContent += `${line}\n`;
+      };
+      try {
+        const { runAccessProbe } = await import("../docs/accessProbe");
+        await runAccessProbe(log);
+        log("Done.");
+      } catch (e) {
+        log(`FAIL — the probe itself crashed: ${e instanceof Error ? e.message : String(e)}`);
+      }
+      diagBtn.disabled = false;
+    })();
+  });
+  body.append(diagNote, diagBtn, diagOut);
 }
 
 /** "added 3 members · 1 owner · removed 2" (or "everything in sync"). */
