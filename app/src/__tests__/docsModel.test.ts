@@ -1154,6 +1154,7 @@ describe("lifecycle commands (5B/5C — the settled workflow)", () => {
     hasReviewers: false,
     isOwner: false,
     isAdmin: false,
+    isEditor: false,
     ...over,
   });
 
@@ -1212,6 +1213,25 @@ describe("lifecycle commands (5B/5C — the settled workflow)", () => {
     expect(revise[0].staysCheckedOut).toBe(true);
     expect(lifecycleCommandsFor("approved", gates())).toEqual([]);
     expect(lifecycleCommandsFor("", gates({ isAdmin: true }))).toEqual([]);
+  });
+
+  it("a granted revision editor (5G3) drives the cycle but signs nothing", async () => {
+    const { lifecycleCommandsFor } = await import("../docs/model");
+    // the grant's whole point: Start revision on the approved document…
+    expect(lifecycleCommandsFor("approved", gates({ isEditor: true })).map((c) => c.key)).toEqual([
+      "revise",
+    ]);
+    // …but NO approval standing at either sign-off step, and no
+    // retirement — the editor asks, the owner answers
+    expect(
+      lifecycleCommandsFor("inOwnerApproval", gates({ isEditor: true })).map((c) => c.key)
+    ).toEqual(["requestRevision"]);
+    expect(
+      lifecycleCommandsFor("inApproval", gates({ isEditor: true, hasApprovers: true })).map(
+        (c) => c.key
+      )
+    ).toEqual(["requestRevision"]);
+    expect(lifecycleCommandsFor("superseded", gates({ isEditor: true }))).toEqual([]);
   });
 
   it("retirement (5D): the owner ends a document's life, and can undo it", async () => {

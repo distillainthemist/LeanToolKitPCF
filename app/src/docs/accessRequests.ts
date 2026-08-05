@@ -17,6 +17,11 @@ import { el } from "../../../shared/ui/dom";
 import { openDialog } from "../../../shared/ui/dialog";
 import { Ben_ltkdoclibrariesService } from "../generated/services/Ben_ltkdoclibrariesService";
 import { eq, firstWhere, upsertWhere } from "../store/dv";
+import { addMember, groupMembers, removeMember } from "../store/accessGroup";
+import { spErrorText, validateItemErrors } from "./model";
+import { DocRow } from "./rows";
+import { checkInFile, checkOutFile, validateUpdateListItem } from "./sp";
+import { appDocsConfig } from "./docsStore";
 
 const REQUESTS_ROW = "__requests__";
 
@@ -35,6 +40,11 @@ export interface AccessRequest {
   /** ISO timestamp. */
   when: string;
   declined?: { by: string; reason: string; when: string };
+  /** Set on approval (5G3): the entry BECOMES the live grant record —
+   *  the ledger doubles as the grant registry, so a person granted on
+   *  two documents keeps their editors-group seat until the LAST grant
+   *  ends, and "orphaned editors" is a precise health question. */
+  granted?: { by: string; when: string };
 }
 
 export const requestId = (uniqueId: string, whoId: string): string =>
@@ -124,6 +134,311 @@ export async function myRequestFor(
 ): Promise<AccessRequest | null> {
   const all = await readLedger();
   return all.find((e) => e.id === requestId(uniqueId, whoId)) ?? null;
+}
+
+// ---- the grant lifecycle (5G3) -----------------------------------------
+
+const sameDoc = (e: AccessRequest, uniqueId: string): boolean =>
+  e.uniqueId.trim().toLowerCase() === uniqueId.trim().toLowerCase();
+
+/**
+ * End the grants on one document for the given people: their ledger
+ * entries go, and their editors-group seat goes UNLESS another live
+ * grant elsewhere still needs it. Returns a warning ("" = clean) —
+ * callers surface it but never fail the command that already landed.
+ */
+export async function releaseGrants(uniqueId: string, emails: string[]): Promise<string> {
+  const lower = new Set(emails.map((e) => e.trim().toLowerCase()).filter((e) => e !== ""));
+  if (lower.size === 0) return "";
+  await mutateLedger(
+    (all) => all.filter((e) => !(sameDoc(e, uniqueId) && lower.has(e.who.email.toLowerCase()))),
+    (all) => !all.some((e) => sameDoc(e, uniqueId) && lower.has(e.who.email.toLowerCase()))
+  );
+  const cfg = await appDocsConfig();
+  if (cfg.editorsGroupId === "") return "";
+  const stillGranted = new Set(
+    (await readLedger())
+      .filter((e) => e.granted !== undefined)
+      .map((e) => e.who.email.toLowerCase())
+  );
+  const members = await groupMembers(cfg.editorsGroupId);
+  const failed: string[] = [];
+  for (const email of lower) {
+    if (stillGranted.has(email)) continue; // another live grant keeps the seat
+    const m = members.find((x) => x.email.toLowerCase() === email);
+    if (m === undefined) continue; // never held a seat (or already gone)
+    try {
+      await removeMember(cfg.editorsGroupId, m.id);
+    } catch {
+      failed.push(email);
+    }
+  }
+  return failed.length === 0
+    ? ""
+    : `The editors-group seat was not released for ${failed.join(", ")} — ` +
+        "remove them in Entra, or Access diagnostics will flag the drift.";
+}
+
+/** A tiny timeout wrapper matching lifecycleCmds' — a grant step that
+ *  hangs must become a visible failure, not a stuck dialog. */
+type Sp = { ok: boolean; status: string; data: unknown };
+const timedSp = async (p: Promise<Sp>, what: string): Promise<Sp> => {
+  let clock = 0;
+  const timeout = new Promise<Sp>((resolve) => {
+    clock = window.setTimeout(
+      () => resolve({ ok: false, status: `${what} did not answer within 25 seconds`, data: null }),
+      25_000
+    );
+  });
+  const r = await Promise.race([p, timeout]);
+  window.clearTimeout(clock);
+  return r;
+};
+
+const claimsFor = (emails: string[]): string =>
+  JSON.stringify(
+    emails.map((e) => ({ Key: `i:0#.f|membership|${e.trim().toLowerCase()}` }))
+  );
+
+export interface ApproveRequestOpts {
+  site: string;
+  request: AccessRequest;
+  /** The document's LIVE row — approval needs its check-out door. */
+  row: DocRow;
+  /** The Revision editors column (mapped, or the caller doesn't offer
+   *  approve at all). */
+  revEditorsInternal: string;
+  /** Current grantee emails from the column — the new grant appends. */
+  existingEditors: string[];
+  actorName: string;
+  host: HTMLElement;
+  onDone: () => void;
+}
+
+/**
+ * The owner's one-step approval (5G0-proven): grant column written
+ * under a check-out bracket (the authorization), editors-group seat
+ * added (the physical ability), the ledger entry becomes the grant
+ * record. Column first — if SharePoint refuses, nothing was granted.
+ */
+export function openApproveRequest(opts: ApproveRequestOpts): void {
+  const { site, request, row } = opts;
+  let running = false;
+  const dlg = openDialog({
+    host: opts.host,
+    title: `Approve edit access — ${request.name}`,
+    buttons: [
+      { label: "Cancel", kind: "secondary", onClick: () => { if (!running) dlg.close(); } },
+      { label: "Approve & grant", kind: "primary", onClick: () => void go() },
+    ],
+  });
+  const goBtn = dlg.root.querySelector(".ltk-btn-primary") as HTMLButtonElement;
+  dlg.body.appendChild(
+    el("div", "app-field-hint", `${request.who.name} asked: ${request.reason}`)
+  );
+  dlg.body.appendChild(
+    el(
+      "div",
+      "app-settings-note",
+      `Grants ${request.who.name} one revision cycle on this document — they can ` +
+        "start the revision, check out, edit and submit. The grant ends " +
+        "automatically when the revision is approved (or cancelled/revoked)."
+    )
+  );
+  const status = el("div", "app-docs-addstatus");
+  dlg.body.appendChild(status);
+  const fail = (what: string, why: string) => {
+    status.textContent = `${what}: ${spErrorText(why).slice(0, 300)}`;
+    status.classList.add("app-docs-addstatus-warn");
+    running = false;
+    goBtn.disabled = false;
+  };
+
+  const go = async () => {
+    if (running) return;
+    running = true;
+    goBtn.disabled = true;
+    status.classList.remove("app-docs-addstatus-warn");
+
+    status.textContent = "Taking the check-out…";
+    const out = await timedSp(checkOutFile(site, row.serverUrl), "Check-out");
+    if (!out.ok && !/checked out/i.test(spErrorText(out.status))) {
+      return fail("Could not check out", out.status);
+    }
+
+    status.textContent = "Writing the grant…";
+    const everyone = [
+      ...opts.existingEditors.filter(
+        (e) => e.trim().toLowerCase() !== request.who.email.toLowerCase()
+      ),
+      request.who.email,
+    ];
+    const wrote = await timedSp(
+      validateUpdateListItem(
+        site,
+        row.listId,
+        row.id,
+        [{ FieldName: opts.revEditorsInternal, FieldValue: claimsFor(everyone) }],
+        false
+      ),
+      "The grant write"
+    );
+    const errs = validateItemErrors(wrote.data);
+    if (!wrote.ok || errs.length > 0) {
+      return fail(
+        "The grant write was refused (the document stays checked out)",
+        errs.map((e) => `${e.field}: ${e.message}`).join("; ") || wrote.status
+      );
+    }
+
+    status.textContent = "Checking in…";
+    const cin = await timedSp(
+      checkInFile(
+        site,
+        row.serverUrl,
+        `Edit access granted to ${request.who.name} by ${opts.actorName} — ${request.reason}`,
+        false
+      ),
+      "Check-in"
+    );
+    if (!cin.ok && !/not checked out/i.test(spErrorText(cin.status))) {
+      return fail("Check-in was refused (the document stays checked out)", cin.status);
+    }
+
+    // the authorization is on the record — the seat and the ledger are
+    // cleanup from here, warned but never a rollback
+    let warn = "";
+    status.textContent = "Adding to the editors group…";
+    try {
+      const cfg = await appDocsConfig();
+      if (cfg.editorsGroupId !== "") await addMember(cfg.editorsGroupId, request.who.id);
+      else warn = "No temporary editors group is linked — the grant is app-only. ";
+    } catch (e) {
+      warn = `The editors-group add was refused (${spErrorText(
+        e instanceof Error ? e.message : String(e)
+      ).slice(0, 160)}) — add them in Entra. `;
+    }
+    try {
+      await markGranted(request.id, opts.actorName);
+    } catch {
+      warn += "The ledger update did not land — the request may reappear. ";
+    }
+
+    if (warn !== "") {
+      status.textContent = `Granted. ${warn}`;
+      status.classList.add("app-docs-addstatus-warn");
+      running = false;
+      opts.onDone();
+      return; // leave the warning readable
+    }
+    status.textContent =
+      "Granted. SharePoint can take a few minutes to honour the new group " +
+      "membership — the requester's first check-out may be refused until it lands.";
+    running = false;
+    goBtn.style.display = "none";
+    opts.onDone();
+  };
+}
+
+async function markGranted(id: string, by: string): Promise<void> {
+  const stamp = { by, when: new Date().toISOString() };
+  await mutateLedger(
+    (all) => all.map((e) => (e.id === id ? { ...e, declined: undefined, granted: stamp } : e)),
+    (all) => all.some((e) => e.id === id && e.granted !== undefined)
+  );
+}
+
+export interface RevokeAccessOpts {
+  site: string;
+  row: DocRow;
+  revEditorsInternal: string;
+  /** Current grantees (emails + names for display). */
+  editors: { email: string; name: string }[];
+  actorName: string;
+  host: HTMLElement;
+  onDone: () => void;
+}
+
+/** The owner's early exit: clear the grant column under a check-out
+ *  bracket, then release seats and ledger entries. */
+export function openRevokeAccess(opts: RevokeAccessOpts): void {
+  const { site, row } = opts;
+  let running = false;
+  const dlg = openDialog({
+    host: opts.host,
+    title: `Revoke edit access — ${row.name}`,
+    buttons: [
+      { label: "Cancel", kind: "secondary", onClick: () => { if (!running) dlg.close(); } },
+      { label: "Revoke access", kind: "danger", onClick: () => void go() },
+    ],
+  });
+  dlg.body.appendChild(
+    el(
+      "div",
+      "app-settings-note",
+      `Ends edit access for ${opts.editors.map((e) => e.name || e.email).join(", ")} — ` +
+        "recorded in the version history."
+    )
+  );
+  const status = el("div", "app-docs-addstatus");
+  dlg.body.appendChild(status);
+  const fail = (what: string, why: string) => {
+    status.textContent = `${what}: ${spErrorText(why).slice(0, 300)}`;
+    status.classList.add("app-docs-addstatus-warn");
+    running = false;
+  };
+
+  const go = async () => {
+    if (running) return;
+    running = true;
+    status.classList.remove("app-docs-addstatus-warn");
+
+    status.textContent = "Taking the check-out…";
+    const out = await timedSp(checkOutFile(site, row.serverUrl), "Check-out");
+    if (!out.ok && !/checked out/i.test(spErrorText(out.status))) {
+      return fail("Could not check out", out.status);
+    }
+    status.textContent = "Clearing the grant…";
+    const wrote = await timedSp(
+      validateUpdateListItem(
+        site,
+        row.listId,
+        row.id,
+        [{ FieldName: opts.revEditorsInternal, FieldValue: "[]" }],
+        false
+      ),
+      "The grant clear"
+    );
+    const errs = validateItemErrors(wrote.data);
+    if (!wrote.ok || errs.length > 0) {
+      return fail(
+        "The clear was refused (the document stays checked out)",
+        errs.map((e) => `${e.field}: ${e.message}`).join("; ") || wrote.status
+      );
+    }
+    status.textContent = "Checking in…";
+    const cin = await timedSp(
+      checkInFile(site, row.serverUrl, `Edit access revoked by ${opts.actorName}`, false),
+      "Check-in"
+    );
+    if (!cin.ok && !/not checked out/i.test(spErrorText(cin.status))) {
+      return fail("Check-in was refused (the document stays checked out)", cin.status);
+    }
+    status.textContent = "Releasing editor access…";
+    const warn = await releaseGrants(
+      row.uniqueId,
+      opts.editors.map((e) => e.email)
+    ).catch(() => "The release did not finish — Access diagnostics will flag any drift.");
+    if (warn !== "") {
+      status.textContent = `Revoked. ${warn}`;
+      status.classList.add("app-docs-addstatus-warn");
+      running = false;
+      opts.onDone();
+      return;
+    }
+    dlg.close();
+    opts.onDone();
+  };
 }
 
 // ---- dialogs -----------------------------------------------------------

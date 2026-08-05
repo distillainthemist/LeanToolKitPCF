@@ -243,9 +243,29 @@ Build order:
   armed, Decline… demands a reason recorded on the entry. Approve is
   5G3's. Also: the 4C "b11" build marker retired from the add dialog
   (Ben's ask).
-- **5G3:** approve = column write + group add (+ propagation notice);
-  removal on Approve/Cancel/decline + manual revoke; grant-column gates
-  (grantee = revise/check-out/submit on that document).
+- **5G3 — BUILT 2026-08-06.** Approve… on the queue row: check-out
+  bracket → VULI claims write of the Revision editors column (merged,
+  the AUTHORIZATION — refused = nothing granted) → minor check-in
+  "Edit access granted to X by Y — reason" → editors-group addMember
+  (the physical ability; failure WARNS, never rolls back) → the ledger
+  entry BECOMES the grant record (granted:{by,when} — the ledger is
+  the grant REGISTRY, so a seat survives until a person's LAST grant
+  ends, and "orphaned editors" is a precise health question). Approve
+  confirmation carries the propagation notice. Gates: LifecycleGates.
+  isEditor (from the grant column's emails) puts Start revision on the
+  approved document — never approve, never retire (tested). The
+  overlay fires ONE arming refreshRow at open (no badge churn) so
+  gates see every gate column — the register feed stops at twelve
+  lookups. Release rides every exit: the owner's Approve clears the
+  column INSIDE the approve bracket (before the major) then releases
+  seats/ledger after check-in (warned, non-fatal); Cancel revision
+  releases after the restore (the restore itself reverts the column);
+  Revoke edit access… (owner/admin, wherever a grant is live) clears +
+  releases early. Queue gains Approve… beside Decline…, with explicit
+  hints when the document is gone or no grant column is mapped.
+  gateFields are now per-library filtered (the grant column may exist
+  on standards alone — the refreshRow 400 lesson, applied to every
+  queue query).
 - **5G4:** health checks (owner-seeding drift, orphaned editors) +
   the cookbook permission table.
 

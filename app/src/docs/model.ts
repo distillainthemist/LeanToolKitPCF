@@ -373,6 +373,10 @@ export interface LifecycleGates {
   isOwner: boolean;
   /** Site or super admin — the fallback that prevents deadlock. */
   isAdmin: boolean;
+  /** Named in the Revision editors column (5G3): a granted outsider
+   *  who may DRIVE one revision — start it, check out, edit, submit —
+   *  but never approve and never retire. */
+  isEditor: boolean;
 }
 
 /**
@@ -424,11 +428,13 @@ export function lifecycleCommandsFor(
         ? [by("approve"), by("requestRevision")]
         : [by("requestRevision")];
     case "approved": {
-      // revision is open to anyone gated into approval; RETIRING a
-      // document is the owner's call (or an admin's) — approvers
-      // endorse content, they don't decide a document's end of life
+      // revision is open to anyone gated into approval — and to a
+      // granted revision editor (5G3), which is the whole point of the
+      // grant; RETIRING a document is the owner's call (or an admin's)
+      // — approvers endorse content, they don't decide a document's
+      // end of life
       const out: LifecycleCommandDef[] = [];
-      if (g.isOwner || g.isApprover || g.isAdmin) out.push(by("revise"));
+      if (g.isOwner || g.isApprover || g.isAdmin || g.isEditor) out.push(by("revise"));
       if (g.isOwner || g.isAdmin) out.push(by("markSuperseded"), by("markObsolete"));
       return out;
     }

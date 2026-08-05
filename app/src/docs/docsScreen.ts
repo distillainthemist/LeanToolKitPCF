@@ -335,6 +335,9 @@ export function mountDocs(
     const reviewInternal = internalForRole("nextReviewDate");
     const approversInternal = internalForRole("approvers");
     const reviewersInternal = internalForRole("reviewers");
+    /** The edit-access GRANT column (5G3) — "" until the site maps one,
+     *  and approve-request is withheld until it does. */
+    const revEditorsInternal = internalForRole("revisionEditors");
 
     // ---- lifecycle commands (Phase 5B) ---------------------------------
     // Standards move between stages; everything here derives from the
@@ -404,6 +407,9 @@ export function mountDocs(
         hasReviewers,
         isOwner: myEmail !== "" && owners.includes(myEmail),
         isAdmin: docAdmin(),
+        // a granted revision editor (5G3) — may drive THIS document's
+        // next cycle, never sign anything off
+        isEditor: myEmail !== "" && emails(revEditorsInternal).includes(myEmail),
       };
     };
     /** The commands this row offers this user — only ever for standards,
@@ -446,10 +452,20 @@ export function mountDocs(
           actorName: currentViewer()?.name ?? "",
           host: dialogHost,
           reviewersPicker,
+          // the owner's Approve ends every grant on the document (5G3)
+          grantRelease:
+            revEditorsInternal !== ""
+              ? { internal: revEditorsInternal, emails: grantEmails(row) }
+              : undefined,
           onDone: () => void refreshRow(row),
         });
       });
     };
+    /** Current grantee emails from the Revision editors column. */
+    const grantEmails = (row: DocRow): string[] =>
+      revEditorsInternal === ""
+        ? []
+        : (row.values[`${revEditorsInternal}#email`] ?? "").split(";").filter((s) => s !== "");
 
     /** Mark reviewed, offered on the ROW (overlay + kebab, Ben
      *  2026-08-04): an APPROVED standard with a review column, for its
@@ -501,6 +517,8 @@ export function mountDocs(
           row,
           host: dialogHost,
           heldByMe: isMine(row),
+          // the restore reverts the grant column; seats/ledger follow
+          grantRelease: { emails: grantEmails(row) },
           onDone: () => void refreshRow(row),
         });
       });
@@ -528,6 +546,32 @@ export function mountDocs(
       const req = await myRequestFor(row.uniqueId, whoId).catch(() => null);
       myRequests.set(reqKey(row), req);
       for (const rp of viewerRepaints) rp();
+    };
+    /** Revoke edit access (5G3): the owner's early exit from a grant —
+     *  offered wherever a grant is live and the viewer may end it. */
+    const canRevokeAccess = (row: DocRow, lib: DocLibrary | null | undefined): boolean => {
+      if (lib?.libType !== "standard" || revEditorsInternal === "") return false;
+      if (grantEmails(row).length === 0) return false;
+      const g = lifecycleGatesFor(row);
+      return g.isOwner || g.isAdmin;
+    };
+    const openRevokeAccessRow = (row: DocRow) => {
+      const names = (row.values[revEditorsInternal] ?? "")
+        .split(";")
+        .map((s) => s.trim())
+        .filter((s) => s !== "");
+      const mails = grantEmails(row);
+      void import("./accessRequests").then(({ openRevokeAccess }) => {
+        openRevokeAccess({
+          site: app.siteUrl,
+          row,
+          revEditorsInternal,
+          editors: mails.map((email, i) => ({ email, name: names[i] ?? email })),
+          actorName: currentViewer()?.name ?? "",
+          host: dialogHost,
+          onDone: () => void refreshRow(row),
+        });
+      });
     };
     const openRequestAccessRow = (row: DocRow) => {
       void import("./accessRequests").then(({ openRequestAccess }) => {
@@ -711,7 +755,15 @@ export function mountDocs(
         ownerInternal,
         approversInternal,
         reviewersInternal,
+        revEditorsInternal,
       ].filter((f) => f !== "");
+      /** …but ONLY the ones each library actually carries — an uncarried
+       *  column is a guaranteed RLDAS 400 (the refreshRow lesson), and
+       *  the grant column may exist on standards alone. */
+      const gateFieldsFor = (l: DocLibrary): string[] => {
+        const carried = new Set(l.config.columns.map((c) => c.internal));
+        return gateFields.filter((f) => carried.has(f));
+      };
       const labelsForStage = (stage: LifecycleStage): string[] => {
         const ids = new Set(termsForStage(siteDict, stage));
         return statusTermList
@@ -735,7 +787,7 @@ export function mountDocs(
               l.listId,
               buildRenderViewXml({
                 checkedOutToMe: true,
-                fields: ["CheckoutUser", ...gateFields],
+                fields: ["CheckoutUser", ...gateFieldsFor(l)],
                 rowLimit: 30,
               })
             );
@@ -761,7 +813,7 @@ export function mountDocs(
                 buildRenderViewXml({
                   personIsMe: reviewersInternal,
                   termFilters: [{ cols: [statusInternal], labels: inReviewLabels }],
-                  fields: gateFields,
+                  fields: gateFieldsFor(l),
                   rowLimit: 30,
                 })
               );
@@ -793,7 +845,7 @@ export function mountDocs(
                 buildRenderViewXml({
                   personIsMe: col,
                   termFilters: [{ cols: [statusInternal], labels }],
-                  fields: gateFields,
+                  fields: gateFieldsFor(l),
                   rowLimit: 30,
                 })
               );
@@ -823,7 +875,9 @@ export function mountDocs(
       jobs.push(
         (async () => {
           const { readLedger } = await import("./accessRequests");
-          const pending = (await readLedger()).filter((e) => e.declined === undefined);
+          const pending = (await readLedger()).filter(
+            (e) => e.declined === undefined && e.granted === undefined
+          );
           const mine = pending.filter(
             (e) =>
               docAdmin() ||
@@ -846,7 +900,7 @@ export function mountDocs(
                 ? await renderListPage(
                     app.siteUrl,
                     l.listId,
-                    buildRenderViewXml({ idIn: ids, fields: gateFields, rowLimit: 30 })
+                    buildRenderViewXml({ idIn: ids, fields: gateFieldsFor(l), rowLimit: 30 })
                   ).catch(() => ({ rows: [] as DocRow[] }))
                 : { rows: [] as DocRow[] };
             const rowsById = new Map(page.rows.map((r) => [r.id, r]));
@@ -881,7 +935,7 @@ export function mountDocs(
                   termFilters: scoped
                     ? [{ cols: [statusInternal], labels: approvedLabels }]
                     : undefined,
-                  fields: [reviewInternal, ...gateFields],
+                  fields: [reviewInternal, ...gateFieldsFor(l)],
                   rowLimit: 30,
                 })
               );
@@ -1058,6 +1112,44 @@ export function mountDocs(
                   `${rt.req.who.name} · ${rt.req.reason}`
                 )
               );
+              const decided = () => {
+                refreshTasksBadge();
+                reload();
+              };
+              // approve needs the live row (the check-out door) AND a
+              // mapped grant column — without one, the hint says which
+              if (rt.row !== null && revEditorsInternal !== "") {
+                const liveRow = rt.row;
+                const app2 = el("button", "app-btn app-btn-primary app-docs-taskact", "Approve…") as HTMLButtonElement;
+                app2.addEventListener("click", (e) => {
+                  e.stopPropagation();
+                  void import("./accessRequests").then(({ openApproveRequest }) => {
+                    openApproveRequest({
+                      site: app.siteUrl,
+                      request: rt.req,
+                      row: liveRow,
+                      revEditorsInternal,
+                      existingEditors: (liveRow.values[`${revEditorsInternal}#email`] ?? "")
+                        .split(";")
+                        .filter((s) => s !== ""),
+                      actorName: currentViewer()?.name ?? "",
+                      host: dialogHost,
+                      onDone: decided,
+                    });
+                  });
+                });
+                rowEl.appendChild(app2);
+              } else {
+                rowEl.appendChild(
+                  el(
+                    "span",
+                    "app-field-hint",
+                    rt.row === null
+                      ? "Document not found — decline to clear."
+                      : "Map a Revision editors column (Settings → Documents) to approve."
+                  )
+                );
+              }
               const dec = el("button", "app-btn app-docs-taskact", "Decline…") as HTMLButtonElement;
               dec.addEventListener("click", (e) => {
                 e.stopPropagation();
@@ -1066,10 +1158,7 @@ export function mountDocs(
                     request: rt.req,
                     actorName: currentViewer()?.name ?? "",
                     host: dialogHost,
-                    onDone: () => {
-                      refreshTasksBadge();
-                      reload();
-                    },
+                    onDone: decided,
                   });
                 });
               });
@@ -2254,6 +2343,10 @@ export function mountDocs(
                     ...(canRequestAccess(row, lib)
                       ? [{ key: "requestAccess", label: requestAccessLabel(row), primary: false }]
                       : []),
+                    // a live grant the viewer may end early (5G3)
+                    ...(canRevokeAccess(row, lib)
+                      ? [{ key: "revokeAccess", label: "Revoke edit access…", primary: false }]
+                      : []),
                   ],
                   run: (key) => {
                     if (key === "markReviewed") {
@@ -2268,6 +2361,10 @@ export function mountDocs(
                       openRequestAccessRow(row);
                       return;
                     }
+                    if (key === "revokeAccess") {
+                      openRevokeAccessRow(row);
+                      return;
+                    }
                     const cmd = lifecycleActionsFor(row, lib).find((c) => c.key === key);
                     if (cmd !== undefined) runLifecycle(row, cmd);
                   },
@@ -2280,6 +2377,10 @@ export function mountDocs(
         // arm the request-access button with this user's live request
         // state — the repaint set was just cleared and re-registered
         if (canRequestAccess(row, lib)) void refreshRequestState(row);
+        // standards: one arming read so gates see EVERY gate column —
+        // the register feed deliberately carries only some of them (the
+        // grant column would be lookup thirteen); no badge churn
+        if (lib?.libType === "standard") void refreshRow(row, false);
       });
     };
 
@@ -2398,16 +2499,20 @@ export function mountDocs(
      *  scroll position and re-ask for everything, to answer a question
      *  about one row. One list-door call since 5B: lifecycle commands
      *  change status and version, not only the check-out. */
-    const refreshRow = async (row: DocRow) => {
+    const refreshRow = async (row: DocRow, withBadge = true) => {
       // ONLY columns this library carries — an uncarried field is a
       // guaranteed RLDAS 400, and a silently failed refresh left the
       // overlay painting the old stage (Ben, 2026-08-04)
       const carried = new Set(
         (byListId.get(row.listId)?.config.columns ?? []).map((c) => c.internal)
       );
-      const fields = [statusInternal, ownerInternal, approversInternal, reviewersInternal].filter(
-        (f) => f !== "" && carried.has(f)
-      );
+      const fields = [
+        statusInternal,
+        ownerInternal,
+        approversInternal,
+        reviewersInternal,
+        revEditorsInternal,
+      ].filter((f) => f !== "" && carried.has(f));
       fields.push("CheckoutUser");
       const page = await renderListPage(
         app.siteUrl,
@@ -2429,7 +2534,8 @@ export function mountDocs(
       list?.setRows(list.rows());
       for (const rp of viewerRepaints) rp();
       // a command that changes checkout state changes the My tasks count
-      refreshTasksBadge();
+      // (skipped for the overlay-open arming read, which changed nothing)
+      if (withBadge) refreshTasksBadge();
     };
 
     const commandFailed = (what: string, why: string) => {

@@ -50,6 +50,15 @@ export interface LifecycleRunOpts {
     internal: string;
     existing: { email: string; name: string }[];
   };
+  /** 5G3, the owner's Approve only: every edit-access grant on the
+   *  document ends with the cycle it was granted for. The Revision
+   *  editors column clears under the same check-out (before the major);
+   *  after the check-in the memberships/ledger release — best effort,
+   *  warned, never fatal to an approve that already landed. */
+  grantRelease?: {
+    internal: string;
+    emails: string[];
+  };
   /** Called after the command lands, so the screen can re-read the row
    *  and the tasks badge. */
   onDone: () => void;
@@ -275,6 +284,34 @@ export function openLifecycleCommand(opts: LifecycleRunOpts): void {
       return fail("The status write was refused (the document stays checked out)", patch.status);
     }
 
+    // the grant dies with the cycle (5G3): clear the Revision editors
+    // column inside the same check-out, so the approved major carries
+    // no live grant. An empty claims array is the forms engine's
+    // "nobody" for a person field.
+    const gr = opts.grantRelease;
+    const releasing =
+      gr !== undefined && command.key === "approve" && command.to === "approved" && gr.emails.length > 0;
+    if (releasing) {
+      status.textContent = "Ending edit-access grants…";
+      const cleared = await timed(
+        validateUpdateListItem(
+          site,
+          opts.listId,
+          row.id,
+          [{ FieldName: gr.internal, FieldValue: "[]" }],
+          false
+        ),
+        "The grant clear"
+      );
+      const errs = validateItemErrors(cleared.data);
+      if (!cleared.ok || errs.length > 0) {
+        return fail(
+          "Ending edit access was refused (the document stays checked out)",
+          errs.map((e) => `${e.field}: ${e.message}`).join("; ") || cleared.status
+        );
+      }
+    }
+
     // Start revision ENDS here: the draft status and everything after
     // it live inside the check-out — nothing is published until a
     // submit checks in
@@ -291,6 +328,31 @@ export function openLifecycleCommand(opts: LifecycleRunOpts): void {
     );
     if (!cin.ok && !/not checked out/i.test(spErrorText(cin.status))) {
       return fail("Check-in was refused (the document stays checked out)", cin.status);
+    }
+
+    // the approve LANDED — membership/ledger release is cleanup, warned
+    // but never fatal (the orphaned-editors health check is the net)
+    if (releasing && gr !== undefined) {
+      status.textContent = "Releasing editor access…";
+      try {
+        const { releaseGrants } = await import("./accessRequests");
+        const warn = await releaseGrants(row.uniqueId, gr.emails);
+        if (warn !== "") {
+          status.textContent = `Approved. ${warn}`;
+          status.classList.add("app-docs-addstatus-warn");
+          running = false;
+          opts.onDone();
+          return; // leave the dialog open so the warning is read
+        }
+      } catch (e) {
+        status.textContent = `Approved. Editor membership was not released: ${spErrorText(
+          e instanceof Error ? e.message : String(e)
+        ).slice(0, 200)} — Access diagnostics will flag it.`;
+        status.classList.add("app-docs-addstatus-warn");
+        running = false;
+        opts.onDone();
+        return;
+      }
     }
 
     dlg.close();
@@ -311,6 +373,10 @@ export interface CancelRevisionOpts {
   host: HTMLElement;
   /** The holder's check-out (if the acting user's) is discarded first. */
   heldByMe: boolean;
+  /** 5G3: grants die with the cycle they were granted for. The restore
+   *  itself reverts the Revision editors column (the approved major
+   *  predates the grant); memberships/ledger release afterwards. */
+  grantRelease?: { emails: string[] };
   onDone: () => void;
 }
 
@@ -378,6 +444,25 @@ export function openCancelRevision(opts: CancelRevisionOpts): void {
       "The restore"
     );
     if (!restored.ok) return fail("The restore was refused", restored.status);
+
+    // the restore reverted the grant COLUMN (the approved major
+    // predates it); memberships and ledger entries release here
+    if (opts.grantRelease !== undefined && opts.grantRelease.emails.length > 0) {
+      status.textContent = "Releasing editor access…";
+      try {
+        const { releaseGrants } = await import("./accessRequests");
+        const warn = await releaseGrants(row.uniqueId, opts.grantRelease.emails);
+        if (warn !== "") {
+          status.textContent = `Revision cancelled. ${warn}`;
+          status.classList.add("app-docs-addstatus-warn");
+          running = false;
+          opts.onDone();
+          return;
+        }
+      } catch {
+        /* the orphaned-editors health check is the net */
+      }
+    }
 
     dlg.close();
     opts.onDone();
