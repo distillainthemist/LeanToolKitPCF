@@ -643,6 +643,40 @@ export function mountDocs(
       });
     };
 
+    /** Edit properties (5H1): checked out to me → the writes ride the
+     *  check-out; free → an auto bracket (working/revision writers;
+     *  standards owner/controllers); held by someone else → not
+     *  offered. */
+    const canEditProps = (row: DocRow, lib: DocLibrary | null | undefined): boolean => {
+      if (
+        lib == null ||
+        (lib.libType !== "working" && lib.libType !== "revision" && lib.libType !== "standard")
+      ) {
+        return false;
+      }
+      if ((row.checkoutName ?? "") !== "") return isMine(row);
+      if (lib.libType === "standard") {
+        const g = lifecycleGatesFor(row);
+        return g.isOwner || g.isAdmin;
+      }
+      return permsByLib.get(row.listId.toLowerCase())?.edit ?? false;
+    };
+    const openEditPropertiesRow = (row: DocRow) => {
+      const lib = byListId.get(row.listId);
+      if (lib === undefined) return;
+      void import("./editProperties").then(({ openEditProperties }) => {
+        openEditProperties({
+          site: app.siteUrl,
+          row,
+          lib,
+          dictBy,
+          host: dialogHost,
+          heldByMe: isMine(row),
+          onDone: () => void refreshRow(row),
+        });
+      });
+    };
+
     /** The SOURCE document's Office editor — as distinct from the PDF
      *  (Ben, 2026-08-04). Only Office formats have one. */
     const editSourceUrl = (row: DocRow): string => {
@@ -2539,6 +2573,7 @@ export function mountDocs(
                   mine: isMine(row),
                   by: row.checkoutName ?? "",
                   canEdit: canEditContent(lib, row),
+                  canProps: canEditProps(row, lib),
                 }),
                 register: (repaint) => {
                   viewerRepaints.add(repaint);
@@ -2546,6 +2581,7 @@ export function mountDocs(
                 checkOut: () => runCommand("out", row),
                 checkIn: () => openCheckIn(row),
                 discard: () => openDiscard(row),
+                editProps: () => openEditPropertiesRow(row),
                 editUrl: editSourceUrl(row),
               }
             : null,
@@ -3062,6 +3098,9 @@ export function mountDocs(
       // Phase 4B: the commands themselves. Offered only where a document
       // is meant to be worked on — controlled standards and records keep
       // their lifecycle for Phase 5, so nothing here can edit one.
+      if (canEditProps(row, lib)) {
+        item("Edit properties…", () => openEditPropertiesRow(row));
+      }
       if (canEditContent(lib, row)) {
         const held = (row.checkoutName ?? "") !== "";
         if (!held) {

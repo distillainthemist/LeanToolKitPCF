@@ -427,6 +427,15 @@ export function recycleFile(site: string, url: string): Promise<SpResult> {
  * body, which dies server-side as a 502. A true PATCH verb needs no
  * override header, so it cannot be broken that way.
  */
+/** One item's RAW field values (5H1 prefill): taxonomy arrives as
+ *  {Label, TermGuid, WssId} objects (arrays when multi), dates as ISO,
+ *  text/choice verbatim — the register's RLDAS strings lose the term
+ *  ids this read keeps. Person fields arrive as lookup IDs only; the
+ *  caller takes person emails from the RLDAS row instead. */
+export function fetchListItem(site: string, listId: string, itemId: number): Promise<SpResult> {
+  return spRequest(site, "GET", `_api/web/lists(guid'${listId}')/items(${itemId})`);
+}
+
 export function patchTaxonomyField(
   site: string,
   listId: string,

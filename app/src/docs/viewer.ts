@@ -79,7 +79,16 @@ interface ViewerOpts {
      *  command can change the stage while the overlay is open — the
      *  buttons must appear/disappear without a reopen (Ben,
      *  2026-08-04). Absent = always editable. */
-    state: () => { checkedOut: boolean; mine: boolean; by: string; canEdit?: boolean };
+    state: () => {
+      checkedOut: boolean;
+      mine: boolean;
+      by: string;
+      canEdit?: boolean;
+      /** May this user edit PROPERTIES right now (5H1)? Read per
+       *  repaint, like canEdit — a check-out or a stage change flips
+       *  it while the overlay is open. */
+      canProps?: boolean;
+    };
     /** Hands the screen a repaint to call whenever it changes the
      *  document's state — a command runs through the screen's own
      *  dialogs, so the overlay cannot know it finished otherwise. */
@@ -87,6 +96,8 @@ interface ViewerOpts {
     checkOut: () => Promise<void>;
     checkIn: () => void;
     discard: () => void;
+    /** Edit properties (5H1) — shown whenever state().canProps holds. */
+    editProps?: () => void;
     /** The SOURCE document's Office editor URL ("" = no editor) — the
      *  revision is edited here, as distinct from the PDF rendering
      *  (Ben, 2026-08-04). */
@@ -255,6 +266,10 @@ export function openDocViewer(opts: ViewerOpts): void {
     const outBtn = el("button", "app-btn") as HTMLButtonElement;
     const inBtn = el("button", "app-btn app-btn-primary", "Check in…") as HTMLButtonElement;
     const dropBtn = el("button", "app-btn", "Discard check-out") as HTMLButtonElement;
+    const propsBtn =
+      ctl.editProps !== undefined
+        ? (el("button", "app-btn", "Edit properties…") as HTMLButtonElement)
+        : null;
     const held = el("span", "app-docs-heldby");
     const src =
       (ctl.editUrl ?? "") !== "" ? linkBtn("Edit source ↗", ctl.editUrl ?? "", false) : null;
@@ -265,6 +280,7 @@ export function openDocViewer(opts: ViewerOpts): void {
       outBtn.style.display = canEdit && !s.checkedOut ? "" : "none";
       inBtn.style.display = canEdit && s.checkedOut && s.mine ? "" : "none";
       dropBtn.style.display = canEdit && s.checkedOut && s.mine ? "" : "none";
+      if (propsBtn !== null) propsBtn.style.display = s.canProps === true ? "" : "none";
       held.textContent = s.checkedOut && !s.mine ? `🔒 Checked out by ${s.by}` : "";
       held.style.display = held.textContent === "" ? "none" : "";
       if (src !== null) src.style.display = canEdit ? "" : "none";
@@ -278,9 +294,11 @@ export function openDocViewer(opts: ViewerOpts): void {
     });
     inBtn.addEventListener("click", () => ctl.checkIn());
     dropBtn.addEventListener("click", () => ctl.discard());
+    propsBtn?.addEventListener("click", () => ctl.editProps?.());
     paint();
     ctl.register?.(paint);
     actions.append(outBtn, inBtn, dropBtn, held);
+    if (propsBtn !== null) actions.append(propsBtn);
     // the SOURCE, not the PDF: where a revision's edits actually happen
     if (src !== null) actions.append(src);
   }

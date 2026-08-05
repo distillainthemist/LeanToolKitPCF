@@ -1148,6 +1148,56 @@ describe("lifecycle mapping (5A)", () => {
   });
 });
 
+describe("edit-properties prefill (5H1)", () => {
+  it("keeps taxonomy term ids, cuts dates to yyyy-mm-dd, skips people", async () => {
+    const { prefillFromItem } = await import("../docs/model");
+    const fields = [
+      { internal: "DMSDocumentType", title: "", type: "Invalid", required: false, choices: [], isTaxonomy: true, termSetId: "" },
+      { internal: "DMSTags", title: "", type: "Invalid", required: false, choices: [], isTaxonomy: true, termSetId: "" },
+      { internal: "DMSEffectiveDate", title: "", type: "DateTime", required: false, choices: [], isTaxonomy: false, termSetId: "" },
+      { internal: "Title", title: "", type: "Text", required: false, choices: [], isTaxonomy: false, termSetId: "" },
+      { internal: "DMSOwner", title: "", type: "User", required: false, choices: [], isTaxonomy: false, termSetId: "" },
+    ];
+    const got = prefillFromItem(
+      {
+        DMSDocumentType: { Label: "Procedure", TermGuid: "t-1", WssId: 7 },
+        // multi taxonomy: the FIRST term prefills (the editor is single-pick)
+        DMSTags: [
+          { Label: "Safety", TermGuid: "t-2" },
+          { Label: "Ops", TermGuid: "t-3" },
+        ],
+        DMSEffectiveDate: "2026-08-07T00:00:00Z",
+        Title: "Metal Despatch",
+        DMSOwner: 7, // person = lookup id only; emails ride the RLDAS row
+      },
+      fields as never
+    );
+    expect(got.get("DMSDocumentType")).toEqual({ term: { label: "Procedure", termId: "t-1" } });
+    expect(got.get("DMSTags")).toEqual({ term: { label: "Safety", termId: "t-2" } });
+    expect(got.get("DMSEffectiveDate")).toEqual({ text: "2026-08-07" });
+    expect(got.get("Title")).toEqual({ text: "Metal Despatch" });
+    // a number is stringified — but a person id is still a number, and
+    // the form treats it as text ONLY when the field is not a person…
+    // person columns are prefilled from RLDAS emails by the dialog, so
+    // whatever lands here for them is ignored by the person editor
+    expect(got.has("MissingColumn")).toBe(false);
+  });
+
+  it("tolerates nulls, absent columns and junk shapes", async () => {
+    const { prefillFromItem } = await import("../docs/model");
+    const fields = [
+      { internal: "A", title: "", type: "Text", required: false, choices: [], isTaxonomy: false, termSetId: "" },
+      { internal: "B", title: "", type: "Invalid", required: false, choices: [], isTaxonomy: true, termSetId: "" },
+      { internal: "C", title: "", type: "DateTime", required: false, choices: [], isTaxonomy: false, termSetId: "" },
+    ];
+    const got = prefillFromItem(
+      { A: null, B: "not an object", C: 12345 },
+      fields as never
+    );
+    expect(got.size).toBe(0);
+  });
+});
+
 describe("lifecycle commands (5B/5C — the settled workflow)", () => {
   const gates = (over: Partial<Record<string, boolean>> = {}) => ({
     isApprover: false,

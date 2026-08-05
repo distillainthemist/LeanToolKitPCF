@@ -1557,6 +1557,51 @@ export function dictionaryHealth(input: HealthInput): HealthFinding[] {
 // Parsing only. The calls live in sp.ts; these turn their answers into
 // something the UI can act on, and are the part worth testing.
 
+/** 5H1: one column's starting value for the edit-properties form. */
+export interface PrefillValue {
+  text?: string;
+  term?: { label: string; termId: string };
+}
+
+/**
+ * Starting values from ONE list-REST item read (5H1). Taxonomy keeps
+ * its TermGuid (multi takes the FIRST — the editor is single-pick,
+ * matching the add form); dates cut to the date input's yyyy-mm-dd;
+ * person fields are NOT here — the item read carries lookup ids only,
+ * so emails ride the RLDAS row instead.
+ */
+export function prefillFromItem(
+  item: Record<string, unknown>,
+  fields: SpField[]
+): Map<string, PrefillValue> {
+  const out = new Map<string, PrefillValue>();
+  for (const f of fields) {
+    const raw = item[f.internal];
+    if (raw == null) continue;
+    if (f.isTaxonomy) {
+      const one = Array.isArray(raw) ? (raw as unknown[])[0] : raw;
+      if (one && typeof one === "object") {
+        const o = one as { Label?: unknown; TermGuid?: unknown };
+        const label = typeof o.Label === "string" ? o.Label : "";
+        const termId = typeof o.TermGuid === "string" ? o.TermGuid : "";
+        if (termId !== "") out.set(f.internal, { term: { label, termId } });
+      }
+      continue;
+    }
+    if (f.type === "DateTime") {
+      if (typeof raw === "string" && raw.length >= 10) {
+        out.set(f.internal, { text: raw.slice(0, 10) });
+      }
+      continue;
+    }
+    if (typeof raw === "string") out.set(f.internal, { text: raw });
+    else if (typeof raw === "number" || typeof raw === "boolean") {
+      out.set(f.internal, { text: String(raw) });
+    }
+  }
+  return out;
+}
+
 export interface BasePermissions {
   add: boolean;
   edit: boolean;

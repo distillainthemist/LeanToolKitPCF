@@ -16,18 +16,15 @@ import { DocLibrary } from "./docsStore";
 import {
   AddFieldValue,
   SiteColumn,
-  SpField,
   fieldsFromResponse,
   newDocumentWrites,
   sanitizeFileName,
-  sortByDictionary,
   spErrorText,
   validateItemErrors,
 } from "./model";
 import { DocRow, buildRenderViewXml, extOf } from "./rows";
 import { renderListPage } from "./data";
-import { searchEntra } from "../store/people";
-import { POOL_ROLES, PeopleSource, poolPeopleSource } from "./accessGates";
+import { BuiltEditor, buildFieldEditors } from "./fieldEditors";
 import {
   checkInFile,
   checkOutFile,
@@ -36,7 +33,6 @@ import {
   fetchFields,
   fetchListRoot,
   fetchRegionalSettings,
-  fetchTermPaths,
   validateUpdateListItem,
 } from "./sp";
 
@@ -53,31 +49,6 @@ export interface AddDocumentOpts {
   /** Called with the created document's row, after check-in. */
   onCreated: (row: DocRow) => void;
 }
-
-/** Columns SharePoint manages itself — fine in a VIEW, nonsense in this
- *  form ("Checked out to" rendered as an editable person picker, Ben,
- *  2026-08-04). The dictionary auto-appends new live fields as
- *  available, so availability alone cannot be the test. */
-const SYSTEM_FIELDS = new Set([
-  "CheckoutUser",
-  "Author",
-  "Editor",
-  "Modified",
-  "Created",
-  "FileLeafRef",
-  "FileSizeDisplay",
-]);
-
-/** Field types the form can edit. */
-const editorKind = (f: SpField): AddFieldValue["kind"] | null => {
-  if (SYSTEM_FIELDS.has(f.internal)) return null;
-  if (f.isTaxonomy) return "taxonomy";
-  if (f.type === "User" || f.type === "UserMulti") return "person";
-  if (f.type === "DateTime") return "date";
-  if (f.choices.length > 0) return "choice";
-  if (f.type === "Text" || f.type === "Note") return "text";
-  return null;
-};
 
 export function openAddDocument(opts: AddDocumentOpts): void {
   const { site, host } = opts;
@@ -168,22 +139,10 @@ export function openAddDocument(opts: AddDocumentOpts): void {
   const statusLine = el("div", "app-docs-addstatus");
   body.appendChild(statusLine);
 
-  interface Editor {
-    field: SpField;
-    kind: AddFieldValue["kind"];
-    /** Current value; taxonomy holds JSON {label, termId}. */
-    read: () => AddFieldValue;
-    isEmpty: () => boolean;
-  }
-  let editors: Editor[] = [];
+  let editors: BuiltEditor[] = [];
 
   const currentTarget = (): DocLibrary =>
     opts.targets.find((t) => t.listId === targetSel.value) ?? opts.targets[0];
-
-  const labelOf = (f: SpField): string => {
-    const dictLabel = opts.dictBy.get(f.internal)?.label ?? "";
-    return dictLabel !== "" ? dictLabel : f.title;
-  };
 
   const sync = () => {
     const missing = editors.some((e) => e.field.required && e.isEmpty());
@@ -203,222 +162,18 @@ export function openAddDocument(opts: AddDocumentOpts): void {
     clear(metaBox);
     metaBox.appendChild(el("div", "app-loading-line", "Reading the library's columns…"));
     const fields = fieldsFromResponse((await fetchFields(site, lib.listId)).data);
-    const byInternal = new Map(fields.map((f) => [f.internal, f]));
-    clear(metaBox);
-
-    // the SITE DICTIONARY's row order decides the form — the same order
-    // the viewer's properties pane uses, adjustable under Settings →
-    // Documents → Document columns; availability is the site's word for
-    // "a person should see this column"
-    const dictOrder = [...opts.dictBy.keys()];
-    const available = new Map(
-      lib.config.columns.filter((x) => x.available).map((x) => [x.internal, x])
-    );
-    for (const internal of sortByDictionary([...available.keys()], dictOrder)) {
-      const c = available.get(internal)!;
-      const f = byInternal.get(c.internal);
-      if (f === undefined) continue;
-      const kind = editorKind(f);
-      if (kind === null) continue; // person and exotic types: SharePoint's job for now
-      const star = f.required ? " *" : "";
-
-      if (kind === "taxonomy") {
-        const setId = opts.dictBy.get(f.internal)?.termSetId || f.termSetId;
-        if (setId === "") continue;
-        const sel = el("select", "app-input") as HTMLSelectElement;
-        placeholder(sel, "—");
-        void fetchTermPaths(site, setId).then((walk) => {
-          for (const n of walk.nodes) {
-            const o = el(
-              "option",
-              "",
-              `${"  ".repeat(n.labels.length - 1)}${n.labels[n.labels.length - 1]}`
-            ) as HTMLOptionElement;
-            o.value = JSON.stringify({ label: n.labels[n.labels.length - 1], termId: n.id });
-            sel.appendChild(o);
-          }
-        });
-        sel.addEventListener("change", sync);
-        metaBox.appendChild(fieldRow(labelOf(f) + star, sel));
-        editors.push({
-          field: f,
-          kind,
-          read: () => {
-            let v = { label: "", termId: "" };
-            if (sel.value !== "") {
-              // defensive twin of the placeholder fix — a value that is
-              // not our JSON must read as "nothing picked", never throw
-              try {
-                v = JSON.parse(sel.value) as { label: string; termId: string };
-              } catch {
-                v = { label: "", termId: "" };
-              }
-            }
-            return {
-              internal: f.internal,
-              kind: "taxonomy",
-              label: v.label,
-              termId: v.termId,
-              multi: f.type === "TaxonomyFieldTypeMulti",
-            };
-          },
-          isEmpty: () => sel.value === "",
-        });
-        continue;
-      }
-
-      if (kind === "person") {
-        // the app's one people pattern (screens/people.ts): debounced
-        // search with a sequence guard, results as rows to pick. Role-
-        // bound columns (owner/approvers/reviewers, 5G1) search the
-        // OWNERS & APPROVERS pool, not all of Entra — with a graceful
-        // fall-back to everyone (plus a hint) when the group is
-        // unlinked or unreadable.
-        const multi = f.type === "UserMulti";
-        const poolBound = POOL_ROLES.has(opts.dictBy.get(f.internal)?.role ?? "");
-        const source: Promise<PeopleSource> = poolBound
-          ? poolPeopleSource()
-          : Promise.resolve({
-              restricted: false,
-              hint: "",
-              search: async (q: string) =>
-                (await searchEntra(q)).map((h) => ({
-                  mail: h.mail,
-                  displayName: h.displayName,
-                })),
-            });
-        const picked: { email: string; name: string }[] = [];
-        const box = el("div", "app-docs-ppl");
-        const chips = el("div", "app-docs-pplchips");
-        const search = el("input", "app-input") as HTMLInputElement;
-        search.placeholder = multi ? "Search people to add…" : "Search for a person…";
-        const hitsBox = el("div", "app-docs-pplhits");
-        box.append(chips, search, hitsBox);
-        if (poolBound) {
-          void source.then((s) => {
-            if (s.restricted) {
-              search.placeholder = "Search the owners & approvers group…";
-            } else if (s.hint !== "") {
-              box.appendChild(el("div", "app-field-hint", s.hint));
-            }
-          });
-        }
-
-        const paintChips = () => {
-          clear(chips);
-          for (const p of picked) {
-            const chip = el("span", "app-docs-pplchip");
-            chip.appendChild(el("span", "", p.name));
-            const off = el("button", "app-docs-pplchipx", "✕") as HTMLButtonElement;
-            off.setAttribute("aria-label", `Remove ${p.name}`);
-            off.addEventListener("click", () => {
-              picked.splice(picked.indexOf(p), 1);
-              paintChips();
-              sync();
-            });
-            chip.appendChild(off);
-            chips.appendChild(chip);
-          }
-          chips.style.display = picked.length > 0 ? "" : "none";
-        };
-        paintChips();
-
-        const renderHits = (hits: { mail: string; displayName: string }[]) => {
-          clear(hitsBox);
-          for (const h of hits.filter((x) => x.mail !== "").slice(0, 8)) {
-            const row = el("button", "app-docs-pplhit") as HTMLButtonElement;
-            row.type = "button";
-            row.append(
-              el("span", "app-docs-pplhitname", h.displayName),
-              el("span", "app-field-hint", h.mail)
-            );
-            row.addEventListener("click", () => {
-              if (!multi) picked.length = 0;
-              if (!picked.some((p) => p.email.toLowerCase() === h.mail.toLowerCase())) {
-                picked.push({ email: h.mail, name: h.displayName });
-              }
-              search.value = "";
-              clear(hitsBox);
-              paintChips();
-              sync();
-            });
-            hitsBox.appendChild(row);
-          }
-        };
-
-        let searchSeq = 0;
-        let timer = 0;
-        search.addEventListener("input", () => {
-          window.clearTimeout(timer);
-          const q = search.value.trim();
-          if (q === "") {
-            clear(hitsBox);
-            return;
-          }
-          timer = window.setTimeout(() => {
-            const seq = ++searchSeq;
-            void source.then((s) => s.search(q)).then(
-              (hits) => {
-                if (seq === searchSeq) renderHits(hits);
-              },
-              () => {
-                if (seq !== searchSeq) return;
-                clear(hitsBox);
-                hitsBox.appendChild(el("div", "app-field-hint", "People search failed."));
-              }
-            );
-          }, 350);
-        });
-
-        metaBox.appendChild(fieldRow(labelOf(f) + star, box));
-        editors.push({
-          field: f,
-          kind,
-          read: () => ({ internal: f.internal, kind: "person", people: [...picked] }),
-          isEmpty: () => picked.length === 0,
-        });
-        continue;
-      }
-
-      let control: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement;
-      if (kind === "choice") {
-        const sel = el("select", "app-input") as HTMLSelectElement;
-        // explicit empty value, or "—" itself would be WRITTEN as the
-        // chosen value — same defect as the taxonomy placeholder
-        placeholder(sel, "—");
-        for (const choice of f.choices) {
-          const o = el("option", "", choice) as HTMLOptionElement;
-          o.value = choice;
-          sel.appendChild(o);
-        }
-        control = sel;
-      } else if (kind === "date") {
-        const inp = el("input", "app-input") as HTMLInputElement;
-        inp.type = "date";
-        control = inp;
-      } else if (f.type === "Note") {
-        const ta = el("textarea", "app-input") as HTMLTextAreaElement;
-        ta.rows = 2;
-        control = ta;
-      } else {
-        control = el("input", "app-input") as HTMLInputElement;
-      }
-      control.addEventListener("input", sync);
-      control.addEventListener("change", sync);
-      metaBox.appendChild(fieldRow(labelOf(f) + star, control));
-      editors.push({
-        field: f,
-        kind,
-        read: () => ({ internal: f.internal, kind, text: control.value.trim() }),
-        isEmpty: () => control.value.trim() === "",
-      });
-    }
-    if (editors.length === 0) {
-      metaBox.appendChild(
-        el("div", "app-field-hint", "This library has no editable columns configured.")
-      );
-    }
-    sync();
+    // the SHARED editors (fieldEditors.ts, extracted for 5H1's
+    // edit-properties form): dictionary order, pool-bound person
+    // pickers, the placeholder/value="" lesson — one implementation,
+    // verified once
+    editors = buildFieldEditors({
+      site,
+      box: metaBox,
+      fields,
+      columns: lib.config.columns,
+      dictBy: opts.dictBy,
+      onChange: sync,
+    });
   };
   targetSel.addEventListener("change", () => void buildEditors());
   void buildEditors();
