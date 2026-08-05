@@ -26,7 +26,8 @@ import {
 } from "./model";
 import { DocRow, buildRenderViewXml, extOf } from "./rows";
 import { renderListPage } from "./data";
-import { EntraHit, searchEntra } from "../store/people";
+import { searchEntra } from "../store/people";
+import { POOL_ROLES, PeopleSource, poolPeopleSource } from "./accessGates";
 import {
   checkInFile,
   checkOutFile,
@@ -270,8 +271,24 @@ export function openAddDocument(opts: AddDocumentOpts): void {
 
       if (kind === "person") {
         // the app's one people pattern (screens/people.ts): debounced
-        // Entra search with a sequence guard, results as rows to pick
+        // search with a sequence guard, results as rows to pick. Role-
+        // bound columns (owner/approvers/reviewers, 5G1) search the
+        // OWNERS & APPROVERS pool, not all of Entra — with a graceful
+        // fall-back to everyone (plus a hint) when the group is
+        // unlinked or unreadable.
         const multi = f.type === "UserMulti";
+        const poolBound = POOL_ROLES.has(opts.dictBy.get(f.internal)?.role ?? "");
+        const source: Promise<PeopleSource> = poolBound
+          ? poolPeopleSource()
+          : Promise.resolve({
+              restricted: false,
+              hint: "",
+              search: async (q: string) =>
+                (await searchEntra(q)).map((h) => ({
+                  mail: h.mail,
+                  displayName: h.displayName,
+                })),
+            });
         const picked: { email: string; name: string }[] = [];
         const box = el("div", "app-docs-ppl");
         const chips = el("div", "app-docs-pplchips");
@@ -279,6 +296,15 @@ export function openAddDocument(opts: AddDocumentOpts): void {
         search.placeholder = multi ? "Search people to add…" : "Search for a person…";
         const hitsBox = el("div", "app-docs-pplhits");
         box.append(chips, search, hitsBox);
+        if (poolBound) {
+          void source.then((s) => {
+            if (s.restricted) {
+              search.placeholder = "Search the owners & approvers group…";
+            } else if (s.hint !== "") {
+              box.appendChild(el("div", "app-field-hint", s.hint));
+            }
+          });
+        }
 
         const paintChips = () => {
           clear(chips);
@@ -299,7 +325,7 @@ export function openAddDocument(opts: AddDocumentOpts): void {
         };
         paintChips();
 
-        const renderHits = (hits: EntraHit[]) => {
+        const renderHits = (hits: { mail: string; displayName: string }[]) => {
           clear(hitsBox);
           for (const h of hits.filter((x) => x.mail !== "").slice(0, 8)) {
             const row = el("button", "app-docs-pplhit") as HTMLButtonElement;
@@ -333,7 +359,7 @@ export function openAddDocument(opts: AddDocumentOpts): void {
           }
           timer = window.setTimeout(() => {
             const seq = ++searchSeq;
-            void searchEntra(q).then(
+            void source.then((s) => s.search(q)).then(
               (hits) => {
                 if (seq === searchSeq) renderHits(hits);
               },

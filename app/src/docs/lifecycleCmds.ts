@@ -9,7 +9,7 @@
 
 import { clear, el } from "../../../shared/ui/dom";
 import { openDialog } from "../../../shared/ui/dialog";
-import { EntraHit, searchEntra } from "../store/people";
+import { poolPeopleSource } from "./accessGates";
 import {
   LifecycleCommandDef,
   formatDateForLocale,
@@ -103,9 +103,12 @@ export function openLifecycleCommand(opts: LifecycleRunOpts): void {
   );
 
   // additional reviewers (submit-for-review): the app's one people
-  // pattern — debounced Entra search, chips to remove
+  // pattern — debounced search, chips to remove. 5G1: reviewers are a
+  // POOL role, so the search is the owners & approvers group's members
+  // when the pool is readable, all of Entra (with a hint) otherwise.
   const added: { email: string; name: string }[] = [];
   if (opts.reviewersPicker !== undefined) {
+    const source = poolPeopleSource();
     const existing = opts.reviewersPicker.existing;
     if (existing.length > 0) {
       dlg.body.appendChild(
@@ -116,6 +119,10 @@ export function openLifecycleCommand(opts: LifecycleRunOpts): void {
     const search = el("input", "app-input") as HTMLInputElement;
     search.placeholder = "Add reviewers…";
     const hitsBox = el("div", "app-docs-pplhits");
+    void source.then((s) => {
+      if (s.restricted) search.placeholder = "Add reviewers from the owners & approvers group…";
+      else if (s.hint !== "") dlg.body.appendChild(el("div", "app-field-hint", s.hint));
+    });
     const paintChips = () => {
       clear(chips);
       for (const p of added) {
@@ -143,8 +150,8 @@ export function openLifecycleCommand(opts: LifecycleRunOpts): void {
       }
       timer = window.setTimeout(() => {
         const mine = ++seq;
-        void searchEntra(q).then(
-          (hits: EntraHit[]) => {
+        void source.then((s) => s.search(q)).then(
+          (hits) => {
             if (mine !== seq) return;
             clear(hitsBox);
             const taken = new Set(

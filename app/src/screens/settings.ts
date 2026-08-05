@@ -1050,6 +1050,10 @@ async function renderAccessControl(body: HTMLElement, me: RosterPerson): Promise
       write(id, name);
       await saveAppDocsConfig(cfg);
       invalidateDocsCache();
+      // membership answers are cached per session — a relink must land
+      // without a reload
+      const { invalidateAccessGates } = await import("../docs/accessGates");
+      invalidateAccessGates();
       cfg = await appDocsConfig();
       paint();
     };

@@ -242,8 +242,9 @@ export interface GroupMember {
 }
 
 /** The group's USER members with identity (the microsoft.graph.user cast
- *  skips nested groups/service principals). */
-async function memberProfiles(groupId: string): Promise<GroupMember[]> {
+ *  skips nested groups/service principals). Exported for the 5G pool
+ *  pickers — the owners & approvers group is what they select from. */
+export async function groupMembers(groupId: string): Promise<GroupMember[]> {
   const out: GroupMember[] = [];
   let path = `/groups/${groupId}/members/microsoft.graph.user?$select=id,displayName,mail,userPrincipalName&$top=999`;
   while (path) {
@@ -350,7 +351,7 @@ export async function syncAllAccess(
     newcomers: [],
   };
   const [memberList, owners] = await Promise.all([
-    memberProfiles(group.id),
+    groupMembers(group.id),
     idSet(group.id, "owners"),
   ]);
   const members = new Set(memberList.map((m) => m.id));

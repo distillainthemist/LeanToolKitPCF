@@ -213,12 +213,19 @@ Build order:
     security-role incident in one click). Probe skips the membership
     mutation when the runner is already a member — a live grant is
     never disturbed.
-- **5G1:** ~~settings maps the three groups~~ (DONE 2026-08-06: the
-  Access control tab + keyword group search — startswith only, the
-  passthrough cannot send the eventual-consistency header $search
-  needs). Remaining: membership plumbing (cached per session, admin
-  fails CLOSED to the Dataverse role, pool fails to an explanatory
-  hint); pickers restrict to the pool; add-form standards target gated.
+- **5G1 — DONE 2026-08-06.** The Access control tab + keyword group
+  search (startswith only — the passthrough cannot send the
+  eventual-consistency header $search needs). Membership plumbing in
+  docs/accessGates.ts, session-cached: viewerIsController fails CLOSED
+  (merged into every docs admin gate beside the Dataverse role via
+  docAdmin()); viewerInPool answers null on unknown and
+  affordance-hiding gates stay OPEN on unknown (SharePoint is the hard
+  gate); poolPeopleSource restricts the owner/approver/reviewer pickers
+  (add form + submit-for-review) to the pool's members with local
+  filtering, degrading to Entra-wide search plus a visible hint when
+  the group is unlinked or unreadable. The add-form standards target
+  hides for known non-pool members. Settings relinks invalidate the
+  caches without a reload.
 - **5G2:** "Revision editors" dictionary role; Request edit access +
   ledger + owner's Access requests queue + decline.
 - **5G3:** approve = column write + group add (+ propagation notice);

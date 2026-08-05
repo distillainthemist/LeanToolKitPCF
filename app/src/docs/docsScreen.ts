@@ -57,6 +57,7 @@ import {
   termForStage,
   termsForStage,
 } from "./model";
+import { viewerInPool, viewerIsController } from "./accessGates";
 import {
   TermNode,
   checkInFile,
@@ -341,6 +342,14 @@ export function mountDocs(
     // mapped stage. Gates: person-column EMAILS (names collide), admin
     // standing fetched once.
     let meIsAdmin = false;
+    /** Controllers-group membership (5G1) — merged into every admin
+     *  gate BESIDE the Dataverse role. viewerIsController fails CLOSED,
+     *  so an unreadable group never elevates anyone. */
+    let meIsController = false;
+    /** Pool membership (5G1): null = unknown (unlinked group or a
+     *  failed lookup) — gates that hide affordances stay OPEN on
+     *  unknown, SharePoint being the hard gate. */
+    let meInPool: boolean | null = null;
     if (whoId !== "") {
       void viewerPerson(whoId).then(
         (p) => {
@@ -348,7 +357,20 @@ export function mountDocs(
         },
         () => {}
       );
+      void viewerIsController(whoId).then(
+        (v) => {
+          meIsController = v;
+        },
+        () => {}
+      );
+      void viewerInPool(whoId).then(
+        (v) => {
+          meInPool = v;
+        },
+        () => {}
+      );
     }
+    const docAdmin = () => meIsAdmin || meIsController;
     /** The status set's terms, id + real-cased label — filled by
      *  readStatusTerms; what termForStage resolves a write against. */
     const statusTermList: { id: string; label: string }[] = [];
@@ -381,7 +403,7 @@ export function mountDocs(
         hasApprovers: outsideApprovers.length > 0,
         hasReviewers,
         isOwner: myEmail !== "" && owners.includes(myEmail),
-        isAdmin: meIsAdmin,
+        isAdmin: docAdmin(),
       };
     };
     /** The commands this row offers this user — only ever for standards,
@@ -1481,24 +1503,27 @@ export function mountDocs(
     // answers arrive and only if somewhere writable exists to add to
     const addBtn = el("button", "app-btn app-btn-primary app-docs-addbtn", "＋ Add document") as HTMLButtonElement;
     addBtn.style.display = "none";
+    /** May this user add to this library? Working/revision ride the
+     *  SharePoint permission answer alone; STANDARDS additionally need
+     *  the pool (5G1) — once general users are read-only, SharePoint
+     *  would refuse them late, so the target hides up front. A pool
+     *  answer of "unknown" gates OPEN: SharePoint stays the hard gate,
+     *  and a Graph hiccup must not strand a legitimate author. */
+    const canAddTo = (l: DocLibrary): boolean => {
+      if (!(permsByLib.get(l.listId.toLowerCase())?.add ?? false)) return false;
+      if (l.libType === "working" || l.libType === "revision") return true;
+      if (l.libType !== "standard") return false;
+      return meInPool !== false || docAdmin();
+    };
     void permsReady.then(() => {
-      const canAdd = libraries.some(
-        (l) =>
-          (l.libType === "working" || l.libType === "revision" || l.libType === "standard") &&
-          (permsByLib.get(l.listId.toLowerCase())?.add ?? false)
-      );
-      if (canAdd && !favMode) addBtn.style.display = "";
+      if (libraries.some(canAddTo) && !favMode) addBtn.style.display = "";
     });
     addBtn.addEventListener("click", () => {
       void (async () => {
         const { openAddDocument } = await import("./addDocument");
         openAddDocument({
           site: app.siteUrl,
-          targets: libraries.filter(
-            (l) =>
-              (l.libType === "working" || l.libType === "revision" || l.libType === "standard") &&
-              (permsByLib.get(l.listId.toLowerCase())?.add ?? false)
-          ),
+          targets: libraries.filter(canAddTo),
           templates: libraries.filter((l) => l.libType === "template"),
           dictBy,
           host: dialogHost,
