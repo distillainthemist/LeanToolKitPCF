@@ -305,6 +305,56 @@ Build order:
   tasks gains "Edit access you granted" — live grants routed by owner
   email, admins see all, inline one-person Revoke….
 
+### 5H — Uploads + property edits (settled with Ben, 2026-08-06;
+### built BEFORE 5F at Ben's call)
+
+**The constraint everything bends around:** file bytes CANNOT cross the
+connector (4A, measured four ways); server-side `copyto` is the only
+content route, and the player CSP blocks direct fetch to SharePoint.
+So uploads are a STAGING HANDOFF: the user's upload happens in
+SharePoint's own UI, the app takes over once the bytes exist
+server-side. (H0 re-runs the byte probes first — one SDK release could
+collapse this whole design into a file input.)
+
+**Decisions (Ben):**
+- Staging = a DEDICATED library (e.g. "DMS-Upload") on the site:
+  writable by pool + controllers, never exposed in LeanBoard's nav
+  (RESERVED-style skip by config — it is simply not exposed), simple
+  versioning/no require-checkout, cookbook documents it. Leftovers are
+  sweepable.
+- ADD by upload: pool members + controllers.
+- REPLACE by upload: WHOEVER HOLDS THE CHECK-OUT — same rule as
+  editing in Office; version history + the required comment audit it.
+  v1 requires the SAME EXTENSION (a swapped extension breaks renditions
+  and Edit-source assumptions).
+- Edit properties: BOTH modes. Checked out to me → rides the check-out,
+  no check-in (publishes with the holder's next check-in — the
+  visibility constraint makes drafts private). NOT checked out →
+  quick-edit with an auto bracket (check-out → writes → MINOR check-in,
+  comment REQUIRED, prefilled "Properties updated"): working/revision
+  docs for anyone with write, standards for owner/controllers.
+  Checked out by someone else → not offered.
+
+**Build order:**
+- **H0 (spike):** Ben re-runs Test write access (four byte carriages —
+  current SDK verdict); probe addition: `copyto` with boverwrite=true
+  ONTO a file checked out to me (only false is measured).
+- **H1: Edit properties.** Extract the 4C metadata editors into a
+  shared module; prefill from a fresh LIST REST single-item read
+  (taxonomy arrives with Label+TermGuid, person as emails, dates ISO);
+  writes = the measured pair (VULI text/choice/person/locale-dates +
+  connector PatchItem taxonomy). Both modes above. Overlay + kebab
+  entry "Edit properties…".
+- **H2: Add by upload.** "Upload a document…" beside the template flow
+  (gated): open the staging library in SharePoint (new tab) → back →
+  refresh lists staging files newest-first → pick → copyto → recycle
+  staging copy → the 4C metadata form → check-in. Same dictionary
+  ordering, same recipe.
+- **H3: Replace content.** On a document checked out to me: staging
+  pickup → copyto boverwrite=true over the held file → stays checked
+  out → normal check-in (comment, minor/major). Same-extension guard.
+  Discard still reverts everything.
+
 ### 5E — Acknowledgement ledger (SCHEMA release) — PARKED (Ben, 2026-08-05)
 - `ben_ltkdocack` through the schema pipeline — the first schema change
   since v0.25.0. Append-only rows (person, document, version, when).
