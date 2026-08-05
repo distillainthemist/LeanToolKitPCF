@@ -349,6 +349,15 @@ export function openLifecycleCommand(opts: LifecycleRunOpts): void {
     // the approve LANDED — membership/ledger release is cleanup, warned
     // but never fatal (the orphaned-editors health check is the net)
     if (releasing && gr !== undefined) {
+      // when a warning holds the dialog open, its buttons must say so:
+      // the command is DONE, so "Cancel" becomes "Close" and the
+      // primary action hides (Ben, 2026-08-06)
+      const warnState = () => {
+        const closeBtn = dlg.root.querySelector(".ltk-btn-secondary") as HTMLButtonElement | null;
+        if (closeBtn !== null) closeBtn.textContent = "Close";
+        goBtn.style.display = "none";
+        running = false;
+      };
       status.textContent = "Releasing editor access…";
       try {
         const { releaseGrants } = await import("./accessRequests");
@@ -356,7 +365,7 @@ export function openLifecycleCommand(opts: LifecycleRunOpts): void {
         if (warn !== "") {
           status.textContent = `Approved. ${warn}`;
           status.classList.add("app-docs-addstatus-warn");
-          running = false;
+          warnState();
           opts.onDone();
           return; // leave the dialog open so the warning is read
         }
@@ -365,7 +374,7 @@ export function openLifecycleCommand(opts: LifecycleRunOpts): void {
           e instanceof Error ? e.message : String(e)
         ).slice(0, 200)} — Access diagnostics will flag it.`;
         status.classList.add("app-docs-addstatus-warn");
-        running = false;
+        warnState();
         opts.onDone();
         return;
       }
@@ -471,6 +480,11 @@ export function openCancelRevision(opts: CancelRevisionOpts): void {
         if (warn !== "") {
           status.textContent = `Revision cancelled. ${warn}`;
           status.classList.add("app-docs-addstatus-warn");
+          // done — nothing left to cancel or keep revising
+          const keepBtn = dlg.root.querySelector(".ltk-btn-secondary") as HTMLButtonElement | null;
+          if (keepBtn !== null) keepBtn.textContent = "Close";
+          const goBtn2 = dlg.root.querySelector(".ltk-btn-danger") as HTMLButtonElement | null;
+          if (goBtn2 !== null) goBtn2.style.display = "none";
           running = false;
           opts.onDone();
           return;

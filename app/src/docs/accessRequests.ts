@@ -288,6 +288,14 @@ export function openApproveRequest(opts: ApproveRequestOpts): void {
     ],
   });
   const goBtn = dlg.root.querySelector(".ltk-btn-primary") as HTMLButtonElement;
+  // once the grant LANDED, the secondary button is no longer a cancel —
+  // there is nothing left to cancel (Ben, 2026-08-06)
+  const doneState = () => {
+    const closeBtn = dlg.root.querySelector(".ltk-btn-secondary") as HTMLButtonElement | null;
+    if (closeBtn !== null) closeBtn.textContent = "Close";
+    goBtn.style.display = "none";
+    running = false;
+  };
   dlg.body.appendChild(
     el("div", "app-field-hint", `${request.who.name} asked: ${request.reason}`)
   );
@@ -421,7 +429,7 @@ export function openApproveRequest(opts: ApproveRequestOpts): void {
     if (warn !== "") {
       status.textContent = `Granted. ${warn}`;
       status.classList.add("app-docs-addstatus-warn");
-      running = false;
+      doneState();
       opts.onDone();
       return; // leave the warning readable
     }
@@ -429,8 +437,7 @@ export function openApproveRequest(opts: ApproveRequestOpts): void {
       ? `Granted — effective immediately. ${request.who.name} can Start revision now.`
       : "Granted. SharePoint can take a few minutes to honour the new group " +
         "membership — the requester's first check-out may be refused until it lands.";
-    running = false;
-    goBtn.style.display = "none";
+    doneState();
     opts.onDone();
   };
 }
@@ -527,6 +534,11 @@ export function openRevokeAccess(opts: RevokeAccessOpts): void {
     if (warn !== "") {
       status.textContent = `Revoked. ${warn}`;
       status.classList.add("app-docs-addstatus-warn");
+      // the revoke LANDED — nothing left to cancel
+      const closeBtn = dlg.root.querySelector(".ltk-btn-secondary") as HTMLButtonElement | null;
+      if (closeBtn !== null) closeBtn.textContent = "Close";
+      const revokeBtn = dlg.root.querySelector(".ltk-btn-danger") as HTMLButtonElement | null;
+      if (revokeBtn !== null) revokeBtn.style.display = "none";
       running = false;
       opts.onDone();
       return;
