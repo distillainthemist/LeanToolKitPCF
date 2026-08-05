@@ -18,6 +18,7 @@ import { clear, el } from "../../../shared/ui/dom";
 import { draggableRow } from "../../../shared/ui/dragList";
 import { statusChip } from "../../../shared/ui/format";
 import { boardHash, boardUrl } from "../links";
+import { bootFail } from "../loading";
 import { setLeaveGuard } from "../navGuard";
 import { promptText, promptUnsaved } from "../prompts";
 import { currentViewer, detectHost } from "../runtime";
@@ -326,7 +327,7 @@ export function mountSettings(parent: HTMLElement, initialTab = ""): () => void 
       window.removeEventListener("beforeunload", onBeforeUnload);
       setLeaveGuard(null);
     };
-  })();
+  })().catch(bootFail(parent, "Settings"));
   return () => cleanup();
 }
 

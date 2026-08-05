@@ -26,7 +26,7 @@ import { openDialog } from "../../../shared/ui/dialog";
 import { clear, el } from "../../../shared/ui/dom";
 import { statusChip } from "../../../shared/ui/format";
 import { boardUrl, LATEST, latestInstanceIso } from "../links";
-import { showLoading } from "../loading";
+import { bootFail, showLoading } from "../loading";
 import { appTheme } from "../cardHost";
 import { currentViewer, detectHost } from "../runtime";
 import { paletteMap, resolvePaletteColor, titleStripColor } from "../../../shared/palette";
@@ -105,7 +105,7 @@ export function mountBoard(
       return;
     }
     await renderBoard(parent, board, iso, cleanups, stopLoading);
-  })();
+  })().catch(bootFail(parent, "The board"));
   return () => cleanups.forEach((fn) => fn());
 }
 

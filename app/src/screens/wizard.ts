@@ -13,7 +13,7 @@ import {
 import { parseOrgTree } from "../../../shared/schema/meeting";
 import { parsePeople } from "../../../shared/schema/people";
 import { el } from "../../../shared/ui/dom";
-import { showLoading } from "../loading";
+import { bootFail, showLoading } from "../loading";
 import { appTheme, editorHost } from "../cardHost";
 import { detectHost } from "../runtime";
 import { saveMeetingBoard } from "../store/boards";
@@ -250,7 +250,7 @@ export function mountWizard(parent: HTMLElement, editBoardId = ""): () => void {
         el("div", "app-board-note", "Demo mode — Done logs instead of saving.")
       );
     }
-  })();
+  })().catch(bootFail(host, "The meeting wizard"));
   return () => {
     setLeaveGuard(null);
     designerCleanup?.();

@@ -1,6 +1,7 @@
 // Boards list — every non-template board, opening on click.
 
 import { el } from "../../../shared/ui/dom";
+import { bootFail } from "../loading";
 import { detectHost } from "../runtime";
 import { listBoards } from "../store/boards";
 
@@ -35,6 +36,6 @@ export function mountBoards(parent: HTMLElement): () => void {
       );
       list.appendChild(row);
     }
-  })();
+  })().catch(bootFail(parent, "The rituals list"));
   return () => undefined;
 }

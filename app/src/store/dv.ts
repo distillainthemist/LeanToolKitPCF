@@ -5,11 +5,37 @@
 // updates).
 
 export interface ListResult<T> {
+  /** The SDK's IOperationResult flag. A REFUSED call resolves with
+   *  success:false — it does not reject. */
+  success?: boolean;
   data?: T[];
+  error?: { message?: string };
 }
 
 export interface OneResult<T> {
+  success?: boolean;
   data?: T;
+  error?: { message?: string };
+}
+
+/**
+ * Refuse to read failure as emptiness. A denied Dataverse call RESOLVES
+ * with success:false, so `result.data ?? []` turns "permission denied"
+ * into an empty table — which is how a user missing a table privilege
+ * saw "Standard documents haven't been set up yet" instead of the real
+ * refusal (production, 2026-08-05). Only an explicit false throws;
+ * absent means a source that never reports the flag.
+ */
+function settle<R extends { success?: boolean; error?: { message?: string } }>(
+  result: R,
+  what: string
+): R {
+  if (result.success === false) {
+    throw new Error(
+      `Dataverse ${what} failed: ${result.error?.message ?? "unknown error"}`
+    );
+  }
+  return result;
 }
 
 /** Escape a value for an OData string literal. */
@@ -33,7 +59,7 @@ export async function firstWhere<T>(
   filter: string,
   select?: string[]
 ): Promise<T | null> {
-  const result = await getAll({ filter, top: 1, select });
+  const result = settle(await getAll({ filter, top: 1, select }), "read");
   return result.data?.[0] ?? null;
 }
 
@@ -43,7 +69,7 @@ export async function allWhere<T>(
   select?: string[],
   orderBy?: string[]
 ): Promise<T[]> {
-  const result = await getAll({ filter, select, orderBy });
+  const result = settle(await getAll({ filter, select, orderBy }), "read");
   return result.data ?? [];
 }
 
@@ -67,10 +93,10 @@ export async function upsertWhere<TFields extends object, TRow>(
   const existing = await firstWhere(service.getAll, filter);
   if (existing) {
     const id = idOf(existing);
-    await service.update(id, fields as never);
+    settle(await service.update(id, fields as never), "update");
     return id;
   }
-  const created = await service.create(fields as never);
+  const created = settle(await service.create(fields as never), "create");
   const row = created.data;
   if (!row) throw new Error(`create returned no row for filter ${filter}`);
   return idOf(row);

@@ -39,7 +39,7 @@ import {
   VIEWER_ID,
 } from "../demoData";
 import { el } from "../../../shared/ui/dom";
-import { showLoading } from "../loading";
+import { bootFail, showLoading } from "../loading";
 
 /** Everything one hub paint needs — the result of one boot round. */
 interface HubData {
@@ -145,7 +145,7 @@ export function mountHub(parent: HTMLElement): () => void {
   // extra-tab content (the Documents area) registers its teardown here
   const cleanups: (() => void)[] = [];
 
-  void (async () => {
+  const boot = async () => {
     const hosted = await detectHost();
 
     let meetingsRaw: string;
@@ -340,7 +340,10 @@ export function mountHub(parent: HTMLElement): () => void {
         parent.prepend(note);
       }
     }
-  })();
+  };
+  // a refused Dataverse call now surfaces as an error (dv.ts settle) —
+  // without this catch it would strand the loading spinner forever
+  void boot().catch(bootFail(host, "The hub"));
 
   return () => {
     dead = true;

@@ -3,6 +3,7 @@
 // department enrichment, deactivate.
 
 import { clear, el } from "../../../shared/ui/dom";
+import { bootFail } from "../loading";
 import { currentViewer, detectHost } from "../runtime";
 import { RosterPerson } from "../store/mappers";
 import {
@@ -163,7 +164,7 @@ export function mountPeople(parent: HTMLElement): () => void {
     });
 
     await refresh();
-  })();
+  })().catch(bootFail(parent, "People admin"));
   return () => undefined;
 }
 

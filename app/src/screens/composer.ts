@@ -17,6 +17,7 @@ import { policyOnPick } from "../../../controls/CardSettings/registry";
 import { paletteMap, titleStripColor } from "../../../shared/palette";
 import { el } from "../../../shared/ui/dom";
 import { appTheme } from "../cardHost";
+import { bootFail } from "../loading";
 import { detectHost } from "../runtime";
 import { getBoard, listBoards, saveManifest } from "../store/boards";
 import { appPalettes } from "../store/config";
@@ -98,7 +99,7 @@ export function mountComposer(
       },
       cleanups
     );
-  })();
+  })().catch(bootFail(parent, "The composer"));
   return () => cleanups.forEach((fn) => fn());
 }
 
@@ -198,7 +199,7 @@ export function mountInstanceComposer(
       },
       cleanups
     );
-  })();
+  })().catch(bootFail(parent, "The composer"));
   return () => cleanups.forEach((fn) => fn());
 }
 
