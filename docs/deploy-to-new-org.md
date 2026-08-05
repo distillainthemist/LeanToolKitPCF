@@ -1,6 +1,6 @@
 # Deploying LeanBoard to a new organisation
 
-One managed solution carries everything: the eight Dataverse tables,
+One managed solution carries everything: the app's Dataverse tables,
 the **LeanBoard User security role**, the code app itself, and its
 Office 365 Users connection reference. Every GitHub release (v0.x.y
 tag) attaches **`LeanBoard_<tag>_managed.zip`**.
@@ -82,12 +82,23 @@ gets this wrong says so instead of showing empty folders.
    group-team mapping and app sharing remain this one-time admin step.
    The app runs in each user's own security context, so without the
    role every Dataverse call fails. The role grants create/read/write/
-   append on the nine app tables at organisation level, plus delete on
+   append on ALL app tables at organisation level — including
+   **ben_ltkdoclibrary** (Documents configuration) — plus delete on
    Card Data (the reset-meeting feature reseeds those rows) and on Card
    Series (unsetting a rating deletes its row).
    App-level roles (super admin / site admin / user) and meeting
    confidentiality are enforced by the app on top of this — the
    Dataverse role is deliberately flat.
+
+   > **Trap (hit in production, 2026-08-05):** a table added AFTER the
+   > role was authored ships with NO privileges on it unless the role
+   > is updated in the DEV environment (the CI export's source) — a
+   > role edited only in a downstream environment goes stale again at
+   > the next import. The symptom is subtle because a denied read
+   > resolves as an EMPTY result, not an error: a user missing read on
+   > ben_ltkdoclibrary sees *"Standard documents haven't been set up
+   > yet"* while everyone else sees documents fine. When a new table
+   > lands in the solution, update the role beside it, in Dev.
 4. Share the LeanBoard app with users. On first open each user
    approves the connection once; the card catalog self-seeds; People
    admin builds the roster.
