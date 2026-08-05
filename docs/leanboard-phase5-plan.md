@@ -226,8 +226,23 @@ Build order:
   the group is unlinked or unreadable. The add-form standards target
   hides for known non-pool members. Settings relinks invalidate the
   caches without a reload.
-- **5G2:** "Revision editors" dictionary role; Request edit access +
-  ledger + owner's Access requests queue + decline.
+- **5G2 — BUILT 2026-08-06.** "Revision editors" dictionary role added
+  (the grant column 5G3 writes). docs/accessRequests.ts owns the ledger
+  transport (moved from the probe — the probe now exercises the REAL
+  one): every mutation re-reads, merges, writes, and VERIFIES it landed
+  (one retry; a lost race is a re-request, never corruption). Request
+  edit access rides the overlay's lifecycle button row, offered exactly
+  where the lifecycle offers a user NOTHING (approved standard, not
+  named): reason required; entry = {doc ids, requester, owner emails at
+  request time, reason, when}, one live entry per document per person.
+  Pending → the button reads "Edit access requested…" (withdraw
+  inside); declined → "Edit access declined…" (owner's reason shown,
+  request-again or dismiss). My tasks gains "Edit-access requests":
+  entries routed by owner email (doc admins see all — the deadlock
+  breaker), document rows fetched live so a click opens the overlay
+  armed, Decline… demands a reason recorded on the entry. Approve is
+  5G3's. Also: the 4C "b11" build marker retired from the add dialog
+  (Ben's ask).
 - **5G3:** approve = column write + group add (+ propagation notice);
   removal on Approve/Cancel/decline + manual revoke; grant-column gates
   (grantee = revise/check-out/submit on that document).

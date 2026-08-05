@@ -506,6 +506,44 @@ export function mountDocs(
       });
     };
 
+    /** Request edit access (5G2): the road onto an approved standard
+     *  for someone NOT named on it — the overlay offers it exactly
+     *  where the lifecycle offers them nothing. State is fetched when
+     *  such an overlay opens and repainted through viewerRepaints. */
+    const myRequests = new Map<string, import("./accessRequests").AccessRequest | null>();
+    const reqKey = (row: DocRow) => row.uniqueId.trim().toLowerCase();
+    const canRequestAccess = (row: DocRow, lib: DocLibrary | null | undefined): boolean =>
+      lib?.libType === "standard" &&
+      whoId !== "" &&
+      row.uniqueId !== "" &&
+      stageOfRow(row) === "approved" &&
+      lifecycleActionsFor(row, lib).length === 0;
+    const requestAccessLabel = (row: DocRow): string => {
+      const req = myRequests.get(reqKey(row));
+      if (req == null) return "Request edit access…";
+      return req.declined !== undefined ? "Edit access declined…" : "Edit access requested…";
+    };
+    const refreshRequestState = async (row: DocRow) => {
+      const { myRequestFor } = await import("./accessRequests");
+      const req = await myRequestFor(row.uniqueId, whoId).catch(() => null);
+      myRequests.set(reqKey(row), req);
+      for (const rp of viewerRepaints) rp();
+    };
+    const openRequestAccessRow = (row: DocRow) => {
+      void import("./accessRequests").then(({ openRequestAccess }) => {
+        openRequestAccess({
+          doc: { listId: row.listId, itemId: row.id, uniqueId: row.uniqueId, name: row.name },
+          owners: (row.values[`${ownerInternal}#email`] ?? "")
+            .split(";")
+            .filter((s) => s !== ""),
+          viewer: { id: whoId, name: currentViewer()?.name ?? "", email: myEmail },
+          host: dialogHost,
+          existing: myRequests.get(reqKey(row)) ?? null,
+          onChanged: () => void refreshRequestState(row),
+        });
+      });
+    };
+
     /** The SOURCE document's Office editor — as distinct from the PDF
      *  (Ben, 2026-08-04). Only Office formats have one. */
     const editSourceUrl = (row: DocRow): string => {
@@ -645,17 +683,26 @@ export function mountDocs(
       /** review-due rows carry an inline Mark reviewed action (5C). */
       canMarkReviewed?: boolean;
     }
+    /** Edit-access requests awaiting this user's decision (5G2) — the
+     *  row is fetched live so a click opens the overlay armed; null row
+     *  = the document has gone (the request row still offers Decline). */
+    interface RequestTaskRow {
+      req: import("./accessRequests").AccessRequest;
+      row: DocRow | null;
+      libName: string;
+    }
     interface MyTasks {
       toApprove: TaskRow[];
       toReview: TaskRow[];
       held: TaskRow[];
       review: TaskRow[];
+      requests: RequestTaskRow[];
     }
     /** "Near" for a review date: due within this many days counts. */
     const REVIEW_HORIZON_DAYS = 30;
 
     const fetchMyTasks = async (): Promise<MyTasks> => {
-      const out: MyTasks = { toApprove: [], toReview: [], held: [], review: [] };
+      const out: MyTasks = { toApprove: [], toReview: [], held: [], review: [], requests: [] };
       const nameOf = (l: DocLibrary) => l.config.title || l.name;
       /** every column the opened overlay's gates and chips lean on — a
        *  task row is one click from Approve, so it must arrive armed */
@@ -770,6 +817,50 @@ export function mountDocs(
       // admins stand in at either step, but a queue of everyone else's
       // approvals would drown them — admins act from the register
 
+      // edit-access requests (5G2): entries whose OWNER emails include
+      // me — plus everything for doc admins, the deadlock breaker when
+      // an owner is away (request volume is small, unlike approvals)
+      jobs.push(
+        (async () => {
+          const { readLedger } = await import("./accessRequests");
+          const pending = (await readLedger()).filter((e) => e.declined === undefined);
+          const mine = pending.filter(
+            (e) =>
+              docAdmin() ||
+              e.owners.some((o) => o.toLowerCase() === myEmail)
+          );
+          const byList = new Map<string, typeof mine>();
+          for (const e of mine) {
+            const k = e.listId.toLowerCase();
+            byList.set(k, [...(byList.get(k) ?? []), e]);
+          }
+          for (const [k, reqs] of byList) {
+            const l = byListId.get(k);
+            if (l === undefined) {
+              for (const r of reqs) out.requests.push({ req: r, row: null, libName: "" });
+              continue;
+            }
+            const ids = reqs.map((r) => r.itemId).filter((n) => n > 0);
+            const page =
+              ids.length > 0
+                ? await renderListPage(
+                    app.siteUrl,
+                    l.listId,
+                    buildRenderViewXml({ idIn: ids, fields: gateFields, rowLimit: 30 })
+                  ).catch(() => ({ rows: [] as DocRow[] }))
+                : { rows: [] as DocRow[] };
+            const rowsById = new Map(page.rows.map((r) => [r.id, r]));
+            for (const r of reqs) {
+              out.requests.push({
+                req: r,
+                row: rowsById.get(r.itemId) ?? null,
+                libName: nameOf(l),
+              });
+            }
+          }
+        })()
+      );
+
       // review due — my standards, date within the horizon. Scoped to
       // the APPROVED stage where the site maps one (5D): a retired or
       // mid-revision standard has no periodic review to chase.
@@ -827,7 +918,11 @@ export function mountDocs(
     };
 
     const taskCount = (t: MyTasks) =>
-      t.toApprove.length + t.toReview.length + t.held.length + t.review.length;
+      t.toApprove.length +
+      t.toReview.length +
+      t.held.length +
+      t.review.length +
+      t.requests.length;
 
     let tasksBadgeGen = 0;
     const paintTasksBadge = (n: number) => {
@@ -934,6 +1029,54 @@ export function mountDocs(
               bodyEl.appendChild(rowEl);
             }
           };
+          // edit-access requests (5G2): decisions about PEOPLE lead —
+          // someone is blocked until the owner answers
+          if (t.requests.length > 0) {
+            bodyEl.appendChild(
+              el("div", "app-docs-tasksgroup", `Edit-access requests (${t.requests.length})`)
+            );
+            for (const rt of t.requests) {
+              const rowEl = el("div", "app-docs-taskrow");
+              if (rt.row !== null) {
+                const liveRow = rt.row;
+                rowEl.setAttribute("role", "button");
+                rowEl.tabIndex = 0;
+                const open = () => {
+                  closePanel();
+                  onRowOpen(liveRow);
+                };
+                rowEl.addEventListener("click", open);
+                rowEl.addEventListener("keydown", (e) => {
+                  if (e.key === "Enter") open();
+                });
+              }
+              rowEl.append(
+                el("span", "app-docs-taskname", rt.req.name),
+                el(
+                  "span",
+                  "app-field-hint",
+                  `${rt.req.who.name} · ${rt.req.reason}`
+                )
+              );
+              const dec = el("button", "app-btn app-docs-taskact", "Decline…") as HTMLButtonElement;
+              dec.addEventListener("click", (e) => {
+                e.stopPropagation();
+                void import("./accessRequests").then(({ openDeclineRequest }) => {
+                  openDeclineRequest({
+                    request: rt.req,
+                    actorName: currentViewer()?.name ?? "",
+                    host: dialogHost,
+                    onDone: () => {
+                      refreshTasksBadge();
+                      reload();
+                    },
+                  });
+                });
+              });
+              rowEl.appendChild(dec);
+              bodyEl.appendChild(rowEl);
+            }
+          }
           // most actionable first: sign-off, then review work, then
           // your own held documents, then the review cadence
           group("Awaiting your approval", t.toApprove);
@@ -2106,6 +2249,11 @@ export function mountDocs(
                     ...(canCancelRevision(row, lib)
                       ? [{ key: "cancelRevision", label: "Cancel revision…", primary: false }]
                       : []),
+                    // the not-named user's one door (5G2) — offered
+                    // exactly where the lifecycle offers nothing
+                    ...(canRequestAccess(row, lib)
+                      ? [{ key: "requestAccess", label: requestAccessLabel(row), primary: false }]
+                      : []),
                   ],
                   run: (key) => {
                     if (key === "markReviewed") {
@@ -2114,6 +2262,10 @@ export function mountDocs(
                     }
                     if (key === "cancelRevision") {
                       openCancelRevisionRow(row);
+                      return;
+                    }
+                    if (key === "requestAccess") {
+                      openRequestAccessRow(row);
                       return;
                     }
                     const cmd = lifecycleActionsFor(row, lib).find((c) => c.key === key);
@@ -2125,6 +2277,9 @@ export function mountDocs(
                 }
               : null,
         });
+        // arm the request-access button with this user's live request
+        // state — the repaint set was just cleared and re-registered
+        if (canRequestAccess(row, lib)) void refreshRequestState(row);
       });
     };
 

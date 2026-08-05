@@ -26,6 +26,9 @@ export const COLUMN_ROLES: { key: string; label: string }[] = [
   { key: "owner", label: "Owner" },
   { key: "approvers", label: "Approvers" },
   { key: "reviewers", label: "Reviewers" },
+  // 5G2: the edit-access GRANT — the authorization; editors-group
+  // membership is only the physical ability (the locked 5G principle)
+  { key: "revisionEditors", label: "Revision editors" },
   { key: "importance", label: "Importance" },
   { key: "status", label: "Approval status" },
   { key: "effectiveDate", label: "Effective date" },

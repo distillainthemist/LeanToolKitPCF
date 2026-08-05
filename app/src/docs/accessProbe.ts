@@ -16,8 +16,6 @@
 // 2026-08-05 "documents not set up" security-role incident. Output is
 // status-only: names and outcomes, never tokens or URLs.
 
-import { Ben_ltkdoclibrariesService } from "../generated/services/Ben_ltkdoclibrariesService";
-import { eq, firstWhere, upsertWhere } from "../store/dv";
 import {
   accessGroup,
   isGroupMember,
@@ -26,44 +24,9 @@ import {
 import { currentViewer } from "../runtime";
 import { viewerPerson } from "../store/people";
 import { appDocsConfig } from "./docsStore";
-
-const REQUESTS_ROW = "__requests__";
-
-export interface LedgerEntry {
-  [key: string]: unknown;
-}
-
-/** Read the ledger row's entries ([] when the row does not exist). */
-export async function readLedger(): Promise<LedgerEntry[]> {
-  const row = await firstWhere(
-    Ben_ltkdoclibrariesService.getAll,
-    eq("ben_listid", REQUESTS_ROW)
-  );
-  const raw = (row?.ben_configjson ?? "").trim();
-  if (!raw.startsWith("[")) return [];
-  try {
-    const parsed = JSON.parse(raw) as unknown;
-    return Array.isArray(parsed) ? (parsed as LedgerEntry[]) : [];
-  } catch {
-    return [];
-  }
-}
-
-/** Overwrite the ledger row (upsert by the reserved listid). Last write
- *  wins — callers re-read and merge first; 5G2 keeps entries small and
- *  verifies its own write landed. */
-export async function writeLedger(entries: LedgerEntry[]): Promise<void> {
-  await upsertWhere(
-    Ben_ltkdoclibrariesService,
-    eq("ben_listid", REQUESTS_ROW),
-    (row) => row.ben_ltkdoclibraryid ?? "",
-    {
-      ben_listid: REQUESTS_ROW,
-      ben_name: "Access requests ledger",
-      ben_configjson: JSON.stringify(entries),
-    }
-  );
-}
+// the ledger transport lives with the request flow it carries (5G2);
+// the probe exercises the REAL one, not a copy
+import { AccessRequest, readLedger, writeLedger } from "./accessRequests";
 
 export async function runAccessProbe(log: (line: string) => void): Promise<void> {
   const viewer = currentViewer();
@@ -123,17 +86,29 @@ export async function runAccessProbe(log: (line: string) => void): Promise<void>
   // ---- probe 1: the requests ledger ------------------------------------
   log("— Ledger probe (the request-edit-access home) —");
   const marker = `probe:${viewer.objectId}:${Date.now()}`;
+  // a WELL-FORMED entry — readLedger drops shapes a request never has
+  const probeEntry: AccessRequest = {
+    id: marker,
+    listId: "",
+    itemId: 0,
+    uniqueId: marker,
+    name: "access probe",
+    who: { id: viewer.objectId, name: viewer.name, email: viewer.email },
+    owners: [],
+    reason: "access diagnostics probe entry",
+    when: new Date().toISOString(),
+  };
   try {
     const before = await readLedger();
     log(`OK — ledger row read (${before.length} entr${before.length === 1 ? "y" : "ies"}).`);
-    await writeLedger([...before, { probe: marker }]);
+    await writeLedger([...before, probeEntry]);
     const after = await readLedger();
-    if (after.some((e) => e.probe === marker)) {
+    if (after.some((e) => e.id === marker)) {
       log("OK — ledger write landed and read back.");
     } else {
       log("FAIL — the write reported success but the entry did not read back.");
     }
-    await writeLedger(after.filter((e) => e.probe !== marker));
+    await writeLedger(after.filter((e) => e.id !== marker));
     log("OK — probe entry removed.");
   } catch (e) {
     log(`FAIL — ledger write refused: ${trim(e)}`);

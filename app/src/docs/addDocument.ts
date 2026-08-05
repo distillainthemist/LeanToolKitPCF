@@ -82,15 +82,13 @@ const editorKind = (f: SpField): AddFieldValue["kind"] | null => {
 export function openAddDocument(opts: AddDocumentOpts): void {
   const { site, host } = opts;
 
-  // Visible build marker: three "stuck" reports in a row turned out to
-  // involve at least one stale player bundle, and the marker settles
-  // "which code is this" from a screenshot alone. Bump per revision.
-  const BUILD = "b11";
-
+  // (The 4C debugging build marker is retired at Ben's ask, 2026-08-06 —
+  // the dialog title is clean. If "stuck" reports return, restore a
+  // visible marker FIRST: stale player bundles faked three of them.)
   let creating = false;
   const dlg = openDialog({
     host,
-    title: `Add a document · ${BUILD}`,
+    title: "Add a document",
     buttons: [
       { label: "Cancel", kind: "secondary", onClick: () => { if (!creating) dlg.close(); } },
       {
