@@ -88,6 +88,9 @@ interface ViewerOpts {
        *  repaint, like canEdit — a check-out or a stage change flips
        *  it while the overlay is open. */
       canProps?: boolean;
+      /** May this user REPLACE the content (5H3 — holds the check-out
+       *  and a staging library is configured)? */
+      canReplace?: boolean;
     };
     /** Hands the screen a repaint to call whenever it changes the
      *  document's state — a command runs through the screen's own
@@ -98,6 +101,8 @@ interface ViewerOpts {
     discard: () => void;
     /** Edit properties (5H1) — shown whenever state().canProps holds. */
     editProps?: () => void;
+    /** Replace content (5H3) — shown whenever state().canReplace holds. */
+    replace?: () => void;
     /** The SOURCE document's Office editor URL ("" = no editor) — the
      *  revision is edited here, as distinct from the PDF rendering
      *  (Ben, 2026-08-04). */
@@ -270,6 +275,10 @@ export function openDocViewer(opts: ViewerOpts): void {
       ctl.editProps !== undefined
         ? (el("button", "app-btn", "Edit properties…") as HTMLButtonElement)
         : null;
+    const replaceBtn =
+      ctl.replace !== undefined
+        ? (el("button", "app-btn", "Replace content…") as HTMLButtonElement)
+        : null;
     const held = el("span", "app-docs-heldby");
     const src =
       (ctl.editUrl ?? "") !== "" ? linkBtn("Edit source ↗", ctl.editUrl ?? "", false) : null;
@@ -281,6 +290,7 @@ export function openDocViewer(opts: ViewerOpts): void {
       inBtn.style.display = canEdit && s.checkedOut && s.mine ? "" : "none";
       dropBtn.style.display = canEdit && s.checkedOut && s.mine ? "" : "none";
       if (propsBtn !== null) propsBtn.style.display = s.canProps === true ? "" : "none";
+      if (replaceBtn !== null) replaceBtn.style.display = s.canReplace === true ? "" : "none";
       held.textContent = s.checkedOut && !s.mine ? `🔒 Checked out by ${s.by}` : "";
       held.style.display = held.textContent === "" ? "none" : "";
       if (src !== null) src.style.display = canEdit ? "" : "none";
@@ -295,10 +305,12 @@ export function openDocViewer(opts: ViewerOpts): void {
     inBtn.addEventListener("click", () => ctl.checkIn());
     dropBtn.addEventListener("click", () => ctl.discard());
     propsBtn?.addEventListener("click", () => ctl.editProps?.());
+    replaceBtn?.addEventListener("click", () => ctl.replace?.());
     paint();
     ctl.register?.(paint);
     actions.append(outBtn, inBtn, dropBtn, held);
     if (propsBtn !== null) actions.append(propsBtn);
+    if (replaceBtn !== null) actions.append(replaceBtn);
     // the SOURCE, not the PDF: where a revision's edits actually happen
     if (src !== null) actions.append(src);
   }

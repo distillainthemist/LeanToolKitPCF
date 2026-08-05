@@ -350,10 +350,23 @@ collapse this whole design into a file input.)
   refresh lists staging files newest-first → pick → copyto → recycle
   staging copy → the 4C metadata form → check-in. Same dictionary
   ordering, same recipe.
-- **H3: Replace content.** On a document checked out to me: staging
-  pickup → copyto boverwrite=true over the held file → stays checked
-  out → normal check-in (comment, minor/major). Same-extension guard.
-  Discard still reverts everything.
+- **H3 — BUILT 2026-08-06.** Replace content… (row kebab + overlay
+  control row) for WHOEVER HOLDS the check-out, when a staging library
+  is configured: same staging handoff, the picker FILTERED to the
+  document's extension (a wrong type is never offerable), copyto
+  boverwrite=true OVER the held file (probe step added: "Copy OVER a
+  checked-out file" — check out the probe file, copy over it, discard),
+  document STAYS checked out (publish by check-in, revert by Discard),
+  staging original recycled best-effort. Staging hint updated: the
+  library should be writable by everyone who adds or replaces (all app
+  users is simplest). H1 note: the add form's editors are the shared
+  fieldEditors module now — verified by Ben same day. H2 note: the
+  "normal upload" question re-answered — the connector's Create file IS
+  binary-capable, but the code-app SDK's executeAsync JSON carriage
+  re-encodes (all four carriages re-measured dead 2026-08-06); the
+  probe re-checks per SDK release, and a Dataverse-file-column + relay
+  FLOW remains the one road to a native picker (optional add-on,
+  declined for now).
 
 ### 5E — Acknowledgement ledger (SCHEMA release) — PARKED (Ben, 2026-08-05)
 - `ben_ltkdocack` through the schema pipeline — the first schema change

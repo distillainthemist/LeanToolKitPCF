@@ -357,6 +357,26 @@ export async function runWriteProbe(
     step("Server-side copy", copy.ok, say(copy, "copied — this is the template route"));
     if (copy.ok) created.push(copyUrl);
 
+    // 5H3's one unmeasured call: copy OVER a file the caller holds
+    // checked out (overwrite=true) — the replace-content route. Run
+    // against the probe's own file, inside its own check-out, then the
+    // check-out is discarded so nothing persists.
+    if (copy.ok) {
+      const hold = await checkOutFile(site, textUrl);
+      const heldNow = hold.ok || /checked out/i.test(say(hold, ""));
+      if (!heldNow) {
+        step("Copy OVER a checked-out file", false, `could not check out first: ${say(hold, "")}`);
+      } else {
+        const over = await copyFileTo(site, copyUrl, textUrl, true);
+        step(
+          "Copy OVER a checked-out file",
+          over.ok,
+          say(over, "replaced — this is the replace-content route (5H3)")
+        );
+        await undoCheckOut(site, textUrl);
+      }
+    }
+
     // THE question 4A exists to answer. Two carriages, because the first
     // one's failure was diagnostic rather than final: a string body is
     // re-encoded as UTF-8 (16 sent, 21 stored, measured on Dev

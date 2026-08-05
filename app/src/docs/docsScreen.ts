@@ -679,6 +679,60 @@ export function mountDocs(
       });
     };
 
+    /** The staging library resolved by TITLE (H2/H3) — undefined when
+     *  unset or unresolvable; failures just withhold the option. */
+    const resolveStaging = async (): Promise<
+      { listId: string; openUrl: string } | undefined
+    > => {
+      if (app.stagingLibrary === "") return undefined;
+      try {
+        const libsRes = await fetchLibraries(app.siteUrl);
+        const all =
+          ((libsRes.data ?? {}) as { value?: { Id?: string; Title?: string }[] }).value ?? [];
+        const hit = all.find(
+          (l) => (l.Title ?? "").toLowerCase() === app.stagingLibrary.toLowerCase()
+        );
+        if (hit?.Id === undefined || hit.Id === "") return undefined;
+        const rootRes = await fetchListRoot(app.siteUrl, hit.Id);
+        const root = String(
+          ((rootRes.data ?? {}) as { ServerRelativeUrl?: unknown }).ServerRelativeUrl ?? ""
+        );
+        if (root === "") return undefined;
+        return { listId: hit.Id, openUrl: `${new URL(app.siteUrl).origin}${root}` };
+      } catch {
+        return undefined;
+      }
+    };
+    /** Replace content (5H3): whoever HOLDS the check-out may swap the
+     *  file — same rule as editing in Office; the check-in/discard
+     *  discipline audits and reverts it. */
+    const canReplaceContent = (row: DocRow, lib: DocLibrary | null | undefined): boolean =>
+      lib != null &&
+      (lib.libType === "working" || lib.libType === "revision" || lib.libType === "standard") &&
+      app.stagingLibrary !== "" &&
+      isMine(row);
+    const openReplaceContentRow = (row: DocRow) => {
+      void (async () => {
+        const staging = await resolveStaging();
+        if (staging === undefined) {
+          commandFailed(
+            "Replace content",
+            `The staging library "${app.stagingLibrary}" could not be resolved — check ` +
+              "Settings → Access control → Upload staging library."
+          );
+          return;
+        }
+        const { openReplaceContent } = await import("./replaceContent");
+        openReplaceContent({
+          site: app.siteUrl,
+          row,
+          staging,
+          host: dialogHost,
+          onDone: () => void refreshRow(row),
+        });
+      })();
+    };
+
     /** The SOURCE document's Office editor — as distinct from the PDF
      *  (Ben, 2026-08-04). Only Office formats have one. */
     const editSourceUrl = (row: DocRow): string => {
@@ -2016,32 +2070,10 @@ export function mountDocs(
       void (async () => {
         const { openAddDocument } = await import("./addDocument");
         // H2: the upload source, offered to pool members and controllers
-        // when a staging library is configured — resolved by TITLE here
-        // so the dialog opens with a working folder link. Unknown pool
-        // gates OPEN (the staging library's own permissions are the
-        // hard gate); any resolution failure just withholds the option.
-        let upload: { listId: string; openUrl: string } | undefined;
-        if (app.stagingLibrary !== "" && (meInPool !== false || docAdmin())) {
-          try {
-            const libsRes = await fetchLibraries(app.siteUrl);
-            const all =
-              ((libsRes.data ?? {}) as { value?: { Id?: string; Title?: string }[] }).value ?? [];
-            const hit = all.find(
-              (l) => (l.Title ?? "").toLowerCase() === app.stagingLibrary.toLowerCase()
-            );
-            if (hit?.Id !== undefined && hit.Id !== "") {
-              const rootRes = await fetchListRoot(app.siteUrl, hit.Id);
-              const root = String(
-                ((rootRes.data ?? {}) as { ServerRelativeUrl?: unknown }).ServerRelativeUrl ?? ""
-              );
-              if (root !== "") {
-                upload = { listId: hit.Id, openUrl: `${new URL(app.siteUrl).origin}${root}` };
-              }
-            }
-          } catch {
-            /* the upload option is simply not offered */
-          }
-        }
+        // when a staging library is configured. Unknown pool gates OPEN
+        // (the staging library's own permissions are the hard gate).
+        const upload =
+          meInPool !== false || docAdmin() ? await resolveStaging() : undefined;
         openAddDocument({
           site: app.siteUrl,
           upload,
@@ -2604,6 +2636,7 @@ export function mountDocs(
                   by: row.checkoutName ?? "",
                   canEdit: canEditContent(lib, row),
                   canProps: canEditProps(row, lib),
+                  canReplace: canReplaceContent(row, lib),
                 }),
                 register: (repaint) => {
                   viewerRepaints.add(repaint);
@@ -2612,6 +2645,7 @@ export function mountDocs(
                 checkIn: () => openCheckIn(row),
                 discard: () => openDiscard(row),
                 editProps: () => openEditPropertiesRow(row),
+                replace: () => openReplaceContentRow(row),
                 editUrl: editSourceUrl(row),
               }
             : null,
@@ -3130,6 +3164,9 @@ export function mountDocs(
       // their lifecycle for Phase 5, so nothing here can edit one.
       if (canEditProps(row, lib)) {
         item("Edit properties…", () => openEditPropertiesRow(row));
+      }
+      if (canReplaceContent(row, lib)) {
+        item("Replace content…", () => openReplaceContentRow(row));
       }
       if (canEditContent(lib, row)) {
         const held = (row.checkoutName ?? "") !== "";

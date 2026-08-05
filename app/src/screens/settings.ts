@@ -1181,8 +1181,9 @@ async function renderAccessControl(body: HTMLElement, me: RosterPerson): Promise
       "div",
       "app-field-hint",
       "Create it on the DMS site (a plain document library, e.g. DMS-Upload), " +
-        "writable by the owners & approvers pool and controllers, and do NOT " +
-        "expose it under Settings → Documents — it is plumbing, not a register."
+        "writable by everyone who adds or replaces documents (simplest: all app " +
+        "users — replace-by-upload is open to whoever holds a check-out), and do " +
+        "NOT expose it under Settings → Documents — it is plumbing, not a register."
     )
   );
 }

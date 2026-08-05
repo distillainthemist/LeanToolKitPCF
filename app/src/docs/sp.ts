@@ -283,11 +283,21 @@ export function undoCheckOut(site: string, url: string): Promise<SpResult> {
 
 /** Server-side copy: no bytes cross the wire, which is what makes the
  *  template route certain where upload is not. */
-export function copyFileTo(site: string, url: string, newUrl: string): Promise<SpResult> {
+/** Server-side copy — the ONLY content route (bytes cannot cross the
+ *  connector). overwrite=false refuses name collisions cleanly (the add
+ *  route); overwrite=true copies OVER an existing file — the REPLACE
+ *  route (5H3), run inside the holder's check-out so the swap rides the
+ *  normal check-in/discard discipline. */
+export function copyFileTo(
+  site: string,
+  url: string,
+  newUrl: string,
+  overwrite = false
+): Promise<SpResult> {
   return spRequest(
     site,
     "POST",
-    `${filePath(url)}/copyto(strnewurl='${spQuote(newUrl)}',boverwrite=false)`
+    `${filePath(url)}/copyto(strnewurl='${spQuote(newUrl)}',boverwrite=${overwrite ? "true" : "false"})`
   );
 }
 
