@@ -116,6 +116,68 @@ function summarizeError(err: unknown): string {
   return `${typeof o.code === "string" ? `${o.code}: ` : ""}${msg}`.slice(0, 1500);
 }
 
+// ---- site groups (5G3b — instant-effect grant enforcement) -------------
+// A SharePoint SITE group's membership is evaluated live per request —
+// no Entra claim caching — which is why the editors group moves here:
+// Ben's grantee run (2026-08-06) measured the Entra route's propagation
+// at "sign out and wait", and a grant that cannot be USED on approval
+// is a grant that generates support calls.
+
+/** Resolve a site group by its NAME (the configured handle). */
+export function fetchSiteGroupByName(site: string, name: string): Promise<SpResult> {
+  return spRequest(
+    site,
+    "GET",
+    `_api/web/sitegroups/getbyname('${spQuote(name)}')?$select=Id,Title,OnlyAllowMembersViewMembership`
+  );
+}
+
+export function fetchSiteGroupUsers(site: string, groupId: number): Promise<SpResult> {
+  return spRequest(
+    site,
+    "GET",
+    `_api/web/sitegroups(${groupId})/users?$select=LoginName,Email,Title`
+  );
+}
+
+/** Add by claims login (i:0#.f|membership|email). Plain-JSON body first;
+ *  the verbose flag retries with the __metadata envelope some tenants
+ *  demand — the probe measures which lands here. */
+export function addSiteGroupUser(
+  site: string,
+  groupId: number,
+  loginName: string,
+  verbose = false
+): Promise<SpResult> {
+  return spRequest(site, "POST", `_api/web/sitegroups(${groupId})/users`, {
+    body: JSON.stringify(
+      verbose
+        ? { __metadata: { type: "SP.User" }, LoginName: loginName }
+        : { LoginName: loginName }
+    ),
+    ...(verbose
+      ? {
+          headers: {
+            Accept: "application/json;odata=verbose",
+            "Content-Type": "application/json;odata=verbose",
+          },
+        }
+      : {}),
+  });
+}
+
+/** Remove by claims login — body form, so the | and # never need URL
+ *  escaping. Removing a non-member is SharePoint's error to report. */
+export function removeSiteGroupUser(
+  site: string,
+  groupId: number,
+  loginName: string
+): Promise<SpResult> {
+  return spRequest(site, "POST", `_api/web/sitegroups(${groupId})/users/removebyloginname`, {
+    body: JSON.stringify({ loginName }),
+  });
+}
+
 // ---- the specific calls Phase 1 needs ----------------------------------
 
 /** Visible document libraries (BaseTemplate 101) on a site. */

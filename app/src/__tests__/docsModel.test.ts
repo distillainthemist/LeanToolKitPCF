@@ -69,6 +69,7 @@ describe("app docs config", () => {
       ownersGroupName: "Document Owners & Approvers",
       editorsGroupId: "g-editors",
       editorsGroupName: "Temporary Document Editors",
+      spEditorsGroup: "DMSDocumentEditors",
       sites: {},
     });
     expect(parseAppDocsConfig(raw).siteUrl).toBe("https://x.sharepoint.com/sites/Dev");

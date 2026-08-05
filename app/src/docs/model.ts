@@ -530,6 +530,11 @@ export interface AppDocsConfig {
   ownersGroupName: string;
   editorsGroupId: string;
   editorsGroupName: string;
+  /** The SHAREPOINT site group grants enforce through (5G3b) — its
+   *  membership takes effect immediately, unlike an Entra group's
+   *  claim-cached one. Named, not id'd: names are what the sitegroups
+   *  REST resolves and what an admin reads in SharePoint. */
+  spEditorsGroup: string;
   /** siteUrl → that site's shared column mapping and palettes. A map,
    *  so exposing a second site later adds a key rather than a schema. */
   sites: Record<string, SiteDictionary>;
@@ -562,6 +567,7 @@ export function emptyAppDocsConfig(): AppDocsConfig {
     ownersGroupName: "",
     editorsGroupId: "",
     editorsGroupName: "",
+    spEditorsGroup: "",
     sites: {},
   };
 }
@@ -645,6 +651,7 @@ export function parseAppDocsConfig(raw: string | null | undefined): AppDocsConfi
     out.ownersGroupName = asStr(o.ownersGroupName);
     out.editorsGroupId = asStr(o.editorsGroupId);
     out.editorsGroupName = asStr(o.editorsGroupName);
+    out.spEditorsGroup = asStr(o.spEditorsGroup);
     if (o.sites && typeof o.sites === "object") {
       for (const [key, val] of Object.entries(o.sites as Record<string, unknown>)) {
         const k = siteKey(key);
@@ -762,6 +769,7 @@ export function serializeAppDocsConfig(cfg: AppDocsConfig): string {
   if (cfg.ownersGroupName !== "") o.ownersGroupName = cfg.ownersGroupName;
   if (cfg.editorsGroupId !== "") o.editorsGroupId = cfg.editorsGroupId;
   if (cfg.editorsGroupName !== "") o.editorsGroupName = cfg.editorsGroupName;
+  if (cfg.spEditorsGroup !== "") o.spEditorsGroup = cfg.spEditorsGroup;
   const sites: Record<string, unknown> = {};
   for (const [key, dict] of Object.entries(cfg.sites)) {
     const body = serializeSiteDictionary(dict);

@@ -62,6 +62,8 @@ export async function runAccessProbe(log: (line: string) => void): Promise<void>
   // ---- document groups (5G config) -------------------------------------
   let editorsId = "";
   let ownersId = "";
+  let siteUrl = "";
+  let spGroupName = "";
   try {
     const cfg = await appDocsConfig();
     const line = (label: string, id: string, name: string) =>
@@ -69,8 +71,15 @@ export async function runAccessProbe(log: (line: string) => void): Promise<void>
     line("Document controllers group", cfg.controllersGroupId, cfg.controllersGroupName);
     line("Owners & approvers group", cfg.ownersGroupId, cfg.ownersGroupName);
     line("Temporary editors group", cfg.editorsGroupId, cfg.editorsGroupName);
+    log(
+      cfg.spEditorsGroup !== ""
+        ? `OK — SharePoint editors site group set: ${cfg.spEditorsGroup}.`
+        : "INFO — no SharePoint editors site group set (grants would use the Entra route, which propagates slowly)."
+    );
     editorsId = cfg.editorsGroupId;
     ownersId = cfg.ownersGroupId;
+    siteUrl = cfg.siteUrl;
+    spGroupName = cfg.spEditorsGroup;
   } catch (e) {
     log(`FAIL — could not read the documents configuration: ${trim(e)}`);
   }
@@ -115,8 +124,73 @@ export async function runAccessProbe(log: (line: string) => void): Promise<void>
     log("   (The request flow would need per-user rows instead — the fallback design.)");
   }
 
+  // ---- probe 3: the SHAREPOINT editors site group (5G3b) ---------------
+  // The instant-effect route: site-group membership is evaluated live,
+  // so a grant works on the next click. Measures (a) resolve + member
+  // read as this user, (b) add/remove executed by a pool member whose
+  // standing comes only through the NESTED Entra group in the owning
+  // site group, (c) which body shape this tenant's REST accepts.
+  log("— Site-group probe (instant-effect grants) —");
+  if (siteUrl === "" || spGroupName === "") {
+    log("SKIP — set the SharePoint editors site group under Settings → Access control first.");
+  } else {
+    const { addSiteGroupUser, fetchSiteGroupByName, fetchSiteGroupUsers, removeSiteGroupUser } =
+      await import("./sp");
+    const myLogin = `i:0#.f|membership|${viewer.email.trim().toLowerCase()}`;
+    const resolved = await fetchSiteGroupByName(siteUrl, spGroupName);
+    const groupId = Number(
+      ((resolved.data ?? {}) as { Id?: unknown }).Id ?? 0
+    );
+    if (!resolved.ok || groupId <= 0) {
+      log(`FAIL — could not resolve site group "${spGroupName}": ${resolved.status.slice(0, 200)}`);
+    } else {
+      log(`OK — site group resolved (id ${groupId}).`);
+      const listUsers = async (): Promise<string[]> => {
+        const r = await fetchSiteGroupUsers(siteUrl, groupId);
+        if (!r.ok) throw new Error(r.status);
+        const rows = ((r.data ?? {}) as { value?: { LoginName?: string }[] }).value ?? [];
+        return rows.map((u) => (u.LoginName ?? "").toLowerCase());
+      };
+      try {
+        const before = await listUsers();
+        log(`OK — membership readable (${before.length} member${before.length === 1 ? "" : "s"}).`);
+        if (before.includes(myLogin.toLowerCase())) {
+          log("SKIP — you are ALREADY a member of the site group — add/remove not attempted, a live grant is never disturbed.");
+        } else {
+          let how = "plain JSON";
+          let added = await addSiteGroupUser(siteUrl, groupId, myLogin);
+          if (!added.ok) {
+            how = "verbose envelope";
+            added = await addSiteGroupUser(siteUrl, groupId, myLogin, true);
+          }
+          if (!added.ok) {
+            log(`FAIL — self-add refused (both body shapes): ${added.status.slice(0, 250)}`);
+            log("   (If you expected rights: is the OWNING site group's membership — via the nested Entra pool group — reaching you?)");
+          } else {
+            const nowIn = (await listUsers()).includes(myLogin.toLowerCase());
+            log(
+              nowIn
+                ? `OK — self-add landed via ${how}, read back IMMEDIATELY (the instant-effect claim holds).`
+                : `FAIL — the add (${how}) answered OK but did not read back.`
+            );
+            const removed = await removeSiteGroupUser(siteUrl, groupId, myLogin);
+            const gone = removed.ok && !(await listUsers()).includes(myLogin.toLowerCase());
+            log(
+              gone
+                ? "OK — self-remove landed; the group is back as it was."
+                : `FAIL — remove did not land: ${removed.status.slice(0, 200)} — remove yourself in SharePoint.`
+            );
+          }
+        }
+      } catch (e) {
+        log(`FAIL — could not read the site group's members: ${trim(e)}`);
+        log("   (Set the group's 'Who can view membership' to Everyone.)");
+      }
+    }
+  }
+
   // ---- probe 2: editors-group membership as a group owner --------------
-  log("— Editors-group probe (executing a grant) —");
+  log("— Entra editors-group probe (the fallback route) —");
   if (editorsId === "") {
     log("SKIP — no temporary editors group linked under Settings → Access control.");
     return;

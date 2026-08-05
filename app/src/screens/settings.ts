@@ -1102,6 +1102,49 @@ async function renderAccessControl(body: HTMLElement, me: RosterPerson): Promise
       cfg.editorsGroupName = name;
     }
   );
+
+  // the SHAREPOINT editors site group (5G3b): grants enforce through a
+  // SITE group because its membership takes effect IMMEDIATELY — the
+  // Entra route was measured propagating at "sign out and wait"
+  const spRow = el("div", "app-settings-row app-access-grouprow");
+  const spText = el("div", "");
+  spText.appendChild(el("div", "app-user-field-label", "SharePoint editors site group"));
+  const spNote = el("div", "app-settings-note", "");
+  spText.appendChild(spNote);
+  const spInput = el("input", "app-input") as HTMLInputElement;
+  spInput.placeholder = "Site group name, e.g. DMSDocumentEditors";
+  const spSave = el("button", "app-btn", "Save") as HTMLButtonElement;
+  const paintSp = () => {
+    spInput.value = cfg.spEditorsGroup;
+    spNote.textContent =
+      cfg.spEditorsGroup !== ""
+        ? "Grant approvals add people to this site group — effective immediately."
+        : "Not set — approvals fall back to the Entra editors group (membership can take a while to propagate).";
+  };
+  spSave.addEventListener("click", () => {
+    void (async () => {
+      cfg.spEditorsGroup = spInput.value.trim();
+      await saveAppDocsConfig(cfg);
+      invalidateDocsCache();
+      const { invalidateAccessGates } = await import("../docs/accessGates");
+      invalidateAccessGates();
+      cfg = await appDocsConfig();
+      paintSp();
+    })();
+  });
+  paintSp();
+  spRow.append(spText, el("span", "app-bar-gap"), spInput, spSave);
+  card.appendChild(spRow);
+  card.appendChild(
+    el(
+      "div",
+      "app-field-hint",
+      "Create the group on the SharePoint site with Contribute on the standards " +
+        "library only; owner = a site group containing the owners & approvers " +
+        "(so any pool member can execute a grant); membership editable by the " +
+        "owner, viewable by everyone. Access diagnostics probes it."
+    )
+  );
 }
 
 /** Users: search + site/role filters, role + site assignment. */
