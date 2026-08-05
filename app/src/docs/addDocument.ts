@@ -33,6 +33,7 @@ import {
   fetchFields,
   fetchListRoot,
   fetchRegionalSettings,
+  recycleFile,
   validateUpdateListItem,
 } from "./sp";
 
@@ -48,6 +49,16 @@ export interface AddDocumentOpts {
   host: HTMLElement;
   /** Called with the created document's row, after check-in. */
   onCreated: (row: DocRow) => void;
+  /** H2: the upload source — present only for pool members and
+   *  controllers with a staging library configured. Bytes cannot cross
+   *  the connector (4A, re-measured 2026-08-06), so the user uploads in
+   *  SharePoint's own UI and the app copies server-side. */
+  upload?: {
+    /** The staging library, resolved by title. */
+    listId: string;
+    /** Open-in-SharePoint URL for the staging library. */
+    openUrl: string;
+  };
 }
 
 export function openAddDocument(opts: AddDocumentOpts): void {
@@ -130,7 +141,105 @@ export function openAddDocument(opts: AddDocumentOpts): void {
   // information the person adding it should see, not infer (Ben,
   // 2026-08-04)
   body.appendChild(fieldRow("Into library", targetSel));
-  body.appendChild(fieldRow("From template", tplSel));
+
+  // ---- content source (H2): a template copy, or a STAGED upload --------
+  let mode: "template" | "upload" = "template";
+  const tplRow = fieldRow("From template", tplSel);
+  body.appendChild(tplRow);
+  const stagingRows = new Map<string, DocRow>();
+  const stagingSel = el("select", "app-input") as HTMLSelectElement;
+  const sourceRow = (): DocRow | undefined =>
+    mode === "upload" ? stagingRows.get(stagingSel.value) : tplRows.get(tplSel.value);
+  if (opts.upload !== undefined) {
+    const up = opts.upload;
+    const seg = el("div", "app-docs-seg");
+    const segTpl = el("button", "app-docs-segbtn app-docs-segbtn-on", "From a template") as HTMLButtonElement;
+    const segUp = el("button", "app-docs-segbtn", "By upload") as HTMLButtonElement;
+    segTpl.type = "button";
+    segUp.type = "button";
+    seg.append(segTpl, segUp);
+    body.insertBefore(fieldRow("Content source", seg), tplRow);
+
+    const openLink = el("a", "app-btn", "Open the upload folder ↗") as HTMLAnchorElement;
+    openLink.href = up.openUrl;
+    openLink.target = "_blank";
+    openLink.rel = "noopener";
+    const refreshBtn = el("button", "app-btn", "⟳ Refresh") as HTMLButtonElement;
+    refreshBtn.type = "button";
+    placeholder(stagingSel, "Refresh to list uploaded files…");
+    const upBox = el("div", "app-docs-upbox");
+    upBox.append(openLink, refreshBtn, stagingSel);
+    const uploadRow = fieldRow("Uploaded file", upBox);
+    uploadRow.style.display = "none";
+    body.appendChild(uploadRow);
+    body.appendChild(
+      Object.assign(el("div", "app-field-hint"), {
+        textContent:
+          "Upload in the SharePoint tab, come back, Refresh, pick the file — " +
+          "the app copies it into the library and tidies the upload folder.",
+      })
+    );
+
+    const paintMode = () => {
+      segTpl.classList.toggle("app-docs-segbtn-on", mode === "template");
+      segUp.classList.toggle("app-docs-segbtn-on", mode === "upload");
+      tplRow.style.display = mode === "template" ? "" : "none";
+      uploadRow.style.display = mode === "upload" ? "" : "none";
+      const src = sourceRow();
+      nameExt.textContent = src !== undefined ? `.${src.ext}` : "";
+      sync();
+    };
+    segTpl.addEventListener("click", () => {
+      mode = "template";
+      paintMode();
+    });
+    segUp.addEventListener("click", () => {
+      mode = "upload";
+      paintMode();
+    });
+
+    const loadStaging = () => {
+      refreshBtn.disabled = true;
+      void renderListPage(site, up.listId, buildRenderViewXml({ rowLimit: 30 }))
+        .then((page) => {
+          clear(stagingSel);
+          stagingRows.clear();
+          placeholder(
+            stagingSel,
+            page.rows.length === 0
+              ? "No files in the upload folder yet — upload, then Refresh"
+              : "Choose an uploaded file…"
+          );
+          // newest first (the register's default order) — the file just
+          // uploaded is the first option
+          for (const r of page.rows) {
+            stagingRows.set(r.uniqueId, r);
+            const o = el("option", "", r.name) as HTMLOptionElement;
+            o.value = r.uniqueId;
+            stagingSel.appendChild(o);
+          }
+          stagingSel.value = "";
+        })
+        .catch(() => {
+          clear(stagingSel);
+          placeholder(stagingSel, "Could not read the upload folder — check the staging library");
+        })
+        .then(() => {
+          refreshBtn.disabled = false;
+          sync();
+        });
+    };
+    refreshBtn.addEventListener("click", loadStaging);
+    stagingSel.addEventListener("change", () => {
+      const src = stagingRows.get(stagingSel.value);
+      if (src !== undefined && nameInput.value.trim() === "") {
+        // the uploaded file's own stem is usually the right name
+        nameInput.value = src.ext !== "" ? src.name.slice(0, -(src.ext.length + 1)) : src.name;
+      }
+      nameExt.textContent = src !== undefined ? `.${src.ext}` : "";
+      sync();
+    });
+  }
   body.appendChild(fieldRow("Name", nameInput, nameExt));
 
   // ---- metadata editors, rebuilt when the target changes ---------------
@@ -147,7 +256,10 @@ export function openAddDocument(opts: AddDocumentOpts): void {
   const sync = () => {
     const missing = editors.some((e) => e.field.required && e.isEmpty());
     createBtn.disabled =
-      creating || tplSel.value === "" || sanitizeFileName(nameInput.value) === "" || missing;
+      creating ||
+      sourceRow() === undefined ||
+      sanitizeFileName(nameInput.value) === "" ||
+      missing;
   };
   nameInput.addEventListener("input", sync);
   tplSel.addEventListener("change", () => {
@@ -278,10 +390,10 @@ export function openAddDocument(opts: AddDocumentOpts): void {
 
   const create = async () => {
     if (creating) return;
-    const tpl = tplRows.get(tplSel.value);
+    const src = sourceRow();
     const lib = currentTarget();
     const clean = sanitizeFileName(nameInput.value);
-    if (tpl === undefined || clean === "") return;
+    if (src === undefined || clean === "") return;
     creating = true;
     sync();
 
@@ -291,7 +403,7 @@ export function openAddDocument(opts: AddDocumentOpts): void {
       sync();
     };
 
-    status("Copying the template…");
+    status(mode === "upload" ? "Copying the uploaded file…" : "Copying the template…");
     const rootRes = await timedRetry("Finding the library root", () =>
       fetchListRoot(site, lib.listId)
     );
@@ -299,12 +411,12 @@ export function openAddDocument(opts: AddDocumentOpts): void {
       ((rootRes.data ?? {}) as { ServerRelativeUrl?: unknown }).ServerRelativeUrl ?? ""
     );
     if (root === "") return fail("Could not find the library", rootRes.status);
-    const fileName = `${clean}.${tpl.ext}`;
+    const fileName = `${clean}.${src.ext}`;
     const newUrl = `${root}/${fileName}`;
     // safe to retry: boverwrite=false means a landed-late first attempt
     // just makes the second one fail "already exists", which is caught
     // by reading the file back rather than trusted blindly
-    const copy = await timedRetry("The copy", () => copyFileTo(site, tpl.serverUrl, newUrl));
+    const copy = await timedRetry("The copy", () => copyFileTo(site, src.serverUrl, newUrl));
     if (!copy.ok) return fail("Copy refused (a document with this name may already exist)", copy.status);
 
     // From here the document EXISTS — a failure below leaves it checked
@@ -379,7 +491,14 @@ export function openAddDocument(opts: AddDocumentOpts): void {
 
     status("Checking in…");
     const cin = await timed<Sp | null>(
-      checkInFile(site, newUrl, `Created from template “${tpl.name}”`, false),
+      checkInFile(
+        site,
+        newUrl,
+        mode === "upload"
+          ? `Added by upload — “${src.name}”`
+          : `Created from template “${src.name}”`,
+        false
+      ),
       25_000,
       null
     );
@@ -392,6 +511,18 @@ export function openAddDocument(opts: AddDocumentOpts): void {
     }
     if (!cin.ok && !/not checked out/i.test(spErrorText(cin.status))) {
       return fail("Created, but check-in was refused (it stays checked out to you)", cin.status);
+    }
+
+    // the staging copy has served its purpose — best effort: the
+    // document itself is DONE either way, and a leftover in the upload
+    // folder is visible there and harmless
+    if (mode === "upload") {
+      status("Tidying the upload folder…");
+      await timed<Sp>(recycleFile(site, src.serverUrl), 10_000, {
+        ok: false,
+        status: "",
+        data: null,
+      });
     }
 
     // hand the finished row back the way the register reads rows — and

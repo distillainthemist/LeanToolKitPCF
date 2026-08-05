@@ -63,7 +63,9 @@ import {
   checkInFile,
   checkOutFile,
   fetchFileInfo,
+  fetchLibraries,
   fetchListPermissions,
+  fetchListRoot,
   fetchTermPaths,
   fetchTermsInSet,
   undoCheckOut,
@@ -2013,8 +2015,36 @@ export function mountDocs(
     addBtn.addEventListener("click", () => {
       void (async () => {
         const { openAddDocument } = await import("./addDocument");
+        // H2: the upload source, offered to pool members and controllers
+        // when a staging library is configured — resolved by TITLE here
+        // so the dialog opens with a working folder link. Unknown pool
+        // gates OPEN (the staging library's own permissions are the
+        // hard gate); any resolution failure just withholds the option.
+        let upload: { listId: string; openUrl: string } | undefined;
+        if (app.stagingLibrary !== "" && (meInPool !== false || docAdmin())) {
+          try {
+            const libsRes = await fetchLibraries(app.siteUrl);
+            const all =
+              ((libsRes.data ?? {}) as { value?: { Id?: string; Title?: string }[] }).value ?? [];
+            const hit = all.find(
+              (l) => (l.Title ?? "").toLowerCase() === app.stagingLibrary.toLowerCase()
+            );
+            if (hit?.Id !== undefined && hit.Id !== "") {
+              const rootRes = await fetchListRoot(app.siteUrl, hit.Id);
+              const root = String(
+                ((rootRes.data ?? {}) as { ServerRelativeUrl?: unknown }).ServerRelativeUrl ?? ""
+              );
+              if (root !== "") {
+                upload = { listId: hit.Id, openUrl: `${new URL(app.siteUrl).origin}${root}` };
+              }
+            }
+          } catch {
+            /* the upload option is simply not offered */
+          }
+        }
         openAddDocument({
           site: app.siteUrl,
+          upload,
           targets: libraries.filter(canAddTo),
           templates: libraries.filter((l) => l.libType === "template"),
           dictBy,

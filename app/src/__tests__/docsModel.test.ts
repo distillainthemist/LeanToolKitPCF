@@ -70,6 +70,7 @@ describe("app docs config", () => {
       editorsGroupId: "g-editors",
       editorsGroupName: "Temporary Document Editors",
       spEditorsGroup: "DMSDocumentEditors",
+      stagingLibrary: "DMS-Upload",
       sites: {},
     });
     expect(parseAppDocsConfig(raw).siteUrl).toBe("https://x.sharepoint.com/sites/Dev");

@@ -535,6 +535,11 @@ export interface AppDocsConfig {
    *  claim-cached one. Named, not id'd: names are what the sitegroups
    *  REST resolves and what an admin reads in SharePoint. */
   spEditorsGroup: string;
+  /** The upload STAGING library's title (5H2) — bytes cannot cross the
+   *  connector, so uploads happen in SharePoint's own UI here, and the
+   *  app copies server-side into the target. Never exposed in the nav;
+   *  "" = upload-add not offered. */
+  stagingLibrary: string;
   /** siteUrl → that site's shared column mapping and palettes. A map,
    *  so exposing a second site later adds a key rather than a schema. */
   sites: Record<string, SiteDictionary>;
@@ -568,6 +573,7 @@ export function emptyAppDocsConfig(): AppDocsConfig {
     editorsGroupId: "",
     editorsGroupName: "",
     spEditorsGroup: "",
+    stagingLibrary: "",
     sites: {},
   };
 }
@@ -652,6 +658,7 @@ export function parseAppDocsConfig(raw: string | null | undefined): AppDocsConfi
     out.editorsGroupId = asStr(o.editorsGroupId);
     out.editorsGroupName = asStr(o.editorsGroupName);
     out.spEditorsGroup = asStr(o.spEditorsGroup);
+    out.stagingLibrary = asStr(o.stagingLibrary);
     if (o.sites && typeof o.sites === "object") {
       for (const [key, val] of Object.entries(o.sites as Record<string, unknown>)) {
         const k = siteKey(key);
@@ -770,6 +777,7 @@ export function serializeAppDocsConfig(cfg: AppDocsConfig): string {
   if (cfg.editorsGroupId !== "") o.editorsGroupId = cfg.editorsGroupId;
   if (cfg.editorsGroupName !== "") o.editorsGroupName = cfg.editorsGroupName;
   if (cfg.spEditorsGroup !== "") o.spEditorsGroup = cfg.spEditorsGroup;
+  if (cfg.stagingLibrary !== "") o.stagingLibrary = cfg.stagingLibrary;
   const sites: Record<string, unknown> = {};
   for (const [key, dict] of Object.entries(cfg.sites)) {
     const body = serializeSiteDictionary(dict);

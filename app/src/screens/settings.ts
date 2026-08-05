@@ -1145,6 +1145,46 @@ async function renderAccessControl(body: HTMLElement, me: RosterPerson): Promise
         "owner, viewable by everyone. Access diagnostics probes it."
     )
   );
+
+  // the upload STAGING library (5H2): bytes cannot cross the connector,
+  // so uploads happen in SharePoint's own UI here and the app copies
+  // server-side into the target library
+  const stRow = el("div", "app-settings-row app-access-grouprow");
+  const stText = el("div", "");
+  stText.appendChild(el("div", "app-user-field-label", "Upload staging library"));
+  const stNote = el("div", "app-settings-note", "");
+  stText.appendChild(stNote);
+  const stInput = el("input", "app-input") as HTMLInputElement;
+  stInput.placeholder = "Library title, e.g. DMS-Upload";
+  const stSave = el("button", "app-btn", "Save") as HTMLButtonElement;
+  const paintSt = () => {
+    stInput.value = cfg.stagingLibrary;
+    stNote.textContent =
+      cfg.stagingLibrary !== ""
+        ? "Pool members and controllers can add documents by upload through this library."
+        : "Not set — documents can only be added from templates.";
+  };
+  stSave.addEventListener("click", () => {
+    void (async () => {
+      cfg.stagingLibrary = stInput.value.trim();
+      await saveAppDocsConfig(cfg);
+      invalidateDocsCache();
+      cfg = await appDocsConfig();
+      paintSt();
+    })();
+  });
+  paintSt();
+  stRow.append(stText, el("span", "app-bar-gap"), stInput, stSave);
+  card.appendChild(stRow);
+  card.appendChild(
+    el(
+      "div",
+      "app-field-hint",
+      "Create it on the DMS site (a plain document library, e.g. DMS-Upload), " +
+        "writable by the owners & approvers pool and controllers, and do NOT " +
+        "expose it under Settings → Documents — it is plumbing, not a register."
+    )
+  );
 }
 
 /** Users: search + site/role filters, role + site assignment. */
