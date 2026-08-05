@@ -20,7 +20,7 @@ import { eq, firstWhere, upsertWhere } from "../store/dv";
 import { addMember, groupMembers, removeMember } from "../store/accessGroup";
 import { REQUESTS_LIST_ID, spErrorText, validateItemErrors } from "./model";
 import { DocRow } from "./rows";
-import { checkInFile, checkOutFile, validateUpdateListItem } from "./sp";
+import { checkInFile, checkOutFile, fetchFieldSchema, validateUpdateListItem } from "./sp";
 import { appDocsConfig } from "./docsStore";
 
 // one source of truth with the library reads that must SKIP this row
@@ -261,6 +261,22 @@ export function openApproveRequest(opts: ApproveRequestOpts): void {
     goBtn.disabled = true;
     status.classList.remove("app-docs-addstatus-warn");
 
+    // preflight: the grant column must exist ON THIS LIBRARY — a role
+    // mapped in the dictionary can still name a column a given list
+    // never received, and that must fail HERE with the remedy, not as
+    // a bare refusal mid-write (Ben's first approve run, 2026-08-06)
+    status.textContent = "Checking the grant column…";
+    const schema = await timedSp(
+      fetchFieldSchema(site, row.listId, opts.revEditorsInternal),
+      "The column check"
+    );
+    if (!schema.ok) {
+      return fail(
+        `The Revision editors column ("${opts.revEditorsInternal}") is not on this library`,
+        `add the column to the standards library (and re-open Settings → Documents so the library learns it), then approve again. SharePoint said: ${schema.status}`
+      );
+    }
+
     status.textContent = "Taking the check-out…";
     const out = await timedSp(checkOutFile(site, row.serverUrl), "Check-out");
     if (!out.ok && !/checked out/i.test(spErrorText(out.status))) {
@@ -459,6 +475,26 @@ export interface RequestAccessOpts {
 export function openRequestAccess(opts: RequestAccessOpts): void {
   const { existing } = opts;
   let running = false;
+
+  // granted: the good news — the entry is the LIVE grant record, so
+  // there is nothing to dismiss; it clears when the revision cycle ends
+  if (existing !== null && existing.granted !== undefined) {
+    const dlg = openDialog({
+      host: opts.host,
+      title: `Edit access granted — ${opts.doc.name}`,
+      buttons: [{ label: "Close", kind: "primary", onClick: () => dlg.close() }],
+    });
+    dlg.body.appendChild(
+      el(
+        "div",
+        "app-settings-note",
+        `${existing.granted.by} granted you one revision cycle — Start revision is ` +
+          "available on the document. If a check-out is refused, the group " +
+          "membership may still be propagating (a few minutes)."
+      )
+    );
+    return;
+  }
 
   // declined: show the outcome, offer request-again (which replaces the
   // entry) or dismiss (which removes it)

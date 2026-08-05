@@ -2131,7 +2131,8 @@ button.app-docs-navterm.app-docs-navterm-on {
   background: #fff; border: 1px solid #ddd9d1; border-radius: 8px;
   box-shadow: 0 8px 28px rgba(0, 0, 0, 0.18); padding: 10px 12px;
 }
-.app-docs-taskshead { font-weight: 700; margin-bottom: 6px; }
+.app-docs-taskshead { font-weight: 700; margin-bottom: 6px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.app-docs-tasksrefresh { font-weight: 400; font-size: 12px; padding: 4px 10px; min-height: 32px; }
 .app-docs-tasksgroup {
   font-size: 11px; font-weight: 600; letter-spacing: 0.04em;
   text-transform: uppercase; color: #57534a; margin: 10px 0 4px;

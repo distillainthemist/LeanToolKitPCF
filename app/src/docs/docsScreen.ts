@@ -539,6 +539,7 @@ export function mountDocs(
     const requestAccessLabel = (row: DocRow): string => {
       const req = myRequests.get(reqKey(row));
       if (req == null) return "Request edit access…";
+      if (req.granted !== undefined) return "Edit access granted ✓";
       return req.declined !== undefined ? "Edit access declined…" : "Edit access requested…";
     };
     const refreshRequestState = async (row: DocRow) => {
@@ -741,12 +742,22 @@ export function mountDocs(
       held: TaskRow[];
       review: TaskRow[];
       requests: RequestTaskRow[];
+      /** The viewer's OWN requests, every state — an outcome the
+       *  requester never sees teaches nothing (Ben, 2026-08-06). */
+      outgoing: import("./accessRequests").AccessRequest[];
     }
     /** "Near" for a review date: due within this many days counts. */
     const REVIEW_HORIZON_DAYS = 30;
 
     const fetchMyTasks = async (): Promise<MyTasks> => {
-      const out: MyTasks = { toApprove: [], toReview: [], held: [], review: [], requests: [] };
+      const out: MyTasks = {
+        toApprove: [],
+        toReview: [],
+        held: [],
+        review: [],
+        requests: [],
+        outgoing: [],
+      };
       const nameOf = (l: DocLibrary) => l.config.title || l.name;
       /** every column the opened overlay's gates and chips lean on — a
        *  task row is one click from Approve, so it must arrive armed */
@@ -875,7 +886,12 @@ export function mountDocs(
       jobs.push(
         (async () => {
           const { readLedger } = await import("./accessRequests");
-          const pending = (await readLedger()).filter(
+          const ledger = await readLedger();
+          // the viewer's own requests, every state — pending shows as
+          // waiting, declined carries the owner's reason, granted is
+          // the invitation to start revising
+          out.outgoing = ledger.filter((e) => e.who.id === whoId);
+          const pending = ledger.filter(
             (e) => e.declined === undefined && e.granted === undefined
           );
           const mine = pending.filter(
@@ -976,7 +992,14 @@ export function mountDocs(
       t.toReview.length +
       t.held.length +
       t.review.length +
-      t.requests.length;
+      t.requests.length +
+      // of your OWN requests only a decline is actionable (dismiss);
+      // pending is waiting and granted persists for the whole cycle —
+      // counting those would keep the badge hot for weeks
+      t.outgoing.filter((e) => e.declined !== undefined).length;
+    /** Everything the panel PAINTS — outgoing rows show in every state
+     *  even when none of them counts toward the badge. */
+    const taskVisible = (t: MyTasks) => taskCount(t) > 0 || t.outgoing.length > 0;
 
     let tasksBadgeGen = 0;
     const paintTasksBadge = (n: number) => {
@@ -1031,7 +1054,14 @@ export function mountDocs(
       panel.style.top = `${r.bottom + 6}px`;
       panel.style.right = `${Math.max(8, window.innerWidth - r.right)}px`;
       const bodyEl = el("div", "app-docs-tasksbody");
-      panel.append(el("div", "app-docs-taskshead", "My tasks"), bodyEl);
+      const head = el("div", "app-docs-taskshead", "My tasks");
+      // a decision made elsewhere (another person, another tab) shows
+      // up without closing and reopening the panel (Ben, 2026-08-06)
+      const refreshBtn = el("button", "app-btn app-docs-tasksrefresh", "⟳ Refresh") as HTMLButtonElement;
+      refreshBtn.setAttribute("aria-label", "Refresh tasks");
+      refreshBtn.addEventListener("click", () => reload());
+      head.appendChild(refreshBtn);
+      panel.append(head, bodyEl);
       scrim.appendChild(panel);
       document.body.appendChild(scrim);
 
@@ -1042,7 +1072,7 @@ export function mountDocs(
           if (!scrim.isConnected) return;
           clear(bodyEl);
           paintTasksBadge(taskCount(t));
-          if (taskCount(t) === 0) {
+          if (!taskVisible(t)) {
             bodyEl.appendChild(el("div", "app-field-hint", "Nothing needs you."));
             return;
           }
@@ -1172,6 +1202,44 @@ export function mountDocs(
           group("Awaiting your review", t.toReview);
           group("Checked out to you", t.held);
           group("Review due", t.review);
+          // your OWN requests, every state — the outcome reaches you
+          // here, not only buried in the document overlay
+          if (t.outgoing.length > 0) {
+            bodyEl.appendChild(
+              el("div", "app-docs-tasksgroup", `Your access requests (${t.outgoing.length})`)
+            );
+            for (const req of t.outgoing) {
+              const rowEl = el("div", "app-docs-taskrow");
+              const state =
+                req.granted !== undefined
+                  ? `Granted by ${req.granted.by} — open the document and Start revision`
+                  : req.declined !== undefined
+                    ? `Declined by ${req.declined.by} — ${req.declined.reason}`
+                    : "Waiting on the document owner";
+              rowEl.append(
+                el("span", "app-docs-taskname", req.name),
+                el("span", "app-field-hint", state)
+              );
+              if (req.granted === undefined) {
+                const act = el(
+                  "button",
+                  "app-btn app-docs-taskact",
+                  req.declined !== undefined ? "Dismiss" : "Withdraw"
+                ) as HTMLButtonElement;
+                act.addEventListener("click", (e) => {
+                  e.stopPropagation();
+                  void import("./accessRequests").then(({ removeRequest }) =>
+                    removeRequest(req.id).then(() => {
+                      refreshTasksBadge();
+                      reload();
+                    })
+                  );
+                });
+                rowEl.appendChild(act);
+              }
+              bodyEl.appendChild(rowEl);
+            }
+          }
         });
       };
       reload();
@@ -2514,11 +2582,33 @@ export function mountDocs(
         revEditorsInternal,
       ].filter((f) => f !== "" && carried.has(f));
       fields.push("CheckoutUser");
-      const page = await renderListPage(
-        app.siteUrl,
-        row.listId,
-        buildRenderViewXml({ idIn: [row.id], fields, rowLimit: 1 })
-      );
+      // a freshly created grant column may exist on the LIST before the
+      // library CONFIG learns it — for standards, ask for it anyway and
+      // fall back to carried-only if the optimistic guess 400s (a stale
+      // config must not hide a live grant from its grantee)
+      const lib = byListId.get(row.listId);
+      const optimistic =
+        lib?.libType === "standard" &&
+        revEditorsInternal !== "" &&
+        !fields.includes(revEditorsInternal)
+          ? [...fields, revEditorsInternal]
+          : fields;
+      let page: Awaited<ReturnType<typeof renderListPage>>;
+      try {
+        page = await renderListPage(
+          app.siteUrl,
+          row.listId,
+          buildRenderViewXml({ idIn: [row.id], fields: optimistic, rowLimit: 1 })
+        );
+        if (optimistic !== fields) fields.push(revEditorsInternal);
+      } catch (e) {
+        if (optimistic === fields) throw e;
+        page = await renderListPage(
+          app.siteUrl,
+          row.listId,
+          buildRenderViewXml({ idIn: [row.id], fields, rowLimit: 1 })
+        );
+      }
       const fresh = page.rows[0];
       if (fresh !== undefined) {
         row.checkoutName = fresh.checkoutName ?? "";
