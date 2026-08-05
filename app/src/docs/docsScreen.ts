@@ -744,8 +744,9 @@ export function mountDocs(
       review: TaskRow[];
       requests: RequestTaskRow[];
       /** The viewer's OWN requests, every state — an outcome the
-       *  requester never sees teaches nothing (Ben, 2026-08-06). */
-      outgoing: import("./accessRequests").AccessRequest[];
+       *  requester never sees teaches nothing, and a granted row OPENS
+       *  the document it granted (Ben, 2026-08-06). */
+      outgoing: RequestTaskRow[];
     }
     /** "Near" for a review date: due within this many days counts. */
     const REVIEW_HORIZON_DAYS = 30;
@@ -888,47 +889,47 @@ export function mountDocs(
         (async () => {
           const { readLedger } = await import("./accessRequests");
           const ledger = await readLedger();
-          // the viewer's own requests, every state — pending shows as
-          // waiting, declined carries the owner's reason, granted is
-          // the invitation to start revising
-          out.outgoing = ledger.filter((e) => e.who.id === whoId);
-          const pending = ledger.filter(
-            (e) => e.declined === undefined && e.granted === undefined
-          );
-          const mine = pending.filter(
+          const outgoingEntries = ledger.filter((e) => e.who.id === whoId);
+          const mine = ledger.filter(
             (e) =>
-              docAdmin() ||
-              e.owners.some((o) => o.toLowerCase() === myEmail)
+              e.declined === undefined &&
+              e.granted === undefined &&
+              (docAdmin() || e.owners.some((o) => o.toLowerCase() === myEmail))
           );
-          const byList = new Map<string, typeof mine>();
-          for (const e of mine) {
+          // one live-row fetch covers BOTH queues — a request row (either
+          // side) opens the document overlay armed
+          type Entry = (typeof ledger)[number];
+          const need = [...mine, ...outgoingEntries];
+          const byList = new Map<string, Entry[]>();
+          for (const e of need) {
             const k = e.listId.toLowerCase();
             byList.set(k, [...(byList.get(k) ?? []), e]);
           }
-          for (const [k, reqs] of byList) {
+          const rowFor = new Map<string, DocRow>(); // listIdLower:itemId
+          const libFor = new Map<string, DocLibrary>();
+          for (const [k, entries] of byList) {
             const l = byListId.get(k);
-            if (l === undefined) {
-              for (const r of reqs) out.requests.push({ req: r, row: null, libName: "" });
-              continue;
-            }
-            const ids = reqs.map((r) => r.itemId).filter((n) => n > 0);
-            const page =
-              ids.length > 0
-                ? await renderListPage(
-                    app.siteUrl,
-                    l.listId,
-                    buildRenderViewXml({ idIn: ids, fields: gateFieldsFor(l), rowLimit: 30 })
-                  ).catch(() => ({ rows: [] as DocRow[] }))
-                : { rows: [] as DocRow[] };
-            const rowsById = new Map(page.rows.map((r) => [r.id, r]));
-            for (const r of reqs) {
-              out.requests.push({
-                req: r,
-                row: rowsById.get(r.itemId) ?? null,
-                libName: nameOf(l),
-              });
-            }
+            if (l === undefined) continue;
+            libFor.set(k, l);
+            const ids = [...new Set(entries.map((e) => e.itemId).filter((n) => n > 0))];
+            if (ids.length === 0) continue;
+            const page = await renderListPage(
+              app.siteUrl,
+              l.listId,
+              buildRenderViewXml({ idIn: ids, fields: gateFieldsFor(l), rowLimit: 30 })
+            ).catch(() => ({ rows: [] as DocRow[] }));
+            for (const r of page.rows) rowFor.set(`${k}:${r.id}`, r);
           }
+          const taskRowOf = (e: Entry): RequestTaskRow => {
+            const k = e.listId.toLowerCase();
+            return {
+              req: e,
+              row: rowFor.get(`${k}:${e.itemId}`) ?? null,
+              libName: libFor.has(k) ? nameOf(libFor.get(k)!) : "",
+            };
+          };
+          out.requests = mine.map(taskRowOf);
+          out.outgoing = outgoingEntries.map(taskRowOf);
         })()
       );
 
@@ -999,7 +1000,7 @@ export function mountDocs(
       // reaches anyone. Pending is just waiting; a seen grant persists
       // quietly for the whole cycle.
       t.outgoing.filter(
-        (e) => e.declined !== undefined || (e.granted !== undefined && e.seen !== true)
+        (e) => e.req.declined !== undefined || (e.req.granted !== undefined && e.req.seen !== true)
       ).length;
     /** Everything the panel PAINTS — outgoing rows show in every state
      *  even when none of them counts toward the badge. */
@@ -1212,11 +1213,27 @@ export function mountDocs(
             bodyEl.appendChild(
               el("div", "app-docs-tasksgroup", `Your access requests (${t.outgoing.length})`)
             );
-            for (const req of t.outgoing) {
+            for (const rt of t.outgoing) {
+              const req = rt.req;
               const rowEl = el("div", "app-docs-taskrow");
+              // the row OPENS the document it is about — a granted row
+              // is one click from Start revision (Ben, 2026-08-06)
+              if (rt.row !== null) {
+                const liveRow = rt.row;
+                rowEl.setAttribute("role", "button");
+                rowEl.tabIndex = 0;
+                const open = () => {
+                  closePanel();
+                  onRowOpen(liveRow);
+                };
+                rowEl.addEventListener("click", open);
+                rowEl.addEventListener("keydown", (e) => {
+                  if (e.key === "Enter") open();
+                });
+              }
               const state =
                 req.granted !== undefined
-                  ? `Granted by ${req.granted.by} — open the document and Start revision`
+                  ? `Granted by ${req.granted.by} — open and Start revision`
                   : req.declined !== undefined
                     ? `Declined by ${req.declined.by} — ${req.declined.reason}`
                     : "Waiting on the document owner";
@@ -1246,8 +1263,8 @@ export function mountDocs(
             // painted = seen: the grant stops counting on the badge
             // (the entry itself lives on for the whole cycle)
             const unseen = t.outgoing
-              .filter((e) => e.granted !== undefined && e.seen !== true)
-              .map((e) => e.id);
+              .filter((e) => e.req.granted !== undefined && e.req.seen !== true)
+              .map((e) => e.req.id);
             if (unseen.length > 0) {
               void import("./accessRequests").then(({ markSeen }) =>
                 markSeen(unseen).then(
