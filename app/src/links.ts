@@ -168,7 +168,9 @@ export function launchTarget(): string {
   const doc = param(DOC_PARAM);
   if (doc !== "") {
     pendingDoc = doc;
-    return "#/"; // same road: hub → Documents tab → the overlay opens
+    // the KIOSK route (5I): only the document, no app chrome — a
+    // scanned code in the field reads a procedure, nothing else
+    return "#/doc";
   }
   const boardId = param(LAUNCH_PARAM);
   return boardId === "" ? "" : boardHash(boardId, param(AT_PARAM));

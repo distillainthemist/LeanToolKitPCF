@@ -57,6 +57,10 @@ interface ViewerOpts {
    *  by the viewer, arrives with work to do and expands). The header's
    *  Details button toggles either way. */
   detailsOpen?: boolean;
+  /** KIOSK mode (5I): the viewer IS the whole screen — a scanned share
+   *  link in the field. No close button, no escape-away, no
+   *  scrim-click dismissal: there is nowhere else to go. */
+  solo?: boolean;
   /** Share this document (5I) — the screen owns the dialog (permalink +
    *  QR); the viewer only offers the button. */
   share?: () => void;
@@ -129,7 +133,8 @@ interface ViewerOpts {
 function overlay(
   label: string,
   onClose?: () => void,
-  right = false
+  right = false,
+  solo = false
 ): {
   panel: HTMLElement;
   close: () => void;
@@ -149,10 +154,13 @@ function overlay(
   const onKey = (e: KeyboardEvent) => {
     if (e.key === "Escape") close();
   };
-  document.addEventListener("keydown", onKey);
-  scrim.addEventListener("pointerdown", (e) => {
-    if (e.target === scrim) close();
-  });
+  // kiosk (5I): the overlay IS the screen — nothing dismisses it
+  if (!solo) {
+    document.addEventListener("keydown", onKey);
+    scrim.addEventListener("pointerdown", (e) => {
+      if (e.target === scrim) close();
+    });
+  }
   return { panel, close };
 }
 
@@ -212,10 +220,16 @@ const PROP_SKIP = new Set([
 export function openDocViewer(opts: ViewerOpts): void {
   const { site, row } = opts;
   let blobUrl = "";
-  const { panel, close } = overlay(row.name, () => {
-    if (blobUrl !== "") URL.revokeObjectURL(blobUrl);
-  }, true);
+  const { panel, close } = overlay(
+    row.name,
+    () => {
+      if (blobUrl !== "") URL.revokeObjectURL(blobUrl);
+    },
+    true,
+    opts.solo === true
+  );
   panel.classList.add("app-docs-viewer");
+  if (opts.solo === true) panel.classList.add("app-docs-viewer-solo");
 
   const head = el("div", "app-docs-viewhead");
   head.append(
@@ -231,10 +245,12 @@ export function openDocViewer(opts: ViewerOpts): void {
   let detailsOpen = opts.detailsOpen === true;
   const detailsBtn = el("button", "app-btn app-docs-detailstoggle", "") as HTMLButtonElement;
   head.appendChild(detailsBtn);
-  const x = el("button", "app-btn app-docs-viewclose", "✕") as HTMLButtonElement;
-  x.setAttribute("aria-label", "Close");
-  x.addEventListener("click", close);
-  head.appendChild(x);
+  if (opts.solo !== true) {
+    const x = el("button", "app-btn app-docs-viewclose", "✕") as HTMLButtonElement;
+    x.setAttribute("aria-label", "Close");
+    x.addEventListener("click", close);
+    head.appendChild(x);
+  }
   panel.appendChild(head);
 
   const body = el("div", "app-docs-viewbody");

@@ -73,13 +73,7 @@ import {
 import { openDialog } from "../../../shared/ui/dialog";
 import { currentViewer } from "../runtime";
 import { viewerPerson } from "../store/people";
-import {
-  docLinkUrl,
-  docLinkUrlMobile,
-  docsViewUrl,
-  takePendingDoc,
-  takePendingDocView,
-} from "../links";
+import { docLinkUrl, docLinkUrlMobile, docsViewUrl, takePendingDocView } from "../links";
 import {
   DocUiPrefs,
   DocView,
@@ -2587,8 +2581,8 @@ export function mountDocs(
         el(
           "div",
           "app-field-hint",
-          "Opens LeanBoard on this document — preview up, details tucked away. " +
-            "Anyone with app access can follow it."
+          "Opens JUST this document — full-screen, no navigation: made for reading " +
+            "a procedure in the field. Anyone with app access can follow it."
         )
       );
       const linkRow = el("div", "app-docs-sharelink");
@@ -2612,7 +2606,7 @@ export function mountDocs(
       // variant for phones without the app.
       const mobileUrl = docLinkUrlMobile(row.listId, row.id);
       let qrTarget: "app" | "web" = mobileUrl !== "" ? "app" : "web";
-      const seg = el("div", "app-docs-seg");
+      const seg = el("div", "app-docs-seg app-docs-shareseg");
       const segApp = el("button", "app-docs-segbtn", "Power Apps mobile") as HTMLButtonElement;
       const segWeb = el("button", "app-docs-segbtn", "Browser") as HTMLButtonElement;
       segApp.type = "button";
@@ -3934,36 +3928,8 @@ export function mountDocs(
     // arrive unfiltered and blink
     void readStatusTerms().finally(() => void load(true));
 
-    // a shared DOCUMENT link (5I): fetch the row and open its overlay —
-    // preview up, details collapsed (the default). The register loads
-    // behind it as usual.
-    const pendingDocPayload = takePendingDoc();
-    if (pendingDocPayload !== "") {
-      const sep = pendingDocPayload.lastIndexOf(":");
-      const pListId = pendingDocPayload.slice(0, sep);
-      const itemN = Number(pendingDocPayload.slice(sep + 1));
-      const targetLib = byListId.get(pListId.toLowerCase());
-      if (targetLib !== undefined && Number.isFinite(itemN) && itemN > 0) {
-        void renderListPage(
-          app.siteUrl,
-          targetLib.listId,
-          buildRenderViewXml({
-            idIn: [itemN],
-            fields: targetLib.config.columns
-              .filter((c) => c.available)
-              .map((c) => c.internal),
-            rowLimit: 1,
-          })
-        )
-          .then((page) => {
-            const row = page.rows[0];
-            if (!dead && row !== undefined) onRowOpen(row, { details: false });
-          })
-          .catch(() => {
-            /* a dead link opens the register alone — still useful */
-          });
-      }
-    }
+    // (a shared DOCUMENT link never lands here — the "#/doc" KIOSK
+    // route renders it chrome-free; see docSolo.ts)
   })();
 
   return () => {

@@ -145,8 +145,9 @@ function route(): void {
   modeText.textContent = showHome ? "Home" : "Settings";
   modeLink.href = showHome ? "#/" : "#/settings";
   // the focused meeting view runs full-bleed — its own title row carries
-  // the meeting name and Back, so the app bar just costs height
-  bar.style.display = parts[0] === "edit" ? "none" : "";
+  // the meeting name and Back; the document KIOSK (5I) is chrome-free by
+  // design (a scanned code reads a procedure, nothing else)
+  bar.style.display = parts[0] === "edit" || parts[0] === "doc" ? "none" : "";
 
   void (async () => {
     try {
@@ -163,6 +164,11 @@ function route(): void {
       } else if (parts[0] === "edit" && parts[1] && parts[2] && parts[3]) {
         const { mountCardEditor } = await import("./screens/cardEditor");
         mount = () => mountCardEditor(screenRoot, parts[1], parts[2], parts[3]);
+      } else if (parts[0] === "doc") {
+        // the kiosk (5I) — dynamic import keeps the docs modules off the
+        // startup bundle, same door the hub's Documents tab uses
+        const { mountDocSolo } = await import("./docs/docSolo");
+        mount = () => mountDocSolo(screenRoot);
       } else if (parts[0] === "boards") {
         const { mountBoards } = await import("./screens/boards");
         mount = () => mountBoards(screenRoot);
