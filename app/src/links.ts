@@ -96,6 +96,22 @@ export function docLinkUrl(listId: string, itemId: number): string {
   return `${PLAYER}/e/${host.environmentId}/app/${host.appId}?${q.toString()}#/`;
 }
 
+/**
+ * The POWER APPS MOBILE deep link for one document ("" when the host
+ * never answered). A scanned https player URL opens the phone's
+ * BROWSER (the web interface, Ben 2026-08-07); the documented
+ * ms-apps scheme opens Power Apps mobile directly, launch parameters
+ * intact — the right payload for a QR that lives on a printed
+ * procedure. Needs the mobile app installed.
+ */
+export function docLinkUrlMobile(listId: string, itemId: number): string {
+  if (!host || host.appId === "") return "";
+  const q = new URLSearchParams();
+  if (host.tenantId !== "") q.set("tenantId", host.tenantId);
+  q.set(DOC_PARAM, `${listId}:${itemId}`);
+  return `ms-apps:///providers/Microsoft.PowerApps/apps/${host.appId}?${q.toString()}`;
+}
+
 /** Player query parameter pinning one occurrence ("yyyy-mm-ddTHH:MM"). */
 export const AT_PARAM = "at";
 

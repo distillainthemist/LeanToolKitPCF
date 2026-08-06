@@ -73,7 +73,13 @@ import {
 import { openDialog } from "../../../shared/ui/dialog";
 import { currentViewer } from "../runtime";
 import { viewerPerson } from "../store/people";
-import { docLinkUrl, docsViewUrl, takePendingDoc, takePendingDocView } from "../links";
+import {
+  docLinkUrl,
+  docLinkUrlMobile,
+  docsViewUrl,
+  takePendingDoc,
+  takePendingDocView,
+} from "../links";
 import {
   DocUiPrefs,
   DocView,
@@ -2599,19 +2605,54 @@ export function mountDocs(
       });
       linkRow.append(input, copyBtn);
       dlg.body.appendChild(linkRow);
+      // the QR: a scan happens on a PHONE, and the https player URL
+      // opens the phone's browser (the web interface, Ben 2026-08-07) —
+      // so the code defaults to the ms-apps deep link, which opens
+      // Power Apps MOBILE directly. The toggle keeps the browser
+      // variant for phones without the app.
+      const mobileUrl = docLinkUrlMobile(row.listId, row.id);
+      let qrTarget: "app" | "web" = mobileUrl !== "" ? "app" : "web";
+      const seg = el("div", "app-docs-seg");
+      const segApp = el("button", "app-docs-segbtn", "Power Apps mobile") as HTMLButtonElement;
+      const segWeb = el("button", "app-docs-segbtn", "Browser") as HTMLButtonElement;
+      segApp.type = "button";
+      segWeb.type = "button";
+      seg.append(segApp, segWeb);
+      const qrLabel = el("div", "app-field-hint", "");
       const qrHost = el("div", "app-docs-shareqr");
-      dlg.body.appendChild(qrHost);
-      // the encoder loads on demand — nobody pays its bytes until the
-      // first Share
-      void import("../../../shared/ui/qr").then(({ qrSvg }) => {
-        const svg = qrSvg(url, 220);
-        if (svg !== null) qrHost.appendChild(svg);
-        else {
-          qrHost.appendChild(
-            el("div", "app-field-hint", "The link is too long for a QR code — copy it instead.")
-          );
-        }
+      if (mobileUrl !== "") dlg.body.appendChild(seg);
+      dlg.body.append(qrHost, qrLabel);
+      const paintQr = () => {
+        segApp.classList.toggle("app-docs-segbtn-on", qrTarget === "app");
+        segWeb.classList.toggle("app-docs-segbtn-on", qrTarget === "web");
+        qrLabel.textContent =
+          qrTarget === "app"
+            ? "Scanning opens Power Apps mobile (the app must be installed)."
+            : "Scanning opens the browser's web player.";
+        clear(qrHost);
+        // the encoder loads on demand — nobody pays its bytes until the
+        // first Share
+        void import("../../../shared/ui/qr").then(({ qrSvg }) => {
+          if (!qrHost.isConnected) return;
+          clear(qrHost);
+          const svg = qrSvg(qrTarget === "app" ? mobileUrl : url, 220);
+          if (svg !== null) qrHost.appendChild(svg);
+          else {
+            qrHost.appendChild(
+              el("div", "app-field-hint", "The link is too long for a QR code — copy it instead.")
+            );
+          }
+        });
+      };
+      segApp.addEventListener("click", () => {
+        qrTarget = "app";
+        paintQr();
       });
+      segWeb.addEventListener("click", () => {
+        qrTarget = "web";
+        paintQr();
+      });
+      paintQr();
     };
 
     const onRowOpen = (row: DocRow, openOpts?: { details?: boolean }) => {
