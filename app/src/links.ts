@@ -65,6 +65,37 @@ export function docsViewUrl(encoded: string): string {
   return `${PLAYER}/e/${host.environmentId}/app/${host.appId}?${q.toString()}#/`;
 }
 
+/** Player query parameter carrying ONE document (5I): `${listId}:${itemId}`.
+ *  The link opens the app on the document overlay alone — preview up,
+ *  details collapsed — the share-a-procedure permalink/QR target. */
+export const DOC_PARAM = "ltkdoc";
+let pendingDoc = "";
+
+/** The document payload the launch delivered — consumed once by the
+ *  Documents screen when it mounts. */
+export function takePendingDoc(): string {
+  const v = pendingDoc;
+  pendingDoc = "";
+  return v;
+}
+
+export function hasPendingDoc(): boolean {
+  return pendingDoc !== "";
+}
+
+/** The absolute player URL for one document. */
+export function docLinkUrl(listId: string, itemId: number): string {
+  const payload = `${listId}:${itemId}`;
+  if (!host || host.appId === "" || host.environmentId === "") {
+    const base = window.location.href.split("#")[0].split("?")[0];
+    return `${base}?${DOC_PARAM}=${encodeURIComponent(payload)}#/`;
+  }
+  const q = new URLSearchParams();
+  if (host.tenantId !== "") q.set("tenantId", host.tenantId);
+  q.set(DOC_PARAM, payload);
+  return `${PLAYER}/e/${host.environmentId}/app/${host.appId}?${q.toString()}#/`;
+}
+
 /** Player query parameter pinning one occurrence ("yyyy-mm-ddTHH:MM"). */
 export const AT_PARAM = "at";
 
@@ -117,6 +148,11 @@ export function launchTarget(): string {
     // land on the hub — its Documents tab fronts itself and consumes the
     // payload (the standalone #/docs page has no app chrome around it)
     return "#/";
+  }
+  const doc = param(DOC_PARAM);
+  if (doc !== "") {
+    pendingDoc = doc;
+    return "#/"; // same road: hub → Documents tab → the overlay opens
   }
   const boardId = param(LAUNCH_PARAM);
   return boardId === "" ? "" : boardHash(boardId, param(AT_PARAM));

@@ -73,7 +73,7 @@ import {
 import { openDialog } from "../../../shared/ui/dialog";
 import { currentViewer } from "../runtime";
 import { viewerPerson } from "../store/people";
-import { docsViewUrl, takePendingDocView } from "../links";
+import { docLinkUrl, docsViewUrl, takePendingDoc, takePendingDocView } from "../links";
 import {
   DocUiPrefs,
   DocView,
@@ -1245,7 +1245,7 @@ export function mountDocs(
               rowEl.tabIndex = 0;
               const open = () => {
                 closePanel();
-                onRowOpen(tr.row);
+                onRowOpen(tr.row, { details: true }); // a task open arrives with work to do
               };
               rowEl.addEventListener("click", open);
               rowEl.addEventListener("keydown", (e) => {
@@ -1287,7 +1287,7 @@ export function mountDocs(
                 rowEl.tabIndex = 0;
                 const open = () => {
                   closePanel();
-                  onRowOpen(liveRow);
+                  onRowOpen(liveRow, { details: true });
                 };
                 rowEl.addEventListener("click", open);
                 rowEl.addEventListener("keydown", (e) => {
@@ -1379,7 +1379,7 @@ export function mountDocs(
                 rowEl.tabIndex = 0;
                 const open = () => {
                   closePanel();
-                  onRowOpen(liveRow);
+                  onRowOpen(liveRow, { details: true });
                 };
                 rowEl.addEventListener("click", open);
                 rowEl.addEventListener("keydown", (e) => {
@@ -1459,7 +1459,7 @@ export function mountDocs(
                 rowEl.tabIndex = 0;
                 const open = () => {
                   closePanel();
-                  onRowOpen(liveRow);
+                  onRowOpen(liveRow, { details: true });
                 };
                 rowEl.addEventListener("click", open);
                 rowEl.addEventListener("keydown", (e) => {
@@ -2567,7 +2567,54 @@ export function mountDocs(
       return next.some((f) => f.uniqueId === row.uniqueId);
     };
 
-    const onRowOpen = (row: DocRow) => {
+    /** Share one document (5I): the permalink opens the app on this
+     *  document alone — preview up, details collapsed (the default) —
+     *  plus a QR of the same link for print or a wall poster. */
+    const openShareDoc = (row: DocRow) => {
+      const url = docLinkUrl(row.listId, row.id);
+      const dlg = openDialog({
+        host: dialogHost,
+        title: `Share — ${row.name}`,
+        buttons: [{ label: "Close", kind: "secondary", onClick: () => dlg.close() }],
+      });
+      dlg.body.appendChild(
+        el(
+          "div",
+          "app-field-hint",
+          "Opens LeanBoard on this document — preview up, details tucked away. " +
+            "Anyone with app access can follow it."
+        )
+      );
+      const linkRow = el("div", "app-docs-sharelink");
+      const input = el("input", "app-input") as HTMLInputElement;
+      input.readOnly = true;
+      input.value = url;
+      input.addEventListener("focus", () => input.select());
+      const copyBtn = el("button", "app-btn app-btn-primary", "Copy link") as HTMLButtonElement;
+      copyBtn.addEventListener("click", () => {
+        void navigator.clipboard.writeText(url).then(() => {
+          copyBtn.textContent = "Copied ✓";
+          window.setTimeout(() => (copyBtn.textContent = "Copy link"), 1500);
+        });
+      });
+      linkRow.append(input, copyBtn);
+      dlg.body.appendChild(linkRow);
+      const qrHost = el("div", "app-docs-shareqr");
+      dlg.body.appendChild(qrHost);
+      // the encoder loads on demand — nobody pays its bytes until the
+      // first Share
+      void import("../../../shared/ui/qr").then(({ qrSvg }) => {
+        const svg = qrSvg(url, 220);
+        if (svg !== null) qrHost.appendChild(svg);
+        else {
+          qrHost.appendChild(
+            el("div", "app-field-hint", "The link is too long for a QR code — copy it instead.")
+          );
+        }
+      });
+    };
+
+    const onRowOpen = (row: DocRow, openOpts?: { details?: boolean }) => {
       const lib = byListId.get(row.listId) ?? current;
       // the drive is per LIBRARY, and the PDF routes need it — resolve
       // before opening (cached, so only the first open of a library pays)
@@ -2581,6 +2628,10 @@ export function mountDocs(
           row,
           driveId,
           libraryName: lib ? lib.config.title || lib.name : "",
+          // collapsed is the default (5I) — a task-list open, or a
+          // document this user holds, arrives with work to do
+          detailsOpen: openOpts?.details ?? isMine(row),
+          share: () => openShareDoc(row),
           askToWork: lib?.libType === "working",
           // details pane (Vault V4): the register's fields, never
           // SharePoint's plumbing — exactly the available-ticked columns
@@ -3159,6 +3210,7 @@ export function mountDocs(
       item("Copy PDF link", () => {
         void navigator.clipboard.writeText(bestPdf);
       });
+      item("Share document…", () => openShareDoc(row));
       // Phase 4B: the commands themselves. Offered only where a document
       // is meant to be worked on — controlled standards and records keep
       // their lifecycle for Phase 5, so nothing here can edit one.
@@ -3840,6 +3892,37 @@ export function mountDocs(
     // so the very first page should already be filtered rather than
     // arrive unfiltered and blink
     void readStatusTerms().finally(() => void load(true));
+
+    // a shared DOCUMENT link (5I): fetch the row and open its overlay —
+    // preview up, details collapsed (the default). The register loads
+    // behind it as usual.
+    const pendingDocPayload = takePendingDoc();
+    if (pendingDocPayload !== "") {
+      const sep = pendingDocPayload.lastIndexOf(":");
+      const pListId = pendingDocPayload.slice(0, sep);
+      const itemN = Number(pendingDocPayload.slice(sep + 1));
+      const targetLib = byListId.get(pListId.toLowerCase());
+      if (targetLib !== undefined && Number.isFinite(itemN) && itemN > 0) {
+        void renderListPage(
+          app.siteUrl,
+          targetLib.listId,
+          buildRenderViewXml({
+            idIn: [itemN],
+            fields: targetLib.config.columns
+              .filter((c) => c.available)
+              .map((c) => c.internal),
+            rowLimit: 1,
+          })
+        )
+          .then((page) => {
+            const row = page.rows[0];
+            if (!dead && row !== undefined) onRowOpen(row, { details: false });
+          })
+          .catch(() => {
+            /* a dead link opens the register alone — still useful */
+          });
+      }
+    }
   })();
 
   return () => {

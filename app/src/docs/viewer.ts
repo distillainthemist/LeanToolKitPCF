@@ -52,6 +52,14 @@ interface ViewerOpts {
    *  settings — the ONLY properties shown when provided. Absent, every
    *  non-noise field renders (the skip set below). */
   columns?: string[];
+  /** Open with the details pane EXPANDED (5I: collapsed is the default
+   *  — the document speaks first; a task-list open, or a document held
+   *  by the viewer, arrives with work to do and expands). The header's
+   *  Details button toggles either way. */
+  detailsOpen?: boolean;
+  /** Share this document (5I) — the screen owns the dialog (permalink +
+   *  QR); the viewer only offers the button. */
+  share?: () => void;
   /** Status value for this row ("" = none) + the screen's palette-aware
    *  chip renderer. A getter is re-read on every details repaint — a
    *  lifecycle command changes the status while the overlay is open,
@@ -218,6 +226,11 @@ export function openDocViewer(opts: ViewerOpts): void {
       [opts.libraryName, formatWhen(row.modified)].filter((s) => s !== "").join(" · ")
     )
   );
+  // collapsed by default (5I): the document speaks first, the details
+  // pane is a click away — and a share-link open IS this default
+  let detailsOpen = opts.detailsOpen === true;
+  const detailsBtn = el("button", "app-btn app-docs-detailstoggle", "") as HTMLButtonElement;
+  head.appendChild(detailsBtn);
   const x = el("button", "app-btn app-docs-viewclose", "✕") as HTMLButtonElement;
   x.setAttribute("aria-label", "Close");
   x.addEventListener("click", close);
@@ -232,6 +245,16 @@ export function openDocViewer(opts: ViewerOpts): void {
   // ---- details pane ----------------------------------------------------
   const aside = el("aside", "app-docs-details");
   body.appendChild(aside);
+  const paintDetails = () => {
+    aside.style.display = detailsOpen ? "" : "none";
+    detailsBtn.textContent = detailsOpen ? "Hide details" : "Details";
+    detailsBtn.setAttribute("aria-expanded", String(detailsOpen));
+  };
+  detailsBtn.addEventListener("click", () => {
+    detailsOpen = !detailsOpen;
+    paintDetails();
+  });
+  paintDetails();
 
   const chips = el("div", "app-docs-detailchips");
   const paintChips = () => {
@@ -263,6 +286,11 @@ export function openDocViewer(opts: ViewerOpts): void {
     });
   });
   actions.append(copy);
+  if (opts.share !== undefined) {
+    const shareBtn = el("button", "app-btn", "Share…") as HTMLButtonElement;
+    shareBtn.addEventListener("click", () => opts.share?.());
+    actions.append(shareBtn);
+  }
   // document control sits with the other actions, not in a menu: when a
   // document is checked out to you, checking it back in is the thing you
   // came here to do

@@ -14,7 +14,7 @@ import { LtkAction, parseActionsJson } from "../../../shared/schema/actions";
 import { parseOrgTree } from "../../../shared/schema/meeting";
 import { parsePeople } from "../../../shared/schema/people";
 import { appTheme, editorHost } from "../cardHost";
-import { boardHash, boardUrl, hasPendingDocView } from "../links";
+import { boardHash, boardUrl, hasPendingDoc, hasPendingDocView } from "../links";
 import { currentViewer, detectHost } from "../runtime";
 import { actionsForViewer, upsertActions } from "../store/actions";
 import { canViewBoard, listBoards } from "../store/boards";
@@ -244,7 +244,7 @@ export function mountHub(parent: HTMLElement): () => void {
     // a shared Documents link launched the app (or an old #/docs
     // bookmark landed here): front the tab — its mount consumes any
     // pending view payload
-    if (hasPendingDocView() || window.location.hash.startsWith("#/docs")) {
+    if (hasPendingDocView() || hasPendingDoc() || window.location.hash.startsWith("#/docs")) {
       view.selectTab("documents");
     }
     if (hosted) {

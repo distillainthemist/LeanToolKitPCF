@@ -2354,6 +2354,12 @@ button.app-doclist-hsort:hover { color: var(--app-accent, #2563eb); }
 .app-docscard-warn { background: #fff3d6; color: #7a5a00; }
 .app-docscard-good { background: #e7f5e9; color: #1f6b2d; }
 
+/* 5I: the overlay's details toggle + the share dialog */
+.app-docs-detailstoggle { margin-left: auto; font-size: 12.5px; }
+.app-docs-sharelink { display: flex; gap: 8px; align-items: center; margin: 10px 0; }
+.app-docs-sharelink input { flex: 1; min-width: 0; font-size: 12px; }
+.app-docs-shareqr { display: flex; justify-content: center; padding: 8px 0 4px; }
+
 /* Upload source row (5H2): folder link + refresh + file picker */
 .app-docs-upbox { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .app-docs-upbox select { flex: 1; min-width: 220px; }

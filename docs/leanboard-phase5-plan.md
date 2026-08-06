@@ -368,6 +368,28 @@ collapse this whole design into a file input.)
   FLOW remains the one road to a native picker (optional add-on,
   declined for now).
 
+### 5I — Overlay focus + document share (BUILT 2026-08-07, Ben's ask)
+
+- **Details collapsed by default:** the overlay opens preview-first;
+  the details pane (chips/actions/properties/versions) hides behind a
+  header "Details" toggle. EXPANDED when the open arrives with work to
+  do: every My-tasks open passes details:true, and a document CHECKED
+  OUT TO the viewer opens expanded too.
+- **Share a document:** "Share…" in the overlay actions + "Share
+  document…" in the row kebab → dialog with the PERMALINK (player URL,
+  DOC_PARAM "ltkdoc" = listId:itemId, same launch-param channel as view
+  links: launchTarget → hub fronts Documents → docsScreen consumes
+  takePendingDoc → fetches the row → opens the overlay with details
+  COLLAPSED — "just the document") + copy button + a QR code.
+- **The QR encoder is in-house** (shared/ui/qr.ts, lazy-loaded): the
+  app is zero-dependency and the player CSP blocks external image
+  services. Byte mode, ECC level M, FIXED mask 0 (spec-legal — the
+  format info declares it), capacities computed from the raw-module
+  formula + the two per-version ECC tables, RS over GF(256).
+  Structural invariants tested (format bits for M/mask0 = the published
+  101010000010010, sizes 4v+17, finder/timing geometry, dark module,
+  over-capacity → null and the dialog says copy-the-link instead).
+
 ### 5E — Acknowledgement ledger (SCHEMA release) — PARKED (Ben, 2026-08-05)
 - `ben_ltkdocack` through the schema pipeline — the first schema change
   since v0.25.0. Append-only rows (person, document, version, when).
