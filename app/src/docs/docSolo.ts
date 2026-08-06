@@ -2,9 +2,15 @@
 // printed procedure, a link in a job pack — opens ONLY the document.
 // No hub, no register, no navigation: someone in the field scans a code
 // and reads a procedure, nothing else. The viewer mounts in SOLO mode
-// (no close, no escape-away — there is nowhere to go), details pane
-// present but collapsed behind the Details toggle so revision/effective
-// dates are one tap away.
+// (no close, no escape-away — there is nowhere to go).
+//
+// Two resume lessons from Ben's phone (2026-08-07):
+//  - a RE-scan remounts this route while the previous overlay is parked
+//    on document.body — the viewer's close handle is held and called on
+//    cleanup, or kiosks would stack;
+//  - the first network calls after foregrounding can fail (the SDK's
+//    requests-in-background window), so the load RETRIES with a short
+//    backoff before it admits defeat — and the defeat names the error.
 
 import { el } from "../../../shared/ui/dom";
 import { takePendingDoc } from "../links";
@@ -17,9 +23,13 @@ import { openDocViewer } from "./viewer";
 export function mountDocSolo(parent: HTMLElement): () => void {
   const note = (text: string) => parent.appendChild(el("div", "app-settings-note", text));
   let dead = false;
+  let closeViewer: (() => void) | null = null;
 
-  void (async () => {
-    const payload = takePendingDoc();
+  const payload = takePendingDoc();
+
+  /** One attempt: throws on transport failures (retried); settles with
+   *  a note on FINAL conditions (bad link, no access, gone). */
+  const attempt = async (): Promise<void> => {
     if (payload === "") {
       note("This link carries no document.");
       return;
@@ -57,7 +67,7 @@ export function mountDocSolo(parent: HTMLElement): () => void {
     }
     const dict = app.sites[Object.keys(app.sites)[0] ?? ""] ?? { columns: [] };
     const dictOrder = dict.columns.map((c) => c.internal);
-    openDocViewer({
+    closeViewer = openDocViewer({
       site: app.siteUrl,
       row,
       driveId,
@@ -73,11 +83,35 @@ export function mountDocSolo(parent: HTMLElement): () => void {
         dictOrder
       ),
     });
-  })().catch(() => {
-    if (!dead) note("The document could not be loaded — check your access and try again.");
-  });
+  };
+
+  void (async () => {
+    const loading = el("div", "app-loading-line", "Opening the document…");
+    parent.appendChild(loading);
+    for (let tries = 0; ; tries++) {
+      try {
+        await attempt();
+        loading.remove();
+        return;
+      } catch (e) {
+        if (dead) return;
+        if (tries >= 2) {
+          loading.remove();
+          note(
+            `The document could not be loaded: ${String(
+              e instanceof Error ? e.message : e
+            ).slice(0, 200)} — scan again or reopen the app.`
+          );
+          return;
+        }
+        // the foreground window: give the host a moment and go again
+        await new Promise((r) => window.setTimeout(r, 900));
+      }
+    }
+  })();
 
   return () => {
     dead = true;
+    closeViewer?.();
   };
 }

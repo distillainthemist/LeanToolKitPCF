@@ -253,6 +253,10 @@ document.addEventListener("visibilitychange", () => {
       await refreshHostParams();
       const { resumeDocLaunch } = await import("./links");
       if (resumeDocLaunch()) {
+        // a beat for the host to finish waking — the first network
+        // calls in the foregrounding instant can fail (the kiosk also
+        // retries its own loads, so this is belt AND braces)
+        await new Promise((r) => window.setTimeout(r, 400));
         if (window.location.hash === "#/doc") route();
         else window.location.hash = "#/doc";
       }

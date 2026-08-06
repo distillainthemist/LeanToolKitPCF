@@ -217,7 +217,10 @@ const PROP_SKIP = new Set([
   "ContentType",
 ]);
 
-export function openDocViewer(opts: ViewerOpts): void {
+/** Returns the CLOSE handle — the kiosk (5I) needs it: a re-scan
+ *  remounts the route, and an overlay parked on document.body would
+ *  otherwise outlive its screen and stack. */
+export function openDocViewer(opts: ViewerOpts): () => void {
   const { site, row } = opts;
   let blobUrl = "";
   const { panel, close } = overlay(
@@ -702,4 +705,5 @@ export function openDocViewer(opts: ViewerOpts): void {
   } else {
     paintPreview();
   }
+  return close;
 }
