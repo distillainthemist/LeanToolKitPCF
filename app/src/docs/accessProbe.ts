@@ -37,8 +37,11 @@ export async function runAccessProbe(log: (line: string) => void): Promise<void>
   log(`Signed in as ${viewer.name} (${viewer.email}).`);
   // what THIS boot saw — run right after following a share link on a
   // device, this line says whether the ltkdoc parameter ever arrived
-  const { launchDebug } = await import("../links");
+  const { launchDebug, readResumeLog } = await import("../links");
   log(`INFO — launch: ${launchDebug()}`);
+  // the resume TRAIL survives restarts (localStorage): scan, get stuck,
+  // close the app, reopen, run this — the trail says what fired
+  log(`INFO — resume trail:\n${readResumeLog()}`);
 
   // ---- roster + app access group (visibility facts) --------------------
   try {

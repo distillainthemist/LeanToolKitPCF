@@ -93,6 +93,32 @@ export function hasPendingDoc(): boolean {
 let lastDocHandled = "";
 
 /**
+ * The resume trail (5I debugging, 2026-08-07): whether the mobile host
+ * fires visibility events and refreshes launch parameters is only
+ * observable ON the phone, and the kiosk blocks navigation — so every
+ * resume step writes a line HERE, in localStorage, where Access
+ * diagnostics can read it after a restart.
+ */
+export function logResume(entry: string): void {
+  try {
+    const key = "ltk-resume-log";
+    const prior = (localStorage.getItem(key) ?? "").split("\n").filter((s) => s !== "");
+    prior.push(`${new Date().toISOString().slice(11, 19)} ${entry}`);
+    localStorage.setItem(key, prior.slice(-8).join("\n"));
+  } catch {
+    /* storage unavailable = no trail, nothing else breaks */
+  }
+}
+
+export function readResumeLog(): string {
+  try {
+    return localStorage.getItem("ltk-resume-log") ?? "(empty)";
+  } catch {
+    return "(unavailable)";
+  }
+}
+
+/**
  * A RESUMED deep link (5I): after refreshHostParams, does the host now
  * carry a document launch this session has not handled? True = the
  * payload is pending and the caller should route to the kiosk. Stale
@@ -102,9 +128,13 @@ export function resumeDocLaunch(): boolean {
   const params = host?.queryParams ?? {};
   const named = Object.entries(params).find(([key]) => key.toLowerCase() === DOC_PARAM);
   const doc = (named?.[1] ?? "").trim();
+  logResume(
+    `resume check: params=[${Object.keys(params).join(",") || "none"}] doc="${doc.slice(-24)}" handled="${lastDocHandled.slice(-24)}"`
+  );
   if (doc === "" || doc === lastDocHandled) return false;
   pendingDoc = doc;
   lastDocHandled = doc;
+  logResume("→ routing to the kiosk");
   return true;
 }
 

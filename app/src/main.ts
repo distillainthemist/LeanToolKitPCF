@@ -249,6 +249,8 @@ document.addEventListener("visibilitychange", () => {
   if (document.visibilityState !== "visible") return;
   void (async () => {
     try {
+      const { logResume } = await import("./links");
+      logResume("visible again — asking the host for fresh params");
       const { refreshHostParams } = await import("./runtime");
       await refreshHostParams();
       const { resumeDocLaunch } = await import("./links");
