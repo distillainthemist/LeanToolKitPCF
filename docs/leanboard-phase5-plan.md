@@ -389,6 +389,25 @@ collapse this whole design into a file input.)
   Structural invariants tested (format bits for M/mask0 = the published
   101010000010010, sizes 4v+17, finder/timing geometry, dark module,
   over-capacity → null and the dialog says copy-the-link instead).
+  qrCanvas adds a shrink-to-fit TITLE band (document stem) — the
+  displayed canvas IS the clipboard copy ("Copy QR image",
+  ClipboardItem PNG).
+- **Mobile deep links, MEASURED (Ben's phone, 2026-08-07):** the QR
+  carries the ms-apps scheme (an https player URL scanned on a phone
+  opens the BROWSER); the copyable text link stays https. The mobile
+  host delivers launch parameters in the WEBVIEW URL at boot — never
+  in the SDK context (hostParams=[none], resume trail) — so a COLD
+  scan works and a WARM re-scan physically cannot: a foregrounded
+  page's URL is immutable and the second payload never reaches the
+  running app. No app-side fix exists; the share dialog says "close
+  LeanBoard first" and the resume machinery stays (inert here,
+  useful if the host ever forwards params; the localStorage resume
+  trail in Access diagnostics is the measuring instrument). The kiosk
+  ("#/doc"): chrome-free, viewer in SOLO mode (no close/escape/details
+  toggle — pure preview + Open PDF), openDocViewer returns its close
+  handle (re-scans remount the route; overlays must not stack), loads
+  retry the foreground window (renderListPage SOFT errors throw into
+  the retry — a network hiccup must not read as "document gone").
 
 ### 5E — Acknowledgement ledger (SCHEMA release) — PARKED (Ben, 2026-08-05)
 - `ben_ltkdocack` through the schema pipeline — the first schema change

@@ -2631,7 +2631,10 @@ export function mountDocs(
             );
         }, "image/png");
       });
-      qrLabel.textContent = "Scanning opens Power Apps mobile (the app must be installed).";
+      qrLabel.textContent =
+        "Scanning opens Power Apps mobile (the app must be installed). If " +
+        "LeanBoard is already running, close it first — a scan cannot redirect " +
+        "a running app.";
       // the encoder loads on demand — nobody pays its bytes until the
       // first Share
       void import("../../../shared/ui/qr").then(({ qrCanvas }) => {

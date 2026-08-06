@@ -209,10 +209,16 @@ export function launchTarget(): string {
   // the mobile deep-link mystery kit (2026-08-07): WHAT this boot
   // actually saw, replayed by Access diagnostics — a phone scan that
   // lands on the hub instead of the kiosk is diagnosed from this line
+  // ltkdoc's DELIVERY CHANNEL is the diagnosis (measured 2026-08-07:
+  // mobile hands parameters in the webview URL at boot, never in the
+  // SDK context — which is why a warm re-scan cannot reach a running
+  // app: a foregrounded page's URL is immutable)
+  const inHost = Object.keys(params).some((k) => k.toLowerCase() === DOC_PARAM);
+  const inSearch = new URLSearchParams(search).get(DOC_PARAM) !== null;
   lastLaunchDebug =
-    `hash="${typeof window === "undefined" ? "" : window.location.hash}" ` +
+    `hash="${typeof window === "undefined" ? "" : window.location.hash.slice(0, 40)}" ` +
     `hostParams=[${Object.keys(params).join(", ") || "none"}] ` +
-    `search=${search === "" ? "(empty)" : `"${search.slice(0, 120)}"`}`;
+    `ltkdoc=${inHost ? "host" : inSearch ? "search" : "absent"}`;
   const query = new URLSearchParams(search);
   const param = (name: string): string => {
     const named = Object.entries(params).find(
