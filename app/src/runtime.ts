@@ -48,3 +48,31 @@ export async function detectHost(): Promise<boolean> {
 export function currentViewer(): Viewer | null {
   return viewer;
 }
+
+/**
+ * Re-read the host context's launch parameters (5I resume): a deep link
+ * into an ALREADY-RUNNING mobile app foregrounds it without a boot, so
+ * the only chance of seeing the new scan is asking the host again when
+ * visibility returns. Harmless when the host answers with stale
+ * parameters — the caller dedupes against what it already handled.
+ */
+export async function refreshHostParams(): Promise<void> {
+  if (hosted !== true) return;
+  try {
+    const context = await Promise.race([
+      getContext(),
+      new Promise<never>((_, reject) => setTimeout(() => reject(new Error("timeout")), 2500)),
+    ]);
+    const user = context.user;
+    if (user?.objectId) {
+      setAppHost({
+        appId: context.app?.appId ?? "",
+        environmentId: context.app?.environmentId ?? "",
+        tenantId: user.tenantId ?? "",
+        queryParams: context.app?.queryParams ?? {},
+      });
+    }
+  } catch {
+    /* keep the params we had */
+  }
+}

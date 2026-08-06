@@ -240,6 +240,28 @@ async function onHashChange(): Promise<void> {
 window.addEventListener("hashchange", () => void onHashChange());
 route();
 
+// A deep link into an ALREADY-RUNNING mobile app foregrounds it without
+// a boot (Ben, 2026-08-07) — launch parameters are only read at start.
+// On every return to visibility, ask the host again: if it now carries
+// a document scan this session has not handled, the kiosk wins. Inert
+// when the host reports stale parameters (deduped) or none.
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState !== "visible") return;
+  void (async () => {
+    try {
+      const { refreshHostParams } = await import("./runtime");
+      await refreshHostParams();
+      const { resumeDocLaunch } = await import("./links");
+      if (resumeDocLaunch()) {
+        if (window.location.hash === "#/doc") route();
+        else window.location.hash = "#/doc";
+      }
+    } catch {
+      /* a resume probe never breaks the running app */
+    }
+  })();
+});
+
 // Warm the Documents caches once the first screen is up (Ben,
 // 2026-08-03). The folder tree and filter pills are a term-store walk —
 // a round trip per level per set — and it is the slowest part of opening

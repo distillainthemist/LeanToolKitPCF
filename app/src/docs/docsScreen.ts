@@ -2599,22 +2599,12 @@ export function mountDocs(
       });
       linkRow.append(input, copyBtn);
       dlg.body.appendChild(linkRow);
-      // the QR: a scan happens on a PHONE, and the https player URL
-      // opens the phone's browser (the web interface, Ben 2026-08-07) —
-      // so the code defaults to the ms-apps deep link, which opens
-      // Power Apps MOBILE directly. The toggle keeps the browser
-      // variant for phones without the app.
+      // the QR: a scan happens on a PHONE, so it carries the ms-apps
+      // deep link that opens Power Apps MOBILE directly (browser users
+      // take the text link above — no toggle needed, Ben 2026-08-07)
       const mobileUrl = docLinkUrlMobile(row.listId, row.id);
-      let qrTarget: "app" | "web" = mobileUrl !== "" ? "app" : "web";
-      const seg = el("div", "app-docs-seg app-docs-shareseg");
-      const segApp = el("button", "app-docs-segbtn", "Power Apps mobile") as HTMLButtonElement;
-      const segWeb = el("button", "app-docs-segbtn", "Browser") as HTMLButtonElement;
-      segApp.type = "button";
-      segWeb.type = "button";
-      seg.append(segApp, segWeb);
       const qrLabel = el("div", "app-field-hint", "");
       const qrHost = el("div", "app-docs-shareqr");
-      if (mobileUrl !== "") dlg.body.appendChild(seg);
       // the copied image IS the displayed canvas: title band + code,
       // ready for a job pack or a laminated poster
       const copyQrBtn = el("button", "app-btn", "Copy QR image") as HTMLButtonElement;
@@ -2641,40 +2631,23 @@ export function mountDocs(
             );
         }, "image/png");
       });
-      const paintQr = () => {
-        segApp.classList.toggle("app-docs-segbtn-on", qrTarget === "app");
-        segWeb.classList.toggle("app-docs-segbtn-on", qrTarget === "web");
-        qrLabel.textContent =
-          qrTarget === "app"
-            ? "Scanning opens Power Apps mobile (the app must be installed)."
-            : "Scanning opens the browser's web player.";
+      qrLabel.textContent = "Scanning opens Power Apps mobile (the app must be installed).";
+      // the encoder loads on demand — nobody pays its bytes until the
+      // first Share
+      void import("../../../shared/ui/qr").then(({ qrCanvas }) => {
+        if (!qrHost.isConnected) return;
         clear(qrHost);
-        // the encoder loads on demand — nobody pays its bytes until the
-        // first Share
-        void import("../../../shared/ui/qr").then(({ qrCanvas }) => {
-          if (!qrHost.isConnected) return;
-          clear(qrHost);
-          const canvas = qrCanvas(qrTarget === "app" ? mobileUrl : url, stem);
-          if (canvas !== null) {
-            qrHost.appendChild(canvas);
-            copyQrBtn.style.display = "";
-          } else {
-            copyQrBtn.style.display = "none";
-            qrHost.appendChild(
-              el("div", "app-field-hint", "The link is too long for a QR code — copy it instead.")
-            );
-          }
-        });
-      };
-      segApp.addEventListener("click", () => {
-        qrTarget = "app";
-        paintQr();
+        const canvas = qrCanvas(mobileUrl !== "" ? mobileUrl : url, stem);
+        if (canvas !== null) {
+          qrHost.appendChild(canvas);
+          copyQrBtn.style.display = "";
+        } else {
+          copyQrBtn.style.display = "none";
+          qrHost.appendChild(
+            el("div", "app-field-hint", "The link is too long for a QR code — copy it instead.")
+          );
+        }
       });
-      segWeb.addEventListener("click", () => {
-        qrTarget = "web";
-        paintQr();
-      });
-      paintQr();
     };
 
     const onRowOpen = (row: DocRow, openOpts?: { details?: boolean }) => {

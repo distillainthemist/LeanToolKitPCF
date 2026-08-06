@@ -89,6 +89,25 @@ export function hasPendingDoc(): boolean {
   return pendingDoc !== "";
 }
 
+/** The last ltkdoc payload this session ACTED on — resume dedupe. */
+let lastDocHandled = "";
+
+/**
+ * A RESUMED deep link (5I): after refreshHostParams, does the host now
+ * carry a document launch this session has not handled? True = the
+ * payload is pending and the caller should route to the kiosk. Stale
+ * parameters (the host re-reporting the boot's own scan) dedupe away.
+ */
+export function resumeDocLaunch(): boolean {
+  const params = host?.queryParams ?? {};
+  const named = Object.entries(params).find(([key]) => key.toLowerCase() === DOC_PARAM);
+  const doc = (named?.[1] ?? "").trim();
+  if (doc === "" || doc === lastDocHandled) return false;
+  pendingDoc = doc;
+  lastDocHandled = doc;
+  return true;
+}
+
 /** The absolute player URL for one document. */
 export function docLinkUrl(listId: string, itemId: number): string {
   const payload = `${listId}:${itemId}`;
@@ -181,6 +200,7 @@ export function launchTarget(): string {
   const doc = param(DOC_PARAM);
   if (doc !== "") {
     pendingDoc = doc;
+    lastDocHandled = doc;
     // the KIOSK route (5I): only the document, no app chrome — a
     // scanned code in the field reads a procedure, nothing else
     return "#/doc";
