@@ -59,6 +59,11 @@ export function mountDocSolo(parent: HTMLElement): () => void {
       ),
       driveIdFor(app.siteUrl, lib.listId),
     ]);
+    // renderListPage reports transport failures SOFTLY ({rows: [],
+    // error}) — treating that as "no rows" painted a resume-window
+    // network hiccup as "document doesn't exist" (Ben, 2026-08-07).
+    // A soft error THROWS here, which is what the retry loop catches.
+    if (page.error !== "") throw new Error(page.error);
     const row: DocRow | undefined = page.rows[0];
     if (dead) return;
     if (row === undefined) {
