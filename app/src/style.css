@@ -2359,6 +2359,8 @@ button.app-doclist-hsort:hover { color: var(--app-accent, #2563eb); }
 .app-docs-sharelink { display: flex; gap: 8px; align-items: center; margin: 10px 0; }
 .app-docs-sharelink input { flex: 1; min-width: 0; font-size: 12px; }
 .app-docs-shareqr { display: flex; justify-content: center; padding: 8px 0 4px; }
+.app-docs-shareqr canvas { width: 260px; max-width: 100%; height: auto; }
+.app-docs-shareqractions { display: flex; justify-content: center; padding-bottom: 6px; }
 /* the share dialog's QR-target toggle: two equal halves, centred text
    (the register chip's auto-width looked lopsided here too) */
 .app-docs-shareseg { display: flex; width: 100%; }

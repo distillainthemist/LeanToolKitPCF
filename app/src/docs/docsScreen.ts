@@ -2615,7 +2615,32 @@ export function mountDocs(
       const qrLabel = el("div", "app-field-hint", "");
       const qrHost = el("div", "app-docs-shareqr");
       if (mobileUrl !== "") dlg.body.appendChild(seg);
-      dlg.body.append(qrHost, qrLabel);
+      // the copied image IS the displayed canvas: title band + code,
+      // ready for a job pack or a laminated poster
+      const copyQrBtn = el("button", "app-btn", "Copy QR image") as HTMLButtonElement;
+      copyQrBtn.style.display = "none";
+      const qrActions = el("div", "app-docs-shareqractions");
+      qrActions.appendChild(copyQrBtn);
+      dlg.body.append(qrHost, qrActions, qrLabel);
+      const stem = row.ext !== "" ? row.name.slice(0, -(row.ext.length + 1)) : row.name;
+      copyQrBtn.addEventListener("click", () => {
+        const canvas = qrHost.querySelector("canvas");
+        if (canvas === null) return;
+        canvas.toBlob((blob) => {
+          if (blob === null) return;
+          void navigator.clipboard
+            .write([new ClipboardItem({ "image/png": blob })])
+            .then(
+              () => {
+                copyQrBtn.textContent = "Copied ✓";
+                window.setTimeout(() => (copyQrBtn.textContent = "Copy QR image"), 1500);
+              },
+              () => {
+                copyQrBtn.textContent = "Copy not supported here";
+              }
+            );
+        }, "image/png");
+      });
       const paintQr = () => {
         segApp.classList.toggle("app-docs-segbtn-on", qrTarget === "app");
         segWeb.classList.toggle("app-docs-segbtn-on", qrTarget === "web");
@@ -2626,12 +2651,15 @@ export function mountDocs(
         clear(qrHost);
         // the encoder loads on demand — nobody pays its bytes until the
         // first Share
-        void import("../../../shared/ui/qr").then(({ qrSvg }) => {
+        void import("../../../shared/ui/qr").then(({ qrCanvas }) => {
           if (!qrHost.isConnected) return;
           clear(qrHost);
-          const svg = qrSvg(qrTarget === "app" ? mobileUrl : url, 220);
-          if (svg !== null) qrHost.appendChild(svg);
-          else {
+          const canvas = qrCanvas(qrTarget === "app" ? mobileUrl : url, stem);
+          if (canvas !== null) {
+            qrHost.appendChild(canvas);
+            copyQrBtn.style.display = "";
+          } else {
+            copyQrBtn.style.display = "none";
             qrHost.appendChild(
               el("div", "app-field-hint", "The link is too long for a QR code — copy it instead.")
             );

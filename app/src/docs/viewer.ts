@@ -244,7 +244,8 @@ export function openDocViewer(opts: ViewerOpts): void {
   // pane is a click away — and a share-link open IS this default
   let detailsOpen = opts.detailsOpen === true;
   const detailsBtn = el("button", "app-btn app-docs-detailstoggle", "") as HTMLButtonElement;
-  head.appendChild(detailsBtn);
+  // the kiosk is PURE preview (Ben, 2026-08-07) — no details door at all
+  if (opts.solo !== true) head.appendChild(detailsBtn);
   if (opts.solo !== true) {
     const x = el("button", "app-btn app-docs-viewclose", "✕") as HTMLButtonElement;
     x.setAttribute("aria-label", "Close");

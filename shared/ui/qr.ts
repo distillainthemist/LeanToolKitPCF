@@ -267,6 +267,52 @@ export function qrMatrix(text: string): boolean[][] | null {
   return dark;
 }
 
+/**
+ * The matrix as a CANVAS with an optional title band above (5I: the
+ * shared QR carries the document's name into prints and pastes — and a
+ * clipboard image is a bitmap anyway, so the canvas is both the display
+ * and the copy source). Title font shrinks to fit one line.
+ */
+export function qrCanvas(
+  text: string,
+  title = "",
+  scale = 6
+): HTMLCanvasElement | null {
+  const m = qrMatrix(text);
+  if (m === null) return null;
+  const n = m.length;
+  const quiet = 4;
+  const qrPx = (n + quiet * 2) * scale;
+  const band = title !== "" ? scale * 6 : 0;
+  const canvas = document.createElement("canvas");
+  canvas.width = qrPx;
+  canvas.height = qrPx + band;
+  const ctx = canvas.getContext("2d");
+  if (ctx === null) return null;
+  ctx.fillStyle = "#fff";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "#000";
+  if (title !== "") {
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    let size = Math.round(scale * 3);
+    while (size > 9) {
+      ctx.font = `600 ${size}px -apple-system, "Segoe UI", Roboto, sans-serif`;
+      if (ctx.measureText(title).width <= qrPx - scale * 6) break;
+      size--;
+    }
+    ctx.fillText(title, qrPx / 2, band * 0.58, qrPx - scale * 4);
+  }
+  for (let y = 0; y < n; y++) {
+    for (let x = 0; x < n; x++) {
+      if (m[y][x]) {
+        ctx.fillRect((x + quiet) * scale, band + (y + quiet) * scale, scale, scale);
+      }
+    }
+  }
+  return canvas;
+}
+
 /** The matrix as an SVG (dark on light, 4-module quiet zone). */
 export function qrSvg(text: string, sizePx = 220): SVGElement | null {
   const m = qrMatrix(text);
