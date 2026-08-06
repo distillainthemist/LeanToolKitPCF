@@ -35,6 +35,10 @@ export async function runAccessProbe(log: (line: string) => void): Promise<void>
     return;
   }
   log(`Signed in as ${viewer.name} (${viewer.email}).`);
+  // what THIS boot saw — run right after following a share link on a
+  // device, this line says whether the ltkdoc parameter ever arrived
+  const { launchDebug } = await import("../links");
+  log(`INFO — launch: ${launchDebug()}`);
 
   // ---- roster + app access group (visibility facts) --------------------
   try {

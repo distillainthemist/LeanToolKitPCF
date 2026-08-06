@@ -20,6 +20,12 @@ export interface AppHost {
 }
 
 let host: AppHost | null = null;
+let lastLaunchDebug = "launchTarget has not run";
+
+/** What the boot saw (hash, host params, search) — diagnostics only. */
+export function launchDebug(): string {
+  return lastLaunchDebug;
+}
 
 export function setAppHost(info: AppHost | null): void {
   host = info;
@@ -151,6 +157,13 @@ export function boardUrl(boardId: string, iso = ""): string {
 export function launchTarget(): string {
   const params = host?.queryParams ?? {};
   const search = typeof window === "undefined" ? "" : window.location.search;
+  // the mobile deep-link mystery kit (2026-08-07): WHAT this boot
+  // actually saw, replayed by Access diagnostics — a phone scan that
+  // lands on the hub instead of the kiosk is diagnosed from this line
+  lastLaunchDebug =
+    `hash="${typeof window === "undefined" ? "" : window.location.hash}" ` +
+    `hostParams=[${Object.keys(params).join(", ") || "none"}] ` +
+    `search=${search === "" ? "(empty)" : `"${search.slice(0, 120)}"`}`;
   const query = new URLSearchParams(search);
   const param = (name: string): string => {
     const named = Object.entries(params).find(

@@ -43,7 +43,12 @@ void (async () => {
     // it once, and only when the app opened on its landing route
     const { launchTarget } = await import("./links");
     const target = launchTarget();
-    if (target !== "" && (window.location.hash === "" || window.location.hash === "#/")) {
+    // a DOC launch always wins: someone scanned a code, and there is no
+    // in-app state worth protecting — the landing-route guard exists
+    // for ritual/view links, where a hand-typed hash should keep ruling
+    // (mobile hosts have booted on unexpected hashes, 2026-08-07)
+    const landing = window.location.hash === "" || window.location.hash === "#/";
+    if (target !== "" && (landing || target === "#/doc")) {
       if (window.location.hash === target) {
         // already on the landing route (a docview launch): no hashchange
         // will fire, so re-route by hand — the hub re-mounts and sees the
