@@ -9,6 +9,7 @@ import {
   librariesFromLists,
   mergeColumns,
   orgDrift,
+  orgSyncPlan,
   orgTreePaths,
   parseAppDocsConfig,
   parseLibraryConfig,
@@ -282,6 +283,102 @@ describe("org drift", () => {
     expect(report.matched).toBe(3);
     expect(report.onlyApp).toEqual([]);
     expect(report.onlyTerms).toEqual([]);
+  });
+});
+
+// ---- org → term set push sync (5F) --------------------------------------
+
+describe("org sync plan", () => {
+  const APP = [
+    { site: "Bell Bay", departments: [{ department: "Casting", areas: ["Line 1"] }] },
+  ];
+  const term = (id: string, ...labels: string[]) => ({ id, labels });
+
+  it("is empty when the trees agree (idempotent by construction)", () => {
+    const plan = orgSyncPlan(orgTreePaths(APP), [
+      term("a", "bell bay"),
+      term("b", "Bell Bay", "casting"),
+      term("c", "Bell Bay", "Casting", "Line 1"),
+    ]);
+    expect(plan.matched).toBe(3);
+    expect(plan.creates).toEqual([]);
+    expect(plan.renames).toEqual([]);
+    expect(plan.orphans).toEqual([]);
+    expect(plan.error).toBe("");
+  });
+
+  it("orders creates parent-first for a missing branch", () => {
+    const plan = orgSyncPlan(orgTreePaths(APP), [term("a", "Bell Bay")]);
+    expect(plan.creates).toEqual([
+      ["Bell Bay", "Casting"],
+      ["Bell Bay", "Casting", "Line 1"],
+    ]);
+    expect(plan.renames).toEqual([]);
+  });
+
+  it("pairs a lone unmatched sibling as an in-place rename, descendants follow", () => {
+    const plan = orgSyncPlan(orgTreePaths(APP), [
+      term("a", "Bell Bay"),
+      term("b", "Bell Bay", "Machining"),
+      term("c", "Bell Bay", "Machining", "Line 1"),
+    ]);
+    expect(plan.renames).toEqual([
+      { id: "b", from: ["Bell Bay", "Machining"], to: ["Bell Bay", "Casting"] },
+    ]);
+    // the renamed department's child matches under the NEW label; the
+    // rename itself is listed as a rename, not double-counted as a match
+    expect(plan.creates).toEqual([]);
+    expect(plan.orphans).toEqual([]);
+    expect(plan.matched).toBe(2);
+  });
+
+  it("refuses to guess when two siblings are unmatched on both sides", () => {
+    const app = [
+      {
+        site: "Bell Bay",
+        departments: [
+          { department: "Casting", areas: [] },
+          { department: "Rolling", areas: [] },
+        ],
+      },
+    ];
+    const plan = orgSyncPlan(orgTreePaths(app), [
+      term("a", "Bell Bay"),
+      term("b", "Bell Bay", "Machining"),
+      term("c", "Bell Bay", "Finishing"),
+    ]);
+    expect(plan.renames).toEqual([]);
+    expect(plan.creates).toEqual([
+      ["Bell Bay", "Casting"],
+      ["Bell Bay", "Rolling"],
+    ]);
+    expect(plan.orphans.map((p) => p.join("/"))).toEqual([
+      "Bell Bay/Machining",
+      "Bell Bay/Finishing",
+    ]);
+  });
+
+  it("syncs under the single company root when the offset is on", () => {
+    const plan = orgSyncPlan(
+      orgTreePaths(APP),
+      [term("root", "PacOps"), term("a", "PacOps", "Bell Bay")],
+      1
+    );
+    expect(plan.matched).toBe(1);
+    expect(plan.creates).toEqual([
+      ["Bell Bay", "Casting"],
+      ["Bell Bay", "Casting", "Line 1"],
+    ]);
+  });
+
+  it("refuses the company offset when the set has several top-level terms", () => {
+    const plan = orgSyncPlan(
+      orgTreePaths(APP),
+      [term("r1", "PacOps"), term("r2", "Archive")],
+      1
+    );
+    expect(plan.error).toContain("exactly one top-level term");
+    expect(plan.creates).toEqual([]);
   });
 });
 

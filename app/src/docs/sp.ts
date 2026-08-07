@@ -627,6 +627,58 @@ export function fetchTermChildren(
   });
 }
 
+// ---- term-store writes (5F — org → term set push sync) -----------------
+// Same v2.1 door as the reads above; the signed-in user needs term-set
+// edit rights (group manager / contributor in the term store), and a
+// refusal comes back as an honest {ok:false} the sync log surfaces.
+
+/** The term store's default language — new labels must speak it. */
+export function fetchTermStoreLanguage(site: string): Promise<SpResult> {
+  return spRequest(site, "GET", "_api/v2.1/termStore?$select=defaultLanguageTag", {
+    headers: { Accept: "application/json" },
+  });
+}
+
+/** One term with its FULL label collection — read before a rename so
+ *  synonyms and other-language labels survive the PATCH (labels is
+ *  replaced whole, not merged). */
+export function fetchTerm(site: string, setId: string, termId: string): Promise<SpResult> {
+  return spRequest(site, "GET", `_api/v2.1/termStore/sets/${setId}/terms/${termId}?$select=id,labels`, {
+    headers: { Accept: "application/json" },
+  });
+}
+
+/** Create a term under a parent (parentId "" = the set root). */
+export function createTerm(
+  site: string,
+  setId: string,
+  parentId: string,
+  name: string,
+  languageTag: string
+): Promise<SpResult> {
+  const uri = parentId === ""
+    ? `_api/v2.1/termStore/sets/${setId}/children`
+    : `_api/v2.1/termStore/sets/${setId}/terms/${parentId}/children`;
+  return spRequest(site, "POST", uri, {
+    headers: { Accept: "application/json", "Content-Type": "application/json" },
+    body: JSON.stringify({ labels: [{ languageTag, name, isDefault: true }] }),
+  });
+}
+
+/** Replace a term's label collection (the in-place rename — the GUID,
+ *  and with it every document tag and stage mapping, stays put). */
+export function patchTermLabels(
+  site: string,
+  setId: string,
+  termId: string,
+  labels: { languageTag: string; name: string; isDefault: boolean }[]
+): Promise<SpResult> {
+  return spRequest(site, "PATCH", `_api/v2.1/termStore/sets/${setId}/terms/${termId}`, {
+    headers: { Accept: "application/json", "Content-Type": "application/json" },
+    body: JSON.stringify({ labels }),
+  });
+}
+
 /**
  * The Organisation term set flattened to label paths, walked level by
  * level (v2.1 has no subtree expand). Depth-capped and request-capped —

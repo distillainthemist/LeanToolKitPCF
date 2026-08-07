@@ -3,7 +3,9 @@
 // libraries LeanBoard exposes, configure each library's presentation
 // (display names, view columns, document-management column roles, status
 // colours from the app state palette, rendition location), pick the term
-// group / Organisation set, and run the read-only org drift report.
+// group / Organisation set, and run the org drift report — which since
+// 5F is also the sync plan: Apply pushes the app's org tree into the
+// term set (create + in-place rename only, never delete).
 //
 // Loaded ONLY by dynamic import from the settings screen — the import
 // gate (rule C) fails the build if a static chain ever reaches the
@@ -17,7 +19,6 @@ import {
   COLUMN_ROLES,
   ColumnConfig,
   DictionaryConflict,
-  DriftReport,
   HealthFinding,
   LIBRARY_TYPES,
   LIFECYCLE_STAGES,
@@ -41,18 +42,19 @@ import {
   isDateColumn,
   librariesFromLists,
   mergeColumns,
-  orgDrift,
   dictionaryHealth,
   orgTreePaths,
   paletteKeyFor,
   rekeyPaletteToTerms,
   resolveLibraryConfig,
   matchesTemplate,
+  orgSyncPlan,
   seedDefaultColumns,
   siteKey,
   templateFor,
   syncSiteDictionary,
 } from "./model";
+import { executeOrgSync } from "./orgSync";
 import type { TermNode } from "./sp";
 import {
   fetchFields,
@@ -1306,39 +1308,96 @@ export async function renderDocsSettings(body: HTMLElement, ctx: Ctx): Promise<v
         fetchTermPaths(app.siteUrl, app.orgSetId),
         orgJson(),
       ]);
-      const paths = nodes.map((n) => n.labels);
       driftBtn.disabled = false;
       driftBtn.textContent = "Load drift report";
       if (error !== "") {
         driftBox.appendChild(note(`Term walk failed: ${error}`));
         return;
       }
-      const report: DriftReport = orgDrift(
-        orgTreePaths(parseOrgTree(orgRaw)),
-        paths,
-        companyLevel.checked ? 1 : 0
-      );
-      const list = (title: string, items: string[][]) => {
+      const offset = companyLevel.checked ? 1 : 0;
+      // the report IS the sync plan (5F): what a sync would create and
+      // rename, and what it deliberately leaves alone
+      const plan = orgSyncPlan(orgTreePaths(parseOrgTree(orgRaw)), nodes, offset);
+      if (plan.error !== "") {
+        driftBox.appendChild(note(`Cannot compare: ${plan.error}.`));
+        return;
+      }
+      const list = (title: string, items: string[]) => {
         driftBox.appendChild(el("div", "app-field-label", `${title} (${items.length})`));
         if (items.length === 0) {
           driftBox.appendChild(el("div", "app-field-hint", "none"));
           return;
         }
         const ul = el("ul", "app-docs-driftlist");
-        for (const p of items.slice(0, 50)) {
-          ul.appendChild(el("li", "", p.join(" › ")));
-        }
+        for (const p of items.slice(0, 50)) ul.appendChild(el("li", "", p));
         if (items.length > 50) ul.appendChild(el("li", "", `… and ${items.length - 50} more`));
         driftBox.appendChild(ul);
       };
       driftBox.appendChild(
         note(
-          `${report.matched} matched${truncated ? " (term walk truncated — large set)" : ""}. ` +
-            "Alignment is by name; the sync that fixes drift comes later and never deletes terms."
+          `${plan.matched} matched. Alignment is by name; a rename is proposed only when ` +
+            "it is unambiguous, and the sync NEVER deletes terms."
         )
       );
-      list("In LeanBoard only", report.onlyApp);
-      list("In the term set only", report.onlyTerms);
+      list("To create in the term set", plan.creates.map((p) => p.join(" › ")));
+      list(
+        "To rename in place (the term keeps its id — tags survive)",
+        plan.renames.map((r) => `${r.from.join(" › ")} → ${r.to[r.to.length - 1]}`)
+      );
+      list("In the term set only (left alone)", plan.orphans.map((p) => p.join(" › ")));
+      const total = plan.creates.length + plan.renames.length;
+      if (total === 0) {
+        driftBox.appendChild(note("✓ Nothing to sync — the trees agree."));
+        return;
+      }
+      if (truncated) {
+        driftBox.appendChild(
+          note(
+            "The term walk was truncated (large set), so this comparison is partial — " +
+              "syncing against a partial view could recreate terms it did not see. Sync disabled."
+          )
+        );
+        return;
+      }
+      // the plan above is the confirmation step — the button says exactly
+      // how many changes it will make, and none of them are deletions
+      const applyBtn = el(
+        "button",
+        "app-btn",
+        `Apply to term set (${total} change${total === 1 ? "" : "s"})`
+      ) as HTMLButtonElement;
+      driftBox.appendChild(applyBtn);
+      const logBox = el("div", "");
+      driftBox.appendChild(logBox);
+      applyBtn.addEventListener("click", () => {
+        void (async () => {
+          applyBtn.disabled = true;
+          applyBtn.textContent = "Syncing…";
+          clear(logBox);
+          const failed = await executeOrgSync({
+            site: app.siteUrl,
+            setId: app.orgSetId,
+            plan,
+            termNodes: nodes,
+            termOffset: offset,
+            log: (line) => logBox.appendChild(el("div", "app-field-hint", line)),
+          });
+          // one shot per plan: a re-run after a PARTIAL failure would
+          // re-create the terms that DID land — reload the report instead,
+          // and the fresh plan carries only what is still missing
+          applyBtn.textContent = failed === 0 ? "Applied" : "Reload the drift report to retry";
+          logBox.appendChild(
+            note(
+              failed === 0
+                ? "✓ Sync complete — reload the drift report to confirm alignment. " +
+                    "Search filtering may take a crawl cycle to see new terms."
+                : `${failed} step(s) failed — nothing was deleted. The usual cause is term-store ` +
+                    "rights: the signed-in account needs to be a contributor or group manager " +
+                    "on the term set. Fix and reload the drift report."
+            )
+          );
+        })();
+      });
     })();
   });
 

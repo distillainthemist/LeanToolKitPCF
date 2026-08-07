@@ -1983,6 +1983,122 @@ export function orgTreePaths(
   return out;
 }
 
+// ---- org → term set push sync (5F) -------------------------------------
+// The drift report's write half. The app's org tree is the source of
+// truth; the plan only ever ADDS terms or renames existing ones IN
+// PLACE on their GUID — documents tagged with a term and the lifecycle
+// stage mapping are both keyed by term id, so an in-place rename keeps
+// every tag and mapping alive where a delete-and-recreate would orphan
+// them. Terms with no app counterpart are reported and left alone.
+
+export interface OrgSyncPlan {
+  /** App paths absent from the term set, parent-first — the create order. */
+  creates: string[][];
+  /** In-place label changes: the term keeps its GUID, tags survive. */
+  renames: { id: string; from: string[]; to: string[] }[];
+  /** Term-set-only paths — never touched, listed so nothing is silent. */
+  orphans: string[][];
+  matched: number;
+  /** Non-empty when the comparison itself cannot be trusted. */
+  error: string;
+}
+
+/**
+ * What a sync would do, computed shallow-to-deep. Matching is by label
+ * path, case-insensitive (same rule as orgDrift). A rename is inferred
+ * ONLY when a parent scope has exactly one unmatched app node and
+ * exactly one unmatched term — the unambiguous case. Two siblings
+ * renamed at once cannot be paired safely, so they become creates and
+ * the old terms stay as reported orphans (never deleted).
+ */
+export function orgSyncPlan(
+  appPaths: string[][],
+  termNodes: { id: string; labels: string[] }[],
+  termOffset = 0
+): OrgSyncPlan {
+  const norm = (p: string[]) => p.map((s) => s.trim().toLowerCase()).join("¦");
+  if (termOffset > 0) {
+    const roots = new Set(
+      termNodes.filter((n) => n.labels.length === 1).map((n) => norm(n.labels))
+    );
+    if (roots.size !== 1) {
+      return {
+        creates: [],
+        renames: [],
+        orphans: [],
+        matched: 0,
+        error:
+          `the company-level comparison needs exactly one top-level term to sync under ` +
+          `(found ${roots.size})`,
+      };
+    }
+  }
+  // unclaimed terms, keyed by their (offset-sliced) label path
+  const terms = new Map<string, { id: string; labels: string[] }>();
+  for (const n of termNodes) {
+    const sliced = n.labels.slice(termOffset);
+    if (sliced.length > 0) terms.set(norm(sliced), { id: n.id, labels: sliced });
+  }
+  const parentKey = (p: string[]) => norm(p.slice(0, -1));
+  const maxDepth = Math.max(0, ...appPaths.map((p) => p.length));
+  const creates: string[][] = [];
+  const renames: OrgSyncPlan["renames"] = [];
+  let matched = 0;
+  for (let depth = 1; depth <= maxDepth; depth++) {
+    // claim exact matches first, so a spare term is genuinely spare
+    const missing: string[][] = [];
+    for (const p of appPaths.filter((q) => q.length === depth)) {
+      const key = norm(p);
+      if (terms.has(key)) {
+        terms.delete(key);
+        matched++;
+      } else {
+        missing.push(p);
+      }
+    }
+    const missingByParent = new Map<string, string[][]>();
+    for (const p of missing) {
+      const k = parentKey(p);
+      missingByParent.set(k, [...(missingByParent.get(k) ?? []), p]);
+    }
+    const spareByParent = new Map<string, { id: string; labels: string[] }[]>();
+    for (const t of terms.values()) {
+      if (t.labels.length !== depth) continue;
+      const k = parentKey(t.labels);
+      spareByParent.set(k, [...(spareByParent.get(k) ?? []), t]);
+    }
+    for (const [parent, apps] of missingByParent) {
+      const spares = spareByParent.get(parent) ?? [];
+      if (apps.length === 1 && spares.length === 1) {
+        const t = spares[0];
+        const to = apps[0];
+        renames.push({ id: t.id, from: t.labels, to });
+        terms.delete(norm(t.labels));
+        // descendants of a renamed term now live under the new label —
+        // re-key them so deeper levels compare against the FUTURE tree
+        const oldPrefix = `${norm(t.labels)}¦`;
+        const rekeyed: [string, { id: string; labels: string[] }][] = [];
+        for (const [k, v] of terms) {
+          if (!k.startsWith(oldPrefix)) continue;
+          terms.delete(k);
+          const labels = [...to, ...v.labels.slice(to.length)];
+          rekeyed.push([norm(labels), { id: v.id, labels }]);
+        }
+        for (const [k, v] of rekeyed) terms.set(k, v);
+      } else {
+        creates.push(...apps);
+      }
+    }
+  }
+  return {
+    creates,
+    renames,
+    orphans: [...terms.values()].map((t) => t.labels),
+    matched,
+    error: "",
+  };
+}
+
 /** SharePoint's date column types — what a from/to filter can bind to. */
 export function isDateField(f: SpField): boolean {
   return f.type === "DateTime";

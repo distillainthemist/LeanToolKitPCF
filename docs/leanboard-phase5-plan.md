@@ -415,9 +415,38 @@ collapse this whole design into a file input.)
 - "Acknowledge" for approved documents whose ack-required column says
   so; per-document report against the roster.
 
-### 5F — Org → term set push sync
-- The drift report's write half: GUID-matched create/rename only, never
-  delete; idempotent by construction.
+### 5F — Org → term set push sync (BUILT 2026-08-07, awaiting hosted verify)
+- The drift report's write half: create + in-place rename only, never
+  delete; idempotent by construction (an aligned pair of trees plans
+  zero actions).
+- **Why renames ride the GUID**: document tags and the lifecycle stage
+  mapping are both keyed by term id — an in-place label PATCH keeps
+  every tag and mapping alive where delete-and-recreate would orphan
+  them. That is what "GUID-matched" buys.
+- `orgSyncPlan` (model.ts, tested ×6): shallow-to-deep; exact label-path
+  matches claim terms first (case-insensitive, same rule as orgDrift);
+  then per parent scope, exactly-one unmatched app node + exactly-one
+  unmatched term ⇒ an unambiguous RENAME (descendant term keys are
+  rewritten to the future prefix so deeper levels compare against the
+  renamed tree); anything else becomes creates, and the old terms stay
+  as reported orphans. Company-level offset syncs under the single
+  top-level term — several roots refuse with an honest error.
+- Executor `docs/orgSync.ts`: renames first (read the full label
+  collection, swap only the default label's name, PATCH the whole array
+  back — synonyms and other languages survive), then creates
+  parent-first, capturing each new term id for its children. Labels
+  speak the term store's `defaultLanguageTag`. Every step logs OK/FAIL;
+  the first hosted run doubles as the transport measurement for
+  term-store WRITES through the connector door (v2.1 GETs are long
+  proven; POST/PATCH are new).
+- UI: the drift report IS the plan (creates / renames / left-alone
+  orphans / matched count) and the Apply button states its change count
+  — that display is the confirmation step. **One shot per plan**: after
+  a partial failure the button forces a report reload, because re-running
+  a stale plan would re-create the terms that DID land. A truncated term
+  walk disables sync (a partial view could recreate terms it never saw).
+- Rights: the signed-in account needs term-set contributor / group
+  manager standing in the term store; a refusal surfaces per-step.
 
 **Deferred:** `ben_ltkdochistory` projection (version history + check-in
 comments already carry the trail); Teams/Outlook push notifications.
