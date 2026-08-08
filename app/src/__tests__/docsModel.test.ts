@@ -8,9 +8,13 @@ import {
   fieldsFromResponse,
   librariesFromLists,
   mergeColumns,
+  ControlDoc,
+  ControlRoles,
+  controlHealth,
   orgDrift,
   orgSyncPlan,
   orgTreePaths,
+  tallyByOwner,
   parseAppDocsConfig,
   parseLibraryConfig,
   seedDefaultColumns,
@@ -283,6 +287,157 @@ describe("org drift", () => {
     expect(report.matched).toBe(3);
     expect(report.onlyApp).toEqual([]);
     expect(report.onlyTerms).toEqual([]);
+  });
+});
+
+// ---- document control health (the controllers' corpus report) -----------
+
+describe("controlHealth", () => {
+  const ALL: ControlRoles = {
+    owner: true,
+    status: true,
+    org: true,
+    docType: true,
+    documentId: true,
+    review: true,
+  };
+  const NOW = Date.parse("2026-08-08T00:00:00Z");
+  const doc = (over: Partial<ControlDoc> = {}): ControlDoc => ({
+    listId: "l1",
+    itemId: 1,
+    name: "SOP.pdf",
+    libName: "Standards",
+    controlled: true,
+    owner: "Ben Pechey",
+    stage: "approved",
+    org: "Bell Bay",
+    docType: "Procedure",
+    documentId: "STD-1",
+    reviewIso: "2027-01-01T00:00:00Z",
+    checkedOutTo: "",
+    ...over,
+  });
+  const keys = (r: { issues: { key: string }[] }) => r.issues.map((i) => i.key);
+
+  it("reports nothing for a healthy corpus", () => {
+    const r = controlHealth([doc(), doc({ itemId: 2 })], ALL, NOW);
+    expect(r.issues).toEqual([]);
+    expect(r.scanned).toBe(2);
+    expect(r.clean).toBe(2);
+    expect(r.skipped).toEqual([]);
+  });
+
+  it("catches the control-breaking gaps", () => {
+    const r = controlHealth(
+      [
+        doc({ itemId: 1, owner: "  " }),
+        doc({ itemId: 2, stage: "" }),
+        doc({ itemId: 3, org: "" }),
+      ],
+      ALL,
+      NOW
+    );
+    expect(keys(r)).toEqual(expect.arrayContaining(["noOwner", "noStatus", "untagged"]));
+    expect(r.clean).toBe(0);
+    // every warn issue names the documents it is about
+    for (const i of r.issues) expect(i.docs.length).toBeGreaterThan(0);
+  });
+
+  it("judges reviews only for approved documents, and separates late from absent", () => {
+    const r = controlHealth(
+      [
+        doc({ itemId: 1, reviewIso: "2026-08-01T00:00:00Z" }), // overdue
+        doc({ itemId: 2, reviewIso: "" }), // missing
+        doc({ itemId: 3, stage: "draft", reviewIso: "" }), // a draft owes nothing
+      ],
+      ALL,
+      NOW
+    );
+    const overdue = r.issues.find((i) => i.key === "reviewOverdue");
+    const missing = r.issues.find((i) => i.key === "reviewMissing");
+    expect(overdue?.docs.map((d) => d.itemId)).toEqual([1]);
+    expect(missing?.docs.map((d) => d.itemId)).toEqual([2]);
+  });
+
+  it("counts a document once however many issues it has", () => {
+    const r = controlHealth(
+      [doc({ itemId: 1, owner: "", org: "", stage: "" }), doc({ itemId: 2 })],
+      ALL,
+      NOW
+    );
+    expect(r.scanned).toBe(2);
+    expect(r.clean).toBe(1);
+  });
+
+  it("SKIPS a check whose role is unmapped rather than passing it silently", () => {
+    const r = controlHealth(
+      [doc({ owner: "", documentId: "" })],
+      { ...ALL, owner: false, documentId: false },
+      NOW
+    );
+    expect(keys(r)).not.toContain("noOwner");
+    expect(keys(r)).not.toContain("noDocumentId");
+    expect(r.skipped.join(" ")).toContain("Owner is not mapped");
+    // an unrunnable check must not read as a clean document either way —
+    // the skip line is the honest answer
+    expect(r.skipped.length).toBe(1);
+  });
+
+  it("exempts uncontrolled documents from the lifecycle checks, not the rest", () => {
+    // a working draft owes no approval status and no review date; it
+    // still owes an owner and a place in the organisation
+    const r = controlHealth(
+      [
+        doc({ itemId: 1, controlled: false, stage: "", reviewIso: "", owner: "", org: "" }),
+        doc({ itemId: 2, stage: "" }), // a controlled document with no status IS a finding
+      ],
+      ALL,
+      NOW
+    );
+    const noStatus = r.issues.find((i) => i.key === "noStatus");
+    expect(noStatus?.docs.map((d) => d.itemId)).toEqual([2]);
+    expect(keys(r)).not.toContain("reviewMissing");
+    expect(r.issues.find((i) => i.key === "noOwner")?.docs.map((d) => d.itemId)).toEqual([1]);
+    expect(r.issues.find((i) => i.key === "untagged")?.docs.map((d) => d.itemId)).toEqual([1]);
+  });
+
+  it("does not nag about the lifecycle when nothing controlled is in scope", () => {
+    const r = controlHealth(
+      [doc({ controlled: false, stage: "", reviewIso: "" })],
+      { ...ALL, status: false, review: false },
+      NOW
+    );
+    expect(r.skipped).toEqual([]); // no controlled documents = nothing skipped
+    expect(keys(r)).not.toContain("noStatus");
+  });
+
+  it("sorts warnings ahead of information, biggest pile first", () => {
+    const r = controlHealth(
+      [
+        doc({ itemId: 1, org: "", checkedOutTo: "Marketing" }),
+        doc({ itemId: 2, org: "", checkedOutTo: "Marketing" }),
+        doc({ itemId: 3, checkedOutTo: "Marketing" }),
+      ],
+      ALL,
+      NOW
+    );
+    expect(keys(r)[0]).toBe("untagged");
+    expect(keys(r)[keys(r).length - 1]).toBe("inRevision");
+  });
+
+  it("tallies overdue reviews by owner, busiest first", () => {
+    expect(
+      tallyByOwner([
+        doc({ owner: "Ben Pechey" }),
+        doc({ owner: "Ben Pechey" }),
+        doc({ owner: "Olive Green; Someone Else" }),
+        doc({ owner: "" }),
+      ])
+    ).toEqual([
+      { owner: "Ben Pechey", count: 2 },
+      { owner: "(nobody named)", count: 1 },
+      { owner: "Olive Green", count: 1 },
+    ]);
   });
 });
 

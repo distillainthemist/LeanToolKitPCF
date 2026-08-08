@@ -80,6 +80,7 @@ import {
   takePendingDocView,
   takePendingWorkDoc,
 } from "../links";
+import { rememberTaskCount } from "../taskBadge";
 import { accessRequestPlan, notifyPlanFor } from "./notifyModel";
 import {
   DocUiPrefs,
@@ -124,6 +125,11 @@ export interface DocsMountOpts {
    *  re-mounts in place instead of writing the hash (a hash write would
    *  route away to the standalone #/docs screen). */
   embedded?: boolean;
+  /** How many things await this viewer in Documents — reported whenever
+   *  the tasks badge repaints, so the hub can carry the same number on
+   *  its tab label. ONE selector feeds both, which is the R7 rule: two
+   *  counters drift, and a badge nobody believes is worse than none. */
+  onTaskCount?: (n: number) => void;
 }
 
 export function mountDocs(
@@ -1189,6 +1195,10 @@ export function mountDocs(
     const paintTasksBadge = (n: number) => {
       actionNeeded.textContent = n > 0 ? `Document tasks · ${n}` : "Document tasks";
       actionNeeded.classList.toggle("app-docs-actionneeded-hot", n > 0);
+      // the hub's tab label carries the same number, live while the app
+      // is open and from the remembered value on the next launch
+      opts.onTaskCount?.(n);
+      rememberTaskCount(whoId, n);
     };
     /** Recounted in the background — at mount, and after every command
      *  that can change the answer (check-out/in/discard, add, lifecycle). */
@@ -1625,6 +1635,30 @@ export function mountDocs(
       return { card, head };
     };
 
+    // ---- FAVOURITES (Ben, 2026-08-08) ----------------------------------
+    // The star has been settable since Vault V1 with nowhere to go — the
+    // entry point was cut in the flat-2.0 pass and the favMode machinery
+    // left waiting for a home. This is it: one row above the libraries,
+    // a scope of its own (filled accent = a location, the app's rule 1).
+    const favNav = el(
+      "button",
+      `app-docs-favnav${favMode ? " app-docs-favnav-on" : ""}`
+    ) as HTMLButtonElement;
+    const favNavCount = el("span", "app-docs-favnavcount", "");
+    favNav.append(
+      el("span", "app-docs-favnavstar", favMode ? "★" : "☆"),
+      el("span", "app-docs-favnavlabel", "Favourites"),
+      favNavCount
+    );
+    favNav.title = "The documents you have starred, across every library";
+    favNav.setAttribute("aria-pressed", String(favMode));
+    favNav.addEventListener("click", () => {
+      if (favMode) return; // already here — the libraries below lead out
+      pendingFav = true;
+      remount();
+    });
+    if (whoId !== "") nav.appendChild(favNav);
+
     // ---- LIBRARIES card (Vault V1) -------------------------------------
     // Checkbox = include toggle (minimum one stays ticked); the name and
     // the hover/focus "Only" affordance solo-select (finding 3). One
@@ -1685,6 +1719,7 @@ export function mountDocs(
         if (dead) return;
         favs = p.favorites;
         savedViews = p.views;
+        favNavCount.textContent = favs.length > 0 ? String(favs.length) : "";
         if (favMode) void load(true); // favourites arrived — paint them
       });
     }
@@ -1834,8 +1869,12 @@ export function mountDocs(
     };
 
     // the browse-by card fills the pane to the bottom (Ben, 2026-08-01:
-    // full-height left column per the Vault design), its tree scrolling
+    // full-height left column per the Vault design), its tree scrolling.
+    // In favourites mode it is HIDDEN rather than inert: favourites are
+    // local rows carrying no field values, so a folder click would look
+    // like a filter and do nothing.
     const treeCard = el("section", "app-docs-navcard app-docs-navcard-fill");
+    if (favMode) treeCard.style.display = "none";
     const treeHead = el("div", "app-docs-navhead");
     treeHead.appendChild(el("span", "app-docs-navheadlabel", "Folders"));
     treeCard.appendChild(treeHead);
@@ -2849,7 +2888,9 @@ export function mountDocs(
           ? mountDocTiles(listHost, {
               onRow: onRowOpen,
               onNearEnd: () => void loadMore(),
-              emptyText: "No documents here yet.",
+              emptyText: favMode
+                ? "No favourites yet — open a document's ⋮ menu and choose ☆ Add to favourites."
+                : "No documents here yet.",
               emptyExtra,
               statusChip: statusCol ? statusChip : null,
               statusColumn: statusCol?.internal ?? "",
@@ -2860,7 +2901,9 @@ export function mountDocs(
               columns: buildColumns(),
               onRow: onRowOpen,
               onNearEnd: () => void loadMore(),
-              emptyText: "No documents here yet.",
+              emptyText: favMode
+                ? "No favourites yet — open a document's ⋮ menu and choose ☆ Add to favourites."
+                : "No documents here yet.",
               emptyExtra,
               sort,
               onSort: (key) => {
@@ -3430,7 +3473,10 @@ export function mountDocs(
           }))
         );
         done = true;
-        status.textContent = `${favs.length} favourite(s)`;
+        status.textContent =
+          favs.length === 0
+            ? "No favourites yet"
+            : `${favs.length} favourite${favs.length === 1 ? "" : "s"}`;
         return;
       }
       inFlight = true;
@@ -3958,6 +4004,46 @@ export function mountDocs(
           "(search text is not applied).",
         exportRegister
       );
+      // the CONTROLLERS' report: document controllers cannot open
+      // Settings (documents settings is super-admin only), so their
+      // corpus check lives here, with the register they work in.
+      // Scope: every library EXCEPT templates (Ben, 2026-08-08) —
+      // templates are stationery, not documents under control — and
+      // except the upload staging library, whose contents are files
+      // mid-handoff that are meant to be transient.
+      const healthLibs = libraries.filter(
+        (l) =>
+          l.libType !== "template" &&
+          (app.stagingLibrary === "" ||
+            l.name.trim().toLowerCase() !== app.stagingLibrary.trim().toLowerCase())
+      );
+      if (docAdmin() && healthLibs.length > 0) {
+        item(
+          "Document control health…",
+          "Documents missing what the control system needs — no owner, no " +
+            "status, reviews overdue or absent, untagged. Every library " +
+            "except templates, whatever this view shows.",
+          () => {
+            void import("./healthReport").then(({ openControlHealth }) => {
+              openControlHealth({
+                site: app.siteUrl,
+                libraries: healthLibs,
+                roles: {
+                  owner: ownerInternal,
+                  status: statusInternal,
+                  org: [...orgCols],
+                  docType: internalForRole("docType"),
+                  documentId: internalForRole("documentId"),
+                  review: reviewInternal,
+                },
+                stageOf: stageOfRow,
+                host: dialogHost,
+                onOpenDoc: (row) => onRowOpen(row, { details: true }),
+              });
+            });
+          }
+        );
+      }
       const r = topKebab.getBoundingClientRect();
       menu.style.top = `${r.bottom + 4}px`;
       menu.style.left = `${Math.max(8, r.right - 200)}px`;

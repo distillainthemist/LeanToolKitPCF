@@ -26,6 +26,9 @@ export interface DialogOptions {
   title: string;
   buttons: DialogButton[];
   onClose?: () => void;
+  /** Widest the dialog may grow, px. Default 420 — raise it for content
+   *  that is a table or a report rather than a form. */
+  maxWidth?: number;
 }
 
 export function openDialog(opts: DialogOptions): DialogHandle {
@@ -37,6 +40,9 @@ export function openDialog(opts: DialogOptions): DialogHandle {
   }
   const overlay = el("div", "ltk-dialog-overlay");
   const box = el("div", "ltk-dialog");
+  if (opts.maxWidth !== undefined) {
+    box.style.width = `min(${opts.maxWidth}px, calc(100% - 32px))`;
+  }
   const heading = el("div", "ltk-dialog-title", opts.title);
   const body = el("div", "ltk-dialog-body");
   const footer = el("div", "ltk-dialog-footer");

@@ -102,7 +102,7 @@ export const LTK_BASE_CSS = `
   background: var(--ltk-bg); color: var(--ltk-fg);
   border-radius: 6px; box-shadow: 0 4px 20px rgba(0,0,0,0.25);
   width: min(420px, calc(100% - 32px));
-  max-height: calc(100% - 32px); overflow: auto;
+  max-height: calc(100% - 32px); overflow: hidden;
   display: flex; flex-direction: column;
 }
 .ltk-dialog-title {
@@ -110,7 +110,19 @@ export const LTK_BASE_CSS = `
   border-bottom: 1px solid var(--ltk-hairline);
   text-align: left;
 }
-.ltk-dialog-body { padding: 12px 16px; display: flex; flex-direction: column; gap: 12px; }
+/* the BODY scrolls, not the whole dialog — a long form or report must
+   never push its own Close button off the screen */
+.ltk-dialog-body {
+  padding: 12px 16px; display: flex; flex-direction: column; gap: 12px;
+  overflow-y: auto; min-height: 0;
+}
+/* MEASURED 2026-08-08: a flex child is normally protected from being
+   squashed by min-height:auto — but that protection evaporates the
+   moment the child sets overflow:hidden (as a rounded card does), and
+   the column then compresses its content instead of scrolling it
+   (Ben's control-health report: boxes crushed 312px -> 87px, the body
+   never scrolled). Children keep their own height; the body scrolls. */
+.ltk-dialog-body > * { flex-shrink: 0; }
 .ltk-dialog-footer {
   display: flex; justify-content: flex-end; gap: 8px; padding: 10px 16px 14px;
 }

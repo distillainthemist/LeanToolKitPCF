@@ -1983,6 +1983,212 @@ export function orgTreePaths(
   return out;
 }
 
+// ---- document control health (the controllers' corpus report) ----------
+// Docs Health (settings) answers "is the CONFIGURATION consistent?".
+// This answers the other half: "are the DOCUMENTS themselves in a state
+// the control system can actually work with?" — which is a controller's
+// job, not a super-admin's, so it lives in the register's kebab.
+//
+// Every check is grounded in a mapped ROLE: the app can only judge what
+// it has been told means something. A check whose role is unmapped is
+// REPORTED AS SKIPPED, never silently passed — a report that quietly
+// omits a check reads as a clean bill of health.
+
+export interface ControlDoc {
+  listId: string;
+  itemId: number;
+  name: string;
+  libName: string;
+  /** Does this document live in a CONTROLLED (standards) library? The
+   *  report scans every library except templates (Ben, 2026-08-08), but
+   *  only a controlled document owes the lifecycle anything — a working
+   *  draft has no approval status by design, and flagging every one of
+   *  them would bury the findings that matter. */
+  controlled: boolean;
+  /** Owner display text ("" = nobody named). */
+  owner: string;
+  /** The stage its status value maps to ("" = no value, or a value the
+   *  lifecycle mapping does not know). */
+  stage: LifecycleStage | "";
+  /** Organisation term text ("" = untagged). */
+  org: string;
+  docType: string;
+  documentId: string;
+  /** Next review date, ISO ("" = none recorded). */
+  reviewIso: string;
+  /** Who holds the check-out ("" = free). */
+  checkedOutTo: string;
+}
+
+export interface ControlIssue {
+  key: string;
+  title: string;
+  /** Why it matters and what to do — the report is for someone who has
+   *  to fix it, not someone admiring it. */
+  detail: string;
+  level: "warn" | "info";
+  docs: ControlDoc[];
+}
+
+export interface ControlHealthReport {
+  issues: ControlIssue[];
+  scanned: number;
+  /** Documents with no WARN-level issue. */
+  clean: number;
+  /** Checks that could not run, named for the report. */
+  skipped: string[];
+}
+
+/** Which column roles this site has mapped — an unmapped role's check
+ *  cannot run, and says so. */
+export interface ControlRoles {
+  owner: boolean;
+  status: boolean;
+  org: boolean;
+  docType: boolean;
+  documentId: boolean;
+  review: boolean;
+}
+
+export function controlHealth(
+  docs: ControlDoc[],
+  roles: ControlRoles,
+  now: number = Date.now()
+): ControlHealthReport {
+  const issues: ControlIssue[] = [];
+  const skipped: string[] = [];
+  const add = (
+    key: string,
+    level: "warn" | "info",
+    title: string,
+    detail: string,
+    hits: ControlDoc[]
+  ) => {
+    if (hits.length > 0) issues.push({ key, level, title, detail, docs: hits });
+  };
+  // the lifecycle checks answer only for CONTROLLED documents
+  const controlled = docs.filter((d) => d.controlled);
+  const approved = controlled.filter((d) => d.stage === "approved");
+
+  if (controlled.length > 0 && roles.status) {
+    add(
+      "noStatus",
+      "warn",
+      "No approval status the lifecycle recognises",
+      "The approval commands cannot move these documents, and the register's " +
+        "approved-only view hides them. Set a status, or map the term under " +
+        "Settings → Documents → Lifecycle.",
+      controlled.filter((d) => d.stage === "")
+    );
+  } else if (controlled.length > 0) {
+    skipped.push("Approval status is not mapped — status and review checks cannot run.");
+  }
+
+  if (roles.owner) {
+    add(
+      "noOwner",
+      "warn",
+      "No owner named",
+      "Nobody can give final approval, retire the document, or answer an " +
+        "edit-access request for it.",
+      docs.filter((d) => d.owner.trim() === "")
+    );
+  } else {
+    skipped.push("Owner is not mapped — ownership checks cannot run.");
+  }
+
+  if (controlled.length > 0 && roles.review && roles.status) {
+    add(
+      "reviewOverdue",
+      "warn",
+      "Review overdue",
+      "Approved documents past their next review date — the register still " +
+        "presents them as current.",
+      approved.filter((d) => {
+        const t = Date.parse(d.reviewIso);
+        return !Number.isNaN(t) && t < now;
+      })
+    );
+    add(
+      "reviewMissing",
+      "warn",
+      "No next review date",
+      "Approved documents with no review date never come up for review — they " +
+        "age quietly.",
+      approved.filter((d) => d.reviewIso.trim() === "")
+    );
+  } else if (controlled.length > 0 && !roles.review) {
+    skipped.push("Next review date is not mapped — review checks cannot run.");
+  }
+
+  if (roles.org) {
+    add(
+      "untagged",
+      "warn",
+      "Not tagged to the organisation",
+      "These documents are invisible to folder navigation — findable only by " +
+        "search.",
+      docs.filter((d) => d.org.trim() === "")
+    );
+  } else {
+    skipped.push("Organisation unit is not mapped — tagging checks cannot run.");
+  }
+
+  if (roles.docType) {
+    add(
+      "noDocType",
+      "info",
+      "No document type",
+      "The type drives templates, tiles and filtering.",
+      docs.filter((d) => d.docType.trim() === "")
+    );
+  }
+  if (roles.documentId) {
+    add(
+      "noDocumentId",
+      "info",
+      "No document ID",
+      "A controlled document that cannot be cited by number is hard to " +
+        "reference from other documents and records.",
+      docs.filter((d) => d.documentId.trim() === "")
+    );
+  }
+
+  add(
+    "inRevision",
+    "info",
+    "Checked out right now",
+    "Work in progress — listed so a stalled revision is visible, not because " +
+      "anything is wrong.",
+    docs.filter((d) => d.checkedOutTo.trim() !== "")
+  );
+
+  // warnings first, then the biggest piles — a controller works down
+  issues.sort((a, b) =>
+    a.level === b.level ? b.docs.length - a.docs.length : a.level === "warn" ? -1 : 1
+  );
+
+  const flagged = new Set<string>();
+  for (const i of issues) {
+    if (i.level !== "warn") continue;
+    for (const d of i.docs) flagged.add(`${d.listId.toLowerCase()}:${d.itemId}`);
+  }
+  return { issues, scanned: docs.length, clean: docs.length - flagged.size, skipped };
+}
+
+/** Overdue-by-owner, biggest first — the backlog's "whose reviews are
+ *  late?" question, answered without leaving the report. */
+export function tallyByOwner(docs: ControlDoc[]): { owner: string; count: number }[] {
+  const by = new Map<string, number>();
+  for (const d of docs) {
+    const who = d.owner.trim() === "" ? "(nobody named)" : d.owner.split(";")[0].trim();
+    by.set(who, (by.get(who) ?? 0) + 1);
+  }
+  return [...by.entries()]
+    .map(([owner, count]) => ({ owner, count }))
+    .sort((a, b) => b.count - a.count || a.owner.localeCompare(b.owner));
+}
+
 // ---- org → term set push sync (5F) -------------------------------------
 // The drift report's write half. The app's org tree is the source of
 // truth; the plan only ever ADDS terms or renames existing ones IN

@@ -1805,6 +1805,56 @@ input[type="color"].app-color:disabled { opacity: 0.4; cursor: default; }
 .app-docs-namecell { display: inline-flex; gap: 8px; align-items: center; min-width: 0; }
 .app-docs-name { overflow: hidden; text-overflow: ellipsis; }
 .app-docs-chip { padding: 4px 11px; border-radius: 999px; font-size: 12px; background: #eee; display: inline-block; }
+/* Favourites: a scope of its own above the libraries. Filled accent
+   when it IS the scope — the app's rule 1 (filled = location). */
+.app-docs-favnav {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  min-height: 44px; margin-bottom: 8px; padding: 8px 12px;
+  border: 1px solid #e2ded6; border-radius: 8px; background: #fff;
+  cursor: pointer; text-align: left; font-size: 13px; font-weight: 600;
+  color: #1a1e24;
+}
+.app-docs-favnav:hover { background: #f7f6f3; }
+.app-docs-favnav-on,
+.app-docs-favnav-on:hover {
+  background: var(--app-accent, #2563eb); border-color: var(--app-accent, #2563eb); color: #fff;
+}
+.app-docs-favnavstar { flex: none; font-size: 15px; line-height: 1; }
+.app-docs-favnavlabel { flex: 1; min-width: 0; }
+.app-docs-favnavcount { flex: none; font-size: 12px; font-weight: 700; opacity: 0.8; }
+
+/* Document control health — the controllers' corpus report. Findings
+   collapse to a headline with a count; opening one lists the documents,
+   each a door to the register overlay that fixes it. */
+.app-docs-hrissue { border: 1px solid #e7e4dd; border-radius: 8px; margin-top: 8px; overflow: hidden; }
+.app-docs-hrissue.app-docs-health-warn { border-left: 3px solid #d97706; }
+.app-docs-hrissue.app-docs-health-info { border-left: 3px solid #c9c4ba; }
+.app-docs-hrhead {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  min-height: 44px; padding: 8px 12px; border: none; background: none;
+  cursor: pointer; text-align: left; font-size: 13px;
+}
+.app-docs-hrhead:hover { background: #f7f6f3; }
+.app-docs-hrtitle { flex: 1; min-width: 0; font-weight: 600; }
+.app-docs-hrcount {
+  flex: none; font-size: 12px; font-weight: 700; color: #40474f;
+  background: #eceae5; border-radius: 999px; padding: 2px 9px;
+}
+.app-docs-hrcaret { flex: none; color: #8a8378; font-size: 11px; }
+.app-docs-hrbody { padding: 0 12px 10px; display: flex; flex-direction: column; gap: 6px; }
+.app-docs-hrdocs { display: flex; flex-direction: column; gap: 2px; margin-top: 4px; }
+.app-docs-hrdoc {
+  display: flex; flex-direction: column; gap: 1px; width: 100%;
+  min-height: 40px; padding: 6px 8px; border: none; background: none;
+  border-radius: 5px; cursor: pointer; text-align: left;
+}
+.app-docs-hrdoc:hover:not(:disabled) { background: #f2f1ee; }
+.app-docs-hrdoc:disabled { cursor: default; opacity: 0.6; }
+.app-docs-hrdocname {
+  font-size: 13px; font-weight: 600;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
 /* R8 quiet state: approved is the norm — outline, so exceptions read */
 .app-docs-chip-quiet { background: transparent; border: 1px solid #c9c4ba; color: #57534a; padding: 3px 10px; }
 .app-docs-kebab {

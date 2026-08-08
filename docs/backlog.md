@@ -16,16 +16,55 @@ stay the design detail; this is the queue.
    both connectors ride the same executeAsync door as SharePoint, so a
    probe (N0) runs before feature code, per standing practice.
 2. **Full UI design review** (Ben) + resulting tweaks.
-3. **Document Control Health report.** The corpus report card, named
-   *Document Control Health*: missing required metadata, overdue
-   reviews by owner, untagged documents. Lives in the documents-tab
-   kebab (audience = document controllers, who cannot open Settings).
-4. **Hub board card: documents needing review.** A dashboard card
-   surfacing documents whose next review date is due/near — design to
-   be reviewed with Ben before build.
-5. **Favourites left-nav entry.** A "Favourites" row above the library
-   list showing the starred set across libraries — closes the
-   star-but-no-view gap.
+3. ~~**Document Control Health report.**~~ **BUILT 2026-08-08** —
+   register kebab, gated on docAdmin (controllers + app admins).
+   Checks are grounded in MAPPED ROLES, because the app can only judge
+   what it has been told means something: no recognised approval
+   status, no owner, review overdue, no review date, untagged (warn);
+   no document type, no document ID, checked out right now (info). A
+   check whose role is unmapped is REPORTED AS SKIPPED, never silently
+   passed. Scans EVERY library except templates (Ben, 2026-08-08) and
+   except the upload staging library (files mid-handoff are meant to be
+   transient) — deliberately NOT the nav's selection, or the report
+   would describe a filtered view as if it were the corpus — capped at
+   2000 with the cap stated. Lifecycle checks (status, reviews) apply
+   to CONTROLLED documents only: a working draft owes no approval
+   status, and flagging every one would bury the real findings; the
+   report states that split on screen. Findings
+   collapse to counts, expand to documents, and a document click opens
+   its overlay to fix it; overdue/missing reviews carry a by-owner
+   tally; Export CSV for the full list. Pure `controlHealth` +
+   `tallyByOwner` in model.ts, 7 tests.
+4. ~~**Hub board card: documents needing review.**~~ **DECIDED +
+   BUILT 2026-08-08 as a tab count**, not a card. The design review
+   found two blockers for a real card: LeanHub's API has no
+   "extra section" hook (only setMeetings/setActions/setBoards/
+   setExtraTabs…), so a card needs a CONTROL change and a solution
+   deploy, not `pac code push`; and a card that queries SharePoint on
+   the landing path works against the import gate and the startup
+   budget. Ben chose the tab count. Shipped: "Documents · 3" on the hub
+   tab, fed by the Documents screen's OWN task selector (R7's single
+   source — never a second count), remembered per viewer in
+   localStorage (src/taskBadge.ts, 6 tests) so it shows on the next
+   launch, and re-labelled live when the count changes (LeanHub caches
+   extra-tab hosts, so re-labelling does NOT remount the register).
+   Aged out after a week rather than asserting a stale number.
+   **Known boundary, by design:** the badge reminds you of a backlog
+   you have already seen; it cannot discover work that arrived since
+   your last visit — the Teams/Outlook notifications do that, better.
+   If the badge proves too quiet in practice, the next step is
+   extracting the task engine out of docsScreen so the hub can sweep
+   independently (~250 lines, the app's most-used panel — deferred
+   until there is evidence it is needed).
+5. ~~**Favourites left-nav entry.**~~ **BUILT 2026-08-08** — a
+   "☆ Favourites · N" row above the Libraries card, filled accent when
+   it IS the scope (rule 1: filled = location). It needed no new
+   machinery: `favMode` had been waiting since the flat-2.0 pass cut
+   the entry point. Signed-in only (favourites are per-person). In
+   favourites mode the Folders tree HIDES rather than sitting inert —
+   favourite rows carry no field values, so a folder click would look
+   like a filter and do nothing — and the empty state names the ⋮ menu
+   item that fills it. The libraries below are the way back out.
 6. **Phase 6 deployment cookbook** + stale-docs cleanup
    (`master-leanboard.md` still lists phases 3–5 as pending). The
    optional add-on flows an org can bolt on without app changes:

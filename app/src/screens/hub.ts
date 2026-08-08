@@ -16,6 +16,7 @@ import { parsePeople } from "../../../shared/schema/people";
 import { appTheme, editorHost } from "../cardHost";
 import { boardHash, boardUrl, hasPendingDocView, hasPendingWorkDoc } from "../links";
 import { currentViewer, detectHost } from "../runtime";
+import { documentsTabLabel, readTaskCount } from "../taskBadge";
 import { actionsForViewer, upsertActions } from "../store/actions";
 import { canViewBoard, listBoards } from "../store/boards";
 import { selfHealCatalog } from "../store/catalog";
@@ -236,11 +237,35 @@ export function mountHub(parent: HTMLElement): () => void {
     // Standard Documents rides as a hub tab. DYNAMIC import only — the
     // import gate fails the build if the hub (a board-path entry) ever
     // reaches src/docs/ statically; the area loads on first tab open.
-    view.setExtraTabs([{ key: "documents", label: "Documents" }], (key, tabHost) => {
+    // …and the tab carries what is waiting for you there ("Documents ·
+    // 3"), from the number the Documents screen itself last published —
+    // never a second count of its own (R7: two counters drift).
+    const whoId = currentViewer()?.objectId ?? "";
+    let docsTaskCount = readTaskCount(whoId);
+    const mountDocsTab = (_key: string, tabHost: HTMLElement) => {
       void import("../docs/docsScreen").then(({ mountDocs }) => {
-        cleanups.push(mountDocs(tabHost, "", { embedded: true }));
+        cleanups.push(
+          mountDocs(tabHost, "", {
+            embedded: true,
+            onTaskCount: (n) => {
+              if (n === docsTaskCount || view === null) return;
+              docsTaskCount = n;
+              // re-labels in place: the control keeps its extra-tab host,
+              // so the mounted register is NOT torn down (verified in
+              // LeanHub.render — a cached host only mounts once)
+              view.setExtraTabs(
+                [{ key: "documents", label: documentsTabLabel(n) }],
+                mountDocsTab
+              );
+            },
+          })
+        );
       });
-    });
+    };
+    view.setExtraTabs(
+      [{ key: "documents", label: documentsTabLabel(docsTaskCount) }],
+      mountDocsTab
+    );
     // a shared Documents link launched the app (or an old #/docs
     // bookmark landed here), or a notification's WORK link named a
     // document (N1): front the tab — its mount consumes any pending
