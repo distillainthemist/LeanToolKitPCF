@@ -11,6 +11,7 @@ import {
   ControlDoc,
   ControlRoles,
   controlHealth,
+  hasOutsideApprovers,
   orgDrift,
   orgSyncPlan,
   orgTreePaths,
@@ -287,6 +288,57 @@ describe("org drift", () => {
     expect(report.matched).toBe(3);
     expect(report.onlyApp).toEqual([]);
     expect(report.onlyTerms).toEqual([]);
+  });
+});
+
+describe("hasOutsideApprovers (does an endorsement round exist?)", () => {
+  const P = (emails: string[], names: string[]) => ({ emails, names });
+
+  it("a sole owner-approver is not an outside approver", () => {
+    expect(
+      hasOutsideApprovers(P(["ben@x.com"], ["Ben Pechey"]), P(["ben@x.com"], ["Ben Pechey"]))
+    ).toBe(false);
+  });
+
+  it("REGRESSION: falls back to names when the owner's email did not arrive", () => {
+    // the shape that inserted an approval step nobody asked for and
+    // cost the document its major version (Ben, 2026-08-08): approvers
+    // carried emails, the owner column carried only display text, and
+    // an email never equals a name
+    expect(
+      hasOutsideApprovers(P([], ["Ben Pechey"]), P(["ben@x.com"], ["Ben Pechey"]))
+    ).toBe(false);
+    // …and the mirror image
+    expect(
+      hasOutsideApprovers(P(["ben@x.com"], ["Ben Pechey"]), P([], ["Ben Pechey"]))
+    ).toBe(false);
+  });
+
+  it("still finds a genuine outside approver, by email or by name", () => {
+    expect(
+      hasOutsideApprovers(P(["ben@x.com"], ["Ben"]), P(["olive@x.com"], ["Olive"]))
+    ).toBe(true);
+    expect(hasOutsideApprovers(P([], ["Ben Pechey"]), P([], ["Olive Green"]))).toBe(true);
+    // one of several approvers is outside — the round is needed
+    expect(
+      hasOutsideApprovers(
+        P(["ben@x.com"], ["Ben"]),
+        P(["ben@x.com", "olive@x.com"], ["Ben", "Olive"])
+      )
+    ).toBe(true);
+  });
+
+  it("no approvers named at all means no round", () => {
+    expect(hasOutsideApprovers(P(["ben@x.com"], ["Ben"]), P([], []))).toBe(false);
+  });
+
+  it("ignores case and stray spacing on both sides", () => {
+    expect(
+      hasOutsideApprovers(P([], [" Ben Pechey "]), P([], ["ben pechey"]))
+    ).toBe(false);
+    expect(
+      hasOutsideApprovers(P(["BEN@x.com"], ["Ben"]), P(["ben@X.com"], ["Ben"]))
+    ).toBe(false);
   });
 });
 

@@ -1983,6 +1983,36 @@ export function orgTreePaths(
   return out;
 }
 
+/**
+ * Is anyone named as an approver who is NOT the owner? That question
+ * decides whether an endorsement round exists at all, so it has to be
+ * asked carefully.
+ *
+ * The trap (Ben, 2026-08-08): a person column reaches us as display
+ * text plus an OPTIONAL email projection, and RLDAS does not always
+ * carry the email. Comparing an approver's email against an owner's
+ * NAME never matches, so a sole owner-approver looked like an outside
+ * approver — which inserted an approval step nobody asked for and,
+ * because an endorsement is a MINOR check-in, cost the document the
+ * major version its approval was supposed to record.
+ *
+ * So: compare like with like. Emails when BOTH sides have them (exact),
+ * display names otherwise (imprecise, but at least the same question).
+ */
+export function hasOutsideApprovers(
+  owner: { emails: string[]; names: string[] },
+  approvers: { emails: string[]; names: string[] }
+): boolean {
+  const norm = (xs: string[]) =>
+    xs.map((s) => s.trim().toLowerCase()).filter((s) => s !== "");
+  const oEmails = norm(owner.emails);
+  const aEmails = norm(approvers.emails);
+  const byEmail = oEmails.length > 0 && aEmails.length > 0;
+  const ownerKeys = new Set(byEmail ? oEmails : norm(owner.names));
+  const approverKeys = byEmail ? aEmails : norm(approvers.names);
+  return approverKeys.some((k) => !ownerKeys.has(k));
+}
+
 // ---- document control health (the controllers' corpus report) ----------
 // Docs Health (settings) answers "is the CONFIGURATION consistent?".
 // This answers the other half: "are the DOCUMENTS themselves in a state

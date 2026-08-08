@@ -49,6 +49,7 @@ import {
   paletteEntryFor,
   parseBasePermissions,
   siteKey,
+  hasOutsideApprovers,
   sortByDictionary,
   sortLibrariesForDisplay,
   spErrorText,
@@ -403,13 +404,20 @@ export function mountDocs(
     const lifecycleGatesFor = (row: DocRow) => {
       const emails = (col: string): string[] =>
         col === "" ? [] : (row.values[`${col}#email`] ?? "").split(";").filter((s) => s !== "");
+      /** Display names — the fallback identity when a person column's
+       *  email projection did not arrive (see hasOutsideApprovers). */
+      const names = (col: string): string[] =>
+        col === "" ? [] : (row.values[col] ?? "").split(";");
       const approvers = emails(approversInternal);
       const owners = emails(ownerInternal);
       // an owner named as their own (sole) approver adds no second
       // step — their sign-off is already the mandatory finale, so only
       // approvers OUTSIDE the owner list create the endorse round and
       // submission otherwise goes straight to the owner's stage
-      const outsideApprovers = approvers.filter((e) => !owners.includes(e));
+      const outsideApprovers = hasOutsideApprovers(
+        { emails: owners, names: names(ownerInternal) },
+        { emails: approvers, names: names(approversInternal) }
+      );
       // reviewers named = the review round is mandatory; display text is
       // the fallback signal when the email projection is absent
       const hasReviewers =
@@ -418,7 +426,7 @@ export function mountDocs(
           (row.values[reviewersInternal] ?? "").trim() !== "");
       return {
         isApprover: myEmail !== "" && approvers.includes(myEmail),
-        hasApprovers: outsideApprovers.length > 0,
+        hasApprovers: outsideApprovers,
         hasReviewers,
         isOwner: myEmail !== "" && owners.includes(myEmail),
         isAdmin: docAdmin(),
