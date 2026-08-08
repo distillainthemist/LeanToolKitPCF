@@ -89,11 +89,17 @@ stay the design detail; this is the queue.
    blank. DocsCard also moves off the pre-C3b search feed onto the
    register's RLDAS road, approved-only by default. Plan of record:
    `leanboard-doc-cards-plan.md` parts A/B (Ben, 2026-08-08).
-8. **Native upload relay — U0 probe.** `ben_ltkupload` table (file
-   column; role updated in DEV beside it) + Test-write-access probe:
-   can the SDK carry bytes into a Dataverse file column? Relay flow +
-   dialog UI follow only on a green verdict. Plan part C. Rides the
-   release after the cards (schema release).
+8. **Native upload relay — U0 probe.** BUILT 2026-08-08, verdict
+   pending Ben's hosted run. The SDK HAS the door the connectors never
+   had (`uploadFileToRecord` on the DataClient, present in 1.2.7);
+   `ben_ltkupload` deployed to DEV via `data/deploy-schema.mjs` — which
+   now grants role privileges declaratively (`role: {delete}` in
+   schema.mjs — the 2026-08-05 stale-role trap closed at the tool) —
+   and "Test Dataverse upload" sits in the Test write access panel
+   (64KB + 4MB round-trips, first-divergence compare, self-cleaning).
+   Relay flow (U1, Ben authors) + dialog UI (U2) follow only on a
+   green verdict. NEXT RELEASE IS SCHEMA-CARRYING: prod needs the
+   managed solution re-imported, not just an app push.
 9. **Content-approval trial — CA0 (Ben, hosted).** Test library with
    content approval on; one full revision cycle through the app;
    record the write-bracket and visibility behaviour; decision gate.
