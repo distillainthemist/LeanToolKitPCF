@@ -111,6 +111,14 @@ import { openDocViewer } from "./viewer";
 const PAGE = 50;
 
 /**
+ * How many rows the header's match total may read per library. Core
+ * fields only, so this is a small payload — but a library past the cap
+ * would report a floor as if it were a total, and the header says
+ * "so far" instead of overstating.
+ */
+const COUNT_CAP = 2000;
+
+/**
  * How many content matches the index may contribute to one search.
  * CAML's `In` operator carries at most 500 values, and postquery returns
  * at most 500 rows a page — so 500 is both engines' natural ceiling.
@@ -3369,6 +3377,9 @@ export function mountDocs(
     let feeds: BrowseFeed[] = [];
     /** Library-total for plain browsing ("50 of 150"); null = unknown. */
     let knownTotal: number | null = null;
+    /** How many documents match the CURRENT question — null until it
+     *  answers, or when the answer would be a floor dressed as a total. */
+    let matchTotal: number | null = null;
     /** listId (lowercase) → item ids the index matched inside documents,
      *  resolved once per reset and OR'd into every page's CAML. */
     let contentIds = new Map<string, number[]>();
@@ -3431,15 +3442,85 @@ export function mountDocs(
           : contentsNote === "failed"
             ? " · contents search unavailable"
             : "";
-      const shown = total;
+      // the counted total wins where it is known: a library's raw
+      // ItemCount knows nothing of "Show only Approved"
+      const shown = matchTotal ?? total;
+      const suffix = plainBrowse ? "" : " matching";
       status.textContent =
-        (plainBrowse
-          ? shown !== null && shown > n
-            ? `${docs(n)} of ${shown}`
-            : docs(n)
-          : shown !== null && shown > n
-            ? `${docs(n)} of ${shown} matching`
-            : `${docs(shown ?? n)} matching`) + note;
+        (shown !== null
+          ? shown > n
+            ? `${docs(n)} of ${shown}${suffix}`
+            : `${docs(shown)}${suffix}`
+          : // no total known: say what this IS — a running count — rather
+            // than dressing "what has loaded" as "what there is" (Ben,
+            // 2026-08-08: the header climbed as you scrolled)
+            done
+            ? `${docs(n)}${suffix}`
+            : `${docs(n)} so far`) + note;
+    };
+
+    /**
+     * How many documents match the register's current question.
+     *
+     * RLDAS cannot answer "how many" without returning them, and our
+     * filters are CAML (taxonomy labels, date windows), so no OData
+     * $count can stand in. This asks the same Where a SECOND time for
+     * the CORE fields only — a small payload — which is what makes a
+     * header total possible without the reader scrolling to earn it.
+     *
+     * This is the folder-count query's honest half: one request per
+     * library, no per-term tally. The tally was the part that lied
+     * (same-named departments merged) and the part that multiplied.
+     */
+    const refreshMatchTotal = (gen: number) => {
+      const libs =
+        taskFilter === null
+          ? viewLibs()
+          : libraries.filter((l) => (taskFilter?.get(l.listId.toLowerCase())?.length ?? 0) > 0);
+      if (favMode || libs.length === 0) {
+        matchTotal = null;
+        return;
+      }
+      const words = query.trim() === "" ? undefined : query.trim().split(/\s+/);
+      void Promise.all(
+        libs.map((lib) => {
+          const carried = new Set(lib.config.columns.map((c) => c.internal));
+          return renderListPage(
+            app.siteUrl,
+            lib.listId,
+            buildRenderViewXml({
+              modifiedAfterIso: modifiedIso(),
+              nameWords: words,
+              idIn:
+                taskFilter?.get(lib.listId.toLowerCase()) ??
+                contentIds.get(lib.listId.toLowerCase()) ??
+                [],
+              termFilters: [
+                ...filters.map((f) => ({
+                  cols: f.col === "" ? [...orgCols] : [f.col],
+                  labels: [...f.labels],
+                })),
+                ...approvedFilterFor(),
+              ],
+              dateRanges: dateFilters.filter((d) => carried.has(d.col)),
+              // the status column only, and only to feed applyNonCurrent's
+              // fallback — everything else the count needs is core
+              fields:
+                statusInternal !== "" && carried.has(statusInternal) ? [statusInternal] : [],
+              rowLimit: COUNT_CAP,
+            })
+          );
+        })
+      ).then((pages) => {
+        if (dead || gen !== generation) return;
+        // a library past the cap (or one that refused) would report a
+        // floor as if it were a total — the running count is honester
+        matchTotal =
+          pages.some((p) => p.next !== "" || p.error !== "")
+            ? null
+            : applyNonCurrent(pages.flatMap((p) => p.rows)).length;
+        paintStatus(knownTotal, "");
+      });
     };
 
     /** End of a load: drop the lock, then replay a reset that arrived
@@ -3505,6 +3586,7 @@ export function mountDocs(
       // 100" would describe a longer list than the one on screen
       if (reset) {
         knownTotal = null;
+        matchTotal = null;
         if (
           words === undefined &&
           modifiedDays === 0 &&
@@ -3555,6 +3637,9 @@ export function mountDocs(
           }
         }
       }
+      // the header's total, asked alongside the first page rather than
+      // before it — the rows are what the reader is waiting for
+      if (reset) refreshMatchTotal(gen);
       {
         // browse via RenderListDataAsStream (single library or union):
         // display-ready values for every field type, with name search,
