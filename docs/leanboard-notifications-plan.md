@@ -172,7 +172,7 @@ verification is quick).
   not "LeanBoard" — by design, but it also means the ACTOR's Teams/
   Outlook licence and consent are what the send runs on; first use per
   user may prompt connection consent in the player.
-- No scheduled/reminder sends here — at-action only. Reminder push
-  (review-due nudges) stays a deployment-flow cookbook add-on, where a
-  flow can run unattended.
+- No scheduled/reminder sends here — at-action only. (Reminder push
+  was briefly a cookbook add-on; removed by decision 2026-08-08 —
+  rituals and reporting are the review mechanism, full stop.)
 - No read-tracking; "did they see it" is Teams/Outlook's domain.

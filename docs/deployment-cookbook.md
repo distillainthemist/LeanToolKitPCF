@@ -17,6 +17,17 @@ contract**.
 
 Companion install runbook: [deploy-to-new-org.md](deploy-to-new-org.md).
 
+> **Trimmed by decision (Ben, 2026-08-08).** Two recipes were removed
+> outright rather than left as options. *Review-due reminder push*:
+> reviews are driven by rituals and reporting (My tasks, Document
+> Control Health, the board cards) — no inbox push, period, so the
+> recipe would only invite a second reminder mechanism. *Stored
+> watermarked renditions*: the status travels **in the document
+> template itself** — a field in the template bound to the status
+> column, alongside the template's own "uncontrolled if printed"
+> wording — so the live document self-identifies and no stored
+> artefact is needed.
+
 ## The contract every add-on honours
 
 **What to read.** Settings → Documents → Document columns maps each
@@ -54,46 +65,7 @@ documents" filters on the labels (or term GUIDs) the site mapped to the
 
 ---
 
-## Recipe 1 — review-due reminder push
-
-**What the app already does:** overdue and due-soon are computed from
-columns at read time — My tasks, the Documents tab count, the health
-reports and the register's review prompts all surface them, and the
-daily meeting is the reminder. Nothing is stored, so nothing goes
-stale. **What it cannot do:** push to an inbox on a clock. This flow
-adds that for organisations that want it.
-
-- **Trigger:** Recurrence — e.g. weekly, Monday morning. Resist daily;
-  the app already nags in-app, and an inbox that cries wolf gets
-  filtered.
-- **Query:** for each standards library, Get items filtered on the
-  next-review-date column `le` today-plus-horizon (30 days matches the
-  app's due-soon window). Taxonomy columns are awkward in OData — filter
-  on the date, then test the status field's text (it renders as
-  `Label|GUID`) against the approved-stage labels in a condition.
-  Skip anything not approved: a draft or a superseded document owes no
-  periodic review (the app applies the same split).
-- **Group by owner:** one digest per owner (the person column carries
-  the email), not one message per document — mirror the health report's
-  by-owner tally, not a mail-merge.
-- **Send** via the Teams or Outlook connector, each document carrying a
-  **work link** — the same link the app's own notifications carry, which
-  opens LeanBoard on that document with the details pane expanded and
-  the commands live:
-
-  ```
-  https://apps.powerapps.com/play/e/<environmentId>/app/<appId>?tenantId=<tenantId>&ltkdoc=<listId>:<itemId>&ltkmode=work#/
-  ```
-
-  `listId` is the library's GUID, `itemId` the item's numeric ID — both
-  available in the flow. Copy the fixed part of the shape from any Share
-  dialog or app notification in the target environment.
-- **Variants on the same skeleton:** retention-due (filter the
-  retain-until column; notify controllers, not owners), and overdue
-  escalation (a second recurrence that notifies a manager once a review
-  is N days past — keep the threshold generous).
-
-## Recipe 2 — content-approval hardening
+## Recipe 1 — content-approval hardening
 
 **The gap it closes**, stated plainly in the plan: with no server-side
 engine, readers cannot write at all — the permission wall holds for the
@@ -128,36 +100,7 @@ not preventable. Two hardening levels:
   item-level sprawl the group model exists to avoid, and it breaks the
   set-once permission table.
 
-## Recipe 3 — stored watermarked renditions
-
-The app's read path for approved documents is the **live PDF** — the
-viewer converts on demand, so readers always see the current approved
-content. Storing watermarked renditions from the client was measured
-impossible (file bytes cannot cross the connector; the player CSP blocks
-direct fetch), so a stored artefact — for regulator submissions,
-external distribution, or a strict FR-DI-005/007 reading — is a
-deployment flow:
-
-- **Trigger:** *When an item is modified* on the standards library, with
-  a condition that the status field's label is an approved-stage term
-  (or a scheduled sweep comparing modified-since — cheaper under heavy
-  editing, since property edits also fire the modified trigger).
-- **Convert:** SharePoint's site-scoped conversion endpoint —
-  `/_api/v2.0/drive/items/{id}/content?format=pdf` answers 302 to a
-  presigned URL (measured 2026-07-27) — or the OneDrive connector's
-  *Convert file* action against a temporary copy.
-- **Stamp:** the watermark ("Uncontrolled if printed", document ID,
-  version, effective date) needs a PDF-capable step — a small Azure
-  Function with a PDF library, or an org-approved document service.
-  This is the one piece with no out-of-the-box connector action.
-- **Write** the result to the library's **PDF rendition folder**
-  (Settings → Documents → the library's configuration) — the config
-  slot reserved for exactly this. The app does not read that folder
-  today; its viewer stays live. Name renditions
-  `<DocumentID> v<major>.pdf` so a superseding approval overwrites its
-  predecessor deterministically.
-
-## Recipe 4 — native upload picker (relay)
+## Recipe 2 — native upload picker (relay)
 
 Measured repeatedly (latest 2026-08-06): file bytes cannot cross the
 connector from the code app — all four carriages re-encode — so in-app
@@ -166,6 +109,7 @@ UI; the app takes over once bytes exist server-side), and the Test
 write access probe re-checks the carriages on every SDK bump. A
 deployment that insists on a native in-app picker has one road: a
 Dataverse **file column** the app could upload into, plus a **relay
-flow** that copies the file on to SharePoint. Declined for Pechey
-(2026-08-06) — the handoff is simpler and has no second engine — but
-this is the documented road if a deployment's requirements differ.
+flow** that copies the file on to SharePoint. Originally declined for
+Pechey (2026-08-06); **taken up 2026-08-08** — the design and probe
+plan live in
+[leanboard-doc-cards-plan.md](leanboard-doc-cards-plan.md) (part C).

@@ -80,8 +80,31 @@ stay the design detail; this is the queue.
    app), the standard-documents plan's Phase 6 section closed, and this
    queue's items 1–2 struck.
 
-**The near-term queue is empty** — everything else lives under Future
-below.
+7. **Doc cards refresh (NEXT).** The Standard documents card renders
+   register-true rows (extracted cells: status chip, owner avatar,
+   file-type chip, checkout lock); Document health renders R5 task
+   rows; both configured by PASTING a filtered view's Copy link from
+   the register (`docsView` — the encoded DocView, rename-proof term
+   ids, one source of filter truth), legacy text configs honoured when
+   blank. DocsCard also moves off the pre-C3b search feed onto the
+   register's RLDAS road, approved-only by default. Plan of record:
+   `leanboard-doc-cards-plan.md` parts A/B (Ben, 2026-08-08).
+8. **Native upload relay — U0 probe.** `ben_ltkupload` table (file
+   column; role updated in DEV beside it) + Test-write-access probe:
+   can the SDK carry bytes into a Dataverse file column? Relay flow +
+   dialog UI follow only on a green verdict. Plan part C. Rides the
+   release after the cards (schema release).
+9. **Content-approval trial — CA0 (Ben, hosted).** Test library with
+   content approval on; one full revision cycle through the app;
+   record the write-bracket and visibility behaviour; decision gate.
+   Plan part D. Runs in parallel any time.
+
+Removed by decision (Ben, 2026-08-08): the cookbook's reminder-push
+recipe (reviews run on rituals & reporting — no inbox push) and the
+stored-watermarked-renditions recipe (a field in the document template,
+bound to the status column beside the template's own "uncontrolled if
+printed" wording, does the watermark's job — no flow, no stored
+artefact).
 
 ## Future (formally logged, no date)
 

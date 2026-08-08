@@ -156,11 +156,13 @@ people) lives in the tables, untouched by app updates.
 ## Optional add-on flows
 
 LeanBoard runs flow-free; the app never invokes Power Automate. What an
-organisation can bolt on — review-due reminder push, content-approval
-hardening, stored watermarked renditions, a native-upload relay — is a
-set of flows reading the same SharePoint columns the app reads, with the
-columns as the only contract. Recipes and the rules that keep an add-on
-an add-on: [deployment-cookbook.md](deployment-cookbook.md).
+organisation can bolt on — content-approval hardening, a native-upload
+relay — is read against the same SharePoint columns the app reads, with
+the columns as the only contract. Recipes and the rules that keep an
+add-on an add-on: [deployment-cookbook.md](deployment-cookbook.md).
+(Reminder push and stored watermarked renditions were considered and
+removed by decision — reviews run on rituals and reporting, and status
+travels in the document template itself; the cookbook records both.)
 
 ## Fallback: pac CLI install (no solution import for the app)
 
