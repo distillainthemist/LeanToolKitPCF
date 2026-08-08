@@ -19,6 +19,8 @@ import { Ben_ltkdoclibrariesService } from "../generated/services/Ben_ltkdoclibr
 import { eq, firstWhere, upsertWhere } from "../store/dv";
 import { addMember, groupMembers, removeMember } from "../store/accessGroup";
 import { REQUESTS_LIST_ID, spErrorText, validateItemErrors } from "./model";
+import { NotifyContext } from "./notifyModel";
+import { attachNotifyPanel } from "./notifyPanel";
 import { DocRow } from "./rows";
 import {
   addSiteGroupUser,
@@ -360,6 +362,9 @@ export interface ApproveRequestOpts {
   actorName: string;
   host: HTMLElement;
   onDone: () => void;
+  /** N3: the notify plan (→ the requester) — offered once the grant
+   *  landed, warnings included (the grant DID land). */
+  notify?: NotifyContext;
 }
 
 /**
@@ -523,6 +528,10 @@ export function openApproveRequest(opts: ApproveRequestOpts): void {
       status.classList.add("app-docs-addstatus-warn");
       doneState();
       opts.onDone();
+      // the grant LANDED — telling the requester is still on offer
+      if (opts.notify !== undefined) {
+        attachNotifyPanel({ body: dlg.body, context: opts.notify });
+      }
       return; // leave the warning readable
     }
     status.textContent = instant
@@ -531,6 +540,9 @@ export function openApproveRequest(opts: ApproveRequestOpts): void {
         "membership — the requester's first check-out may be refused until it lands.";
     doneState();
     opts.onDone();
+    if (opts.notify !== undefined) {
+      attachNotifyPanel({ body: dlg.body, context: opts.notify });
+    }
   };
 }
 
@@ -727,6 +739,9 @@ export interface RequestAccessOpts {
    *  2026-08-06) — the screen runs the confirm + release. */
   onEndAccess?: () => void;
   onChanged: () => void;
+  /** N3: the notify plan (→ the owners) the screen derived — the
+   *  done-state offers the panel; never required, never automatic. */
+  notify?: NotifyContext;
 }
 
 export function openRequestAccess(opts: RequestAccessOpts): void {
@@ -877,8 +892,21 @@ export function openRequestAccess(opts: RequestAccessOpts): void {
         reason: reason.value.trim(),
         when: new Date().toISOString(),
       });
-      dlg.close();
       opts.onChanged();
+      // N3: the request is in the owner's tasks either way — the panel
+      // just gets it seen sooner
+      if (
+        opts.notify !== undefined &&
+        attachNotifyPanel({ body: dlg.body, context: opts.notify, reason: reason.value })
+      ) {
+        const closeBtn = dlg.root.querySelector(".ltk-btn-secondary") as HTMLButtonElement | null;
+        if (closeBtn !== null) closeBtn.textContent = "Close";
+        goBtn.style.display = "none";
+        running = false;
+        status.textContent = "✓ Request sent.";
+        return;
+      }
+      dlg.close();
     } catch (e) {
       running = false;
       sync();
@@ -894,6 +922,9 @@ export function openDeclineRequest(opts: {
   actorName: string;
   host: HTMLElement;
   onDone: () => void;
+  /** N3: the notify plan (→ the requester) — the typed reason rides
+   *  into the message, same as Request revision. */
+  notify?: NotifyContext;
 }): void {
   let running = false;
   const dlg = openDialog({
@@ -930,8 +961,19 @@ export function openDeclineRequest(opts: {
     status.textContent = "Recording…";
     try {
       await declineRequest(opts.request.id, opts.actorName, reason.value.trim());
-      dlg.close();
       opts.onDone();
+      if (
+        opts.notify !== undefined &&
+        attachNotifyPanel({ body: dlg.body, context: opts.notify, reason: reason.value })
+      ) {
+        const closeBtn = dlg.root.querySelector(".ltk-btn-secondary") as HTMLButtonElement | null;
+        if (closeBtn !== null) closeBtn.textContent = "Close";
+        if (goBtn) goBtn.style.display = "none";
+        running = false;
+        status.textContent = "✓ Declined.";
+        return;
+      }
+      dlg.close();
     } catch (e) {
       running = false;
       sync();

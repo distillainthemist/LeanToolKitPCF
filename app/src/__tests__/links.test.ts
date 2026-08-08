@@ -1,12 +1,16 @@
 import { afterEach, describe, expect, it } from "vitest";
 import {
   boardUrl,
+  docLinkUrlWork,
   docsViewUrl,
   hasPendingDocView,
+  hasPendingWorkDoc,
   latestInstanceIso,
   launchTarget,
   setAppHost,
+  takePendingDoc,
   takePendingDocView,
+  takePendingWorkDoc,
 } from "../links";
 
 const NOW = Date.parse("2026-07-23T09:00:00Z");
@@ -61,6 +65,37 @@ describe("launchTarget", () => {
     setAppHost(HOST);
     expect(docsViewUrl("{}").endsWith("#/")).toBe(true);
     expect(docsViewUrl("{}")).toContain("docview=%7B%7D");
+  });
+
+  it("a plain document launch routes to the kiosk, not the work slot", () => {
+    setAppHost({ ...HOST, queryParams: { ltkdoc: "list-1:42" } });
+    expect(launchTarget()).toBe("#/doc");
+    expect(hasPendingWorkDoc()).toBe(false);
+    expect(takePendingDoc()).toBe("list-1:42");
+  });
+
+  it("a WORK-mode launch lands on the hub with the work slot filled (N1)", () => {
+    setAppHost({ ...HOST, queryParams: { ltkdoc: "list-1:42", LtkMode: "Work" } });
+    expect(launchTarget()).toBe("#/"); // full app — the overlay needs its commands
+    expect(hasPendingWorkDoc()).toBe(true); // the peek does not consume
+    expect(hasPendingWorkDoc()).toBe(true);
+    expect(takePendingWorkDoc()).toBe("list-1:42");
+    expect(hasPendingWorkDoc()).toBe(false); // the take does
+    expect(takePendingDoc()).toBe(""); // the kiosk slot stays empty
+  });
+
+  it("an unknown mode value falls back to the kiosk", () => {
+    setAppHost({ ...HOST, queryParams: { ltkdoc: "list-1:42", ltkmode: "view" } });
+    expect(launchTarget()).toBe("#/doc");
+    expect(takePendingDoc()).toBe("list-1:42");
+  });
+
+  it("docLinkUrlWork carries the document and the mode", () => {
+    setAppHost(HOST);
+    const url = docLinkUrlWork("list-1", 42);
+    expect(url).toContain("ltkdoc=list-1%3A42");
+    expect(url).toContain("ltkmode=work");
+    expect(url.endsWith("#/")).toBe(true);
   });
 });
 

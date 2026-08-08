@@ -1,8 +1,13 @@
 // The toolkit's one modal dialog — every add/edit interaction in every
 // control goes through this, so dialogs look and behave identically
-// everywhere (Flat 2.0, keyboard + touch, Esc/underlay to cancel).
+// everywhere (Flat 2.0, keyboard + touch). Dialogs are truly MODAL
+// (Ben, 2026-08-08): they take focus and close ONLY via their buttons —
+// a stray click on the underlay or an Escape must never throw away a
+// half-filled form. Escape is swallowed rather than ignored, so an
+// overlay UNDER the dialog (the document viewer) cannot close instead.
 
 import { el } from "./dom";
+import { markDialog, trapFocus } from "./focusTrap";
 
 export interface DialogButton {
   label: string;
@@ -36,16 +41,17 @@ export function openDialog(opts: DialogOptions): DialogHandle {
   const body = el("div", "ltk-dialog-body");
   const footer = el("div", "ltk-dialog-footer");
 
+  let untrap: () => void = () => {};
   const close = () => {
+    untrap();
     overlay.remove();
     document.removeEventListener("keydown", onKey, true);
     if (opts.onClose) opts.onClose();
   };
+  // Escape is SWALLOWED, not honoured: closing is the buttons' job, and
+  // letting the key through would close whatever overlay sits beneath
   const onKey = (e: KeyboardEvent) => {
-    if (e.key === "Escape") {
-      e.stopPropagation();
-      close();
-    }
+    if (e.key === "Escape") e.stopPropagation();
   };
 
   for (const b of opts.buttons) {
@@ -55,16 +61,26 @@ export function openDialog(opts: DialogOptions): DialogHandle {
     footer.appendChild(btn);
   }
 
-  // dismiss on click (not pointerdown) so closing can never let the same
-  // press fall through to whatever sits behind the overlay
-  overlay.addEventListener("click", (e) => {
-    if (e.target === overlay) close();
-  });
+  // a click on the underlay does nothing — dialogs close only via their
+  // buttons (a stray click must never discard a half-filled form)
   document.addEventListener("keydown", onKey, true);
 
   box.append(heading, body, footer);
   overlay.appendChild(box);
   opts.host.appendChild(overlay);
+  markDialog(box, opts.title);
+  untrap = trapFocus(overlay);
+  // initial focus lands INSIDE the dialog — deferred, because callers
+  // append their inputs (and often focus one) after openDialog returns
+  window.setTimeout(() => {
+    if (!overlay.isConnected) return;
+    const active = document.activeElement;
+    if (active instanceof HTMLElement && overlay.contains(active)) return;
+    const target =
+      body.querySelector<HTMLElement>("input:not([disabled]), textarea:not([disabled]), select:not([disabled])") ??
+      footer.querySelector<HTMLElement>("button:not([disabled])");
+    target?.focus();
+  }, 0);
   return { root: overlay, body, close };
 }
 

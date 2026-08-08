@@ -28,7 +28,9 @@ export interface DocTilesOptions {
   statusChip?: ((value: string) => HTMLElement) | null;
   /** Configured internal names ("" = not configured). */
   statusColumn?: string;
-  ownerColumn?: string;
+  /** Document-type column (R9): the meta line reads type + labelled
+   *  date; the owner moved to the overlay. */
+  typeColumn?: string;
   /** Presigned page-one image for a row, "" when there is none. Called
    *  at most once per tile, as the tile nears the viewport. */
   thumbUrlFor?: (row: DocRow) => Promise<string>;
@@ -105,16 +107,25 @@ export function mountDocTiles(host: HTMLElement, opts: DocTilesOptions): DocList
     if (statusVal !== "" && opts.statusChip) chips.appendChild(opts.statusChip(statusVal));
     body.appendChild(chips);
 
-    const { stem } = splitNameForEllipsis(row.name);
+    // R9: middle-ellipsis — the stem's head shrinks, its tail and the
+    // extension survive ("Compressed Air Sys…tandard.pdf"), so a wall
+    // of same-prefix documents stays tellable-apart
+    const { stem, ext } = splitNameForEllipsis(row.name);
+    const TAIL = 8;
     const name = el("div", "app-doctile-name");
     name.title = row.name;
-    name.append(el("span", "app-doctile-stem", stem));
+    name.append(
+      el("span", "app-doctile-stem", stem.length > TAIL ? stem.slice(0, -TAIL) : ""),
+      el("span", "app-doctile-tail", (stem.length > TAIL ? stem.slice(-TAIL) : stem) + ext)
+    );
     body.appendChild(name);
 
+    // R9 meta: what KIND of document and a labelled date — the owner
+    // lives in the overlay, where there is room for a whole person
     const metaBits: string[] = [];
-    const owner = opts.ownerColumn ? (row.values[opts.ownerColumn] ?? "") : "";
-    if (owner !== "") metaBits.push(owner.split(";")[0].trim());
-    if (row.modified !== "") metaBits.push(formatWhen(row.modified));
+    const typeVal = opts.typeColumn ? (row.values[opts.typeColumn] ?? "") : "";
+    if (typeVal !== "") metaBits.push(typeVal.split(";")[0].trim());
+    if (row.modified !== "") metaBits.push(`Modified ${formatWhen(row.modified)}`);
     body.appendChild(el("div", "app-doctile-meta", metaBits.join(" · ")));
     card.appendChild(body);
     card.addEventListener("click", () => opts.onRow(row));

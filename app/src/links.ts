@@ -77,6 +77,28 @@ export function docsViewUrl(encoded: string): string {
 export const DOC_PARAM = "ltkdoc";
 let pendingDoc = "";
 
+/** Mode modifier for a document link (N1). Absent = the kiosk (pure
+ *  preview, printed-QR territory). "work" = the WORK link notifications
+ *  carry: full app, Documents screen, the overlay open with details
+ *  expanded and the lifecycle commands live — "come do your step",
+ *  not "read this procedure". */
+export const MODE_PARAM = "ltkmode";
+const MODE_WORK = "work";
+let pendingWorkDoc = "";
+
+/** The work-link payload the launch delivered — consumed once by the
+ *  Documents screen when it mounts. */
+export function takePendingWorkDoc(): string {
+  const v = pendingWorkDoc;
+  pendingWorkDoc = "";
+  return v;
+}
+
+/** Non-consuming peek: the hub fronts its Documents tab on it. */
+export function hasPendingWorkDoc(): boolean {
+  return pendingWorkDoc !== "";
+}
+
 /** The document payload the launch delivered — consumed once by the
  *  Documents screen when it mounts. */
 export function takePendingDoc(): string {
@@ -148,6 +170,22 @@ export function docLinkUrl(listId: string, itemId: number): string {
   const q = new URLSearchParams();
   if (host.tenantId !== "") q.set("tenantId", host.tenantId);
   q.set(DOC_PARAM, payload);
+  return `${PLAYER}/e/${host.environmentId}/app/${host.appId}?${q.toString()}#/`;
+}
+
+/** The absolute player URL for one document in WORK mode (N1): full
+ *  app, overlay open, details expanded, commands live — what a
+ *  notification's "come do your step" link carries. */
+export function docLinkUrlWork(listId: string, itemId: number): string {
+  const payload = `${listId}:${itemId}`;
+  if (!host || host.appId === "" || host.environmentId === "") {
+    const base = window.location.href.split("#")[0].split("?")[0];
+    return `${base}?${DOC_PARAM}=${encodeURIComponent(payload)}&${MODE_PARAM}=${MODE_WORK}#/`;
+  }
+  const q = new URLSearchParams();
+  if (host.tenantId !== "") q.set("tenantId", host.tenantId);
+  q.set(DOC_PARAM, payload);
+  q.set(MODE_PARAM, MODE_WORK);
   return `${PLAYER}/e/${host.environmentId}/app/${host.appId}?${q.toString()}#/`;
 }
 
@@ -235,8 +273,15 @@ export function launchTarget(): string {
   }
   const doc = param(DOC_PARAM);
   if (doc !== "") {
-    pendingDoc = doc;
     lastDocHandled = doc;
+    if (param(MODE_PARAM).toLowerCase() === MODE_WORK) {
+      // the WORK route (N1): a notification's "come do your step" —
+      // land on the hub, whose Documents tab consumes the payload and
+      // opens the overlay with commands live
+      pendingWorkDoc = doc;
+      return "#/";
+    }
+    pendingDoc = doc;
     // the KIOSK route (5I): only the document, no app chrome — a
     // scanned code in the field reads a procedure, nothing else
     return "#/doc";

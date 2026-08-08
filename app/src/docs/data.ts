@@ -257,13 +257,17 @@ async function presignedThumb(site: string, row: DocRow): Promise<string> {
 export async function itemDetails(
   site: string,
   row: DocRow
-): Promise<{ id: number; values: Record<string, string>; error: string }> {
+): Promise<{ id: number; values: Record<string, string>; iso: Record<string, string>; error: string }> {
+  // the RAW item fields ride along (no $select): FieldValuesAsText
+  // renders dates in the SITE's locale ("5/10/2025" — ambiguous to a
+  // reader and unparseable without guessing), while the raw field
+  // carries ISO — the only honest source for reformatting (R6)
   const r = await spRequest(
     site,
     "GET",
-    `_api/web/GetFileById('${row.uniqueId}')/ListItemAllFields?$expand=FieldValuesAsText&$select=Id,FieldValuesAsText`
+    `_api/web/GetFileById('${row.uniqueId}')/ListItemAllFields?$expand=FieldValuesAsText`
   );
-  if (!r.ok) return { id: 0, values: {}, error: r.status };
+  if (!r.ok) return { id: 0, values: {}, iso: {}, error: r.status };
   const o = (r.data ?? {}) as Record<string, unknown>;
   const fv =
     o.FieldValuesAsText && typeof o.FieldValuesAsText === "object"
@@ -273,7 +277,11 @@ export async function itemDetails(
   for (const [k, v] of Object.entries(fv)) {
     if (typeof v === "string" && !k.startsWith("odata")) values[k] = v;
   }
-  return { id: typeof o.Id === "number" ? o.Id : 0, values, error: "" };
+  const iso: Record<string, string> = {};
+  for (const [k, v] of Object.entries(o)) {
+    if (typeof v === "string" && /^\d{4}-\d{2}-\d{2}T\d{2}/.test(v)) iso[k] = v;
+  }
+  return { id: typeof o.Id === "number" ? o.Id : 0, values, iso, error: "" };
 }
 
 export interface DocVersion {

@@ -642,6 +642,45 @@ async function renderProfile(
     })();
   });
   body.append(diagNote, diagBtn, diagOut);
+
+  // ---- notification probe (N0, kept as a support tool) -----------------
+  // Measures the Teams/Outlook transports the notification feature rides
+  // (docs/leanboard-notifications-plan.md). Email goes to YOURSELF; the
+  // Teams leg only runs when a colleague is named, because it sends them
+  // one real message — a probe that can never spam by default.
+  body.appendChild(el("div", "app-section", "Notification probe"));
+  const notifyNote = el(
+    "div",
+    "app-settings-note",
+    "Tests whether this account can send notification messages. The email test " +
+      "goes to yourself. The Teams test sends ONE probe message to a colleague " +
+      "you name — leave the field empty to skip it."
+  );
+  const notifyTarget = el("input", "app-input") as HTMLInputElement;
+  notifyTarget.type = "email";
+  notifyTarget.placeholder = "Colleague's email for the Teams test (optional)";
+  const notifyBtn = el("button", "app-btn", "Run notification probe") as HTMLButtonElement;
+  const notifyOut = el("pre", "app-docs-probelog");
+  notifyOut.style.display = "none";
+  notifyBtn.addEventListener("click", () => {
+    void (async () => {
+      notifyBtn.disabled = true;
+      notifyOut.style.display = "";
+      notifyOut.textContent = "Running…\n";
+      const log = (line: string) => {
+        notifyOut.textContent += `${line}\n`;
+      };
+      try {
+        const { runNotifyProbe } = await import("../docs/notifyProbe");
+        await runNotifyProbe(log, notifyTarget.value);
+        log("Done.");
+      } catch (e) {
+        log(`FAIL — the probe itself crashed: ${e instanceof Error ? e.message : String(e)}`);
+      }
+      notifyBtn.disabled = false;
+    })();
+  });
+  body.append(notifyNote, notifyTarget, notifyBtn, notifyOut);
 }
 
 /** "added 3 members · 1 owner · removed 2" (or "everything in sync"). */

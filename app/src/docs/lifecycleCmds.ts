@@ -16,6 +16,8 @@ import {
   spErrorText,
   validateItemErrors,
 } from "./model";
+import { NotifyContext } from "./notifyModel";
+import { attachNotifyPanel } from "./notifyPanel";
 import { DocRow } from "./rows";
 import {
   checkInFile,
@@ -66,6 +68,10 @@ export interface LifecycleRunOpts {
   /** Called after the command lands, so the screen can re-read the row
    *  and the tasks badge. */
   onDone: () => void;
+  /** N2: the notify plan the screen derived — who the next step is and
+   *  what to say. Present = the done-state offers the panel; sending is
+   *  never required and never automatic. */
+  notify?: NotifyContext;
 }
 
 type Sp = { ok: boolean; status: string; data: unknown };
@@ -209,6 +215,31 @@ export function openLifecycleCommand(opts: LifecycleRunOpts): void {
   reason.addEventListener("input", sync);
   sync();
   reason.focus();
+
+  /**
+   * The notify panel (N2): shown in the done-state when the screen
+   * derived a plan. Returns false when there is nothing to offer (the
+   * dialog then closes as before). Recipients added as reviewers in
+   * THIS dialog join the prefill — they are exactly who should hear.
+   */
+  const showNotifyPanel = (): boolean => {
+    const n = opts.notify;
+    if (n === undefined) return false;
+    const attached = attachNotifyPanel({
+      body: dlg.body,
+      context: n,
+      extra: command.key === "submitReview" ? added : [],
+      reason: reason.value,
+    });
+    if (!attached) return false;
+    // the command is DONE — the dialog's own buttons say so
+    const closeBtn = dlg.root.querySelector(".ltk-btn-secondary") as HTMLButtonElement | null;
+    if (closeBtn !== null) closeBtn.textContent = "Close";
+    goBtn.style.display = "none";
+    running = false;
+    status.textContent = "✓ Done.";
+    return true;
+  };
 
   const fail = (what: string, why: string) => {
     status.textContent = `${what}: ${spErrorText(why).slice(0, 300)}`;
@@ -380,8 +411,10 @@ export function openLifecycleCommand(opts: LifecycleRunOpts): void {
       }
     }
 
-    dlg.close();
     opts.onDone();
+    // the notify panel keeps the dialog open when there is someone to
+    // tell — otherwise close as always
+    if (!showNotifyPanel()) dlg.close();
   };
 }
 

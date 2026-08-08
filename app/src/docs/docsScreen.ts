@@ -10,7 +10,7 @@
 // would lie about the corpus.
 
 import { el, clear } from "../../../shared/ui/dom";
-import { fileTypeChip, withStatusGlyph } from "../../../shared/ui/format";
+import { fileTypeChip, statusChip as tonePill, withStatusGlyph } from "../../../shared/ui/format";
 import { draggableRow } from "../../../shared/ui/dragList";
 import { showLoading } from "../loading";
 import { detectHost } from "../runtime";
@@ -36,7 +36,6 @@ import {
   pdfViewUrlFor,
   pickBrowseHead,
   splitNameForEllipsis,
-  tallySubtreeCounts,
   taxonomySearchProperty,
 } from "./rows";
 import { DocLibrary, docsConfig } from "./docsStore";
@@ -66,14 +65,22 @@ import {
   fetchLibraries,
   fetchListPermissions,
   fetchListRoot,
-  fetchTermPaths,
+  cachedTermPaths,
   fetchTermsInSet,
   undoCheckOut,
 } from "./sp";
 import { openDialog } from "../../../shared/ui/dialog";
 import { currentViewer } from "../runtime";
 import { viewerPerson } from "../store/people";
-import { docLinkUrl, docLinkUrlMobile, docsViewUrl, takePendingDocView } from "../links";
+import {
+  docLinkUrl,
+  docLinkUrlMobile,
+  docLinkUrlWork,
+  docsViewUrl,
+  takePendingDocView,
+  takePendingWorkDoc,
+} from "../links";
+import { accessRequestPlan, notifyPlanFor } from "./notifyModel";
 import {
   DocUiPrefs,
   DocView,
@@ -101,14 +108,6 @@ let pendingLibs: string[] | null = null;
 import { openDocViewer } from "./viewer";
 
 const PAGE = 50;
-
-/**
- * How many rows the folder counts may read per library. They are ids and
- * one column, so this is cheap — but a library past the cap would report
- * a floor as if it were a total, and the tree falls back to counting
- * loaded rows instead of overstating.
- */
-const COUNT_CAP = 2000;
 
 /**
  * How many content matches the index may contribute to one search.
@@ -460,9 +459,37 @@ export function mountDocs(
             revEditorsInternal !== ""
               ? { internal: revEditorsInternal, emails: grantEmails(row) }
               : undefined,
+          // N2: who the next step is and what to say — the dialog's
+          // done-state offers it; null = no panel at all
+          notify:
+            notifyPlanFor({
+              commandKey: cmd.key,
+              to: cmd.to,
+              docName: row.name,
+              actorName: currentViewer()?.name ?? "",
+              roles: {
+                owners: rolePeople(row, ownerInternal),
+                approvers: rolePeople(row, approversInternal),
+                reviewers: rolePeople(row, reviewersInternal),
+                editors: rolePeople(row, revEditorsInternal),
+              },
+              myEmail,
+              link: docLinkUrlWork(row.listId, row.id),
+            }) ?? undefined,
           onDone: () => void refreshRow(row),
         });
       });
+    };
+    /** A person column's people — RLDAS keeps display names in the value
+     *  and emails under "<col>#email", paired by position. */
+    const rolePeople = (row: DocRow, internal: string): { name: string; email: string }[] => {
+      if (internal === "") return [];
+      const names = (row.values[internal] ?? "")
+        .split(";")
+        .map((s) => s.trim())
+        .filter((s) => s !== "");
+      const mails = (row.values[`${internal}#email`] ?? "").split(";").filter((s) => s !== "");
+      return mails.map((email, i) => ({ email, name: names[i] ?? email }));
     };
     /** Current grantee emails from the Revision editors column. */
     const grantEmails = (row: DocRow): string[] =>
@@ -480,6 +507,16 @@ export function mountDocs(
       if (stageOfRow(row) !== "approved") return false;
       const g = lifecycleGatesFor(row);
       return g.isOwner || g.isAdmin;
+    };
+    /** Is the next review inside the task horizon (or past)? Decides
+     *  whether Mark reviewed is the overlay's DECISION (R5) or just an
+     *  overflow item — an early review is offered quietly, a due one
+     *  loudly. */
+    const reviewDue = (row: DocRow): boolean => {
+      if (reviewInternal === "") return false;
+      const iso = row.values[`${reviewInternal}.`] ?? "";
+      const t = Date.parse(iso !== "" ? iso : (row.values[reviewInternal] ?? ""));
+      return !Number.isNaN(t) && t <= Date.now() + REVIEW_HORIZON_DAYS * 86_400_000;
     };
     const openMarkReviewedRow = (row: DocRow) => {
       void import("./lifecycleCmds").then(({ openMarkReviewed }) => {
@@ -641,6 +678,16 @@ export function mountDocs(
               ? () => openEndMyAccess(row)
               : undefined,
           onChanged: () => void refreshRequestState(row),
+          // N3: the owners hear about the request straight away
+          notify:
+            accessRequestPlan({
+              kind: "requested",
+              docName: row.name,
+              actorName: currentViewer()?.name ?? "",
+              targets: rolePeople(row, ownerInternal),
+              myEmail,
+              link: docLinkUrlWork(row.listId, row.id),
+            }) ?? undefined,
         });
       });
     };
@@ -861,7 +908,7 @@ export function mountDocs(
     // columns via CAML <UserID/>, so there is no state to go stale and
     // nothing to sweep. Checking a document in makes it leave the list
     // because the list never existed anywhere else.
-    const actionNeeded = el("button", "app-btn app-docs-actionneeded", "My tasks") as HTMLButtonElement;
+    const actionNeeded = el("button", "app-btn app-docs-actionneeded", "Document tasks") as HTMLButtonElement;
     actionNeeded.title = "Documents checked out to you, and your documents due for review";
 
     interface TaskRow {
@@ -869,8 +916,6 @@ export function mountDocs(
       libName: string;
       why: string;
       overdue: boolean;
-      /** review-due rows carry an inline Mark reviewed action (5C). */
-      canMarkReviewed?: boolean;
     }
     /** Edit-access requests awaiting this user's decision (5G2) — the
      *  row is fetched live so a click opens the overlay armed; null row
@@ -954,7 +999,8 @@ export function mountDocs(
               })
             );
             for (const row of page.rows) {
-              out.held.push({ row, libName: nameOf(l), why: "Checked out to you", overdue: false });
+              // the group title + pill say WHAT; why carries only extras
+              out.held.push({ row, libName: nameOf(l), why: "", overdue: false });
             }
           })()
         );
@@ -980,12 +1026,7 @@ export function mountDocs(
                 })
               );
               for (const row of page.rows) {
-                out.toReview.push({
-                  row,
-                  libName: nameOf(l),
-                  why: "Awaiting your review",
-                  overdue: false,
-                });
+                out.toReview.push({ row, libName: nameOf(l), why: "", overdue: false });
               }
             })()
           );
@@ -1015,12 +1056,7 @@ export function mountDocs(
                 const key = row.uniqueId !== "" ? row.uniqueId : `${row.listId}:${row.id}`;
                 if (seen.has(key)) continue;
                 seen.add(key);
-                out.toApprove.push({
-                  row,
-                  libName: nameOf(l),
-                  why: "Awaiting your approval",
-                  overdue: false,
-                });
+                out.toApprove.push({ row, libName: nameOf(l), why: "", overdue: false });
               }
             })()
           );
@@ -1121,18 +1157,9 @@ export function mountDocs(
                   ? disp
                   : formatDayMonthYear(new Date(t).toISOString());
                 const overdue = !Number.isNaN(t) && t < Date.now();
-                out.review.push({
-                  row,
-                  libName: nameOf(l),
-                  why:
-                    when === ""
-                      ? "Review due"
-                      : overdue
-                        ? `Review overdue · ${when}`
-                        : `Review due · ${when}`,
-                  overdue,
-                  canMarkReviewed: true,
-                });
+                // the pill says overdue-or-due (R6); why carries the
+                // date alone, in the app's one format ("7 Aug 2026")
+                out.review.push({ row, libName: nameOf(l), why: when, overdue });
               }
             })()
           );
@@ -1143,27 +1170,24 @@ export function mountDocs(
       return out;
     };
 
+    /** ONE selector for the badge AND the panel (R7, design review
+     *  2026-08-08): the count is exactly the rows the panel paints —
+     *  the earlier badge filtered outgoing news by seen-state while the
+     *  panel painted everything, and the two drifted (11 vs 13). One
+     *  number, one meaning: "items in your Document tasks". */
     const taskCount = (t: MyTasks) =>
       t.toApprove.length +
       t.toReview.length +
       t.held.length +
       t.review.length +
       t.requests.length +
-      // of your OWN requests: a decline counts until dismissed, and a
-      // grant counts until SEEN — news that never highlights never
-      // reaches anyone. Pending is just waiting; a seen grant persists
-      // quietly for the whole cycle.
-      t.outgoing.filter(
-        (e) => e.req.declined !== undefined || (e.req.granted !== undefined && e.req.seen !== true)
-      ).length;
-    /** Everything the panel PAINTS — outgoing rows and standing grants
-     *  show even when none of them counts toward the badge. */
-    const taskVisible = (t: MyTasks) =>
-      taskCount(t) > 0 || t.outgoing.length > 0 || t.grantedByMe.length > 0;
+      t.outgoing.length +
+      t.grantedByMe.length;
+    const taskVisible = (t: MyTasks) => taskCount(t) > 0;
 
     let tasksBadgeGen = 0;
     const paintTasksBadge = (n: number) => {
-      actionNeeded.textContent = n > 0 ? `My tasks · ${n}` : "My tasks";
+      actionNeeded.textContent = n > 0 ? `Document tasks · ${n}` : "Document tasks";
       actionNeeded.classList.toggle("app-docs-actionneeded-hot", n > 0);
     };
     /** Recounted in the background — at mount, and after every command
@@ -1176,22 +1200,6 @@ export function mountDocs(
       });
     };
     refreshTasksBadge();
-
-    /** Mark reviewed (5C) — the review-due queue's own command: stamps
-     *  the next review date and checks in "Periodic review — no
-     *  changes". Lives in the lazy lifecycle chunk. */
-    const openMarkReviewed = (t: TaskRow, onDone: () => void) => {
-      void import("./lifecycleCmds").then(({ openMarkReviewed: openDlg }) => {
-        openDlg({
-          site: app.siteUrl,
-          listId: t.row.listId,
-          row: t.row,
-          reviewInternal,
-          host: dialogHost,
-          onDone,
-        });
-      });
-    };
 
     actionNeeded.addEventListener("click", () => {
       const scrim = el("div", "app-docs-tasksscrim");
@@ -1214,10 +1222,10 @@ export function mountDocs(
       panel.style.top = `${r.bottom + 6}px`;
       panel.style.right = `${Math.max(8, window.innerWidth - r.right)}px`;
       const bodyEl = el("div", "app-docs-tasksbody");
-      const head = el("div", "app-docs-taskshead", "My tasks");
+      const head = el("div", "app-docs-taskshead", "Document tasks");
       // a decision made elsewhere (another person, another tab) shows
       // up without closing and reopening the panel (Ben, 2026-08-06)
-      const refreshBtn = el("button", "app-btn app-docs-tasksrefresh", "⟳ Refresh") as HTMLButtonElement;
+      const refreshBtn = el("button", "app-docs-tasksrefresh", "Refresh") as HTMLButtonElement;
       refreshBtn.setAttribute("aria-label", "Refresh tasks");
       refreshBtn.addEventListener("click", () => reload());
       head.appendChild(refreshBtn);
@@ -1236,7 +1244,13 @@ export function mountDocs(
             bodyEl.appendChild(el("div", "app-field-hint", "Nothing needs you."));
             return;
           }
-          const group = (title: string, rows: TaskRow[]) => {
+          // R6 (design review 2026-08-08): due labels are PILLS — glyph
+          // + word via the app's statusChip, never bare red text
+          const group = (
+            title: string,
+            rows: TaskRow[],
+            pill: (tr: TaskRow) => HTMLElement
+          ) => {
             if (rows.length === 0) return;
             bodyEl.appendChild(el("div", "app-docs-tasksgroup", `${title} (${rows.length})`));
             for (const tr of rows) {
@@ -1251,25 +1265,16 @@ export function mountDocs(
               rowEl.addEventListener("keydown", (e) => {
                 if (e.key === "Enter") open();
               });
-              rowEl.append(
-                el("span", "app-docs-taskname", tr.row.name),
-                el(
-                  "span",
-                  `app-field-hint${tr.overdue ? " app-docs-taskoverdue" : ""}`,
-                  `${tr.libName} · ${tr.why}`
-                )
+              // R5 anatomy: pill · name-over-meta · chevron — every row
+              // identical, the whole row opens the overlay, where the
+              // decision zone handles approve/mark-reviewed (no
+              // divergent inline buttons)
+              const text = el("div", "app-docs-tasktext");
+              text.append(
+                el("div", "app-docs-taskname", tr.row.name),
+                el("div", "app-field-hint", tr.why !== "" ? `Due ${tr.why}` : tr.libName)
               );
-              if (tr.canMarkReviewed === true && reviewInternal !== "") {
-                const act = el("button", "app-btn app-docs-taskact", "Mark reviewed…") as HTMLButtonElement;
-                act.addEventListener("click", (e) => {
-                  e.stopPropagation();
-                  openMarkReviewed(tr, () => {
-                    refreshTasksBadge();
-                    reload();
-                  });
-                });
-                rowEl.appendChild(act);
-              }
+              rowEl.append(pill(tr), text, el("span", "app-docs-taskchev", "›"));
               bodyEl.appendChild(rowEl);
             }
           };
@@ -1325,6 +1330,18 @@ export function mountDocs(
                       actorName: currentViewer()?.name ?? "",
                       host: dialogHost,
                       onDone: decided,
+                      // N3: the requester hears the good news — the work
+                      // link lands them on the overlay with Start
+                      // revision live (the seat is instant)
+                      notify:
+                        accessRequestPlan({
+                          kind: "granted",
+                          docName: rt.req.name,
+                          actorName: currentViewer()?.name ?? "",
+                          targets: [{ name: rt.req.who.name, email: rt.req.who.email }],
+                          myEmail,
+                          link: docLinkUrlWork(rt.req.listId, rt.req.itemId),
+                        }) ?? undefined,
                     });
                   });
                 });
@@ -1349,6 +1366,17 @@ export function mountDocs(
                     actorName: currentViewer()?.name ?? "",
                     host: dialogHost,
                     onDone: decided,
+                    // N3: the outcome reaches the requester directly —
+                    // the typed reason rides into the message
+                    notify:
+                      accessRequestPlan({
+                        kind: "declined",
+                        docName: rt.req.name,
+                        actorName: currentViewer()?.name ?? "",
+                        targets: [{ name: rt.req.who.name, email: rt.req.who.email }],
+                        myEmail,
+                        link: docLinkUrlWork(rt.req.listId, rt.req.itemId),
+                      }) ?? undefined,
                   });
                 });
               });
@@ -1358,10 +1386,12 @@ export function mountDocs(
           }
           // most actionable first: sign-off, then review work, then
           // your own held documents, then the review cadence
-          group("Awaiting your approval", t.toApprove);
-          group("Awaiting your review", t.toReview);
-          group("Checked out to you", t.held);
-          group("Review due", t.review);
+          group("Awaiting your approval", t.toApprove, () => tonePill("◐ Approve", "amber"));
+          group("Awaiting your review", t.toReview, () => tonePill("◐ Review", "amber"));
+          group("Checked out to you", t.held, () => tonePill("🔒 Checked out", "neutral"));
+          group("Review due", t.review, (tr) =>
+            tr.overdue ? tonePill("⚑ Overdue", "red") : tonePill("● Due soon", "amber")
+          );
           // your OWN requests, every state — the outcome reaches you
           // here, not only buried in the document overlay
           if (t.outgoing.length > 0) {
@@ -1488,6 +1518,44 @@ export function mountDocs(
               bodyEl.appendChild(rowEl);
             }
           }
+          // R5 footer: the panel's DOCUMENTS as a register scope — one
+          // click from triage to the full list, filter removable as a
+          // chip like any other
+          const uniq = new Map<string, DocRow>();
+          for (const tr of [...t.toApprove, ...t.toReview, ...t.held, ...t.review]) {
+            uniq.set(`${tr.row.listId.toLowerCase()}:${tr.row.id}`, tr.row);
+          }
+          if (uniq.size > 0) {
+            const foot = el(
+              "button",
+              "app-docs-tasksfoot",
+              `Show all ${uniq.size} in register`
+            ) as HTMLButtonElement;
+            foot.addEventListener("click", () => {
+              const map = new Map<string, number[]>();
+              for (const r of uniq.values()) {
+                const k = r.listId.toLowerCase();
+                map.set(k, [...(map.get(k) ?? []), r.id]);
+              }
+              approvedBeforeTaskFilter = onlyApproved;
+              onlyApproved = false; // task documents are mid-workflow by nature
+              // "show ALL my tasks" means all of them: any standing
+              // query, column filter, folder pick or date window would
+              // intersect tasks away (Ben, 2026-08-08)
+              query = "";
+              search.value = "";
+              filters = [];
+              dateFilters = [];
+              modifiedDays = 0;
+              taskFilter = map;
+              taskFilterN = uniq.size;
+              closePanel();
+              paintChips();
+              paintTreeSelection();
+              void load(true);
+            });
+            bodyEl.appendChild(foot);
+          }
         });
       };
       reload();
@@ -1503,6 +1571,13 @@ export function mountDocs(
      */
     let onlyApproved = !(bootView?.nonCurrent ?? false);
     let modifiedDays = bootView?.modifiedDays ?? 0;
+    /** R5 footer filter: the task panel's documents shown AS a register
+     *  scope (listId → item ids, CAML idIn). "Show only Approved" is
+     *  suspended while it holds — task documents are mid-workflow by
+     *  nature — and restored when the chip clears. */
+    let taskFilter: Map<string, number[]> | null = null;
+    let taskFilterN = 0;
+    let approvedBeforeTaskFilter = true;
     // declared HERE, not in the data-flow section: the register's empty
     // state reads it during the initial mount, and a later `let` would be
     // a temporal-dead-zone crash that kills the whole screen
@@ -1716,7 +1791,6 @@ export function mountDocs(
     const groupBy = "";
     let treeNodes: TermNode[] = [];
     const treeButtons = new Map<string, HTMLElement>();
-    const countSpans = new Map<string, HTMLElement>();
     let allBtn: HTMLButtonElement | null = null;
     let collapsed = new Set<string>();
 
@@ -1728,116 +1802,12 @@ export function mountDocs(
       }
     };
 
-    // Loaded-row counts (Ben, 2026-08-01: speed first, live counts can
-    // come later). Every rendered row now comes from the browse feed and
-    // carries its columns as display text, so a term's count = loaded
-    // rows whose group-by column holds its label — including under a
-    // contents search. Favourites carry no field values, so they count
-    // nothing rather than lie. Scoped honestly via the title attribute.
-    /** Totals per node from the index (null until they answer, or when
-     *  they cannot). Counting LOADED rows made the numbers climb as you
-     *  scrolled — a progress report where a total was meant (Ben,
-     *  2026-08-03). */
-    let treeTotals: Map<string, number> | null = null;
-
-    const paintTreeCounts = () => {
-      if (countSpans.size === 0) return;
-      const cols = groupBy === "" ? [...orgCols] : [groupBy];
-      const rows = favMode ? [] : loadedRows();
-      // a site counts what its departments and areas hold, not only what
-      // was pinned at site level (Ben, 2026-08-03)
-      const tally = treeTotals ?? tallySubtreeCounts(rows, cols, treeNodes);
-      const whole = treeTotals !== null;
-      for (const n of treeNodes) {
-        const span = countSpans.get(n.id);
-        if (!span) continue;
-        const count = tally.get(n.id) ?? 0;
-        span.textContent = (whole || rows.length > 0) && count > 0 ? String(count) : "";
-        const where =
-          n.labels.length > 0
-            ? `${n.labels[n.labels.length - 1]} and everything under it`
-            : "this folder";
-        span.title = whole
-          ? `Documents in ${where}`
-          : `Documents loaded so far in ${where}`;
-      }
-    };
-
-    /**
-     * Ask the index for a count per organisation term — one request for
-     * the whole tree, matching the register's current scope, query and
-     * term filters.
-     *
-     * Date bounds are the exception: they are CAML-only (a custom date
-     * column has no dependable managed property), so with one applied
-     * the totals would overstate. Rather than show a number that
-     * disagrees with the list, the tree falls back to counting loaded
-     * rows and says so in the tooltip.
-     */
-    const refreshTreeTotals = (gen: number) => {
-      const libs = viewLibs();
-      if (favMode || treeNodes.length === 0 || libs.length === 0) {
-        treeTotals = null;
-        paintTreeCounts();
-        return;
-      }
-      const words = query.trim() === "" ? undefined : query.trim().split(/\s+/);
-      // One id-and-organisation page per library, then count DOCUMENTS —
-      // not (document, term) pairs. Grouping counts pairs, which made a
-      // parent read 112 where its libraries held 100: a document tagged
-      // in two areas is still one document (Ben, 2026-08-03). Same Where
-      // as the register, so the totals answer the same question the list
-      // does; only the folder's own filter is left out, or picking one
-      // folder would zero every other count.
-      void Promise.all(
-        libs.map((lib) => {
-          const col = [...orgCols].find((c) =>
-            lib.config.columns.some((x) => x.internal === c)
-          );
-          if (col === undefined) return Promise.resolve({ rows: [], next: "", error: "" });
-          const carried = new Set(lib.config.columns.map((c) => c.internal));
-          const viewXml = buildRenderViewXml({
-            modifiedAfterIso: modifiedIso(),
-            nameWords: words,
-            idIn: contentIds.get(lib.listId.toLowerCase()) ?? [],
-            termFilters: [
-              ...filters
-                .filter((f) => f.col !== "")
-                .map((f) => ({ cols: [f.col], labels: [...f.labels] })),
-              ...approvedFilterFor(),
-            ],
-            dateRanges: dateFilters.filter((d) => carried.has(d.col)),
-            fields: statusInternal !== "" && carried.has(statusInternal)
-              ? [col, statusInternal]
-              : [col],
-            rowLimit: COUNT_CAP,
-          });
-          return renderListPage(app.siteUrl, lib.listId, viewXml);
-        })
-      ).then((pages) => {
-        if (dead || gen !== generation) return;
-        // a library with more than the cap would report a floor dressed
-        // as a total, so the tree says "loaded so far" instead
-        const truncated = pages.some((p) => p.next !== "" || p.error !== "");
-        // the register hides drafts and superseded documents unless
-        // asked; a total that counted them would describe a longer list
-        // than the one on screen
-        const rows = applyNonCurrent(pages.flatMap((p) => p.rows));
-        if (truncated || rows.length === 0) {
-          treeTotals = null;
-          matchTotal = null;
-        } else {
-          treeTotals = tallySubtreeCounts(rows, [...orgCols], treeNodes);
-          // with a folder picked, the matching total IS that folder's
-          // count — the query deliberately leaves the folder filter out
-          // so every other folder still counts
-          const picked = filterFor("");
-          matchTotal = picked ? (treeTotals.get(picked.node.id) ?? 0) : rows.length;
-        }
-        paintTreeCounts();
-        paintStatus(knownTotal, "");
-      });
-    };
+    // Folder counts REMOVED (Ben, 2026-08-08, UI design review): the
+    // numbers cost one id-and-org query per library in scope after
+    // EVERY register reload — bandwidth spent exactly when the rows are
+    // loading — and same-named departments merged their counts (the
+    // grouped RLDAS placeholder-TermID limitation). The tree is pure
+    // navigation now; the register itself says what a folder holds.
 
     /** Deepest term whose label path matches the viewer's own site /
      *  department / area (offset 1 tolerates a company-rooted set). */
@@ -1879,7 +1849,6 @@ export function mountDocs(
     const paintTree = () => {
       clear(treeBox);
       treeButtons.clear();
-      countSpans.clear();
       allBtn = null;
       const setId = setFor(groupBy);
       if (setId === "") {
@@ -1888,7 +1857,7 @@ export function mountDocs(
       }
       collapsed = new Set(uiState.collapsed[setId] ?? []);
       treeBox.appendChild(el("div", "app-field-hint", "Loading…"));
-      void fetchTermPaths(app.siteUrl, setId, 4, 60).then(async ({ nodes, error }) => {
+      void cachedTermPaths(app.siteUrl, setId, 4, 60).then(async ({ nodes, error }) => {
         if (dead || setFor(groupBy) !== setId) return;
         clear(treeBox);
         if (error !== "" || nodes.length === 0) {
@@ -1957,16 +1926,12 @@ export function mountDocs(
             );
           }
           row.appendChild(btn);
-          const count = el("span", "app-docs-navcount", "");
-          row.appendChild(count);
-          countSpans.set(n.id, count);
           treeButtons.set(n.id, btn);
           rows.set(n.id, row);
           treeBox.appendChild(row);
         }
         paintCollapse();
         paintTreeSelection();
-        paintTreeCounts();
         // boot: a shared/saved view's org filter first; otherwise land on
         // the viewer's own corner of the organisation (chip makes either
         // one-click removable). Organisation tree only.
@@ -2020,7 +1985,7 @@ export function mountDocs(
     for (const f of bootView?.filters ?? []) {
       const setId = setFor(f.col);
       if (setId === "" || filterFor(f.col) !== null) continue;
-      void fetchTermPaths(app.siteUrl, setId, 4, 60).then(({ nodes }) => {
+      void cachedTermPaths(app.siteUrl, setId, 4, 60).then(({ nodes }) => {
         if (dead) return;
         const match = nodes.find((n) => n.id === f.termId);
         if (match && filterFor(f.col) === null) applyFilter(f.col, match, nodes);
@@ -2102,7 +2067,7 @@ export function mountDocs(
       : current
         ? current.config.title || current.name
         : allSelected
-          ? "All documents"
+          ? "All libraries"
           : selectedIds
               .map((id) => byListId.get(id.toLowerCase()))
               .filter((l): l is DocLibrary => l !== undefined)
@@ -2134,6 +2099,20 @@ export function mountDocs(
     const paintChips = () => {
       paintTitle();
       clear(filterBar);
+      if (taskFilter !== null) {
+        const chip = el("span", "app-docs-orgchip");
+        chip.appendChild(document.createTextNode(`Document tasks · ${taskFilterN}`));
+        const x = el("button", "app-docs-orgchip-x", "×") as HTMLButtonElement;
+        x.title = "Show the whole register again";
+        x.addEventListener("click", () => {
+          taskFilter = null;
+          onlyApproved = approvedBeforeTaskFilter;
+          paintChips();
+          void load(true);
+        });
+        chip.appendChild(x);
+        filterBar.appendChild(chip);
+      }
       if (modifiedDays > 0) {
         const chip = el("span", "app-docs-orgchip");
         chip.appendChild(document.createTextNode(`Modified: last ${modifiedDays} days`));
@@ -2233,7 +2212,7 @@ export function mountDocs(
           g.appendChild(pills);
           pills.appendChild(el("span", "app-field-hint", "Loading…"));
           const setId = setFor(col);
-          void fetchTermPaths(app.siteUrl, setId, 4, 60).then(({ nodes, error }) => {
+          void cachedTermPaths(app.siteUrl, setId, 4, 60).then(({ nodes, error }) => {
             if (dead || !menu || !menu.contains(pills)) return;
             clear(pills);
             if (error !== "" || nodes.length === 0) {
@@ -2397,7 +2376,12 @@ export function mountDocs(
 
     // glyph + word so status reads under any colour-vision (finding 5);
     // both now come from the site palette, falling back to the built-in
-    // vocabulary when a site has not set a glyph of its own
+    // vocabulary when a site has not set a glyph of its own.
+    // R8 (design review 2026-08-08), the quiet/loud rule: APPROVED is
+    // the register's normal state — when every row wears a solid green
+    // pill the one exception drowns. Approved renders as an OUTLINE;
+    // only exception states keep the fill. Tiles share this function,
+    // so the rule holds in both views by construction.
     const statusChip = (value: string): HTMLElement => {
       const col = statusCol;
       const entry = paletteEntryFor(
@@ -2414,7 +2398,12 @@ export function mountDocs(
         glyph !== "" ? `${glyph} ${value}` : withStatusGlyph(value)
       );
       const color = resolvePaletteColor(states, entry?.color ?? "", "");
-      if (color !== "") {
+      const termId = labelToId.get(value.split(";")[0].trim().toLowerCase()) ?? "";
+      const quiet = termId !== "" && stageOfTerm(siteDict, termId) === "approved";
+      if (quiet) {
+        chip.classList.add("app-docs-chip-quiet");
+        if (color !== "") chip.style.borderColor = color;
+      } else if (color !== "") {
         chip.style.background = color;
         chip.style.color = textOn(color);
       }
@@ -2653,6 +2642,15 @@ export function mountDocs(
       });
     };
 
+    /** Does this document await an ACTIVITY from the viewer? Opens the
+     *  details pane unprompted (Ben, 2026-08-08) — a pending decision
+     *  hidden behind a collapsed pane is a prompt nobody hears. Same
+     *  pending definition as the overlay's decision zone. */
+    const needsMyActivity = (row: DocRow, lib: DocLibrary | null | undefined): boolean => {
+      if (isMine(row)) return true; // checked out to me = mid-activity
+      if (lifecycleActionsFor(row, lib).some((a) => a.primary)) return true;
+      return canMarkReviewedRow(row, lib) && reviewDue(row);
+    };
     const onRowOpen = (row: DocRow, openOpts?: { details?: boolean }) => {
       const lib = byListId.get(row.listId) ?? current;
       // the drive is per LIBRARY, and the PDF routes need it — resolve
@@ -2669,7 +2667,7 @@ export function mountDocs(
           libraryName: lib ? lib.config.title || lib.name : "",
           // collapsed is the default (5I) — a task-list open, or a
           // document this user holds, arrives with work to do
-          detailsOpen: openOpts?.details ?? isMine(row),
+          detailsOpen: openOpts?.details ?? needsMyActivity(row, lib),
           share: () => openShareDoc(row),
           askToWork: lib?.libType === "working",
           // details pane (Vault V4): the register's fields, never
@@ -2682,6 +2680,8 @@ export function mountDocs(
           linkColumns: (lib?.config.columns ?? [])
             .filter((c) => c.role === "linkedDocuments")
             .map((c) => c.internal),
+          // R6: date columns render in the one app format, from raw ISO
+          dateColumns: siteDict.columns.filter((c) => isDateColumn(c)).map((c) => c.internal),
           // dictionary order — the same order the add form uses,
           // adjustable under Settings → Documents → Document columns
           columns: lib
@@ -2748,8 +2748,11 @@ export function mountDocs(
                       label: c.label,
                       primary: c.primary,
                     })),
+                    // primary exactly when due (R5): the task-panel row
+                    // lands here and the decision zone must offer the
+                    // job the row promised
                     ...(canMarkReviewedRow(row, lib)
-                      ? [{ key: "markReviewed", label: "Mark reviewed…", primary: false }]
+                      ? [{ key: "markReviewed", label: "Mark reviewed…", primary: reviewDue(row) }]
                       : []),
                     ...(canCancelRevision(row, lib)
                       ? [{ key: "cancelRevision", label: "Cancel revision…", primary: false }]
@@ -2850,7 +2853,7 @@ export function mountDocs(
               emptyExtra,
               statusChip: statusCol ? statusChip : null,
               statusColumn: statusCol?.internal ?? "",
-              ownerColumn: ownerColCfg?.internal ?? "",
+              typeColumn: internalForRole("docType"),
               thumbUrlFor: (row) => tileThumbFor(app.siteUrl, row),
             })
           : mountDocList<DocRow>(listHost, {
@@ -3218,14 +3221,15 @@ export function mountDocs(
         menu!.appendChild(b);
       };
       const lib = byListId.get(row.listId) ?? current;
-      // slim kebab (Vault V4): one-click actions only — properties and
-      // history live in the overlay a row click opens
-      if (whoId !== "") {
-        const isFav = favs.some((f) => f.uniqueId === row.uniqueId);
-        item(isFav ? "★ Remove favourite" : "☆ Add to favourites", () => {
-          void favToggleFor(row)();
-        });
-      }
+      // R10 (design review 2026-08-08): grouped, not flat — Open PDF
+      // first, then (link/share), (work-on-it + favourites), (review),
+      // and the lifecycle transitions LAST behind their own separator.
+      // A divider only lands between non-empty groups.
+      const divider = () => {
+        if (menu!.childElementCount === 0) return;
+        if (menu!.lastElementChild?.classList.contains("app-docs-menusep")) return;
+        menu!.appendChild(el("div", "app-docs-menusep", ""));
+      };
       // readers get the PDF rendering, never the editable source.
       // A LINK, not a button running window.open: `window.open("",
       // "_blank", "noopener")` returns null — that is what noopener
@@ -3246,18 +3250,23 @@ export function mountDocs(
         bestPdf = pdfViewUrlFor(app.siteUrl, d, row);
         openPdf.href = bestPdf;
       });
-      item("Copy PDF link", () => {
+      divider();
+      item("Copy link", () => {
         void navigator.clipboard.writeText(bestPdf);
       });
       item("Share document…", () => openShareDoc(row));
-      // Phase 4B: the commands themselves. Offered only where a document
-      // is meant to be worked on — controlled standards and records keep
-      // their lifecycle for Phase 5, so nothing here can edit one.
+      divider();
+      // work-on-it group — properties, content, check-out, favourites
       if (canEditProps(row, lib)) {
         item("Edit properties…", () => openEditPropertiesRow(row));
       }
       if (canReplaceContent(row, lib)) {
         item("Replace content…", () => openReplaceContentRow(row));
+      }
+      const lcCmds = lifecycleActionsFor(row, lib);
+      const revise = lcCmds.find((c) => c.key === "revise");
+      if (revise !== undefined) {
+        item(`${revise.label}…`, () => runLifecycle(row, revise));
       }
       if (canEditContent(lib, row)) {
         const held = (row.checkoutName ?? "") !== "";
@@ -3270,15 +3279,27 @@ export function mountDocs(
           item(`Checked out by ${row.checkoutName}`, null, "Only they can check it in");
         }
       }
-      // lifecycle commands (Phase 5B) — standards move between stages
-      for (const cmd of lifecycleActionsFor(row, lib)) {
-        item(`${cmd.label}…`, () => runLifecycle(row, cmd));
+      if (whoId !== "") {
+        const isFav = favs.some((f) => f.uniqueId === row.uniqueId);
+        item(isFav ? "★ Remove favourite" : "☆ Add to favourites", () => {
+          void favToggleFor(row)();
+        });
       }
+      divider();
       if (canMarkReviewedRow(row, lib)) {
         item("Mark reviewed…", () => openMarkReviewedRow(row));
       }
+      divider();
+      // lifecycle TRANSITIONS last, behind their own line — a stage
+      // move must never sit shoulder to shoulder with Copy link
+      for (const cmd of lcCmds.filter((c) => c.key !== "revise")) {
+        item(`${cmd.label}…`, () => runLifecycle(row, cmd));
+      }
       if (canCancelRevision(row, lib)) {
         item("Cancel revision…", () => openCancelRevisionRow(row));
+      }
+      if (menu.lastElementChild?.classList.contains("app-docs-menusep")) {
+        menu.lastElementChild.remove();
       }
       const r = anchor.getBoundingClientRect();
       menu.style.top = `${r.bottom + 4}px`;
@@ -3305,10 +3326,6 @@ export function mountDocs(
     let feeds: BrowseFeed[] = [];
     /** Library-total for plain browsing ("50 of 150"); null = unknown. */
     let knownTotal: number | null = null;
-    /** How many documents match the current filters — from the same
-     *  query the folder counts use, so "40 of 100 matching" is a total
-     *  and not a count of what has scrolled by (Ben, 2026-08-03). */
-    let matchTotal: number | null = null;
     /** listId (lowercase) → item ids the index matched inside documents,
      *  resolved once per reset and OR'd into every page's CAML. */
     let contentIds = new Map<string, number[]>();
@@ -3371,11 +3388,7 @@ export function mountDocs(
           : contentsNote === "failed"
             ? " · contents search unavailable"
             : "";
-      // The counted total wins wherever it is known: the library's raw
-      // ItemCount knows nothing of "Show only Approved", so a plain
-      // browse would otherwise read "50 of 100" while the folders —
-      // counted properly — read 76 (Ben, 2026-08-03).
-      const shown = matchTotal ?? total;
+      const shown = total;
       status.textContent =
         (plainBrowse
           ? shown !== null && shown > n
@@ -3439,15 +3452,20 @@ export function mountDocs(
       const browseIds = scopeAll ? allListIds : selectedIds;
       const words = query.trim() === "" ? undefined : query.trim().split(/\s+/);
       const wantContents = words !== undefined && searchContents;
-      // the up-front total for plain browsing (library ItemCounts)
+      // the up-front total for plain browsing (library ItemCounts) —
+      // withheld while "Show only Approved" filters the list: ItemCount
+      // knows nothing of status, and with the folder-count query gone
+      // (2026-08-08) there is no counted total to correct it, so "12 of
+      // 100" would describe a longer list than the one on screen
       if (reset) {
         knownTotal = null;
-        matchTotal = null;
         if (
           words === undefined &&
           modifiedDays === 0 &&
           filters.length === 0 &&
-          dateFilters.length === 0
+          dateFilters.length === 0 &&
+          taskFilter === null &&
+          (!onlyApproved || statusInternal === "")
         ) {
           void Promise.all(browseIds.map((id) => listItemCount(app.siteUrl, id))).then(
             (counts) => {
@@ -3498,7 +3516,16 @@ export function mountDocs(
         // SERVER-side per library; feeds k-way merge client-side and a
         // drained buffer refills mid-page so the merge never skips rows
         if (feeds.length === 0) {
-          feeds = browseIds.map((id) => {
+          // under the task filter, the TASK documents' libraries define
+          // the scope — whatever was ticked in the nav (a task in an
+          // unticked library must still show), and a library holding
+          // none contributes no feed (an empty idIn would mean "no
+          // constraint" and flood the scope back in)
+          const feedIds =
+            taskFilter === null
+              ? browseIds
+              : allListIds.filter((id) => (taskFilter?.get(id.toLowerCase())?.length ?? 0) > 0);
+          feeds = feedIds.map((id) => {
             const lib = byListId.get(id.toLowerCase());
             // ONLY the fields the register renders: SharePoint throttles
             // any query touching >12 lookup-type columns (taxonomy and
@@ -3547,6 +3574,18 @@ export function mountDocs(
               ) {
                 out.add(approversInternal);
               }
+              // the overlay's "Review due" decision (R5) judges the next
+              // review date FROM THE ROW — a feed that omits the column
+              // leaves reviewDue blind and the prompt silent (Ben's
+              // Ship Loader repro, 2026-08-08). A date, not a lookup, so
+              // it costs nothing against the throttle.
+              if (
+                feedLib?.libType === "standard" &&
+                reviewInternal !== "" &&
+                carried.has(reviewInternal)
+              ) {
+                out.add(reviewInternal);
+              }
               return [...out];
             };
             const viewXml = buildRenderViewXml({
@@ -3554,7 +3593,7 @@ export function mountDocs(
               asc: sort.asc,
               modifiedAfterIso: modifiedIso(),
               nameWords: words,
-              idIn: contentIds.get(id.toLowerCase()) ?? [],
+              idIn: taskFilter?.get(id.toLowerCase()) ?? contentIds.get(id.toLowerCase()) ?? [],
               termFilters: [
                 ...filters.map((f) => ({
                   cols: f.col === "" ? [...orgCols] : [f.col],
@@ -3599,8 +3638,6 @@ export function mountDocs(
         paintStatus(knownTotal, feedError);
       }
       list.setLoading(false);
-      paintTreeCounts();
-      if (reset) refreshTreeTotals(gen);
       finish();
     };
     const loadMore = () => load(false);
@@ -3927,13 +3964,50 @@ export function mountDocs(
       document.body.appendChild(menu);
     });
 
+    // a notification's WORK link (N1): the recipient arrived to DO
+    // their step — resolve the named document and open the overlay
+    // with details expanded and the commands live. (A kiosk link never
+    // lands here — "#/doc" renders chrome-free; see docSolo.ts.)
+    const openWorkDoc = async (payload: string): Promise<void> => {
+      const sep = payload.lastIndexOf(":");
+      const listId = payload.slice(0, sep);
+      const itemId = Number(payload.slice(sep + 1));
+      const lib = byListId.get(listId.toLowerCase());
+      if (lib === undefined || !Number.isFinite(itemId) || itemId <= 0) {
+        status.textContent = "The linked document's library is not available to you.";
+        return;
+      }
+      const page = await renderListPage(
+        app.siteUrl,
+        lib.listId,
+        buildRenderViewXml({
+          idIn: [itemId],
+          fields: lib.config.columns.filter((c) => c.available).map((c) => c.internal),
+          rowLimit: 1,
+        })
+      );
+      if (dead) return;
+      const row = page.rows[0];
+      if (row === undefined) {
+        // soft errors are named, not painted as "gone" (the docSolo lesson)
+        status.textContent =
+          page.error !== ""
+            ? `The linked document could not be loaded: ${page.error.slice(0, 160)}`
+            : "The linked document no longer exists (or you cannot see it).";
+        return;
+      }
+      onRowOpen(row, { details: true });
+    };
+
     // the status vocabulary first: "Show only Approved" is on by default,
     // so the very first page should already be filtered rather than
-    // arrive unfiltered and blink
-    void readStatusTerms().finally(() => void load(true));
-
-    // (a shared DOCUMENT link never lands here — the "#/doc" KIOSK
-    // route renders it chrome-free; see docSolo.ts)
+    // arrive unfiltered and blink — and the work link waits for it too,
+    // so the overlay's lifecycle commands see the mapped terms
+    const workDoc = takePendingWorkDoc();
+    void readStatusTerms().finally(() => {
+      void load(true);
+      if (workDoc !== "") void openWorkDoc(workDoc);
+    });
   })();
 
   return () => {

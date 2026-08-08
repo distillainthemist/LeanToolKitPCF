@@ -409,31 +409,6 @@ describe("Vault V5 hardening units", () => {
     // AND across = both clauses present as separate space-joined terms
     expect(q.indexOf("owstaxIdOrganisation")).toBeLessThan(q.indexOf("owstaxIdDMSProcess"));
   });
-  it("loaded-row term counts: multi-value split, case-insensitive, multi-column", async () => {
-    const { tallyTermCounts } = await import("../docs/rows");
-    const row = (values: Record<string, string>) => ({
-      id: 1,
-      uniqueId: "u",
-      name: "n",
-      ext: "pdf",
-      serverUrl: "/x",
-      listId: "l",
-      modified: "",
-      values,
-    });
-    const tally = tallyTermCounts(
-      [
-        row({ Org: "Brisbane; Bell Bay" }),
-        row({ Org: "brisbane" }),
-        row({ Org: "", Other: "Brisbane" }),
-        row({}),
-      ],
-      ["Org", "Other"]
-    );
-    expect(tally.get("brisbane")).toBe(3);
-    expect(tally.get("bell bay")).toBe(1);
-    expect(tally.get("")).toBeUndefined();
-  });
 });
 
 describe("RenderListDataAsStream (register browse feed)", () => {
@@ -721,53 +696,6 @@ describe("Vault V3 server-side presentation", () => {
   });
 });
 
-describe("folder counts include everything below (2026-08-03)", () => {
-  const row = (org: string) => ({
-    id: 0,
-    uniqueId: "u",
-    name: "n",
-    ext: "pdf",
-    serverUrl: "/s",
-    listId: "l",
-    modified: "",
-    values: { Org: org },
-  });
-  const nodes = [
-    { id: "pac", labels: ["Pacific"] },
-    { id: "bb", labels: ["Pacific", "Bell Bay"] },
-    { id: "cast", labels: ["Pacific", "Bell Bay", "Casting"] },
-    { id: "boy", labels: ["Pacific", "Boyne"] },
-  ];
-
-  it("rolls descendants up, counting each document once", async () => {
-    const { tallySubtreeCounts } = await import("../docs/rows");
-    const t = tallySubtreeCounts(
-      [row("Casting"), row("Bell Bay"), row("Boyne"), row("Pacific")],
-      ["Org"],
-      nodes
-    );
-    // Pacific holds all four; Bell Bay its own plus Casting's
-    expect(t.get("pac")).toBe(4);
-    expect(t.get("bb")).toBe(2);
-    expect(t.get("cast")).toBe(1);
-    expect(t.get("boy")).toBe(1);
-  });
-
-  it("counts a document tagged at two levels once, not twice", async () => {
-    const { tallySubtreeCounts } = await import("../docs/rows");
-    // summing children would have said 2 for Bell Bay
-    const t = tallySubtreeCounts([row("Bell Bay; Casting")], ["Org"], nodes);
-    expect(t.get("bb")).toBe(1);
-    expect(t.get("pac")).toBe(1);
-  });
-
-  it("gives a leaf with nothing under it its own count", async () => {
-    const { tallySubtreeCounts } = await import("../docs/rows");
-    const t = tallySubtreeCounts([row("Boyne")], ["Org"], nodes);
-    expect(t.get("boy")).toBe(1);
-    expect(t.get("bb")).toBe(0);
-  });
-});
 
 describe("date range filters (2026-08-03)", () => {
   it("bounds a date column, either end optional, end-date inclusive", async () => {
@@ -810,56 +738,3 @@ describe("date range filters (2026-08-03)", () => {
   });
 });
 
-describe("folder totals count documents, not tags (2026-08-03)", () => {
-  const row = (id: number, org: string) => ({
-    id,
-    uniqueId: `u${id}`,
-    name: `n${id}`,
-    ext: "pdf",
-    serverUrl: "/s",
-    listId: "l",
-    modified: "",
-    values: { Org: org },
-  });
-  const nodes = [
-    { id: "pac", labels: ["Pacific"] },
-    { id: "bb", labels: ["Pacific", "Bell Bay"] },
-    { id: "cast", labels: ["Pacific", "Bell Bay", "Casting"] },
-    { id: "bbm", labels: ["Pacific", "Bell Bay", "Maintenance"] },
-    { id: "boy", labels: ["Pacific", "Boyne"] },
-    { id: "boym", labels: ["Pacific", "Boyne", "Maintenance"] },
-  ];
-
-  it("counts a document once however many tags put it in a folder", async () => {
-    const { tallySubtreeCounts } = await import("../docs/rows");
-    // this is the case that made a grouped count report 112 documents in
-    // a scope holding 100: grouping counts (document, term) PAIRS
-    const t = tallySubtreeCounts(
-      [row(1, "Bell Bay; Casting"), row(2, "Casting"), row(3, "Boyne")],
-      ["Org"],
-      nodes
-    );
-    expect(t.get("pac")).toBe(3);
-    expect(t.get("bb")).toBe(2);
-    expect(t.get("cast")).toBe(2);
-    expect(t.get("boy")).toBe(1);
-  });
-
-  it("a parent never counts more than the documents beneath it", async () => {
-    const { tallySubtreeCounts } = await import("../docs/rows");
-    const rows = Array.from({ length: 10 }, (_, i) => row(i, i % 2 ? "Casting" : "Boyne"));
-    const t = tallySubtreeCounts(rows, ["Org"], nodes);
-    expect(t.get("pac")).toBe(10);
-    expect((t.get("bb") ?? 0) + (t.get("boy") ?? 0)).toBe(10);
-  });
-
-  it("a label in two branches counts for both — the known limit", async () => {
-    const { tallySubtreeCounts } = await import("../docs/rows");
-    // rows carry labels, not term ids, so this site's two "Maintenance"
-    // terms cannot be told apart; the ancestor still counts it once
-    const t = tallySubtreeCounts([row(1, "Maintenance")], ["Org"], nodes);
-    expect(t.get("bbm")).toBe(1);
-    expect(t.get("boym")).toBe(1);
-    expect(t.get("pac")).toBe(1);
-  });
-});

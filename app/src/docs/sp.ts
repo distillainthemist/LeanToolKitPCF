@@ -703,8 +703,61 @@ interface TermWalk {
 // navigation. The settings save invalidates it.
 const termCache = new Map<string, Promise<TermWalk>>();
 
+/** Cross-session walk store (localStorage). Cleared with the session
+ *  cache — the 5F sync invalidates through here, so a synced tree is
+ *  never served stale. */
+const WALK_STORE = "ltk-termwalk";
+
 export function invalidateTermPaths(): void {
   termCache.clear();
+  try {
+    for (const k of Object.keys(localStorage)) {
+      if (k.startsWith(WALK_STORE)) localStorage.removeItem(k);
+    }
+  } catch {
+    /* storage unavailable = nothing was cached there anyway */
+  }
+}
+
+/**
+ * The term walk for SCREEN TREES (browse folders, filter pills): serves
+ * the last session's walk from localStorage INSTANTLY when one exists,
+ * while the live walk refreshes the store in the background for next
+ * time — org structures change rarely, and the tree appearing at once
+ * beats being one rename fresher (Ben, 2026-08-08). The drift report
+ * and the 5F sync must keep calling fetchTermPaths — a STALE tree fed
+ * to the sync executor would recreate terms it cannot see.
+ */
+export function cachedTermPaths(
+  site: string,
+  setId: string,
+  maxDepth = 4,
+  maxRequests = 120
+): Promise<TermWalk> {
+  const key = `${WALK_STORE}|${site}|${setId}|${maxDepth}`;
+  let stored: TermWalk | null = null;
+  try {
+    const raw = localStorage.getItem(key);
+    if (raw !== null) {
+      const p = JSON.parse(raw) as { nodes?: TermNode[]; truncated?: boolean };
+      if (Array.isArray(p.nodes) && p.nodes.length > 0) {
+        stored = { nodes: p.nodes, truncated: p.truncated === true, error: "" };
+      }
+    }
+  } catch {
+    /* unreadable = no cache */
+  }
+  const live = fetchTermPaths(site, setId, maxDepth, maxRequests).then((r) => {
+    if (r.error === "" && r.nodes.length > 0) {
+      try {
+        localStorage.setItem(key, JSON.stringify({ nodes: r.nodes, truncated: r.truncated }));
+      } catch {
+        /* storage full or absent — the session cache still holds it */
+      }
+    }
+    return r;
+  });
+  return stored !== null ? Promise.resolve(stored) : live;
 }
 
 export function fetchTermPaths(

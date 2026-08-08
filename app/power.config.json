@@ -41,6 +41,22 @@
           }
         }
       }
+    },
+    "30b27643-ebc5-45f4-953d-61a274806174": {
+      "id": "/providers/Microsoft.PowerApps/apis/shared_office365",
+      "displayName": "Office 365 Outlook",
+      "dataSources": [
+        "office365"
+      ],
+      "dataSets": {}
+    },
+    "83a5d802-8d01-4867-9c0e-4fb388edf52d": {
+      "id": "/providers/Microsoft.PowerApps/apis/shared_teams",
+      "displayName": "Microsoft Teams",
+      "dataSources": [
+        "teams"
+      ],
+      "dataSets": {}
     }
   },
   "databaseReferences": {

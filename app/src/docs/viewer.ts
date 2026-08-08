@@ -25,6 +25,7 @@ import {
 } from "../../../shared/tokens";
 import {
   DocRow,
+  formatDayMonthYear,
   formatWhen,
   pdfViewUrlFor,
   sourceUrlFor,
@@ -48,6 +49,10 @@ interface ViewerOpts {
   labels?: Record<string, string>;
   /** Columns holding links to other documents (values render as links). */
   linkColumns?: string[];
+  /** Date columns (dictionary-derived): their values render in the
+   *  app's one format ("5 Oct 2025") from the item's RAW ISO value —
+   *  never re-parsed from locale display text, which is ambiguous. */
+  dateColumns?: string[];
   /** Internal names (config order) ticked *available* in the library's
    *  settings — the ONLY properties shown when provided. Absent, every
    *  non-noise field renders (the skip set below). */
@@ -234,9 +239,12 @@ export function openDocViewer(opts: ViewerOpts): () => void {
   panel.classList.add("app-docs-viewer");
   if (opts.solo === true) panel.classList.add("app-docs-viewer-solo");
 
+  // R3 (design review): the filename appears ONCE, in the pane title —
+  // the header carries the context line (library · date). The kiosk
+  // keeps the name up top: it has no details pane to carry it.
   const head = el("div", "app-docs-viewhead");
+  if (opts.solo === true) head.appendChild(el("span", "app-docs-viewname", row.name));
   head.append(
-    el("span", "app-docs-viewname", row.name),
     el(
       "span",
       "app-field-hint",
@@ -246,10 +254,9 @@ export function openDocViewer(opts: ViewerOpts): () => void {
   // collapsed by default (5I): the document speaks first, the details
   // pane is a click away — and a share-link open IS this default
   let detailsOpen = opts.detailsOpen === true;
-  const detailsBtn = el("button", "app-btn app-docs-detailstoggle", "") as HTMLButtonElement;
-  // the kiosk is PURE preview (Ben, 2026-08-07) — no details door at all
-  if (opts.solo !== true) head.appendChild(detailsBtn);
   if (opts.solo !== true) {
+    // R4: ONE close control — ✕ alone; the details toggle moves to the
+    // pane edge below
     const x = el("button", "app-btn app-docs-viewclose", "✕") as HTMLButtonElement;
     x.setAttribute("aria-label", "Close");
     x.addEventListener("click", close);
@@ -263,14 +270,27 @@ export function openDocViewer(opts: ViewerOpts): () => void {
   body.appendChild(stage);
 
   // ---- details pane ----------------------------------------------------
+  // R4: the collapse toggle lives ON the pane edge — a slim strip
+  // between preview and details, never mistakable for a dismiss.
+  // The kiosk is PURE preview (Ben, 2026-08-07): no details door at all.
+  const edge = el("button", "app-docs-edgetoggle") as HTMLButtonElement;
+  if (opts.solo !== true) body.appendChild(edge);
   const aside = el("aside", "app-docs-details");
   body.appendChild(aside);
   const paintDetails = () => {
     aside.style.display = detailsOpen ? "" : "none";
-    detailsBtn.textContent = detailsOpen ? "Hide details" : "Details";
-    detailsBtn.setAttribute("aria-expanded", String(detailsOpen));
+    // too subtle as a bare chevron (Ben, 2026-08-08) — the collapsed
+    // strip carries a vertical "Details" label so the pane's door is
+    // findable, and the open strip still reads as a fold
+    clear(edge);
+    edge.appendChild(el("span", "app-docs-edgeglyph", detailsOpen ? "»" : "«"));
+    if (!detailsOpen) edge.appendChild(el("span", "app-docs-edgelabel", "Details"));
+    const label = detailsOpen ? "Hide details" : "Show details";
+    edge.title = label;
+    edge.setAttribute("aria-label", label);
+    edge.setAttribute("aria-expanded", String(detailsOpen));
   };
-  detailsBtn.addEventListener("click", () => {
+  edge.addEventListener("click", () => {
     detailsOpen = !detailsOpen;
     paintDetails();
   });
@@ -290,105 +310,165 @@ export function openDocViewer(opts: ViewerOpts): () => void {
   const meta = [opts.libraryName, formatWhen(row.modified)].filter((s) => s !== "");
   if (meta.length > 0) aside.appendChild(el("div", "app-docs-detailmeta", meta.join(" · ")));
 
-  // every reader action lands on the PDF rendering — the editable source
-  // is reachable only through the working-document "Work on it" path.
-  // Two actions only (Ben, 2026-07-30): the rendered PDF's own toolbar
-  // already offers print/save/download, so duplicating them here was
-  // noise. A copied link travels to email or Teams equally well.
+  // R1/R2 (design review, 2026-08-08): the pane leads with a DECISION
+  // ZONE when this viewer has a pending decision — the one solid accent
+  // button in the pane lives there (or Open PDF is it, when nothing is
+  // pending). Utilities are a fixed 4-up row; everything else tucks
+  // into ⋯, so the flat button stack is gone but every action keeps a
+  // home (the D4 action-parity rule still holds).
   const pdfUrl = pdfViewUrlFor(site, opts.driveId, row);
+  const ctl = opts.control ?? null;
+  const lc = opts.lifecycle ?? null;
+  const decision = el("div", "app-docs-decision");
   const actions = el("div", "app-docs-detailactions");
-  actions.append(linkBtn("Open PDF ↗", pdfUrl, true));
-  const copy = el("button", "app-btn", "Copy PDF link") as HTMLButtonElement;
+  const held = el("span", "app-docs-heldby");
+
+  /** Which non-primary lifecycle keys the decision card surfaced —
+   *  the overflow menu offers the rest, never a duplicate. */
+  let inCard = new Set<string>();
+
+  const paintActions = () => {
+    clear(decision);
+    clear(actions);
+    inCard = new Set();
+    const s = ctl?.state() ?? null;
+    const canEdit = s !== null && s.canEdit !== false;
+    const heldMine = s?.checkedOut === true && s.mine === true;
+    const lcActs = lc?.actions() ?? [];
+    const primaryAct = lcActs.find((a) => a.primary);
+    const revisionAct = lcActs.find((a) => a.key === "requestRevision");
+    held.textContent =
+      s?.checkedOut === true && !s.mine ? `🔒 Checked out by ${s.by}` : "";
+    held.style.display = held.textContent === "" ? "none" : "";
+
+    const pending = primaryAct !== undefined || heldMine;
+    decision.style.display = pending ? "" : "none";
+    if (pending) {
+      const heading =
+        primaryAct?.key === "approve"
+          ? "Awaiting your approval"
+          : primaryAct?.key === "markReviewed"
+            ? "Review due"
+            : primaryAct !== undefined
+              ? heldMine
+                ? "Revision in progress"
+                : "Needs revision"
+              : "Checked out to you";
+      decision.appendChild(el("div", "app-docs-decision-head", heading));
+      decision.appendChild(linkBtn("Open PDF ↗", pdfUrl, false));
+      // a revision-needed document's real next step is EDITING: the
+      // check-out door belongs IN the card, or action parity breaks —
+      // the pending branch used to swallow it entirely (Ben, 2026-08-08)
+      if (
+        primaryAct !== undefined &&
+        primaryAct.key !== "approve" &&
+        primaryAct.key !== "markReviewed" &&
+        ctl !== null &&
+        canEdit &&
+        s?.checkedOut !== true
+      ) {
+        const outBtn = el("button", "app-btn", "Check out & edit") as HTMLButtonElement;
+        outBtn.addEventListener("click", () => {
+          outBtn.disabled = true;
+          void ctl.checkOut().finally(() => paintActions());
+        });
+        decision.appendChild(outBtn);
+      }
+      // holding the revision, the EDIT door is the activity itself —
+      // it must not hide in the ⋯ while the card asks for a submit
+      if (
+        heldMine &&
+        primaryAct !== undefined &&
+        primaryAct.key !== "approve" &&
+        primaryAct.key !== "markReviewed" &&
+        (ctl?.editUrl ?? "") !== ""
+      ) {
+        decision.appendChild(linkBtn("Edit source ↗", ctl?.editUrl ?? "", false));
+      }
+      if (primaryAct !== undefined) {
+        const go = el(
+          "button",
+          "app-btn app-btn-primary",
+          primaryAct.key === "approve" ? `✓ ${primaryAct.label}` : primaryAct.label
+        ) as HTMLButtonElement;
+        go.addEventListener("click", () => lc?.run(primaryAct.key));
+        decision.appendChild(go);
+        inCard.add(primaryAct.key);
+      }
+      if (heldMine && ctl !== null) {
+        const inBtn = el(
+          "button",
+          `app-btn${primaryAct === undefined ? " app-btn-primary" : ""}`,
+          "Check in…"
+        ) as HTMLButtonElement;
+        inBtn.addEventListener("click", () => ctl.checkIn());
+        decision.appendChild(inBtn);
+      }
+      if (revisionAct !== undefined) {
+        const rev = el("button", "app-btn", revisionAct.label) as HTMLButtonElement;
+        rev.addEventListener("click", () => lc?.run(revisionAct.key));
+        decision.appendChild(rev);
+        inCard.add(revisionAct.key);
+      }
+      if (heldMine && ctl !== null) {
+        // the quiet way out — a text link, not a button competing with
+        // the decision itself. In a lifecycle (a standard mid-revision)
+        // the honest name is the WORKFLOW's ("Cancel revision"), not
+        // the mechanism's ("discard check-out").
+        const drop = el(
+          "button",
+          "app-docs-textlink",
+          lc !== null ? "Cancel revision…" : "Discard check-out"
+        ) as HTMLButtonElement;
+        drop.addEventListener("click", () => ctl.discard());
+        decision.appendChild(drop);
+      }
+    } else {
+      // no decision pending: Open PDF is the pane's one solid primary
+      actions.appendChild(linkBtn("Open PDF ↗", pdfUrl, true));
+      if (ctl !== null && canEdit && s?.checkedOut !== true) {
+        const outBtn = el("button", "app-btn", "Check out") as HTMLButtonElement;
+        outBtn.addEventListener("click", () => {
+          outBtn.disabled = true;
+          void ctl.checkOut().finally(() => {
+            outBtn.disabled = false;
+            paintActions();
+          });
+        });
+        actions.appendChild(outBtn);
+      }
+    }
+    actions.appendChild(held);
+  };
+  paintActions();
+  ctl?.register?.(paintActions);
+  lc?.register?.(paintActions);
+
+  // the 4-up utility row: Copy link · Share · Favourite · ⋯ — fixed,
+  // quiet, and identical whatever the document's state
+  const util = el("div", "app-docs-utilrow");
+  const copy = el("button", "app-btn", "Copy link") as HTMLButtonElement;
   copy.addEventListener("click", () => {
     void navigator.clipboard.writeText(pdfUrl).then(() => {
       copy.textContent = "Copied ✓";
-      setTimeout(() => (copy.textContent = "Copy PDF link"), 1500);
+      setTimeout(() => (copy.textContent = "Copy link"), 1500);
     });
   });
-  actions.append(copy);
+  util.appendChild(copy);
   if (opts.share !== undefined) {
     const shareBtn = el("button", "app-btn", "Share…") as HTMLButtonElement;
     shareBtn.addEventListener("click", () => opts.share?.());
-    actions.append(shareBtn);
-  }
-  // document control sits with the other actions, not in a menu: when a
-  // document is checked out to you, checking it back in is the thing you
-  // came here to do
-  if (opts.control) {
-    const ctl = opts.control;
-    const outBtn = el("button", "app-btn") as HTMLButtonElement;
-    const inBtn = el("button", "app-btn app-btn-primary", "Check in…") as HTMLButtonElement;
-    const dropBtn = el("button", "app-btn", "Discard check-out") as HTMLButtonElement;
-    const propsBtn =
-      ctl.editProps !== undefined
-        ? (el("button", "app-btn", "Edit properties…") as HTMLButtonElement)
-        : null;
-    const replaceBtn =
-      ctl.replace !== undefined
-        ? (el("button", "app-btn", "Replace content…") as HTMLButtonElement)
-        : null;
-    const held = el("span", "app-docs-heldby");
-    const src =
-      (ctl.editUrl ?? "") !== "" ? linkBtn("Edit source ↗", ctl.editUrl ?? "", false) : null;
-    const paint = () => {
-      const s = ctl.state();
-      const canEdit = s.canEdit !== false;
-      outBtn.textContent = "Check out";
-      outBtn.style.display = canEdit && !s.checkedOut ? "" : "none";
-      inBtn.style.display = canEdit && s.checkedOut && s.mine ? "" : "none";
-      dropBtn.style.display = canEdit && s.checkedOut && s.mine ? "" : "none";
-      if (propsBtn !== null) propsBtn.style.display = s.canProps === true ? "" : "none";
-      if (replaceBtn !== null) replaceBtn.style.display = s.canReplace === true ? "" : "none";
-      held.textContent = s.checkedOut && !s.mine ? `🔒 Checked out by ${s.by}` : "";
-      held.style.display = held.textContent === "" ? "none" : "";
-      if (src !== null) src.style.display = canEdit ? "" : "none";
-    };
-    outBtn.addEventListener("click", () => {
-      outBtn.disabled = true;
-      void ctl.checkOut().finally(() => {
-        outBtn.disabled = false;
-        paint();
-      });
-    });
-    inBtn.addEventListener("click", () => ctl.checkIn());
-    dropBtn.addEventListener("click", () => ctl.discard());
-    propsBtn?.addEventListener("click", () => ctl.editProps?.());
-    replaceBtn?.addEventListener("click", () => ctl.replace?.());
-    paint();
-    ctl.register?.(paint);
-    actions.append(outBtn, inBtn, dropBtn, held);
-    if (propsBtn !== null) actions.append(propsBtn);
-    if (replaceBtn !== null) actions.append(replaceBtn);
-    // the SOURCE, not the PDF: where a revision's edits actually happen
-    if (src !== null) actions.append(src);
-  }
-  // lifecycle commands sit with the actions: a standard awaiting your
-  // approval opens with Approve one click away
-  if (opts.lifecycle) {
-    const lc = opts.lifecycle;
-    const box = el("div", "app-docs-lifebtns");
-    const paint = () => {
-      clear(box);
-      for (const a of lc.actions()) {
-        const b = el(
-          "button",
-          `app-btn${a.primary ? " app-btn-primary" : ""}`,
-          a.label
-        ) as HTMLButtonElement;
-        b.addEventListener("click", () => lc.run(a.key));
-        box.appendChild(b);
-      }
-      box.style.display = box.childElementCount > 0 ? "" : "none";
-    };
-    paint();
-    lc.register?.(paint);
-    actions.appendChild(box);
+    util.appendChild(shareBtn);
   }
   if (opts.favorite) {
     const fav = opts.favorite;
     const favBtn = el("button", "app-btn app-docs-favbtn") as HTMLButtonElement;
     const paintFav = () => {
-      favBtn.textContent = fav.isFav() ? "★ Favourited" : "☆ Add to favourites";
+      // compact star (the R1 mock's 4-up row) — the word rides the
+      // accessible name, the glyph the visible one
+      favBtn.textContent = fav.isFav() ? "★" : "☆";
+      favBtn.title = fav.isFav() ? "Favourited — click to remove" : "Add to favourites";
+      favBtn.setAttribute("aria-label", favBtn.title);
       favBtn.setAttribute("aria-pressed", String(fav.isFav()));
     };
     paintFav();
@@ -399,9 +479,68 @@ export function openDocViewer(opts: ViewerOpts): () => void {
         paintFav();
       });
     });
-    actions.append(favBtn);
+    util.appendChild(favBtn);
   }
-  aside.appendChild(actions);
+  const moreBtn = el("button", "app-btn app-docs-utilmore", "⋯") as HTMLButtonElement;
+  moreBtn.setAttribute("aria-label", "More actions");
+  moreBtn.setAttribute("aria-haspopup", "menu");
+  moreBtn.addEventListener("click", () => {
+    const open = document.querySelector(".app-docs-panemenu");
+    if (open !== null) {
+      open.remove();
+      return;
+    }
+    const menu = el("div", "app-docs-menu app-docs-panemenu");
+    const closeMenu = () => {
+      menu.remove();
+      document.removeEventListener("pointerdown", onDoc, true);
+      document.removeEventListener("keydown", onMenuKey, true);
+    };
+    const onDoc = (e: PointerEvent) => {
+      if (!menu.contains(e.target as Node)) closeMenu();
+    };
+    // first Escape closes the menu, the second the overlay
+    const onMenuKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        closeMenu();
+      }
+    };
+    document.addEventListener("pointerdown", onDoc, true);
+    document.addEventListener("keydown", onMenuKey, true);
+    const item = (label: string, run: () => void) => {
+      const b = el("button", "app-docs-menuitem", label) as HTMLButtonElement;
+      b.addEventListener("click", () => {
+        closeMenu();
+        run();
+      });
+      menu.appendChild(b);
+    };
+    const s = ctl?.state() ?? null;
+    if (s?.canProps === true && ctl?.editProps !== undefined) {
+      item("Edit properties…", () => ctl.editProps?.());
+    }
+    if (s?.canReplace === true && ctl?.replace !== undefined) {
+      item("Replace content…", () => ctl.replace?.());
+    }
+    if (ctl !== null && s !== null && s.canEdit !== false && (ctl.editUrl ?? "") !== "") {
+      item("Edit source ↗", () => window.open(ctl.editUrl ?? "", "_blank", "noopener"));
+    }
+    for (const a of (lc?.actions() ?? []).filter((x) => !x.primary && !inCard.has(x.key))) {
+      item(a.label, () => lc?.run(a.key));
+    }
+    if (menu.childElementCount === 0) {
+      menu.appendChild(el("div", "app-field-hint", "No further actions."));
+    }
+    const r = moreBtn.getBoundingClientRect();
+    menu.style.position = "fixed";
+    menu.style.top = `${r.bottom + 4}px`;
+    menu.style.right = `${Math.max(8, window.innerWidth - r.right)}px`;
+    document.body.appendChild(menu);
+  });
+  util.appendChild(moreBtn);
+
+  aside.append(decision, actions, util);
 
   // PROPERTIES + VERSION HISTORY (the old properties dialog, folded in)
   const propsBox = el("div", "app-docs-detailprops");
@@ -427,15 +566,31 @@ export function openDocViewer(opts: ViewerOpts): () => void {
     }
     const labels = opts.labels ?? {};
     const linkCols = new Set(opts.linkColumns ?? []);
+    // R6: one date format app-wide — date columns re-render from the
+    // raw ISO twin; a column whose ISO is absent keeps its display text
+    // untouched (never guess at "5/10/2025")
+    for (const k of opts.dateColumns ?? []) {
+      const isoV = details.iso[k];
+      if (isoV !== undefined && (details.values[k] ?? "").trim() !== "") {
+        details.values[k] = formatDayMonthYear(isoV);
+      }
+    }
     // configured libraries: exactly the ticked columns, in config order —
     // a reader should see the register's fields, not SharePoint's plumbing
-    const shown: [string, string][] = opts.columns
-      ? opts.columns
-          .map((k): [string, string] => [k, details.values[k] ?? ""])
-          .filter(([, v]) => v.trim() !== "")
-      : Object.entries(details.values).filter(
-          ([k, v]) => v.trim() !== "" && !PROP_SKIP.has(k)
-        );
+    // R3: the filename never repeats — the pane title carries it, so a
+    // name column (or any column merely echoing the name) drops out
+    const NAME_COLS = new Set(["FileLeafRef", "LinkFilename", "LinkFilenameNoMenu"]);
+    const isNameEcho = ([k, v]: [string, string]) =>
+      NAME_COLS.has(k) || v.trim() === row.name;
+    const shown: [string, string][] = (
+      opts.columns
+        ? opts.columns
+            .map((k): [string, string] => [k, details.values[k] ?? ""])
+            .filter(([, v]) => v.trim() !== "")
+        : Object.entries(details.values).filter(
+            ([k, v]) => v.trim() !== "" && !PROP_SKIP.has(k)
+          )
+    ).filter((e) => !isNameEcho(e));
     if (shown.length === 0) {
       propsBox.appendChild(
         el(

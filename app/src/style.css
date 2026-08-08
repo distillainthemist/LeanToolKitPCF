@@ -1788,7 +1788,6 @@ input[type="color"].app-color:disabled { opacity: 0.4; cursor: default; }
 .app-docs-librow2:focus-within .app-docs-only { display: inline-flex; }
 .app-docs-favrow { border: none; background: none; font: inherit; cursor: pointer; text-align: left; }
 .app-docs-favrow .app-docs-libname2 { padding-left: 28px; } /* aligns with names past the checkboxes */
-.app-docs-navcount { flex: none; font-size: 11px; color: #6d675c; padding-right: 8px; }
 .app-docs-navorg { margin: 14px 0 4px; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.04em; color: #6b6b6b; }
 .app-docs-navterm { font-size: 12.5px; color: #8a8a8a; padding: 2px 0; cursor: not-allowed; }
 .app-docs-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
@@ -1806,6 +1805,8 @@ input[type="color"].app-color:disabled { opacity: 0.4; cursor: default; }
 .app-docs-namecell { display: inline-flex; gap: 8px; align-items: center; min-width: 0; }
 .app-docs-name { overflow: hidden; text-overflow: ellipsis; }
 .app-docs-chip { padding: 4px 11px; border-radius: 999px; font-size: 12px; background: #eee; display: inline-block; }
+/* R8 quiet state: approved is the norm — outline, so exceptions read */
+.app-docs-chip-quiet { background: transparent; border: 1px solid #c9c4ba; color: #57534a; padding: 3px 10px; }
 .app-docs-kebab {
   border: none; background: none; cursor: pointer; font-size: 16px; padding: 2px 8px;
   min-width: 36px; min-height: 36px; /* dense floor (V5 audit) */
@@ -1839,7 +1840,7 @@ a.app-docs-menuitem { text-decoration: none; color: inherit; box-sizing: border-
 .app-docs-viewer { width: min(1080px, 100vw - 52px); height: auto; max-height: none; }
 .app-docs-viewbody { flex: 1; min-height: 0; display: flex; }
 .app-docs-details {
-  width: 340px;
+  width: 400px;
   flex: none;
   border-left: 1px solid #eee;
   overflow-y: auto;
@@ -1853,6 +1854,19 @@ a.app-docs-menuitem { text-decoration: none; color: inherit; box-sizing: border-
 .app-docs-detailmeta { font-size: 12px; color: #6d675c; }
 .app-docs-detailactions { display: flex; flex-direction: column; gap: 8px; }
 .app-docs-detailactions .app-btn { justify-content: center; }
+/* R1 decision zone: the amber ALERT channel (never selection) — the one
+   place the pane raises its voice, and only when a decision is pending */
+.app-docs-decision { display: flex; flex-direction: column; gap: 8px; background: #fef3e2; border: 1px solid #f2ddb8; border-radius: 10px; padding: 12px; }
+.app-docs-decision .app-btn { justify-content: center; }
+.app-docs-decision-head { font-size: 13px; font-weight: 700; color: #92400e; }
+.app-docs-textlink { border: none; background: none; padding: 6px 4px; min-height: 36px; font-size: 13px; color: #57534a; text-decoration: underline; cursor: pointer; align-self: center; }
+.app-docs-textlink:hover { color: #1a1e24; }
+/* R1 utility row: 4-up, fixed, identical whatever the document's state */
+.app-docs-utilrow { display: flex; gap: 8px; }
+.app-docs-utilrow .app-btn { flex: 1; min-width: 0; justify-content: center; white-space: nowrap; }
+.app-docs-utilrow .app-docs-utilmore { flex: 0 0 44px; }
+.app-docs-utilrow .app-docs-favbtn { flex: 0 0 44px; font-size: 16px; }
+.app-docs-panemenu { width: 220px; }
 .app-docs-detailprops { display: flex; flex-direction: column; gap: 6px; }
 .app-docs-detailprops .app-field-label { margin-top: 8px; }
 /* page-one image preview: fits the stage, never crops the page */
@@ -1928,23 +1942,23 @@ a.app-docs-menuitem { text-decoration: none; color: inherit; box-sizing: border-
    width and left its value a two-character column. Label above, value
    full width below — the same shape the settings fields use, so the
    overlay and settings read alike. */
-.app-docs-propgrid { display: flex; flex-direction: column; gap: 10px; margin-bottom: 14px; }
+/* R3: a two-column label/value grid — key fields above the fold instead
+   of one-per-line all-caps rows pushing everything off-screen */
+.app-docs-propgrid {
+  display: grid; grid-template-columns: minmax(130px, 42%) 1fr;
+  gap: 8px 12px; align-items: baseline; margin-bottom: 14px;
+}
 .app-docs-propkey {
   font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: #6d675c;
-  line-height: 1.3;
+  line-height: 1.4;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
-.app-docs-propval {
-  font-size: 13px;
-  word-break: break-word;
-  margin-top: 1px;
-  padding-bottom: 9px;
-  border-bottom: 1px solid #f2f0ec;
-}
-.app-docs-propgrid > .app-docs-propval:last-child { border-bottom: none; }
+.app-docs-propval { font-size: 13px; word-break: break-word; min-width: 0; }
 /* the preview stage's own spinner: a frame can take a moment, and a
    blank white box does not say "loading" (Ben, 2026-08-03) */
 .app-docs-prevload {
@@ -2106,7 +2120,6 @@ button.app-docs-navterm.app-docs-navterm-on {
 
 /* lifecycle command buttons in the overlay (5B) — a COLUMN like the
    action list they sit in, buttons stretching to the full width */
-.app-docs-lifebtns { display: flex; flex-direction: column; gap: 8px; align-self: stretch; }
 .app-docs-lifebtns .app-btn { width: 100%; justify-content: center; }
 
 /* lifecycle mapping (Phase 5A) */
@@ -2132,19 +2145,34 @@ button.app-docs-navterm.app-docs-navterm-on {
   box-shadow: 0 8px 28px rgba(0, 0, 0, 0.18); padding: 10px 12px;
 }
 .app-docs-taskshead { font-weight: 700; margin-bottom: 6px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.app-docs-tasksrefresh { font-weight: 400; font-size: 12px; padding: 4px 10px; min-height: 32px; }
+.app-docs-tasksrefresh {
+  border: none; background: none; cursor: pointer; min-height: 32px;
+  font-weight: 400; font-size: 13px; padding: 4px 8px; color: var(--app-accent);
+}
 .app-docs-tasksgroup {
   font-size: 11px; font-weight: 600; letter-spacing: 0.04em;
   text-transform: uppercase; color: #57534a; margin: 10px 0 4px;
 }
+/* R5 anatomy: pill · name-over-meta · chevron, one shape for every row */
 .app-docs-taskrow {
-  display: flex; flex-direction: column; gap: 1px; width: 100%;
+  display: flex; align-items: center; gap: 10px; width: 100%;
   border: none; background: none; cursor: pointer; text-align: left;
-  padding: 6px 8px; border-radius: 5px;
+  padding: 8px; border-radius: 5px; min-height: 44px;
 }
 .app-docs-taskrow:hover { background: #f2f1ee; }
-.app-docs-taskname { font-size: 13px; font-weight: 600; }
-.app-docs-taskoverdue { color: #a4262c; }
+.app-docs-taskrow > .ltk-status-chip { flex: none; }
+.app-docs-tasktext { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.app-docs-taskname {
+  font-size: 13px; font-weight: 600;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.app-docs-taskchev { flex: none; color: #a6a094; font-size: 16px; }
+.app-docs-tasksfoot {
+  display: block; width: 100%; text-align: left; border: none;
+  border-top: 1px solid #eceae5; background: none; cursor: pointer;
+  margin-top: 8px; padding: 10px 8px 4px; font-size: 13px;
+  color: var(--app-accent); font-weight: 500;
+}
 .app-docs-taskact { align-self: flex-start; margin-top: 4px; font-size: 12px; padding: 3px 10px; }
 
 /* dictionary row reorder — order = how properties read everywhere */
@@ -2176,6 +2204,12 @@ button.app-docs-navterm.app-docs-navterm-on {
 .app-docs-pplchipx {
   border: none; background: none; cursor: pointer; font-size: 11px;
   color: inherit; padding: 2px; line-height: 1;
+}
+/* N2: the notify panel in a command's done-state */
+.app-docs-notifybox {
+  display: flex; flex-direction: column; gap: 8px;
+  margin-top: 12px; padding-top: 12px;
+  border-top: 1px solid var(--app-line, #e3e3e0);
 }
 .app-docs-pplhits { display: flex; flex-direction: column; }
 .app-docs-pplhit {
@@ -2261,8 +2295,9 @@ button.app-doclist-hsort:hover { color: var(--app-accent, #2563eb); }
 }
 .app-doctile-bandext { font-size: 18px; font-weight: 800; letter-spacing: 0.06em; }
 /* page-one thumbnails need room to read as a page — but only once one
-   has actually painted, so a host that refuses them keeps tidy tiles */
-.app-doctiles-thumbs .app-doctile-band { height: 132px; }
+   has actually painted, so a host that refuses them keeps tidy tiles.
+   R9: capped so the thumbnail never exceeds ~half the card. */
+.app-doctiles-thumbs .app-doctile-band { height: 108px; }
 /* the real page-one image, once it loads, over the file-type placeholder:
    anchored to the top so a document reads from its first line, and faded
    in so a slow thumbnail never flashes the tile */
@@ -2284,8 +2319,9 @@ button.app-doclist-hsort:hover { color: var(--app-accent, #2563eb); }
 }
 .app-doctile-body { padding: 8px 10px 10px; display: flex; flex-direction: column; gap: 6px; }
 .app-doctile-chips { display: flex; gap: 6px; flex-wrap: wrap; }
-.app-doctile-name { display: flex; min-width: 0; font-size: 13px; font-weight: 600; }
-.app-doctile-stem { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.app-doctile-name { display: flex; min-width: 0; font-size: 13px; font-weight: 600; white-space: nowrap; }
+.app-doctile-stem { flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.app-doctile-tail { flex: none; }
 .app-doctile-ext { flex: none; white-space: nowrap; }
 .app-doctile-meta { font-size: 11.5px; color: #6d675c; }
 /* filters popover */
@@ -2355,7 +2391,20 @@ button.app-doclist-hsort:hover { color: var(--app-accent, #2563eb); }
 .app-docscard-good { background: #e7f5e9; color: #1f6b2d; }
 
 /* 5I: the overlay's details toggle + the share dialog */
-.app-docs-detailstoggle { margin-left: auto; font-size: 12.5px; }
+/* R4: the details toggle is a strip ON the pane edge — clearly a fold,
+   never a dismiss. Labelled when collapsed so the door is findable. */
+.app-docs-edgetoggle {
+  flex: none; width: 30px; align-self: stretch;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
+  border: none;
+  background: var(--app-accent, #2563eb); color: #fff; cursor: pointer; padding: 0;
+}
+.app-docs-edgetoggle:hover { filter: brightness(0.9); }
+.app-docs-edgeglyph { font-size: 16px; font-weight: 700; line-height: 1; }
+.app-docs-edgelabel {
+  writing-mode: vertical-rl; font-size: 11px; font-weight: 600;
+  letter-spacing: 0.05em; text-transform: uppercase;
+}
 .app-docs-sharelink { display: flex; gap: 8px; align-items: center; margin: 10px 0; }
 .app-docs-sharelink input { flex: 1; min-width: 0; font-size: 12px; }
 .app-docs-shareqr { display: flex; justify-content: center; padding: 8px 0 4px; }

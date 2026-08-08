@@ -35,18 +35,29 @@ const BOARD_ENTRIES = [
 const isDocs = (p) => p.includes(`${sep}src${sep}docs${sep}`);
 const isGenerated = (p) => p.includes(`${sep}src${sep}generated${sep}`);
 
-// SharePoint services are found from power.config.json (the authority on
-// which data sources belong to which connector), matched to generated
-// service files by their `dataSourceName = '<name>'` line — pac names
-// files after the TABLE (DocumentsService.ts), so a filename heuristic
-// cannot work.
+// Docs-only connector services are found from power.config.json (the
+// authority on which data sources belong to which connector), matched to
+// generated service files by their `dataSourceName = '<name>'` line —
+// pac names files after the TABLE (DocumentsService.ts), so a filename
+// heuristic cannot work. SharePoint since Phase 0; Teams and Outlook
+// (N0) join it — their generated wrappers are thousands of lines and
+// belong to the docs chunk alone. Office 365 Users/Groups stay OUT of
+// the set: the roster machinery in src/store/ uses them at boot.
+const DOCS_ONLY_APIS = [
+  "shared_sharepointonline",
+  "shared_teams",
+  "shared_office365", // the Outlook connector's api id
+];
 function spServiceFiles() {
   const cfgPath = resolve(APP, "power.config.json");
   if (!existsSync(cfgPath)) return new Set();
   const cfg = JSON.parse(readFileSync(cfgPath, "utf8"));
   const spSources = new Set();
   for (const ref of Object.values(cfg.connectionReferences ?? {})) {
-    if (typeof ref.id === "string" && ref.id.endsWith("shared_sharepointonline")) {
+    if (
+      typeof ref.id === "string" &&
+      DOCS_ONLY_APIS.some((api) => ref.id.endsWith(`/${api}`))
+    ) {
       for (const ds of ref.dataSources ?? []) spSources.add(ds.toLowerCase());
     }
   }
