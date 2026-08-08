@@ -10,13 +10,13 @@
 // would lie about the corpus.
 
 import { el, clear } from "../../../shared/ui/dom";
-import { fileTypeChip, statusChip as tonePill, withStatusGlyph } from "../../../shared/ui/format";
+import { statusChip as tonePill } from "../../../shared/ui/format";
 import { draggableRow } from "../../../shared/ui/dragList";
 import { showLoading } from "../loading";
 import { detectHost } from "../runtime";
-import { paletteMap, resolvePaletteColor } from "../../../shared/palette";
-import { textOn } from "../../../shared/tokens";
+import { paletteMap } from "../../../shared/palette";
 import { appPalettes } from "../store/config";
+import { RegisterCellCtx, buildRegisterColumns, makeStatusChip } from "./registerCells";
 import {
   driveIdFor,
   listItemCount,
@@ -35,7 +35,6 @@ import {
   isNonCurrentStatus,
   pdfViewUrlFor,
   pickBrowseHead,
-  splitNameForEllipsis,
   taxonomySearchProperty,
 } from "./rows";
 import { DocLibrary, docsConfig } from "./docsStore";
@@ -46,7 +45,6 @@ import {
   emptySiteDictionary,
   isDateColumn,
   lifecycleCommandsFor,
-  paletteEntryFor,
   parseBasePermissions,
   siteKey,
   hasOutsideApprovers,
@@ -2430,91 +2428,21 @@ export function mountDocs(
       approvedLabels = labels.filter((l) => !isNonCurrentStatus(l));
     };
 
-    // glyph + word so status reads under any colour-vision (finding 5);
-    // both now come from the site palette, falling back to the built-in
-    // vocabulary when a site has not set a glyph of its own.
-    // R8 (design review 2026-08-08), the quiet/loud rule: APPROVED is
-    // the register's normal state — when every row wears a solid green
-    // pill the one exception drowns. Approved renders as an OUTLINE;
-    // only exception states keep the fill. Tiles share this function,
-    // so the rule holds in both views by construction.
-    const statusChip = (value: string): HTMLElement => {
-      const col = statusCol;
-      const entry = paletteEntryFor(
-        siteDict,
-        col?.termSetId ?? "",
-        col?.internal ?? "",
-        value,
-        labelToId
-      );
-      const glyph = entry?.glyph ?? "";
-      const chip = el(
-        "span",
-        "app-docs-chip",
-        glyph !== "" ? `${glyph} ${value}` : withStatusGlyph(value)
-      );
-      const color = resolvePaletteColor(states, entry?.color ?? "", "");
-      const termId = labelToId.get(value.split(";")[0].trim().toLowerCase()) ?? "";
-      const quiet = termId !== "" && stageOfTerm(siteDict, termId) === "approved";
-      if (quiet) {
-        chip.classList.add("app-docs-chip-quiet");
-        if (color !== "") chip.style.borderColor = color;
-      } else if (color !== "") {
-        chip.style.background = color;
-        chip.style.color = textOn(color);
-      }
-      return chip;
+    // The row anatomy (status chip, owner avatar, name cell, column
+    // set) lives in registerCells.ts since B1 of the doc-cards plan —
+    // the board's documents card renders THE SAME cells, so the look
+    // cannot drift between the screen and a card. labelToId is captured
+    // by reference: the status-vocabulary read fills it later and every
+    // chip painted after that resolves ids.
+    const cellCtx: RegisterCellCtx = {
+      dict: siteDict,
+      states,
+      labelToId,
+      statusCol,
+      myEmail,
     };
+    const statusChip = makeStatusChip(cellCtx);
 
-    const ownerColCfg = ownerInternal !== "" ? (dictBy.get(ownerInternal) ?? null) : null;
-    /** Initials avatar + the full owner text (Vault V3 row anatomy). */
-    const ownerCell = (v: string): HTMLElement => {
-      const first = v.split(";")[0].trim();
-      const initials = first
-        .split(/\s+/)
-        .slice(0, 2)
-        .map((w) => w[0]?.toUpperCase() ?? "")
-        .join("");
-      const cell = el("span", "app-docs-ownercell");
-      cell.title = v;
-      cell.append(
-        el("span", "app-docs-avatar", initials === "" ? "•" : initials),
-        el("span", "app-docs-ownername", v)
-      );
-      return cell;
-    };
-
-    const nameCol: ListColumn<DocRow> = {
-      key: "name",
-      label: "Document",
-      width: "minmax(190px, 3fr)",
-      sortKey: "name",
-      render: (row) => {
-        const cell = el("span", "app-docs-namecell");
-        // extension dropped from the display (Ben, 2026-08-02) — the
-        // file-type chip carries it; the full filename stays in title
-        const { stem } = splitNameForEllipsis(row.name);
-        const nm = el("span", "app-docs-name");
-        nm.title = row.name;
-        nm.append(el("span", "app-docs-namestem", stem));
-        cell.append(fileTypeChip(row.ext), nm);
-        // checked out is a state worth seeing without opening anything,
-        // and MINE is the only actionable case — so it reads differently
-        if ((row.checkoutName ?? "") !== "") {
-          const mine = isMine(row);
-          const lock = el(
-            "span",
-            `app-docs-lock${mine ? " app-docs-lock-mine" : ""}`,
-            mine ? "✎ you" : `🔒 ${row.checkoutName}`
-          );
-          lock.title = mine
-            ? "You have this checked out"
-            : `Checked out by ${row.checkoutName}`;
-          cell.append(lock);
-        }
-        return cell;
-      },
-    };
     const kebabCol: ListColumn<DocRow> = {
       key: "kebab",
       label: "",
@@ -2529,72 +2457,31 @@ export function mountDocs(
         return b;
       },
     };
-    const modifiedCol: ListColumn<DocRow> = {
-      key: "modified",
-      label: "Modified",
-      width: "124px",
-      sortKey: "modified",
-      render: (row) => formatWhen(row.modified),
-    };
 
     // the view's own column set beats the library default (Phase 3a —
     // carried by saved views and shared links; [] = default)
     const chosenColumns = bootView?.columns ?? [];
-    /** Column set for the current width bucket (Vault V3: the status
-     *  column drops out first as the pane narrows, then owner and the
-     *  other configured columns — name and Modified always survive). */
-    const buildColumns = (): ListColumn<DocRow>[] => {
-      const columns: ListColumn<DocRow>[] = [nameCol];
-      // which columns to show is a VIEW question (the chooser, or what
-      // the libraries in view open with); what each one means is the
-      // dictionary's answer, so this holds for any number of libraries
-      // the chooser and view templates decide WHICH columns show; the
-      // dictionary decides their ORDER, so columns sit in the same
-      // relative sequence whatever is hidden (Ben, 2026-08-04).
-      // Modified is unknown to the dictionary, so it lands last.
-      const wanted = sortByDictionary(
-        chosenColumns.length > 0
-          ? chosenColumns.filter((i) => i === "Modified" || dictBy.get(i)?.available === true)
-          : defaultInternals(),
-        [...dictBy.keys()]
-      );
-      // more than one library in view: say which one each row came from
-      if (viewLibs().length > 1 && bucket !== "narrow") {
-        columns.push({
-          key: "library",
-          label: "Library",
-          width: "minmax(110px, 1fr)",
-          render: (row) => {
-            const lib = byListId.get(row.listId);
-            return lib ? lib.config.title || lib.name : "";
-          },
-        });
-      }
-      for (const internal of wanted) {
-        if (internal === "Modified") {
-          columns.push(modifiedCol);
-          continue;
-        }
-        const role = roleOf(internal);
-        if (bucket !== "full" && role === "status") continue;
-        if (bucket === "narrow") continue;
-        columns.push({
-          key: internal,
-          label: labelOf(internal),
-          render: (row) => {
-            const v = row.values[internal] ?? "";
-            if (v === "") return "";
-            if (role === "status") return statusChip(v);
-            if (role === "owner") return ownerCell(v);
-            // RLDAS date fields arrive as ISO — humanize them
-            return /^\d{4}-\d{2}-\d{2}T/.test(v) ? formatWhen(v) : v;
-          },
-        });
-      }
-      if (!wanted.includes("Modified")) columns.push(modifiedCol);
-      columns.push(kebabCol);
-      return columns;
-    };
+    /** Column set for the current width bucket (Vault V3): which
+     *  columns is the VIEW's question (the chooser, or what the
+     *  libraries in view open with); order, meaning and narrowing are
+     *  registerCells' answer. */
+    const buildColumns = (): ListColumn<DocRow>[] =>
+      buildRegisterColumns(cellCtx, {
+        wanted:
+          chosenColumns.length > 0
+            ? chosenColumns.filter((i) => i === "Modified" || dictBy.get(i)?.available === true)
+            : defaultInternals(),
+        bucket,
+        // more than one library in view: say which one each row came from
+        libraryLabel:
+          viewLibs().length > 1
+            ? (row) => {
+                const lib = byListId.get(row.listId);
+                return lib ? lib.config.title || lib.name : "";
+              }
+            : undefined,
+        trailing: [kebabCol],
+      });
 
     /** Favourite wiring shared by the overlay and the row kebab. */
     const favToggleFor = (row: DocRow) => async (): Promise<boolean> => {
