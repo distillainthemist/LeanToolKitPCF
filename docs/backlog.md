@@ -7,15 +7,15 @@ stay the design detail; this is the queue.
 
 ## Near-term (ordered — Ben, 2026-08-07)
 
-1. **Document-control notifications (NEXT).** The option to send a
-   notification for a document-control task — a Teams message or an
-   email via the Microsoft Teams / Office 365 Outlook connector — with
-   a direct link to the document. New connector = new connection
-   references (the Phase 1 ALM note applies: connections are created
-   per environment and consented per user). Transport is UNMEASURED:
-   both connectors ride the same executeAsync door as SharePoint, so a
-   probe (N0) runs before feature code, per standing practice.
-2. **Full UI design review** (Ben) + resulting tweaks.
+1. ~~**Document-control notifications.**~~ **BUILT 2026-08-08
+   (v0.37.0)** — N0 probe → work link (`ltkmode=work`) → the notify
+   panel on every lifecycle done-state → 5G access-request moments.
+   Teams chat preferred, Outlook alternative, sent at-action by the
+   actor; design of record in `leanboard-notifications-plan.md`.
+   At-action only — reminder push stays a cookbook add-on.
+2. ~~**Full UI design review** (Ben) + resulting tweaks.~~ **DONE
+   2026-08-08 (v0.37.0)** — the D6 R1–R10 slate from
+   `documents-integration-plan.md` plus field-reported fixes.
 3. ~~**Document Control Health report.**~~ **BUILT 2026-08-08** —
    register kebab, gated on docAdmin (controllers + app admins).
    Checks are grounded in MAPPED ROLES, because the app can only judge
@@ -65,11 +65,23 @@ stay the design detail; this is the queue.
    favourite rows carry no field values, so a folder click would look
    like a filter and do nothing — and the empty state names the ⋮ menu
    item that fills it. The libraries below are the way back out.
-6. **Phase 6 deployment cookbook** + stale-docs cleanup
-   (`master-leanboard.md` still lists phases 3–5 as pending). The
-   optional add-on flows an org can bolt on without app changes:
-   reminder push, content-approval hardening, watermarked renditions —
-   assembled from the phase-plan sections and `deploy-to-new-org.md`.
+6. ~~**Phase 6 deployment cookbook** + stale-docs cleanup.~~ **DONE
+   2026-08-08** — `deployment-cookbook.md`: the contract (columns only,
+   five rules — never write status, never hold a check-out, never touch
+   staging, honest identity, notify-don't-duplicate) plus four recipes:
+   review-due reminder push (with the work-link shape and retention/
+   escalation variants), content-approval hardening (Approve Items cost
+   stated; unmeasured against the write bracket — trial on a test
+   library), stored watermarked renditions (into the per-library
+   rendition folder — the app's read path stays the live PDF), and the
+   native-upload relay (declined for Pechey, documented as the road).
+   Linked from `deploy-to-new-org.md`. Stale docs swept:
+   `master-leanboard.md`'s phase table closed (3–5 shipped as the code
+   app), the standard-documents plan's Phase 6 section closed, and this
+   queue's items 1–2 struck.
+
+**The near-term queue is empty** — everything else lives under Future
+below.
 
 ## Future (formally logged, no date)
 

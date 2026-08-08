@@ -896,6 +896,15 @@ Chatbot link-out, QR codes, corpus-quality reports — plus a short
 bolt on (reminder push, content-approval hardening), reading the same columns,
 with LeanBoard none the wiser.
 
+> **Progress (2026-08-08) — Phase 6 CLOSED.** QR codes shipped with the
+> kiosk deep links (5I); the corpus-quality report shipped as **Document
+> Control Health** (register kebab, v0.38.0); the cookbook is
+> [deployment-cookbook.md](deployment-cookbook.md) — reminder push,
+> content-approval hardening, stored watermarked renditions, and the
+> native-upload relay, each with the read-only contract stated. The
+> chatbot link-out stays parked until Pechey chooses a chatbot
+> ([backlog.md](backlog.md)).
+
 ---
 
 ## Risks

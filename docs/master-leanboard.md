@@ -570,9 +570,12 @@ Filter('LTK Actions',
 
 | Phase | Scope | Status |
 | --- | --- | --- |
-| 0 | Spikes: Safari SVG-in-Image (**done — resolved by BoardGrid, tiles stay SVG**); 22-control editor screen load (in-studio) | **half done** |
+| 0 | Spikes: Safari SVG-in-Image (**done — resolved by BoardGrid, tiles stay SVG**); 22-control editor screen load (in-studio) | **done — the card studio mounts editors on demand** |
 | 1 | Tables + manifest schema + Power Fx recipes (this page) | **done — this page** |
 | 2 | PCF: CardSettings board mode + catalogJSON; crew attendees; tile defaults | **done — v0.4.0** |
-| 3 | Board app: board list → grid screen → editor screen → meeting flow | pending |
-| 4 | Project boards + templates | pending |
-| 5 | Pilot (monthly ops review) + hardening | pending |
+| 3 | Board app: board list → grid screen → editor screen → meeting flow | **done — shipped as the code app** ([code-app-build.md](code-app-build.md)); the PCF wrappers were retired ([leanboard-pcf-retirement-plan.md](leanboard-pcf-retirement-plan.md)) |
+| 4 | Project boards + templates | **done** — board kinds, create-from-template, the card studio's archive/copy flows |
+| 5 | Pilot (monthly ops review) + hardening | **done — in production at Pechey** (v0.2x–v0.3x hardening: live tiles, card series, design passes; the Standard Documents area grew alongside — [leanboard-standard-documents-plan.md](leanboard-standard-documents-plan.md)) |
+
+This table closed 2026-08-08; ongoing work is queued in
+[backlog.md](backlog.md), not here.
