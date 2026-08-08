@@ -1217,7 +1217,8 @@ export function mountDocs(
         paintTasksBadge(taskCount(t));
       });
     };
-    refreshTasksBadge();
+    // (the first count is fired from the mount tail, once the status
+    // vocabulary has arrived — see the note there)
 
     actionNeeded.addEventListener("click", () => {
       const scrim = el("div", "app-docs-tasksscrim");
@@ -4176,6 +4177,14 @@ export function mountDocs(
     // so the overlay's lifecycle commands see the mapped terms
     const workDoc = takePendingWorkDoc();
     void readStatusTerms().finally(() => {
+      // …and the task count waits for it too. The queues ask their
+      // questions IN that vocabulary — which labels mean approved, in
+      // review, awaiting approval — so counting before it lands asks a
+      // different question and answers a different number: the
+      // review-due sweep runs unscoped and drags in drafts, superseded
+      // and obsolete standards (Ben, 2026-08-08: 13 at launch, 9 on
+      // opening the panel). One vocabulary, one number.
+      refreshTasksBadge();
       void load(true);
       if (workDoc !== "") void openWorkDoc(workDoc);
     });
