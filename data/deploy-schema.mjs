@@ -91,6 +91,15 @@ function attributeMetadata(logical, def) {
       DateTimeBehavior: { Value: "TimeZoneIndependent" },
     };
   }
+  if (def.kind === "file") {
+    // U0 (2026-08-08): file columns carry bytes via the SDK's
+    // uploadFileToRecord door, not as a record attribute
+    return {
+      ...base,
+      "@odata.type": "Microsoft.Dynamics.CRM.FileAttributeMetadata",
+      MaxSizeInKB: def.maxKB,
+    };
+  }
   throw new Error(`unknown column kind for ${logical}`);
 }
 
@@ -245,6 +254,57 @@ async function ensureLookup(rel) {
   console.log(`lookup ${rel.schemaName} created`);
 }
 
+/**
+ * Grant the LeanBoard User role this table's privileges at organisation
+ * level — in the SAME run that creates the table, so the 2026-08-05
+ * stale-role trap (new table, no privileges, silent empty reads) cannot
+ * recur for tables that declare `role`. Tables without the flag are
+ * untouched: their grants stay exactly as hand-authored.
+ */
+async function ensureRolePrivileges(t) {
+  if (!t.role) return;
+  const bu = await call(
+    "GET",
+    "businessunits?$select=businessunitid&$filter=_parentbusinessunitid_value eq null"
+  );
+  const buId = bu.value[0].businessunitid;
+  const roles = await call(
+    "GET",
+    `roles?$select=roleid&$filter=name eq 'LeanBoard User' and _businessunitid_value eq ${buId}`
+  );
+  if (!roles.value?.length) {
+    throw new Error("role 'LeanBoard User' not found in the root business unit");
+  }
+  const ops = ["Create", "Read", "Write", "Append", "AppendTo"];
+  if (t.role.delete === true) ops.push("Delete");
+  const privileges = [];
+  for (const op of ops) {
+    const name = `prv${op}${t.logical}`;
+    const p = await call("GET", `privileges?$select=privilegeid&$filter=name eq '${name}'`);
+    if (!p.value?.length) throw new Error(`privilege ${name} not found`);
+    privileges.push({
+      Depth: "Global",
+      PrivilegeId: p.value[0].privilegeid,
+      BusinessUnitId: buId,
+      PrivilegeName: name,
+    });
+  }
+  try {
+    await call(`POST`, `roles(${roles.value[0].roleid})/Microsoft.Dynamics.CRM.AddPrivilegesRole`, {
+      Privileges: privileges,
+    });
+    console.log(`  role privileges granted on ${t.logical} (${ops.join("/")}, org level)`);
+  } catch (e) {
+    // idempotence: an already-granted privilege refuses — that IS the
+    // desired end state
+    if (/already exist|duplicate/i.test(String(e.message))) {
+      console.log(`  role privileges on ${t.logical}: already present`);
+    } else {
+      throw e;
+    }
+  }
+}
+
 const publisherId = await ensurePublisher();
 await ensureSolution(publisherId);
 for (const t of TABLES) {
@@ -253,6 +313,7 @@ for (const t of TABLES) {
     await ensureColumn(t, logical, def);
   }
   await ensureKey(t);
+  await ensureRolePrivileges(t);
 }
 for (const rel of LOOKUPS) {
   await ensureLookup(rel);

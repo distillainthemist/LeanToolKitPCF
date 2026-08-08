@@ -101,6 +101,10 @@
         "ltkdoclibraries": {
           "entitySetName": "ben_ltkdoclibraries",
           "logicalName": "ben_ltkdoclibrary"
+        },
+        "leanboarduploads": {
+          "entitySetName": "ben_ltkuploads",
+          "logicalName": "ben_ltkupload"
         }
       },
       "environmentVariableName": ""

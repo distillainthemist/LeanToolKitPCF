@@ -5,6 +5,13 @@
  */
 
 export const dataSourcesInfo = {
+  "ben_ltkuploads": {
+    "tableId": "",
+    "version": "",
+    "primaryKey": "ben_ltkuploadid",
+    "dataSourceType": "Dataverse",
+    "apis": {}
+  },
   "ben_ltkactions": {
     "tableId": "",
     "version": "",

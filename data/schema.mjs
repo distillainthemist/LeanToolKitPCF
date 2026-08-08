@@ -4,9 +4,18 @@
 // "ben", all organization-owned, all created inside the LeanToolKitData
 // solution so environments receive them by (managed) solution import.
 //
-// Column kinds: text {max}, memo {max}, bool, dateonly, datetime.
-// key: alternate-key column list. lookups are declared separately (they
-// become 1:N relationships).
+// Column kinds: text {max}, memo {max}, bool, dateonly, datetime,
+// file {maxKB}. key: alternate-key column list. lookups are declared
+// separately (they become 1:N relationships).
+//
+// role: { delete: true|false } — the deployer also grants the LeanBoard
+// User security role organisation-level Create/Read/Write/Append/
+// AppendTo (+ Delete when asked) on that table, in whatever org it runs
+// against. Declared HERE so a new table can never ship without its role
+// privileges again (the 2026-08-05 stale-role trap: a table added after
+// the role was authored ships with NO privileges, and the symptom is a
+// silent empty read). Older tables keep their hand-authored grants —
+// only tables that declare `role` are touched.
 
 export const PUBLISHER = {
   uniquename: "benobrien",
@@ -232,6 +241,26 @@ export const TABLES = [
       ben_configjson: { ...memo(200000), display: "Library configuration (JSON)" },
     },
     key: ["ben_listid"],
+  },
+  {
+    // Native-upload relay staging (doc-cards plan U0, 2026-08-08): the
+    // app writes the picked file into ben_file; a deployment flow (the
+    // cookbook's relay recipe) carries it on to SharePoint's staging
+    // library and clears the row. Rows are TRANSIENT — anything old
+    // here is a stalled relay, which is exactly what ben_status is for.
+    schema: "ben_LTKUpload",
+    logical: "ben_ltkupload",
+    display: "LeanBoard Upload",
+    plural: "LeanBoard Uploads",
+    primaryNameMax: 300,
+    columns: {
+      ben_file: { kind: "file", maxKB: 32768, display: "File" },
+      ben_targetlibrary: { ...text(200), display: "Target library" },
+      ben_status: { ...text(20), display: "Status" },
+    },
+    // uploaders create rows and the probe (and users abandoning an
+    // upload) delete their own — Delete is part of the contract
+    role: { delete: true },
   },
 ];
 

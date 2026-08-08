@@ -1512,4 +1512,44 @@ export async function renderDocsSettings(body: HTMLElement, ctx: Ctx): Promise<v
       writeBtn.textContent = "Test write access";
     })();
   });
+
+  // ---- U0: the Dataverse file-column relay probe (doc-cards plan C) --
+  // A different door than the carriages above: the SDK's own
+  // uploadFileToRecord on ben_ltkupload.ben_file. Needs no site or
+  // library — Dataverse only — so it runs even where SharePoint is
+  // not configured.
+  body.appendChild(
+    el(
+      "div",
+      "app-field-hint",
+      "Dataverse relay (U0): round-trips 64KB and 4MB through the LeanBoard Upload file column — the native-upload road's transport."
+    )
+  );
+  const upBtn = el("button", "app-btn", "Test Dataverse upload") as HTMLButtonElement;
+  const upRow = el("div", "app-docs-siterow");
+  upRow.append(upBtn);
+  body.appendChild(upRow);
+  const upBox = el("div", "");
+  body.appendChild(upBox);
+  upBtn.addEventListener("click", () => {
+    void (async () => {
+      upBtn.disabled = true;
+      upBtn.textContent = "Testing…";
+      clear(upBox);
+      const list = el("div", "app-dept-list");
+      upBox.appendChild(list);
+      const { runUploadProbe } = await import("./writeProbe");
+      await runUploadProbe((s) => {
+        const row = el("div", `app-docs-health app-docs-health-${s.ok ? "info" : "warn"}`);
+        row.append(
+          el("span", "app-docs-healthmark", s.ok ? "✓" : "⚠"),
+          el("span", "app-docs-healthtitle", s.name),
+          el("span", "app-field-hint", s.detail)
+        );
+        list.appendChild(row);
+      });
+      upBtn.disabled = false;
+      upBtn.textContent = "Test Dataverse upload";
+    })();
+  });
 }

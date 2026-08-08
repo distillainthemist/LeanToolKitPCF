@@ -455,3 +455,117 @@ export async function runWriteProbe(
     }
   }
 }
+
+// ---- U0: the Dataverse file-column relay (doc-cards plan part C) -------
+//
+// The connector carriages cannot carry bytes (measured four ways, re-
+// checked per SDK bump above). This probe measures the OTHER door: the
+// SDK's own uploadFileToRecord/downloadFileFromRecord on a Dataverse
+// FILE column (ben_ltkupload.ben_file, schema 2026-08-08). If bytes
+// round-trip intact here, the native-upload relay road is open: app →
+// Dataverse file column → deployment flow → SharePoint staging.
+
+/** Deterministic pattern including high bytes and NULs — the same
+ *  re-encode/truncation traps the SharePoint carriages fell into. */
+function patternBytes(size: number): Uint8Array<ArrayBuffer> {
+  // explicit ArrayBuffer so the result satisfies BlobPart (a bare
+  // `new Uint8Array(n)` types over ArrayBufferLike since TS 5.7)
+  const b = new Uint8Array(new ArrayBuffer(size));
+  for (let i = 0; i < size; i++) b[i] = (i * 31) & 0xff;
+  return b;
+}
+
+/** First divergence between two byte arrays, -1 when identical. */
+function firstDiff(a: Uint8Array, b: Uint8Array): number {
+  const n = Math.min(a.length, b.length);
+  for (let i = 0; i < n; i++) if (a[i] !== b[i]) return i;
+  return a.length === b.length ? -1 : n;
+}
+
+/**
+ * Runs the Dataverse upload probe: create a row, round-trip 64KB and
+ * then 4MB through the file column, delete everything. Reports each
+ * step as it lands; the row is deleted even when a step fails.
+ */
+export async function runUploadProbe(onStep: (step: ProbeStep) => void): Promise<void> {
+  const step = (name: string, ok: boolean, detail: string) => onStep({ name, ok, detail });
+  const { Ben_ltkuploadsService } = await import("../generated/services/Ben_ltkuploadsService");
+  const { getClient } = await import("@microsoft/power-apps/data");
+  const { dataSourcesInfo } = await import("../../.power/schemas/appschemas/dataSourcesInfo");
+  const client = getClient(dataSourcesInfo);
+  const TABLE = "ben_ltkuploads";
+  let id = "";
+  try {
+    const created = await Ben_ltkuploadsService.create({
+      ben_name: "LeanBoard U0 probe — safe to delete",
+      ben_status: "probe",
+    } as Parameters<typeof Ben_ltkuploadsService.create>[0]);
+    id =
+      created.success !== false
+        ? String((created.data as { ben_ltkuploadid?: unknown })?.ben_ltkuploadid ?? "")
+        : "";
+    step(
+      "Create upload row",
+      id !== "",
+      id !== "" ? "row created" : (created.error?.message ?? "refused").slice(0, 300)
+    );
+    if (id === "") return;
+
+    for (const size of [64 * 1024, 4 * 1024 * 1024]) {
+      const label = size >= 1024 * 1024 ? `${size / (1024 * 1024)}MB` : `${size / 1024}KB`;
+      const bytes = patternBytes(size);
+      const t0 = performance.now();
+      const up = await Ben_ltkuploadsService.upload(
+        id,
+        "ben_file",
+        new File([bytes], `u0-probe-${label}.bin`, { type: "application/octet-stream" })
+      );
+      const upMs = Math.round(performance.now() - t0);
+      if (up.success === false) {
+        step(`Upload ${label}`, false, (up.error?.message ?? "refused").slice(0, 300));
+        return;
+      }
+      step(`Upload ${label}`, true, `accepted in ${upMs}ms`);
+
+      const t1 = performance.now();
+      const down = await client.downloadFileFromRecord(TABLE, id, "ben_file");
+      const downMs = Math.round(performance.now() - t1);
+      if (down.success === false || !(down.data instanceof Uint8Array)) {
+        step(`Read back ${label}`, false, (down.error?.message ?? "no bytes returned").slice(0, 300));
+        return;
+      }
+      const diff = firstDiff(bytes, down.data);
+      step(
+        `Read back ${label}`,
+        diff === -1,
+        diff === -1
+          ? `${down.data.length} bytes in ${downMs}ms, identical to what was sent`
+          : `${down.data.length} bytes for ${size} sent — first divergence at byte ${diff}`
+      );
+      if (diff !== -1) return;
+    }
+    step(
+      "Native upload road",
+      true,
+      "bytes cross the SDK's file door intact — the relay design is buildable"
+    );
+  } finally {
+    if (id !== "") {
+      // the file first (a row delete may refuse while a file blocks it),
+      // then the row; tolerate either already being gone
+      const df = await client
+        .deleteFileOrImageFromRecord(TABLE, id, "ben_file")
+        .catch(() => ({ success: false }));
+      const dr = await Ben_ltkuploadsService.delete(id)
+        .then(() => true)
+        .catch(() => false);
+      step(
+        "Clean up",
+        dr,
+        dr
+          ? `probe row deleted${df.success === false ? " (file delete was refused first — the row delete carried it)" : ""}`
+          : "probe row NOT deleted — remove it from LeanBoard Uploads by hand"
+      );
+    }
+  }
+}
