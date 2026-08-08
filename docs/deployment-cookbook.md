@@ -102,14 +102,35 @@ not preventable. Two hardening levels:
 
 ## Recipe 2 — native upload picker (relay)
 
-Measured repeatedly (latest 2026-08-06): file bytes cannot cross the
-connector from the code app — all four carriages re-encode — so in-app
-upload is the **staging handoff** (the user uploads in SharePoint's own
-UI; the app takes over once bytes exist server-side), and the Test
-write access probe re-checks the carriages on every SDK bump. A
-deployment that insists on a native in-app picker has one road: a
-Dataverse **file column** the app could upload into, plus a **relay
-flow** that copies the file on to SharePoint. Originally declined for
-Pechey (2026-08-06); **taken up 2026-08-08** — the design and probe
-plan live in
-[leanboard-doc-cards-plan.md](leanboard-doc-cards-plan.md) (part C).
+File bytes cannot cross the *connector* from the code app (all four
+carriages re-encode — re-measured per SDK bump by the Test write
+access probe), but they DO cross the SDK's own Dataverse file door:
+**measured green 2026-08-08** — 64KB and 4MB round-tripped
+byte-identical through `ben_ltkupload.ben_file` (upload ≈0.4 MB/s,
+download ≈4 MB/s). So the native picker rides a relay: the app writes
+the picked file into the **LeanBoard Upload** table; this flow carries
+it to the SharePoint **staging library**, where the app's shipped
+handoff (copyto, metadata form, check-in) takes over. The probe stays
+in Settings → Documents → Test write access → *Test Dataverse upload*.
+
+The flow (one per environment, a named service identity with write on
+the staging library ONLY):
+
+1. **Trigger:** Dataverse — *When a row is added* to LeanBoard Uploads
+   (`ben_ltkupload`).
+2. **Get the bytes:** Dataverse — *Download a file or an image*, table
+   LeanBoard Uploads, row identifier from the trigger, column `ben_file`.
+3. **Write to staging:** SharePoint — *Create file* in the staging
+   library (the same one named in Settings → Documents), file name =
+   the row's **Name** (the app stamps it unique), content = step 2's
+   body.
+4. **Clear the row:** Dataverse — *Delete a row* (the row is transient;
+   the staging file is now the artefact). On any failure branch,
+   instead set `ben_status` = `failed` and leave the row — the app's
+   dialog times out visibly, and stalled rows are findable.
+
+What the app promises the flow: the row's Name is the exact staging
+filename it will watch for; `ben_targetlibrary` says where the user was
+headed (informational — the app's own handoff performs the move to the
+target). What the flow must never do: write anywhere but staging, or
+touch rows whose status it did not set.

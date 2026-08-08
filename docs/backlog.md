@@ -89,17 +89,21 @@ stay the design detail; this is the queue.
    blank. DocsCard also moves off the pre-C3b search feed onto the
    register's RLDAS road, approved-only by default. Plan of record:
    `leanboard-doc-cards-plan.md` parts A/B (Ben, 2026-08-08).
-8. **Native upload relay — U0 probe.** BUILT 2026-08-08, verdict
-   pending Ben's hosted run. The SDK HAS the door the connectors never
-   had (`uploadFileToRecord` on the DataClient, present in 1.2.7);
-   `ben_ltkupload` deployed to DEV via `data/deploy-schema.mjs` — which
-   now grants role privileges declaratively (`role: {delete}` in
-   schema.mjs — the 2026-08-05 stale-role trap closed at the tool) —
-   and "Test Dataverse upload" sits in the Test write access panel
-   (64KB + 4MB round-trips, first-divergence compare, self-cleaning).
-   Relay flow (U1, Ben authors) + dialog UI (U2) follow only on a
-   green verdict. NEXT RELEASE IS SCHEMA-CARRYING: prod needs the
-   managed solution re-imported, not just an app push.
+8. **Native upload relay.** U0 **GREEN (Ben's hosted run,
+   2026-08-08)**: bytes cross the SDK's file door intact — 64KB up in
+   1.1s, 4MB up in 10.4s / down in 0.9s, byte-identical both sizes
+   (≈0.4 MB/s up: a size cap and a visible progress state are U2
+   requirements, not niceties). The SDK door is `uploadFileToRecord`
+   on the DataClient (1.2.7); `ben_ltkupload` deployed to DEV via
+   `data/deploy-schema.mjs`, which now grants role privileges
+   declaratively (`role: {delete}` — the 2026-08-05 stale-role trap
+   closed at the tool). The probe stays as "Test Dataverse upload" in
+   Test write access. NEXT: **U1** — Ben authors the relay flow
+   (cookbook recipe 2 carries the concrete recipe); **U2** — the
+   dialog UI (unique staging filename `u-<stamp>-<name>`, bounded
+   watch, size cap, progress) once the flow is live. NEXT RELEASE IS
+   SCHEMA-CARRYING: prod needs the managed solution re-imported, not
+   just an app push.
 9. **Content-approval trial — CA0 (Ben, hosted).** Test library with
    content approval on; one full revision cycle through the app;
    record the write-bracket and visibility behaviour; decision gate.
