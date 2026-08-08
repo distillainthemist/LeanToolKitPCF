@@ -11,6 +11,7 @@ import {
   serializeDocViews,
   serializeFavDocs,
   toCsv,
+  viewFromPaste,
 } from "../docs/views";
 
 describe("view link payload", () => {
@@ -56,6 +57,41 @@ describe("view link payload", () => {
   it("a mangled link opens the plain area rather than throwing", () => {
     expect(decodeDocView("not json")).toEqual(emptyDocView());
     expect(decodeDocView("")).toEqual(emptyDocView());
+  });
+});
+
+describe("viewFromPaste (doc-cards plan A)", () => {
+  const encoded = encodeDocView({
+    ...emptyDocView(),
+    listId: "l1",
+    orgTermId: "t9",
+    orgPath: ["Bell Bay", "Casting line"],
+  });
+
+  it("accepts the full player link Copy link produces", () => {
+    // exactly how docsViewUrl builds it: URLSearchParams, which writes
+    // the payload's spaces as +
+    const link =
+      "https://apps.powerapps.com/play/e/env1/app/app1?tenantId=ten1&" +
+      new URLSearchParams({ docview: encoded }).toString() +
+      "#/";
+    const v = viewFromPaste(link);
+    expect(v?.listId).toBe("l1");
+    expect(v?.orgTermId).toBe("t9");
+    // + decodes back to the space it stood for
+    expect(v?.orgPath).toEqual(["Bell Bay", "Casting line"]);
+  });
+
+  it("accepts the raw payload and its URL-encoded form", () => {
+    expect(viewFromPaste(encoded)?.orgTermId).toBe("t9");
+    expect(viewFromPaste(encodeURIComponent(encoded))?.orgTermId).toBe("t9");
+  });
+
+  it("garbage is null, never an empty view that shows everything", () => {
+    expect(viewFromPaste("")).toBeNull();
+    expect(viewFromPaste("not a link")).toBeNull();
+    expect(viewFromPaste("https://example.com/?other=1")).toBeNull();
+    expect(viewFromPaste("%E0%A4%A")).toBeNull(); // malformed escape
   });
 });
 

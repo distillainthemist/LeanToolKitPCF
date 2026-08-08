@@ -798,25 +798,24 @@ export const CARDS: CardSpec[] = [
       "The area's controlled documents, live from SharePoint — the team's standards on the board they run from.",
     config: [
       {
+        // doc-cards plan A: the register's Copy link carries the WHOLE
+        // view state (library, organisation and taxonomy filters by
+        // term id, search, date windows, columns) — pasting it here is
+        // the card's filter UI, and the one source of filter truth.
+        key: "docsView",
+        label: "View (paste a Documents link)",
+        kind: "text",
+        help:
+          "In Documents, set the library and filters you want, then ⋮ → Copy link and paste it here — the card shows exactly what the register showed, and keeps working through renames. Blank keeps this card's older text settings working as before.",
+        placeholder: "https://apps.powerapps.com/play/…?docview=…",
+      },
+      {
         key: "docsLibrary",
-        label: "Library",
+        label: "Libraries",
         kind: "text",
-        help: "A library's display name from the Documents area; blank shows every exposed library.",
-        placeholder: "Standards",
-      },
-      {
-        key: "docsOrg",
-        label: "Organisation term",
-        kind: "text",
-        help: "Only documents tagged with this organisation term (or anything beneath it).",
-        placeholder: "Casting",
-      },
-      {
-        key: "docsMatch",
-        label: "Title filter",
-        kind: "text",
-        help: "Only documents whose name or title matches these words.",
-        placeholder: "SOP",
+        help:
+          "Display names, comma-separated; blank shows every exposed library. Narrows the pasted view when both are set.",
+        placeholder: "Standards, HSEC",
       },
       {
         key: "docsCount",
@@ -843,18 +842,20 @@ export const CARDS: CardSpec[] = [
       "Overdue and due-soon document reviews for this area, derived live — the daily meeting is the reminder.",
     config: [
       {
-        key: "docsLibrary",
-        label: "Library",
+        key: "docsView",
+        label: "View (paste a Documents link)",
         kind: "text",
-        help: "A library's display name from the Documents area; blank checks every exposed library.",
-        placeholder: "Standards",
+        help:
+          "In Documents, set the library and filters you want, then ⋮ → Copy link and paste it here — health is judged inside that scope. Blank keeps this card's older text settings working as before.",
+        placeholder: "https://apps.powerapps.com/play/…?docview=…",
       },
       {
-        key: "docsOrg",
-        label: "Organisation term",
+        key: "docsLibrary",
+        label: "Libraries",
         kind: "text",
-        help: "Only documents tagged with this organisation term (or anything beneath it).",
-        placeholder: "Casting",
+        help:
+          "Display names, comma-separated; blank checks every exposed library. Narrows the pasted view when both are set.",
+        placeholder: "Standards, HSEC",
       },
       {
         key: "dueSoonDays",

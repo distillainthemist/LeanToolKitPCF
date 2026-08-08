@@ -147,6 +147,36 @@ export function decodeDocView(raw: string): DocView {
   }
 }
 
+/**
+ * A DocView from whatever was PASTED into a board card's settings
+ * (doc-cards plan A): the full player link the register's Copy link
+ * produces, a bare `docview=...` query fragment, the URL-encoded
+ * payload alone, or the raw JSON. Unlike decodeDocView, garbage is
+ * `null`, not an empty view — a card must say "that paste didn't
+ * decode" rather than silently show everything.
+ */
+export function viewFromPaste(raw: string): DocView | null {
+  let t = (raw ?? "").trim();
+  if (t === "") return null;
+  const m = t.match(/[?&#]docview=([^&#\s]+)/i);
+  if (m !== null) t = m[1];
+  if (!t.startsWith("{")) {
+    // query-string decode: URLSearchParams writes spaces as "+" (a
+    // literal + travels as %2B), so + means space here
+    try {
+      t = decodeURIComponent(t.replace(/\+/g, "%20"));
+    } catch {
+      return null;
+    }
+  }
+  if (!t.startsWith("{")) return null;
+  try {
+    return viewFromJson(JSON.parse(t));
+  } catch {
+    return null;
+  }
+}
+
 // ---- the per-user saved lists (ben_ltkuserprefs columns) ---------------
 
 export function parseDocViews(raw: string | null | undefined): DocView[] {

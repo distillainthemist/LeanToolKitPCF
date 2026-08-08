@@ -1,7 +1,8 @@
-// Standard Documents — the board cards (plan Phase 3): "Standard
-// documents" (the area's controlled documents, live) and "Document
-// health" (overdue / due-soon reviews, derived at read time — never
-// stored, per the repo's own rule: stored "overdue" goes stale).
+// Standard Documents — the board cards (doc-cards plan A/B2):
+// "Standard documents" renders the register's OWN rows — same cells,
+// same feed road — and "Document health" derives overdue / due-soon
+// reviews at read time (never stored, per the repo's own rule: stored
+// "overdue" goes stale).
 //
 // Card contract (the resolved Phase 2 design): the grid paints the
 // stored tile SVG before this module even loads (cardRegistry reaches
@@ -9,23 +10,38 @@
 // happens after paint with jitter, so a wall of boards opening at shift
 // start cannot synchronise into a 429 storm. Cards hold no document of
 // their own — the tile snapshot is the only thing they emit.
+//
+// Configuration is a PASTED register link (plan part A): Copy link
+// carries the whole view state — library, organisation and taxonomy
+// filters by term id (rename-proof), search words, date windows, the
+// column set — so the card shows exactly what the register showed, and
+// there is ONE source of filter truth. The older text settings
+// (docsLibrary, docsOrg, docsMatch) keep working when nothing is
+// pasted: a stored board keeps its meaning.
 
 import type { CardMount } from "../cardRegistry";
 import { el, clear } from "../../../shared/ui/dom";
 import { renderTitleBar, parsePrompts } from "../../../shared/ui/chrome";
 import { applyThemeVars } from "../../../shared/tokens";
+import { paletteMap } from "../../../shared/palette";
+import { appPalettes } from "../store/config";
+import { currentViewer } from "../runtime";
 import { docsConfig, DocLibrary } from "./docsStore";
-import { searchPage, renderListPage } from "./data";
-import { fetchTermPaths } from "./sp";
+import { renderListPage, driveIdFor } from "./data";
+import { TermNode, cachedTermPaths, fetchTermsInSet } from "./sp";
 import {
   DocRow,
+  browseComparator,
   buildRenderViewXml,
-  extGlyph,
   formatWhen,
-  taxonomySearchProperty,
+  isNonCurrentStatus,
+  pickBrowseHead,
 } from "./rows";
+import { DocView, emptyDocView, viewFromPaste } from "./views";
+import { SiteDictionary, emptySiteDictionary, siteKey } from "./model";
+import { RegisterCellCtx, buildRegisterColumns, WidthBucket } from "./registerCells";
+import { mountDocList } from "./listView";
 import { openDocViewer } from "./viewer";
-import { driveIdFor } from "./data";
 
 type Kind = "docs" | "health";
 
@@ -59,56 +75,220 @@ function snapshotSvg(title: string, lines: { text: string; strong?: boolean }[])
   );
 }
 
-/** Resolve the configured scope against the docs configuration. */
-async function resolveScope(opts: CardMount): Promise<{
+// ---- scope: what the card is looking at -------------------------------
+
+interface CardScope {
   site: string;
   libs: DocLibrary[];
-  orgIds: string[];
-  orgProps: string[];
-  note: string;
-}> {
+  dict: SiteDictionary;
+  /** The effective view — pasted, or synthesised from the legacy keys. */
+  view: DocView;
+  /** CAML label filters (org + taxonomy), subtree-expanded — the same
+   *  shape the register's own feed carries. */
+  termFilters: { cols: string[]; labels: string[] }[];
+  statusCol: { internal: string; termSetId: string } | null;
+  ownerInternal: string;
+  labelToId: Map<string, string>;
+  /** Status values meaning "the approved copy" — [] when the set could
+   *  not be read; the client-side fallback then stands in. */
+  approvedLabels: string[];
+  /** Human line describing the scope (shown while designing). */
+  summary: string;
+  /** Non-fatal notes, painted above the rows. */
+  notes: string[];
+  /** Nothing renderable — the reason. */
+  fatal: string;
+}
+
+const subtreeIn = (nodes: TermNode[], node: TermNode): TermNode[] =>
+  nodes.filter(
+    (n) =>
+      n.id === node.id ||
+      (n.labels.length > node.labels.length &&
+        node.labels.every((l, i) => n.labels[i] === l))
+  );
+
+const leafLabels = (node: TermNode, subtree: TermNode[]): string[] => [
+  ...new Set([node, ...subtree].map((n) => n.labels[n.labels.length - 1].toLowerCase())),
+];
+
+/** Resolve the configured scope. Anything unresolvable is REPORTED, and
+ *  a filter that cannot be applied is fatal rather than dropped — a
+ *  card silently showing more than it was scoped to would lie. */
+async function resolveCardScope(opts: CardMount): Promise<CardScope> {
+  const out: CardScope = {
+    site: "",
+    libs: [],
+    dict: emptySiteDictionary(),
+    view: emptyDocView(),
+    termFilters: [],
+    statusCol: null,
+    ownerInternal: "",
+    labelToId: new Map(),
+    approvedLabels: [],
+    summary: "",
+    notes: [],
+    fatal: "",
+  };
   const { app, libraries } = await docsConfig();
   if (app.siteUrl === "" || libraries.length === 0) {
-    return { site: "", libs: [], orgIds: [], orgProps: [], note: "Set up Settings → Documents first." };
+    out.fatal = "Set up Settings → Documents first.";
+    return out;
   }
-  const wantLib = cfg(opts, "docsLibrary").toLowerCase();
-  const libs =
-    wantLib === ""
-      ? libraries
-      : libraries.filter(
-          (l) => (l.config.title || l.name).toLowerCase() === wantLib
-        );
-  if (libs.length === 0) {
-    return { site: app.siteUrl, libs: [], orgIds: [], orgProps: [], note: `No exposed library called “${cfg(opts, "docsLibrary")}”.` };
+  out.site = app.siteUrl;
+  out.dict = app.sites[siteKey(app.siteUrl)] ?? emptySiteDictionary();
+
+  // ---- the effective view --------------------------------------------
+  const pasted = cfg(opts, "docsView");
+  const view = viewFromPaste(pasted);
+  if (pasted !== "" && view === null) {
+    out.notes.push("The pasted view didn't decode — using the card's other settings.");
   }
-  let orgIds: string[] = [];
-  const orgProps = [
+  if (view !== null) {
+    out.view = view;
+  } else {
+    // legacy keys, synthesised into the same shape (docsOrg resolves
+    // against the walk below, by leaf label — its historical meaning)
+    out.view = { ...emptyDocView(), query: cfg(opts, "docsMatch") };
+  }
+
+  // ---- libraries -------------------------------------------------------
+  let libs = libraries;
+  if (out.view.listId !== "") {
+    libs = libraries.filter((l) => l.listId.toLowerCase() === out.view.listId.toLowerCase());
+    if (libs.length === 0) {
+      out.fatal = "The pasted view's library is not exposed here.";
+      return out;
+    }
+  }
+  const wantNames = cfg(opts, "docsLibrary")
+    .split(",")
+    .map((s) => s.trim().toLowerCase())
+    .filter((s) => s !== "");
+  if (wantNames.length > 0) {
+    const nameOf = (l: DocLibrary) => (l.config.title || l.name).toLowerCase();
+    const missing = wantNames.filter((w) => !libs.some((l) => nameOf(l) === w));
+    libs = libs.filter((l) => wantNames.includes(nameOf(l)));
+    if (missing.length > 0) {
+      out.notes.push(`No exposed library called ${missing.map((m) => `“${m}”`).join(", ")}.`);
+    }
+    if (libs.length === 0) {
+      out.fatal = "None of the configured libraries are exposed here.";
+      return out;
+    }
+  }
+  out.libs = libs;
+
+  // ---- column roles ----------------------------------------------------
+  const forRole = (role: string): string =>
+    out.dict.columns.find((c) => c.role === role)?.internal ?? "";
+  const statusInternal = forRole("status");
+  out.ownerInternal = forRole("owner");
+  if (statusInternal !== "") {
+    const sc = out.dict.columns.find((c) => c.internal === statusInternal);
+    out.statusCol = { internal: statusInternal, termSetId: sc?.termSetId ?? "" };
+  }
+
+  // ---- status vocabulary (BEFORE any feed: an approved-only clause
+  // built from an unresolved vocabulary is unscoped — the 13-vs-9
+  // lesson, 2026-08-08) ------------------------------------------------
+  if (out.statusCol !== null && out.statusCol.termSetId !== "") {
+    const r = await fetchTermsInSet(out.site, out.statusCol.termSetId);
+    const rows = Array.isArray((r.data as { value?: unknown[] })?.value)
+      ? ((r.data as { value: unknown[] }).value as Record<string, unknown>[])
+      : [];
+    const labels: string[] = [];
+    for (const t of rows) {
+      const names = t.labels as { name?: string; isDefault?: boolean }[] | undefined;
+      const def = Array.isArray(names) ? (names.find((l) => l.isDefault) ?? names[0]) : undefined;
+      const name = (def?.name ?? "").trim();
+      if (name === "") continue;
+      labels.push(name);
+      if (typeof t.id === "string") out.labelToId.set(name.toLowerCase(), t.id);
+    }
+    // "approved" is whatever this site's vocabulary calls current — the
+    // same reading the register uses, so card and screen cannot disagree
+    out.approvedLabels = labels.filter((l) => !isNonCurrentStatus(l));
+  }
+
+  // ---- filters (org + taxonomy), subtree-expanded ---------------------
+  const orgCols = [
     ...new Set(
       libs.flatMap((l) =>
         l.config.columns.filter((c) => c.role === "orgUnit").map((c) => c.internal)
       )
     ),
-  ].map(taxonomySearchProperty);
-  const wantOrg = cfg(opts, "docsOrg").toLowerCase();
-  if (wantOrg !== "" && app.orgSetId !== "") {
-    const { nodes } = await fetchTermPaths(app.siteUrl, app.orgSetId);
-    // deepest node whose leaf label matches; the filter is the subtree
-    const target = nodes
-      .filter((n) => n.labels[n.labels.length - 1].toLowerCase() === wantOrg)
-      .sort((a, b) => b.labels.length - a.labels.length)[0];
-    if (target) {
-      orgIds = nodes
-        .filter(
-          (n) =>
-            n.id === target.id ||
-            (n.labels.length > target.labels.length &&
-              target.labels.every((l, i) => n.labels[i] === l))
-        )
-        .map((n) => n.id);
+  ];
+  const setForCol = (col: string): string => {
+    for (const l of libraries) {
+      const c = l.config.columns.find((x) => x.internal === col && x.termSetId !== "");
+      if (c) return c.termSetId;
     }
+    return "";
+  };
+  const filterPaths: string[] = [];
+  const addFilter = async (
+    col: string,
+    setId: string,
+    termId: string,
+    legacyLeaf: string
+  ): Promise<boolean> => {
+    if (setId === "") {
+      out.fatal = "A filtered column's term set is unknown here.";
+      return false;
+    }
+    const { nodes } = await cachedTermPaths(out.site, setId);
+    let node: TermNode | undefined;
+    if (termId !== "") {
+      node = nodes.find((n) => n.id === termId);
+    } else {
+      // legacy docsOrg: deepest node whose LEAF label matches
+      node = nodes
+        .filter((n) => n.labels[n.labels.length - 1].toLowerCase() === legacyLeaf)
+        .sort((a, b) => b.labels.length - a.labels.length)[0];
+    }
+    if (node === undefined) {
+      out.fatal =
+        termId !== ""
+          ? "A term this view filters on no longer exists — re-copy the link from Documents."
+          : `No organisation term called “${legacyLeaf}”.`;
+      return false;
+    }
+    out.termFilters.push({
+      cols: col === "" ? orgCols : [col],
+      labels: leafLabels(node, subtreeIn(nodes, node)),
+    });
+    filterPaths.push(node.labels[node.labels.length - 1]);
+    return true;
+  };
+  if (out.view.orgTermId !== "") {
+    if (!(await addFilter("", app.orgSetId, out.view.orgTermId, ""))) return out;
+  } else if (view === null && cfg(opts, "docsOrg") !== "") {
+    if (app.orgSetId === "") {
+      out.fatal = "No organisation term set is configured.";
+      return out;
+    }
+    if (!(await addFilter("", app.orgSetId, "", cfg(opts, "docsOrg").toLowerCase()))) return out;
   }
-  return { site: app.siteUrl, libs, orgIds, orgProps, note: "" };
+  for (const f of out.view.filters) {
+    if (!(await addFilter(f.col, setForCol(f.col), f.termId, ""))) return out;
+  }
+
+  // ---- the human summary ----------------------------------------------
+  const parts: string[] = [
+    out.view.listId !== "" || wantNames.length > 0
+      ? libs.map((l) => l.config.title || l.name).join(", ")
+      : "All documents",
+    ...filterPaths,
+  ];
+  if (out.view.query !== "") parts.push(`“${out.view.query}”`);
+  if (out.view.modifiedDays > 0) parts.push(`modified ${out.view.modifiedDays}d`);
+  parts.push(out.view.nonCurrent ? "including drafts & superseded" : "approved only");
+  out.summary = parts.join(" · ");
+  return out;
 }
+
+// ---- the card shell ----------------------------------------------------
 
 export function mountDocsCard(kind: Kind, opts: CardMount): void {
   const root = el("div", "app-docscard");
@@ -142,37 +322,134 @@ const note = (body: HTMLElement, text: string): null => {
   return null;
 };
 
+/** Scope preamble: while DESIGNING, say exactly what the card watches
+ *  (the paste's validator); on the board, only the notes that matter. */
+function paintScopeLines(opts: CardMount, body: HTMLElement, scope: CardScope): void {
+  if (opts.designTime === true) {
+    body.appendChild(el("div", "app-field-hint", scope.summary));
+  }
+  for (const n of scope.notes) body.appendChild(el("div", "app-settings-note", n));
+}
+
+// ---- Standard documents: the register's rows, on the board ------------
+
 async function paintDocs(
   opts: CardMount,
   body: HTMLElement
 ): Promise<{ text: string; strong?: boolean }[] | null> {
-  const scope = await resolveScope(opts);
-  if (scope.note !== "") return note(body, scope.note);
+  const scope = await resolveCardScope(opts);
+  if (scope.fatal !== "") return note(body, scope.fatal);
   const n = Math.max(1, Math.min(20, Number(cfg(opts, "docsCount")) || 8));
-  const page = await searchPage(scope.site, cfg(opts, "docsMatch"), {
-    listIds: scope.libs.map((l) => l.listId),
-    rowLimit: n,
-    byModified: true,
-    termFilters:
-      scope.orgIds.length > 0 && scope.orgProps.length > 0
-        ? [{ properties: scope.orgProps, termIds: scope.orgIds }]
-        : undefined,
+  const onlyApproved = !scope.view.nonCurrent;
+
+  // the register's feed, in miniature: one RLDAS page per library —
+  // filters in the CAML, fields only where the library carries them —
+  // merged newest-first (C3b: the search road disagreed with the screen)
+  const modifiedAfterIso =
+    scope.view.modifiedDays > 0
+      ? new Date(Date.now() - scope.view.modifiedDays * 86400000).toISOString()
+      : undefined;
+  const words = scope.view.query.trim() === "" ? undefined : scope.view.query.trim().split(/\s+/);
+  const approvedFilter =
+    onlyApproved && scope.statusCol !== null && scope.approvedLabels.length > 0
+      ? [{ cols: [scope.statusCol.internal], labels: scope.approvedLabels }]
+      : [];
+
+  // which columns: the view's own choice, else what the libraries in
+  // view open with — availability answered by the dictionary (the
+  // register's own rule)
+  const dictBy = new Map(scope.dict.columns.map((c) => [c.internal, c]));
+  const defaults = (): string[] => {
+    const wanted = new Set<string>();
+    for (const lib of scope.libs) {
+      for (const c of lib.config.columns) if (c.inDefault) wanted.add(c.internal);
+    }
+    const fromDict = scope.dict.columns
+      .filter((c) => c.available && wanted.has(c.internal))
+      .map((c) => c.internal);
+    return fromDict.length > 0 ? fromDict : [...wanted];
+  };
+  const wanted =
+    scope.view.columns.length > 0
+      ? scope.view.columns.filter((i) => i === "Modified" || dictBy.get(i)?.available === true)
+      : defaults();
+
+  const feeds = scope.libs.map((lib) => {
+    const carried = new Set(lib.config.columns.map((c) => c.internal));
+    const fields = new Set<string>();
+    for (const internal of wanted) {
+      if (internal !== "Modified" && carried.has(internal)) fields.add(internal);
+    }
+    for (const internal of [scope.statusCol?.internal ?? "", scope.ownerInternal]) {
+      if (internal !== "" && carried.has(internal)) fields.add(internal);
+    }
+    // the checkout lock, where documents can be worked on (a lookup —
+    // scoped exactly as the register scopes it)
+    if (lib.libType === "working" || lib.libType === "revision" || lib.libType === "standard") {
+      fields.add("CheckoutUser");
+    }
+    const viewXml = buildRenderViewXml({
+      modifiedAfterIso,
+      nameWords: words,
+      termFilters: [...scope.termFilters, ...approvedFilter],
+      dateRanges: scope.view.dates.filter((d) => carried.has(d.col)),
+      fields: [...fields],
+      rowLimit: n,
+    });
+    return { lib, viewXml };
   });
-  if (page.error !== "") return note(body, `Documents refused: ${page.error}`);
-  clear(body);
-  if (page.rows.length === 0) {
-    body.appendChild(el("div", "app-field-hint", "No documents in this scope yet."));
-    return [{ text: "No documents in scope" }];
+
+  const pages = await Promise.all(
+    feeds.map((f) => renderListPage(scope.site, f.lib.listId, f.viewXml, ""))
+  );
+  const err = pages.find((p) => p.error !== "");
+  if (err !== undefined) return note(body, `Documents refused: ${err.error}`);
+
+  // merge newest-first across libraries — each page is already its
+  // library's top-n, so the merged head is the true top-n
+  const cmp = browseComparator("modified", false);
+  const buffers = pages.map((p) => [...p.rows]);
+  let rows: DocRow[] = [];
+  for (;;) {
+    const i = pickBrowseHead(buffers, cmp);
+    if (i < 0 || rows.length >= n) break;
+    rows.push(buffers[i].shift()!);
   }
+  // vocabulary unreadable: the CAML clause could not be built, so the
+  // register's client-side fallback stands in — same meaning, stated
+  if (onlyApproved && scope.statusCol !== null && scope.approvedLabels.length === 0) {
+    const col = scope.statusCol.internal;
+    rows = rows.filter((r) => !isNonCurrentStatus(r.values[col] ?? ""));
+  }
+
+  const palettes = await appPalettes();
+  clear(body);
+  paintScopeLines(opts, body, scope);
+  const cellCtx: RegisterCellCtx = {
+    dict: scope.dict,
+    states: paletteMap(palettes.states),
+    labelToId: scope.labelToId,
+    statusCol: scope.statusCol,
+    myEmail: (currentViewer()?.email ?? "").toLowerCase(),
+  };
+  const w = body.clientWidth;
+  const bucket: WidthBucket = w > 0 && w < 380 ? "narrow" : w < 560 ? "mid" : "full";
   const byListId = new Map(scope.libs.map((l) => [l.listId.toLowerCase(), l]));
-  for (const row of page.rows) {
-    const line = el("button", "app-docscard-row") as HTMLButtonElement;
-    line.append(
-      el("span", "app-docs-glyph", extGlyph(row.ext)),
-      el("span", "app-docscard-name", row.name),
-      el("span", "app-field-hint", formatWhen(row.modified))
-    );
-    line.addEventListener("click", () => {
+  const listHost = el("div", "app-docscard-list");
+  body.appendChild(listHost);
+  const list = mountDocList<DocRow>(listHost, {
+    columns: buildRegisterColumns(cellCtx, {
+      wanted,
+      bucket,
+      libraryLabel:
+        scope.libs.length > 1
+          ? (row) => {
+              const lib = byListId.get(row.listId);
+              return lib ? lib.config.title || lib.name : "";
+            }
+          : undefined,
+    }),
+    onRow: (row) => {
       const lib = byListId.get(row.listId);
       void driveIdFor(scope.site, row.listId).then((driveId) =>
         openDocViewer({
@@ -183,25 +460,34 @@ async function paintDocs(
           askToWork: lib?.libType === "working",
         })
       );
-    });
-    body.appendChild(line);
-  }
-  return page.rows.map((r) => ({ text: r.name }));
+    },
+    onNearEnd: () => undefined,
+    emptyText: "No documents in this scope yet.",
+    density: "compact",
+  });
+  list.setRows(rows);
+  if (rows.length === 0) return [{ text: "No documents in scope" }];
+  const statusOf = (r: DocRow): string =>
+    scope.statusCol !== null ? (r.values[scope.statusCol.internal] ?? "") : "";
+  return rows.map((r) => ({
+    text: statusOf(r) !== "" ? `${r.name} — ${statusOf(r)}` : r.name,
+  }));
 }
+
+// ---- Document health: derive-at-read, never stored --------------------
 
 async function paintHealth(
   opts: CardMount,
   body: HTMLElement
 ): Promise<{ text: string; strong?: boolean }[] | null> {
-  const scope = await resolveScope(opts);
-  if (scope.note !== "") return note(body, scope.note);
+  const scope = await resolveCardScope(opts);
+  if (scope.fatal !== "") return note(body, scope.fatal);
   const dueSoonDays = Math.max(1, Number(cfg(opts, "dueSoonDays")) || 30);
   const CAP = 200; // per library — derive-at-read on pilot-scale libraries
   const now = Date.now();
   const soon = now + dueSoonDays * 86400000;
   let overdue: { row: DocRow; when: number }[] = [];
   let dueSoon = 0;
-  let scanned = 0;
   let capped = false;
   let reviewColSeen = false;
   for (const lib of scope.libs) {
@@ -213,10 +499,10 @@ async function paintHealth(
     // RLDAS, like the register (C3b): the old FieldValuesAsText path
     // rendered dates and taxonomy inconsistently depending on the
     // projection, so a card could disagree with the screen behind it.
-    // Only the review date is needed — one field, no lookup pressure.
     const viewXml = buildRenderViewXml({
       sortName: false,
       asc: true,
+      termFilters: scope.termFilters,
       fields: [reviewCol.internal],
       rowLimit: 100,
     });
@@ -224,7 +510,6 @@ async function paintHealth(
       const page = await renderListPage(scope.site, lib.listId, viewXml, next);
       if (page.error !== "") return note(body, `Documents refused: ${page.error}`);
       for (const row of page.rows) {
-        scanned++;
         const when = Date.parse(row.values[reviewCol.internal] ?? "");
         if (Number.isNaN(when)) continue;
         if (when < now) overdue.push({ row, when });
@@ -246,6 +531,7 @@ async function paintHealth(
   }
   overdue = overdue.sort((a, b) => a.when - b.when);
   clear(body);
+  paintScopeLines(opts, body, scope);
   const stat = (label: string, count: number, cls: string) => {
     const box = el("div", `app-docscard-stat ${cls}`);
     box.append(el("span", "app-docscard-statn", String(count)), el("span", "", label));
