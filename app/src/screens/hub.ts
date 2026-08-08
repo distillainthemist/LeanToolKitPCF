@@ -16,7 +16,7 @@ import { parsePeople } from "../../../shared/schema/people";
 import { appTheme, editorHost } from "../cardHost";
 import { boardHash, boardUrl, hasPendingDocView, hasPendingWorkDoc } from "../links";
 import { currentViewer, detectHost } from "../runtime";
-import { documentsTabLabel, readTaskCount } from "../taskBadge";
+import { readTaskCount } from "../taskBadge";
 import { actionsForViewer, upsertActions } from "../store/actions";
 import { canViewBoard, listBoards } from "../store/boards";
 import { selfHealCatalog } from "../store/catalog";
@@ -254,7 +254,7 @@ export function mountHub(parent: HTMLElement): () => void {
               // so the mounted register is NOT torn down (verified in
               // LeanHub.render — a cached host only mounts once)
               view.setExtraTabs(
-                [{ key: "documents", label: documentsTabLabel(n) }],
+                [{ key: "documents", label: "Documents", count: n }],
                 mountDocsTab
               );
             },
@@ -263,7 +263,7 @@ export function mountHub(parent: HTMLElement): () => void {
       });
     };
     view.setExtraTabs(
-      [{ key: "documents", label: documentsTabLabel(docsTaskCount) }],
+      [{ key: "documents", label: "Documents", count: docsTaskCount }],
       mountDocsTab
     );
     // a shared Documents link launched the app (or an old #/docs

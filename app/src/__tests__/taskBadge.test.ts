@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { documentsTabLabel, readTaskCount, rememberTaskCount } from "../taskBadge";
+import { readTaskCount, rememberTaskCount } from "../taskBadge";
 
 // the app runs in a browser; the suite does not — a Map-backed stand-in
 // is enough for storage semantics
@@ -35,8 +35,6 @@ describe("the Documents tab badge's memory", () => {
   it("says nothing rather than zero — a badge of 0 is noise", () => {
     rememberTaskCount("ben", 0);
     expect(readTaskCount("ben")).toBe(0);
-    expect(documentsTabLabel(0)).toBe("Documents");
-    expect(documentsTabLabel(3)).toBe("Documents · 3");
   });
 
   it("survives unusable storage and malformed records", () => {

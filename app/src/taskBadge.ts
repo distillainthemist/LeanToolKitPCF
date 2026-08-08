@@ -44,8 +44,3 @@ export function readTaskCount(who: string): number {
     return 0;
   }
 }
-
-/** The tab's label for a count — one spelling, both callers. */
-export function documentsTabLabel(n: number): string {
-  return n > 0 ? `Documents · ${n}` : "Documents";
-}

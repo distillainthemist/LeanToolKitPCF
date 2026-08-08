@@ -39,13 +39,22 @@ export const LEANHUB_CSS = `
   padding: 12px 16px 10px;
   border-bottom: 2px solid transparent;
   cursor: pointer;
+  /* flex, not inline-block children: a count chip is smaller than the
+     label, and on the shared BASELINE it sits visibly low against the
+     word (Ben, 2026-08-08). Centred against the label instead. */
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 .ltk-lh-tab-on { color: var(--ltk-fg); border-bottom-color: var(--ltk-accent); }
 .ltk-lh-tabcount {
-  display: inline-block; margin-left: 6px; min-width: 18px; text-align: center;
+  flex: none; min-width: 18px; text-align: center;
   background: #fdecec; color: #a02832; border-radius: 999px;
   font-size: 11.5px; font-weight: 700; padding: 1px 6px; line-height: 1.5;
 }
+/* the quiet variant: a count of things WAITING, not things late — red
+   is reserved for overdue, so waiting work wears the neutral chip */
+.ltk-lh-tabcount-quiet { background: #eceae5; color: #57534a; }
 .ltk-lh-body {
   flex: 1;
   min-height: 0;

@@ -77,7 +77,7 @@ export class LeanHubView {
    *  rebuilding, so externally mounted content survives tab switches —
    *  plain DOM keeps its state across re-appends. onExtraTab fires once
    *  per key, on first activation (lazy mounting). */
-  private extraTabs: { key: string; label: string }[] = [];
+  private extraTabs: { key: string; label: string; count?: number }[] = [];
   private onExtraTab: ((key: string, host: HTMLElement) => void) | null = null;
   private extraHosts = new Map<string, HTMLElement>();
   /** Board directory for the Rituals view; null = option hidden. */
@@ -211,7 +211,7 @@ export class LeanHubView {
   /** Host-supplied tabs appended after Actions; content is mounted by
    *  the caller into the host element handed to onSelect. */
   setExtraTabs(
-    tabs: { key: string; label: string }[],
+    tabs: { key: string; label: string; count?: number }[],
     onSelect: (key: string, host: HTMLElement) => void
   ): void {
     this.extraTabs = tabs;
@@ -281,7 +281,7 @@ export class LeanHubView {
     renderTitleBar(this.root, this.cardTitle, this.prompts);
 
     const tabs = el("div", "ltk-lh-tabs");
-    const defs: { key: Tab | string; label: string }[] = [
+    const defs: { key: Tab | string; label: string; count?: number }[] = [
       { key: "myday", label: "My day" },
       { key: "calendar", label: "Cadence" },
       { key: "actions", label: "Actions" },
@@ -301,6 +301,13 @@ export class LeanHubView {
       if (t.key === "actions" && overdueCount > 0) {
         const chip = el("span", "ltk-lh-tabcount", String(overdueCount));
         chip.title = `${overdueCount} overdue action${overdueCount === 1 ? "" : "s"}`;
+        btn.appendChild(chip);
+      }
+      // a host-supplied tab's own count (the Documents tasks badge):
+      // the same chip, quietly toned — waiting is not late
+      if (typeof t.count === "number" && t.count > 0) {
+        const chip = el("span", "ltk-lh-tabcount ltk-lh-tabcount-quiet", String(t.count));
+        chip.title = `${t.count} item${t.count === 1 ? "" : "s"} waiting in ${t.label}`;
         btn.appendChild(chip);
       }
       if (t.key === this.tab) btn.classList.add("ltk-lh-tab-on");
