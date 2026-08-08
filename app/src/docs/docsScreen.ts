@@ -80,6 +80,7 @@ import {
   takePendingWorkDoc,
 } from "../links";
 import { rememberTaskCount } from "../taskBadge";
+import { taskGroupHeader, taskRowEl } from "./taskRows";
 import { accessRequestPlan, notifyPlanFor } from "./notifyModel";
 import {
   DocUiPrefs,
@@ -1269,38 +1270,27 @@ export function mountDocs(
             bodyEl.appendChild(el("div", "app-field-hint", "Nothing needs you."));
             return;
           }
-          // R6 (design review 2026-08-08): due labels are PILLS — glyph
-          // + word via the app's statusChip, never bare red text
+          // R5/R6 anatomy lives in taskRows.ts since B3 of the doc-cards
+          // plan — the Document-health board card renders the same rows
           const group = (
             title: string,
             rows: TaskRow[],
             pill: (tr: TaskRow) => HTMLElement
           ) => {
             if (rows.length === 0) return;
-            bodyEl.appendChild(el("div", "app-docs-tasksgroup", `${title} (${rows.length})`));
+            bodyEl.appendChild(taskGroupHeader(title, rows.length));
             for (const tr of rows) {
-              const rowEl = el("div", "app-docs-taskrow");
-              rowEl.setAttribute("role", "button");
-              rowEl.tabIndex = 0;
-              const open = () => {
-                closePanel();
-                onRowOpen(tr.row, { details: true }); // a task open arrives with work to do
-              };
-              rowEl.addEventListener("click", open);
-              rowEl.addEventListener("keydown", (e) => {
-                if (e.key === "Enter") open();
-              });
-              // R5 anatomy: pill · name-over-meta · chevron — every row
-              // identical, the whole row opens the overlay, where the
-              // decision zone handles approve/mark-reviewed (no
-              // divergent inline buttons)
-              const text = el("div", "app-docs-tasktext");
-              text.append(
-                el("div", "app-docs-taskname", tr.row.name),
-                el("div", "app-field-hint", tr.why !== "" ? `Due ${tr.why}` : tr.libName)
+              bodyEl.appendChild(
+                taskRowEl({
+                  pill: pill(tr),
+                  name: tr.row.name,
+                  meta: tr.why !== "" ? `Due ${tr.why}` : tr.libName,
+                  onOpen: () => {
+                    closePanel();
+                    onRowOpen(tr.row, { details: true }); // a task open arrives with work to do
+                  },
+                })
               );
-              rowEl.append(pill(tr), text, el("span", "app-docs-taskchev", "›"));
-              bodyEl.appendChild(rowEl);
             }
           };
           // edit-access requests (5G2): decisions about PEOPLE lead —

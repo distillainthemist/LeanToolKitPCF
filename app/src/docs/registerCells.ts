@@ -47,6 +47,30 @@ export interface RegisterCellCtx {
   myEmail: string;
 }
 
+/** The palette's verdict on one status value — colour, glyph, and the
+ *  R8 quiet/loud call. The chip AND the tile snapshot resolve through
+ *  this one function, so they cannot disagree. */
+export function statusTone(
+  ctx: RegisterCellCtx,
+  value: string
+): { color: string; glyph: string; quiet: boolean } {
+  const col = ctx.statusCol;
+  const entry = paletteEntryFor(
+    ctx.dict,
+    col?.termSetId ?? "",
+    col?.internal ?? "",
+    value,
+    ctx.labelToId
+  );
+  const color = resolvePaletteColor(ctx.states, entry?.color ?? "", "");
+  const termId = ctx.labelToId.get(value.split(";")[0].trim().toLowerCase()) ?? "";
+  return {
+    color,
+    glyph: entry?.glyph ?? "",
+    quiet: termId !== "" && stageOfTerm(ctx.dict, termId) === "approved",
+  };
+}
+
 /**
  * Status pill: glyph + word so status reads under any colour-vision;
  * both come from the site palette, falling back to the built-in
@@ -57,23 +81,12 @@ export interface RegisterCellCtx {
  */
 export function makeStatusChip(ctx: RegisterCellCtx): (value: string) => HTMLElement {
   return (value: string): HTMLElement => {
-    const col = ctx.statusCol;
-    const entry = paletteEntryFor(
-      ctx.dict,
-      col?.termSetId ?? "",
-      col?.internal ?? "",
-      value,
-      ctx.labelToId
-    );
-    const glyph = entry?.glyph ?? "";
+    const { color, glyph, quiet } = statusTone(ctx, value);
     const chip = el(
       "span",
       "app-docs-chip",
       glyph !== "" ? `${glyph} ${value}` : withStatusGlyph(value)
     );
-    const color = resolvePaletteColor(ctx.states, entry?.color ?? "", "");
-    const termId = ctx.labelToId.get(value.split(";")[0].trim().toLowerCase()) ?? "";
-    const quiet = termId !== "" && stageOfTerm(ctx.dict, termId) === "approved";
     if (quiet) {
       chip.classList.add("app-docs-chip-quiet");
       if (color !== "") chip.style.borderColor = color;

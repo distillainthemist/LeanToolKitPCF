@@ -21,6 +21,7 @@
 
 import type { CardMount } from "../cardRegistry";
 import { el, clear } from "../../../shared/ui/dom";
+import { statusChip as tonePill } from "../../../shared/ui/format";
 import { renderTitleBar, parsePrompts } from "../../../shared/ui/chrome";
 import { applyThemeVars } from "../../../shared/tokens";
 import { paletteMap } from "../../../shared/palette";
@@ -33,13 +34,19 @@ import {
   DocRow,
   browseComparator,
   buildRenderViewXml,
-  formatWhen,
+  formatDayMonthYear,
   isNonCurrentStatus,
   pickBrowseHead,
 } from "./rows";
+import { taskGroupHeader, taskRowEl } from "./taskRows";
 import { DocView, emptyDocView, viewFromPaste } from "./views";
 import { SiteDictionary, emptySiteDictionary, siteKey } from "./model";
-import { RegisterCellCtx, buildRegisterColumns, WidthBucket } from "./registerCells";
+import {
+  RegisterCellCtx,
+  buildRegisterColumns,
+  statusTone,
+  WidthBucket,
+} from "./registerCells";
 import { mountDocList } from "./listView";
 import { openDocViewer } from "./viewer";
 
@@ -54,16 +61,32 @@ const cfg = (opts: CardMount, key: string): string => {
 const esc = (s: string): string =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
+interface SnapshotLine {
+  text: string;
+  strong?: boolean;
+  /** Status dot colour (B4) — resolved through statusTone, so the tile
+   *  wears the same palette the chips wear. "" / absent = no dot. */
+  dot?: string;
+}
+
 /** The tile snapshot: a simple readable SVG of what the card shows. */
-function snapshotSvg(title: string, lines: { text: string; strong?: boolean }[]): string {
+function snapshotSvg(title: string, lines: SnapshotLine[]): string {
   const rows = lines
     .slice(0, 8)
-    .map(
-      (l, i) =>
-        `<text x="16" y="${64 + i * 30}" font-size="${l.strong ? 20 : 16}" ` +
+    .map((l, i) => {
+      const y = 64 + i * 30;
+      const dot =
+        (l.dot ?? "") !== ""
+          ? `<circle cx="21" cy="${y - 5}" r="5" fill="${esc(l.dot ?? "")}"/>`
+          : "";
+      const x = (l.dot ?? "") !== "" ? 34 : 16;
+      return (
+        dot +
+        `<text x="${x}" y="${y}" font-size="${l.strong ? 20 : 16}" ` +
         `font-weight="${l.strong ? 700 : 400}" fill="#333" ` +
         `font-family="system-ui, sans-serif">${esc(l.text.slice(0, 60))}</text>`
-    )
+      );
+    })
     .join("");
   return (
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 320">` +
@@ -467,11 +490,17 @@ async function paintDocs(
   });
   list.setRows(rows);
   if (rows.length === 0) return [{ text: "No documents in scope" }];
+  // B4: the tile wears the chips' own palette — a coloured dot per row
+  // where the status resolves, the status word where it does not
   const statusOf = (r: DocRow): string =>
     scope.statusCol !== null ? (r.values[scope.statusCol.internal] ?? "") : "";
-  return rows.map((r) => ({
-    text: statusOf(r) !== "" ? `${r.name} — ${statusOf(r)}` : r.name,
-  }));
+  return rows.map((r) => {
+    const s = statusOf(r);
+    const color = s !== "" ? statusTone(cellCtx, s).color : "";
+    return color !== ""
+      ? { text: r.name, dot: color }
+      : { text: s !== "" ? `${r.name} — ${s}` : r.name };
+  });
 }
 
 // ---- Document health: derive-at-read, never stored --------------------
@@ -483,37 +512,65 @@ async function paintHealth(
   const scope = await resolveCardScope(opts);
   if (scope.fatal !== "") return note(body, scope.fatal);
   const dueSoonDays = Math.max(1, Number(cfg(opts, "dueSoonDays")) || 30);
-  const CAP = 200; // per library — derive-at-read on pilot-scale libraries
-  const now = Date.now();
-  const soon = now + dueSoonDays * 86400000;
-  let overdue: { row: DocRow; when: number }[] = [];
-  let dueSoon = 0;
+  const CAP = 200; // FINDINGS per library — the cap is stated when hit
+  // only approved documents owe a periodic review (5D: the review-due
+  // queue is scoped to the APPROVED stage — a draft or superseded
+  // standard has nothing to chase); unscoped only when the status
+  // vocabulary could not be read, exactly like the register's sweep
+  const approvedClause =
+    scope.statusCol !== null && scope.approvedLabels.length > 0
+      ? [{ cols: [scope.statusCol.internal], labels: scope.approvedLabels }]
+      : [];
+  interface Due {
+    row: DocRow;
+    when: number;
+    label: string;
+    owner: string;
+    lib: DocLibrary;
+  }
+  const overdue: Due[] = [];
+  const dueSoon: Due[] = [];
   let capped = false;
   let reviewColSeen = false;
+  const now = Date.now();
   for (const lib of scope.libs) {
     const reviewCol = lib.config.columns.find((c) => c.role === "nextReviewDate");
     if (!reviewCol) continue;
     reviewColSeen = true;
-    let next = "";
-    let taken = 0;
-    // RLDAS, like the register (C3b): the old FieldValuesAsText path
-    // rendered dates and taxonomy inconsistently depending on the
-    // projection, so a card could disagree with the screen behind it.
+    const carried = new Set(lib.config.columns.map((c) => c.internal));
+    const fields = [reviewCol.internal];
+    // the owner names the row's meta line (a lookup — one, deliberate)
+    if (scope.ownerInternal !== "" && carried.has(scope.ownerInternal)) {
+      fields.push(scope.ownerInternal);
+    }
+    // the register's own review sweep, communal: the due question is
+    // asked SERVER-SIDE (dueWithinDays covers overdue and due-soon in
+    // one clause), so only findings come back — not the corpus
     const viewXml = buildRenderViewXml({
-      sortName: false,
-      asc: true,
-      termFilters: scope.termFilters,
-      fields: [reviewCol.internal],
+      dueWithinDays: { col: reviewCol.internal, days: dueSoonDays },
+      termFilters: [...scope.termFilters, ...approvedClause],
+      fields,
       rowLimit: 100,
     });
+    let next = "";
+    let taken = 0;
     for (;;) {
       const page = await renderListPage(scope.site, lib.listId, viewXml, next);
       if (page.error !== "") return note(body, `Documents refused: ${page.error}`);
       for (const row of page.rows) {
-        const when = Date.parse(row.values[reviewCol.internal] ?? "");
-        if (Number.isNaN(when)) continue;
-        if (when < now) overdue.push({ row, when });
-        else if (when < soon) dueSoon++;
+        // the ISO twin ("Column.") is the real value; the display text
+        // is a site-locale guess we only fall back to
+        const iso = row.values[`${reviewCol.internal}.`] ?? "";
+        const disp = row.values[reviewCol.internal] ?? "";
+        const t = Date.parse(iso !== "" ? iso : disp);
+        if (Number.isNaN(t)) continue;
+        (t < now ? overdue : dueSoon).push({
+          row,
+          when: t,
+          label: formatDayMonthYear(new Date(t).toISOString()),
+          owner: (row.values[scope.ownerInternal] ?? "").split(";")[0].trim(),
+          lib,
+        });
       }
       taken += page.rows.length;
       next = page.next;
@@ -529,7 +586,9 @@ async function paintHealth(
       "Map a column to the Next review date role in Settings → Documents — health is derived from it."
     );
   }
-  overdue = overdue.sort((a, b) => a.when - b.when);
+  overdue.sort((a, b) => a.when - b.when);
+  dueSoon.sort((a, b) => a.when - b.when);
+
   clear(body);
   paintScopeLines(opts, body, scope);
   const stat = (label: string, count: number, cls: string) => {
@@ -540,25 +599,64 @@ async function paintHealth(
   const statRow = el("div", "app-docscard-stats");
   statRow.append(
     stat("overdue", overdue.length, overdue.length > 0 ? "app-docscard-bad" : "app-docscard-good"),
-    stat(`due in ${dueSoonDays}d`, dueSoon, dueSoon > 0 ? "app-docscard-warn" : "app-docscard-good")
+    stat(
+      `due in ${dueSoonDays}d`,
+      dueSoon.length,
+      dueSoon.length > 0 ? "app-docscard-warn" : "app-docscard-good"
+    )
   );
   body.appendChild(statRow);
-  for (const o of overdue.slice(0, 5)) {
-    const line = el("div", "app-docscard-row");
-    line.append(
-      el("span", "app-docscard-name", o.row.name),
-      el("span", "app-field-hint", formatWhen(new Date(o.when).toISOString()))
+
+  // R5 task rows (taskRows.ts — the register's Document-tasks anatomy):
+  // pill · name-over-meta · chevron, the whole row opens the overlay
+  // with the details pane up, where Mark reviewed lives
+  const openRow = (d: Due) => {
+    void driveIdFor(scope.site, d.row.listId).then((driveId) =>
+      openDocViewer({
+        site: scope.site,
+        row: d.row,
+        driveId,
+        libraryName: d.lib.config.title || d.lib.name,
+        askToWork: false,
+        detailsOpen: true,
+      })
     );
-    body.appendChild(line);
+  };
+  const ROWS_SHOWN = 8;
+  const renderGroup = (title: string, list: Due[], pill: () => HTMLElement, room: number) => {
+    if (list.length === 0) return 0;
+    body.appendChild(taskGroupHeader(title, list.length));
+    const shown = list.slice(0, Math.max(0, room));
+    for (const d of shown) {
+      body.appendChild(
+        taskRowEl({
+          pill: pill(),
+          name: d.row.name,
+          meta: d.owner !== "" ? `${d.owner} · Due ${d.label}` : `Due ${d.label}`,
+          onOpen: () => openRow(d),
+        })
+      );
+    }
+    return shown.length;
+  };
+  const used = renderGroup("Review overdue", overdue, () => tonePill("⚑ Overdue", "red"), ROWS_SHOWN);
+  renderGroup("Review due soon", dueSoon, () => tonePill("● Due soon", "amber"), ROWS_SHOWN - used);
+  const hidden = overdue.length + dueSoon.length - Math.min(overdue.length + dueSoon.length, ROWS_SHOWN);
+  if (hidden > 0) {
+    body.appendChild(
+      el("div", "app-field-hint", `${hidden} more in the register's Document tasks.`)
+    );
   }
   if (capped) {
-    body.appendChild(
-      el("div", "app-field-hint", `First ${CAP} documents per library scanned.`)
-    );
+    body.appendChild(el("div", "app-field-hint", `First ${CAP} findings per library counted.`));
   }
+  if (overdue.length === 0 && dueSoon.length === 0) {
+    body.appendChild(el("div", "app-field-hint", "Nothing due — reviews are up to date."));
+  }
+  // B4: overdue names carry the pill's red as a dot
   return [
     { text: `${overdue.length} overdue`, strong: true },
-    { text: `${dueSoon} due in ${dueSoonDays} days`, strong: true },
-    ...overdue.slice(0, 5).map((o) => ({ text: o.row.name })),
+    { text: `${dueSoon.length} due in ${dueSoonDays} days`, strong: true },
+    ...overdue.slice(0, 5).map((o) => ({ text: o.row.name, dot: "#c43d3d" })),
   ];
 }
