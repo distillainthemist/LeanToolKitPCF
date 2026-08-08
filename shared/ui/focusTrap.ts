@@ -17,11 +17,15 @@ const FOCUSABLE = [
 
 /** Focusable descendants that are actually on screen, in tab order. */
 function focusable(container: HTMLElement): HTMLElement[] {
-  return Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE)).filter((elem) =>
+  return Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE)).filter((elem) => {
     // an element inside a display:none parent reports its OWN display, so
-    // checkVisibility is the only reliable test (see the tile-mode audit)
-    typeof elem.checkVisibility === "function" ? elem.checkVisibility() : true
-  );
+    // checkVisibility is the only reliable test (see the tile-mode audit).
+    // PROBED, not assumed: this file is shared with the control suite,
+    // which compiles against an older DOM lib that has never heard of it
+    // (root typecheck, 2026-08-08) — and older browsers have not either.
+    const probe = elem as HTMLElement & { checkVisibility?: () => boolean };
+    return typeof probe.checkVisibility === "function" ? probe.checkVisibility() : true;
+  });
 }
 
 /**
