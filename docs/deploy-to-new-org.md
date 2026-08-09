@@ -67,7 +67,7 @@ as the signed-in user):
 | --- | --- | --- | --- |
 | App access group | Entra security | app sharing | Who can open LeanBoard (the roster syncs it). |
 | Document Controllers | Entra security | Full Control on the DMS site | Full document admin — merges with the app's super/site-admin roles. |
-| Document Owners & Approvers | Entra security | Edit on the standards library | The eligibility POOL: owner/approver/reviewer pickers select from its members. Rights on a document come from being NAMED on it. |
+| Document Owners & Approvers | Entra security | Edit on the standards library — **plus Approve Items (custom permission level) when content approval is on**, so the app's approve publishes in one step (see the cookbook's hardening recipe) | The eligibility POOL: owner/approver/reviewer pickers select from its members. Rights on a document come from being NAMED on it. |
 | *(site)* DMSDocumentOwners | SharePoint site group | none | Holds ownership of the editors site group. Members: the two Entra groups above. |
 | *(site)* DMSDocumentEditors | SharePoint site group | **Contribute on the standards library ONLY** (no site-level grant) | Grant approvals seat people here — membership takes effect **immediately** (measured 2026-08-06; the Entra route below propagates in minutes-to-an-hour). Settings: owner = DMSDocumentOwners, membership editable by *Group Owner*, viewable by *Everyone* (the app reads it). |
 | Temporary Document Editors | Entra security | Contribute on the standards library | FALLBACK seat for tenants without the site group. Pool members must be seeded as its Entra OWNERS to execute grants. |

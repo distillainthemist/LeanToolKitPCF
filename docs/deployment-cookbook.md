@@ -84,18 +84,21 @@ not preventable. Two hardening levels:
 - **Then, SharePoint content approval** on the standards library
   (Versioning settings → Require content approval; draft visibility =
   approvers and authors). Readers then see only the last **approved**
-  major, walled by the platform rather than by convention. **The cost,
-  stated up front:** publishing now requires the *Approve Items*
-  permission. Full Control (Document Controllers) has it; Edit and
-  Contribute do not — so an owner's final major check-in sits *Pending*
-  until someone with Approve Items approves it in SharePoint, an extra
-  step outside the app on every approval, unless the deployment grants
-  approvers a custom permission level that adds Approve Items.
-  **Unmeasured against the app's write bracket** — trial on a test
-  library first: run a full revision cycle and confirm the app's
-  check-out → property writes → major check-in sequence behaves, and
-  that the overlay's live reads show what you expect while a version is
-  pending.
+  major, walled by the platform rather than by convention.
+  **MEASURED AND ADOPTED at Pechey (CA0 trial, 2026-08-08/09):** the
+  app's full write bracket behaved under moderation, drafts were
+  correctly invisible to readers mid-cycle, and since CA1 the app
+  itself **publishes at every reader-facing transition** (approve,
+  supersede, obsolete, reinstate — `_ModerationStatus = 0`, the same
+  call SharePoint's own Approve makes). Two deployment requirements
+  make it one-step: grant the **Document Owners & Approvers** group a
+  custom permission level adding *Approve Items* (plain Edit cannot
+  publish — without the grant the app warns honestly and a controller
+  publishes in SharePoint), and know that **property quick-edits pend**
+  until published (a metadata fix is invisible to readers until a
+  reader-facing transition or a manual approve carries it — accepted
+  for now; auto-publish for owner/controller quick-edits is a small
+  follow-up if it grates).
 - **What not to do:** per-document unique permissions. That is the
   item-level sprawl the group model exists to avoid, and it breaks the
   set-once permission table.

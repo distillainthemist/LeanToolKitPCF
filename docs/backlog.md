@@ -107,10 +107,19 @@ stay the design detail; this is the queue.
    table, probe and schema stay: NEXT RELEASE IS STILL
    SCHEMA-CARRYING (prod needs the managed solution re-imported, not
    just an app push).
-9. **Content-approval trial — CA0 (Ben, hosted).** Test library with
-   content approval on; one full revision cycle through the app;
-   record the write-bracket and visibility behaviour; decision gate.
-   Plan part D. Runs in parallel any time.
+9. ~~**Content-approval trial — CA0.**~~ **DONE + ADOPTED
+   2026-08-08/09.** The bracket held, drafts were walled; the one gap
+   (owner's Approve left the item PENDING) became CA1: lifecycle
+   commands now publish (`_ModerationStatus = 0`) on every
+   reader-facing transition, warned-not-fatal when refused. Ben
+   granted Owners & Approvers the Approve Items permission — one-step
+   approval confirmed working. Verdict + requirements recorded in
+   cookbook recipe 1 and the deploy runbook's permission table. Open
+   niggle, deliberately parked: property quick-edits pend until
+   published (auto-publish is a small follow-up if it grates). Same
+   session: draft-with-no-reviewers now offers BOTH submits in the
+   decision card, "Submit for owner approval" when that is where it
+   lands (Ben's flow finding).
 
 Removed by decision (Ben, 2026-08-08): the cookbook's reminder-push
 recipe (reviews run on rituals & reporting — no inbox push) and the
