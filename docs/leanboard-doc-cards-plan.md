@@ -201,14 +201,51 @@ Progressing this one is **measurement, not code** — the recipe is
 marked unmeasured against the app's write bracket, and the trial closes
 that.
 
-- **CA0 (Ben, hosted, on a TEST library):** enable content approval
-  (draft visibility: approvers and authors), then run one full revision
-  cycle through the app as owner/approver and once as a controller.
-  Record: do the VULI/PatchItem property writes land on a pending item;
-  does the final `checkin(1)` produce a *pending* major; what do
-  mid-cycle readers see; does approving in SharePoint publish cleanly;
-  does Cancel revision's version-restore behave. The app is not
-  changed for the trial.
+- **CA0 (Ben, hosted) — the protocol (2026-08-08).** Run on the DEV
+  site's seeded standards library, not a fresh one: the trial's
+  question is "does OUR configured machinery behave under moderation",
+  which only the configured library can answer, and Dev is disposable.
+  The app is not changed for the trial.
+
+  *Setup:* Library settings → Versioning settings → **Require content
+  approval: Yes**; Draft item security: *Only users who can approve
+  items (and the author)*. Record what happens to the EXISTING items'
+  moderation status the moment it turns on.
+
+  *Run 1 — the full cycle as a non-Full-Control owner* (marketing@ if
+  it owns a seeded doc; otherwise note the identity used): Start
+  revision → edit → Submit for approval → the owner's final Approve.
+  Record at each step:
+  1. does Start revision's check-out + status write land at all;
+  2. mid-cycle, in a private window as a plain reader: what does the
+     register show for that document, and does the viewer's PDF show
+     the OLD approved content (it should — moderation walls drafts);
+  3. after the final Approve (`checkin type 1`): the item's SharePoint
+     **moderation** status (Pending or Approved?) versus the app's own
+     status term — **this is the key observation**: if moderation says
+     Pending while the app's chip says approved, readers still see old
+     content behind an "approved" label until someone with Approve
+     Items publishes it in SharePoint;
+  4. the version history: did the major land as x.0, or as a draft?
+
+  *Run 2 — the publish:* as a controller (Full Control), approve the
+  pending item in SharePoint's own UI. Does the new content reach
+  readers cleanly?
+
+  *Run 3 — the edges:* on other seeded docs — Cancel revision
+  (does the version restore behave, and is the restored version itself
+  pending?); and a quick property edit (H1's auto bracket) on an
+  approved standard (does the minor check-in go pending, hiding a
+  metadata fix from readers until approved?).
+
+  *Reversal:* Require content approval: No — record what happens to
+  any still-pending items.
+
+  *Decision rule:* adopt only if nothing in the write bracket broke
+  AND the standing cost is acceptable: every approval gains a second,
+  SharePoint-side publish step owned by controllers (or approvers get
+  a custom permission level adding Approve Items). Either way the
+  verdict and measurements land in cookbook recipe 1.
 - **CA1 (only if adopted):** Settings → Documents → Health learns to
   read the library's moderation flag and states the operational
   consequence ("content approval is ON — final approval also needs
