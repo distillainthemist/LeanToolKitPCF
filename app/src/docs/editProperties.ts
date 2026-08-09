@@ -33,6 +33,7 @@ import {
   connectorPatchItem,
   fetchFields,
   fetchListItem,
+  fetchListModeration,
   validateUpdateListItem,
 } from "./sp";
 
@@ -44,6 +45,12 @@ export interface EditPropertiesOpts {
   host: HTMLElement;
   /** true = ride the held check-out (no check-in); false = bracket. */
   heldByMe: boolean;
+  /** The document sits in a READER-FACING stage (approved/superseded/
+   *  obsolete). On a moderated library the bracket's check-in then
+   *  PUBLISHES too (Ben, 2026-08-09: a property edit is not a separate
+   *  approval process) — but never on a mid-circulation draft, whose
+   *  moderation wall must hold. */
+  readerFacingStage?: boolean;
   onDone: () => void;
 }
 
@@ -234,6 +241,46 @@ export function openEditProperties(opts: EditPropertiesOpts): void {
       );
       if (!cin.ok && !/not checked out/i.test(spErrorText(cin.status))) {
         return fail("Check-in was refused (the document stays checked out)", cin.status);
+      }
+      // CA1 (Ben, 2026-08-09): on a moderated library the bracket's
+      // minor check-in lands PENDING, hiding the metadata fix from
+      // readers behind an approval process nobody meant to start. A
+      // quick edit on a READER-FACING document publishes as part of
+      // the save — the same road the lifecycle commands ride. Never on
+      // a mid-circulation draft: its moderation wall must hold.
+      if (opts.readerFacingStage === true) {
+        const mod = await timed(fetchListModeration(site, row.listId), "The moderation read");
+        const moderated =
+          mod.ok &&
+          ((mod.data ?? {}) as { EnableModeration?: unknown }).EnableModeration === true;
+        if (moderated) {
+          status.textContent = "Publishing (content approval)…";
+          const pub = await timed(
+            validateUpdateListItem(
+              site,
+              row.listId,
+              row.id,
+              [{ FieldName: "_ModerationStatus", FieldValue: "0" }],
+              false
+            ),
+            "The publish"
+          );
+          const errs = validateItemErrors(pub.data);
+          if (!pub.ok || errs.length > 0) {
+            // the edit LANDED — the pending state is a warning, and the
+            // dialog stays open so it is read
+            status.textContent =
+              "Saved — but SharePoint content approval is still PENDING: readers see the " +
+              "previous properties until a document controller approves it in SharePoint.";
+            status.classList.add("app-docs-addstatus-warn");
+            const closeBtn = dlg.root.querySelector(".ltk-btn-secondary") as HTMLButtonElement | null;
+            if (closeBtn !== null) closeBtn.textContent = "Close";
+            saveBtn.style.display = "none";
+            running = false;
+            opts.onDone();
+            return;
+          }
+        }
       }
     }
     dlg.close();

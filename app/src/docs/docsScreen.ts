@@ -742,6 +742,9 @@ export function mountDocs(
           dictBy,
           host: dialogHost,
           heldByMe: isMine(row),
+          // a quick edit on a reader-facing document publishes under
+          // moderation (CA1) — a mid-circulation draft never does
+          readerFacingStage: ["approved", "superseded", "obsolete"].includes(stageOfRow(row)),
           onDone: () => void refreshRow(row),
         });
       });
