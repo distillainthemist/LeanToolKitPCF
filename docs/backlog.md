@@ -98,12 +98,15 @@ stay the design detail; this is the queue.
    `data/deploy-schema.mjs`, which now grants role privileges
    declaratively (`role: {delete}` — the 2026-08-05 stale-role trap
    closed at the tool). The probe stays as "Test Dataverse upload" in
-   Test write access. NEXT: **U1** — Ben authors the relay flow
-   (cookbook recipe 2 carries the concrete recipe); **U2** — the
-   dialog UI (unique staging filename `u-<stamp>-<name>`, bounded
-   watch, size cap, progress) once the flow is live. NEXT RELEASE IS
-   SCHEMA-CARRYING: prod needs the managed solution re-imported, not
-   just an app push.
+   Test write access. **U1/U2 PARKED (Ben, 2026-08-08)** — the shipped
+   staging handoff stays the upload road; the relay is measured OPEN
+   and fully specified (cookbook recipe 2 + plan part C, including the
+   alternatives analysis), so picking it up later is authoring one
+   flow and building the dialog UI (`u-<stamp>-<name>` staging watch,
+   size cap, progress — required at the measured ~0.4 MB/s). The
+   table, probe and schema stay: NEXT RELEASE IS STILL
+   SCHEMA-CARRYING (prod needs the managed solution re-imported, not
+   just an app push).
 9. **Content-approval trial — CA0 (Ben, hosted).** Test library with
    content approval on; one full revision cycle through the app;
    record the write-bracket and visibility behaviour; decision gate.
