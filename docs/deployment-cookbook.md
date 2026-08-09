@@ -94,11 +94,12 @@ not preventable. Two hardening levels:
   make it one-step: grant the **Document Owners & Approvers** group a
   custom permission level adding *Approve Items* (plain Edit cannot
   publish — without the grant the app warns honestly and a controller
-  publishes in SharePoint), and know that **property quick-edits pend**
-  until published (a metadata fix is invisible to readers until a
-  reader-facing transition or a manual approve carries it — accepted
-  for now; auto-publish for owner/controller quick-edits is a small
-  follow-up if it grates).
+  publishes in SharePoint). Property quick-edits on reader-facing
+  documents publish as part of the save (2026-08-09); a
+  mid-circulation draft's edit pends — its moderation wall holds —
+  and a plain Check in… of content deliberately stays unpublished:
+  content changes on a moderated standards library belong to the
+  revision workflow, which publishes at approve.
 - **What not to do:** per-document unique permissions. That is the
   item-level sprawl the group model exists to avoid, and it breaks the
   set-once permission table.

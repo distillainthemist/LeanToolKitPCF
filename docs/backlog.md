@@ -114,12 +114,15 @@ stay the design detail; this is the queue.
    reader-facing transition, warned-not-fatal when refused. Ben
    granted Owners & Approvers the Approve Items permission — one-step
    approval confirmed working. Verdict + requirements recorded in
-   cookbook recipe 1 and the deploy runbook's permission table. Open
-   niggle, deliberately parked: property quick-edits pend until
-   published (auto-publish is a small follow-up if it grates). Same
-   session: draft-with-no-reviewers now offers BOTH submits in the
-   decision card, "Submit for owner approval" when that is where it
-   lands (Ben's flow finding).
+   cookbook recipe 1 and the deploy runbook's permission table. The
+   quick-edit niggle CLOSED same day (Ben's call): a property edit on
+   a READER-FACING document publishes as part of the save — a
+   mid-circulation draft's edit still pends, its moderation wall
+   holds, and the plain Check in… deliberately stays unpublished
+   (content changes belong to the revision workflow). Same session:
+   draft-with-no-reviewers now offers BOTH submits in the decision
+   card, "Submit for owner approval" when that is where it lands
+   (Ben's flow finding).
 
 Removed by decision (Ben, 2026-08-08): the cookbook's reminder-push
 recipe (reviews run on rituals & reporting — no inbox push) and the
