@@ -410,13 +410,19 @@ export function lifecycleCommandsFor(
   // where a submission for approval lands: the approvers' step when any
   // are named, else directly at the owner's
   const approvalEntry: LifecycleStage = g.hasApprovers ? "inApproval" : "inOwnerApproval";
+  // with no approvers named the submission lands at the OWNER — say so
+  // on the button, or "for approval" promises a round that won't happen
+  const submitApproval = by("submitApproval", {
+    to: approvalEntry,
+    ...(g.hasApprovers ? {} : { label: "Submit for owner approval" }),
+  });
   switch (stage) {
     case "draft":
       return g.hasReviewers
         ? [by("submitReview")]
-        : [by("submitReview"), by("submitApproval", { to: approvalEntry })];
+        : [by("submitReview"), submitApproval];
     case "inReview":
-      return [by("submitApproval", { to: approvalEntry }), by("requestRevision")];
+      return [submitApproval, by("requestRevision")];
     case "inApproval":
       // the approvers' step: an endorsement, minor — the owner's word
       // is the major

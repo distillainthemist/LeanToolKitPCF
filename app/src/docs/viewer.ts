@@ -335,7 +335,13 @@ export function openDocViewer(opts: ViewerOpts): () => void {
     const canEdit = s !== null && s.canEdit !== false;
     const heldMine = s?.checkedOut === true && s.mine === true;
     const lcActs = lc?.actions() ?? [];
-    const primaryAct = lcActs.find((a) => a.primary);
+    // EVERY primary act gets a card button (Ben, 2026-08-09: a draft
+    // with no reviewers offers submit-for-review AND submit-for-
+    // approval — review is optional there, and the second road was
+    // hiding in ⋯). The FIRST keeps the one solid accent; the rest
+    // render plain, so the design rule holds.
+    const primaryActs = lcActs.filter((a) => a.primary);
+    const primaryAct = primaryActs[0];
     const revisionAct = lcActs.find((a) => a.key === "requestRevision");
     held.textContent =
       s?.checkedOut === true && !s.mine ? `🔒 Checked out by ${s.by}` : "";
@@ -385,15 +391,15 @@ export function openDocViewer(opts: ViewerOpts): () => void {
       ) {
         decision.appendChild(linkBtn("Edit source ↗", ctl?.editUrl ?? "", false));
       }
-      if (primaryAct !== undefined) {
+      for (const [i, act] of primaryActs.entries()) {
         const go = el(
           "button",
-          "app-btn app-btn-primary",
-          primaryAct.key === "approve" ? `✓ ${primaryAct.label}` : primaryAct.label
+          i === 0 ? "app-btn app-btn-primary" : "app-btn",
+          act.key === "approve" ? `✓ ${act.label}` : act.label
         ) as HTMLButtonElement;
-        go.addEventListener("click", () => lc?.run(primaryAct.key));
+        go.addEventListener("click", () => lc?.run(act.key));
         decision.appendChild(go);
-        inCard.add(primaryAct.key);
+        inCard.add(act.key);
       }
       if (heldMine && ctl !== null) {
         const inBtn = el(

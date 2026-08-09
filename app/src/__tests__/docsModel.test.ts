@@ -1516,13 +1516,21 @@ describe("lifecycle commands (5B/5C — the settled workflow)", () => {
 
   it("review is mandatory when reviewers are named; approval entry depends on approvers", async () => {
     const { lifecycleCommandsFor } = await import("../docs/model");
-    // no reviewers: a draft may skip straight to approval
+    // no reviewers: a draft may skip straight to approval — and BOTH
+    // submits are primary, so the decision card offers both directly
+    // (Ben, 2026-08-09: the second road was hiding in the ⋯ overflow)
     const free = lifecycleCommandsFor("draft", gates());
     expect(free.map((c) => c.key)).toEqual(["submitReview", "submitApproval"]);
-    // no approvers named → submission lands at the OWNER's stage
+    expect(free.every((c) => c.primary)).toBe(true);
+    // no approvers named → submission lands at the OWNER's stage, and
+    // the button SAYS so — "for approval" would promise a round that
+    // won't happen
     expect(free[1].to).toBe("inOwnerApproval");
-    // approvers named → the endorsement stage first
-    expect(lifecycleCommandsFor("draft", gates({ hasApprovers: true }))[1].to).toBe("inApproval");
+    expect(free[1].label).toBe("Submit for owner approval");
+    // approvers named → the endorsement stage first, plain label
+    const withApprovers = lifecycleCommandsFor("draft", gates({ hasApprovers: true }));
+    expect(withApprovers[1].to).toBe("inApproval");
+    expect(withApprovers[1].label).toBe("Submit for approval");
     // reviewers named = review round MANDATORY (Ben, 2026-08-04)
     expect(lifecycleCommandsFor("draft", gates({ hasReviewers: true })).map((c) => c.key)).toEqual([
       "submitReview",
