@@ -255,6 +255,12 @@ export function fetchListRoot(site: string, listId: string): Promise<SpResult> {
   );
 }
 
+/** Whether the library runs SharePoint content approval (CA1: a
+ *  moderated library's check-ins land PENDING until published). */
+export function fetchListModeration(site: string, listId: string): Promise<SpResult> {
+  return spRequest(site, "GET", `_api/web/lists(guid'${listId}')?$select=EnableModeration`);
+}
+
 export function checkOutFile(site: string, url: string): Promise<SpResult> {
   return spRequest(site, "POST", `${filePath(url)}/CheckOut()`);
 }

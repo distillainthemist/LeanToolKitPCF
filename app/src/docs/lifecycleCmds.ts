@@ -24,6 +24,7 @@ import {
   checkOutFile,
   connectorPatchItem,
   fetchFileVersions,
+  fetchListModeration,
   fetchRegionalSettings,
   restoreFileVersion,
   undoCheckOut,
@@ -377,38 +378,76 @@ export function openLifecycleCommand(opts: LifecycleRunOpts): void {
       return fail("Check-in was refused (the document stays checked out)", cin.status);
     }
 
-    // the approve LANDED — membership/ledger release is cleanup, warned
-    // but never fatal (the orphaned-editors health check is the net)
+    // the command LANDED — everything below is follow-through, warned
+    // but never fatal. When a warning holds the dialog open, its
+    // buttons must say so: "Cancel" becomes "Close" and the primary
+    // action hides (Ben, 2026-08-06).
+    const warnings: string[] = [];
+    const warnState = () => {
+      const closeBtn = dlg.root.querySelector(".ltk-btn-secondary") as HTMLButtonElement | null;
+      if (closeBtn !== null) closeBtn.textContent = "Close";
+      goBtn.style.display = "none";
+      running = false;
+    };
+
+    // CA1 (Ben's trial, 2026-08-08): on a moderated library a check-in
+    // lands PENDING — readers keep seeing the old content behind the
+    // new status until someone with Approve Items publishes it. A
+    // lifecycle transition into a READER-FACING stage means the whole
+    // readership, so the command publishes as part of the act: the SP
+    // UI's own road (VULI _ModerationStatus = 0). Draft-bound
+    // transitions (submit for review/approval) must NOT publish — a
+    // published draft would undo the moderation wall mid-circulation.
+    const READER_FACING = new Set(["approved", "superseded", "obsolete"]);
+    if (READER_FACING.has(command.to)) {
+      const mod = await fetchListModeration(site, opts.listId);
+      const moderated =
+        mod.ok &&
+        ((mod.data ?? {}) as { EnableModeration?: unknown }).EnableModeration === true;
+      if (moderated) {
+        status.textContent = "Publishing (content approval)…";
+        const pub = await timed(
+          validateUpdateListItem(
+            site,
+            opts.listId,
+            row.id,
+            [{ FieldName: "_ModerationStatus", FieldValue: "0" }],
+            false
+          ),
+          "The publish"
+        );
+        const errs = validateItemErrors(pub.data);
+        if (!pub.ok || errs.length > 0) {
+          warnings.push(
+            "SharePoint content approval is still PENDING — readers keep seeing the previous " +
+              "version until a document controller approves it in SharePoint (or approvers " +
+              "are granted the Approve Items permission)."
+          );
+        }
+      }
+    }
+
     if (releasing && gr !== undefined) {
-      // when a warning holds the dialog open, its buttons must say so:
-      // the command is DONE, so "Cancel" becomes "Close" and the
-      // primary action hides (Ben, 2026-08-06)
-      const warnState = () => {
-        const closeBtn = dlg.root.querySelector(".ltk-btn-secondary") as HTMLButtonElement | null;
-        if (closeBtn !== null) closeBtn.textContent = "Close";
-        goBtn.style.display = "none";
-        running = false;
-      };
       status.textContent = "Releasing editor access…";
       try {
         const { releaseGrants } = await import("./accessRequests");
         const warn = await releaseGrants(row.uniqueId, gr.emails);
-        if (warn !== "") {
-          status.textContent = `Approved. ${warn}`;
-          status.classList.add("app-docs-addstatus-warn");
-          warnState();
-          opts.onDone();
-          return; // leave the dialog open so the warning is read
-        }
+        if (warn !== "") warnings.push(warn);
       } catch (e) {
-        status.textContent = `Approved. Editor membership was not released: ${spErrorText(
-          e instanceof Error ? e.message : String(e)
-        ).slice(0, 200)} — Access diagnostics will flag it.`;
-        status.classList.add("app-docs-addstatus-warn");
-        warnState();
-        opts.onDone();
-        return;
+        warnings.push(
+          `Editor membership was not released: ${spErrorText(
+            e instanceof Error ? e.message : String(e)
+          ).slice(0, 200)} — Access diagnostics will flag it.`
+        );
       }
+    }
+
+    if (warnings.length > 0) {
+      status.textContent = `${command.key === "approve" ? "Approved" : "Done"}. ${warnings.join(" ")}`;
+      status.classList.add("app-docs-addstatus-warn");
+      warnState();
+      opts.onDone();
+      return; // leave the dialog open so the warning is read
     }
 
     opts.onDone();
