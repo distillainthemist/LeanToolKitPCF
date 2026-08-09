@@ -179,6 +179,21 @@ standing practice.
   Dataverse — visible in the dialog's timeout message and sweepable),
   and file bytes transit Dataverse capacity. Decision gate after U0's
   verdict.
+- **Alternatives to a flow, considered and settled (Ben's question,
+  2026-08-08):** every road that moves the bytes unattended is
+  server-side automation of the same class — a C# Dataverse plugin
+  (pro-code + an app-only SharePoint certificate to manage forever),
+  an Azure Function on a webhook (that plus Azure), or a low-code
+  Power Fx plugin (a flow by another name, in preview). The
+  Dataverse↔SharePoint document-management integration does not carry
+  file-column content, SharePoint cannot pull from Dataverse, and the
+  app relaying it itself is dead by measurement (reading back works —
+  U0 — writing to SharePoint still cannot). The flow is the lightest
+  member of the class: no code, no secrets, visible runs. The one
+  no-automation alternative is not building U2 and keeping the
+  staging handoff as the only road. The relay keeps the flow-free
+  thesis: LeanBoard never depends on it — no flow means the staging
+  handoff, not a broken app.
 
 ## Part D — content-approval hardening trial (cookbook recipe 1)
 
