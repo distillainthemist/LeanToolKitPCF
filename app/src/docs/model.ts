@@ -90,6 +90,28 @@ export interface LibraryConfig {
 // its view.
 
 /** One site column, as the whole site presents it. */
+/** A column's standing for one library type (consolidation Part II):
+ *  key absent = hidden there; "on" = available (chooser, dialogs,
+ *  filters); "default" = in the default view too. */
+export type ColumnTypeState = "on" | "default";
+
+/** The three types that get their own cells. Revision libraries mirror
+ *  standard (they hold checked-out copies of standards); template
+ *  libraries are fixed (name + modified) and take no cells. */
+export type ConfigurableLibType = "standard" | "record" | "working";
+
+export type TypeStates = Partial<Record<ConfigurableLibType, ColumnTypeState>>;
+
+export const CONFIGURABLE_TYPES: ConfigurableLibType[] = ["standard", "record", "working"];
+
+/** Which cell a library's type reads (null = template: fixed view). */
+export function effectiveColumnType(libType: string): ConfigurableLibType | null {
+  if (libType === "standard" || libType === "revision") return "standard";
+  if (libType === "record") return "record";
+  if (libType === "working") return "working";
+  return null;
+}
+
 export interface SiteColumn {
   /** SharePoint internal name — the identity. */
   internal: string;
@@ -97,7 +119,9 @@ export interface SiteColumn {
   label: string;
   /** Document-management role ("" = none). */
   role: string;
-  /** Offered in the column picker at all. */
+  /** Offered in the column picker at all. LEGACY since Part II —
+   *  availability is derived from `types` (hidden everywhere =
+   *  unavailable); kept parsed so pre-Part-II payloads migrate. */
   available: boolean;
   /** Term set behind a taxonomy column ("" = not taxonomy / unknown). */
   termSetId: string;
@@ -112,6 +136,16 @@ export interface SiteColumn {
    * the pane starts where it always was.
    */
   filterable: boolean;
+  /** The sub-heading this column sits under (Part II). Groups are
+   *  DIALOG furniture (real section headers in the add form, quick
+   *  edit and properties pane) and register ORDERING only — a table
+   *  cannot render sub-headings. "" = the ungrouped tail. */
+  group: string;
+  /** Per-type standing (Part II). `undefined` = a dictionary that
+   *  predates Part II — run deriveTypeStates over the per-library
+   *  configs before resolving; the resolution helpers below expect a
+   *  DERIVED dictionary. */
+  types?: TypeStates;
 }
 
 /**
@@ -155,6 +189,10 @@ export interface SiteDictionary {
   columns: SiteColumn[];
   palettes: TermPalette[];
   templates: ViewTemplates;
+  /** Ordered sub-headings (Part II). A column may name a group not
+   *  listed here (an orphan) — it renders after the listed groups
+   *  rather than being dropped. */
+  groups: string[];
   /** Status term id → lifecycle stage (Phase 5A). Explicit — the stored
    *  mapping is the law, name suggestions only prefill it — and keyed
    *  by term ID so a rename cannot detach a stage. Optional so the many
@@ -163,7 +201,117 @@ export interface SiteDictionary {
 }
 
 export function emptySiteDictionary(): SiteDictionary {
-  return { columns: [], palettes: [], templates: {} };
+  return { columns: [], palettes: [], templates: {}, groups: [] };
+}
+
+// ---- Part II resolution (consolidation plan, Ben 2026-08-10) -----------
+// The site defines INTENT — which columns matter to which library type,
+// in what order, under what headings. The library stays REALITY: feeds
+// still intersect with what each list physically carries, and Health
+// reports the gap. These helpers expect a DERIVED dictionary (every
+// column carrying `types`); run deriveTypeStates first.
+
+const stateFor = (col: SiteColumn, t: ConfigurableLibType): ColumnTypeState | undefined =>
+  col.types?.[t];
+
+/** The configurable types a set of libraries actually spans (revision
+ *  mirrors standard; template contributes nothing). */
+export function configurableTypesIn(libTypes: string[]): ConfigurableLibType[] {
+  const out = new Set<ConfigurableLibType>();
+  for (const lt of libTypes) {
+    const t = effectiveColumnType(lt);
+    if (t !== null) out.add(t);
+  }
+  return CONFIGURABLE_TYPES.filter((t) => out.has(t));
+}
+
+/** Ordered internals OFFERED (chooser, filters) for a mix of library
+ *  types: any state at all for any type in view. */
+export function columnsForTypes(dict: SiteDictionary, libTypes: string[]): string[] {
+  const types = configurableTypesIn(libTypes);
+  return dict.columns
+    .filter((c) => types.some((t) => stateFor(c, t) !== undefined))
+    .map((c) => c.internal);
+}
+
+/** Ordered internals in the DEFAULT view for a mix of library types:
+ *  cells reading "default" for ANY type in view — Ben's cross-filter
+ *  rule, with mixed views showing the union. "Modified" stays the
+ *  consumer's appended passenger, as today. */
+export function defaultColumnsFor(dict: SiteDictionary, libTypes: string[]): string[] {
+  const types = configurableTypesIn(libTypes);
+  return dict.columns
+    .filter((c) => types.some((t) => stateFor(c, t) === "default"))
+    .map((c) => c.internal);
+}
+
+/** Dialog sections for ONE library: its type's non-hidden columns
+ *  under their sub-headings — listed groups first in dict.groups
+ *  order, orphan groups after in first-appearance order, the
+ *  ungrouped tail last under "" (the caller renders no header for
+ *  it). Template libraries take no sections. */
+export function dialogSections(
+  dict: SiteDictionary,
+  libType: string
+): { heading: string; columns: string[] }[] {
+  const t = effectiveColumnType(libType);
+  if (t === null) return [];
+  const visible = dict.columns.filter((c) => stateFor(c, t) !== undefined);
+  const order: string[] = [...dict.groups];
+  for (const c of visible) {
+    if (c.group !== "" && !order.includes(c.group)) order.push(c.group);
+  }
+  const out: { heading: string; columns: string[] }[] = [];
+  for (const heading of [...order, ""]) {
+    const columns = visible.filter((c) => c.group === heading).map((c) => c.internal);
+    if (columns.length > 0) out.push({ heading, columns });
+  }
+  return out;
+}
+
+/**
+ * The Part II migration, pure and silent (Part I's rules: read-time
+ * derive, deterministic, nothing lost silently — the manager shows
+ * what it derived). Only columns WITHOUT `types` are touched. Per
+ * column × type, across the libraries of that type (revision counting
+ * toward standard): "default" if any ticks inDefault OR the C5 type
+ * template lists the column; "on" if any ticks available; else hidden.
+ * Union widens, never narrows. With NO library of any configurable
+ * type to learn from, a legacy-available column reads "on" for all
+ * three — nothing vanishes for lack of evidence.
+ */
+export function deriveTypeStates(
+  dict: SiteDictionary,
+  libraries: { libType: string; config: { columns: ColumnConfig[] } }[]
+): SiteDictionary {
+  if (dict.columns.every((c) => c.types !== undefined)) return dict;
+  const byType = new Map<ConfigurableLibType, { columns: ColumnConfig[] }[]>();
+  for (const t of CONFIGURABLE_TYPES) byType.set(t, []);
+  let anyLib = false;
+  for (const lib of libraries) {
+    const t = effectiveColumnType(lib.libType);
+    if (t === null) continue;
+    anyLib = true;
+    byType.get(t)!.push(lib.config);
+  }
+  const columns = dict.columns.map((c) => {
+    if (c.types !== undefined) return c;
+    const types: TypeStates = {};
+    for (const t of CONFIGURABLE_TYPES) {
+      const configs = byType.get(t)!;
+      const inTemplate = (dict.templates[t] ?? []).includes(c.internal);
+      const matches = configs.flatMap((cfg) =>
+        cfg.columns.filter((x) => x.internal === c.internal)
+      );
+      if (inTemplate || matches.some((x) => x.inDefault)) types[t] = "default";
+      else if (matches.some((x) => x.available)) types[t] = "on";
+    }
+    if (!anyLib && c.available) {
+      for (const t of CONFIGURABLE_TYPES) types[t] = "on";
+    }
+    return { ...c, types };
+  });
+  return { ...dict, columns };
 }
 
 // ---- lifecycle (Phase 5A) ----------------------------------------------
@@ -686,6 +834,18 @@ function parseSiteDictionary(o: Record<string, unknown>): SiteDictionary {
       const col = c as Record<string, unknown>;
       const internal = asStr(col.internal);
       if (internal === "") continue;
+      // per-type states (Part II): only known types and known states
+      // survive the parse; an empty object reads as undefined so a
+      // pre-Part-II payload still triggers the migration derive
+      let types: TypeStates | undefined;
+      if (col.types && typeof col.types === "object") {
+        const t: TypeStates = {};
+        for (const key of CONFIGURABLE_TYPES) {
+          const v = (col.types as Record<string, unknown>)[key];
+          if (v === "on" || v === "default") t[key] = v;
+        }
+        if (Object.keys(t).length > 0) types = t;
+      }
       dict.columns.push({
         internal,
         label: asStr(col.label),
@@ -694,8 +854,13 @@ function parseSiteDictionary(o: Record<string, unknown>): SiteDictionary {
         termSetId: asStr(col.termSetId),
         isDate: col.isDate === true,
         filterable: col.filterable !== false,
+        group: asStr(col.group),
+        ...(types !== undefined ? { types } : {}),
       });
     }
+  }
+  if (Array.isArray(o.groups)) {
+    dict.groups = o.groups.map(asStr).filter((g) => g !== "");
   }
   if (Array.isArray(o.palettes)) {
     for (const p of o.palettes) {
@@ -747,9 +912,12 @@ function serializeSiteDictionary(dict: SiteDictionary): Record<string, unknown> 
     if (c.termSetId !== "") col.termSetId = c.termSetId;
     if (c.isDate) col.isDate = true;
     if (!c.filterable) col.filterable = false;
+    if (c.group !== "") col.group = c.group;
+    if (c.types !== undefined && Object.keys(c.types).length > 0) col.types = c.types;
     return col;
   });
   if (cols.length > 0) o.columns = cols;
+  if (dict.groups.length > 0) o.groups = dict.groups;
   const pals = dict.palettes.filter((p) => Object.keys(p.entries).length > 0);
   if (pals.length > 0) {
     o.palettes = pals.map((p) => ({
@@ -872,6 +1040,8 @@ export function buildSiteDictionary(
       // schema fills isDate on the next settings visit
       isDate: false,
       filterable: true,
+      // ungrouped; Part II's deriveTypeStates fills the type cells
+      group: "",
     });
   }
   // status colours → a palette per term set (labels as keys for now)
@@ -1262,6 +1432,10 @@ export function syncSiteDictionary(
       isDate: isDateField(f),
       // a column that cannot filter is not offered as one
       filterable: f.termSetId !== "" || isDateField(f),
+      // a NEW live-schema column arrives ungrouped and typeless — the
+      // manager is where it gets its standing (deriveTypeStates only
+      // fills columns on dictionaries that predate Part II)
+      group: "",
     });
   }
   return { dictionary: { ...dict, columns: out }, carriers };

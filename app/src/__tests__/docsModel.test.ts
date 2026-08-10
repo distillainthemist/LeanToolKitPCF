@@ -706,7 +706,7 @@ describe("site column dictionary", () => {
     // an empty dictionary must change nothing (a fresh deployment)
     expect(resolveLibraryConfig(cfg, emptySiteDictionary())).toEqual(cfg);
     // and an unknown column is kept as-is rather than vanishing mid-upgrade
-    const dict = { columns: [{ internal: "Other", label: "", role: "", available: true, termSetId: "", isDate: false, filterable: true }], palettes: [], templates: {} };
+    const dict = { columns: [{ internal: "Other", label: "", role: "", available: true, termSetId: "", isDate: false, filterable: true, group: "" }], palettes: [], templates: {}, groups: [] };
     expect(resolveLibraryConfig(cfg, dict).columns[0].role).toBe("tags");
   });
 
@@ -717,9 +717,10 @@ describe("site column dictionary", () => {
       siteUrl: "https://x.sharepoint.com/sites/Dev",
       sites: {
         "https://x.sharepoint.com/sites/dev": {
-          columns: [{ internal: "DMSStatus", label: "Status", role: "status", available: true, termSetId: "set-9", isDate: false, filterable: true }],
+          columns: [{ internal: "DMSStatus", label: "Status", role: "status", available: true, termSetId: "set-9", isDate: false, filterable: true, group: "" }],
           palettes: [{ setId: "set-9", setName: "Approval", entries: { Approved: { color: "good", glyph: "✓", label: "Approved" } } }],
           templates: { record: ["DMSStatus"] },
+          groups: [],
         },
       },
     };
@@ -749,11 +750,12 @@ describe("dictionary ↔ live schema sync (C1)", () => {
     const { syncSiteDictionary } = await import("../docs/model");
     const stored = {
       columns: [
-        { internal: "DMSStatus", label: "Status", role: "status", available: true, termSetId: "", isDate: false, filterable: true },
-        { internal: "Retired", label: "Gone", role: "tags", available: true, termSetId: "", isDate: false, filterable: true },
+        { internal: "DMSStatus", label: "Status", role: "status", available: true, termSetId: "", isDate: false, filterable: true, group: "" },
+        { internal: "Retired", label: "Gone", role: "tags", available: true, termSetId: "", isDate: false, filterable: true, group: "" },
       ],
       palettes: [],
       templates: {},
+      groups: [],
     };
     const { dictionary, carriers } = syncSiteDictionary(stored, [
       { listId: "1", name: "Standards", fields: [spField("DMSStatus", "set-9"), spField("DMSOwner")] },
@@ -775,7 +777,7 @@ describe("dictionary ↔ live schema sync (C1)", () => {
   it("keeps a stored term set when the live read cannot see one", async () => {
     const { syncSiteDictionary } = await import("../docs/model");
     const { dictionary } = syncSiteDictionary(
-      { columns: [{ internal: "DMSTags", label: "", role: "tags", available: true, termSetId: "kept", isDate: false, filterable: true }], palettes: [], templates: {} },
+      { columns: [{ internal: "DMSTags", label: "", role: "tags", available: true, termSetId: "kept", isDate: false, filterable: true, group: "" }], palettes: [], templates: {}, groups: [] },
       [{ listId: "1", name: "L", fields: [spField("DMSTags")] }]
     );
     expect(dictionary.columns[0].termSetId).toBe("kept");
@@ -812,6 +814,7 @@ describe("term set palettes (C2)", () => {
       columns: [],
       palettes: [pal({ "term-1": { color: "good", glyph: "✓", label: "Approved" } })],
       templates: {},
+      groups: [],
     };
     // the register now paints the NEW label; the live term store maps it
     // back to the id the palette already holds
@@ -827,12 +830,13 @@ describe("term set palettes (C2)", () => {
     const { colourableSets } = await import("../docs/model");
     const sets = colourableSets({
       templates: {},
+      groups: [],
       columns: [
-        { internal: "DMSStatus", label: "", role: "status", available: true, termSetId: "set-9", isDate: false, filterable: true },
-        { internal: "DMSDocumentStatus", label: "", role: "", available: true, termSetId: "set-9", isDate: false, filterable: true },
-        { internal: "DMSImportance", label: "", role: "importance", available: true, termSetId: "set-3", isDate: false, filterable: true },
-        { internal: "Hidden", label: "", role: "", available: false, termSetId: "set-4", isDate: false, filterable: true },
-        { internal: "PlainText", label: "", role: "", available: true, termSetId: "", isDate: false, filterable: true },
+        { internal: "DMSStatus", label: "", role: "status", available: true, termSetId: "set-9", isDate: false, filterable: true, group: "" },
+        { internal: "DMSDocumentStatus", label: "", role: "", available: true, termSetId: "set-9", isDate: false, filterable: true, group: "" },
+        { internal: "DMSImportance", label: "", role: "importance", available: true, termSetId: "set-3", isDate: false, filterable: true, group: "" },
+        { internal: "Hidden", label: "", role: "", available: false, termSetId: "set-4", isDate: false, filterable: true, group: "" },
+        { internal: "PlainText", label: "", role: "", available: true, termSetId: "", isDate: false, filterable: true, group: "" },
       ],
       palettes: [],
     });
@@ -853,6 +857,7 @@ describe("configuration health (C4)", () => {
     termSetId,
     isDate: false,
     filterable: true,
+    group: "",
   });
   const base = {
     conflicts: [],
@@ -865,7 +870,7 @@ describe("configuration health (C4)", () => {
     const { dictionaryHealth } = await import("../docs/model");
     const found = dictionaryHealth({
       ...base,
-      dict: { columns: [sc("A", "status"), sc("B", "status"), sc("C", "owner")], palettes: [], templates: {} },
+      dict: { columns: [sc("A", "status"), sc("B", "status"), sc("C", "owner")], palettes: [], templates: {}, groups: [] },
     });
     const dup = found.find((f) => f.title.includes("mapped to 2 columns"));
     expect(dup?.level).toBe("warn");
@@ -879,7 +884,7 @@ describe("configuration health (C4)", () => {
     const { dictionaryHealth } = await import("../docs/model");
     const found = dictionaryHealth({
       ...base,
-      dict: { columns: [sc("DMSOwner", "owner"), sc("Noise")], palettes: [], templates: {} },
+      dict: { columns: [sc("DMSOwner", "owner"), sc("Noise")], palettes: [], templates: {}, groups: [] },
       carriers: new Map([
         ["DMSOwner", ["Standards"]],
         ["Noise", ["Standards"]],
@@ -901,6 +906,7 @@ describe("configuration health (C4)", () => {
       ...base,
       dict: {
         templates: {},
+        groups: [],
         columns: [sc("Stage", "status")],
         palettes: [
           {
@@ -935,6 +941,7 @@ describe("configuration health (C4)", () => {
           columns: [sc("A", "status"), sc("B", "owner"), sc("C", "docType")],
           palettes: [],
           templates: {},
+          groups: [],
         },
         carriers: new Map([
           ["A", ["One"]],
@@ -1010,13 +1017,14 @@ describe("taxonomy values against their term set (2026-08-03)", () => {
       termSetId: "set-1",
       isDate: false,
       filterable: true,
+      group: "",
     };
     const found = dictionaryHealth({
       conflicts: [],
       carriers: new Map<string, string[]>(),
       libraries: [],
       choicesBy: new Map<string, string[]>(),
-      dict: { columns: [col], palettes: [], templates: {} },
+      dict: { columns: [col], palettes: [], templates: {}, groups: [] },
       taxProbe: new Map([["DMSOrg", probe(["Pacific:Casting"])]]),
     });
     expect(found[0].title).toContain("whole term path");
@@ -1027,7 +1035,7 @@ describe("taxonomy values against their term set (2026-08-03)", () => {
         carriers: new Map<string, string[]>(),
         libraries: [],
         choicesBy: new Map<string, string[]>(),
-        dict: { columns: [col], palettes: [], templates: {} },
+        dict: { columns: [col], palettes: [], templates: {}, groups: [] },
       }).some((f) => f.title.includes("term path"))
     ).toBe(false);
   });
@@ -1353,6 +1361,7 @@ describe("lifecycle mapping (5A)", () => {
       columns: [],
       palettes: [],
       templates: {},
+      groups: [],
       lifecycle: { "aaa-1": "approved", "bbb-2": "draft" },
     };
     const back = parseAppDocsConfig(serializeAppDocsConfig(cfg));
@@ -1392,6 +1401,7 @@ describe("lifecycle mapping (5A)", () => {
       columns: [],
       palettes: [],
       templates: {},
+      groups: [],
       lifecycle: { "t-1": "draft" as const },
     };
     const terms = [
@@ -1441,6 +1451,7 @@ describe("lifecycle mapping (5A)", () => {
       columns: [],
       palettes: [],
       templates: {},
+      groups: [],
       lifecycle: {
         "t-1": "approved" as const,
         "t-2": "approved" as const,
@@ -1449,7 +1460,7 @@ describe("lifecycle mapping (5A)", () => {
     };
     expect(termsForStage(dict, "approved")).toEqual(["t-1", "t-2"]);
     expect(termsForStage(dict, "obsolete")).toEqual([]);
-    expect(termsForStage({ columns: [], palettes: [], templates: {} }, "draft")).toEqual([]);
+    expect(termsForStage({ columns: [], palettes: [], templates: {}, groups: [] }, "draft")).toEqual([]);
   });
 });
 
@@ -1648,6 +1659,7 @@ describe("lifecycle commands (5B/5C — the settled workflow)", () => {
       columns: [],
       palettes: [],
       templates: {},
+      groups: [],
       lifecycle: { "t-appr": "approved" as const, "t-gone": "inReview" as const },
     };
     const terms = [
@@ -1671,11 +1683,13 @@ describe("view templates (C5)", () => {
     termSetId: "",
     isDate: false,
     filterable: true,
+    group: "",
   });
   const dict = {
     columns: [sc("DMSType", "docType"), sc("DMSOwner", "owner"), sc("DMSStatus", "status"), sc("Notes")],
     palettes: [],
     templates: {},
+    groups: [],
   };
 
   it("falls back to the roles a type implies, in dictionary order", async () => {
@@ -1726,5 +1740,164 @@ describe("view templates (C5)", () => {
     expect(back.sites["https://x/sites/d"].templates.working).toEqual(["DMSOwner"]);
     // an unknown library type is not a template
     expect((back.sites["https://x/sites/d"].templates as Record<string, unknown>).bogus).toBeUndefined();
+  });
+});
+
+// ---- Part II: the one column manager (consolidation plan, 2026-08-10)
+
+describe("Part II column model", () => {
+  const pcol = (
+    internal: string,
+    over: Partial<import("../docs/model").SiteColumn> = {}
+  ): import("../docs/model").SiteColumn => ({
+    internal,
+    label: "",
+    role: "",
+    available: true,
+    termSetId: "",
+    isDate: false,
+    filterable: true,
+    group: "",
+    ...over,
+  });
+
+  it("group, types and groups round-trip sparsely; old payloads stay typeless", async () => {
+    const { parseAppDocsConfig, serializeAppDocsConfig, emptyAppDocsConfig } = await import(
+      "../docs/model"
+    );
+    const cfg = {
+      ...emptyAppDocsConfig(),
+      siteUrl: "https://x/sites/d",
+      sites: {
+        "https://x/sites/d": {
+          columns: [
+            pcol("DMSStatus", { group: "Control", types: { standard: "default" as const } }),
+            pcol("DMSTags", { types: { working: "on" as const } }),
+            pcol("Legacy"), // no types — must stay undefined through the trip
+          ],
+          palettes: [],
+          templates: {},
+          groups: ["Control", "Identity"],
+        },
+      },
+    };
+    const back = parseAppDocsConfig(serializeAppDocsConfig(cfg)).sites["https://x/sites/d"];
+    expect(back.groups).toEqual(["Control", "Identity"]);
+    expect(back.columns[0].group).toBe("Control");
+    expect(back.columns[0].types).toEqual({ standard: "default" });
+    expect(back.columns[1].types).toEqual({ working: "on" });
+    expect(back.columns[2].types).toBeUndefined();
+    // garbage states and unknown types are dropped, not kept broken
+    const messy = parseAppDocsConfig(
+      JSON.stringify({
+        sites: {
+          "https://x/sites/d": {
+            columns: [{ internal: "A", types: { standard: "maybe", template: "on" } }],
+          },
+        },
+      })
+    );
+    expect(messy.sites["https://x/sites/d"].columns[0].types).toBeUndefined();
+  });
+
+  it("defaults and offerings cross-filter by the types in view; revision mirrors standard", async () => {
+    const { columnsForTypes, defaultColumnsFor, emptySiteDictionary } = await import(
+      "../docs/model"
+    );
+    const dict = {
+      ...emptySiteDictionary(),
+      columns: [
+        pcol("DMSStatus", { types: { standard: "default" as const } }),
+        pcol("DMSAdded", { types: { record: "default" as const } }),
+        pcol("DMSTags", { types: { standard: "on" as const, working: "on" as const } }),
+        pcol("Hidden", { types: {} }),
+      ],
+    };
+    // one type: its defaults alone
+    expect(defaultColumnsFor(dict, ["standard"])).toEqual(["DMSStatus"]);
+    // a mixed view shows the UNION, dictionary-ordered
+    expect(defaultColumnsFor(dict, ["standard", "record"])).toEqual(["DMSStatus", "DMSAdded"]);
+    // available-but-not-default is offered, never defaulted
+    expect(columnsForTypes(dict, ["working"])).toEqual(["DMSTags"]);
+    expect(defaultColumnsFor(dict, ["working"])).toEqual([]);
+    // revision libraries read the standard cells; template contributes nothing
+    expect(defaultColumnsFor(dict, ["revision"])).toEqual(["DMSStatus"]);
+    expect(columnsForTypes(dict, ["template"])).toEqual([]);
+    // hidden everywhere = unavailable everywhere
+    expect(columnsForTypes(dict, ["standard", "record", "working"])).not.toContain("Hidden");
+  });
+
+  it("dialog sections follow group order, orphans after, ungrouped last", async () => {
+    const { dialogSections, emptySiteDictionary } = await import("../docs/model");
+    const dict = {
+      ...emptySiteDictionary(),
+      groups: ["Identity", "Control"],
+      columns: [
+        pcol("DMSStatus", { group: "Control", types: { standard: "on" as const } }),
+        pcol("DMSId", { group: "Identity", types: { standard: "default" as const } }),
+        pcol("DMSOdd", { group: "Elsewhere", types: { standard: "on" as const } }),
+        pcol("DMSLoose", { types: { standard: "on" as const } }),
+        pcol("DMSWorking", { group: "Identity", types: { working: "on" as const } }),
+      ],
+    };
+    expect(dialogSections(dict, "standard")).toEqual([
+      { heading: "Identity", columns: ["DMSId"] },
+      { heading: "Control", columns: ["DMSStatus"] },
+      { heading: "Elsewhere", columns: ["DMSOdd"] },
+      { heading: "", columns: ["DMSLoose"] },
+    ]);
+    // the other type's columns never leak into this type's dialog
+    expect(dialogSections(dict, "working")).toEqual([
+      { heading: "Identity", columns: ["DMSWorking"] },
+    ]);
+    // template libraries take no sections at all
+    expect(dialogSections(dict, "template")).toEqual([]);
+  });
+
+  it("deriveTypeStates unions the per-library past — widens, never narrows", async () => {
+    const { deriveTypeStates, emptySiteDictionary } = await import("../docs/model");
+    const lib = (libType: string, columns: { internal: string; available: boolean; inDefault: boolean }[]) => ({
+      libType,
+      config: {
+        columns: columns.map((c) => ({
+          ...c,
+          label: "",
+          role: "",
+          termSetId: "",
+        })),
+      },
+    });
+    const dict = {
+      ...emptySiteDictionary(),
+      templates: { record: ["DMSTemplated"] },
+      columns: [
+        pcol("DMSStatus"),
+        pcol("DMSTemplated"),
+        pcol("Untouched", { types: { working: "on" as const } }),
+      ],
+    };
+    const derived = deriveTypeStates(dict, [
+      // two standards libraries disagree — the union wins (default > on)
+      lib("standard", [{ internal: "DMSStatus", available: true, inDefault: false }]),
+      lib("standard", [{ internal: "DMSStatus", available: true, inDefault: true }]),
+      // a revision library's config counts toward STANDARD
+      lib("revision", [{ internal: "DMSTemplated", available: true, inDefault: false }]),
+      lib("working", []),
+    ]);
+    const by = new Map(derived.columns.map((c) => [c.internal, c.types]));
+    expect(by.get("DMSStatus")).toEqual({ standard: "default" });
+    // the C5 template seeds the type's default even with no library tick
+    expect(by.get("DMSTemplated")).toEqual({ standard: "on", record: "default" });
+    // an already-typed column is never touched
+    expect(by.get("Untouched")).toEqual({ working: "on" });
+    // the input dict is not mutated (pure)
+    expect(dict.columns[0].types).toBeUndefined();
+    // no libraries at all: a legacy-available column reads "on" everywhere
+    const bare = deriveTypeStates(
+      { ...emptySiteDictionary(), columns: [pcol("A"), pcol("B", { available: false })] },
+      []
+    );
+    expect(bare.columns[0].types).toEqual({ standard: "on", record: "on", working: "on" });
+    expect(bare.columns[1].types).toEqual({});
   });
 });
