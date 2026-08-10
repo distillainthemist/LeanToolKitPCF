@@ -45,12 +45,16 @@ import {
   columnOffered,
   defaultColumnsFor,
   deriveTypeStates,
+  dialogSections,
   emptySiteDictionary,
+  isDateColumn,
   siteKey,
+  sortByDictionary,
 } from "./model";
 import {
   RegisterCellCtx,
   buildRegisterColumns,
+  makeStatusChip,
   statusTone,
   WidthBucket,
 } from "./registerCells";
@@ -368,6 +372,46 @@ function paintScopeLines(opts: CardMount, body: HTMLElement, scope: CardScope): 
 
 // ---- Standard documents: the register's rows, on the board ------------
 
+/** The details-pane context the register itself passes (Vault V4 / O2 /
+ *  Part II S2) — labels, sections, roles, date columns and the status
+ *  chip. Without it the overlay falls back to dumping every raw
+ *  SharePoint field, which is never what a board card means. */
+function detailProps(
+  scope: CardScope,
+  lib: DocLibrary | undefined,
+  row: DocRow,
+  chip: (value: string) => HTMLElement
+) {
+  const sections =
+    lib !== undefined && scope.dict.columns.length > 0
+      ? dialogSections(scope.dict, lib.libType)
+      : undefined;
+  return {
+    labels: Object.fromEntries(
+      (lib?.config.columns ?? []).filter((c) => c.label !== "").map((c) => [c.internal, c.label])
+    ),
+    linkColumns: (lib?.config.columns ?? [])
+      .filter((c) => c.role === "linkedDocuments")
+      .map((c) => c.internal),
+    dateColumns: scope.dict.columns.filter((c) => isDateColumn(c)).map((c) => c.internal),
+    sections,
+    columns:
+      lib === undefined
+        ? undefined
+        : sections !== undefined
+          ? sections.flatMap((s) => s.columns)
+          : sortByDictionary(
+              lib.config.columns.filter((c) => c.available).map((c) => c.internal),
+              scope.dict.columns.map((c) => c.internal)
+            ),
+    roles: Object.fromEntries(
+      scope.dict.columns.filter((c) => c.role !== "").map((c) => [c.internal, c.role])
+    ),
+    statusValue: scope.statusCol !== null ? (row.values[scope.statusCol.internal] ?? "") : "",
+    statusChipFor: chip,
+  };
+}
+
 async function paintDocs(
   opts: CardMount,
   body: HTMLElement
@@ -497,6 +541,7 @@ async function paintDocs(
           driveId,
           libraryName: lib ? lib.config.title || lib.name : "",
           askToWork: lib?.libType === "working",
+          ...detailProps(scope, lib, row, makeStatusChip(cellCtx)),
         })
       );
     },
@@ -626,6 +671,13 @@ async function paintHealth(
   // R5 task rows (taskRows.ts — the register's Document-tasks anatomy):
   // pill · name-over-meta · chevron, the whole row opens the overlay
   // with the details pane up, where Mark reviewed lives
+  const chip = makeStatusChip({
+    dict: scope.dict,
+    states: paletteMap((await appPalettes()).states),
+    labelToId: scope.labelToId,
+    statusCol: scope.statusCol,
+    myEmail: (currentViewer()?.email ?? "").toLowerCase(),
+  });
   const openRow = (d: Due) => {
     void driveIdFor(scope.site, d.row.listId).then((driveId) =>
       openDocViewer({
@@ -635,9 +687,7 @@ async function paintHealth(
         libraryName: d.lib.config.title || d.lib.name,
         askToWork: false,
         detailsOpen: true,
-        roles: Object.fromEntries(
-          scope.dict.columns.filter((x) => x.role !== "").map((x) => [x.internal, x.role])
-        ),
+        ...detailProps(scope, d.lib, d.row, chip),
       })
     );
   };
