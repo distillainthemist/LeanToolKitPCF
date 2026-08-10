@@ -42,6 +42,10 @@ import {
   BasePermissions,
   LifecycleCommandDef,
   LifecycleStage,
+  columnOffered,
+  defaultColumnsFor,
+  deriveTypeStates,
+  dialogSections,
   emptySiteDictionary,
   isDateColumn,
   lifecycleCommandsFor,
@@ -333,7 +337,13 @@ export function mountDocs(
     // stopped even requesting them (the plan's finding F2). A column's
     // meaning belongs to the site, so it is answered by the dictionary
     // and holds however many libraries are in view.
-    const siteDict = app.sites[siteKey(app.siteUrl)] ?? emptySiteDictionary();
+    // Part II (S2): the dictionary answers DERIVED — columns that
+    // predate the type cells get them from the per-library past, read-
+    // time and pure (nothing is written until an admin saves settings)
+    const siteDict = deriveTypeStates(
+      app.sites[siteKey(app.siteUrl)] ?? emptySiteDictionary(),
+      libraries
+    );
     const dictBy = new Map(siteDict.columns.map((c) => [c.internal, c]));
     /** The libraries whose rows can appear right now. */
     const viewLibs = (): DocLibrary[] =>
@@ -745,6 +755,9 @@ export function mountDocs(
           // a quick edit on a reader-facing document publishes under
           // moderation (CA1) — a mid-circulation draft never does
           readerFacingStage: ["approved", "superseded", "obsolete"].includes(stageOfRow(row)),
+          // Part II S2: the manager's sub-headings section the form
+          sections:
+            siteDict.columns.length > 0 ? dialogSections(siteDict, lib.libType) : undefined,
           onDone: () => void refreshRow(row),
         });
       });
@@ -811,23 +824,24 @@ export function mountDocs(
       if (!office.has(row.ext) || row.uniqueId === "") return "";
       return `${app.siteUrl}/_layouts/15/Doc.aspx?sourcedoc={${row.uniqueId}}&action=edit`;
     };
+    /** The library types the current scope spans — what the Part II
+     *  cross-filter rules resolve against. */
+    const viewTypes = (): string[] => viewLibs().map((l) => l.libType);
     /**
      * The register's columns: the view's own choice when there is one,
-     * otherwise every column any library in view opens with — in
-     * dictionary order, so two libraries never disagree about sequence.
-     * A row whose library lacks a column simply shows nothing there.
+     * otherwise the site's DEFAULT cells for the types in view (Part II
+     * S2: union for mixed views, dictionary-ordered — one source, the
+     * same function the docs card resolves through). A site with no
+     * dictionary yet falls back to the per-library ticks, so an
+     * unconfigured site still browses.
      */
     const defaultInternals = (): string[] => {
-      const libs = viewLibs();
+      if (siteDict.columns.length > 0) return defaultColumnsFor(siteDict, viewTypes());
       const wanted = new Set<string>();
-      for (const lib of libs) {
+      for (const lib of viewLibs()) {
         for (const c of lib.config.columns) if (c.inDefault) wanted.add(c.internal);
       }
-      const out = siteDict.columns
-        .filter((c) => c.available && wanted.has(c.internal))
-        .map((c) => c.internal);
-      // a site with no dictionary yet (nothing exposed) still browses
-      return out.length > 0 ? out : [...wanted];
+      return [...wanted];
     };
 
     const persistUi = (patch: Partial<DocUiPrefs>) => {
@@ -1745,14 +1759,22 @@ export function mountDocs(
     }
     const orgProps = [...orgCols].map(taxonomySearchProperty);
 
-    /** Taxonomy columns beyond the organisation, unioned across the
-     *  exposed libraries: internal → display label + term set. */
+    /** Taxonomy columns beyond the organisation — from the DICTIONARY
+     *  (Part II S2: the manager's cells decide what is offered), the
+     *  per-library union only when a site has no dictionary yet. */
     const taxCols = new Map<string, { label: string; setId: string }>();
-    for (const lib of libraries) {
-      for (const c of lib.config.columns) {
-        if (!c.available || c.termSetId === "" || c.role === "orgUnit") continue;
-        if (!taxCols.has(c.internal)) {
-          taxCols.set(c.internal, { label: c.label || c.internal, setId: c.termSetId });
+    if (siteDict.columns.length > 0) {
+      for (const c of siteDict.columns) {
+        if (!columnOffered(c) || c.termSetId === "" || c.role === "orgUnit") continue;
+        taxCols.set(c.internal, { label: c.label || c.internal, setId: c.termSetId });
+      }
+    } else {
+      for (const lib of libraries) {
+        for (const c of lib.config.columns) {
+          if (!c.available || c.termSetId === "" || c.role === "orgUnit") continue;
+          if (!taxCols.has(c.internal)) {
+            taxCols.set(c.internal, { label: c.label || c.internal, setId: c.termSetId });
+          }
         }
       }
     }
@@ -1760,7 +1782,7 @@ export function mountDocs(
      *  Filters pane (Ben, 2026-08-03). */
     const dateCols = (): { internal: string; label: string }[] =>
       siteDict.columns
-        .filter((c) => c.available && c.filterable && isDateColumn(c))
+        .filter((c) => columnOffered(c) && c.filterable && isDateColumn(c))
         .map((c) => ({ internal: c.internal, label: c.label !== "" ? c.label : c.internal }));
 
     /** col "" = the organisation (its own slot in links). */
@@ -2092,6 +2114,11 @@ export function mountDocs(
           targets: libraries.filter(canAddTo),
           templates: libraries.filter((l) => l.libType === "template"),
           dictBy,
+          // Part II S2: the chosen target's type picks the sections
+          sectionsFor:
+            siteDict.columns.length > 0
+              ? (libType) => dialogSections(siteDict, libType)
+              : undefined,
           host: dialogHost,
           onCreated: (row) => {
             void load(true);
@@ -2234,7 +2261,7 @@ export function mountDocs(
         };
         // the site says which columns filter (Ben, 2026-08-03)
         const filterable = new Set(
-          siteDict.columns.filter((c) => c.available && c.filterable).map((c) => c.internal)
+          siteDict.columns.filter((c) => columnOffered(c) && c.filterable).map((c) => c.internal)
         );
         // …and the organisation obeys that too. It used to be exempt
         // because the Folders pane drives it, which meant unticking it
@@ -2462,7 +2489,11 @@ export function mountDocs(
       buildRegisterColumns(cellCtx, {
         wanted:
           chosenColumns.length > 0
-            ? chosenColumns.filter((i) => i === "Modified" || dictBy.get(i)?.available === true)
+            ? chosenColumns.filter((i) => {
+                  if (i === "Modified") return true;
+                  const c = dictBy.get(i);
+                  return c !== undefined && columnOffered(c);
+                })
             : defaultInternals(),
         bucket,
         // more than one library in view: say which one each row came from
@@ -2618,13 +2649,18 @@ export function mountDocs(
             .map((c) => c.internal),
           // R6: date columns render in the one app format, from raw ISO
           dateColumns: siteDict.columns.filter((c) => isDateColumn(c)).map((c) => c.internal),
+          // Part II S2: the type's non-hidden columns, under their
+          // sub-headings — same sections the add and edit dialogs show
+          sections: lib && siteDict.columns.length > 0 ? dialogSections(siteDict, lib.libType) : undefined,
           // dictionary order — the same order the add form uses,
           // adjustable under Settings → Documents → Document columns
           columns: lib
-            ? sortByDictionary(
-                lib.config.columns.filter((c) => c.available).map((c) => c.internal),
-                [...dictBy.keys()]
-              )
+            ? siteDict.columns.length > 0
+              ? dialogSections(siteDict, lib.libType).flatMap((s) => s.columns)
+              : sortByDictionary(
+                  lib.config.columns.filter((c) => c.available).map((c) => c.internal),
+                  [...dictBy.keys()]
+                )
             : undefined,
           // a getter, read on every details repaint: a lifecycle command
           // rewrites the status while the overlay is open, and the chip
@@ -3841,7 +3877,7 @@ export function mountDocs(
       const carried = new Set(viewLibs().flatMap((l) => l.config.columns.map((c) => c.internal)));
       const entries = [
         ...siteDict.columns
-          .filter((c) => c.available && carried.has(c.internal))
+          .filter((c) => columnOffered(c) && carried.has(c.internal))
           .map((c) => ({ internal: c.internal, label: c.label !== "" ? c.label : c.internal })),
         { internal: "Modified", label: "Modified" },
       ];

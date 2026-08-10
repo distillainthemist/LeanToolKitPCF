@@ -68,6 +68,11 @@ export interface FieldEditorOpts {
   onChange: () => void;
   /** internal → starting value (absent = empty form, the add mode). */
   initial?: Map<string, EditorInitial>;
+  /** The columns under their sub-headings (Part II S2). When provided
+   *  it REPLACES the per-library `columns` selection: each group
+   *  renders as a titled section, in the manager's order; a column
+   *  the library does not carry is skipped as always. */
+  sections?: { heading: string; columns: string[] }[];
 }
 
 export function buildFieldEditors(opts: FieldEditorOpts): BuiltEditor[] {
@@ -86,7 +91,17 @@ export function buildFieldEditors(opts: FieldEditorOpts): BuiltEditor[] {
     const dictLabel = dictBy.get(f.internal)?.label ?? "";
     return dictLabel !== "" ? dictLabel : f.title;
   };
+  // Part II S2: a section heading renders only once its section
+  // actually yields an editor — a group whose columns this library
+  // does not carry never shows an empty title
+  let pendingHeading: string | undefined;
+  const emittedHeadings = new Set<string>();
   const fieldRow = (label: string, control: HTMLElement) => {
+    if (pendingHeading !== undefined && !emittedHeadings.has(pendingHeading)) {
+      box.appendChild(el("div", "app-docs-addgroup", pendingHeading));
+      emittedHeadings.add(pendingHeading);
+    }
+    pendingHeading = undefined;
     const wrap = el("div", "app-docs-addfield");
     wrap.appendChild(el("div", "app-field-label", label));
     wrap.appendChild(control);
@@ -97,7 +112,17 @@ export function buildFieldEditors(opts: FieldEditorOpts): BuiltEditor[] {
   const available = new Map(
     opts.columns.filter((x) => x.available).map((x) => [x.internal, x])
   );
-  for (const internal of sortByDictionary([...available.keys()], [...dictBy.keys()])) {
+  // the sections decide membership and order when given (the manager's
+  // groups); the legacy per-library ticks otherwise
+  const walk: { internal: string; section: string }[] =
+    opts.sections !== undefined
+      ? opts.sections.flatMap((s) => s.columns.map((internal) => ({ internal, section: s.heading })))
+      : sortByDictionary([...available.keys()], [...dictBy.keys()]).map((internal) => ({
+          internal,
+          section: "",
+        }));
+  for (const { internal, section } of walk) {
+    pendingHeading = section !== "" ? section : undefined;
     const f = byInternal.get(internal);
     if (f === undefined) continue;
     const kind = editorKind(f);

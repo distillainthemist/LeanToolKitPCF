@@ -57,6 +57,10 @@ interface ViewerOpts {
    *  settings — the ONLY properties shown when provided. Absent, every
    *  non-noise field renders (the skip set below). */
   columns?: string[];
+  /** The columns under their sub-headings (Part II S2) — when provided
+   *  the properties pane renders each group as a section, exactly as
+   *  the add and edit dialogs do. Flattened, must equal `columns`. */
+  sections?: { heading: string; columns: string[] }[];
   /** Open with the details pane EXPANDED (5I: collapsed is the default
    *  — the document speaks first; a task-list open, or a document held
    *  by the viewer, arrives with work to do and expands). The header's
@@ -607,7 +611,22 @@ export function openDocViewer(opts: ViewerOpts): () => void {
       );
     } else {
       const grid = el("div", "app-docs-propgrid");
+      // Part II S2: group sub-headings section the pane exactly as they
+      // section the add and edit dialogs. A heading renders only when
+      // one of its columns actually has a value to show.
+      const shownKeys = new Set(shown.map(([k]) => k));
+      const headingFor = new Map<string, string>();
+      for (const s of opts.sections ?? []) {
+        const withValues = s.columns.filter((k) => shownKeys.has(k));
+        if (s.heading !== "" && withValues.length > 0) {
+          headingFor.set(withValues[0], s.heading);
+        }
+      }
       for (const [k, v] of shown) {
+        const heading = headingFor.get(k);
+        if (heading !== undefined) {
+          grid.appendChild(el("span", "app-docs-propgroup", heading));
+        }
         grid.appendChild(el("span", "app-docs-propkey", labels[k] ?? k));
         if (linkCols.has(k)) {
           const cell = el("span", "app-docs-propval app-docs-proplinks");

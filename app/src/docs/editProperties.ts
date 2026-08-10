@@ -51,6 +51,9 @@ export interface EditPropertiesOpts {
    *  approval process) — but never on a mid-circulation draft, whose
    *  moderation wall must hold. */
   readerFacingStage?: boolean;
+  /** The manager's sub-headings for this library's type (Part II S2) —
+   *  the form renders them as sections. */
+  sections?: { heading: string; columns: string[] }[];
   onDone: () => void;
 }
 
@@ -182,6 +185,7 @@ export function openEditProperties(opts: EditPropertiesOpts): void {
       dictBy: opts.dictBy,
       onChange: sync,
       initial,
+      sections: opts.sections,
     });
   })().catch((e: unknown) => fail("Could not load the form", String(e)));
 

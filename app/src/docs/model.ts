@@ -214,6 +214,13 @@ export function emptySiteDictionary(): SiteDictionary {
 const stateFor = (col: SiteColumn, t: ConfigurableLibType): ColumnTypeState | undefined =>
   col.types?.[t];
 
+/** Offered anywhere at all. On a derived dictionary this is the cells'
+ *  verdict (hidden everywhere = unavailable); on a pre-Part-II column
+ *  the legacy flag still answers, so nothing vanishes mid-migration. */
+export function columnOffered(col: SiteColumn): boolean {
+  return col.types !== undefined ? Object.keys(col.types).length > 0 : col.available;
+}
+
 /** The configurable types a set of libraries actually spans (revision
  *  mirrors standard; template contributes nothing). */
 export function configurableTypesIn(libTypes: string[]): ConfigurableLibType[] {

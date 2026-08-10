@@ -40,7 +40,14 @@ import {
 } from "./rows";
 import { taskGroupHeader, taskRowEl } from "./taskRows";
 import { DocView, emptyDocView, viewFromPaste } from "./views";
-import { SiteDictionary, emptySiteDictionary, siteKey } from "./model";
+import {
+  SiteDictionary,
+  columnOffered,
+  defaultColumnsFor,
+  deriveTypeStates,
+  emptySiteDictionary,
+  siteKey,
+} from "./model";
 import {
   RegisterCellCtx,
   buildRegisterColumns,
@@ -159,7 +166,12 @@ async function resolveCardScope(opts: CardMount): Promise<CardScope> {
     return out;
   }
   out.site = app.siteUrl;
-  out.dict = app.sites[siteKey(app.siteUrl)] ?? emptySiteDictionary();
+  // derived, like the screen (Part II S2): pre-Part-II dictionaries
+  // get their type cells from the per-library past, read-time and pure
+  out.dict = deriveTypeStates(
+    app.sites[siteKey(app.siteUrl)] ?? emptySiteDictionary(),
+    libraries
+  );
 
   // ---- the effective view --------------------------------------------
   const pasted = cfg(opts, "docsView");
@@ -378,23 +390,27 @@ async function paintDocs(
       ? [{ cols: [scope.statusCol.internal], labels: scope.approvedLabels }]
       : [];
 
-  // which columns: the view's own choice, else what the libraries in
-  // view open with — availability answered by the dictionary (the
-  // register's own rule)
+  // which columns: the view's own choice, else the site's DEFAULT
+  // cells for the types in view — Part II S2: the same function the
+  // register resolves through, so card and screen cannot disagree
   const dictBy = new Map(scope.dict.columns.map((c) => [c.internal, c]));
   const defaults = (): string[] => {
+    if (scope.dict.columns.length > 0) {
+      return defaultColumnsFor(scope.dict, scope.libs.map((l) => l.libType));
+    }
     const wanted = new Set<string>();
     for (const lib of scope.libs) {
       for (const c of lib.config.columns) if (c.inDefault) wanted.add(c.internal);
     }
-    const fromDict = scope.dict.columns
-      .filter((c) => c.available && wanted.has(c.internal))
-      .map((c) => c.internal);
-    return fromDict.length > 0 ? fromDict : [...wanted];
+    return [...wanted];
   };
   const wanted =
     scope.view.columns.length > 0
-      ? scope.view.columns.filter((i) => i === "Modified" || dictBy.get(i)?.available === true)
+      ? scope.view.columns.filter((i) => {
+          if (i === "Modified") return true;
+          const c = dictBy.get(i);
+          return c !== undefined && columnOffered(c);
+        })
       : defaults();
 
   const feeds = scope.libs.map((lib) => {

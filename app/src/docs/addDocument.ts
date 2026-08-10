@@ -45,6 +45,9 @@ export interface AddDocumentOpts {
   templates: DocLibrary[];
   /** The site dictionary by internal name (labels, term sets). */
   dictBy: Map<string, SiteColumn>;
+  /** The manager's sub-headings per library type (Part II S2) — the
+   *  metadata form renders them as sections for the chosen target. */
+  sectionsFor?: (libType: string) => { heading: string; columns: string[] }[];
   /** Styled dialog host (.app-dlghost). */
   host: HTMLElement;
   /** Called with the created document's row, after check-in. */
@@ -285,6 +288,8 @@ export function openAddDocument(opts: AddDocumentOpts): void {
       columns: lib.config.columns,
       dictBy: opts.dictBy,
       onChange: sync,
+      // the target picks the type, the type picks the sections
+      sections: opts.sectionsFor?.(lib.libType),
     });
   };
   targetSel.addEventListener("change", () => void buildEditors());
