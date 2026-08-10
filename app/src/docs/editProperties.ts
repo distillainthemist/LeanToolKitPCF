@@ -18,6 +18,7 @@ import { openDialog } from "../../../shared/ui/dialog";
 import { DocLibrary } from "./docsStore";
 import {
   SiteColumn,
+  addMonthsYmd,
   fieldsFromResponse,
   prefillFromItem,
   spErrorText,
@@ -54,6 +55,17 @@ export interface EditPropertiesOpts {
   /** The manager's sub-headings for this library's type (Part II S2) —
    *  the form renders them as sections. */
   sections?: { heading: string; columns: string[] }[];
+  /** The date model (Ben, 2026-08-10): a CHANGED importance rewrites
+   *  the cadence from the mapping, and the review date follows from
+   *  the stored effective date. Internals "" = unmapped, skipped. */
+  dateModel?: {
+    importanceInternal: string;
+    effectiveInternal: string;
+    reviewInternal: string;
+    cadenceInternal: string;
+    /** importance term id (lowercased) → months. */
+    cadence: Record<string, number>;
+  };
   onDone: () => void;
 }
 
@@ -112,6 +124,9 @@ export function openEditProperties(opts: EditPropertiesOpts): void {
   dlg.body.appendChild(status);
 
   let editors: BuiltEditor[] = [];
+  /** The prefill, kept for save(): the date model reads the STORED
+   *  effective date and the ORIGINAL importance from here. */
+  let initialMap: Map<string, EditorInitial> = new Map();
   const sync = () => {
     const missing = editors.some((e) => e.field.required && e.isEmpty());
     saveBtn.disabled =
@@ -177,6 +192,7 @@ export function openEditProperties(opts: EditPropertiesOpts): void {
       }
     }
     if (!dlg.root.isConnected) return;
+    initialMap = initial;
     editors = buildFieldEditors({
       site,
       box: metaBox,
@@ -205,6 +221,28 @@ export function openEditProperties(opts: EditPropertiesOpts): void {
     }
 
     const { formValues, patch } = splitAddWrites(editors.map((e) => e.read()));
+    // the date model (Ben, 2026-08-10): importance CHANGED → cadence
+    // rewritten from the mapping, review date recomputed from the
+    // stored effective date. Unchanged importance writes nothing.
+    const dm = opts.dateModel;
+    if (dm !== undefined && dm.importanceInternal !== "") {
+      const imp = editors.find((e) => e.field.internal === dm.importanceInternal);
+      const picked = imp?.read();
+      const termId = (picked?.termId ?? "").toLowerCase();
+      const wasId = (initialMap.get(dm.importanceInternal)?.term?.termId ?? "").toLowerCase();
+      if (termId !== "" && termId !== wasId) {
+        const months = dm.cadence[termId];
+        if (months !== undefined && months > 0) {
+          if (dm.cadenceInternal !== "") {
+            formValues.push({ FieldName: dm.cadenceInternal, FieldValue: String(months) });
+          }
+          const effYmd = (initialMap.get(dm.effectiveInternal)?.text ?? "").trim();
+          if (dm.reviewInternal !== "" && /^\d{4}-\d{2}-\d{2}$/.test(effYmd)) {
+            patch[dm.reviewInternal] = addMonthsYmd(effYmd, months);
+          }
+        }
+      }
+    }
     if (formValues.length > 0) {
       status.textContent = "Writing properties…";
       const res = await timed(

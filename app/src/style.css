@@ -2294,6 +2294,16 @@ button.app-docs-navterm.app-docs-navterm-on {
 }
 .app-docs-propgroup:first-child { margin-top: 0; padding-top: 0; border-top: none; }
 
+/* the computed dates line in Mark reviewed (the date model) */
+.app-docs-datestamp { font-size: 13px; font-weight: 600; margin: 4px 0 8px; }
+
+/* the review-cadence mapping: term · months · unit */
+.app-docs-cadgrid {
+  display: grid; grid-template-columns: minmax(140px, 1fr) 90px auto;
+  gap: 6px 10px; align-items: center; margin: 6px 0 12px;
+}
+.app-docs-cadmonths { width: 90px; }
+
 /* the merged three-state cell: hidden — · available ✓ · default ★ */
 .app-docs-typecell {
   border: 1px solid #e0ddd7; background: none; border-radius: 5px;

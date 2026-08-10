@@ -193,6 +193,11 @@ export interface SiteDictionary {
    *  listed here (an orphan) — it renders after the listed groups
    *  rather than being dropped. */
   groups: string[];
+  /** Importance term id → review cadence in MONTHS (the date model,
+   *  Ben 2026-08-10): cadence follows importance, review date is
+   *  always effective + cadence. Keyed by term ID like the lifecycle
+   *  mapping, so a rename cannot detach it. */
+  cadence?: Record<string, number>;
   /** Status term id → lifecycle stage (Phase 5A). Explicit — the stored
    *  mapping is the law, name suggestions only prefill it — and keyed
    *  by term ID so a rename cannot detach a stage. Optional so the many
@@ -1021,6 +1026,16 @@ function parseSiteDictionary(o: Record<string, unknown>): SiteDictionary {
     }
     if (Object.keys(lifecycle).length > 0) dict.lifecycle = lifecycle;
   }
+  if (o.cadence && typeof o.cadence === "object") {
+    const cadence: Record<string, number> = {};
+    for (const [id, months] of Object.entries(o.cadence as Record<string, unknown>)) {
+      const key = id.trim().toLowerCase();
+      if (key !== "" && typeof months === "number" && Number.isFinite(months) && months > 0) {
+        cadence[key] = Math.floor(months);
+      }
+    }
+    if (Object.keys(cadence).length > 0) dict.cadence = cadence;
+  }
   return dict;
 }
 
@@ -1055,6 +1070,9 @@ function serializeSiteDictionary(dict: SiteDictionary): Record<string, unknown> 
   if (Object.keys(templates).length > 0) o.templates = templates;
   if (dict.lifecycle !== undefined && Object.keys(dict.lifecycle).length > 0) {
     o.lifecycle = dict.lifecycle;
+  }
+  if (dict.cadence !== undefined && Object.keys(dict.cadence).length > 0) {
+    o.cadence = dict.cadence;
   }
   return o;
 }
@@ -2665,6 +2683,53 @@ export function orgSyncPlan(
 /** SharePoint's date column types — what a from/to filter can bind to. */
 export function isDateField(f: SpField): boolean {
   return f.type === "DateTime";
+}
+
+// ---- the date model (Ben, 2026-08-10) ---------------------------------
+// One rule per field, all derived, nothing typed by hand:
+//   effective date  = TODAY at the check-ins that mean something — the
+//                     owner's Approve (major) and Mark reviewed. A
+//                     property adjustment never touches it.
+//   review cadence  = the importance term's mapped MONTHS (dict.cadence),
+//                     rewritten whenever importance is set or changed.
+//   review date     = ALWAYS effective + cadence.
+// The three columns are SYSTEM-MANAGED: they leave the editable forms
+// and stay visible in the properties pane. A direct SharePoint edit
+// remains auditable, not preventable — the standing thesis.
+
+/** The columns the date model owns — never offered as form editors. */
+export const SYSTEM_DATE_ROLES = new Set(["effectiveDate", "nextReviewDate", "reviewCadence"]);
+
+/** When neither the importance mapping nor the document's own cadence
+ *  column answers. */
+export const DEFAULT_CADENCE_MONTHS = 12;
+
+/** The mapped months for an importance term; null = unmapped. */
+export function cadenceForImportance(dict: SiteDictionary, termId: string): number | null {
+  const m = (dict.cadence ?? {})[termId.trim().toLowerCase()];
+  return typeof m === "number" && m > 0 ? m : null;
+}
+
+/** yyyy-mm-dd plus N months, end-of-month CLAMPED (31 Jan + 1 month is
+ *  28/29 Feb, never 2 March). "" for unparseable input. */
+export function addMonthsYmd(ymd: string, months: number): string {
+  const m = ymd.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (m === null) return "";
+  const y = Number(m[1]);
+  const mo = Number(m[2]) - 1;
+  const d = Number(m[3]);
+  const total = mo + months;
+  const targetY = y + Math.floor(total / 12);
+  const targetM = ((total % 12) + 12) % 12;
+  const daysInTarget = new Date(targetY, targetM + 1, 0).getDate();
+  const targetD = Math.min(d, daysInTarget);
+  return `${targetY}-${String(targetM + 1).padStart(2, "0")}-${String(targetD).padStart(2, "0")}`;
+}
+
+/** Today as yyyy-mm-dd, LOCAL date parts (the acting user's calendar
+ *  day is the effective day — never UTC's). */
+export function todayYmd(now: Date = new Date()): string {
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 }
 
 /** Roles that ARE dates by definition. The live schema stamps isDate on

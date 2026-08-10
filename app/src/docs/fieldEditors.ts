@@ -9,7 +9,7 @@
 
 import { clear, el } from "../../../shared/ui/dom";
 import { searchEntra } from "../store/people";
-import { AddFieldValue, SiteColumn, SpField, sortByDictionary } from "./model";
+import { AddFieldValue, SYSTEM_DATE_ROLES, SiteColumn, SpField, sortByDictionary } from "./model";
 import { POOL_ROLES, PeopleSource, poolPeopleSource } from "./accessGates";
 import { fetchTermPaths } from "./sp";
 
@@ -126,6 +126,10 @@ export function buildFieldEditors(opts: FieldEditorOpts): BuiltEditor[] {
   const hasNamed = opts.sections?.some((s) => s.heading !== "") === true;
   for (const { internal, section } of walk) {
     pendingHeading = section !== "" ? section : hasNamed ? "Other" : undefined;
+    // the date model's columns are SYSTEM-MANAGED (Ben, 2026-08-10):
+    // effective date stamps at approve/review, cadence follows
+    // importance, review date is always derived — none is a form field
+    if (SYSTEM_DATE_ROLES.has(dictBy.get(internal)?.role ?? "")) continue;
     const f = byInternal.get(internal);
     if (f === undefined) continue;
     const kind = editorKind(f);

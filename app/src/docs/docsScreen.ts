@@ -42,6 +42,7 @@ import {
   BasePermissions,
   LifecycleCommandDef,
   LifecycleStage,
+  cadenceForImportance,
   columnOffered,
   defaultColumnsFor,
   deriveTypeStates,
@@ -363,6 +364,53 @@ export function mountDocs(
     /** The edit-access GRANT column (5G3) — "" until the site maps one,
      *  and approve-request is withheld until it does. */
     const revEditorsInternal = internalForRole("revisionEditors");
+    // ---- the date model (Ben, 2026-08-10) ------------------------------
+    const importanceInternal = internalForRole("importance");
+    const effectiveInternal = internalForRole("effectiveDate");
+    const cadenceInternal = internalForRole("reviewCadence");
+    /** The stamps bundle for a command: the mapped internals this
+     *  library carries, and the cadence months from the row's CURRENT
+     *  importance via the settings mapping — falling back to the row's
+     *  own cadence column; null lets the command apply the 12-month
+     *  default. undefined = nothing mapped, nothing stamped. */
+    const resolveDatesFor = async (
+      row: DocRow,
+      lib: DocLibrary
+    ): Promise<
+      | {
+          effectiveInternal: string;
+          reviewInternal: string;
+          cadenceInternal: string;
+          cadenceMonths: number | null;
+        }
+      | undefined
+    > => {
+      const carried = new Set(lib.config.columns.map((c) => c.internal));
+      const eff = effectiveInternal !== "" && carried.has(effectiveInternal) ? effectiveInternal : "";
+      const rev = reviewInternal !== "" && carried.has(reviewInternal) ? reviewInternal : "";
+      const cad = cadenceInternal !== "" && carried.has(cadenceInternal) ? cadenceInternal : "";
+      if (eff === "" && rev === "" && cad === "") return undefined;
+      let months: number | null = null;
+      const impLabel = (row.values[importanceInternal] ?? "").split(";")[0].trim();
+      const impSet =
+        importanceInternal !== "" ? (dictBy.get(importanceInternal)?.termSetId ?? "") : "";
+      if (impLabel !== "" && impSet !== "") {
+        try {
+          const walk = await cachedTermPaths(app.siteUrl, impSet);
+          const node = walk.nodes.find(
+            (n) => n.labels[n.labels.length - 1].toLowerCase() === impLabel.toLowerCase()
+          );
+          if (node !== undefined) months = cadenceForImportance(siteDict, node.id);
+        } catch {
+          /* mapping unreachable = fall through to the row's own value */
+        }
+      }
+      if (months === null) {
+        const own = Number(row.values[cadenceInternal] ?? "");
+        if (Number.isFinite(own) && own > 0) months = Math.floor(own);
+      }
+      return { effectiveInternal: eff, reviewInternal: rev, cadenceInternal: cad, cadenceMonths: months };
+    };
 
     // ---- lifecycle commands (Phase 5B) ---------------------------------
     // Standards move between stages; everything here derives from the
@@ -473,7 +521,13 @@ export function mountDocs(
           existing: mails.map((email, i) => ({ email, name: names[i] ?? email })),
         };
       }
-      void import("./lifecycleCmds").then(({ openLifecycleCommand }) => {
+      void import("./lifecycleCmds").then(async ({ openLifecycleCommand }) => {
+        // the date model stamps ride the owner's Approve alone
+        const lib = byListId.get(row.listId);
+        const dates =
+          cmd.key === "approve" && cmd.to === "approved" && lib !== undefined
+            ? await resolveDatesFor(row, lib)
+            : undefined;
         openLifecycleCommand({
           site: app.siteUrl,
           listId: row.listId,
@@ -481,6 +535,7 @@ export function mountDocs(
           command: cmd,
           targetTerm: target,
           statusInternal,
+          dates,
           actorName: currentViewer()?.name ?? "",
           actingAsEditor: lifecycleGatesFor(row).isEditor,
           host: dialogHost,
@@ -550,12 +605,16 @@ export function mountDocs(
       return !Number.isNaN(t) && t <= Date.now() + REVIEW_HORIZON_DAYS * 86_400_000;
     };
     const openMarkReviewedRow = (row: DocRow) => {
-      void import("./lifecycleCmds").then(({ openMarkReviewed }) => {
+      void import("./lifecycleCmds").then(async ({ openMarkReviewed }) => {
+        const lib = byListId.get(row.listId);
         openMarkReviewed({
           site: app.siteUrl,
           listId: row.listId,
           row,
           reviewInternal,
+          // a review re-affirms: effective refreshes, cadence follows
+          // the importance mapping (Ben, 2026-08-10)
+          dates: lib !== undefined ? await resolveDatesFor(row, lib) : undefined,
           host: dialogHost,
           onDone: () => void refreshRow(row),
         });
@@ -758,6 +817,14 @@ export function mountDocs(
           // Part II S2: the manager's sub-headings section the form
           sections:
             siteDict.columns.length > 0 ? dialogSections(siteDict, lib.libType) : undefined,
+          // the date model: importance changes rewrite cadence + review
+          dateModel: {
+            importanceInternal,
+            effectiveInternal,
+            reviewInternal,
+            cadenceInternal,
+            cadence: siteDict.cadence ?? {},
+          },
           onDone: () => void refreshRow(row),
         });
       });
@@ -2119,6 +2186,12 @@ export function mountDocs(
             siteDict.columns.length > 0
               ? (libType) => dialogSections(siteDict, libType)
               : undefined,
+          // the date model: a picked importance carries its cadence
+          dateModel: {
+            importanceInternal,
+            cadenceInternal,
+            cadence: siteDict.cadence ?? {},
+          },
           host: dialogHost,
           onCreated: (row) => {
             void load(true);

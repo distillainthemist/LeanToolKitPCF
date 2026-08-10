@@ -526,6 +526,7 @@ export async function renderDocsSettings(body: HTMLElement, ctx: Ctx): Promise<v
     paintManager();
     paintPalettes();
     paintLifecycle();
+    paintCadence();
     paintHealth();
     // repaints itself when it lands — nothing waits on it
     void runTaxProbe();
@@ -1077,6 +1078,64 @@ export async function renderDocsSettings(body: HTMLElement, ctx: Ctx): Promise<v
 
   const lifeBox = el("div", "");
   body.appendChild(lifeBox);
+
+  // ---- review cadence (the date model, Ben 2026-08-10) -----------------
+  body.appendChild(section("Review cadence"));
+  body.appendChild(
+    note(
+      "Months between reviews, per importance. Setting a document's importance sets " +
+        "its cadence; the review date is always the effective date plus the cadence, " +
+        "and the effective date stamps itself at approval and at Mark reviewed — " +
+        "none of the three is typed by hand. Unmapped importance keeps the " +
+        "document's own cadence, or 12 months."
+    )
+  );
+  const cadenceBox = el("div", "");
+  body.appendChild(cadenceBox);
+  const paintCadence = () => {
+    void (async () => {
+      clear(cadenceBox);
+      const dict = dictionary();
+      const impCol = dict.columns.find((c) => c.role === "importance" && c.termSetId !== "");
+      if (impCol === undefined) {
+        cadenceBox.appendChild(
+          note("Map a managed-metadata column to the Importance role first — its terms are what carry a cadence.")
+        );
+        return;
+      }
+      cadenceBox.appendChild(el("div", "app-loading-line", "Reading the importance terms…"));
+      const walk = await fetchTermPaths(app.siteUrl, impCol.termSetId);
+      clear(cadenceBox);
+      if (walk.error !== "" || walk.nodes.length === 0) {
+        cadenceBox.appendChild(note(`Could not read the importance term set: ${walk.error || "no terms"}`));
+        return;
+      }
+      const grid = el("div", "app-docs-cadgrid");
+      for (const n of walk.nodes) {
+        const label = n.labels[n.labels.length - 1];
+        grid.appendChild(el("span", "app-docs-colname", label));
+        const months = el("input", "app-input app-docs-cadmonths") as HTMLInputElement;
+        months.type = "number";
+        months.min = "1";
+        months.placeholder = "—";
+        const key = n.id.toLowerCase();
+        const cur = (dict.cadence ?? {})[key];
+        months.value = cur !== undefined ? String(cur) : "";
+        months.addEventListener("input", () => {
+          const d = dictionary();
+          const cad = { ...(d.cadence ?? {}) };
+          const v = Number(months.value);
+          if (Number.isFinite(v) && v > 0) cad[key] = Math.floor(v);
+          else delete cad[key];
+          d.cadence = cad;
+          ctx.markDirty();
+        });
+        grid.appendChild(months);
+        grid.appendChild(el("span", "app-field-hint", "months"));
+      }
+      cadenceBox.appendChild(grid);
+    })();
+  };
   /** Fed into Health by paintHealth — recomputed whenever the mapping
    *  changes, because an unmapped term is a command that cannot run. */
   let lifecycleFindings: HealthFinding[] = [];

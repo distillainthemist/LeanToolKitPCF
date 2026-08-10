@@ -450,3 +450,26 @@ collapse this whole design into a file input.)
 
 **Deferred:** `ben_ltkdochistory` projection (version history + check-in
 comments already carry the trail); Teams/Outlook push notifications.
+
+## The date model (Ben, 2026-08-10)
+
+One rule per field, all derived, nothing typed by hand:
+
+- **Effective date** = TODAY at the check-ins that mean something —
+  the owner's Approve (the major) and Mark reviewed. A property
+  adjustment never touches it; reinstate/retirement never touch it
+  (no new revision happened).
+- **Review cadence (months)** = the importance term's mapped months
+  (Settings → Documents → Review cadence, keyed by term id like the
+  lifecycle mapping). Setting or changing importance — in the add
+  form or Edit properties — rewrites the cadence; an importance whose
+  term is unmapped keeps the document's own cadence, else 12.
+- **Review date** = ALWAYS effective + cadence (end-of-month
+  clamped). Mark reviewed lost its date picker — it computes; an
+  importance change recomputes review from the STORED effective date.
+
+The three columns are SYSTEM-MANAGED: they left the editable forms
+(fieldEditors skips their roles) and stay visible in the properties
+pane. Stamps ride INSIDE the approve bracket (a refused stamp aborts
+before the check-in); a direct SharePoint edit remains auditable, not
+preventable — the standing thesis.

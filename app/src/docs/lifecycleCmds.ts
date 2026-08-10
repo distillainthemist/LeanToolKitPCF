@@ -11,14 +11,17 @@ import { clear, el } from "../../../shared/ui/dom";
 import { openDialog } from "../../../shared/ui/dialog";
 import { poolPeopleSource } from "./accessGates";
 import {
+  DEFAULT_CADENCE_MONTHS,
   LifecycleCommandDef,
+  addMonthsYmd,
   formatDateForLocale,
   spErrorText,
+  todayYmd,
   validateItemErrors,
 } from "./model";
 import { NotifyContext } from "./notifyModel";
 import { attachNotifyPanel } from "./notifyPanel";
-import { DocRow } from "./rows";
+import { DocRow, formatDayMonthYear } from "./rows";
 import {
   checkInFile,
   checkOutFile,
@@ -41,6 +44,9 @@ export interface LifecycleRunOpts {
   targetTerm: { id: string; label: string };
   /** The status column's internal name. */
   statusInternal: string;
+  /** The date model's stamps for the owner's Approve (Ben,
+   *  2026-08-10) — absent = no mapped date columns, nothing stamped. */
+  dates?: DateStamps;
   /** Who is acting — approve's comment names them. */
   actorName: string;
   /** The actor's standing comes from an edit-access GRANT (5G3) — an
@@ -360,6 +366,52 @@ export function openLifecycleCommand(opts: LifecycleRunOpts): void {
       }
     }
 
+    // the date model (Ben, 2026-08-10): the owner's Approve is a new
+    // major revision, so it stamps effective = TODAY, cadence from the
+    // importance mapping, review = effective + cadence — inside the
+    // bracket, so a refused stamp aborts cleanly before the check-in
+    if (command.key === "approve" && command.to === "approved" && opts.dates !== undefined) {
+      const d = opts.dates;
+      const months = d.cadenceMonths ?? DEFAULT_CADENCE_MONTHS;
+      const effectiveYmd = todayYmd();
+      const stamps: { FieldName: string; FieldValue: string }[] = [];
+      if (d.effectiveInternal !== "" || d.reviewInternal !== "") {
+        status.textContent = "Reading the site's date format…";
+        const regional = await timed(fetchRegionalSettings(site), "The regional settings read");
+        const localeId =
+          Number(((regional.data ?? {}) as { LocaleId?: unknown }).LocaleId ?? 0) || 1033;
+        if (d.effectiveInternal !== "") {
+          stamps.push({
+            FieldName: d.effectiveInternal,
+            FieldValue: formatDateForLocale(effectiveYmd, localeId),
+          });
+        }
+        if (d.reviewInternal !== "") {
+          stamps.push({
+            FieldName: d.reviewInternal,
+            FieldValue: formatDateForLocale(addMonthsYmd(effectiveYmd, months), localeId),
+          });
+        }
+      }
+      if (d.cadenceInternal !== "") {
+        stamps.push({ FieldName: d.cadenceInternal, FieldValue: String(months) });
+      }
+      if (stamps.length > 0) {
+        status.textContent = "Stamping the dates…";
+        const st = await timed(
+          validateUpdateListItem(site, opts.listId, row.id, stamps, false),
+          "The date stamp"
+        );
+        const stErrs = validateItemErrors(st.data);
+        if (!st.ok || stErrs.length > 0) {
+          return fail(
+            "The date stamp was refused (the document stays checked out)",
+            stErrs.map((e) => `${e.field}: ${e.message}`).join("; ") || st.status
+          );
+        }
+      }
+    }
+
     // Start revision ENDS here: the draft status and everything after
     // it live inside the check-out — nothing is published until a
     // submit checks in
@@ -577,12 +629,25 @@ export function openCancelRevision(opts: CancelRevisionOpts): void {
 // the site's regional format only — cookbook rule) and checks in with
 // the comment an auditor expects to find.
 
+/** The date model's bundle (Ben, 2026-08-10): the mapped internals
+ *  this library carries ("" = unmapped/uncarried, skipped) and the
+ *  cadence months resolved from the row's importance via the settings
+ *  mapping — null falls back to the 12-month default. */
+export interface DateStamps {
+  effectiveInternal: string;
+  reviewInternal: string;
+  cadenceInternal: string;
+  cadenceMonths: number | null;
+}
+
 export interface MarkReviewedOpts {
   site: string;
   listId: string;
   row: DocRow;
   /** The next-review-date column's internal name. */
   reviewInternal: string;
+  /** The full date bundle — effective refreshes at review too. */
+  dates?: DateStamps;
   host: HTMLElement;
   onDone: () => void;
 }
@@ -601,35 +666,38 @@ export function openMarkReviewed(opts: MarkReviewedOpts): void {
   });
   const goBtn = dlg.root.querySelector(".ltk-btn-primary") as HTMLButtonElement;
 
+  // the date model (Ben, 2026-08-10): nothing typed by hand — a review
+  // re-affirms the document, so effective refreshes to TODAY and the
+  // next review is always effective + cadence
+  const months = opts.dates?.cadenceMonths ?? DEFAULT_CADENCE_MONTHS;
+  const effectiveYmd = todayYmd();
+  const reviewYmd = addMonthsYmd(effectiveYmd, months);
   dlg.body.appendChild(
     el(
       "div",
       "app-field-hint",
-      "Records a periodic review with no content change: the next review date is set " +
-        "and the version history gains the review comment."
+      "Records a periodic review with no content change. The effective date becomes " +
+        "today and the next review follows the cadence — nothing to type."
     )
   );
-  const dateInput = el("input", "app-input") as HTMLInputElement;
-  dateInput.type = "date";
-  // the default cadence: a year from today, local date parts
-  const next = new Date(Date.now() + 365 * 86400000);
-  dateInput.value = `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, "0")}-${String(next.getDate()).padStart(2, "0")}`;
+  dlg.body.appendChild(
+    el(
+      "div",
+      "app-docs-datestamp",
+      `Effective ${formatDayMonthYear(effectiveYmd)} · next review ` +
+        `${formatDayMonthYear(reviewYmd)} (${months} months)`
+    )
+  );
   const note = el("textarea", "app-input app-docs-cicomment") as HTMLTextAreaElement;
   note.rows = 2;
   note.placeholder = "Comment (optional)";
-  dlg.body.append(
-    el("div", "app-field-label", "Next review date"),
-    dateInput,
-    el("div", "app-field-label", "Comment"),
-    note
-  );
+  dlg.body.append(el("div", "app-field-label", "Comment"), note);
   const status = el("div", "app-docs-addstatus");
   dlg.body.appendChild(status);
 
   const sync = () => {
-    goBtn.disabled = running || dateInput.value === "";
+    goBtn.disabled = running;
   };
-  dateInput.addEventListener("input", sync);
   sync();
 
   const fail = (what: string, why: string) => {
@@ -640,7 +708,7 @@ export function openMarkReviewed(opts: MarkReviewedOpts): void {
   };
 
   const run = async () => {
-    if (running || dateInput.value === "") return;
+    if (running) return;
     running = true;
     sync();
     status.classList.remove("app-docs-addstatus-warn");
@@ -655,15 +723,21 @@ export function openMarkReviewed(opts: MarkReviewedOpts): void {
       return fail("Could not check out", out.status);
     }
 
-    status.textContent = "Setting the next review date…";
+    status.textContent = "Setting the review dates…";
+    const stamps: { FieldName: string; FieldValue: string }[] = [
+      { FieldName: opts.reviewInternal, FieldValue: formatDateForLocale(reviewYmd, localeId) },
+    ];
+    if ((opts.dates?.effectiveInternal ?? "") !== "") {
+      stamps.push({
+        FieldName: opts.dates!.effectiveInternal,
+        FieldValue: formatDateForLocale(effectiveYmd, localeId),
+      });
+    }
+    if ((opts.dates?.cadenceInternal ?? "") !== "") {
+      stamps.push({ FieldName: opts.dates!.cadenceInternal, FieldValue: String(months) });
+    }
     const res = await timed(
-      validateUpdateListItem(
-        site,
-        opts.listId,
-        row.id,
-        [{ FieldName: opts.reviewInternal, FieldValue: formatDateForLocale(dateInput.value, localeId) }],
-        false
-      ),
+      validateUpdateListItem(site, opts.listId, row.id, stamps, false),
       "The date write"
     );
     const errs = validateItemErrors(res.data);

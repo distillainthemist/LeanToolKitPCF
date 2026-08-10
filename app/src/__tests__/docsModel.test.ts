@@ -2041,4 +2041,41 @@ describe("Part II column model", () => {
     expect(doubled.filter((g) => g.current)).toHaveLength(1);
     expect(doubled[0].head).toBeNull(); // the old rule: minors trail toward 3
   });
+  it("the date model: cadence maps, months add, payloads round-trip", async () => {
+    const {
+      addMonthsYmd,
+      cadenceForImportance,
+      emptySiteDictionary,
+      parseAppDocsConfig,
+      serializeAppDocsConfig,
+      emptyAppDocsConfig,
+    } = await import("../docs/model");
+    // month arithmetic clamps to the end of month, never rolls over
+    expect(addMonthsYmd("2026-08-10", 18)).toBe("2028-02-10");
+    expect(addMonthsYmd("2026-01-31", 1)).toBe("2026-02-28");
+    expect(addMonthsYmd("2024-01-31", 1)).toBe("2024-02-29"); // leap
+    expect(addMonthsYmd("2026-10-15", 3)).toBe("2027-01-15");
+    expect(addMonthsYmd("garbage", 6)).toBe("");
+    // the mapping answers by lowercased term id; unmapped is null
+    const dict = { ...emptySiteDictionary(), cadence: { "t-high": 6 } };
+    expect(cadenceForImportance(dict, "T-HIGH")).toBe(6);
+    expect(cadenceForImportance(dict, "t-low")).toBeNull();
+    expect(cadenceForImportance(emptySiteDictionary(), "t-high")).toBeNull();
+    // sparse round-trip; garbage months are dropped, not kept broken
+    const cfg = {
+      ...emptyAppDocsConfig(),
+      siteUrl: "https://x/sites/d",
+      sites: {
+        "https://x/sites/d": { ...emptySiteDictionary(), cadence: { "t-a": 24 } },
+      },
+    };
+    const back = parseAppDocsConfig(serializeAppDocsConfig(cfg));
+    expect(back.sites["https://x/sites/d"].cadence).toEqual({ "t-a": 24 });
+    const messy = parseAppDocsConfig(
+      JSON.stringify({
+        sites: { "https://x/sites/d": { cadence: { "t-a": "soon", "t-b": -3, "t-c": 9.7 } } },
+      })
+    );
+    expect(messy.sites["https://x/sites/d"].cadence).toEqual({ "t-c": 9 });
+  });
 });

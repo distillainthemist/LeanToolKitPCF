@@ -48,6 +48,15 @@ export interface AddDocumentOpts {
   /** The manager's sub-headings per library type (Part II S2) — the
    *  metadata form renders them as sections for the chosen target. */
   sectionsFor?: (libType: string) => { heading: string; columns: string[] }[];
+  /** The date model (Ben, 2026-08-10): a picked importance writes the
+   *  mapped cadence with the new document. Effective and review dates
+   *  wait for the first approval. */
+  dateModel?: {
+    importanceInternal: string;
+    cadenceInternal: string;
+    /** importance term id (lowercased) → months. */
+    cadence: Record<string, number>;
+  };
   /** Styled dialog host (.app-dlghost). */
   host: HTMLElement;
   /** Called with the created document's row, after check-in. */
@@ -465,6 +474,16 @@ export function openAddDocument(opts: AddDocumentOpts): void {
     if (!held) return fail("Created, but could not check out to set properties", out.status);
 
     const writes = newDocumentWrites(editors.map((e) => e.read()), localeId);
+    // the date model: a picked importance carries its cadence in the
+    // same write; effective/review stamp at the first approval
+    const dm = opts.dateModel;
+    if (dm !== undefined && dm.importanceInternal !== "" && dm.cadenceInternal !== "") {
+      const picked = editors.find((e) => e.field.internal === dm.importanceInternal)?.read();
+      const months = dm.cadence[(picked?.termId ?? "").toLowerCase()];
+      if (months !== undefined && months > 0) {
+        writes.formValues.push({ FieldName: dm.cadenceInternal, FieldValue: String(months) });
+      }
+    }
     const vuliValues = writes.formValues.filter(
       (f) => !writes.taxInternals.includes(f.FieldName)
     );
