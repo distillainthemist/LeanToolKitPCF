@@ -289,20 +289,29 @@ export interface DocVersion {
   when: string;
   comment: string;
   current: boolean;
+  /** Who made the version ("" when the expand was refused — the
+   *  history still renders, just unattributed). */
+  author: string;
+  /** SharePoint's numeric version id (major*512 + minor) — what the
+   *  _vti_history URL addresses. 0 = unknown. */
+  versionId: number;
 }
 
-/** SharePoint version history for one item (newest first). */
+/** SharePoint version history for one item (newest first). O3 asks for
+ *  the editor too; a tenant refusing the expand falls back to the
+ *  plain read rather than losing the history. */
 export async function itemVersions(
   site: string,
   listId: string,
   itemId: number
 ): Promise<{ versions: DocVersion[]; error: string }> {
-  const r = await spRequest(
-    site,
-    "GET",
+  const query = (expand: boolean) =>
     `_api/web/lists(guid'${listId}')/items(${itemId})/versions` +
-      `?$select=VersionLabel,Created,CheckInComment,IsCurrentVersion&$top=25`
-  );
+    `?$select=VersionLabel,VersionId,Created,CheckInComment,IsCurrentVersion` +
+    (expand ? `,Editor/LookupValue&$expand=Editor` : "") +
+    `&$top=50`;
+  let r = await spRequest(site, "GET", query(true));
+  if (!r.ok) r = await spRequest(site, "GET", query(false));
   if (!r.ok) return { versions: [], error: r.status };
   const rows = Array.isArray((r.data as { value?: unknown[] })?.value)
     ? ((r.data as { value: unknown[] }).value as Record<string, unknown>[])
@@ -313,6 +322,11 @@ export async function itemVersions(
       when: typeof v.Created === "string" ? v.Created : "",
       comment: typeof v.CheckInComment === "string" ? v.CheckInComment : "",
       current: v.IsCurrentVersion === true,
+      author:
+        typeof (v.Editor as { LookupValue?: unknown } | undefined)?.LookupValue === "string"
+          ? ((v.Editor as { LookupValue: string }).LookupValue)
+          : "",
+      versionId: typeof v.VersionId === "number" ? v.VersionId : 0,
     })),
     error: "",
   };

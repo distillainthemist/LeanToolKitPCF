@@ -33,6 +33,7 @@ import {
   transformPdfUrl,
 } from "./rows";
 import { itemDetails, itemVersions, pagePreviewUrl, presignedUrls } from "./data";
+import { groupVersionsByMajor } from "./model";
 
 interface ViewerOpts {
   site: string;
@@ -773,17 +774,133 @@ export function openDocViewer(opts: ViewerOpts): () => void {
       propsBox.appendChild(el("div", "app-field-hint", "No versions recorded."));
       return;
     }
+    // O3: one card per MAJOR — the milestones people mean by
+    // "version" — each with its draft trail behind a disclosure. The
+    // current group opens; the rest fold to a one-line summary.
+    const groups = groupVersionsByMajor(vres.versions);
+    const origin = (() => {
+      try {
+        return new URL(site).origin;
+      } catch {
+        return "";
+      }
+    })();
+    const webPath = site.replace(origin, "").replace(/\/$/, "");
+    /** Where a version opens: the file itself for the current one; the
+     *  _vti_history address otherwise (a NEW TAB — old versions are not
+     *  presignable, but the tab carries the user's own session). */
+    const versionUrl = (v: (typeof vres.versions)[number]): string => {
+      if (v.current) return origin === "" ? "" : `${origin}${row.serverUrl}`;
+      const m = v.label.match(/^(\d+)\.(\d+)$/);
+      const id = v.versionId > 0 ? v.versionId : m ? Number(m[1]) * 512 + Number(m[2]) : 0;
+      if (id === 0 || origin === "") return "";
+      const rel = row.serverUrl.startsWith(webPath)
+        ? row.serverUrl.slice(webPath.length).replace(/^\//, "")
+        : row.serverUrl.replace(/^\//, "");
+      return `${site.replace(/\/$/, "")}/_vti_history/${id}/${rel}`;
+    };
+    const openLink = (v: (typeof vres.versions)[number]): HTMLElement | null => {
+      const url = versionUrl(v);
+      if (url === "") return null;
+      const a = el("a", "app-docs-verlink", "Open ↗") as HTMLAnchorElement;
+      a.href = url;
+      a.target = "_blank";
+      a.rel = "noopener";
+      return a;
+    };
+    const commentEl = (comment: string): HTMLElement =>
+      comment !== ""
+        ? el("span", "app-docs-vercomment", `“${comment}”`)
+        : el("span", "app-docs-vercomment app-docs-vernone", "No comment");
     const list = el("div", "app-docs-verlist");
-    for (const v of vres.versions) {
-      const line = el("div", "app-docs-verrow");
-      line.append(
-        el("span", "app-docs-verlabel", `v${v.label}${v.current ? " · current" : ""}`),
-        el("span", "app-docs-verwhen", formatWhen(v.when)),
-        el("span", "app-docs-vercomment", v.comment)
-      );
-      list.appendChild(line);
+    for (const g of groups) {
+      const card = el("div", "app-docs-vercard");
+      let open = g.current;
+      let showAll = false;
+      const paintCard = () => {
+        clear(card);
+        const head = el("button", "app-docs-verhead") as HTMLButtonElement;
+        head.setAttribute("aria-expanded", String(open));
+        head.append(
+          el("span", "app-docs-vercaret", open ? "▾" : "▸"),
+          el(
+            "span",
+            "app-docs-verlabel",
+            g.head !== null ? `v${g.head.label}` : "In progress"
+          ),
+          g.current
+            ? tonePill(g.head !== null ? "✓ Published · current" : "● Draft · current", "green")
+            : el("span", "app-docs-chip", "Superseded"),
+          el(
+            "span",
+            "app-docs-verwhen",
+            formatWhen(g.head?.when ?? g.drafts[0]?.when ?? "")
+          )
+        );
+        head.addEventListener("click", () => {
+          open = !open;
+          paintCard();
+        });
+        card.appendChild(head);
+        const headMeta = el("div", "app-docs-vermeta");
+        if (g.head !== null) {
+          if (g.head.author !== "") headMeta.appendChild(el("span", "", g.head.author));
+          headMeta.appendChild(commentEl(g.head.comment));
+        }
+        if (!open && g.drafts.length > 0) {
+          headMeta.appendChild(
+            el("span", "app-field-hint", `${g.drafts.length} draft${g.drafts.length === 1 ? "" : "s"}`)
+          );
+        }
+        const headOpen = g.head !== null ? openLink(g.head) : null;
+        if (headOpen !== null) headMeta.appendChild(headOpen);
+        if (headMeta.children.length > 0) card.appendChild(headMeta);
+        if (open && g.drafts.length > 0) {
+          const trail = el("div", "app-docs-vertrail");
+          const shown = showAll ? g.drafts : g.drafts.slice(0, 2);
+          for (const d of shown) {
+            const line = el("div", "app-docs-verdraft");
+            line.append(
+              el("span", "app-docs-verlabel", `v${d.label}`),
+              el("span", "", d.author),
+              el("span", "app-field-hint", d.current ? "draft · current" : "draft"),
+              el("span", "app-docs-verwhen", formatWhen(d.when))
+            );
+            const a = openLink(d);
+            if (a !== null) line.appendChild(a);
+            line.title = d.comment !== "" ? d.comment : "No comment";
+            trail.appendChild(line);
+          }
+          if (!showAll && g.drafts.length > 2) {
+            const more = el(
+              "button",
+              "app-docs-textlink",
+              `Show ${g.drafts.length - 2} more draft${g.drafts.length - 2 === 1 ? "" : "s"}…`
+            ) as HTMLButtonElement;
+            more.addEventListener("click", () => {
+              showAll = true;
+              paintCard();
+            });
+            trail.appendChild(more);
+          }
+          card.appendChild(trail);
+        }
+      };
+      paintCard();
+      list.appendChild(card);
     }
     propsBox.appendChild(list);
+    // O3: restoring an old version is a LIFECYCLE act, never a raw
+    // write — the pointer keeps the history honest about that
+    if (groups.filter((g) => g.head !== null).length > 1) {
+      propsBox.appendChild(
+        el(
+          "div",
+          "app-field-hint",
+          "Older versions restore through the lifecycle — Cancel revision mid-cycle, Reinstate after retirement."
+        )
+      );
+    }
   };
   void loadDetails();
   opts.register?.(() => {

@@ -2034,9 +2034,30 @@ a.app-docs-menuitem { text-decoration: none; color: inherit; box-sizing: border-
   font-size: 13px;
 }
 .app-docs-prevload .app-loading-spinner { width: 26px; height: 26px; border-width: 2.5px; }
-.app-docs-verrow { display: flex; gap: 12px; padding: 4px 0; border-bottom: 1px solid #f2f2f2; font-size: 12.5px; }
-.app-docs-verlabel { font-weight: 600; min-width: 90px; }
+/* O3: one card per major, drafts as an indented trail behind it */
+.app-docs-verlist { display: flex; flex-direction: column; gap: 8px; }
+.app-docs-vercard { border: 1px solid #e5e2dc; border-radius: 8px; padding: 8px 10px; }
+.app-docs-verhead {
+  display: flex; gap: 8px; align-items: center; width: 100%;
+  border: none; background: none; padding: 0; cursor: pointer;
+  font-size: 13px; text-align: left;
+}
+.app-docs-vercaret { color: #a8a29e; font-size: 11px; width: 12px; }
+.app-docs-verlabel { font-weight: 700; }
+.app-docs-verwhen { margin-left: auto; font-size: 12px; color: #6d675c; }
+.app-docs-vermeta {
+  display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap;
+  font-size: 12.5px; padding: 3px 0 0 20px;
+}
 .app-docs-vercomment { color: #6b6b6b; }
+.app-docs-vernone { font-style: italic; color: #a8a29e; }
+.app-docs-vertrail {
+  margin: 6px 0 2px 20px; padding-left: 10px; border-left: 2px solid #eceae5;
+  display: flex; flex-direction: column; gap: 4px;
+}
+.app-docs-verdraft { display: flex; gap: 8px; align-items: baseline; font-size: 12.5px; }
+.app-docs-verdraft .app-docs-verlabel { font-weight: 600; min-width: 40px; }
+.app-docs-verlink { font-size: 12px; white-space: nowrap; }
 .app-linklike {
   border: none;
   background: none;

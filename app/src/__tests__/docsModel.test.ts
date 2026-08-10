@@ -1969,4 +1969,36 @@ describe("Part II column model", () => {
       }).some((f) => f.title.includes("missing where"))
     ).toBe(false);
   });
+  it("groups version history by major — drafts trail toward x+1 (O3)", async () => {
+    const { groupVersionsByMajor } = await import("../docs/model");
+    const v = (label: string, current = false) => ({ label, current });
+    // the shipped shape: a published 2.0 with its 1.x trail, a 1.0
+    // built from 0.x drafts
+    const groups = groupVersionsByMajor([
+      v("2.0", true),
+      v("1.5"),
+      v("1.4"),
+      v("1.1"),
+      v("1.0"),
+      v("0.2"),
+      v("0.1"),
+    ]);
+    expect(groups.map((g) => g.major)).toEqual([2, 1]);
+    expect(groups[0].head?.label).toBe("2.0");
+    expect(groups[0].current).toBe(true);
+    expect(groups[0].drafts.map((d) => d.label)).toEqual(["1.5", "1.4", "1.1"]);
+    expect(groups[1].head?.label).toBe("1.0");
+    expect(groups[1].current).toBe(false);
+    expect(groups[1].drafts.map((d) => d.label)).toEqual(["0.2", "0.1"]);
+    // mid-cycle: the revision under way is an IN PROGRESS card (no
+    // head yet) and wears the current pill via its draft
+    const mid = groupVersionsByMajor([v("1.5", true), v("1.4"), v("1.0")]);
+    expect(mid[0].head).toBeNull();
+    expect(mid[0].major).toBe(2);
+    expect(mid[0].current).toBe(true);
+    expect(mid[1].head?.label).toBe("1.0");
+    // unparseable labels are not versions; a lone major stands alone
+    expect(groupVersionsByMajor([v("weird"), v("1.0", true)])).toHaveLength(1);
+    expect(groupVersionsByMajor([])).toEqual([]);
+  });
 });

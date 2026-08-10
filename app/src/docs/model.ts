@@ -221,6 +221,60 @@ export function columnOffered(col: SiteColumn): boolean {
   return col.types !== undefined ? Object.keys(col.types).length > 0 : col.available;
 }
 
+// ---- version history, grouped by major (overlay polish O3) ------------
+
+/** The version shape the grouper needs — structural, so data.ts's
+ *  DocVersion fits without an import cycle. */
+export interface VersionLike {
+  /** SharePoint's "x.y" label. */
+  label: string;
+  current: boolean;
+}
+
+export interface VersionGroup<T extends VersionLike> {
+  /** The major number this card publishes (drafts x.y trail TOWARD
+   *  major x+1). 0 never occurs — 0.y drafts trail toward 1. */
+  major: number;
+  /** The published major version row; null = the IN-PROGRESS card, a
+   *  revision under way whose major does not exist yet. */
+  head: T | null;
+  /** The draft trail, newest first. */
+  drafts: T[];
+  /** Wears the one "current" pill — the group holding SharePoint's
+   *  current version, head or draft. */
+  current: boolean;
+}
+
+/**
+ * One card per MAJOR — the published milestones people mean by
+ * "version" — each carrying its draft trail: minors x.y are the work
+ * TOWARD major x+1 and nest under its card; drafts newer than the
+ * newest major sit under an "in progress" card (head null). Input
+ * newest-first (as SharePoint answers); output newest card first.
+ */
+export function groupVersionsByMajor<T extends VersionLike>(versions: T[]): VersionGroup<T>[] {
+  const byMajor = new Map<number, VersionGroup<T>>();
+  const groupFor = (major: number): VersionGroup<T> => {
+    let g = byMajor.get(major);
+    if (g === undefined) {
+      g = { major, head: null, drafts: [], current: false };
+      byMajor.set(major, g);
+    }
+    return g;
+  };
+  for (const v of versions) {
+    const m = v.label.match(/^(\d+)\.(\d+)$/);
+    if (m === null) continue; // an unparseable label is not a version
+    const majorPart = Number(m[1]);
+    const minorPart = Number(m[2]);
+    const g = minorPart === 0 ? groupFor(majorPart) : groupFor(majorPart + 1);
+    if (minorPart === 0) g.head = v;
+    else g.drafts.push(v);
+    if (v.current) g.current = true;
+  }
+  return [...byMajor.values()].sort((a, b) => b.major - a.major);
+}
+
 /**
  * The per-library flags written FROM the cells (S1's save bridge, made
  * pure in S3): the manager is authoritative, the per-library config is
