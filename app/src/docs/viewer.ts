@@ -243,24 +243,31 @@ export function openDocViewer(opts: ViewerOpts): () => void {
   panel.classList.add("app-docs-viewer");
   if (opts.solo === true) panel.classList.add("app-docs-viewer-solo");
 
-  // R3 (design review): the filename appears ONCE, in the pane title —
-  // the header carries the context line (library · date). The kiosk
-  // keeps the name up top: it has no details pane to carry it.
+  // O1 (overlay polish, completing R3): the header carries the
+  // document's IDENTITY — type chip · name · library·date — once, for
+  // kiosk and full mode alike; the details pane no longer repeats it.
+  // "Open in new tab ↗" lives here too: the pane's solid slot stays
+  // reserved for decisions (R1) — and the kiosk keeps NO external
+  // door, it is navigation-free by design.
+  const pdfUrl = pdfViewUrlFor(site, opts.driveId, row);
   const head = el("div", "app-docs-viewhead");
-  if (opts.solo === true) head.appendChild(el("span", "app-docs-viewname", row.name));
-  head.append(
-    el(
-      "span",
-      "app-field-hint",
-      [opts.libraryName, formatWhen(row.modified)].filter((s) => s !== "").join(" · ")
-    )
-  );
+  head.appendChild(fileTypeChip(row.ext));
+  const titleBlock = el("div", "app-docs-viewtitle");
+  const docName = el("div", "app-docs-viewdocname", row.name);
+  docName.title = row.name;
+  titleBlock.appendChild(docName);
+  const context = [opts.libraryName, formatWhen(row.modified)]
+    .filter((s) => s !== "")
+    .join(" · ");
+  if (context !== "") titleBlock.appendChild(el("div", "app-field-hint", context));
+  head.appendChild(titleBlock);
   // collapsed by default (5I): the document speaks first, the details
   // pane is a click away — and a share-link open IS this default
   let detailsOpen = opts.detailsOpen === true;
   if (opts.solo !== true) {
-    // R4: ONE close control — ✕ alone; the details toggle moves to the
-    // pane edge below
+    head.appendChild(linkBtn("Open in new tab ↗", pdfUrl, false));
+    // R4: ONE close control — ✕ alone; the details door lives on the
+    // pane itself
     const x = el("button", "app-btn app-docs-viewclose", "✕") as HTMLButtonElement;
     x.setAttribute("aria-label", "Close");
     x.addEventListener("click", close);
@@ -274,45 +281,53 @@ export function openDocViewer(opts: ViewerOpts): () => void {
   body.appendChild(stage);
 
   // ---- details pane ----------------------------------------------------
-  // R4: the collapse toggle lives ON the pane edge — a slim strip
-  // between preview and details, never mistakable for a dismiss.
+  // O1 (replacing the accent strip — a deliberate reversal of the D6
+  // ask, decided 2026-08-10): EXPANDED, the door is a labelled
+  // "Hide »" on the pane's own top row beside a quiet "Details"
+  // caption; COLLAPSED, a neutral rail with "« Details" is the way
+  // back in. The one solid accent stays the decisions' alone.
   // The kiosk is PURE preview (Ben, 2026-08-07): no details door at all.
   const edge = el("button", "app-docs-edgetoggle") as HTMLButtonElement;
+  edge.append(
+    el("span", "app-docs-edgeglyph", "«"),
+    el("span", "app-docs-edgelabel", "Details")
+  );
+  edge.title = "Show details";
+  edge.setAttribute("aria-label", "Show details");
   if (opts.solo !== true) body.appendChild(edge);
   const aside = el("aside", "app-docs-details");
   body.appendChild(aside);
+  const paneHead = el("div", "app-docs-detailshead");
+  const hideBtn = el("button", "app-docs-textlink", "Hide »") as HTMLButtonElement;
+  hideBtn.setAttribute("aria-label", "Hide details");
+  paneHead.append(el("span", "app-docs-detailscap", "Details"), hideBtn);
+  aside.appendChild(paneHead);
   const paintDetails = () => {
     aside.style.display = detailsOpen ? "" : "none";
-    // too subtle as a bare chevron (Ben, 2026-08-08) — the collapsed
-    // strip carries a vertical "Details" label so the pane's door is
-    // findable, and the open strip still reads as a fold
-    clear(edge);
-    edge.appendChild(el("span", "app-docs-edgeglyph", detailsOpen ? "»" : "«"));
-    if (!detailsOpen) edge.appendChild(el("span", "app-docs-edgelabel", "Details"));
-    const label = detailsOpen ? "Hide details" : "Show details";
-    edge.title = label;
-    edge.setAttribute("aria-label", label);
+    edge.style.display = detailsOpen ? "none" : "";
     edge.setAttribute("aria-expanded", String(detailsOpen));
   };
+  hideBtn.addEventListener("click", () => {
+    detailsOpen = false;
+    paintDetails();
+  });
   edge.addEventListener("click", () => {
-    detailsOpen = !detailsOpen;
+    detailsOpen = true;
     paintDetails();
   });
   paintDetails();
 
+  // the identity lives in the HEADER now (O1) — the pane opens with
+  // the status chip alone, the decision card directly under it
   const chips = el("div", "app-docs-detailchips");
   const paintChips = () => {
     clear(chips);
-    chips.appendChild(fileTypeChip(row.ext));
     const sv =
       typeof opts.statusValue === "function" ? opts.statusValue() : (opts.statusValue ?? "");
     if (sv !== "" && opts.statusChipFor) chips.appendChild(opts.statusChipFor(sv));
   };
   paintChips();
   aside.appendChild(chips);
-  aside.appendChild(el("div", "app-docs-detailtitle", row.name));
-  const meta = [opts.libraryName, formatWhen(row.modified)].filter((s) => s !== "");
-  if (meta.length > 0) aside.appendChild(el("div", "app-docs-detailmeta", meta.join(" · ")));
 
   // R1/R2 (design review, 2026-08-08): the pane leads with a DECISION
   // ZONE when this viewer has a pending decision — the one solid accent
@@ -320,7 +335,6 @@ export function openDocViewer(opts: ViewerOpts): () => void {
   // pending). Utilities are a fixed 4-up row; everything else tucks
   // into ⋯, so the flat button stack is gone but every action keeps a
   // home (the D4 action-parity rule still holds).
-  const pdfUrl = pdfViewUrlFor(site, opts.driveId, row);
   const ctl = opts.control ?? null;
   const lc = opts.lifecycle ?? null;
   const decision = el("div", "app-docs-decision");
@@ -365,7 +379,6 @@ export function openDocViewer(opts: ViewerOpts): () => void {
                 : "Needs revision"
               : "Checked out to you";
       decision.appendChild(el("div", "app-docs-decision-head", heading));
-      decision.appendChild(linkBtn("Open PDF ↗", pdfUrl, false));
       // a revision-needed document's real next step is EDITING: the
       // check-out door belongs IN the card, or action parity breaks —
       // the pending branch used to swallow it entirely (Ben, 2026-08-08)
@@ -434,8 +447,8 @@ export function openDocViewer(opts: ViewerOpts): () => void {
         decision.appendChild(drop);
       }
     } else {
-      // no decision pending: Open PDF is the pane's one solid primary
-      actions.appendChild(linkBtn("Open PDF ↗", pdfUrl, true));
+      // no decision pending: nothing solid — Open in new tab lives in
+      // the header (O1), the accent stays reserved for decisions
       if (ctl !== null && canEdit && s?.checkedOut !== true) {
         const outBtn = el("button", "app-btn", "Check out") as HTMLButtonElement;
         outBtn.addEventListener("click", () => {

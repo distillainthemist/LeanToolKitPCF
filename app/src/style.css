@@ -1882,7 +1882,7 @@ input[type="color"].app-color:disabled { opacity: 0.4; cursor: default; }
 /* menu items that are real links (Open PDF) read as menu items */
 a.app-docs-menuitem { text-decoration: none; color: inherit; box-sizing: border-box; }
 .app-docs-menuitem:disabled { color: #aaa; cursor: default; }
-.app-docs-scrim { position: fixed; inset: 0; z-index: 55; background: rgba(20,20,20,0.45); display: flex; align-items: center; justify-content: center; }
+.app-docs-scrim { position: fixed; inset: 0; z-index: 55; background: rgba(20,20,20,0.58); display: flex; align-items: center; justify-content: center; }
 .app-docs-dialog { background: #fff; border-radius: 10px; box-shadow: 0 12px 40px rgba(0,0,0,0.25); display: flex; flex-direction: column; max-height: 92vh; }
 /* Vault V4: the document overlay — centred (Ben, 2026-08-01), 26px
    margins, full height, preview stage + 340px details pane */
@@ -1934,8 +1934,10 @@ a.app-docs-menuitem { text-decoration: none; color: inherit; box-sizing: border-
 }
 .app-docs-prevph {
   flex: 1;
-  margin: 10px 0 0;
-  border-radius: 6px;
+  margin: 0;
+  border-radius: 4px;
+  background: #fff;
+  box-shadow: 0 2px 14px rgba(0,0,0,0.16);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1958,10 +1960,14 @@ a.app-docs-menuitem { text-decoration: none; color: inherit; box-sizing: border-
   }
 }
 .app-docs-viewhead { display: flex; gap: 10px; align-items: center; padding: 10px 14px; border-bottom: 1px solid #eee; }
+/* O1: the header owns the document's identity — name over context */
+.app-docs-viewtitle { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.app-docs-viewdocname { font-weight: 600; font-size: 14.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.app-docs-viewtitle .app-field-hint { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .app-docs-viewname { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .app-docs-viewclose { margin-left: auto; }
-.app-docs-viewstage { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 0 14px; }
-.app-docs-viewframe { flex: 1; border: 1px solid #eee; border-radius: 6px; margin-top: 10px; }
+.app-docs-viewstage { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 12px 14px 14px; background: #e9e7e2; }
+.app-docs-viewframe { flex: 1; border: none; border-radius: 4px; margin-top: 0; background: #fff; box-shadow: 0 2px 14px rgba(0,0,0,0.16); }
 /* the page image, framed and scaled: the frame is laid out at twice the
    box it shows in and scaled back, so the picture arrives at two device
    pixels per CSS pixel; the box clips the overhang */
@@ -2496,10 +2502,16 @@ button.app-doclist-hsort:hover { color: var(--app-accent, #2563eb); }
 .app-docs-edgetoggle {
   flex: none; width: 30px; align-self: stretch;
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
-  border: none;
-  background: var(--app-accent, #2563eb); color: #fff; cursor: pointer; padding: 0;
+  border: none; border-left: 1px solid #e5e2dc;
+  background: #f3f1ec; color: #57534a; cursor: pointer; padding: 0;
 }
-.app-docs-edgetoggle:hover { filter: brightness(0.9); }
+.app-docs-edgetoggle:hover { background: #eceae4; }
+/* O1: expanded, the pane's own top row is the door */
+.app-docs-detailshead { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.app-docs-detailscap {
+  font-size: 11px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.05em; color: #6d675c;
+}
 .app-docs-edgeglyph { font-size: 16px; font-weight: 700; line-height: 1; }
 .app-docs-edgelabel {
   writing-mode: vertical-rl; font-size: 11px; font-weight: 600;
