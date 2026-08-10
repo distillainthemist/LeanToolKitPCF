@@ -2242,18 +2242,24 @@ button.app-docs-navterm.app-docs-navterm-on {
 .app-docs-mgrgroup { display: flex; gap: 4px; align-items: center; margin: 12px 0 2px; }
 .app-docs-mgrgroupinput { font-weight: 600; font-size: 12.5px; max-width: 220px; padding: 3px 8px; }
 .app-docs-mgrgroupname { font-weight: 600; }
-/* group sub-headings as they render in the dialogs (Part II S2): a
-   section title in the add/edit forms… */
+/* group sub-headings as they render in the dialogs (Part II S2): the
+   app-section anatomy — uppercase over a hairline rule — so property
+   groups read as the same kind of section everything else uses. The
+   first group opens the form without a rule. */
 .app-docs-addgroup {
   font-size: 11.5px; font-weight: 700; text-transform: uppercase;
-  letter-spacing: 0.04em; color: #6d675c; margin: 12px 0 2px;
+  letter-spacing: 0.05em; color: #57534a;
+  margin-top: 8px; padding-top: 12px; border-top: 1px solid #eceae5;
 }
+.app-docs-addgroup:first-child { margin-top: 0; padding-top: 0; border-top: none; }
 /* …and in the viewer's properties pane, spanning both grid columns */
 .app-docs-propgroup {
   grid-column: 1 / -1;
   font-size: 11px; font-weight: 700; text-transform: uppercase;
-  letter-spacing: 0.04em; color: #6d675c; margin-top: 8px;
+  letter-spacing: 0.05em; color: #57534a;
+  margin-top: 6px; padding-top: 10px; border-top: 1px solid #eceae5;
 }
+.app-docs-propgroup:first-child { margin-top: 0; padding-top: 0; border-top: none; }
 
 /* the merged three-state cell: hidden — · available ✓ · default ★ */
 .app-docs-typecell {

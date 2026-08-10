@@ -613,13 +613,17 @@ export function openDocViewer(opts: ViewerOpts): () => void {
       const grid = el("div", "app-docs-propgrid");
       // Part II S2: group sub-headings section the pane exactly as they
       // section the add and edit dialogs. A heading renders only when
-      // one of its columns actually has a value to show.
+      // one of its columns actually has a value to show; once any group
+      // exists, the ungrouped tail is a section too — "Other" (Ben,
+      // 2026-08-10) — never a lone header over a flat list.
       const shownKeys = new Set(shown.map(([k]) => k));
       const headingFor = new Map<string, string>();
+      const hasNamed = (opts.sections ?? []).some((s) => s.heading !== "");
       for (const s of opts.sections ?? []) {
         const withValues = s.columns.filter((k) => shownKeys.has(k));
-        if (s.heading !== "" && withValues.length > 0) {
-          headingFor.set(withValues[0], s.heading);
+        const heading = s.heading !== "" ? s.heading : hasNamed ? "Other" : "";
+        if (heading !== "" && withValues.length > 0) {
+          headingFor.set(withValues[0], heading);
         }
       }
       for (const [k, v] of shown) {

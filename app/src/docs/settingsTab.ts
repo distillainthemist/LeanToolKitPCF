@@ -347,7 +347,8 @@ export async function renderDocsSettings(body: HTMLElement, ctx: Ctx): Promise<v
         // the DOM, so the header cannot start a drag of its own
         draggableRow(row, el("span", ""), "dict-cols", index, entries, () => normalize(entries));
         if (entry.pseudo) {
-          row.appendChild(el("span", "app-docs-mgrgroupname app-field-hint", "Ungrouped"));
+          // the same word the dialogs use for the ungrouped tail
+          row.appendChild(el("span", "app-docs-mgrgroupname app-field-hint", "Other"));
           return row;
         }
         const at = () => synced.groups.indexOf(entry.name);

@@ -121,8 +121,11 @@ export function buildFieldEditors(opts: FieldEditorOpts): BuiltEditor[] {
           internal,
           section: "",
         }));
+  // once any group exists, the ungrouped tail is a section too —
+  // "Other" (Ben, 2026-08-10) — never a lone header over a flat form
+  const hasNamed = opts.sections?.some((s) => s.heading !== "") === true;
   for (const { internal, section } of walk) {
-    pendingHeading = section !== "" ? section : undefined;
+    pendingHeading = section !== "" ? section : hasNamed ? "Other" : undefined;
     const f = byInternal.get(internal);
     if (f === undefined) continue;
     const kind = editorKind(f);
