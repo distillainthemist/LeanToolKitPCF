@@ -748,3 +748,20 @@ export function formatDayMonthYear(iso: string): string {
   return `${String(d.getDate()).padStart(2, "0")}-${MONTHS_SHORT[d.getMonth()]}-${d.getFullYear()}`;
 }
 
+/** A humane distance to a date ("in 18 months", "8 days ago",
+ *  "today") — the review-due hint beside the absolute date (overlay
+ *  polish O2). "" for anything unparseable: the hint is decoration,
+ *  the absolute date is the fact. */
+export function relativeHint(iso: string, now: number = Date.now()): string {
+  const t = Date.parse(iso);
+  if (Number.isNaN(t)) return "";
+  const days = Math.round((t - now) / 86400000);
+  if (days === 0) return "today";
+  const abs = Math.abs(days);
+  const phrase =
+    abs < 60
+      ? `${abs} day${abs === 1 ? "" : "s"}`
+      : `${Math.round(abs / 30.44)} months`;
+  return days > 0 ? `in ${phrase}` : `${phrase} ago`;
+}
+

@@ -2652,6 +2652,11 @@ export function mountDocs(
           // Part II S2: the type's non-hidden columns, under their
           // sub-headings — same sections the add and edit dialogs show
           sections: lib && siteDict.columns.length > 0 ? dialogSections(siteDict, lib.libType) : undefined,
+          // O2: the mapped roles — the pane's identity line, the
+          // owner/approver collapse, the review hint, the flag chips
+          roles: Object.fromEntries(
+            siteDict.columns.filter((c) => c.role !== "").map((c) => [c.internal, c.role])
+          ),
           // dictionary order — the same order the add form uses,
           // adjustable under Settings → Documents → Document columns
           columns: lib

@@ -2004,17 +2004,23 @@ a.app-docs-menuitem { text-decoration: none; color: inherit; box-sizing: border-
   display: grid; grid-template-columns: minmax(130px, 42%) 1fr;
   gap: 8px 12px; align-items: baseline; margin-bottom: 14px;
 }
+/* O2: labels go quiet — sentence case, grey, regular — so the VALUES
+   carry the emphasis (the mockup's rule; group headings keep the
+   uppercase treatment, so hierarchy still reads) */
 .app-docs-propkey {
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+  font-size: 12.5px;
+  font-weight: 400;
   color: #6d675c;
   line-height: 1.4;
   min-width: 0;
   overflow-wrap: anywhere;
 }
-.app-docs-propval { font-size: 13px; word-break: break-word; min-width: 0; }
+.app-docs-propval { font-size: 13px; font-weight: 500; color: #26241f; word-break: break-word; min-width: 0; }
+.app-docs-propval .app-field-hint { font-weight: 400; }
+/* O2: the identity line's document id, plain and strong beside chips */
+.app-docs-detaildocid { font-size: 13px; font-weight: 600; letter-spacing: 0.02em; align-self: center; }
+/* O2: the boolean roles as statement chips at the properties' tail */
+.app-docs-flagchips { display: flex; gap: 6px; flex-wrap: wrap; margin: -6px 0 14px; }
 /* the preview stage's own spinner: a frame can take a moment, and a
    blank white box does not say "loading" (Ben, 2026-08-03) */
 .app-docs-prevload {

@@ -635,6 +635,9 @@ async function paintHealth(
         libraryName: d.lib.config.title || d.lib.name,
         askToWork: false,
         detailsOpen: true,
+        roles: Object.fromEntries(
+          scope.dict.columns.filter((x) => x.role !== "").map((x) => [x.internal, x.role])
+        ),
       })
     );
   };

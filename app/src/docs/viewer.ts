@@ -16,7 +16,7 @@
 
 import { el, clear } from "../../../shared/ui/dom";
 import { markDialog, trapFocus } from "../focusTrap";
-import { fileTypeChip } from "../../../shared/ui/format";
+import { fileTypeChip, statusChip as tonePill } from "../../../shared/ui/format";
 import {
   FILE_TYPE_HUES,
   fileTypeFamily,
@@ -28,6 +28,7 @@ import {
   formatDayMonthYear,
   formatWhen,
   pdfViewUrlFor,
+  relativeHint,
   sourceUrlFor,
   transformPdfUrl,
 } from "./rows";
@@ -61,6 +62,12 @@ interface ViewerOpts {
    *  the properties pane renders each group as a section, exactly as
    *  the add and edit dialogs do. Flattened, must equal `columns`. */
   sections?: { heading: string; columns: string[] }[];
+  /** internal → document-management role (O2). Lets the pane promote
+   *  the identity roles (docType · documentId · status) to its own
+   *  header line, collapse a same-value owner/approver pair, hint the
+   *  review-due date, and render the boolean roles as statement chips
+   *  — all of which then DROP from the properties grid. */
+  roles?: Record<string, string>;
   /** Open with the details pane EXPANDED (5I: collapsed is the default
    *  — the document speaks first; a task-list open, or a document held
    *  by the viewer, arrives with work to do and expands). The header's
@@ -317,11 +324,28 @@ export function openDocViewer(opts: ViewerOpts): () => void {
   });
   paintDetails();
 
-  // the identity lives in the HEADER now (O1) — the pane opens with
-  // the status chip alone, the decision card directly under it
+  // O2: the pane opens with the document-control IDENTITY line —
+  // type · document id · status, from the mapped ROLES — with the
+  // decision card directly under it. Values come from the register row
+  // when it carries them, from the loaded details otherwise (the
+  // details load repaints this line).
+  const rolesMap = opts.roles ?? {};
+  const internalForRole = (role: string): string | undefined =>
+    Object.keys(rolesMap).find((k) => rolesMap[k] === role);
+  let lastValues: Record<string, string> | null = null;
+  const roleValue = (role: string): string => {
+    const k = internalForRole(role);
+    if (k === undefined) return "";
+    const fromRow = (row.values[k] ?? "").trim();
+    return fromRow !== "" ? fromRow : (lastValues?.[k] ?? "").trim();
+  };
   const chips = el("div", "app-docs-detailchips");
   const paintChips = () => {
     clear(chips);
+    const dt = roleValue("docType").split(";")[0].trim();
+    if (dt !== "") chips.appendChild(el("span", "app-docs-chip", dt));
+    const docId = roleValue("documentId");
+    if (docId !== "") chips.appendChild(el("span", "app-docs-detaildocid", docId));
     const sv =
       typeof opts.statusValue === "function" ? opts.statusValue() : (opts.statusValue ?? "");
     if (sv !== "" && opts.statusChipFor) chips.appendChild(opts.statusChipFor(sv));
@@ -587,8 +611,11 @@ export function openDocViewer(opts: ViewerOpts): () => void {
       );
       return;
     }
-    const labels = opts.labels ?? {};
+    const labels = { ...(opts.labels ?? {}) };
     const linkCols = new Set(opts.linkColumns ?? []);
+    // O2: the identity line reads from these too, now that they exist
+    lastValues = details.values;
+    paintChips();
     // R6: one date format app-wide — date columns re-render from the
     // raw ISO twin; a column whose ISO is absent keeps its display text
     // untouched (never guess at "5/10/2025")
@@ -598,6 +625,15 @@ export function openDocViewer(opts: ViewerOpts): () => void {
         details.values[k] = formatDayMonthYear(isoV);
       }
     }
+    // O2: the review-due date carries a humane distance beside the
+    // absolute one — decoration in the value cell, never the fact
+    const hintFor = new Map<string, string>();
+    const reviewK = internalForRole("nextReviewDate");
+    if (reviewK !== undefined) {
+      const isoV = details.iso[reviewK];
+      const hint = isoV !== undefined ? relativeHint(isoV) : "";
+      if (hint !== "") hintFor.set(reviewK, hint);
+    }
     // configured libraries: exactly the ticked columns, in config order —
     // a reader should see the register's fields, not SharePoint's plumbing
     // R3: the filename never repeats — the pane title carries it, so a
@@ -605,7 +641,14 @@ export function openDocViewer(opts: ViewerOpts): () => void {
     const NAME_COLS = new Set(["FileLeafRef", "LinkFilename", "LinkFilenameNoMenu"]);
     const isNameEcho = ([k, v]: [string, string]) =>
       NAME_COLS.has(k) || v.trim() === row.name;
-    const shown: [string, string][] = (
+    // O2: the roles the pane renders ELSEWHERE leave the grid — the
+    // identity line (docType · documentId · status) and the statement
+    // chips (ackRequired, regulatorApproved) below it
+    const ELSEWHERE = new Set(["docType", "documentId", "status", "ackRequired", "regulatorApproved"]);
+    const dropped = new Set(
+      Object.keys(rolesMap).filter((k) => ELSEWHERE.has(rolesMap[k]))
+    );
+    let shown: [string, string][] = (
       opts.columns
         ? opts.columns
             .map((k): [string, string] => [k, details.values[k] ?? ""])
@@ -613,7 +656,22 @@ export function openDocViewer(opts: ViewerOpts): () => void {
         : Object.entries(details.values).filter(
             ([k, v]) => v.trim() !== "" && !PROP_SKIP.has(k)
           )
-    ).filter((e) => !isNameEcho(e));
+    )
+      .filter((e) => !isNameEcho(e))
+      .filter(([k]) => !dropped.has(k));
+    // O2: a document whose owner IS its (sole) approver shows one row —
+    // the same rendered value twice teaches nothing. Display-only: the
+    // gates keep comparing emails, never this text.
+    const ownerK = internalForRole("owner");
+    const apprK = internalForRole("approvers");
+    if (ownerK !== undefined && apprK !== undefined) {
+      const ov = shown.find(([k]) => k === ownerK)?.[1].trim() ?? "";
+      const av = shown.find(([k]) => k === apprK)?.[1].trim() ?? "";
+      if (ov !== "" && ov === av) {
+        shown = shown.filter(([k]) => k !== apprK);
+        labels[ownerK] = "Owner & approver";
+      }
+    }
     if (shown.length === 0) {
       propsBox.appendChild(
         el(
@@ -667,11 +725,39 @@ export function openDocViewer(opts: ViewerOpts): () => void {
           }
           grid.appendChild(cell);
         } else {
-          grid.appendChild(el("span", "app-docs-propval", v));
+          const cell = el("span", "app-docs-propval", v);
+          const hint = hintFor.get(k);
+          if (hint !== undefined) {
+            cell.appendChild(el("span", "app-field-hint", ` · ${hint}`));
+          }
+          grid.appendChild(cell);
         }
       }
       propsBox.appendChild(grid);
     }
+
+    // O2: the boolean roles as statement chips — quiet when they ask
+    // nothing, loud (amber) only when they demand something. The
+    // acknowledgement COUNT waits for the 5E ledger.
+    const isYes = (v: string) => /^(yes|true|1)$/i.test(v.trim());
+    const flags = el("div", "app-docs-flagchips");
+    const ackK = internalForRole("ackRequired");
+    const ackV = ackK !== undefined ? (details.values[ackK] ?? "").trim() : "";
+    if (ackV !== "") {
+      flags.appendChild(
+        isYes(ackV)
+          ? tonePill("Acknowledgement required", "amber")
+          : el("span", "app-docs-chip", "No acknowledgement")
+      );
+    }
+    const regK = internalForRole("regulatorApproved");
+    const regV = regK !== undefined ? (details.values[regK] ?? "").trim() : "";
+    if (regV !== "") {
+      flags.appendChild(
+        el("span", "app-docs-chip", isYes(regV) ? "✓ Regulator-approved" : "Not regulator-approved")
+      );
+    }
+    if (flags.children.length > 0) propsBox.appendChild(flags);
 
     propsBox.appendChild(el("div", "app-field-label", "Version history"));
     const vres =

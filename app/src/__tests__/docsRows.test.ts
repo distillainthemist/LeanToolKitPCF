@@ -738,3 +738,21 @@ describe("date range filters (2026-08-03)", () => {
   });
 });
 
+
+describe("relativeHint (overlay polish O2)", () => {
+  const now = Date.parse("2026-08-10T00:00:00Z");
+  it("speaks days under two months, months beyond, today at zero", async () => {
+    const { relativeHint } = await import("../docs/rows");
+    expect(relativeHint("2026-08-22T00:00:00Z", now)).toBe("in 12 days");
+    expect(relativeHint("2026-08-02T00:00:00Z", now)).toBe("8 days ago");
+    expect(relativeHint("2026-08-10T06:00:00Z", now)).toBe("today");
+    expect(relativeHint("2028-02-10T00:00:00Z", now)).toBe("in 18 months");
+    expect(relativeHint("2026-02-10T00:00:00Z", now)).toBe("6 months ago");
+    expect(relativeHint("2026-08-11T00:00:00Z", now)).toBe("in 1 day");
+  });
+  it("decorates nothing it cannot parse", async () => {
+    const { relativeHint } = await import("../docs/rows");
+    expect(relativeHint("", now)).toBe("");
+    expect(relativeHint("not a date", now)).toBe("");
+  });
+});
