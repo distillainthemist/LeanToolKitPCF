@@ -229,6 +229,13 @@ export interface VersionLike {
   /** SharePoint's "x.y" label. */
   label: string;
   current: boolean;
+  /** Content-approval status (0 approved, 1 rejected, 2 pending,
+   *  3 draft); null/absent = the library is not moderated. Under
+   *  moderation an APPROVED minor is a published fix on its own
+   *  major's lineage — not work toward the next one (Ben's trial
+   *  document, 2026-08-10: a published v2.1 is current content, not
+   *  an open revision). */
+  modStatus?: number | null;
 }
 
 export interface VersionGroup<T extends VersionLike> {
@@ -251,6 +258,13 @@ export interface VersionGroup<T extends VersionLike> {
  * TOWARD major x+1 and nest under its card; drafts newer than the
  * newest major sit under an "in progress" card (head null). Input
  * newest-first (as SharePoint answers); output newest card first.
+ *
+ * Under CONTENT APPROVAL two rules change (Ben's trial, 2026-08-10):
+ * a moderation-APPROVED minor is a PUBLISHED FIX on its own major's
+ * lineage — it joins major x's card, never the next one — and
+ * "current" is OURS to assign, exactly once, to the group holding the
+ * newest approved version (SharePoint flags both the current draft
+ * AND the current published version, which painted two pills).
  */
 export function groupVersionsByMajor<T extends VersionLike>(versions: T[]): VersionGroup<T>[] {
   const byMajor = new Map<number, VersionGroup<T>>();
@@ -262,15 +276,35 @@ export function groupVersionsByMajor<T extends VersionLike>(versions: T[]): Vers
     }
     return g;
   };
+  const moderated = versions.some((v) => v.modStatus !== null && v.modStatus !== undefined);
+  const groupOf = new Map<T, VersionGroup<T>>();
   for (const v of versions) {
     const m = v.label.match(/^(\d+)\.(\d+)$/);
     if (m === null) continue; // an unparseable label is not a version
     const majorPart = Number(m[1]);
     const minorPart = Number(m[2]);
-    const g = minorPart === 0 ? groupFor(majorPart) : groupFor(majorPart + 1);
+    const publishedMinor = moderated && minorPart !== 0 && v.modStatus === 0;
+    const g =
+      minorPart === 0
+        ? groupFor(majorPart)
+        : publishedMinor
+          ? groupFor(majorPart)
+          : groupFor(majorPart + 1);
     if (minorPart === 0) g.head = v;
     else g.drafts.push(v);
-    if (v.current) g.current = true;
+    groupOf.set(v, g);
+  }
+  if (moderated) {
+    // exactly one current: the newest APPROVED version's group — what
+    // readers are actually being served
+    const newestApproved = versions.find(
+      (v) => v.modStatus === 0 && groupOf.has(v)
+    );
+    if (newestApproved !== undefined) groupOf.get(newestApproved)!.current = true;
+  } else {
+    // no moderation: SharePoint's own flag, deduped to the newest
+    const flagged = versions.find((v) => v.current && groupOf.has(v));
+    if (flagged !== undefined) groupOf.get(flagged)!.current = true;
   }
   return [...byMajor.values()].sort((a, b) => b.major - a.major);
 }

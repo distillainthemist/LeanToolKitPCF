@@ -830,7 +830,11 @@ export function openDocViewer(opts: ViewerOpts): () => void {
           ),
           g.current
             ? tonePill(g.head !== null ? "✓ Published · current" : "● Draft · current", "green")
-            : el("span", "app-docs-chip", "Superseded"),
+            : g.head !== null
+              ? el("span", "app-docs-chip", "Superseded")
+              : g.drafts.some((d) => d.modStatus === 2)
+                ? tonePill("Awaiting approval", "amber")
+                : el("span", "app-docs-chip", "Draft"),
           el(
             "span",
             "app-docs-verwhen",
@@ -860,10 +864,26 @@ export function openDocViewer(opts: ViewerOpts): () => void {
           const shown = showAll ? g.drafts : g.drafts.slice(0, 2);
           for (const d of shown) {
             const line = el("div", "app-docs-verdraft");
+            // under moderation the word is the VERSION's own standing —
+            // a published minor is reader-facing content, not a draft
+            const word =
+              d.modStatus === 0
+                ? "published"
+                : d.modStatus === 2
+                  ? "awaiting approval"
+                  : d.modStatus === 1
+                    ? "rejected"
+                    : "draft";
             line.append(
               el("span", "app-docs-verlabel", `v${d.label}`),
               el("span", "", d.author),
-              el("span", "app-field-hint", d.current ? "draft · current" : "draft"),
+              el(
+                "span",
+                "app-field-hint",
+                d.current && (d.modStatus === null || d.modStatus === undefined)
+                  ? `${word} · current`
+                  : word
+              ),
               el("span", "app-docs-verwhen", formatWhen(d.when))
             );
             const a = openLink(d);

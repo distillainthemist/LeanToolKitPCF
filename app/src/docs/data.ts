@@ -295,6 +295,12 @@ export interface DocVersion {
   /** SharePoint's numeric version id (major*512 + minor) — what the
    *  _vti_history URL addresses. 0 = unknown. */
   versionId: number;
+  /** Content-approval status of THIS version (0 approved, 1 rejected,
+   *  2 pending, 3 draft, 4 scheduled); null = the library is not
+   *  moderated (or the column was withheld). Under moderation a
+   *  PUBLISHED minor is reader-facing content, not an open draft —
+   *  the history must know the difference. */
+  modStatus: number | null;
 }
 
 /** SharePoint version history for one item (newest first). O3 asks for
@@ -307,7 +313,7 @@ export async function itemVersions(
 ): Promise<{ versions: DocVersion[]; error: string }> {
   const query = (expand: boolean) =>
     `_api/web/lists(guid'${listId}')/items(${itemId})/versions` +
-    `?$select=VersionLabel,VersionId,Created,CheckInComment,IsCurrentVersion` +
+    `?$select=VersionLabel,VersionId,Created,CheckInComment,IsCurrentVersion,OData__ModerationStatus` +
     (expand ? `,Editor/LookupValue&$expand=Editor` : "") +
     `&$top=50`;
   let r = await spRequest(site, "GET", query(true));
@@ -327,6 +333,8 @@ export async function itemVersions(
           ? ((v.Editor as { LookupValue: string }).LookupValue)
           : "",
       versionId: typeof v.VersionId === "number" ? v.VersionId : 0,
+      modStatus:
+        typeof v.OData__ModerationStatus === "number" ? v.OData__ModerationStatus : null,
     })),
     error: "",
   };

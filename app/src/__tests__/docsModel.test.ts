@@ -2001,4 +2001,44 @@ describe("Part II column model", () => {
     expect(groupVersionsByMajor([v("weird"), v("1.0", true)])).toHaveLength(1);
     expect(groupVersionsByMajor([])).toEqual([]);
   });
+
+  it("under moderation a published minor is a fix, not a draft (Ben's trial doc)", async () => {
+    const { groupVersionsByMajor } = await import("../docs/model");
+    const v = (label: string, current: boolean, modStatus: number | null) => ({
+      label,
+      current,
+      modStatus,
+    });
+    // the trial document exactly: an APPROVED v2.1 above v2.0 —
+    // SharePoint flags BOTH current; the published minor must join
+    // v2.0's card, which alone wears the current pill
+    const groups = groupVersionsByMajor([
+      v("2.1", true, 0),
+      v("2.0", true, 0),
+      v("1.20", false, 3),
+      v("1.0", false, 0),
+    ]);
+    expect(groups.map((g) => g.major)).toEqual([2, 1]);
+    expect(groups[0].head?.label).toBe("2.0");
+    expect(groups[0].drafts.map((d) => d.label)).toEqual(["2.1", "1.20"]);
+    expect(groups[0].current).toBe(true);
+    expect(groups[1].current).toBe(false);
+    expect(groups.filter((g) => g.current)).toHaveLength(1);
+    // a PENDING minor above the major stays an in-progress card, and
+    // the published major keeps the one current pill
+    const pending = groupVersionsByMajor([
+      v("2.1", true, 2),
+      v("2.0", true, 0),
+      v("1.0", false, 0),
+    ]);
+    expect(pending[0].head).toBeNull();
+    expect(pending[0].drafts.map((d) => d.label)).toEqual(["2.1"]);
+    expect(pending[0].current).toBe(false);
+    expect(pending[1].head?.label).toBe("2.0");
+    expect(pending[1].current).toBe(true);
+    // without moderation, SharePoint's flag still yields exactly one
+    const doubled = groupVersionsByMajor([v("2.1", true, null), v("2.0", true, null)]);
+    expect(doubled.filter((g) => g.current)).toHaveLength(1);
+    expect(doubled[0].head).toBeNull(); // the old rule: minors trail toward 3
+  });
 });
