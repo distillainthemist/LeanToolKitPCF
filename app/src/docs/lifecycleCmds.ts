@@ -756,6 +756,41 @@ export function openMarkReviewed(opts: MarkReviewedOpts): void {
       return fail("Check-in was refused (the document stays checked out)", cin.status);
     }
 
+    // CA1: Mark reviewed only exists on an APPROVED document, so its
+    // minor check-in must publish on a moderated library — otherwise
+    // the review stamp sits PENDING behind an approval wall nobody
+    // meant to raise (same rule as the quick property edit).
+    const mod = await timed(fetchListModeration(site, opts.listId), "The moderation read");
+    const moderated =
+      mod.ok && ((mod.data ?? {}) as { EnableModeration?: unknown }).EnableModeration === true;
+    if (moderated) {
+      status.textContent = "Publishing (content approval)…";
+      const pub = await timed(
+        validateUpdateListItem(
+          site,
+          opts.listId,
+          row.id,
+          [{ FieldName: "_ModerationStatus", FieldValue: "0" }],
+          false
+        ),
+        "The publish"
+      );
+      const errs = validateItemErrors(pub.data);
+      if (!pub.ok || errs.length > 0) {
+        // the review LANDED — pending is a warning, kept readable
+        status.textContent =
+          "Reviewed — but SharePoint content approval is still PENDING: readers see the " +
+          "previous review dates until a document controller approves it in SharePoint.";
+        status.classList.add("app-docs-addstatus-warn");
+        const closeBtn = dlg.root.querySelector(".ltk-btn-secondary") as HTMLButtonElement | null;
+        if (closeBtn !== null) closeBtn.textContent = "Close";
+        goBtn.style.display = "none";
+        running = false;
+        opts.onDone();
+        return;
+      }
+    }
+
     dlg.close();
     opts.onDone();
   };
