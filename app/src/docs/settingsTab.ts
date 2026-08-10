@@ -14,11 +14,16 @@
 import { appPalettes } from "../store/config";
 import { el, clear } from "../../../shared/ui/dom";
 import { statusGlyph } from "../../../shared/ui/format";
+import { draggableRow } from "../../../shared/ui/dragList";
 import {
   AppDocsConfig,
   COLUMN_ROLES,
   ColumnConfig,
+  ColumnTypeState,
+  ConfigurableLibType,
+  deriveTypeStates,
   DictionaryConflict,
+  effectiveColumnType,
   HealthFinding,
   LIBRARY_TYPES,
   LIFECYCLE_STAGES,
@@ -126,6 +131,25 @@ export async function renderDocsSettings(body: HTMLElement, ctx: Ctx): Promise<v
   const fieldsByList = new Map<string, SpField[]>();
 
   const save = async () => {
+    // Part II bridge (until S2 re-points the readers and S3 retires the
+    // write): the manager's type cells are authoritative, so the
+    // per-library flags are written FROM them — one source, no drift.
+    // Template libraries keep their config untouched.
+    const dict = app.sites[siteKey(app.siteUrl)];
+    if (dict !== undefined) {
+      const byInternal = new Map(dict.columns.map((c) => [c.internal, c]));
+      for (const lib of exposed) {
+        const t = effectiveColumnType(lib.libType);
+        if (t === null) continue;
+        for (const c of lib.config.columns) {
+          const sc = byInternal.get(c.internal);
+          if (sc?.types === undefined) continue;
+          const state = sc.types[t];
+          c.available = state !== undefined;
+          c.inDefault = state === "default";
+        }
+      }
+    }
     await saveAppDocsConfig(app);
     for (const lib of exposed) {
       await saveDocLibrary(lib);
@@ -163,20 +187,34 @@ export async function renderDocsSettings(body: HTMLElement, ctx: Ctx): Promise<v
   siteRow.append(siteInput, loadLibs);
   body.appendChild(field("Site URL", siteRow));
 
-  // ---- document columns: the site dictionary (C1) -----------------------
-  // These libraries share SharePoint SITE columns, so what a column is
-  // called and what it means belong to the site, not to each library
-  // that happens to carry it. Mapped once here; every library follows.
-  body.appendChild(section("Document columns"));
-  body.appendChild(
+  // ---- section order (Part II S1): LIBRARIES come first — expose, type
+  // and title are the first decisions — then the one column manager.
+  // Hosts keep the code where it has always lived while the DOM carries
+  // the new order; later sections keep appending to body below these.
+  const libsHost = el("div", "");
+  const colsHost = el("div", "");
+  body.append(libsHost, colsHost);
+
+  // ---- document columns: the ONE manager (Part II S1) -------------------
+  // Site columns, managed once: what a column is called and means (C1),
+  // the order everything reads it in, its dialog sub-heading, and its
+  // standing per library TYPE — the merged three-state cell. The old
+  // per-library ticks and C5 templates are superseded; until S2/S3
+  // finish the cutover, save() mirrors the cells into the per-library
+  // configs so every consumer already answers from ONE source.
+  colsHost.appendChild(section("Document columns"));
+  colsHost.appendChild(
     note(
-      "Every library on this site draws on the same site columns, so a column means " +
-        "the same thing everywhere. Set its display name and document-management role " +
-        "once here — each library then chooses only which of them its own view shows."
+      "Every library draws on the same site columns — managed once, here. Drag rows " +
+        "to set the order properties read in everywhere; group them under sub-headings " +
+        "(they become sections in the add and edit dialogs — the register uses the " +
+        "order alone). Each type cell says whether the column is hidden there (—), " +
+        "available (✓), or in the default view (★). Revision libraries mirror " +
+        "standards; template libraries stay fixed."
     )
   );
   const dictBox = el("div", "");
-  body.appendChild(dictBox);
+  colsHost.appendChild(dictBox);
 
   const dictKey = () => siteKey(app.siteUrl);
   const dictionary = (): SiteDictionary =>
@@ -219,7 +257,11 @@ export async function renderDocsSettings(body: HTMLElement, ctx: Ctx): Promise<v
       dict = built.dictionary;
       migrated = built.conflicts;
     }
-    const { dictionary: synced, carriers } = syncSiteDictionary(dict, schemas);
+    // Part II: columns that predate the type cells get them from the
+    // per-library past (union — widens, never narrows); persisted when
+    // the admin saves, per Part I's silent-migration rules
+    const { dictionary: synced0, carriers } = syncSiteDictionary(dict, schemas);
+    const synced = deriveTypeStates(synced0, exposed);
     app.sites[key] = synced;
     lastCarriers = carriers;
     // the palettes section needs the live schema to tell a Choice column
@@ -239,122 +281,260 @@ export async function renderDocsSettings(body: HTMLElement, ctx: Ctx): Promise<v
 
     const gridHost = el("div", "");
     dictBox.appendChild(gridHost);
-    // rebuilt in place on reorder — no refetch of any library's fields
-    const paintGrid = () => {
-    clear(gridHost);
-    const grid = el("div", "app-docs-dict");
-    grid.append(
-      el("span", "app-docs-colhead", ""),
-      el("span", "app-docs-colhead", "SharePoint column"),
-      el("span", "app-docs-colhead", "Display as"),
-      el("span", "app-docs-colhead", "Available"),
-      el("span", "app-docs-colhead", "Filter"),
-      el("span", "app-docs-colhead", "Role"),
-      el("span", "app-docs-colhead", "In libraries")
-    );
-    for (const col of synced.columns) {
-      const live = schemas
-        .flatMap((s) => s.fields)
-        .find((f) => f.internal === col.internal);
-      const clash = migrated.filter((m) => m.internal === col.internal);
-      if (clash.length > 0) {
-        grid.appendChild(
-          el(
-            "div",
-            "app-docs-dictwarn",
-            clash
-              .map(
-                (m) =>
-                  `${col.internal}: libraries disagreed on ${m.field} (` +
-                  m.values.map((v) => `${v.value === "" ? "—" : v.value} ×${v.count}`).join(", ") +
-                  `) — kept “${m.chosen === "" ? "—" : m.chosen}”`
-              )
-              .join(" · ")
-          )
-        );
+
+    // the manager's display list: listed groups, orphan groups, then
+    // the ungrouped tail (under a pseudo-header once any group exists,
+    // so a drop can land there). dict.columns keeps its order within
+    // each group; the FLATTENED display order IS the dictionary order.
+    type Entry =
+      | { kind: "header"; name: string; pseudo: boolean }
+      | { kind: "col"; col: SiteColumn };
+    const buildEntries = (): Entry[] => {
+      const order = [...synced.groups];
+      for (const c of synced.columns) {
+        if (c.group !== "" && !order.includes(c.group)) order.push(c.group);
       }
-      // row order = how properties read, in the add form and the
-      // viewer's properties pane alike (Ben, 2026-08-04)
-      const move = el("span", "app-docs-colmove");
-      const arrow = (dir: -1 | 1, glyph: string) => {
-        const b = el("button", "app-docs-movebtn", glyph) as HTMLButtonElement;
-        const at = synced.columns.indexOf(col);
-        b.disabled = dir === -1 ? at === 0 : at === synced.columns.length - 1;
-        b.setAttribute("aria-label", `Move ${col.internal} ${dir === -1 ? "up" : "down"}`);
-        b.addEventListener("click", () => {
-          const from = synced.columns.indexOf(col);
-          const to = from + dir;
-          if (to < 0 || to >= synced.columns.length) return;
-          synced.columns.splice(from, 1);
-          synced.columns.splice(to, 0, col);
-          ctx.markDirty();
-          paintGrid();
-        });
-        return b;
-      };
-      move.append(arrow(-1, "▲"), arrow(1, "▼"));
-      grid.appendChild(move);
-      grid.appendChild(
-        el("span", "app-docs-colname", `${live?.title ?? col.internal} · ${col.internal}`)
-      );
-      const label = el("input", "app-input") as HTMLInputElement;
-      label.placeholder = live?.title ?? col.internal;
-      label.value = col.label;
-      label.addEventListener("input", () => {
-        col.label = label.value.trim();
-        ctx.markDirty();
-      });
-      grid.appendChild(label);
-      const avail = el("input", "") as HTMLInputElement;
-      avail.type = "checkbox";
-      avail.checked = col.available;
-      avail.title = "Offered in the column picker in every library";
-      avail.addEventListener("change", () => {
-        col.available = avail.checked;
-        ctx.markDirty();
-      });
-      grid.appendChild(avail);
-      // only a column that CAN filter is worth offering as one: a term
-      // set to pick from, or a date to bound (Ben, 2026-08-03)
-      const canFilter = col.termSetId !== "" || isDateColumn(col);
-      const filt = el("input", "") as HTMLInputElement;
-      filt.type = "checkbox";
-      filt.checked = canFilter && col.filterable;
-      filt.disabled = !canFilter;
-      filt.title = canFilter
-        ? "Offered in the register's Filters pane"
-        : "Only managed-metadata and date columns can filter";
-      filt.addEventListener("change", () => {
-        col.filterable = filt.checked;
-        ctx.markDirty();
-      });
-      grid.appendChild(filt);
-      const role = el("select", "app-input") as HTMLSelectElement;
-      for (const r of COLUMN_ROLES) {
-        const o = el("option", "", r.label) as HTMLOptionElement;
-        o.value = r.key;
-        role.appendChild(o);
+      const out: Entry[] = [];
+      for (const g of order) {
+        out.push({ kind: "header", name: g, pseudo: false });
+        for (const c of synced.columns.filter((x) => x.group === g)) {
+          out.push({ kind: "col", col: c });
+        }
       }
-      role.value = COLUMN_ROLES.some((r) => r.key === col.role) ? col.role : "";
-      role.addEventListener("change", () => {
-        col.role = role.value;
-        ctx.markDirty();
-      });
-      grid.appendChild(role);
-      // which libraries actually carry it — a column missing from one
-      // library is the quiet kind of drift, so it is stated plainly
-      const who = carriers.get(col.internal) ?? [];
-      const where = el(
-        "span",
-        `app-docs-colwhere${who.length < exposed.length ? " app-docs-colwhere-part" : ""}`,
-        who.length === exposed.length ? `All ${who.length}` : `${who.length} of ${exposed.length}`
-      );
-      where.title = who.length > 0 ? who.join(", ") : "No library carries this column";
-      grid.appendChild(where);
-    }
-    gridHost.appendChild(grid);
+      const loose = synced.columns.filter((x) => x.group === "");
+      if (order.length > 0 && loose.length > 0) {
+        out.push({ kind: "header", name: "", pseudo: true });
+      }
+      for (const c of loose) out.push({ kind: "col", col: c });
+      return out;
     };
-    paintGrid();
+    /** After a drop, the display order becomes THE order: membership
+     *  from position under the headers, groups from header sequence,
+     *  dict.columns rebuilt flattened. */
+    const normalize = (entries: Entry[]) => {
+      const groups: string[] = [];
+      const cols: SiteColumn[] = [];
+      let current = "";
+      for (const e of entries) {
+        if (e.kind === "header") {
+          current = e.name;
+          if (e.name !== "" && !groups.includes(e.name)) groups.push(e.name);
+        } else {
+          e.col.group = current;
+          cols.push(e.col);
+        }
+      }
+      synced.groups = groups;
+      synced.columns = cols;
+      ctx.markDirty();
+      paintManager();
+    };
+
+    // rebuilt in place on any reorder — no refetch of library fields
+    const paintManager = () => {
+      clear(gridHost);
+      const entries = buildEntries();
+      const headCell = (text: string, title: string) => {
+        const s = el("span", "app-docs-colhead app-docs-colhead-c", text);
+        s.title = title;
+        return s;
+      };
+      const head = el("div", "app-docs-mgrhead");
+      head.append(
+        el("span", "app-docs-colhead", ""),
+        el("span", "app-docs-colhead", "SharePoint column"),
+        el("span", "app-docs-colhead", "Display as"),
+        el("span", "app-docs-colhead", "Role"),
+        headCell("Filter", "Offered in the register's Filters pane"),
+        headCell("Std", "Controlled standards — revision libraries mirror this cell"),
+        headCell("Rec", "Controlled records"),
+        headCell("Wrk", "Working documents"),
+        el("span", "app-docs-colhead", "In libraries")
+      );
+      gridHost.appendChild(head);
+
+      const groupRow = (entry: Entry & { kind: "header" }, index: number) => {
+        const row = el("div", "app-docs-mgrgroup");
+        // a drop target, never a drag source: the handle is never in
+        // the DOM, so the header cannot start a drag of its own
+        draggableRow(row, el("span", ""), "dict-cols", index, entries, () => normalize(entries));
+        if (entry.pseudo) {
+          row.appendChild(el("span", "app-docs-mgrgroupname app-field-hint", "Ungrouped"));
+          return row;
+        }
+        const at = () => synced.groups.indexOf(entry.name);
+        const moveGroup = (dir: -1 | 1, glyph: string) => {
+          const b = el("button", "app-docs-movebtn", glyph) as HTMLButtonElement;
+          const a = at();
+          b.disabled = dir === -1 ? a <= 0 : a === synced.groups.length - 1 || a < 0;
+          b.setAttribute("aria-label", `Move group ${entry.name} ${dir === -1 ? "up" : "down"}`);
+          b.addEventListener("click", () => {
+            const from = at();
+            const to = from + dir;
+            if (from < 0 || to < 0 || to >= synced.groups.length) return;
+            synced.groups.splice(from, 1);
+            synced.groups.splice(to, 0, entry.name);
+            ctx.markDirty();
+            paintManager();
+          });
+          return b;
+        };
+        const nameIn = el("input", "app-input app-docs-mgrgroupinput") as HTMLInputElement;
+        nameIn.value = entry.name;
+        nameIn.addEventListener("change", () => {
+          const next = nameIn.value.trim();
+          if (next === "" || next === entry.name || synced.groups.includes(next)) {
+            nameIn.value = entry.name;
+            return;
+          }
+          const a = at();
+          if (a >= 0) synced.groups[a] = next;
+          for (const c of synced.columns) if (c.group === entry.name) c.group = next;
+          ctx.markDirty();
+          paintManager();
+        });
+        const del = el("button", "app-docs-movebtn", "✕") as HTMLButtonElement;
+        del.title = "Remove the group — its columns keep their places, ungrouped";
+        del.addEventListener("click", () => {
+          for (const c of synced.columns) if (c.group === entry.name) c.group = "";
+          synced.groups = synced.groups.filter((g) => g !== entry.name);
+          ctx.markDirty();
+          paintManager();
+        });
+        row.append(moveGroup(-1, "▲"), moveGroup(1, "▼"), nameIn, del);
+        return row;
+      };
+
+      const colRow = (col: SiteColumn, index: number) => {
+        const live = schemas.flatMap((s) => s.fields).find((f) => f.internal === col.internal);
+        const clash = migrated.filter((m) => m.internal === col.internal);
+        if (clash.length > 0) {
+          gridHost.appendChild(
+            el(
+              "div",
+              "app-docs-dictwarn",
+              clash
+                .map(
+                  (m) =>
+                    `${col.internal}: libraries disagreed on ${m.field} (` +
+                    m.values.map((v) => `${v.value === "" ? "—" : v.value} ×${v.count}`).join(", ") +
+                    `) — kept “${m.chosen === "" ? "—" : m.chosen}”`
+                )
+                .join(" · ")
+            )
+          );
+        }
+        const row = el("div", "app-docs-mgrrow");
+        // row order = how properties read, in the add form and the
+        // viewer's properties pane alike (Ben, 2026-08-04); the drag
+        // carries a row anywhere, including under another sub-heading
+        const grip = el("span", "app-docs-grip", "⠿");
+        grip.title = "Drag to reorder or regroup";
+        draggableRow(row, grip, "dict-cols", index, entries, () => normalize(entries));
+        row.appendChild(grip);
+        row.appendChild(
+          el("span", "app-docs-colname", `${live?.title ?? col.internal} · ${col.internal}`)
+        );
+        const label = el("input", "app-input") as HTMLInputElement;
+        label.placeholder = live?.title ?? col.internal;
+        label.value = col.label;
+        label.addEventListener("input", () => {
+          col.label = label.value.trim();
+          ctx.markDirty();
+        });
+        row.appendChild(label);
+        const role = el("select", "app-input") as HTMLSelectElement;
+        for (const r of COLUMN_ROLES) {
+          const o = el("option", "", r.label) as HTMLOptionElement;
+          o.value = r.key;
+          role.appendChild(o);
+        }
+        role.value = COLUMN_ROLES.some((r) => r.key === col.role) ? col.role : "";
+        role.addEventListener("change", () => {
+          col.role = role.value;
+          ctx.markDirty();
+        });
+        row.appendChild(role);
+        // only a column that CAN filter is worth offering as one: a
+        // term set to pick from, or a date to bound (Ben, 2026-08-03)
+        const canFilter = col.termSetId !== "" || isDateColumn(col);
+        const filt = el("input", "") as HTMLInputElement;
+        filt.type = "checkbox";
+        filt.checked = canFilter && col.filterable;
+        filt.disabled = !canFilter;
+        filt.title = canFilter
+          ? "Offered in the register's Filters pane"
+          : "Only managed-metadata and date columns can filter";
+        filt.addEventListener("change", () => {
+          col.filterable = filt.checked;
+          ctx.markDirty();
+        });
+        row.appendChild(filt);
+        // the merged three-state cell (Part II): hidden — · available ✓
+        // · in the default view ★, cycled by click
+        const typeCell = (t: ConfigurableLibType, titleName: string) => {
+          const cycle: (ColumnTypeState | undefined)[] = [undefined, "on", "default"];
+          const b = el("button", "app-docs-typecell") as HTMLButtonElement;
+          const paint = () => {
+            const s = col.types?.[t];
+            b.textContent = s === "default" ? "★" : s === "on" ? "✓" : "—";
+            b.className = `app-docs-typecell${
+              s === "default" ? " app-docs-typecell-def" : s === "on" ? " app-docs-typecell-on" : ""
+            }`;
+            b.title = `${titleName}: ${
+              s === "default" ? "in the default view" : s === "on" ? "available" : "hidden"
+            } — click to change`;
+          };
+          b.addEventListener("click", () => {
+            const cur = col.types?.[t];
+            const types = { ...(col.types ?? {}) };
+            const next = cycle[(cycle.indexOf(cur) + 1) % cycle.length];
+            if (next === undefined) delete types[t];
+            else types[t] = next;
+            col.types = types;
+            // the legacy flag follows the cells until S2 re-points
+            // its readers — hidden everywhere = unavailable
+            col.available = Object.keys(types).length > 0;
+            ctx.markDirty();
+            paint();
+          });
+          paint();
+          return b;
+        };
+        row.append(
+          typeCell("standard", "Standards"),
+          typeCell("record", "Records"),
+          typeCell("working", "Working documents")
+        );
+        // which libraries actually carry it — a column missing from one
+        // library is the quiet kind of drift, so it is stated plainly
+        const who = carriers.get(col.internal) ?? [];
+        const where = el(
+          "span",
+          `app-docs-colwhere${who.length < exposed.length ? " app-docs-colwhere-part" : ""}`,
+          who.length === exposed.length ? `All ${who.length}` : `${who.length} of ${exposed.length}`
+        );
+        where.title = who.length > 0 ? who.join(", ") : "No library carries this column";
+        row.appendChild(where);
+        return row;
+      };
+
+      entries.forEach((entry, i) => {
+        gridHost.appendChild(entry.kind === "header" ? groupRow(entry, i) : colRow(entry.col, i));
+      });
+
+      const addGroup = el("button", "app-btn", "＋ Add group") as HTMLButtonElement;
+      addGroup.addEventListener("click", () => {
+        let name = "New group";
+        let n = 2;
+        while (synced.groups.includes(name)) name = `New group ${n++}`;
+        synced.groups.push(name);
+        ctx.markDirty();
+        paintManager();
+      });
+      gridHost.appendChild(addGroup);
+    };
+    paintManager();
     paintPalettes();
     paintTemplates();
     paintLifecycle();
@@ -669,15 +849,15 @@ export async function renderDocsSettings(body: HTMLElement, ctx: Ctx): Promise<v
     );
   };
 
-  // ---- libraries section -----------------------------------------------
-  body.appendChild(section("Libraries"));
+  // ---- libraries section (rendered FIRST — Part II S1) ------------------
+  libsHost.appendChild(section("Libraries"));
   const libsNote = note(
     "Tick a library to expose it in LeanBoard, then configure how it presents. " +
       "Unticking removes its configuration row entirely."
   );
-  body.appendChild(libsNote);
+  libsHost.appendChild(libsNote);
   const libsBox = el("div", "app-dept-list");
-  body.appendChild(libsBox);
+  libsHost.appendChild(libsBox);
 
   const typeLabel = (t: LibraryType) =>
     LIBRARY_TYPES.find((x) => x.key === t)?.label ?? t;

@@ -2225,6 +2225,33 @@ button.app-docs-navterm.app-docs-navterm-on {
 }
 .app-docs-taskact { align-self: flex-start; margin-top: 4px; font-size: 12px; padding: 3px 10px; }
 
+/* the ONE column manager (Part II S1): per-row grids share a template
+   so cells align across rows, which is what lets rows be DRAG targets */
+.app-docs-mgrhead, .app-docs-mgrrow {
+  display: grid;
+  grid-template-columns: 20px minmax(140px, 1.2fr) minmax(100px, 0.9fr) minmax(120px, 0.9fr) 44px 30px 30px 30px minmax(78px, 0.6fr);
+  gap: 4px 8px;
+  align-items: center;
+}
+.app-docs-mgrhead { margin: 6px 0 2px; }
+.app-docs-mgrrow { padding: 2px 0; border-radius: 4px; }
+.app-docs-colhead-c { text-align: center; }
+.app-docs-grip { cursor: grab; color: #a8a29e; font-size: 13px; text-align: center; user-select: none; }
+.app-docs-mgrrow:hover .app-docs-grip { color: #57534a; }
+/* a sub-heading row: move/rename/delete; also a drop target */
+.app-docs-mgrgroup { display: flex; gap: 4px; align-items: center; margin: 12px 0 2px; }
+.app-docs-mgrgroupinput { font-weight: 600; font-size: 12.5px; max-width: 220px; padding: 3px 8px; }
+.app-docs-mgrgroupname { font-weight: 600; }
+/* the merged three-state cell: hidden — · available ✓ · default ★ */
+.app-docs-typecell {
+  border: 1px solid #e0ddd7; background: none; border-radius: 5px;
+  height: 24px; font-size: 12px; cursor: pointer; color: #b8b2a8; line-height: 1;
+}
+.app-docs-typecell-on { color: #26241f; border-color: #a8a29e; }
+.app-docs-typecell-def {
+  color: #fff; background: var(--app-accent); border-color: var(--app-accent);
+}
+
 /* dictionary row reorder — order = how properties read everywhere */
 .app-docs-colmove { display: flex; gap: 2px; align-self: center; }
 .app-docs-movebtn {
