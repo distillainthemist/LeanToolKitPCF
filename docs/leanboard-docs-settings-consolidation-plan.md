@@ -311,3 +311,108 @@ the natural moment to migrate them onto RLDAS and the resolved config.
    - **Nothing lost silently.** Every conflict the migration resolved
      stays visible in Health (C4), and the old per-library JSON is
      retained for one release, so a rollback needs no data repair.
+
+---
+
+# Part II — the column model, completed (Ben, 2026-08-10)
+
+Part I moved column MEANING to the site dictionary but ruled that
+`available`/`inDefault` were "genuinely about one library's view" and
+kept them per-library, seeded by type templates (C5). Ben's review:
+that unit was wrong too. Libraries of the same TYPE should look the
+same — nobody ever configured two standards libraries differently
+except by accident, which is why the templates and the drift checks
+exist. The remaining per-library column config, the type templates and
+the dictionary's flags collapse into ONE manager.
+
+## The model
+
+Each site column carries, site-wide:
+
+1. **Order + group.** The dictionary's array order IS the order —
+   drag-and-drop, with columns grouped under sub-headings. Order feeds
+   the register (flattened — a table cannot render sub-headings, so
+   groups are ORDERING there) and the dialogs (the add form, Edit
+   properties and the viewer's properties pane render each group as a
+   real section header).
+2. **`filterable`** — site-wide, as today (the filter pane is
+   cross-library).
+3. **A per-TYPE three-state cell** — the review's one merge: "relevant
+   per type" and "in the default view" as separate axes cannot express
+   real intents without becoming a matrix, so they ARE the matrix, one
+   control: each column × type is **hidden / available / in default**.
+   Three types get cells (standard / record / working); revision
+   libraries mirror standard automatically, template libraries stay
+   fixed (name + modified). `available` is DERIVED — a column hidden
+   for every type is unavailable, one fewer flag to keep honest.
+
+**Resolution rules** (pure, model.ts, shared by screen and cards):
+- register defaults for a view = cells reading *default* for ANY type
+  in view, dictionary-ordered ("Modified" appended as today);
+- offered in the chooser/filters = *available-or-default* for any type
+  in view (∧ `filterable` for the filter pane);
+- dialog sections for a library = its type's non-hidden columns, in
+  group order.
+- Saved views, shared links and the per-user chooser are UNTOUCHED:
+  `DocView.columns` still beats the default; only the default's source
+  changes.
+- The site defines INTENT; the library stays REALITY: feeds keep
+  intersecting with what each list carries (the RLDAS-400 guard), and
+  Health reports a library missing a column its type considers
+  relevant — nothing fails.
+
+**Storage** (sparse, on the existing dictionary — old payloads keep
+parsing, the standing rule):
+
+```ts
+interface SiteColumn {
+  internal; label; role; termSetId; filterable;
+  group: string;                       // sub-heading ("" = ungrouped tail)
+  types?: { standard?: S; record?: S; working?: S };  // S = "on" | "default"
+  // absent type key = hidden; legacy `available` still parsed
+}
+interface SiteDictionary { columns: SiteColumn[]; groups: string[]; }
+```
+
+**Migration** (silent, read-time derive + persist on first admin save,
+Part I's rules): per column × type, *default* if any library of that
+type has `inDefault`, else *on* if any has `available`, else hidden.
+Union widens, never narrows; what it derived stays visible in Health;
+per-library configs go DORMANT (never destroyed — `mergeColumns` keeps
+refreshing carried facts and termSetIds from the live schema).
+
+## Settings information architecture
+
+Libraries move to the TOP (Ben's first ask). The per-library panel
+slims to what is genuinely per-library: type, title, rendition path,
+staging flag. Then **Document columns** — the one manager: draggable
+rows under draggable group headers; each row = label · role select ·
+filterable toggle · three type cells · palette link for taxonomy
+columns. The C5 template picker and the per-library column grid
+RETIRE from the UI. Term sets & colours, Access control, Lifecycle and
+Health follow as today.
+
+## Phases
+
+- **S0 — model + migration (pure).** Dictionary fields, sparse
+  serialization both ways, `columnsForTypes` / `defaultColumnsFor` /
+  `dialogSections` / `deriveTypeStates`, tests incl. old-payload
+  round-trips.
+- **S1 — the manager UI + IA reorder.** dragList-based rows and group
+  headers; the three-state cells; Libraries section to the top;
+  role/palette entry points absorbed into the manager.
+- **S2 — consumers.** Screen `defaultInternals` and the docs card's
+  defaults onto `defaultColumnsFor` (one source, both surfaces); add
+  form / Edit properties / viewer properties onto `dialogSections`
+  (group headers appear); chooser + filter offerings onto the
+  availability rule.
+- **S3 — retire + health + docs.** Per-library column grid and C5
+  template picker removed from settings; health drift check compares
+  type relevance vs carried columns; docs swept.
+
+Gates per phase (full ritual; root typecheck untouched unless shared/
+moves). Hosted checks (Ben): a saved v0.39 link opens unchanged; a
+mixed standards+working view shows the union defaults; the add form
+shows group headers; drag reorder reflects in register, dialogs and
+export; prod's per-library configs (which DO differ within a type)
+derive by union and Health names what widened.
