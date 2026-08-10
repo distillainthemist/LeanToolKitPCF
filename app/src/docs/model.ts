@@ -221,6 +221,33 @@ export function columnOffered(col: SiteColumn): boolean {
   return col.types !== undefined ? Object.keys(col.types).length > 0 : col.available;
 }
 
+/**
+ * The per-library flags written FROM the cells (S1's save bridge, made
+ * pure in S3): the manager is authoritative, the per-library config is
+ * its dormant mirror — kept true so every remaining reader of
+ * available/inDefault (fetch-field lists, dict-less fallbacks) answers
+ * the same as the cells. Template libraries and typeless columns pass
+ * through untouched.
+ */
+export function mirrorCellsToConfig(
+  dict: SiteDictionary,
+  libType: string,
+  cfg: LibraryConfig
+): LibraryConfig {
+  const t = effectiveColumnType(libType);
+  if (t === null || dict.columns.length === 0) return cfg;
+  const by = new Map(dict.columns.map((c) => [c.internal, c]));
+  return {
+    ...cfg,
+    columns: cfg.columns.map((c) => {
+      const sc = by.get(c.internal);
+      if (sc?.types === undefined) return c;
+      const state = sc.types[t];
+      return { ...c, available: state !== undefined, inDefault: state === "default" };
+    }),
+  };
+}
+
 /** The configurable types a set of libraries actually spans (revision
  *  mirrors standard; template contributes nothing). */
 export function configurableTypesIn(libTypes: string[]): ConfigurableLibType[] {
@@ -1537,7 +1564,8 @@ export interface HealthInput {
   conflicts: DictionaryConflict[];
   /** internal → the libraries that carry it. */
   carriers: Map<string, string[]>;
-  libraries: { name: string; columns: ColumnConfig[] }[];
+  /** libType feeds the Part II type-drift check; absent = skipped. */
+  libraries: { name: string; columns: ColumnConfig[]; libType?: string }[];
   /** internal → a Choice column's current choices. */
   choicesBy: Map<string, string[]>;
   /** internal → what a taxonomy column's cells hold against what its
@@ -1644,6 +1672,30 @@ export function dictionaryHealth(input: HealthInput): HealthFinding[] {
   const out: HealthFinding[] = [];
   const roleLabel = (key: string) =>
     COLUMN_ROLES.find((r) => r.key === key)?.label ?? key;
+
+  // Part II (S3): the type cells say which libraries OWE a column — a
+  // library physically missing one its type marks available or default
+  // renders gaps the register cannot explain, so the drift is NAMED
+  // here rather than discovered row by row
+  for (const c of dict.columns) {
+    if (c.types === undefined || Object.keys(c.types).length === 0) continue;
+    const carrying = new Set(carriers.get(c.internal) ?? []);
+    const missing = libraries.filter((lib) => {
+      const t = effectiveColumnType(lib.libType ?? "");
+      return t !== null && c.types?.[t] !== undefined && !carrying.has(lib.name);
+    });
+    if (missing.length > 0) {
+      out.push({
+        level: "warn",
+        title: `“${c.label !== "" ? c.label : c.internal}” is missing where its type expects it`,
+        detail:
+          `${missing.map((l) => l.name).join(", ")} do${missing.length === 1 ? "es" : ""} not ` +
+          `carry ${c.internal}, but the column is marked for their library type in Document ` +
+          `columns — add the site column to the librar${missing.length === 1 ? "y" : "ies"}, ` +
+          `or set the type's cell to hidden.`,
+      });
+    }
+  }
 
   // a role means one column; two is ambiguous and the register just
   // takes the first, which is not a decision anyone made

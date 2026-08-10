@@ -1900,4 +1900,73 @@ describe("Part II column model", () => {
     expect(bare.columns[0].types).toEqual({ standard: "on", record: "on", working: "on" });
     expect(bare.columns[1].types).toEqual({});
   });
+
+  it("mirrorCellsToConfig writes the flags FROM the cells (S3)", async () => {
+    const { mirrorCellsToConfig, emptySiteDictionary } = await import("../docs/model");
+    const dict = {
+      ...emptySiteDictionary(),
+      columns: [
+        pcol("A", { types: { standard: "default" as const } }),
+        pcol("B", { types: { working: "on" as const } }),
+        pcol("Legacy"), // typeless — never touched
+      ],
+    };
+    const cfg = {
+      title: "",
+      renditionPath: "",
+      statusColors: {},
+      columns: [
+        { internal: "A", label: "", role: "", available: false, inDefault: false, termSetId: "" },
+        { internal: "B", label: "", role: "", available: true, inDefault: true, termSetId: "" },
+        { internal: "Legacy", label: "", role: "", available: true, inDefault: true, termSetId: "" },
+      ],
+    };
+    const std = mirrorCellsToConfig(dict, "standard", cfg);
+    expect(std.columns[0]).toMatchObject({ available: true, inDefault: true }); // default cell
+    expect(std.columns[1]).toMatchObject({ available: false, inDefault: false }); // hidden for standard
+    expect(std.columns[2]).toMatchObject({ available: true, inDefault: true }); // typeless untouched
+    // revision reads the standard cells; template passes through whole
+    expect(mirrorCellsToConfig(dict, "revision", cfg).columns[0].inDefault).toBe(true);
+    expect(mirrorCellsToConfig(dict, "template", cfg)).toBe(cfg);
+    // the input is not mutated (pure)
+    expect(cfg.columns[0].available).toBe(false);
+  });
+
+  it("health names a library missing a column its type expects (S3)", async () => {
+    const { dictionaryHealth, emptySiteDictionary } = await import("../docs/model");
+    const dict = {
+      ...emptySiteDictionary(),
+      columns: [pcol("DMSStatus", { label: "Status", types: { standard: "default" as const } })],
+    };
+    const base = {
+      dict,
+      conflicts: [],
+      choicesBy: new Map<string, string[]>(),
+      carriers: new Map([["DMSStatus", ["Standards A"]]]),
+    };
+    const findings = dictionaryHealth({
+      ...base,
+      libraries: [
+        { name: "Standards A", columns: [], libType: "standard" },
+        { name: "Standards B", columns: [], libType: "standard" }, // missing it
+        { name: "Working", columns: [], libType: "working" }, // not owed — hidden there
+      ],
+    });
+    const hit = findings.find((f) => f.title.includes("missing where its type expects"));
+    expect(hit?.detail).toContain("Standards B");
+    expect(hit?.detail).not.toContain("Working");
+    // every owing library carries it = no finding; no libType = skipped
+    expect(
+      dictionaryHealth({
+        ...base,
+        libraries: [{ name: "Standards A", columns: [], libType: "standard" }],
+      }).some((f) => f.title.includes("missing where"))
+    ).toBe(false);
+    expect(
+      dictionaryHealth({
+        ...base,
+        libraries: [{ name: "Standards B", columns: [] }],
+      }).some((f) => f.title.includes("missing where"))
+    ).toBe(false);
+  });
 });

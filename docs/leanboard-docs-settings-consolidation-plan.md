@@ -416,3 +416,20 @@ mixed standards+working view shows the union defaults; the add form
 shows group headers; drag reorder reflects in register, dialogs and
 export; prod's per-library configs (which DO differ within a type)
 derive by union and Health names what widened.
+
+> **Progress — Part II COMPLETE (2026-08-10).** S0: the model +
+> silent migration (group, per-type three-state cells, ordered groups;
+> deriveTypeStates unions the per-library past, C5 templates included,
+> widens never narrows). S1: the one manager (drag rows across
+> sub-headings, group move/rename/delete, —/✓/★ cells) with Libraries
+> moved to the top. S2: the register, the docs card, the column
+> chooser, the Filters pane, the add form, Edit properties and the
+> viewer's properties pane all answer from the cells — defaults via
+> defaultColumnsFor (one function, every surface), dialogs sectioned
+> by the manager's groups. S3: the C5 View-templates section and the
+> per-library View-columns grid RETIRED from the UI (data dormant,
+> never destroyed — the mirror keeps the per-library flags true for
+> the remaining fetch-field readers and dict-less fallbacks), library
+> type changes and newly exposed libraries seed from the cells, and
+> Health names a library missing a column its type expects. Saved
+> views and shared links untouched throughout.

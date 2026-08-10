@@ -131,16 +131,16 @@ bound to the status column beside the template's own "uncontrolled if
 printed" wording, does the watermark's job — no flow, no stored
 artefact).
 
-10. **Settings consolidation Part II (NEXT).** One Document Columns
-    manager: drag-and-drop order with sub-heading groups (register
-    order + dialog sections), site-wide filterable, and a per-type
-    three-state cell (hidden / available / in default) for standard /
-    record / working — revision mirrors standard, template stays
-    fixed; `available` derived. Libraries section moves to the top.
-    C5 templates + per-library column grid retire from the UI (stored
-    configs dormant); saved views / chooser untouched. Phases S0–S3 in
-    `leanboard-docs-settings-consolidation-plan.md` Part II (Ben,
-    2026-08-10).
+10. ~~**Settings consolidation Part II.**~~ **BUILT 2026-08-10**
+    (S0–S3, unreleased): the one Document Columns manager — drag rows
+    across sub-heading groups, —/✓/★ per-type cells — with Libraries
+    first; every surface (register, docs card, chooser, filters, add
+    form, edit properties, properties pane) answers from the cells;
+    dialogs sectioned by the groups; C5 templates + per-library grid
+    retired from the UI (data dormant, mirror keeps flags true);
+    Health names type-relevance drift. Saved views untouched. Ben's
+    hosted checks pending; design of record in
+    `leanboard-docs-settings-consolidation-plan.md` Part II.
 
 ## Future (formally logged, no date)
 

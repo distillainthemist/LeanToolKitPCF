@@ -23,7 +23,7 @@ import {
   ConfigurableLibType,
   deriveTypeStates,
   DictionaryConflict,
-  effectiveColumnType,
+  mirrorCellsToConfig,
   HealthFinding,
   LIBRARY_TYPES,
   LIFECYCLE_STAGES,
@@ -39,7 +39,6 @@ import {
   SpLibrary,
   TaxProbe,
   TermPalette,
-  applyViewTemplate,
   buildSiteDictionary,
   colourableSets,
   emptySiteDictionary,
@@ -52,11 +51,9 @@ import {
   paletteKeyFor,
   rekeyPaletteToTerms,
   resolveLibraryConfig,
-  matchesTemplate,
   orgSyncPlan,
   seedDefaultColumns,
   siteKey,
-  templateFor,
   syncSiteDictionary,
 } from "./model";
 import { executeOrgSync } from "./orgSync";
@@ -131,23 +128,14 @@ export async function renderDocsSettings(body: HTMLElement, ctx: Ctx): Promise<v
   const fieldsByList = new Map<string, SpField[]>();
 
   const save = async () => {
-    // Part II bridge (until S2 re-points the readers and S3 retires the
-    // write): the manager's type cells are authoritative, so the
-    // per-library flags are written FROM them — one source, no drift.
-    // Template libraries keep their config untouched.
+    // the manager's cells are authoritative; the per-library flags are
+    // their dormant mirror, kept true for the remaining readers
+    // (fetch-field lists, dict-less fallbacks). Template libraries and
+    // typeless columns pass through untouched.
     const dict = app.sites[siteKey(app.siteUrl)];
     if (dict !== undefined) {
-      const byInternal = new Map(dict.columns.map((c) => [c.internal, c]));
       for (const lib of exposed) {
-        const t = effectiveColumnType(lib.libType);
-        if (t === null) continue;
-        for (const c of lib.config.columns) {
-          const sc = byInternal.get(c.internal);
-          if (sc?.types === undefined) continue;
-          const state = sc.types[t];
-          c.available = state !== undefined;
-          c.inDefault = state === "default";
-        }
+        lib.config = mirrorCellsToConfig(dict, lib.libType, lib.config);
       }
     }
     await saveAppDocsConfig(app);
@@ -536,7 +524,6 @@ export async function renderDocsSettings(body: HTMLElement, ctx: Ctx): Promise<v
     };
     paintManager();
     paintPalettes();
-    paintTemplates();
     paintLifecycle();
     paintHealth();
     // repaints itself when it lands — nothing waits on it
@@ -743,111 +730,11 @@ export async function renderDocsSettings(body: HTMLElement, ctx: Ctx): Promise<v
     }
   };
 
-  // ---- view templates (C5) ---------------------------------------------
-  // What a library of each type opens with, held once for the site: a
-  // newly exposed library is configured the moment its type is chosen,
-  // instead of being ticked out by hand every time.
-  body.appendChild(section("View templates"));
-  body.appendChild(
-    note(
-      "The columns a library opens with, per library type. A library exposed below " +
-        "picks these up as soon as you choose its type; changing a template here can " +
-        "be applied to the libraries already using it."
-    )
-  );
-  const tmplBox = el("div", "");
-  body.appendChild(tmplBox);
-  let tmplType: LibraryType = "standard";
-
-  const paintTemplates = () => {
-    clear(tmplBox);
-    const dict = dictionary();
-    if (dict.columns.length === 0) {
-      tmplBox.appendChild(note("Load the libraries below first."));
-      return;
-    }
-    const pick = el("select", "app-input") as HTMLSelectElement;
-    for (const t of LIBRARY_TYPES) {
-      const o = el("option", "", t.label) as HTMLOptionElement;
-      o.value = t.key;
-      pick.appendChild(o);
-    }
-    pick.value = tmplType;
-    pick.addEventListener("change", () => {
-      tmplType = pick.value as LibraryType;
-      paintTemplates();
-    });
-    tmplBox.appendChild(field("Library type", pick));
-
-    const chosen = new Set(templateFor(dict, tmplType));
-    const grid = el("div", "app-docs-viewcols");
-    grid.append(
-      el("span", "app-docs-colhead", "Column"),
-      el("span", "app-docs-colhead", "Role"),
-      el("span", "app-docs-colhead", "Opens with")
-    );
-    for (const c of dict.columns) {
-      if (!c.available) continue;
-      // a template is about the columns that carry meaning; the rest are
-      // still choosable per view, just not worth a template row
-      if (c.role === "" && !chosen.has(c.internal)) continue;
-      grid.appendChild(
-        el(
-          "span",
-          "app-docs-colname",
-          `${c.label !== "" ? c.label : (liveByInternal.get(c.internal)?.title ?? c.internal)} · ${c.internal}`
-        )
-      );
-      grid.appendChild(
-        el("span", "app-docs-colrole", COLUMN_ROLES.find((r) => r.key === c.role)?.label ?? "—")
-      );
-      const box = el("input", "") as HTMLInputElement;
-      box.type = "checkbox";
-      box.checked = chosen.has(c.internal);
-      box.addEventListener("change", () => {
-        const next = new Set(templateFor(dictionary(), tmplType));
-        if (box.checked) next.add(c.internal);
-        else next.delete(c.internal);
-        // stored in dictionary order, so every library of this type
-        // opens with the same sequence
-        dictionary().templates[tmplType] = dictionary()
-          .columns.filter((x) => next.has(x.internal))
-          .map((x) => x.internal);
-        ctx.markDirty();
-        paintTemplates();
-      });
-      grid.appendChild(box);
-    }
-    tmplBox.appendChild(grid);
-
-    // applying is explicit and says what it will change — a template is
-    // a starting point, and a library may have been tuned since
-    const mine = exposed.filter((l) => l.libType === tmplType);
-    const differs = mine.filter((l) => !matchesTemplate(l.config, [...chosen]));
-    const row = el("div", "app-docs-siterow");
-    const apply = el("button", "app-btn", "Apply to these libraries") as HTMLButtonElement;
-    apply.disabled = differs.length === 0;
-    apply.addEventListener("click", () => {
-      for (const lib of differs) lib.config = applyViewTemplate(lib.config, [...chosen]);
-      ctx.markDirty();
-      paintLibraries();
-      paintTemplates();
-    });
-    row.appendChild(apply);
-    tmplBox.appendChild(row);
-    tmplBox.appendChild(
-      note(
-        mine.length === 0
-          ? "No library of this type is exposed yet."
-          : differs.length === 0
-            ? mine.length === 1
-              ? "The one library of this type already opens with these columns."
-              : `All ${mine.length} libraries of this type already open with these columns.`
-            : `Would change ${differs.map((l) => l.config.title || l.name).join(", ")} — ` +
-              `${mine.length - differs.length} of ${mine.length} already match.`
-      )
-    );
-  };
+  // The C5 "View templates" section stood here — RETIRED (Part II S3):
+  // the manager's per-type cells are what a library of each type opens
+  // with, so the templates were a second answer to the same question.
+  // dict.templates stays stored (never destroyed): deriveTypeStates
+  // still reads it when migrating a pre-Part-II dictionary.
 
   // ---- libraries section (rendered FIRST — Part II S1) ------------------
   libsHost.appendChild(section("Libraries"));
@@ -884,7 +771,12 @@ export async function renderDocsSettings(body: HTMLElement, ctx: Ctx): Promise<v
     // which of them its own register shows
     lib.config.columns = mergeColumns(lib.config.columns, live);
     lib.config = resolveLibraryConfig(lib.config, dictionary());
-    lib.config = seedDefaultColumns(lib.config, lib.libType);
+    // the type's cells seed the flags when a dictionary exists (Part II
+    // S3); the C5 seeder only serves a site with no dictionary yet
+    lib.config =
+      dictionary().columns.length > 0
+        ? mirrorCellsToConfig(dictionary(), lib.libType, lib.config)
+        : seedDefaultColumns(lib.config, lib.libType);
     const liveByName = new Map(live.map((f) => [f.internal, f]));
 
     const title = el("input", "app-input") as HTMLInputElement;
@@ -905,14 +797,10 @@ export async function renderDocsSettings(body: HTMLElement, ctx: Ctx): Promise<v
     type.value = lib.libType;
     type.addEventListener("change", () => {
       lib.libType = type.value as LibraryType;
-      // a library nobody has ticked columns for takes the type's
-      // template — which is the point of choosing a type (C5)
-      if (!lib.config.columns.some((c) => c.inDefault)) {
-        lib.config = applyViewTemplate(lib.config, templateFor(dictionary(), lib.libType));
-        void configPanel(lib, host); // repaint the grid's ticks
-      }
+      // the type's cells become this library's column truth (Part II
+      // S3) — the mirror keeps the dormant per-library flags honest
+      lib.config = mirrorCellsToConfig(dictionary(), lib.libType, lib.config);
       ctx.markDirty();
-      paintTemplates(); // the "would change" count follows the type
     });
     host.appendChild(
       field(
@@ -937,47 +825,16 @@ export async function renderDocsSettings(body: HTMLElement, ctx: Ctx): Promise<v
       )
     );
 
-    // view columns — the ONE column decision that is this library's own
-    host.appendChild(el("div", "app-field-label", "View columns"));
+    // The per-library "View columns" grid stood here — RETIRED (Part II
+    // S3): which columns a library shows is its TYPE's answer now, set
+    // in the Document columns manager's cells. The panel keeps only
+    // what is genuinely this library's own: type, title, rendition.
     host.appendChild(
       note(
-        "Which columns this library's register opens with. Names and roles come from " +
-          "Document columns above, so they read the same in every library."
+        "Columns, order and the default view are managed once under Document columns " +
+          "— this library follows its type's cells there."
       )
     );
-    const grid = el("div", "app-docs-viewcols");
-    grid.append(
-      el("span", "app-docs-colhead", "Column"),
-      el("span", "app-docs-colhead", "Role"),
-      el("span", "app-docs-colhead", "Default view")
-    );
-    for (const col of lib.config.columns) {
-      // a column the site does not offer is not a view choice here
-      if (!col.available) continue;
-      const liveField = liveByName.get(col.internal);
-      const shown = col.label !== "" ? col.label : (liveField?.title ?? col.internal);
-      grid.appendChild(el("span", "app-docs-colname", `${shown} · ${col.internal}`));
-      grid.appendChild(
-        el(
-          "span",
-          "app-docs-colrole",
-          COLUMN_ROLES.find((r) => r.key === col.role)?.label ?? "—"
-        )
-      );
-      const def = el("input", "") as HTMLInputElement;
-      def.type = "checkbox";
-      def.checked = col.inDefault;
-      def.addEventListener("change", () => {
-        col.inDefault = def.checked;
-        ctx.markDirty();
-      });
-      grid.appendChild(def);
-    }
-    host.appendChild(grid);
-
-    // Colours used to be set here, once per library. They now live under
-    // "Term sets & colours" — one palette per term set, so every library
-    // using that set reads the same (C2).
   };
 
   const paintLibraries = () => {
@@ -1386,6 +1243,7 @@ export async function renderDocsSettings(body: HTMLElement, ctx: Ctx): Promise<v
       libraries: exposed.map((l) => ({
         name: l.config.title !== "" ? l.config.title : l.name,
         columns: l.config.columns,
+        libType: l.libType,
       })),
       choicesBy: new Map([...liveByInternal].map(([k, f]) => [k, f.choices])),
       taxProbe,
