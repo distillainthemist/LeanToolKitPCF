@@ -51,7 +51,7 @@ async function rawPage(
   site: string,
   listId: string,
   viewXml: string
-): Promise<{ ok: boolean; status: string; size: string; rows: DocRow[] }> {
+): Promise<{ ok: boolean; status: string; size: string; rows: DocRow[]; raw: string }> {
   const r = await spRequest(site, "POST", `_api/web/lists(guid'${listId}')/RenderListDataAsStream`, {
     headers: {
       "Content-Type": "application/json;odata=nometadata",
@@ -61,8 +61,39 @@ async function rawPage(
       parameters: { RenderOptions: 2, ViewXml: viewXml, DatesInUtc: true },
     }),
   });
-  if (!r.ok) return { ok: false, status: r.status, size: "", rows: [] };
-  return { ok: true, status: "", size: approxSize(r.data), rows: parseRenderPage(r.data, listId).rows };
+  if (!r.ok) return { ok: false, status: r.status, size: "", rows: [], raw: "" };
+  let raw = "";
+  try {
+    raw = JSON.stringify(r.data ?? "");
+  } catch {
+    raw = "";
+  }
+  return {
+    ok: true,
+    status: "",
+    size: approxSize(r.data),
+    rows: parseRenderPage(r.data, listId).rows,
+    raw,
+  };
+}
+
+/** Character inventory of a whole response: every code point above
+ *  ASCII (and every control below space) with its count — the X-ray
+ *  that lets a desktop run say exactly what a failing phone response
+ *  would have carried. */
+function charInventory(raw: string): string {
+  const counts = new Map<string, number>();
+  for (const ch of raw) {
+    const c = ch.codePointAt(0) ?? 0;
+    if (c >= 0x20 && c < 0x7f) continue;
+    if (c === 0x09 || c === 0x0a || c === 0x0d) continue;
+    const key = `U+${c.toString(16).toUpperCase().padStart(4, "0")}`;
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  return [...counts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([k, n]) => (n > 1 ? `${k}×${n}` : k))
+    .join(" ");
 }
 
 const SCAN_CAP = 40;
@@ -121,6 +152,7 @@ export async function runFeedProbe(
   const scan = pool.slice(0, SCAN_CAP);
   const failed: { row: DocRow; status: string }[] = [];
   const fetched: DocRow[] = [];
+  const xray: { name: string; inventory: string }[] = [];
   for (const row of scan) {
     const p = await rawPage(
       site,
@@ -128,7 +160,11 @@ export async function runFeedProbe(
       buildRenderViewXml({ idIn: [row.id], fields, rowLimit: 1 })
     );
     if (!p.ok) failed.push({ row, status: p.status });
-    else if (p.rows[0] !== undefined) fetched.push(p.rows[0]);
+    else {
+      if (p.rows[0] !== undefined) fetched.push(p.rows[0]);
+      const inv = charInventory(p.raw);
+      if (inv !== "") xray.push({ name: row.name, inventory: inv });
+    }
   }
   step(
     "Per-document scan",
@@ -158,6 +194,14 @@ export async function runFeedProbe(
       : `invisible or broken characters in ${findings.length} value${findings.length > 1 ? "s" : ""}`
   );
   for (const f of findings.slice(0, 12)) step("Suspicious value", false, f);
+
+  // the X-ray (2026-08-11): every non-ASCII code point in each WHOLE
+  // response, counted — run on a desktop, where every fetch succeeds,
+  // and compare the phone-failing documents' inventories against the
+  // passing ones: the discriminating character is the culprit.
+  for (const x of xray.slice(0, 20)) step(`X-ray — ${x.name}`, true, x.inventory);
+  if (xray.length > 20) step("X-ray", true, `…and ${xray.length - 20} more documents with non-ASCII`);
+  if (xray.length === 0) step("X-ray", true, "no response carried any non-ASCII at all");
 
   if (failed.length === 0) {
     if (ladderFailedAt > 0) {
@@ -213,12 +257,20 @@ export interface CharClassInput {
   listId: string;
 }
 
-const CHAR_CLASSES: { token: string; label: string; char: string }[] = [
+/** viaTitle: the character cannot live in a FILENAME (SharePoint strips
+ *  or refuses it), so it rides the file's Title field instead — written
+ *  at create time, selected at read time. U+2028/U+2029 are the pair
+ *  that is LEGAL in JSON yet ILLEGAL inside a JavaScript string
+ *  literal — the precise shape of an eval-style bridge's
+ *  "unterminated string". */
+const CHAR_CLASSES: { token: string; label: string; char: string; viaTitle?: boolean }[] = [
   { token: "CP1X", label: "1-byte ASCII (x)", char: "x" },
   { token: "CP2O", label: "2-byte (ø)", char: "ø" },
   { token: "CP3D", label: "3-byte em dash (—)", char: "—" },
   { token: "CP3A", label: "3-byte fullwidth ampersand (＆)", char: "＆" },
   { token: "CP4E", label: "4-byte emoji (\u{1f600})", char: "\u{1f600}" },
+  { token: "CPLS", label: "line separator (U+2028, in Title)", char: " ", viaTitle: true },
+  { token: "CPPS", label: "paragraph separator (U+2029, in Title)", char: " ", viaTitle: true },
 ];
 
 export async function runCharClassProbe(
