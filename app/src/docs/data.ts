@@ -12,9 +12,12 @@ import {
   SearchPage,
   buildBrowseUri,
   buildSearchBody,
+  clampRowLimit,
+  looksTruncatedResponse,
   parseItemsPage,
   parseRenderPage,
   presignedFromItem,
+  rowLimitOf,
   rowsFromSearch,
 } from "./rows";
 
@@ -88,28 +91,44 @@ export async function browsePage(
  *  2026-08-02): display-ready values for every field type, CAML-driven
  *  server-side search/filter/sort. `next` is the response's opaque
  *  NextHref query string, appended to the endpoint on the next call. */
+/** Once the phone's bridge truncates a page, every later page this
+ *  session pre-shrinks to the size that survived — one failed probe
+ *  teaches the whole register, instead of every page failing first. */
+let learnedRowCap = Number.POSITIVE_INFINITY;
+
 export async function renderListPage(
   site: string,
   listId: string,
   viewXml: string,
   next = ""
 ): Promise<import("./rows").RenderPage & { error: string }> {
-  const r = await spRequest(
-    site,
-    "POST",
-    `_api/web/lists(guid'${listId}')/RenderListDataAsStream${next}`,
-    {
-      headers: {
-        "Content-Type": "application/json;odata=nometadata",
-        Accept: "application/json;odata=nometadata",
-      },
-      body: JSON.stringify({
-        parameters: { RenderOptions: 2, ViewXml: viewXml, DatesInUtc: true },
-      }),
+  let xml =
+    rowLimitOf(viewXml) > learnedRowCap ? clampRowLimit(viewXml, learnedRowCap) : viewXml;
+  for (;;) {
+    const r = await spRequest(
+      site,
+      "POST",
+      `_api/web/lists(guid'${listId}')/RenderListDataAsStream${next}`,
+      {
+        headers: {
+          "Content-Type": "application/json;odata=nometadata",
+          Accept: "application/json;odata=nometadata",
+        },
+        body: JSON.stringify({
+          parameters: { RenderOptions: 2, ViewXml: xml, DatesInUtc: true },
+        }),
+      }
+    );
+    if (r.ok) return { ...parseRenderPage(r.data, listId), error: "" };
+    // a cut-off body (mobile bridge) is retried at half the page size —
+    // the floor gives up and reports, everything else reports at once
+    const rows = rowLimitOf(xml);
+    if (!looksTruncatedResponse(r.status) || rows <= 5) {
+      return { rows: [], next: "", error: r.status };
     }
-  );
-  if (!r.ok) return { rows: [], next: "", error: r.status };
-  return { ...parseRenderPage(r.data, listId), error: "" };
+    learnedRowCap = Math.min(learnedRowCap, Math.max(5, Math.floor(rows / 2)));
+    xml = clampRowLimit(xml, learnedRowCap);
+  }
 }
 
 /** One search page (permission-trimmed, bounded to the given libraries).

@@ -756,3 +756,33 @@ describe("relativeHint (overlay polish O2)", () => {
     expect(relativeHint("not a date", now)).toBe("");
   });
 });
+
+describe("truncated-response recovery (mobile bridge, 2026-08-11)", () => {
+  it("recognises every host's cut-off wording, and nothing else", async () => {
+    const { looksTruncatedResponse } = await import("../docs/rows");
+    // iOS JavaScriptCore, V8, and the SDK's own wrapper
+    expect(
+      looksTruncatedResponse("Retrieve operation failure: JSON parse error: unterminated string")
+    ).toBe(true);
+    expect(looksTruncatedResponse("JSON Parse error: Unterminated string")).toBe(true);
+    expect(looksTruncatedResponse("Unterminated string in JSON at position 524288")).toBe(true);
+    expect(looksTruncatedResponse("Unexpected end of JSON input")).toBe(true);
+    // real refusals must NOT be retried smaller — they would fail again
+    expect(looksTruncatedResponse("Access denied. You do not have permission.")).toBe(false);
+    expect(looksTruncatedResponse("404 - list not found")).toBe(false);
+    expect(looksTruncatedResponse("")).toBe(false);
+  });
+  it("reads and rewrites the page size inside a ViewXml", async () => {
+    const { buildRenderViewXml, clampRowLimit, rowLimitOf } = await import("../docs/rows");
+    const xml = buildRenderViewXml({ rowLimit: 2000 });
+    expect(rowLimitOf(xml)).toBe(2000);
+    const smaller = clampRowLimit(xml, 1000);
+    expect(rowLimitOf(smaller)).toBe(1000);
+    // only the RowLimit changes — the query is the same question
+    expect(smaller.replace('<RowLimit Paged="TRUE">1000', "")).toBe(
+      xml.replace('<RowLimit Paged="TRUE">2000', "")
+    );
+    expect(rowLimitOf("<View></View>")).toBe(0);
+    expect(clampRowLimit(xml, 0.5)).toContain('<RowLimit Paged="TRUE">1</RowLimit>');
+  });
+});

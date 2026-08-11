@@ -220,6 +220,37 @@ export function buildRenderViewXml(opts: RenderQueryOpts = {}): string {
   );
 }
 
+// ---- truncated-response recovery (mobile, 2026-08-11) -----------------
+//
+// The phone player hands connector responses across a native bridge that
+// CUTS large bodies mid-string, and the SDK's JSON.parse of the stump
+// surfaces as "Retrieve operation failure: JSON parse error: unterminated
+// string". The response is whole on the wire — only the hand-off loses
+// the tail — so the recovery is to ask a smaller question: halve the
+// page's RowLimit and reissue. Paged="TRUE" cursors keep multi-page
+// feeds whole at whatever size the host can carry.
+
+/** Does this error read as a cut-off response body? (iOS JSC says
+ *  "JSON Parse error: Unterminated string", V8 says "Unterminated
+ *  string in JSON at position N" or "Unexpected end of JSON input".) */
+export function looksTruncatedResponse(error: string): boolean {
+  return /unterminated string|json parse error|unexpected end of (?:json|data)/i.test(error);
+}
+
+/** The page size a ViewXml asks for (0 = none declared). */
+export function rowLimitOf(viewXml: string): number {
+  const m = /<RowLimit Paged="TRUE">(\d+)<\/RowLimit>/.exec(viewXml);
+  return m === null ? 0 : Number(m[1]);
+}
+
+/** The same ViewXml asking for at most `cap` rows per page. */
+export function clampRowLimit(viewXml: string, cap: number): string {
+  return viewXml.replace(
+    /(<RowLimit Paged="TRUE">)\d+(<\/RowLimit>)/,
+    `$1${Math.max(1, Math.floor(cap))}$2`
+  );
+}
+
 /** One RenderListDataAsStream value as display text: taxonomy comes as
  *  [{Label}], people as [{title}], the rest as strings. */
 function renderText(v: unknown): string {
