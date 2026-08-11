@@ -19,8 +19,13 @@
 // the device that fails; on a desktop everything passes by design.
 
 import { ProbeStep } from "./writeProbe";
-import { spRequest } from "./sp";
-import { DocRow, buildRenderViewXml, parseRenderPage } from "./rows";
+import { addFile, fetchListRoot, recycleFile, spRequest } from "./sp";
+import {
+  DocRow,
+  buildRenderViewXml,
+  looksTruncatedResponse,
+  parseRenderPage,
+} from "./rows";
 import { spErrorText, suspiciousCodePoints } from "./model";
 
 export interface FeedProbeInput {
@@ -185,4 +190,125 @@ export async function runFeedProbe(
         "inspect that value for unusual characters (smart dashes, emoji, symbols)"
       : "every field alone passes — the combined response is what fails (size, not content)"
   );
+}
+
+// ---- the character-class probe (2026-08-11) ---------------------------
+//
+// Validates the byte-class theory precisely: five probe FILES, each
+// carrying exactly one UTF-8 class in its NAME, are read back one at a
+// time — each response holds one class and nothing else, so a failure
+// convicts the class, not the payload around it. One button, three
+// runs, no leftover state:
+//
+//   desktop run 1  — files absent → creates them (writes ride the
+//                    desktop, where the bridge is known-good);
+//   phone run      — files present → reads each; a read that dies with
+//                    the truncation signature IS the verdict;
+//   desktop run 2  — every class reads clean on this device → recycles
+//                    the files, cycle closed.
+
+export interface CharClassInput {
+  site: string;
+  /** A WRITABLE library (working/revision) — probe files live briefly. */
+  listId: string;
+}
+
+const CHAR_CLASSES: { token: string; label: string; char: string }[] = [
+  { token: "CP1X", label: "1-byte ASCII (x)", char: "x" },
+  { token: "CP2O", label: "2-byte (ø)", char: "ø" },
+  { token: "CP3D", label: "3-byte em dash (—)", char: "—" },
+  { token: "CP3A", label: "3-byte fullwidth ampersand (＆)", char: "＆" },
+  { token: "CP4E", label: "4-byte emoji (\u{1f600})", char: "\u{1f600}" },
+];
+
+export async function runCharClassProbe(
+  input: CharClassInput,
+  onStep: (step: ProbeStep) => void
+): Promise<void> {
+  const { site, listId } = input;
+  const step = (name: string, ok: boolean, detail: string) => onStep({ name, ok, detail });
+
+  const rootRes = await fetchListRoot(site, listId);
+  const root = String(
+    ((rootRes.data ?? {}) as { ServerRelativeUrl?: unknown }).ServerRelativeUrl ?? ""
+  );
+  if (root === "") {
+    step("Library root folder", false, clip(rootRes.status) || "not readable");
+    return;
+  }
+  const nameOf = (c: (typeof CHAR_CLASSES)[number]) => `LBCHARPROBE ${c.token} ${c.char}.txt`;
+
+  // ---- read phase: each class alone, addressed by its ASCII token ----
+  const missing: typeof CHAR_CLASSES = [];
+  let died = 0;
+  let unreadable = 0;
+  for (const c of CHAR_CLASSES) {
+    const q = await rawPage(
+      site,
+      listId,
+      buildRenderViewXml({ nameWords: [c.token], fields: [], rowLimit: 1 })
+    );
+    if (!q.ok && looksTruncatedResponse(q.status)) {
+      step(c.label, false, "the read DIED on this character — the bridge cannot carry it");
+      died++;
+    } else if (!q.ok) {
+      step(c.label, false, clip(q.status));
+      unreadable++;
+    } else if (q.rows.length === 0) {
+      missing.push(c);
+    } else {
+      step(c.label, true, "read back intact");
+    }
+  }
+
+  // ---- create phase: only when nothing exists yet (a desktop run) ----
+  if (missing.length === CHAR_CLASSES.length) {
+    for (const c of missing) {
+      const a = await addFile(
+        site,
+        root,
+        nameOf(c),
+        "LeanBoard character probe — safe to delete."
+      );
+      // a truncated CREATE response is itself the file landing and the
+      // read of its echo dying — count that as created
+      const landed = a.ok || looksTruncatedResponse(a.status);
+      step(`Create ${c.label}`, landed, landed ? nameOf(c) : clip(a.status));
+    }
+    step(
+      "Next",
+      true,
+      "probe files created — run this same button ON THE PHONE for the verdict; " +
+        "a later desktop run recycles them"
+    );
+    return;
+  }
+  for (const c of missing) {
+    step(c.label, false, "probe file missing — run once on a desktop to (re)create it");
+  }
+
+  // ---- verdict + cleanup ---------------------------------------------
+  if (died > 0) {
+    step(
+      "Verdict",
+      false,
+      `${died} class${died > 1 ? "es" : ""} failed on this device — the classes above ` +
+        "marked as died are what the bridge drops. Files kept for re-runs; a desktop " +
+        "run recycles them."
+    );
+    return;
+  }
+  if (missing.length === 0 && unreadable === 0) {
+    let recycled = 0;
+    for (const c of CHAR_CLASSES) {
+      const r = await recycleFile(site, `${root}/${nameOf(c)}`);
+      if (r.ok) recycled++;
+    }
+    step(
+      "Cleanup",
+      recycled === CHAR_CLASSES.length,
+      `every class passed on this device — ${recycled} of ${CHAR_CLASSES.length} probe ` +
+        "files recycled"
+    );
+  }
 }

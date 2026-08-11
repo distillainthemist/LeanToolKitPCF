@@ -1708,4 +1708,59 @@ export async function renderDocsSettings(body: HTMLElement, ctx: Ctx): Promise<v
       feedBtn.textContent = "Test document feed";
     })();
   });
+
+  // ---- the character-class probe (mobile truncation, 2026-08-11) -------
+  // One button, three runs: desktop creates five probe files (one UTF-8
+  // class each, in the NAME), the phone reads them for the per-class
+  // verdict, a later desktop run recycles them.
+  body.appendChild(
+    el(
+      "div",
+      "app-field-hint",
+      "Character classes: validates WHICH characters the phone bridge drops. Run once on " +
+        "a desktop (creates five tiny probe files in the picked working library), then on " +
+        "the phone (the verdict), then on a desktop again (recycles the files)."
+    )
+  );
+  const charSel = el("select", "app-input") as HTMLSelectElement;
+  const charBtn = el("button", "app-btn", "Test character classes") as HTMLButtonElement;
+  const charRow = el("div", "app-docs-siterow");
+  charRow.append(charSel, charBtn);
+  body.appendChild(charRow);
+  const charBox = el("div", "");
+  body.appendChild(charBox);
+  const charLibs = exposed.filter((l) => l.libType === "working" || l.libType === "revision");
+  for (const l of charLibs) {
+    const o = el("option", "", l.config.title !== "" ? l.config.title : l.name) as HTMLOptionElement;
+    o.value = l.listId;
+    charSel.appendChild(o);
+  }
+  if (charLibs.length === 0) {
+    charSel.appendChild(el("option", "", "No working or revision library exposed"));
+  }
+  charSel.disabled = charLibs.length === 0;
+  charBtn.disabled = charLibs.length === 0;
+  charBtn.addEventListener("click", () => {
+    void (async () => {
+      const listId = charSel.value;
+      if (listId === "" || app.siteUrl === "") return;
+      charBtn.disabled = true;
+      charBtn.textContent = "Probing…";
+      clear(charBox);
+      const list = el("div", "app-dept-list");
+      charBox.appendChild(list);
+      const { runCharClassProbe } = await import("./feedProbe");
+      await runCharClassProbe({ site: app.siteUrl, listId }, (s) => {
+        const row = el("div", `app-docs-health app-docs-health-${s.ok ? "info" : "warn"}`);
+        row.append(
+          el("span", "app-docs-healthmark", s.ok ? "✓" : "⚠"),
+          el("span", "app-docs-healthtitle", s.name),
+          el("span", "app-field-hint", s.detail)
+        );
+        list.appendChild(row);
+      });
+      charBtn.disabled = false;
+      charBtn.textContent = "Test character classes";
+    })();
+  });
 }
