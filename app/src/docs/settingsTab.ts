@@ -1420,6 +1420,33 @@ export async function renderDocsSettings(body: HTMLElement, ctx: Ctx): Promise<v
         driftBox.appendChild(note(`Cannot compare: ${plan.error}.`));
         return;
       }
+      // the ampersand guard (2026-08-11, the Shipping & Logistics case):
+      // the term store FORCES & into ＆ (U+FF06), and the phone player's
+      // bridge truncates any response carrying that character — so an
+      // ampersand in an org unit name makes every document tagged to it
+      // unreadable on phones. Named here, at the only gate it enters by.
+      const ampPaths = orgTreePaths(parseOrgTree(orgRaw))
+        .filter((p) => p[p.length - 1].includes("&"))
+        .map((p) => p.join(" › "));
+      const ff06Terms = nodes
+        .filter((n) => n.labels.some((l) => l.includes("＆")))
+        .map((n) => n.labels.join(" › "));
+      for (const p of ampPaths) {
+        driftBox.appendChild(
+          note(
+            `⚠ "${p}" contains "&" — SharePoint will store it as a character phones cannot ` +
+              `read back (＆). Rename the unit to use "and" before syncing.`
+          )
+        );
+      }
+      for (const t of ff06Terms) {
+        driftBox.appendChild(
+          note(
+            `⚠ The term "${t.replace(/＆/g, "&")}" is stored with the phone-hostile ＆ — ` +
+              `rename its org unit to use "and" and sync; the rename lands in place, tags follow.`
+          )
+        );
+      }
       const list = (title: string, items: string[]) => {
         driftBox.appendChild(el("div", "app-field-label", `${title} (${items.length})`));
         if (items.length === 0) {
