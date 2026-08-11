@@ -2006,6 +2006,29 @@ export function validateItemErrors(raw: unknown): { field: string; message: stri
  * and gives up gracefully, because an unreadable error is still better
  * than a blank one.
  */
+/** Code points that hide in pasted text and break hosts (the feed
+ *  probe's character audit, 2026-08-11): C0/C1 controls (tab and
+ *  newlines excepted — legitimate in multiline text), zero-width marks,
+ *  the U+2028/U+2029 separators a JavaScript string context cannot
+ *  hold, the BOM, and lone surrogates (a broken emoji half). Returns
+ *  each offender once, as "U+XXXX". */
+export function suspiciousCodePoints(s: string): string[] {
+  const out = new Set<string>();
+  for (const ch of s) {
+    const c = ch.codePointAt(0) ?? 0;
+    const bad =
+      (c < 0x20 && c !== 0x09 && c !== 0x0a && c !== 0x0d) ||
+      (c >= 0x7f && c <= 0x9f) ||
+      (c >= 0x200b && c <= 0x200f) ||
+      c === 0x2028 ||
+      c === 0x2029 ||
+      c === 0xfeff ||
+      (c >= 0xd800 && c <= 0xdfff);
+    if (bad) out.add(`U+${c.toString(16).toUpperCase().padStart(4, "0")}`);
+  }
+  return [...out];
+}
+
 export function spErrorText(raw: string): string {
   const deepest = (value: unknown, depth: number): string => {
     // a real refusal nests connector envelope → message string → JSON →

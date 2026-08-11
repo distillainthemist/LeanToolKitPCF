@@ -21,7 +21,7 @@
 import { ProbeStep } from "./writeProbe";
 import { spRequest } from "./sp";
 import { DocRow, buildRenderViewXml, parseRenderPage } from "./rows";
-import { spErrorText } from "./model";
+import { spErrorText, suspiciousCodePoints } from "./model";
 
 export interface FeedProbeInput {
   site: string;
@@ -115,6 +115,7 @@ export async function runFeedProbe(
   }
   const scan = pool.slice(0, SCAN_CAP);
   const failed: { row: DocRow; status: string }[] = [];
+  const fetched: DocRow[] = [];
   for (const row of scan) {
     const p = await rawPage(
       site,
@@ -122,6 +123,7 @@ export async function runFeedProbe(
       buildRenderViewXml({ idIn: [row.id], fields, rowLimit: 1 })
     );
     if (!p.ok) failed.push({ row, status: p.status });
+    else if (p.rows[0] !== undefined) fetched.push(p.rows[0]);
   }
   step(
     "Per-document scan",
@@ -131,6 +133,27 @@ export async function runFeedProbe(
     }${pool.length > SCAN_CAP ? ` (first ${SCAN_CAP} of ${pool.length})` : ""}`
   );
   for (const f of failed) step(f.row.name, false, clip(f.status));
+
+  // ---- 2b: the character audit ----------------------------------------
+  // Runs over whatever the scan could READ — which is everything on a
+  // desktop — so an invisible poison names itself off the failing
+  // device: the document, the column, and the exact code point.
+  const findings: string[] = [];
+  for (const row of fetched) {
+    for (const [col, value] of Object.entries(row.values)) {
+      const codes = suspiciousCodePoints(value);
+      if (codes.length > 0) findings.push(`${row.name} — ${col}: ${codes.join(" ")}`);
+    }
+  }
+  step(
+    "Character audit",
+    findings.length === 0,
+    findings.length === 0
+      ? `${fetched.length} documents' values scanned — nothing suspicious`
+      : `invisible or broken characters in ${findings.length} value${findings.length > 1 ? "s" : ""}`
+  );
+  for (const f of findings.slice(0, 12)) step("Suspicious value", false, f);
+
   if (failed.length === 0) {
     if (ladderFailedAt > 0) {
       step(
