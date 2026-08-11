@@ -77,6 +77,19 @@ export async function runFeedProbe(
     return;
   }
 
+  // ---- 0b: the character clinic ---------------------------------------
+  // A read whose payload is KNOWN to carry non-ASCII regardless of what
+  // any document holds: SharePoint's localized time-zone list says
+  // "København" and "São Paulo" in every tenant. If THIS fails while
+  // same-size ASCII pages pass, the bridge cannot carry any non-ASCII
+  // response at all — the poison is the character class, not a document.
+  const tz = await spRequest(site, "GET", "_api/web/regionalsettings/timezones");
+  step(
+    "Non-ASCII read (time-zone list)",
+    tz.ok,
+    tz.ok ? `${approxSize(tz.data)} — accented characters carried intact` : clip(tz.status)
+  );
+
   // ---- 1: the size ladder ---------------------------------------------
   let pool: DocRow[] = [];
   let ladderFailedAt = 0;
