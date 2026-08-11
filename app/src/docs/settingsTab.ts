@@ -1650,4 +1650,62 @@ export async function renderDocsSettings(body: HTMLElement, ctx: Ctx): Promise<v
       upBtn.textContent = "Test Dataverse upload";
     })();
   });
+
+  // ---- the feed probe (mobile truncation, 2026-08-11) ------------------
+  // Read-only: maps the phone bridge's response failures on the device
+  // they happen on — a size ladder, a per-document scan with the kiosk's
+  // field set, and a field drill that names a poisoned column.
+  body.appendChild(
+    el(
+      "div",
+      "app-field-hint",
+      "Document feed (mobile): read-only probe for the phone's \"unterminated string\" " +
+        "failures — run it ON the failing phone. It sizes pages, scans documents one by " +
+        "one, and names the document and column that break the feed."
+    )
+  );
+  const feedSel = el("select", "app-input") as HTMLSelectElement;
+  const feedBtn = el("button", "app-btn", "Test document feed") as HTMLButtonElement;
+  const feedRow = el("div", "app-docs-siterow");
+  feedRow.append(feedSel, feedBtn);
+  body.appendChild(feedRow);
+  const feedBox = el("div", "");
+  body.appendChild(feedBox);
+  for (const l of exposed) {
+    const o = el("option", "", l.config.title !== "" ? l.config.title : l.name) as HTMLOptionElement;
+    o.value = l.listId;
+    feedSel.appendChild(o);
+  }
+  feedSel.disabled = exposed.length === 0;
+  feedBtn.disabled = exposed.length === 0;
+  feedBtn.addEventListener("click", () => {
+    void (async () => {
+      const lib = exposed.find((l) => l.listId === feedSel.value);
+      if (lib === undefined || app.siteUrl === "") return;
+      feedBtn.disabled = true;
+      feedBtn.textContent = "Probing…";
+      clear(feedBox);
+      const list = el("div", "app-dept-list");
+      feedBox.appendChild(list);
+      const { runFeedProbe } = await import("./feedProbe");
+      await runFeedProbe(
+        {
+          site: app.siteUrl,
+          listId: lib.listId,
+          fields: lib.config.columns.filter((c) => c.available).map((c) => c.internal),
+        },
+        (s) => {
+          const row = el("div", `app-docs-health app-docs-health-${s.ok ? "info" : "warn"}`);
+          row.append(
+            el("span", "app-docs-healthmark", s.ok ? "✓" : "⚠"),
+            el("span", "app-docs-healthtitle", s.name),
+            el("span", "app-field-hint", s.detail)
+          );
+          list.appendChild(row);
+        }
+      );
+      feedBtn.disabled = false;
+      feedBtn.textContent = "Test document feed";
+    })();
+  });
 }
