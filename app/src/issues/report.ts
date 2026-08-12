@@ -19,7 +19,9 @@ import { openDialog } from "../../../shared/ui/dialog";
 import { currentViewer } from "../runtime";
 import { Ben_ltkissuesService } from "../generated/services/Ben_ltkissuesService";
 import { Ben_ltkissuefilesService } from "../generated/services/Ben_ltkissuefilesService";
+import { Ben_ltkissuemessagesService } from "../generated/services/Ben_ltkissuemessagesService";
 import { Ben_ltkissuewatchsService } from "../generated/services/Ben_ltkissuewatchsService";
+import type { Ben_ltkissues } from "../generated/models/Ben_ltkissuesModel";
 
 export type IssueArea = "boards" | "cards" | "documents" | "settings" | "other";
 
@@ -101,6 +103,13 @@ export function openReportDialog(opts: { host: HTMLElement }): void {
   });
   const sendBtn = dlg.root.querySelector(".ltk-btn-primary") as HTMLButtonElement;
   dlg.body.classList.add("app-issue-body");
+
+  // ---- My reports (I3, option 1): the reporter's own thread view -------
+  // Stacked over this dialog in its own host, so a half-typed report
+  // survives the detour.
+  const mine = el("button", "app-issue-minelink", "My reports →") as HTMLButtonElement;
+  mine.addEventListener("click", () => openMyReports(opts.host));
+  dlg.body.appendChild(mine);
 
   // ---- kind + area ------------------------------------------------------
   const kindRow = el("div", "app-issue-kindrow");
@@ -330,4 +339,153 @@ export function openReportDialog(opts: { host: HTMLElement }): void {
       sync();
     }
   };
+}
+
+// ---- My reports (issues plan I3, option 1 — Ben, 2026-08-12) ----------
+// The reporter's self-serve view: what did I report (and follow), what
+// state is it in, what came back. Reporter-visible messages only —
+// internal notes never render here. Read-only by design: replying
+// happens in the Teams chat the admin's message opened.
+
+const STATUS_WORDS: Record<string, string> = {
+  new: "New",
+  triaged: "Triaged",
+  inprogress: "In progress",
+  done: "Done",
+  declined: "Declined",
+  merged: "Merged",
+};
+
+const agoLine = (iso: string | undefined): string => {
+  const t = Date.parse(iso ?? "");
+  if (Number.isNaN(t)) return "";
+  const days = Math.floor((Date.now() - t) / 86400000);
+  if (days <= 0) return "today";
+  if (days < 60) return `${days} day${days === 1 ? "" : "s"} ago`;
+  return `${Math.round(days / 30)} months ago`;
+};
+
+export function openMyReports(host: HTMLElement): void {
+  const viewer = currentViewer();
+  const myEmail = (viewer?.email ?? "").toLowerCase();
+  const dlgHost = el("div", "app-dlghost");
+  host.appendChild(dlgHost);
+  const dlg = openDialog({
+    host: dlgHost,
+    title: "My reports",
+    maxWidth: 520,
+    onClose: () => dlgHost.remove(),
+    buttons: [{ label: "Close", kind: "secondary", onClick: () => dlg.close() }],
+  });
+  dlg.body.classList.add("app-issue-body");
+  dlg.body.appendChild(el("div", "app-loading-line", "Reading your reports…"));
+
+  void (async () => {
+    // mine by authorship, plus everything I +1'd — one list, newest first
+    const [ownRes, watchRes] = await Promise.all([
+      Ben_ltkissuesService.getAll({
+        filter: `ben_reporteremail eq '${myEmail}'`,
+        top: 100,
+      }),
+      Ben_ltkissuewatchsService.getAll({
+        filter: `ben_email eq '${myEmail}'`,
+        top: 100,
+      }),
+    ]);
+    const own = ownRes.success === false ? [] : (ownRes.data ?? []);
+    const watchedIds = (watchRes.success === false ? [] : (watchRes.data ?? []))
+      .map((w) => w._ben_issue_value ?? "")
+      .filter((id) => id !== "" && !own.some((o) => o.ben_ltkissueid === id));
+    const watched: Ben_ltkissues[] = [];
+    for (const id of watchedIds.slice(0, 25)) {
+      const r = await Ben_ltkissuesService.get(id);
+      if (r.success !== false && r.data !== undefined) watched.push(r.data);
+    }
+    const rows = [...own.map((i) => ({ i, followed: false })), ...watched.map((i) => ({ i, followed: true }))]
+      .sort((a, b) => Date.parse(b.i.modifiedon ?? "") - Date.parse(a.i.modifiedon ?? ""));
+
+    clear(dlg.body);
+    if (rows.length === 0) {
+      dlg.body.appendChild(
+        el("div", "app-issue-done", "Nothing yet — reports and +1s you make will live here.")
+      );
+      return;
+    }
+    for (const { i, followed } of rows) dlg.body.appendChild(reportRow(i, followed));
+  })().catch(() => {
+    clear(dlg.body);
+    dlg.body.appendChild(el("div", "app-field-hint", "Your reports could not be read — try again."));
+  });
+
+  function reportRow(issue: Ben_ltkissues, followed: boolean): HTMLElement {
+    const wrap = el("div", "app-issad-item");
+    const row = el("button", "app-issad-row") as HTMLButtonElement;
+    const text = el("div", "app-issad-text");
+    text.append(
+      el("div", "app-issad-title", issue.ben_name ?? ""),
+      el(
+        "div",
+        "app-issad-meta",
+        [followed ? "following (+1)" : "", agoLine(issue.modifiedon)].filter((s) => s !== "").join(" · ")
+      )
+    );
+    const chip = el(
+      "span",
+      `app-issad-status app-issad-status-${issue.ben_status ?? "new"}`,
+      STATUS_WORDS[issue.ben_status ?? ""] ?? issue.ben_status ?? ""
+    );
+    row.append(text, chip);
+    wrap.appendChild(row);
+    let detail: HTMLElement | null = null;
+    row.addEventListener("click", () => {
+      if (detail !== null) {
+        detail.remove();
+        detail = null;
+        return;
+      }
+      detail = el("div", "app-issad-detail");
+      wrap.appendChild(detail);
+      void paintThread(detail, issue);
+    });
+    return wrap;
+  }
+
+  async function paintThread(hostEl: HTMLElement, issue: Ben_ltkissues): Promise<void> {
+    hostEl.appendChild(el("div", "app-loading-line", "Reading the thread…"));
+    const msgs = await Ben_ltkissuemessagesService.getAll({
+      filter: `_ben_issue_value eq '${issue.ben_ltkissueid}' and ben_audience eq 'reporter'`,
+    });
+    clear(hostEl);
+    if ((issue.ben_status ?? "") === "merged" && (issue.ben_duplicateofname ?? "") !== "") {
+      hostEl.appendChild(
+        el(
+          "div",
+          "app-field-hint",
+          `Merged into "${issue.ben_duplicateofname}" — its updates cover this report too.`
+        )
+      );
+    }
+    if ((issue.ben_resolution ?? "").trim() !== "") {
+      hostEl.appendChild(el("div", "app-issad-desc", `Resolution: ${issue.ben_resolution}`));
+    }
+    const list = (msgs.success === false ? [] : (msgs.data ?? [])).sort(
+      (a, b) => Date.parse(a.createdon ?? "") - Date.parse(b.createdon ?? "")
+    );
+    if (list.length === 0) {
+      hostEl.appendChild(el("div", "app-field-hint", "No updates yet — it's in the queue."));
+      return;
+    }
+    for (const m of list) {
+      const line = el("div", "app-issad-msg");
+      line.append(
+        el(
+          "div",
+          "app-issad-msghead",
+          `${m.ben_authorname || m.ben_authoremail || ""} · ${agoLine(m.createdon)}`
+        ),
+        el("div", "app-issad-msgbody", m.ben_body ?? "")
+      );
+      hostEl.appendChild(line);
+    }
+  }
 }
