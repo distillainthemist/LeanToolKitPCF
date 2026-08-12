@@ -100,6 +100,16 @@ function attributeMetadata(logical, def) {
       MaxSizeInKB: def.maxKB,
     };
   }
+  if (def.kind === "int") {
+    // Issues plan I0 (2026-08-12): whole numbers (e.g. triage priority)
+    return {
+      ...base,
+      "@odata.type": "Microsoft.Dynamics.CRM.IntegerAttributeMetadata",
+      Format: "None",
+      MinValue: def.min ?? -2147483648,
+      MaxValue: def.max ?? 2147483647,
+    };
+  }
   throw new Error(`unknown column kind for ${logical}`);
 }
 
@@ -234,6 +244,10 @@ async function ensureLookup(rel) {
     console.log(`lookup ${rel.schemaName} exists`);
     return;
   }
+  // a SELF-referential relationship (issues plan: duplicate-of) must
+  // say NoCascade explicitly — Dataverse's default cascade is invalid
+  // when a table references itself
+  const self = rel.referenced === rel.referencing;
   await call(
     "POST",
     "RelationshipDefinitions",
@@ -242,6 +256,18 @@ async function ensureLookup(rel) {
       SchemaName: rel.schemaName,
       ReferencedEntity: rel.referenced,
       ReferencingEntity: rel.referencing,
+      ...(self
+        ? {
+            CascadeConfiguration: {
+              Assign: "NoCascade",
+              Delete: "RemoveLink",
+              Merge: "NoCascade",
+              Reparent: "NoCascade",
+              Share: "NoCascade",
+              Unshare: "NoCascade",
+            },
+          }
+        : {}),
       Lookup: {
         "@odata.type": "Microsoft.Dynamics.CRM.LookupAttributeMetadata",
         SchemaName: rel.lookupSchema,

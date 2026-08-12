@@ -148,13 +148,13 @@ Users):
 - Later/optional: Teams copy of updates via notify door; hub badge;
   export to CSV for retro reviews.
 
-## Open questions for Ben
+## Decisions (Ben, 2026-08-12)
 
-1. Global read of issues for all users (powers dedupe/+1 and a "known
-   issues" transparency culture) — acceptable? Alternative is
-   own-rows-only + admin, losing dedupe-at-source.
-2. Who is "admin" for the Issues tab — the existing board-admin gate,
-   or the document-controllers group too?
-3. Should DECLINED send an automatic courtesy message, or stay silent
-   until an admin writes one? (Recommend: automatic line, admins can
-   soften it.)
+1. **Global read is in** — every user sees every issue; dedupe/+1 and
+   the known-issues culture ride on it.
+2. **The Issues tab is superadmin-gated** — the existing app
+   superadmin role (ben_ltkpeoples `ben_role=superadmin`), nobody else.
+3. **Declining PROMPTS for a message** — the decline dialog carries a
+   required reporter-facing message box (prefilled courteously, the
+   admin edits before sending); no silent declines, no robotic
+   auto-lines.

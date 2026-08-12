@@ -262,6 +262,80 @@ export const TABLES = [
     // upload) delete their own — Delete is part of the contract
     role: { delete: true },
   },
+  // ---- Issues (docs/leanboard-issues-plan.md, I0, 2026-08-12) ---------
+  // In-app bug/idea reporting. Global read is a DECISION (Ben,
+  // 2026-08-12): every user sees every issue, which powers
+  // dedupe-at-source (+1 an existing report) and a known-issues
+  // culture. Enum-ish columns follow the repo's text convention.
+  {
+    schema: "ben_LTKIssue",
+    logical: "ben_ltkissue",
+    display: "LeanBoard Issue",
+    plural: "LeanBoard Issues",
+    primaryNameMax: 300, // the reporter's one-liner IS the primary name
+    columns: {
+      ben_description: { ...memo(100000), display: "Description" },
+      ben_kind: { ...text(10), display: "Kind (bug|idea)" },
+      ben_area: { ...text(20), display: "Area (boards|cards|documents|settings|other)" },
+      ben_status: {
+        ...text(20),
+        display: "Status (new|triaged|inprogress|done|declined|merged)",
+      },
+      ben_priority: { kind: "int", min: 0, max: 1000, display: "Priority (admin)" },
+      ben_reporteremail: { ...text(200), display: "Reporter email" },
+      ben_reportername: { ...text(200), display: "Reporter name" },
+      ben_context: { ...memo(20000), display: "Context (JSON)" },
+      ben_resolution: { ...memo(20000), display: "Resolution" },
+    },
+    // issues are never deleted — merged, done or declined; the row is
+    // the audit trail
+    role: { delete: false },
+  },
+  {
+    // one row per attachment — pasted screenshots ride ben_file via the
+    // SDK's uploadFileToRecord (the U0-proven road)
+    schema: "ben_LTKIssueFile",
+    logical: "ben_ltkissuefile",
+    display: "LeanBoard Issue File",
+    plural: "LeanBoard Issue Files",
+    primaryNameMax: 300,
+    columns: {
+      ben_file: { kind: "file", maxKB: 8192, display: "File" },
+      ben_caption: { ...text(300), display: "Caption" },
+    },
+    // a reporter removing their own screenshot before sending
+    role: { delete: true },
+  },
+  {
+    // the update thread; audience=internal rows never render in
+    // reporter-facing surfaces
+    schema: "ben_LTKIssueMessage",
+    logical: "ben_ltkissuemessage",
+    display: "LeanBoard Issue Message",
+    plural: "LeanBoard Issue Messages",
+    primaryNameMax: 300,
+    columns: {
+      ben_body: { ...memo(20000), display: "Body" },
+      ben_authoremail: { ...text(200), display: "Author email" },
+      ben_authorname: { ...text(200), display: "Author name" },
+      ben_audience: { ...text(10), display: "Audience (reporter|internal)" },
+    },
+    role: { delete: false },
+  },
+  {
+    // +1/subscribe — the update fan-out audience beyond the reporter
+    schema: "ben_LTKIssueWatch",
+    logical: "ben_ltkissuewatch",
+    display: "LeanBoard Issue Watch",
+    plural: "LeanBoard Issue Watches",
+    primaryNameMax: 300,
+    columns: {
+      ben_email: { ...text(200), display: "Watcher email" },
+      ben_watchername: { ...text(200), display: "Watcher name" },
+    },
+    // un-+1 is a delete of your own watch row
+    role: { delete: true },
+  },
 ];
 
 /** 1:N relationships (lookup column lives on the referencing table). */
@@ -279,5 +353,35 @@ export const LOOKUPS = [
     referencing: "ben_ltkcarddata",
     lookupSchema: "ben_Instance",
     display: "Instance",
+  },
+  // ---- Issues (I0) ----------------------------------------------------
+  {
+    // merge target: a merged issue points at the issue it folded into
+    schemaName: "ben_ltkissue_duplicates",
+    referenced: "ben_ltkissue",
+    referencing: "ben_ltkissue",
+    lookupSchema: "ben_DuplicateOf",
+    display: "Duplicate of",
+  },
+  {
+    schemaName: "ben_ltkissue_files",
+    referenced: "ben_ltkissue",
+    referencing: "ben_ltkissuefile",
+    lookupSchema: "ben_Issue",
+    display: "Issue",
+  },
+  {
+    schemaName: "ben_ltkissue_messages",
+    referenced: "ben_ltkissue",
+    referencing: "ben_ltkissuemessage",
+    lookupSchema: "ben_Issue",
+    display: "Issue",
+  },
+  {
+    schemaName: "ben_ltkissue_watches",
+    referenced: "ben_ltkissue",
+    referencing: "ben_ltkissuewatch",
+    lookupSchema: "ben_Issue",
+    display: "Issue",
   },
 ];
