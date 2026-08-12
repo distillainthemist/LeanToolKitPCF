@@ -274,6 +274,16 @@ export function mountSettings(parent: HTMLElement, initialTab = ""): () => void 
           await renderDocsSettings(body, ctx);
         },
       });
+      tabs.push({
+        key: "issues",
+        label: "Issues",
+        // the ⚐ Report triage desk (issues plan I2) — superadmin only,
+        // by Ben's 2026-08-12 call
+        render: async () => {
+          const { renderIssuesAdmin } = await import("../issues/adminTab");
+          await renderIssuesAdmin(body);
+        },
+      });
     }
     if (!isAdmin) {
       tabs.push({ key: "request", label: "Request admin", render: () => renderRequest(body, me) });
