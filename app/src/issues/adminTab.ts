@@ -145,6 +145,33 @@ export async function renderIssuesAdmin(body: HTMLElement): Promise<void> {
     if (r.success === false) throw new Error(r.error?.message ?? "the message was refused");
   };
 
+  /** Deliver a reporter-facing message as a TEAMS CHAT (Ben,
+   *  2026-08-12: same road as document notifications) — the thread row
+   *  stays the record, Teams is how the reporter hears it. Dynamic
+   *  import ONLY: the notify module statically imports the docs-gated
+   *  connectors. Returns "" or the honest reason it did not send. */
+  const deliverTeams = async (issue: Issue, text: string): Promise<string> => {
+    const email = (issue.ben_reporteremail ?? "").toLowerCase();
+    if (email === "") return "the report carries no reporter email";
+    if (email === myEmail) {
+      // CreateChat seats the caller itself — a self-chat is refused
+      return "you are the reporter — it's in the thread (Teams refuses self-chats)";
+    }
+    try {
+      const { sendNotifyTeams } = await import("../docs/notify");
+      const { appLinkUrl } = await import("../links");
+      const r = await sendNotifyTeams(
+        [{ email, name: issue.ben_reportername || email }],
+        `About your report: ${issue.ben_name ?? ""}`,
+        text,
+        appLinkUrl()
+      );
+      return r.error;
+    } catch (e) {
+      return say(e);
+    }
+  };
+
   const ensureWatch = async (issueId: string, email: string, name: string) => {
     if (email === "") return;
     const has = await Ben_ltkissuewatchsService.getAll({
@@ -477,7 +504,21 @@ export async function renderIssuesAdmin(body: HTMLElement): Promise<void> {
         sendRep.disabled = sendInt.disabled = true;
         try {
           await writeMessage(id, text, audience);
+          // reporter messages also go out as a Teams chat — the thread
+          // is the record, Teams is the doorbell
           compose.value = "";
+          if (audience === "reporter") {
+            status.textContent = "Sending the Teams message…";
+            const warn = await deliverTeams(issue, text);
+            if (warn !== "") {
+              // the refresh would wipe this warning — stay put so it
+              // is read; the thread row landed either way
+              status.textContent = `Saved to the thread — Teams delivery did not go: ${warn}`;
+              status.classList.add("app-docs-addstatus-warn");
+              sendRep.disabled = sendInt.disabled = false;
+              return;
+            }
+          }
           await refresh();
         } catch (e) {
           fail("The message was refused", e);
@@ -532,6 +573,18 @@ export async function renderIssuesAdmin(body: HTMLElement): Promise<void> {
         if (r.success === false) throw new Error(r.error?.message ?? "refused");
         await writeMessage(id, `Status → Declined`, "reporter");
         await writeMessage(id, msg.value.trim(), "reporter");
+        st.textContent = "Sending the Teams message…";
+        const warn = await deliverTeams(issue, msg.value.trim());
+        if (warn !== "") {
+          st.textContent = `Declined and saved to the thread — Teams delivery did not go: ${warn}`;
+          st.classList.add("app-docs-addstatus-warn");
+          const cancel = dlg.root.querySelector(".ltk-btn-secondary") as HTMLButtonElement | null;
+          if (cancel !== null) cancel.textContent = "Close";
+          (dlg.root.querySelector(".ltk-btn-primary") as HTMLButtonElement).style.display = "none";
+          running = false;
+          onDone();
+          return;
+        }
         dlg.close();
         onDone();
       } catch (e) {

@@ -160,6 +160,17 @@ export function resumeDocLaunch(): boolean {
   return true;
 }
 
+/** The absolute player URL for the app itself — what an issue
+ *  notification links to (issues plan I2: the thread lives in-app). */
+export function appLinkUrl(): string {
+  if (!host || host.appId === "" || host.environmentId === "") {
+    return window.location.href.split("#")[0].split("?")[0];
+  }
+  const q = new URLSearchParams();
+  if (host.tenantId !== "") q.set("tenantId", host.tenantId);
+  return `${PLAYER}/e/${host.environmentId}/app/${host.appId}?${q.toString()}`;
+}
+
 /** The absolute player URL for one document. */
 export function docLinkUrl(listId: string, itemId: number): string {
   const payload = `${listId}:${itemId}`;
