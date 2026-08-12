@@ -82,9 +82,18 @@ export function openReportDialog(opts: { host: HTMLElement }): void {
   const myName = viewer?.name ?? "";
   let running = false;
 
+  // openDialog paints with the toolkit's --ltk-* variables, which only
+  // resolve on a .app-dlghost host — a dialog on a bare screen (no card
+  // above it) came out transparent and unstyled (the docs screen's own
+  // 2026-08-03 lesson). Supply the host here and clean it up on close.
+  const dlgHost = el("div", "app-dlghost");
+  opts.host.appendChild(dlgHost);
+
   const dlg = openDialog({
-    host: opts.host,
+    host: dlgHost,
     title: "Report a problem or idea",
+    maxWidth: 520,
+    onClose: () => dlgHost.remove(),
     buttons: [
       { label: "Cancel", kind: "secondary", onClick: () => { if (!running) dlg.close(); } },
       { label: "Send report", kind: "primary", onClick: () => void send() },

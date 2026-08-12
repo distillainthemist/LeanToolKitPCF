@@ -2589,7 +2589,8 @@ button.app-doclist-hsort:hover { color: var(--app-accent, #2563eb); }
 }
 
 /* ---- Report a problem or idea (issues plan I1) ---------------------- */
-.app-issue-body { display: flex; flex-direction: column; gap: 8px; min-width: min(520px, 86vw); }
+.app-issue-body { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.app-issue-body .app-input, .app-issue-body select.app-input { max-width: 100%; box-sizing: border-box; }
 .app-issue-kindrow { display: flex; gap: 8px; }
 .app-issue-kind {
   flex: 1; padding: 8px 10px; border: 1px solid #d5d2cb; border-radius: 8px;
