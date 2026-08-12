@@ -19,14 +19,23 @@
 // the device that fails; on a desktop everything passes by design.
 
 import { ProbeStep } from "./writeProbe";
-import { addFile, fetchListRoot, recycleFile, spRequest } from "./sp";
+import {
+  addFile,
+  checkInFile,
+  checkOutFile,
+  fetchFileItemId,
+  fetchListRoot,
+  recycleFile,
+  spRequest,
+  validateUpdateListItem,
+} from "./sp";
 import {
   DocRow,
   buildRenderViewXml,
   looksTruncatedResponse,
   parseRenderPage,
 } from "./rows";
-import { spErrorText, suspiciousCodePoints } from "./model";
+import { spErrorText, suspiciousCodePoints, validateItemErrors } from "./model";
 
 export interface FeedProbeInput {
   site: string;
@@ -269,6 +278,7 @@ const CHAR_CLASSES: { token: string; label: string; char: string; viaTitle?: boo
   { token: "CP3D", label: "3-byte em dash (—)", char: "—" },
   { token: "CP3A", label: "3-byte fullwidth ampersand (＆)", char: "＆" },
   { token: "CP4E", label: "4-byte emoji (\u{1f600})", char: "\u{1f600}" },
+  { token: "CPFA", label: "＆ U+FF06 in a text field (Title)", char: "＆", viaTitle: true },
   { token: "CPLS", label: "line separator (U+2028, in Title)", char: " ", viaTitle: true },
   { token: "CPPS", label: "paragraph separator (U+2029, in Title)", char: " ", viaTitle: true },
 ];
@@ -288,7 +298,8 @@ export async function runCharClassProbe(
     step("Library root folder", false, clip(rootRes.status) || "not readable");
     return;
   }
-  const nameOf = (c: (typeof CHAR_CLASSES)[number]) => `LBCHARPROBE ${c.token} ${c.char}.txt`;
+  const nameOf = (c: (typeof CHAR_CLASSES)[number]) =>
+    c.viaTitle === true ? `LBCHARPROBE ${c.token}.txt` : `LBCHARPROBE ${c.token} ${c.char}.txt`;
 
   // ---- read phase: each class alone, addressed by its ASCII token ----
   const missing: typeof CHAR_CLASSES = [];
@@ -298,7 +309,11 @@ export async function runCharClassProbe(
     const q = await rawPage(
       site,
       listId,
-      buildRenderViewXml({ nameWords: [c.token], fields: [], rowLimit: 1 })
+      buildRenderViewXml({
+        nameWords: [c.token],
+        fields: c.viaTitle === true ? ["Title"] : [],
+        rowLimit: 1,
+      })
     );
     if (!q.ok && looksTruncatedResponse(q.status)) {
       step(c.label, false, "the read DIED on this character — the bridge cannot carry it");
@@ -309,7 +324,23 @@ export async function runCharClassProbe(
     } else if (q.rows.length === 0) {
       missing.push(c);
     } else {
-      step(c.label, true, "read back intact");
+      // the honesty check: a class is only TESTED if its character
+      // actually survived into what SharePoint stored and returned —
+      // a stripped filename reading back clean proves nothing
+      const carried =
+        c.viaTitle === true
+          ? (q.rows[0].values["Title"] ?? "").includes(c.char)
+          : q.rows[0].name.includes(c.char);
+      if (carried) step(c.label, true, "read back intact — the character was present and carried");
+      else {
+        step(
+          c.label,
+          false,
+          `INCONCLUSIVE — SharePoint stored it without the character ` +
+            `(got "${(c.viaTitle === true ? q.rows[0].values["Title"] : q.rows[0].name) ?? ""}")`
+        );
+        unreadable++;
+      }
     }
   }
 
@@ -324,8 +355,35 @@ export async function runCharClassProbe(
       );
       // a truncated CREATE response is itself the file landing and the
       // read of its echo dying — count that as created
-      const landed = a.ok || looksTruncatedResponse(a.status);
-      step(`Create ${c.label}`, landed, landed ? nameOf(c) : clip(a.status));
+      let landed = a.ok || looksTruncatedResponse(a.status);
+      let detail = landed ? nameOf(c) : clip(a.status);
+      // viaTitle classes carry their character in the Title field —
+      // written under a check-out bracket, exactly as the app writes
+      if (landed && c.viaTitle === true) {
+        const url = `${root}/${nameOf(c)}`;
+        const idRes = await fetchFileItemId(site, url);
+        const itemId = Number(((idRes.data ?? {}) as { Id?: unknown }).Id ?? 0);
+        if (itemId > 0) {
+          await checkOutFile(site, url); // tolerated if already held
+          const w = await validateUpdateListItem(site, listId, itemId, [
+            { FieldName: "Title", FieldValue: `probe ${c.char} probe` },
+          ]);
+          const errs = validateItemErrors(w.data);
+          await checkInFile(site, url, "Character probe", false);
+          if (!w.ok || errs.length > 0) {
+            landed = false;
+            detail = `the Title write was refused: ${
+              errs.map((e) => e.message).join("; ") || clip(w.status)
+            }`;
+          } else {
+            detail = `${nameOf(c)} — character written into Title`;
+          }
+        } else {
+          landed = false;
+          detail = "created, but its list item could not be found for the Title write";
+        }
+      }
+      step(`Create ${c.label}`, landed, detail);
     }
     step(
       "Next",
