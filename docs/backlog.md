@@ -162,6 +162,43 @@ artefact).
 - **Live-tiles cost bounding.** Watch item (re-affirmed 2026-08-07) —
   act only if refresh cost shows up in practice.
 
+## BBA requirements backlog (Ben's disposition, 2026-08-13)
+
+From `bba-dms-gap-analysis.md` — the items dispositioned to backlog
+(the NEXT tranche — governed hashtags, generic document linking +
+management-system filters, audit trail — is tracked in its own plan
+when written):
+
+- **Document numbering (FR-LC-002 MUST, FR-LC-006 SHOULD).** Auto-
+  generated persistent document numbers with a short prefix; rename/
+  renumber with visible history. Approach to be worked out before
+  build.
+- **Workflow depth (FR-WF-003/007/009/011 MUST; WF-004/008/010,
+  TM-002/003).** Regulator-approved gate, approval timeframes,
+  delegation, formal on-behalf records, simple content revisions,
+  change requests, DocuSign, template self-lifecycle, co-authoring.
+- **Acknowledgement (FR-DI-001/002, RP ack KPIs).** The 5E sign-off
+  card design stands; needs the ben_ltkdocack schema (road proven).
+- **Retention & disposal (FR-VR-004/005/011).** retainUntil stays
+  inert until this is picked up; Purview labels + owner disposal
+  review.
+- **Reporting completeness (FR-RP-001/002/008 tails).** % on-time
+  review compliance KPI, acknowledgement KPIs (after 5E), PDF register
+  export.
+
+**Decisions of record from the same disposition:**
+- PDF/reader layer (FR-DI-005/006/007, LC-003): handled IN the
+  documents — a status stamp field bound to the status column; no
+  app-side rendering. Too difficult to implement reliably.
+- Push notifications (FR-NT-002/003/004): DECIDED AGAINST — rituals
+  and pull surfaces are the mechanism; at-action notify panel only.
+- Per-document confidentiality (FR-AC-005): REJECTED as too risky —
+  library-level confidentiality controls only.
+- Guest/auditor access (FR-AC-007): parked indefinitely.
+- Bulk curated ingestion (FR-IM-002/006): met by the existing
+  spreadsheet process outside the app.
+- AI assistant (FR-AI-*): a future project iteration.
+
 ## Done / no longer tracked
 
 - Folder counts REMOVED (Ben, 2026-08-08, UI design review): they cost

@@ -1,6 +1,38 @@
 # BBA DMS requirements v1.4 — gap analysis vs LeanBoard DMS v0.42.0
 (2026-08-12. Source: BBA_DMS_Requirements_and_HLD_v1_4.docx, 28 Apr 2026.)
 
+## Disposition of record (Ben, 2026-08-13)
+
+- **§1 PDF/reader layer — CLOSED by document design, not app build.**
+  The status stamp lives IN the templates/documents as a field bound to
+  the status column (the 2026-08-08 watermark decision, reaffirmed).
+  On-the-fly PDF rendering judged too difficult to implement reliably.
+- **§2 Document numbering — BACKLOG.** Needed; approach to be worked
+  out first.
+- **§3 Bulk administration & migration — MET by process.** The curated,
+  spreadsheet-driven ingestion already runs as a spreadsheet outside
+  the app.
+- **§4 Governed hashtags — NEXT (part of the next work tranche).**
+- **§5 Workflow depth — BACKLOG.**
+- **§6 Push notifications — DECIDED AGAINST (recorded).** Reviews and
+  reminders run on rituals and pull surfaces; at-action notifications
+  (the notify panel) are the only sends. FR-NT-002/003/004 are
+  consciously not met.
+- **§7 Acknowledgement — BACKLOG** (5E design stands).
+- **§8 Retention & disposal — BACKLOG.**
+- **§9 Corporate↔site linkage — NEXT, as a GENERIC document-linking
+  feature** (documents referencing documents, any scope) plus
+  management-system filters; the two-tier requirement rides on it.
+- **§10 Reporting completeness — BACKLOG.**
+- **§11 Audit trail consolidation — NEXT (part of the next tranche).**
+- **§12 AI assistant — FUTURE project iteration.**
+- **§13 Confidentiality — per-document flag REJECTED (too risky);
+  library-level confidentiality controls only. Guest/auditor access
+  parked indefinitely.**
+
+Next tranche = §4 governed hashtags + §9 generic document linking &
+management-system filters + §11 audit trail.
+
 Status legend: OUT = not built · PART = partially met · decision-flag =
 conflicts with a decision already taken in this build.
 
