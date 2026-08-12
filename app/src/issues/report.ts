@@ -210,20 +210,24 @@ export function openReportDialog(opts: { host: HTMLElement }): void {
   const addShot = (file: File) => {
     if (!file.type.startsWith("image/")) return;
     if (shots.length >= 6) return;
-    const url = URL.createObjectURL(file);
-    shots.push({ file, url });
+    const key = `${file.name}|${Date.now()}|${Math.random()}`;
+    shots.push({ file, url: key });
     const cell = el("div", "app-issue-shot");
     const img = el("img", "") as HTMLImageElement;
-    img.src = url;
+    // a DATA url, not an object url: the Power Apps player's CSP blocks
+    // blob: images (broken-icon thumbnails, Ben 2026-08-12) while data:
+    // renders fine — the branding logo already proves that road
+    const reader = new FileReader();
+    reader.onload = () => {
+      img.src = String(reader.result ?? "");
+    };
+    reader.readAsDataURL(file);
     img.alt = file.name;
     const rm = el("button", "app-issue-shotrm", "✕") as HTMLButtonElement;
     rm.title = "Remove";
     rm.addEventListener("click", () => {
-      const i = shots.findIndex((s) => s.url === url);
-      if (i >= 0) {
-        URL.revokeObjectURL(shots[i].url);
-        shots.splice(i, 1);
-      }
+      const i = shots.findIndex((s) => s.url === key);
+      if (i >= 0) shots.splice(i, 1);
       cell.remove();
     });
     cell.append(img, rm);

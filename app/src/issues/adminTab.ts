@@ -37,6 +37,29 @@ const AREA_WORDS: Record<string, string> = {
   other: "Other",
 };
 
+/** Chunked base64 — String.fromCharCode over a whole screenshot would
+ *  blow the argument limit. */
+function bytesToBase64(bytes: Uint8Array): string {
+  let bin = "";
+  const CHUNK = 8192;
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    bin += String.fromCharCode(...bytes.subarray(i, Math.min(i + CHUNK, bytes.length)));
+  }
+  return btoa(bin);
+}
+
+/** Full-size viewer: a fixed overlay, closed by any click — data: urls
+ *  cannot ride window.open. */
+function openLightbox(url: string, alt: string): void {
+  const box = el("div", "app-issad-lightbox");
+  const img = el("img", "") as HTMLImageElement;
+  img.src = url;
+  img.alt = alt;
+  box.appendChild(img);
+  box.addEventListener("click", () => box.remove());
+  document.body.appendChild(box);
+}
+
 const ago = (iso: string | undefined): string => {
   const t = Date.parse(iso ?? "");
   if (Number.isNaN(t)) return "";
@@ -275,7 +298,10 @@ export async function renderIssuesAdmin(body: HTMLElement): Promise<void> {
       );
     }
 
-    // attachments — bytes through the SDK's file door, painted as thumbs
+    // attachments — bytes through the SDK's file door, painted as DATA
+    // urls (the player's CSP blocks blob: images — Ben, 2026-08-12) with
+    // an in-app lightbox for full size (window.open on data: is blocked
+    // everywhere)
     const fileRows = files.success !== false ? (files.data ?? []) : [];
     if (fileRows.length > 0) {
       const shots = el("div", "app-issue-shots");
@@ -293,14 +319,14 @@ export async function renderIssuesAdmin(body: HTMLElement): Promise<void> {
           if (down.success === false || !(down.data instanceof Uint8Array)) continue;
           const name = f.ben_name ?? "shot";
           const type = /\.png$/i.test(name) ? "image/png" : "image/jpeg";
-          const url = URL.createObjectURL(new Blob([down.data as BlobPart], { type }));
+          const url = `data:${type};base64,${bytesToBase64(down.data)}`;
           const cell = el("div", "app-issue-shot");
           const img = el("img", "") as HTMLImageElement;
           img.src = url;
           img.alt = name;
-          img.title = "Open full size";
+          img.title = "View full size";
           img.style.cursor = "zoom-in";
-          img.addEventListener("click", () => window.open(url, "_blank"));
+          img.addEventListener("click", () => openLightbox(url, name));
           cell.appendChild(img);
           shots.appendChild(cell);
         }
