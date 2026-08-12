@@ -106,10 +106,12 @@ export function openReportDialog(opts: { host: HTMLElement }): void {
 
   // ---- My reports (I3, option 1): the reporter's own thread view -------
   // Stacked over this dialog in its own host, so a half-typed report
-  // survives the detour.
+  // survives the detour. The link rides the TITLE row (Ben, 2026-08-12).
   const mine = el("button", "app-issue-minelink", "My reports →") as HTMLButtonElement;
   mine.addEventListener("click", () => openMyReports(opts.host));
-  dlg.body.appendChild(mine);
+  const titleRow = dlg.root.querySelector(".ltk-dialog-title") as HTMLElement;
+  titleRow.classList.add("app-issue-titlebar");
+  titleRow.appendChild(mine);
 
   // ---- kind + area ------------------------------------------------------
   const kindRow = el("div", "app-issue-kindrow");
@@ -195,7 +197,17 @@ export function openReportDialog(opts: { host: HTMLElement }): void {
   desc.rows = 4;
   desc.placeholder =
     "What did you do, what did you expect, what happened instead? For ideas: what problem would it solve?";
-  dlg.body.append(el("div", "app-field-label", "Summary"), title, el("div", "app-field-label", "Details"), desc);
+  // the * follows the app's required-field convention (fieldEditors),
+  // and the live line below names what still blocks Send — a disabled
+  // button must never be a mystery (Ben, 2026-08-12)
+  const needed = el("div", "app-issue-needed");
+  dlg.body.append(
+    el("div", "app-field-label", "Summary *"),
+    title,
+    el("div", "app-field-label", "Details *"),
+    desc,
+    needed
+  );
   // both required (Ben, 2026-08-12): a bare title cannot be triaged,
   // and asking now beats an admin asking later
   title.addEventListener("input", () => sync());
@@ -279,7 +291,13 @@ export function openReportDialog(opts: { host: HTMLElement }): void {
   dlg.body.appendChild(status);
 
   const sync = () => {
-    sendBtn.disabled = running || title.value.trim() === "" || desc.value.trim() === "";
+    const missing = [
+      title.value.trim() === "" ? "a summary" : "",
+      desc.value.trim() === "" ? "details" : "",
+    ].filter((s) => s !== "");
+    needed.textContent =
+      missing.length === 0 ? "" : `Send report needs ${missing.join(" and ")}.`;
+    sendBtn.disabled = running || missing.length > 0;
   };
   sync();
 

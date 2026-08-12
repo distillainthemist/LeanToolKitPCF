@@ -2689,3 +2689,6 @@ button.app-doclist-hsort:hover { color: var(--app-accent, #2563eb); }
   align-self: flex-end; border: none; background: none; cursor: pointer;
   color: var(--app-accent); font-size: 12.5px; padding: 2px 0;
 }
+.app-issue-titlebar { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.app-issue-titlebar .app-issue-minelink { align-self: auto; font-weight: 400; flex: none; }
+.app-issue-needed { font-size: 12px; color: #92610f; min-height: 15px; }
