@@ -19,6 +19,18 @@ brand.addEventListener("click", () => {
 });
 const nav = el("nav", "app-nav");
 const gap = el("span", "app-bar-gap");
+// report a problem or idea (issues plan I1) \u2014 one affordance for every
+// surface; the dialog module loads on demand, keeping the shell lean
+const reportLink = el("a", "app-link app-link-report") as HTMLAnchorElement;
+reportLink.append(el("span", "app-mode-icon", "\u2690"), el("span", "", "Report"));
+reportLink.href = "#";
+reportLink.title = "Report a problem or share an idea";
+reportLink.addEventListener("click", (e) => {
+  e.preventDefault();
+  void import("./issues/report").then(({ openReportDialog }) =>
+    openReportDialog({ host: document.body })
+  );
+});
 // one context button: Settings from the hub, Home everywhere else
 const modeLink = el("a", "app-link app-link-cog") as HTMLAnchorElement;
 const modeIcon = el("span", "app-mode-icon", "\u2699");
@@ -26,6 +38,7 @@ const modeText = el("span", "", "Settings");
 modeLink.append(modeIcon, modeText);
 modeLink.href = "#/settings";
 nav.appendChild(gap);
+nav.appendChild(reportLink);
 nav.appendChild(modeLink);
 bar.append(brand, nav);
 app.appendChild(bar);
