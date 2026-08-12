@@ -196,7 +196,10 @@ export function openReportDialog(opts: { host: HTMLElement }): void {
   desc.placeholder =
     "What did you do, what did you expect, what happened instead? For ideas: what problem would it solve?";
   dlg.body.append(el("div", "app-field-label", "Summary"), title, el("div", "app-field-label", "Details"), desc);
+  // both required (Ben, 2026-08-12): a bare title cannot be triaged,
+  // and asking now beats an admin asking later
   title.addEventListener("input", () => sync());
+  desc.addEventListener("input", () => sync());
 
   // ---- screenshots: paste, drop, pick ------------------------------------
   const shots: { file: File; url: string }[] = [];
@@ -276,7 +279,7 @@ export function openReportDialog(opts: { host: HTMLElement }): void {
   dlg.body.appendChild(status);
 
   const sync = () => {
-    sendBtn.disabled = running || title.value.trim() === "";
+    sendBtn.disabled = running || title.value.trim() === "" || desc.value.trim() === "";
   };
   sync();
 
