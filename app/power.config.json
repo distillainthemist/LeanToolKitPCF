@@ -105,6 +105,22 @@
         "leanboarduploads": {
           "entitySetName": "ben_ltkuploads",
           "logicalName": "ben_ltkupload"
+        },
+        "leanboardissues": {
+          "entitySetName": "ben_ltkissues",
+          "logicalName": "ben_ltkissue"
+        },
+        "leanboardissuefiles": {
+          "entitySetName": "ben_ltkissuefiles",
+          "logicalName": "ben_ltkissuefile"
+        },
+        "leanboardissuemessages": {
+          "entitySetName": "ben_ltkissuemessages",
+          "logicalName": "ben_ltkissuemessage"
+        },
+        "leanboardissuewatches": {
+          "entitySetName": "ben_ltkissuewatchs",
+          "logicalName": "ben_ltkissuewatch"
         }
       },
       "environmentVariableName": ""

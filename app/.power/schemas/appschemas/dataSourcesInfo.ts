@@ -5,6 +5,34 @@
  */
 
 export const dataSourcesInfo = {
+  "ben_ltkissuefiles": {
+    "tableId": "",
+    "version": "",
+    "primaryKey": "ben_ltkissuefileid",
+    "dataSourceType": "Dataverse",
+    "apis": {}
+  },
+  "ben_ltkissuemessages": {
+    "tableId": "",
+    "version": "",
+    "primaryKey": "ben_ltkissuemessageid",
+    "dataSourceType": "Dataverse",
+    "apis": {}
+  },
+  "ben_ltkissues": {
+    "tableId": "",
+    "version": "",
+    "primaryKey": "ben_ltkissueid",
+    "dataSourceType": "Dataverse",
+    "apis": {}
+  },
+  "ben_ltkissuewatchs": {
+    "tableId": "",
+    "version": "",
+    "primaryKey": "ben_ltkissuewatchid",
+    "dataSourceType": "Dataverse",
+    "apis": {}
+  },
   "ben_ltkuploads": {
     "tableId": "",
     "version": "",
