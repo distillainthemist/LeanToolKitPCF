@@ -14,10 +14,12 @@ export async function resolveLinkTarget(
   site: string,
   uid: string
 ): Promise<{ listId: string; itemId: number } | null> {
+  // OData v3 expand syntax — SP REST refuses the v4 parenthesized form
+  // (the silent fallback-to-download bug, Ben 2026-08-13)
   const r = await spRequest(
     site,
     "GET",
-    `_api/web/GetFileById('${uid}')/ListItemAllFields?$select=Id&$expand=ParentList($select=Id)`
+    `_api/web/GetFileById('${uid}')/ListItemAllFields?$select=Id,ParentList/Id&$expand=ParentList`
   );
   const d = (r.data ?? {}) as { Id?: unknown; ParentList?: { Id?: unknown } };
   const itemId = Number(d.Id ?? 0);

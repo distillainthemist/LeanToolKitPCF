@@ -841,11 +841,13 @@ export function openDocViewer(opts: ViewerOpts): () => void {
       }
     })();
     const webPath = site.replace(origin, "").replace(/\/$/, "");
-    /** Where a version opens: the file itself for the current one; the
-     *  _vti_history address otherwise (a NEW TAB — old versions are not
-     *  presignable, but the tab carries the user's own session). */
+    /** Where a version opens: the current one through the Office WEB
+     *  viewer (?web=1 — a raw file URL just downloads, Ben 2026-08-13);
+     *  the _vti_history address otherwise (a NEW TAB — old versions
+     *  have no web viewer, the download is SharePoint's limit, and the
+     *  tab carries the user's own session). */
     const versionUrl = (v: (typeof vres.versions)[number]): string => {
-      if (v.current) return origin === "" ? "" : `${origin}${row.serverUrl}`;
+      if (v.current) return origin === "" ? "" : `${origin}${row.serverUrl}?web=1`;
       const m = v.label.match(/^(\d+)\.(\d+)$/);
       const id = v.versionId > 0 ? v.versionId : m ? Number(m[1]) * 512 + Number(m[2]) : 0;
       if (id === 0 || origin === "") return "";
