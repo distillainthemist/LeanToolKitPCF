@@ -791,8 +791,16 @@ export function openDocViewer(opts: ViewerOpts): () => void {
     const regK = internalForRole("regulatorApproved");
     const regV = regK !== undefined ? (details.values[regK] ?? "").trim() : "";
     if (regV !== "") {
+      // the flag speaks WITH its evidence (Ben, 2026-08-14): amber
+      // until the regulator's stamped copy is linked
+      const flagLinks = parseDocLinks(details.values[linksInternal] ?? "") ?? [];
+      const hasCopy = flagLinks.some((l) => l.rel === "regulatorCopy");
       flags.appendChild(
-        el("span", "app-docs-chip", isYes(regV) ? "✓ Regulator-approved" : "Not regulator-approved")
+        !isYes(regV)
+          ? el("span", "app-docs-chip", "Not regulator-approved")
+          : hasCopy
+            ? el("span", "app-docs-chip", "✓ Regulator-approved · copy linked")
+            : tonePill("Regulator-approved — copy not linked", "amber")
       );
     }
     if (flags.children.length > 0) propsBox.appendChild(flags);

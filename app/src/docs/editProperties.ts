@@ -19,6 +19,7 @@ import { DocLibrary } from "./docsStore";
 import {
   SiteColumn,
   addMonthsYmd,
+  isYesValue,
   fieldsFromResponse,
   prefillFromItem,
   spErrorText,
@@ -216,12 +217,18 @@ export function openEditProperties(opts: EditPropertiesOpts): void {
     // the links editor (L1): part of THIS form, saved with it
     if (opts.links !== undefined && opts.links.internal !== "") {
       const { buildLinksEditor } = await import("./linksEditor");
+      const regInternal =
+        [...opts.dictBy.values()].find((c) => c.role === "regulatorApproved")?.internal ?? "";
       linksEd = buildLinksEditor({
         site,
         libraries: opts.links.libraries,
         selfUniqueId: row.uniqueId,
         docIdInternal: opts.links.docIdInternal,
         initialRaw: initial.get(opts.links.internal)?.text ?? "",
+        // read from the STORED value — Yes/No columns are not form
+        // fields, so the flag cannot change inside this dialog
+        offerRegulatorCopy:
+          regInternal !== "" && isYesValue(initial.get(regInternal)?.text ?? ""),
       });
       metaBox.appendChild(linksEd.root);
     }

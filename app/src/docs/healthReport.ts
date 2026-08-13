@@ -18,6 +18,7 @@ import {
   ControlHealthReport,
   ControlRoles,
   controlHealth,
+  isYesValue,
   parseDocLinks,
   tallyByOwner,
 } from "./model";
@@ -42,6 +43,8 @@ export interface ControlHealthOpts {
     review: string;
     /** The linked-documents column ("" = unmapped). */
     links: string;
+    /** The regulator-approved flag column ("" = unmapped). */
+    regulator: string;
   };
   /** The screen's stage reading — one status vocabulary for the app. */
   stageOf: (row: DocRow) => ControlDoc["stage"];
@@ -119,6 +122,7 @@ export function openControlHealth(opts: ControlHealthOpts): void {
         roles.documentId,
         roles.review,
         roles.links,
+        roles.regulator,
       ].filter((f) => f !== "" && carried.has(f));
       const viewXml = buildRenderViewXml({
         fields: [...wanted, "CheckoutUser"],
@@ -158,6 +162,8 @@ export function openControlHealth(opts: ControlHealthOpts): void {
             // MISS on huge link lists, never false-positive
             links:
               roles.links !== "" ? (parseDocLinks(row.values[roles.links] ?? "") ?? []) : [],
+            regulatorApproved:
+              roles.regulator !== "" && isYesValue(row.values[roles.regulator] ?? ""),
           });
         }
         next = page.next;
@@ -323,4 +329,5 @@ const roleFlags = (r: ControlHealthOpts["roles"]): ControlRoles => ({
   documentId: r.documentId !== "",
   review: r.review !== "",
   links: r.links !== "",
+  regulator: r.regulator !== "",
 });

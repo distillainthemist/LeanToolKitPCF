@@ -47,6 +47,11 @@ export interface LifecycleRunOpts {
   /** The date model's stamps for the owner's Approve (Ben,
    *  2026-08-10) — absent = no mapped date columns, nothing stamped. */
   dates?: DateStamps;
+  /** The regulator gate (Ben, 2026-08-14): flagged regulator-approved
+   *  with NO regulator-copy link. Approve warns and requires an
+   *  explicit confirmation — publish-first is the expected workflow,
+   *  silence is not. */
+  regulatorGap?: boolean;
   /** Who is acting — approve's comment names them. */
   actorName: string;
   /** The actor's standing comes from an edit-access GRANT (5G3) — an
@@ -127,6 +132,38 @@ export function openLifecycleCommand(opts: LifecycleRunOpts): void {
             (command.major ? " and records a MAJOR version." : ".")
     )
   );
+
+  // the regulator gate (Ben, 2026-08-14): warn-and-confirm, never a
+  // hard block — the expected workflow publishes first and the
+  // regulator's stamped copy is linked when it lands. The confirmation
+  // writes itself into the check-in comment, so the audit view shows
+  // exactly what was decided.
+  let regConfirm: HTMLInputElement | null = null;
+  if (opts.regulatorGap === true) {
+    const warn = el("div", "app-docs-regwarn");
+    warn.append(
+      el(
+        "div",
+        "",
+        "This document is marked regulator-approved, but no regulator approved copy is " +
+          "linked yet."
+      )
+    );
+    const lab = el("label", "app-docs-regconfirm");
+    regConfirm = el("input", "") as HTMLInputElement;
+    regConfirm.type = "checkbox";
+    regConfirm.addEventListener("change", () => sync());
+    lab.append(
+      regConfirm,
+      el(
+        "span",
+        "",
+        "Publish now — the regulator's copy will be linked when it arrives"
+      )
+    );
+    warn.appendChild(lab);
+    dlg.body.appendChild(warn);
+  }
 
   // additional reviewers (submit-for-review): the app's one people
   // pattern — debounced search, chips to remove. 5G1: reviewers are a
@@ -217,7 +254,10 @@ export function openLifecycleCommand(opts: LifecycleRunOpts): void {
   dlg.body.appendChild(status);
 
   const sync = () => {
-    goBtn.disabled = running || (command.needsReason && reason.value.trim() === "");
+    goBtn.disabled =
+      running ||
+      (command.needsReason && reason.value.trim() === "") ||
+      (regConfirm !== null && !regConfirm.checked);
   };
   reason.addEventListener("input", sync);
   sync();
@@ -257,6 +297,7 @@ export function openLifecycleCommand(opts: LifecycleRunOpts): void {
 
   const run = async () => {
     if (running || (command.needsReason && reason.value.trim() === "")) return;
+    if (regConfirm !== null && !regConfirm.checked) return;
     running = true;
     sync();
     status.classList.remove("app-docs-addstatus-warn");
@@ -268,7 +309,10 @@ export function openLifecycleCommand(opts: LifecycleRunOpts): void {
         ? `${command.comment} by ${opts.actorName}`
         : command.comment;
     const note = reason.value.trim();
-    const comment = note !== "" ? `${base} — ${note}` : base;
+    let comment = note !== "" ? `${base} — ${note}` : base;
+    if (regConfirm !== null && regConfirm.checked) {
+      comment += " — regulator copy to follow";
+    }
 
     status.textContent = "Taking the check-out…";
     const out = await timed(checkOutFile(site, row.serverUrl), "Check-out");

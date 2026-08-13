@@ -43,6 +43,8 @@ import {
   DocLink,
   LifecycleCommandDef,
   LifecycleStage,
+  isYesValue,
+  parseDocLinks,
   cadenceForImportance,
   columnOffered,
   defaultColumnsFor,
@@ -68,6 +70,7 @@ import {
   checkOutFile,
   fetchFileInfo,
   fetchLibraries,
+  fetchListItem,
   fetchListPermissions,
   fetchListRoot,
   cachedTermPaths,
@@ -529,6 +532,26 @@ export function mountDocs(
           cmd.key === "approve" && cmd.to === "approved" && lib !== undefined
             ? await resolveDatesFor(row, lib)
             : undefined;
+        // the regulator gate (Ben, 2026-08-14, warn-and-confirm): a
+        // document FLAGGED regulator-approved should carry the
+        // regulator's stamped copy as a link — approving without it is
+        // allowed (publish first, sign-off follows) but never silent.
+        // Full REST read: the feed clips multiline columns.
+        let regulatorGap = false;
+        const regInternal = internalForRole("regulatorApproved");
+        if (
+          cmd.key === "approve" &&
+          regInternal !== "" &&
+          isYesValue(row.values[regInternal] ?? "") &&
+          linksInternalOf() !== ""
+        ) {
+          const item = await fetchListItem(app.siteUrl, row.listId, row.id);
+          const raw = String(
+            ((item.data ?? {}) as Record<string, unknown>)[linksInternalOf()] ?? ""
+          );
+          const links = parseDocLinks(raw) ?? [];
+          regulatorGap = !links.some((l) => l.rel === "regulatorCopy");
+        }
         openLifecycleCommand({
           site: app.siteUrl,
           listId: row.listId,
@@ -537,6 +560,7 @@ export function mountDocs(
           targetTerm: target,
           statusInternal,
           dates,
+          regulatorGap,
           actorName: currentViewer()?.name ?? "",
           actingAsEditor: lifecycleGatesFor(row).isEditor,
           host: dialogHost,
@@ -4235,6 +4259,7 @@ export function mountDocs(
                   documentId: internalForRole("documentId"),
                   review: reviewInternal,
                   links: linksInternalOf(),
+                  regulator: internalForRole("regulatorApproved"),
                 },
                 stageOf: stageOfRow,
                 host: dialogHost,

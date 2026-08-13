@@ -22,6 +22,9 @@ export interface LinksEditorOpts {
   /** The column's FULL current value (the dialog prefills over REST,
    *  so no feed-clipping risk). */
   initialRaw: string;
+  /** The document is FLAGGED regulator-approved — the "Regulator
+   *  approved copy" relationship becomes declarable (Ben, 2026-08-14). */
+  offerRegulatorCopy: boolean;
 }
 
 export interface LinksEditor {
@@ -97,11 +100,20 @@ export function buildLinksEditor(opts: LinksEditorOpts): LinksEditor {
   });
 
   const relRow = el("div", "app-issue-kindrow");
-  const relBtns = (["parent", "peer", "child"] as const).map((k) => {
+  const offered: DocLink["rel"][] = opts.offerRegulatorCopy
+    ? ["parent", "peer", "child", "regulatorCopy"]
+    : ["parent", "peer", "child"];
+  const relBtns = offered.map((k) => {
     const b = el(
       "button",
       "app-issue-kind",
-      k === "parent" ? "Parent" : k === "peer" ? "Related" : "Child"
+      k === "parent"
+        ? "Parent"
+        : k === "peer"
+          ? "Related"
+          : k === "child"
+            ? "Child"
+            : "Regulator copy"
     ) as HTMLButtonElement;
     b.type = "button";
     b.addEventListener("click", () => {

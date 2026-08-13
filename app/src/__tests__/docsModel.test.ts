@@ -353,6 +353,7 @@ describe("controlHealth", () => {
     documentId: true,
     review: true,
     links: true,
+    regulator: true,
   };
   const NOW = Date.parse("2026-08-08T00:00:00Z");
   const doc = (over: Partial<ControlDoc> = {}): ControlDoc => ({
@@ -370,6 +371,7 @@ describe("controlHealth", () => {
     checkedOutTo: "",
     uniqueId: "",
     links: [],
+    regulatorApproved: false,
     ...over,
   });
   const keys = (r: { issues: { key: string }[] }) => r.issues.map((i) => i.key);

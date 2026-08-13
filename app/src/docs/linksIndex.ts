@@ -148,6 +148,8 @@ export const INVERSE_REL: Record<DocLinkRel, DocLinkRel> = {
   parent: "child",
   peer: "peer",
   child: "parent",
+  regulatorCopy: "regulatorCopyOf",
+  regulatorCopyOf: "regulatorCopy",
 };
 
 /** An inbound entry reshaped as a DocLink for the open road. */

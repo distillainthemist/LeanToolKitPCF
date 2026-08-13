@@ -2023,7 +2023,17 @@ export function validateItemErrors(raw: unknown): { field: string; message: stri
 // Declaring a link writes ONLY the declaring document — a site doc
 // names its corporate parent with no rights on the corporate side.
 
-export type DocLinkRel = "parent" | "peer" | "child";
+export type DocLinkRel =
+  | "parent"
+  | "peer"
+  | "child"
+  /** The regulator's stamped copy — the EVIDENCE behind the
+   *  regulator-approved flag (Ben, 2026-08-14). Declarable only while
+   *  the flag is Yes; the approve gate warns when it is missing. */
+  | "regulatorCopy"
+  /** The derived-side voice of regulatorCopy — never declared, only
+   *  painted on the copy's own pane. */
+  | "regulatorCopyOf";
 
 export interface DocLink {
   uid: string;
@@ -2034,13 +2044,21 @@ export interface DocLink {
   docId: string;
 }
 
-export const DOC_LINK_RELS: DocLinkRel[] = ["parent", "peer", "child"];
+export const DOC_LINK_RELS: DocLinkRel[] = [
+  "parent",
+  "peer",
+  "child",
+  "regulatorCopy",
+  "regulatorCopyOf",
+];
 
 /** How a group of links reads on the DECLARING document's pane. */
 export const DOC_LINK_GROUP: Record<DocLinkRel, string> = {
   parent: "Parent documents",
   peer: "Related documents",
   child: "Child documents",
+  regulatorCopy: "Regulator approved copy",
+  regulatorCopyOf: "Approved copy of",
 };
 
 /** How this document reads FROM the linked one (the inverse voice —
@@ -2049,6 +2067,8 @@ export const DOC_LINK_INVERSE: Record<DocLinkRel, string> = {
   parent: "names this as its parent",
   peer: "names this as related",
   child: "names this as a child",
+  regulatorCopy: "names this as its regulator approved copy",
+  regulatorCopyOf: "is the regulator approved copy of this",
 };
 
 /** Parse the column's value. JSON in the expected shape → links;
@@ -2093,7 +2113,13 @@ export function serializeDocLinks(links: DocLink[]): string {
     seen.add(key);
     return true;
   });
-  const rank: Record<DocLinkRel, number> = { parent: 0, peer: 1, child: 2 };
+  const rank: Record<DocLinkRel, number> = {
+    parent: 0,
+    peer: 1,
+    child: 2,
+    regulatorCopy: 3,
+    regulatorCopyOf: 4,
+  };
   kept.sort((a, b) => rank[a.rel] - rank[b.rel]);
   return JSON.stringify(kept);
 }
@@ -2222,6 +2248,11 @@ export function auditRowsFor(
  *  plain words, empty = mintable. The ampersand rule is the U+FF06
  *  lesson: the term store CONVERTS & to a fullwidth character phones
  *  cannot read back, so it must never enter the vocabulary. */
+/** One reading of a Yes/No column's display text, app-wide. */
+export function isYesValue(v: string): boolean {
+  return /^(yes|true|1)$/i.test(v.trim());
+}
+
 export function tagLabelProblems(label: string): string[] {
   const out: string[] = [];
   const t = label.trim();
@@ -2646,6 +2677,8 @@ export interface ControlDoc {
    *  feed clipped mid-JSON (RLDAS truncates multiline columns), so
    *  link checks can MISS but never false-positive. */
   links: DocLink[];
+  /** The regulator-approved flag ("" column value = false). */
+  regulatorApproved: boolean;
 }
 
 export interface ControlIssue {
@@ -2678,6 +2711,8 @@ export interface ControlRoles {
   review: boolean;
   /** The linked-documents column (L1) — dangling/cycle checks. */
   links: boolean;
+  /** The regulator-approved flag column — the evidence check. */
+  regulator: boolean;
 }
 
 export function controlHealth(
@@ -2822,6 +2857,20 @@ export function controlHealth(
     );
     if (crossSite > 0) {
       skipped.push(`cross-site links (${crossSite}) — not verifiable by this site's scan`);
+    }
+    if (roles.regulator) {
+      // the regulator gate's corpus half (Ben, 2026-08-14): the flag
+      // without its evidence — approve warned once, this keeps asking
+      add(
+        "regulatorCopyMissing",
+        "warn",
+        "Regulator-approved without the approved copy linked",
+        "The document is flagged regulator-approved but no Regulator approved copy is " +
+          "linked. Link the regulator's stamped copy via Edit properties when it arrives.",
+        docs.filter(
+          (d) => d.regulatorApproved && !d.links.some((l) => l.rel === "regulatorCopy")
+        )
+      );
     }
     const cycles = parentCycles(
       docs.map((d) => ({ uid: d.uniqueId, name: d.name, links: d.links }))
