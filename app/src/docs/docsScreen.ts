@@ -836,7 +836,14 @@ export function mountDocs(
                   docIdInternal: docIdInternalOf(),
                 }
               : undefined,
-          onDone: () => void refreshRow(row),
+          onDone: () => {
+            // links may have changed — the reverse index re-sweeps on
+            // its next ask
+            void import("./linksIndex").then(({ invalidateLinksIndex }) =>
+              invalidateLinksIndex()
+            );
+            void refreshRow(row);
+          },
         });
       });
     };
@@ -2757,9 +2764,28 @@ export function mountDocs(
       })();
     };
 
-    const linksCtlFor = () => ({
+    const linksCtlFor = (row: DocRow) => ({
       internal: linksInternalOf(),
       open: switchToLink,
+      // L2: who names this document — the hybrid index/search road
+      derived: async () => {
+        const internal = linksInternalOf();
+        if (internal === "") return { links: [], lagging: false };
+        const { inboundFor, inboundAsLink } = await import("./linksIndex");
+        const r = await inboundFor(
+          app.siteUrl,
+          libraries.filter((l) => l.libType !== "template"),
+          internal,
+          docIdInternalOf(),
+          row.uniqueId
+        );
+        return {
+          links: r.entries
+            .filter((e) => e.fromUid.toLowerCase() !== row.uniqueId.toLowerCase())
+            .map(inboundAsLink),
+          lagging: r.road === "search",
+        };
+      },
     });
 
     /** The open overlay's close handle — a link click SWITCHES the
@@ -2807,8 +2833,14 @@ export function mountDocs(
             siteDict.columns.filter((c) => c.role !== "").map((c) => [c.internal, c.role])
           ),
           // L1: link clicks switch the overlay (editing lives in
-          // Edit properties)
-          links: linksCtlFor(),
+          // Edit properties); L2 adds the derived inbound view
+          links: linksCtlFor(row),
+          // version OPEN links are owner/controller-only (Ben,
+          // 2026-08-13) — read per paint, a command can change either
+          versionLinks: () => {
+            const g = lifecycleGatesFor(row);
+            return g.isOwner || g.isAdmin;
+          },
           // dictionary order — the same order the add form uses,
           // adjustable under Settings → Documents → Document columns
           columns: lib

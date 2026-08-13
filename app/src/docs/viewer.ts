@@ -66,6 +66,10 @@ interface ViewerOpts {
   links?: {
     internal: string;
     open: (l: DocLink) => void;
+    /** The DERIVED inbound view (L2): documents naming this one,
+     *  already inverted into this pane's voice. `lagging` = the search
+     *  road answered and the crawl may trail recent links. */
+    derived?: () => Promise<{ links: DocLink[]; lagging: boolean }>;
   };
   /** Date columns (dictionary-derived): their values render in the
    *  app's one format ("5 Oct 2025") from the item's RAW ISO value —
@@ -79,6 +83,10 @@ interface ViewerOpts {
    *  the properties pane renders each group as a section, exactly as
    *  the add and edit dialogs do. Flattened, must equal `columns`. */
   sections?: { heading: string; columns: string[] }[];
+  /** Version OPEN links are owner/controller-only (Ben, 2026-08-13):
+   *  readers see the history cards, not the downloads. Absent (cards,
+   *  kiosk) = hidden. Re-read per paint, like the control gates. */
+  versionLinks?: () => boolean;
   /** internal → document-management role (O2). Lets the pane promote
    *  the identity roles (docType · documentId · status) to its own
    *  header line, collapse a same-value owner/approver pair, hint the
@@ -790,6 +798,49 @@ export function openDocViewer(opts: ViewerOpts): () => void {
         }
         propsBox.appendChild(box);
       }
+      // L2: the derived inbound view — appended as it resolves, marked
+      // apart from what this document declared itself
+      const derived = opts.links?.derived;
+      if (derived !== undefined) {
+        const dBox = el("div", "app-docs-linksbox");
+        propsBox.appendChild(dBox);
+        void derived().then(({ links: inbound, lagging }) => {
+          if (!dBox.isConnected) return;
+          const declared = new Set(parsedLinks.map((l) => `${l.uid.toLowerCase()}|${l.rel}`));
+          const fresh = inbound.filter(
+            (l) => !declared.has(`${l.uid.toLowerCase()}|${l.rel}`)
+          );
+          if (fresh.length === 0) return;
+          if (parsedLinks.length === 0) {
+            dBox.appendChild(el("div", "app-docs-linkshead", "Linked documents"));
+          }
+          for (const rel of DOC_LINK_RELS) {
+            const group = fresh.filter((l) => l.rel === rel);
+            if (group.length === 0) continue;
+            dBox.appendChild(
+              el("div", "app-docs-linkgroup", `${DOC_LINK_GROUP[rel]} · derived`)
+            );
+            for (const l of group) {
+              const rowEl = el("div", "app-docs-linkrow");
+              const openBtn = el(
+                "button",
+                "app-docs-linkname",
+                l.name !== "" ? l.name : l.uid
+              ) as HTMLButtonElement;
+              openBtn.title = "Open the linking document";
+              openBtn.addEventListener("click", () => opts.links?.open(l));
+              rowEl.appendChild(openBtn);
+              if (l.docId !== "") rowEl.appendChild(el("span", "app-docs-linkdocid", l.docId));
+              dBox.appendChild(rowEl);
+            }
+          }
+          if (lagging) {
+            dBox.appendChild(
+              el("div", "app-field-hint", "Found by search — recently added links can lag.")
+            );
+          }
+        });
+      }
     }
 
     // O2: the boolean roles as statement chips — quiet when they ask
@@ -857,6 +908,9 @@ export function openDocViewer(opts: ViewerOpts): () => void {
       return `${site.replace(/\/$/, "")}/_vti_history/${id}/${rel}`;
     };
     const openLink = (v: (typeof vres.versions)[number]): HTMLElement | null => {
+      // owner/controller-only (Ben, 2026-08-13): readers get the
+      // cards, not the downloads
+      if (opts.versionLinks?.() !== true) return null;
       const url = versionUrl(v);
       if (url === "") return null;
       const a = el("a", "app-docs-verlink", "Open ↗") as HTMLAnchorElement;
