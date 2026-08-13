@@ -40,6 +40,7 @@ export const COLUMN_ROLES: { key: string; label: string }[] = [
   { key: "process", label: "Process" },
   { key: "managementProcess", label: "Management process" },
   { key: "linkedDocuments", label: "Linked documents" },
+  { key: "hashtags", label: "Hashtags" },
   { key: "priorNames", label: "Prior names" },
   { key: "priorIds", label: "Prior IDs" },
   { key: "distribution", label: "Distribution audience" },
@@ -2213,6 +2214,26 @@ export function auditRowsFor(
     if (v.modStatus === 1) step += " · rejected";
     return { when: v.when, who: v.author, step, comment: rest, version: v.label };
   });
+}
+
+// ---- governed hashtags (relationships plan H1, 2026-08-13) ------------
+
+/** Why a proposed tag label cannot become a term — each reason in
+ *  plain words, empty = mintable. The ampersand rule is the U+FF06
+ *  lesson: the term store CONVERTS & to a fullwidth character phones
+ *  cannot read back, so it must never enter the vocabulary. */
+export function tagLabelProblems(label: string): string[] {
+  const out: string[] = [];
+  const t = label.trim();
+  if (t === "") out.push("the label is empty");
+  if (t.length > 100) out.push("longer than 100 characters");
+  if (t.includes("&")) {
+    out.push('contains "&" — SharePoint stores it as a character phones cannot read; use "and"');
+  }
+  if (/[;"<>|\t]/.test(t)) out.push("contains characters the term store refuses (; \" < > |)");
+  const codes = suspiciousCodePoints(t);
+  if (codes.length > 0) out.push(`contains invisible or broken characters (${codes.join(" ")})`);
+  return out;
 }
 
 export function suspiciousCodePoints(s: string): string[] {

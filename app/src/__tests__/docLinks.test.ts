@@ -132,3 +132,18 @@ describe("auditRowsFor (the A1 audit view)", () => {
     );
   });
 });
+
+describe("tagLabelProblems (governed hashtags H1)", () => {
+  it("blocks the phone-hostile and term-store-refused shapes", async () => {
+    const { tagLabelProblems } = await import("../docs/model");
+    expect(tagLabelProblems("Shipping & Logistics").join(" ")).toContain('"&"');
+    expect(tagLabelProblems("a;b")).toHaveLength(1);
+    expect(tagLabelProblems("")).toHaveLength(1);
+    expect(tagLabelProblems("x".repeat(101))).toHaveLength(1);
+  });
+  it("passes honest labels, accents and dashes included", async () => {
+    const { tagLabelProblems } = await import("../docs/model");
+    expect(tagLabelProblems("Crane Ops")).toEqual([]);
+    expect(tagLabelProblems("Sécurité – niveau 2")).toEqual([]);
+  });
+});

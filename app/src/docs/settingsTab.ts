@@ -79,6 +79,7 @@ import {
 import { parseOrgTree } from "../../../shared/schema/meeting";
 import { orgJson } from "../store/config";
 import { renderListPage, searchPage } from "./data";
+import { openDialog } from "../../../shared/ui/dialog";
 import { buildRenderViewXml, taxonomySearchProperty } from "./rows";
 
 interface Ctx {
@@ -1532,6 +1533,168 @@ export async function renderDocsSettings(body: HTMLElement, ctx: Ctx): Promise<v
   // body as a string. This asks the tenant instead of guessing, and it
   // is explicit about what it does — it creates files and recycles them,
   // in a library the admin picks, never in a controlled one.
+  // ---- governed hashtags (relationships plan H1, 2026-08-13) -----------
+  body.appendChild(section("Hashtags"));
+  body.appendChild(
+    note(
+      "A closed vocabulary: anyone proposes from the tagging editor; document " +
+        "controllers decide here. Approving MINTS the term; declining sends the " +
+        "proposer a message — never silent. Map a column (with a term set) to the " +
+        "Hashtags role to switch this on."
+    )
+  );
+  const tagBox = el("div", "");
+  body.appendChild(tagBox);
+  const paintTags = () => {
+    void (async () => {
+      clear(tagBox);
+      const dict = dictionary();
+      const tagCol = dict.columns.find((c) => c.role === "hashtags" && c.termSetId !== "");
+      if (tagCol === undefined) {
+        tagBox.appendChild(note("No column is mapped to the Hashtags role yet."));
+        return;
+      }
+      tagBox.appendChild(el("div", "app-loading-line", "Reading the proposal queue…"));
+      const { listProposals, approveProposal, declineProposal } = await import("./tagProposals");
+      const pending = await listProposals("pending");
+      clear(tagBox);
+      const fail = (m: string) => {
+        const w = el("div", "app-docs-addstatus app-docs-addstatus-warn", m);
+        tagBox.prepend(w);
+      };
+      if (pending.length === 0) {
+        tagBox.appendChild(el("div", "app-field-hint", "No proposals waiting."));
+      }
+      for (const prop of pending) {
+        const rowEl = el("div", "app-docs-tagqrow");
+        const text = el("div", "app-docs-tagqtext");
+        text.append(
+          el("div", "app-docs-tagqlabel", `#${prop.label}`),
+          el(
+            "div",
+            "app-field-hint",
+            [prop.proposerName || prop.proposerEmail, prop.note].filter((x) => x !== "").join(" — ")
+          )
+        );
+        const ok = el("button", "app-btn", "Approve") as HTMLButtonElement;
+        ok.addEventListener("click", () => {
+          void (async () => {
+            ok.disabled = true;
+            const err = await approveProposal(prop, app.siteUrl, tagCol.termSetId);
+            if (err !== "") {
+              fail(`Could not approve "#${prop.label}": ${err}`);
+              ok.disabled = false;
+            } else {
+              paintTags();
+            }
+          })();
+        });
+        const no = el("button", "app-btn", "Decline…") as HTMLButtonElement;
+        no.addEventListener("click", () => {
+          const dlgHost = el("div", "app-dlghost");
+          body.appendChild(dlgHost);
+          let running = false;
+          const dlg = openDialog({
+            host: dlgHost,
+            title: `Decline — #${prop.label}`,
+            maxWidth: 460,
+            onClose: () => dlgHost.remove(),
+            buttons: [
+              { label: "Cancel", kind: "secondary", onClick: () => { if (!running) dlg.close(); } },
+              { label: "Decline & send", kind: "primary", onClick: () => void go() },
+            ],
+          });
+          dlg.body.appendChild(
+            el("div", "app-field-hint", "The proposer always hears why — edit before it goes.")
+          );
+          const msg = el("textarea", "app-input") as HTMLTextAreaElement;
+          msg.rows = 3;
+          msg.value =
+            `Thanks for proposing #${prop.label} — we've decided not to add it to the ` +
+            `vocabulary right now. Tags work best when a handful cover many documents.`;
+          dlg.body.appendChild(msg);
+          const st = el("div", "app-docs-addstatus");
+          dlg.body.appendChild(st);
+          const go = async () => {
+            if (running || msg.value.trim() === "") return;
+            running = true;
+            st.textContent = "Declining…";
+            const r = await declineProposal(prop, msg.value.trim());
+            if (r.error !== "") {
+              st.textContent = `Could not decline: ${r.error}`;
+              st.classList.add("app-docs-addstatus-warn");
+              running = false;
+              return;
+            }
+            if (r.warn !== "") {
+              st.textContent = `Declined — the Teams message did not go: ${r.warn}`;
+              st.classList.add("app-docs-addstatus-warn");
+              const c = dlg.root.querySelector(".ltk-btn-secondary") as HTMLButtonElement | null;
+              if (c !== null) c.textContent = "Close";
+              (dlg.root.querySelector(".ltk-btn-primary") as HTMLButtonElement).style.display = "none";
+              running = false;
+              paintTags();
+              return;
+            }
+            dlg.close();
+            paintTags();
+          };
+        });
+        rowEl.append(text, ok, no);
+        tagBox.appendChild(rowEl);
+      }
+      // usage, on demand — a lean one-column sweep, capped and stated
+      const useBtn = el("button", "app-btn", "Count tag usage") as HTMLButtonElement;
+      const useBox = el("div", "");
+      tagBox.append(useBtn, useBox);
+      useBtn.addEventListener("click", () => {
+        void (async () => {
+          useBtn.disabled = true;
+          clear(useBox);
+          useBox.appendChild(el("div", "app-loading-line", "Counting…"));
+          const counts = new Map<string, number>();
+          let scanned = 0;
+          let capped = false;
+          for (const lib of exposed.filter((l) => l.libType !== "template")) {
+            const xml = buildRenderViewXml({ fields: [tagCol.internal], rowLimit: 200 });
+            let next = "";
+            for (;;) {
+              const page = await renderListPage(app.siteUrl, lib.listId, xml, next);
+              if (page.error !== "") break;
+              for (const r of page.rows) {
+                scanned++;
+                if (scanned > 2000) {
+                  capped = true;
+                  break;
+                }
+                for (const lab of (r.values[tagCol.internal] ?? "").split(";")) {
+                  const t = lab.trim();
+                  if (t !== "") counts.set(t, (counts.get(t) ?? 0) + 1);
+                }
+              }
+              next = page.next;
+              if (next === "" || capped) break;
+            }
+            if (capped) break;
+          }
+          clear(useBox);
+          const rows = [...counts.entries()].sort((a, b) => b[1] - a[1]);
+          if (rows.length === 0) {
+            useBox.appendChild(el("div", "app-field-hint", "No documents carry a tag yet."));
+          }
+          for (const [labelText, n] of rows) {
+            useBox.appendChild(el("div", "app-field-hint", `#${labelText} — ${n}`));
+          }
+          if (capped) {
+            useBox.appendChild(el("div", "app-field-hint", "Counted the first 2,000 documents."));
+          }
+          useBtn.disabled = false;
+        })();
+      });
+    })();
+  };
+  paintTags();
+
   body.appendChild(section("Write access"));
   body.appendChild(
     note(

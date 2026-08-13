@@ -9,7 +9,14 @@
 
 import { clear, el } from "../../../shared/ui/dom";
 import { searchEntra } from "../store/people";
-import { AddFieldValue, SYSTEM_DATE_ROLES, SiteColumn, SpField, sortByDictionary } from "./model";
+import {
+  AddFieldValue,
+  SYSTEM_DATE_ROLES,
+  SiteColumn,
+  SpField,
+  sortByDictionary,
+  tagLabelProblems,
+} from "./model";
 import { POOL_ROLES, PeopleSource, poolPeopleSource } from "./accessGates";
 import { fetchTermPaths } from "./sp";
 
@@ -176,6 +183,53 @@ export function buildFieldEditors(opts: FieldEditorOpts): BuiltEditor[] {
       });
       sel.addEventListener("change", sync);
       box.appendChild(fieldRow(labelOf(f) + star, sel));
+      // H1: the hashtags column invites PROPOSALS — the vocabulary is
+      // closed (controllers mint terms), but anyone may ask
+      if (dictBy.get(f.internal)?.role === "hashtags") {
+        const proposeBtn = el(
+          "button",
+          "app-docs-tagpropose",
+          "Propose a new tag…"
+        ) as HTMLButtonElement;
+        proposeBtn.type = "button";
+        const form = el("div", "app-docs-tagproposeform");
+        form.style.display = "none";
+        const lbl = el("input", "app-input") as HTMLInputElement;
+        lbl.placeholder = "The tag, e.g. Crane Ops";
+        const why = el("input", "app-input") as HTMLInputElement;
+        why.placeholder = "Why it's needed (helps the reviewer)";
+        const send = el("button", "app-btn", "Send proposal") as HTMLButtonElement;
+        send.type = "button";
+        const st = el("div", "app-field-hint");
+        form.append(lbl, why, send, st);
+        proposeBtn.addEventListener("click", () => {
+          form.style.display = form.style.display === "none" ? "" : "none";
+          if (form.style.display === "") lbl.focus();
+        });
+        lbl.addEventListener("input", () => {
+          const bad = tagLabelProblems(lbl.value);
+          st.textContent = lbl.value.trim() !== "" && bad.length > 0 ? `⚠ ${bad.join("; ")}` : "";
+        });
+        send.addEventListener("click", () => {
+          void (async () => {
+            send.disabled = true;
+            st.textContent = "Sending…";
+            const { submitTagProposal } = await import("./tagProposals");
+            const err = await submitTagProposal(lbl.value, why.value);
+            if (err !== "") {
+              st.textContent = `⚠ ${err}`;
+              send.disabled = false;
+            } else {
+              st.textContent =
+                "Proposed — a document controller reviews it; the tag appears here once approved.";
+              lbl.value = "";
+              why.value = "";
+              send.disabled = false;
+            }
+          })();
+        });
+        box.append(proposeBtn, form);
+      }
       editors.push({
         field: f,
         kind,

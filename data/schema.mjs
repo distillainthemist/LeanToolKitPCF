@@ -323,6 +323,28 @@ export const TABLES = [
     role: { delete: false },
   },
   {
+    // Governed hashtags (docs/leanboard-relationships-plan.md H1,
+    // 2026-08-13): anyone proposes, document controllers approve —
+    // approval CREATES the term in the Hashtags set (the 5F road), so
+    // the term store never holds an unvetted label. Proposals are the
+    // pending report; they are never deleted (the decision is the
+    // record).
+    schema: "ben_LTKTagProposal",
+    logical: "ben_ltktagproposal",
+    display: "LeanBoard Tag Proposal",
+    plural: "LeanBoard Tag Proposals",
+    primaryNameMax: 200, // the proposed label IS the primary name
+    columns: {
+      ben_note: { ...memo(4000), display: "Why this tag (proposer's note)" },
+      ben_status: { ...text(10), display: "Status (pending|approved|declined)" },
+      ben_proposeremail: { ...text(200), display: "Proposer email" },
+      ben_proposername: { ...text(200), display: "Proposer name" },
+      ben_decision: { ...memo(4000), display: "Decision note" },
+      ben_termid: { ...text(40), display: "Created term id (on approve)" },
+    },
+    role: { delete: false },
+  },
+  {
     // +1/subscribe — the update fan-out audience beyond the reporter
     schema: "ben_LTKIssueWatch",
     logical: "ben_ltkissuewatch",

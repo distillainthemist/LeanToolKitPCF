@@ -33,6 +33,13 @@ export const dataSourcesInfo = {
     "dataSourceType": "Dataverse",
     "apis": {}
   },
+  "ben_ltktagproposals": {
+    "tableId": "",
+    "version": "",
+    "primaryKey": "ben_ltktagproposalid",
+    "dataSourceType": "Dataverse",
+    "apis": {}
+  },
   "ben_ltkuploads": {
     "tableId": "",
     "version": "",

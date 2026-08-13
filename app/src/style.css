@@ -2734,3 +2734,17 @@ button.app-doclist-hsort:hover { color: var(--app-accent, #2563eb); }
 .app-docs-auditc { color: #333; word-break: break-word; }
 .app-docs-auditstep { font-weight: 600; }
 .app-docs-auditcsv { align-self: flex-start; margin-top: 6px; padding: 4px 10px; font-size: 12px; }
+
+/* ---- governed hashtags (relationships plan H1) ----------------------- */
+.app-docs-tagpropose {
+  border: none; background: none; cursor: pointer; padding: 2px 0;
+  color: var(--app-accent); font-size: 12px; align-self: flex-start;
+}
+.app-docs-tagproposeform { display: flex; flex-direction: column; gap: 6px; margin: 4px 0 8px; }
+.app-docs-tagproposeform .app-btn { align-self: flex-start; padding: 4px 10px; font-size: 12px; }
+.app-docs-tagqrow {
+  display: flex; align-items: center; gap: 8px; padding: 8px 10px;
+  border: 1px solid #e3e0d9; border-radius: 8px; background: #fff; margin-bottom: 6px;
+}
+.app-docs-tagqtext { flex: 1; min-width: 0; }
+.app-docs-tagqlabel { font-size: 13px; font-weight: 600; }

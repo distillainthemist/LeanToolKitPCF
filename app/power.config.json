@@ -121,6 +121,10 @@
         "leanboardissuewatches": {
           "entitySetName": "ben_ltkissuewatchs",
           "logicalName": "ben_ltkissuewatch"
+        },
+        "leanboardtagproposals": {
+          "entitySetName": "ben_ltktagproposals",
+          "logicalName": "ben_ltktagproposal"
         }
       },
       "environmentVariableName": ""
