@@ -2103,7 +2103,7 @@ export function serializeDocLinks(links: DocLink[]): string {
  *  it. Returns one line per cycle, each cycle reported once. */
 export function parentCycles(
   docs: { uid: string; name: string; links: DocLink[] }[]
-): string[] {
+): { line: string; uids: string[] }[] {
   const parentOf = new Map<string, string[]>();
   const nameOf = new Map<string, string>();
   for (const d of docs) {
@@ -2114,7 +2114,7 @@ export function parentCycles(
       d.links.filter((l) => l.rel === "parent").map((l) => l.uid.toLowerCase())
     );
   }
-  const cycles: string[] = [];
+  const cycles: { line: string; uids: string[] }[] = [];
   const done = new Set<string>();
   for (const start of parentOf.keys()) {
     if (done.has(start)) continue;
@@ -2126,7 +2126,7 @@ export function parentCycles(
       if (seenAt !== undefined) {
         const loop = trail.slice(seenAt);
         for (const n of loop) done.add(n);
-        cycles.push(loop.map((u) => nameOf.get(u) ?? u).join(" → "));
+        cycles.push({ line: loop.map((u) => nameOf.get(u) ?? u).join(" → "), uids: loop });
         break;
       }
       at.set(cur, trail.length);
@@ -2542,6 +2542,12 @@ export interface ControlDoc {
   reviewIso: string;
   /** Who holds the check-out ("" = free). */
   checkedOutTo: string;
+  /** The document's uniqueId GUID ("" = the feed did not carry it). */
+  uniqueId: string;
+  /** Parsed links (L1). Empty for none — and ALSO for a value the
+   *  feed clipped mid-JSON (RLDAS truncates multiline columns), so
+   *  link checks can MISS but never false-positive. */
+  links: DocLink[];
 }
 
 export interface ControlIssue {
@@ -2572,12 +2578,17 @@ export interface ControlRoles {
   docType: boolean;
   documentId: boolean;
   review: boolean;
+  /** The linked-documents column (L1) — dangling/cycle checks. */
+  links: boolean;
 }
 
 export function controlHealth(
   docs: ControlDoc[],
   roles: ControlRoles,
-  now: number = Date.now()
+  now: number = Date.now(),
+  /** The scanned site's URL — links into OTHER sites cannot be
+   *  verified by this scan and are skipped, stated. */
+  scanSite = ""
 ): ControlHealthReport {
   const issues: ControlIssue[] = [];
   const skipped: string[] = [];
@@ -2686,6 +2697,51 @@ export function controlHealth(
       "anything is wrong.",
     docs.filter((d) => d.checkedOutTo.trim() !== "")
   );
+
+  // ---- L1: document links — dangling anchors + parent cycles ----------
+  if (roles.links) {
+    const uids = new Set(docs.filter((d) => d.uniqueId !== "").map((d) => d.uniqueId.toLowerCase()));
+    const sameSite = (l: DocLink) =>
+      scanSite === "" || l.site === "" || l.site.toLowerCase() === scanSite.toLowerCase();
+    let crossSite = 0;
+    const dangling = docs.filter((d) =>
+      d.links.some((l) => {
+        if (!sameSite(l)) {
+          crossSite++;
+          return false;
+        }
+        return !uids.has(l.uid.toLowerCase());
+      })
+    );
+    add(
+      "danglingLinks",
+      "warn",
+      "Linked document not found",
+      "A declared link's anchor resolves to no scanned document — the target was deleted, " +
+        "moved between sites, or sits past the scan cap. Open the document and re-link or " +
+        "remove the entry.",
+      dangling
+    );
+    if (crossSite > 0) {
+      skipped.push(`cross-site links (${crossSite}) — not verifiable by this site's scan`);
+    }
+    const cycles = parentCycles(
+      docs.map((d) => ({ uid: d.uniqueId, name: d.name, links: d.links }))
+    );
+    if (cycles.length > 0) {
+      const members = new Set(cycles.flatMap((c) => c.uids));
+      add(
+        "parentCycles",
+        "warn",
+        "Parent links form a loop",
+        `Documents cannot be each other's parents: ${cycles.map((c) => c.line).join("; ")}. ` +
+          "Break the loop by removing one parent link.",
+        docs.filter((d) => members.has(d.uniqueId.toLowerCase()))
+      );
+    }
+  } else {
+    skipped.push("Linked documents are not mapped — link checks cannot run.");
+  }
 
   // warnings first, then the biggest piles — a controller works down
   issues.sort((a, b) =>

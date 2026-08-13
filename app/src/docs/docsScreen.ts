@@ -4308,6 +4308,7 @@ export function mountDocs(
                   docType: internalForRole("docType"),
                   documentId: internalForRole("documentId"),
                   review: reviewInternal,
+                  links: linksInternalOf(),
                 },
                 stageOf: stageOfRow,
                 host: dialogHost,

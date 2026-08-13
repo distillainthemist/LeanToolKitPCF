@@ -18,6 +18,7 @@ import {
   ControlHealthReport,
   ControlRoles,
   controlHealth,
+  parseDocLinks,
   tallyByOwner,
 } from "./model";
 import { DocLibrary } from "./docsStore";
@@ -39,6 +40,8 @@ export interface ControlHealthOpts {
     docType: string;
     documentId: string;
     review: string;
+    /** The linked-documents column ("" = unmapped). */
+    links: string;
   };
   /** The screen's stage reading — one status vocabulary for the app. */
   stageOf: (row: DocRow) => ControlDoc["stage"];
@@ -108,8 +111,15 @@ export function openControlHealth(opts: ControlHealthOpts): void {
     for (const lib of opts.libraries) {
       const carried = new Set(lib.config.columns.map((c) => c.internal));
       const orgCol = roles.org.find((c) => carried.has(c)) ?? "";
-      const wanted = [roles.owner, roles.status, orgCol, roles.docType, roles.documentId, roles.review]
-        .filter((f) => f !== "" && carried.has(f));
+      const wanted = [
+        roles.owner,
+        roles.status,
+        orgCol,
+        roles.docType,
+        roles.documentId,
+        roles.review,
+        roles.links,
+      ].filter((f) => f !== "" && carried.has(f));
       const viewXml = buildRenderViewXml({
         fields: [...wanted, "CheckoutUser"],
         rowLimit: 100,
@@ -143,6 +153,11 @@ export function openControlHealth(opts: ControlHealthOpts): void {
             // site-locale rendering we never re-parse (the R6 lesson)
             reviewIso: roles.review !== "" ? (row.values[`${roles.review}.`] ?? "") : "",
             checkedOutTo: row.checkoutName ?? "",
+            uniqueId: row.uniqueId ?? "",
+            // a feed-clipped JSON parses to null → [] — checks may
+            // MISS on huge link lists, never false-positive
+            links:
+              roles.links !== "" ? (parseDocLinks(row.values[roles.links] ?? "") ?? []) : [],
           });
         }
         next = page.next;
@@ -154,7 +169,7 @@ export function openControlHealth(opts: ControlHealthOpts): void {
   };
 
   const paint = (docs: ControlDoc[]) => {
-    const r = controlHealth(docs, roleFlags(opts.roles));
+    const r = controlHealth(docs, roleFlags(opts.roles), Date.now(), opts.site);
     report = r;
     if (exportBtn) exportBtn.disabled = r.issues.length === 0;
     clear(body);
@@ -307,4 +322,5 @@ const roleFlags = (r: ControlHealthOpts["roles"]): ControlRoles => ({
   docType: r.docType !== "",
   documentId: r.documentId !== "",
   review: r.review !== "",
+  links: r.links !== "",
 });

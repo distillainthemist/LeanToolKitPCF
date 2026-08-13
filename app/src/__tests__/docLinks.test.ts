@@ -82,8 +82,8 @@ describe("parentCycles", () => {
       doc("f", "F", ["a"]), // points INTO a cycle but is not part of one
     ]);
     expect(cycles).toHaveLength(2);
-    expect(cycles.some((c) => c.includes("A") && c.includes("B"))).toBe(true);
-    expect(cycles.some((c) => c.includes("C") && c.includes("E"))).toBe(true);
+    expect(cycles.some((c) => c.line.includes("A") && c.line.includes("B"))).toBe(true);
+    expect(cycles.some((c) => c.line.includes("C") && c.line.includes("E"))).toBe(true);
   });
   it("a healthy tree and links leaving the corpus report nothing", () => {
     expect(
