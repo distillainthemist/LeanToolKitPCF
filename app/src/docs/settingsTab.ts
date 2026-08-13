@@ -1534,13 +1534,13 @@ export async function renderDocsSettings(body: HTMLElement, ctx: Ctx): Promise<v
   // is explicit about what it does — it creates files and recycles them,
   // in a library the admin picks, never in a controlled one.
   // ---- governed hashtags (relationships plan H1, 2026-08-13) -----------
-  body.appendChild(section("Hashtags"));
+  body.appendChild(section("Tags"));
   body.appendChild(
     note(
       "A closed vocabulary: anyone proposes from the tagging editor; document " +
         "controllers decide here. Approving MINTS the term; declining sends the " +
         "proposer a message — never silent. Map a column (with a term set) to the " +
-        "Hashtags role to switch this on."
+        "Tags role to switch this on."
     )
   );
   const tagBox = el("div", "");
@@ -1549,9 +1549,9 @@ export async function renderDocsSettings(body: HTMLElement, ctx: Ctx): Promise<v
     void (async () => {
       clear(tagBox);
       const dict = dictionary();
-      const tagCol = dict.columns.find((c) => c.role === "hashtags" && c.termSetId !== "");
+      const tagCol = dict.columns.find((c) => c.role === "tags" && c.termSetId !== "");
       if (tagCol === undefined) {
-        tagBox.appendChild(note("No column is mapped to the Hashtags role yet."));
+        tagBox.appendChild(note("No column is mapped to the Tags role yet."));
         return;
       }
       tagBox.appendChild(el("div", "app-loading-line", "Reading the proposal queue…"));
@@ -1569,7 +1569,7 @@ export async function renderDocsSettings(body: HTMLElement, ctx: Ctx): Promise<v
         const rowEl = el("div", "app-docs-tagqrow");
         const text = el("div", "app-docs-tagqtext");
         text.append(
-          el("div", "app-docs-tagqlabel", `#${prop.label}`),
+          el("div", "app-docs-tagqlabel", prop.label),
           el(
             "div",
             "app-field-hint",
@@ -1582,7 +1582,7 @@ export async function renderDocsSettings(body: HTMLElement, ctx: Ctx): Promise<v
             ok.disabled = true;
             const err = await approveProposal(prop, app.siteUrl, tagCol.termSetId);
             if (err !== "") {
-              fail(`Could not approve "#${prop.label}": ${err}`);
+              fail(`Could not approve "${prop.label}": ${err}`);
               ok.disabled = false;
             } else {
               paintTags();
@@ -1596,7 +1596,7 @@ export async function renderDocsSettings(body: HTMLElement, ctx: Ctx): Promise<v
           let running = false;
           const dlg = openDialog({
             host: dlgHost,
-            title: `Decline — #${prop.label}`,
+            title: `Decline — ${prop.label}`,
             maxWidth: 460,
             onClose: () => dlgHost.remove(),
             buttons: [
@@ -1610,7 +1610,7 @@ export async function renderDocsSettings(body: HTMLElement, ctx: Ctx): Promise<v
           const msg = el("textarea", "app-input") as HTMLTextAreaElement;
           msg.rows = 3;
           msg.value =
-            `Thanks for proposing #${prop.label} — we've decided not to add it to the ` +
+            `Thanks for proposing "${prop.label}" — we've decided not to add it to the ` +
             `vocabulary right now. Tags work best when a handful cover many documents.`;
           dlg.body.appendChild(msg);
           const st = el("div", "app-docs-addstatus");
@@ -1683,7 +1683,7 @@ export async function renderDocsSettings(body: HTMLElement, ctx: Ctx): Promise<v
             useBox.appendChild(el("div", "app-field-hint", "No documents carry a tag yet."));
           }
           for (const [labelText, n] of rows) {
-            useBox.appendChild(el("div", "app-field-hint", `#${labelText} — ${n}`));
+            useBox.appendChild(el("div", "app-field-hint", `${labelText} — ${n}`));
           }
           if (capped) {
             useBox.appendChild(el("div", "app-field-hint", "Counted the first 2,000 documents."));

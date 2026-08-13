@@ -40,7 +40,7 @@ export const COLUMN_ROLES: { key: string; label: string }[] = [
   { key: "process", label: "Process" },
   { key: "managementProcess", label: "Management process" },
   { key: "linkedDocuments", label: "Linked documents" },
-  { key: "hashtags", label: "Hashtags" },
+  { key: "tags", label: "Tags" },
   { key: "priorNames", label: "Prior names" },
   { key: "priorIds", label: "Prior IDs" },
   { key: "distribution", label: "Distribution audience" },

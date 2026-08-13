@@ -185,7 +185,7 @@ export function buildFieldEditors(opts: FieldEditorOpts): BuiltEditor[] {
       box.appendChild(fieldRow(labelOf(f) + star, sel));
       // H1: the hashtags column invites PROPOSALS — the vocabulary is
       // closed (controllers mint terms), but anyone may ask
-      if (dictBy.get(f.internal)?.role === "hashtags") {
+      if (dictBy.get(f.internal)?.role === "tags") {
         const proposeBtn = el(
           "button",
           "app-docs-tagpropose",

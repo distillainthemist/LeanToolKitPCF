@@ -126,7 +126,7 @@ export async function declineProposal(
     const { appLinkUrl } = await import("../links");
     const r = await sendNotifyTeams(
       [{ email: p.proposerEmail, name: p.proposerName || p.proposerEmail }],
-      `About your tag proposal: #${p.label}`,
+      `About your tag proposal: ${p.label}`,
       message.trim(),
       appLinkUrl()
     );
