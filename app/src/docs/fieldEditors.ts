@@ -130,6 +130,9 @@ export function buildFieldEditors(opts: FieldEditorOpts): BuiltEditor[] {
     // effective date stamps at approve/review, cadence follows
     // importance, review date is always derived — none is a form field
     if (SYSTEM_DATE_ROLES.has(dictBy.get(internal)?.role ?? "")) continue;
+    // linked documents are managed by the links editor (relationships
+    // L1) — a raw-JSON textarea would invite corruption
+    if (dictBy.get(internal)?.role === "linkedDocuments") continue;
     const f = byInternal.get(internal);
     if (f === undefined) continue;
     const kind = editorKind(f);

@@ -55,6 +55,15 @@ export interface EditPropertiesOpts {
   /** The manager's sub-headings for this library's type (Part II S2) —
    *  the form renders them as sections. */
   sections?: { heading: string; columns: string[] }[];
+  /** Document linking (relationships L1, Ben 2026-08-13): linking IS a
+   *  properties edit — the links editor renders in this form and its
+   *  value rides the same save. Absent = no links section. */
+  links?: {
+    internal: string;
+    /** Picker search targets (templates already filtered out). */
+    libraries: DocLibrary[];
+    docIdInternal: string;
+  };
   /** The date model (Ben, 2026-08-10): a CHANGED importance rewrites
    *  the cadence from the mapping, and the review date follows from
    *  the stored effective date. Internals "" = unmapped, skipped. */
@@ -124,6 +133,7 @@ export function openEditProperties(opts: EditPropertiesOpts): void {
   dlg.body.appendChild(status);
 
   let editors: BuiltEditor[] = [];
+  let linksEd: import("./linksEditor").LinksEditor | null = null;
   /** The prefill, kept for save(): the date model reads the STORED
    *  effective date and the ORIGINAL importance from here. */
   let initialMap: Map<string, EditorInitial> = new Map();
@@ -203,6 +213,18 @@ export function openEditProperties(opts: EditPropertiesOpts): void {
       initial,
       sections: opts.sections,
     });
+    // the links editor (L1): part of THIS form, saved with it
+    if (opts.links !== undefined && opts.links.internal !== "") {
+      const { buildLinksEditor } = await import("./linksEditor");
+      linksEd = buildLinksEditor({
+        site,
+        libraries: opts.links.libraries,
+        selfUniqueId: row.uniqueId,
+        docIdInternal: opts.links.docIdInternal,
+        initialRaw: initial.get(opts.links.internal)?.text ?? "",
+      });
+      metaBox.appendChild(linksEd.root);
+    }
   })().catch((e: unknown) => fail("Could not load the form", String(e)));
 
   // ---- save -------------------------------------------------------------
@@ -221,6 +243,11 @@ export function openEditProperties(opts: EditPropertiesOpts): void {
     }
 
     const { formValues, patch } = splitAddWrites(editors.map((e) => e.read()));
+    // links ride the same save — untouched writes nothing
+    const linksValue = linksEd?.read() ?? null;
+    if (opts.links !== undefined && linksValue !== null) {
+      formValues.push({ FieldName: opts.links.internal, FieldValue: linksValue });
+    }
     // the date model (Ben, 2026-08-10): importance CHANGED → cadence
     // rewritten from the mapping, review date recomputed from the
     // stored effective date. Unchanged importance writes nothing.

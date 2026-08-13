@@ -57,17 +57,15 @@ interface ViewerOpts {
   labels?: Record<string, string>;
   /** Columns holding links to other documents (values render as links). */
   linkColumns?: string[];
-  /** Document linking (relationships L1): the linked-documents column
-   *  and the SCREEN's actions on it. When the column's value is the
-   *  JSON link shape it renders as its own grouped section; legacy
-   *  free-text values keep the grid rendering. Absent (cards, kiosk) =
-   *  read-only section, no actions. */
+  /** Document linking (relationships L1, Ben 2026-08-13): the pane
+   *  only PROVIDES links — editing lives in Edit properties. When the
+   *  column's value is the JSON shape it renders as its own grouped
+   *  section, names switching the overlay via `open`; legacy free-text
+   *  keeps the grid rendering. Absent (cards, kiosk) = names render
+   *  still. */
   links?: {
     internal: string;
-    canEdit: () => boolean;
     open: (l: DocLink) => void;
-    add: () => void;
-    remove: (l: DocLink) => void;
   };
   /** Date columns (dictionary-derived): their values render in the
    *  app's one format ("5 Oct 2025") from the item's RAW ISO value —
@@ -768,8 +766,7 @@ export function openDocViewer(opts: ViewerOpts): () => void {
     if (linksInternal !== "") {
       const rawLinks = details.values[linksInternal] ?? "";
       const parsedLinks = parseDocLinks(rawLinks) ?? [];
-      const mayEdit = opts.links?.canEdit() === true;
-      if (parsedLinks.length > 0 || mayEdit) {
+      if (parsedLinks.length > 0) {
         const box = el("div", "app-docs-linksbox");
         box.appendChild(el("div", "app-docs-linkshead", "Linked documents"));
         for (const rel of DOC_LINK_RELS) {
@@ -788,19 +785,8 @@ export function openDocViewer(opts: ViewerOpts): () => void {
               rowEl.appendChild(el("span", "app-docs-linkname app-docs-linkname-still", label));
             }
             if (l.docId !== "") rowEl.appendChild(el("span", "app-docs-linkdocid", l.docId));
-            if (mayEdit) {
-              const rm = el("button", "app-docs-linkrm", "✕") as HTMLButtonElement;
-              rm.title = "Remove this link";
-              rm.addEventListener("click", () => opts.links?.remove(l));
-              rowEl.appendChild(rm);
-            }
             box.appendChild(rowEl);
           }
-        }
-        if (mayEdit) {
-          const add = el("button", "app-btn app-docs-linkadd", "＋ Link a document…") as HTMLButtonElement;
-          add.addEventListener("click", () => opts.links?.add());
-          box.appendChild(add);
         }
         propsBox.appendChild(box);
       }

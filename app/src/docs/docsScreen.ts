@@ -826,6 +826,16 @@ export function mountDocs(
             cadenceInternal,
             cadence: siteDict.cadence ?? {},
           },
+          // L1 (rev): linking IS a properties edit — the links editor
+          // renders in this form and saves with it
+          links:
+            linksInternalOf() !== ""
+              ? {
+                  internal: linksInternalOf(),
+                  libraries: libraries.filter((l) => l.libType !== "template"),
+                  docIdInternal: docIdInternalOf(),
+                }
+              : undefined,
           onDone: () => void refreshRow(row),
         });
       });
@@ -2692,187 +2702,70 @@ export function mountDocs(
       if (lifecycleActionsFor(row, lib).some((a) => a.primary)) return true;
       return canMarkReviewedRow(row, lib) && reviewDue(row);
     };
-    // ---- document linking (relationships plan L1, 2026-08-13) ----------
-    // Links live in the document's own linked-documents column; the
-    // screen owns the writes (rights answers + row refresh live here).
+    // ---- document linking (relationships plan L1, rev 2026-08-13) ------
+    // The pane only PROVIDES links (editing lives in Edit properties);
+    // a click SWITCHES the overlay to the target — same-site targets
+    // reopen in their own register, cross-site falls back to the file.
     const linksInternalOf = () =>
       siteDict.columns.find((c) => c.role === "linkedDocuments")?.internal ?? "";
     const docIdInternalOf = () =>
       siteDict.columns.find((c) => c.role === "documentId")?.internal ?? "";
 
-    /** Read-full → change → write bracket → refresh. Returns the
-     *  refusal ("" = written) plus any non-fatal aftermath. */
-    const mutateLinks = async (
-      row: DocRow,
-      change: (cur: DocLink[]) => DocLink[]
-    ): Promise<{ error: string; warn: string }> => {
-      const internal = linksInternalOf();
-      if (internal === "") return { error: "no linked-documents column is mapped", warn: "" };
-      const { readFullLinks, writeDocLinks } = await import("./docLinks");
-      const cur = await readFullLinks(app.siteUrl, row.listId, row.id, internal);
-      if (cur.error !== "") return { error: cur.error, warn: "" };
-      if (cur.links === null) {
-        return {
-          error:
-            "this document's links column holds pre-linking text — move it to another " +
-            "field via Edit properties before managed links can start",
-          warn: "",
-        };
-      }
-      const r = await writeDocLinks({
-        site: app.siteUrl,
-        listId: row.listId,
-        row,
-        internal,
-        links: change(cur.links),
-        readerFacing: ["approved", "superseded", "obsolete"].includes(stageOfRow(row)),
-        heldByMe: isMine(row),
-      });
-      if (r.error === "") await refreshRow(row);
-      return r;
-    };
-
-    /** The add-link picker: rel choice + name search across the
-     *  EXPOSED registers (templates excluded — linking to a template
-     *  is a category error). */
-    const openLinkPicker = (row: DocRow) => {
-      let running = false;
-      let rel: DocLink["rel"] = "peer";
-      const dlg = openDialog({
-        host: dialogHost,
-        title: `Link a document — ${row.name}`,
-        maxWidth: 520,
-        buttons: [{ label: "Close", kind: "secondary", onClick: () => { if (!running) dlg.close(); } }],
-      });
-      const relRow = el("div", "app-issue-kindrow");
-      const relBtns = (["parent", "peer", "child"] as const).map((k) => {
-        const b = el(
-          "button",
-          "app-issue-kind",
-          k === "parent" ? "Parent" : k === "peer" ? "Related" : "Child"
-        ) as HTMLButtonElement;
-        b.addEventListener("click", () => {
-          rel = k;
-          for (const x of relBtns) x.classList.remove("app-issue-kind-on");
-          b.classList.add("app-issue-kind-on");
-        });
-        relRow.appendChild(b);
-        return b;
-      });
-      relBtns[1].classList.add("app-issue-kind-on");
-      const search = el("input", "app-input") as HTMLInputElement;
-      search.placeholder = "Search documents by name…";
-      const hits = el("div", "app-docs-linkhits");
-      const status = el("div", "app-docs-addstatus");
-      dlg.body.append(
-        el("div", "app-field-hint", "How does the picked document relate to THIS one?"),
-        relRow,
-        search,
-        hits,
-        status
-      );
-      let timer = 0;
-      search.addEventListener("input", () => {
-        window.clearTimeout(timer);
-        timer = window.setTimeout(() => void look(), 300);
-      });
-      const look = async () => {
-        clear(hits);
-        const q = search.value.trim();
-        if (q === "") return;
-        const docIdCol = docIdInternalOf();
-        const libs = libraries.filter((l) => l.libType !== "template");
-        const pages = await Promise.all(
-          libs.map((l) =>
-            renderListPage(
+    const switchToLink = (l: DocLink) => {
+      void (async () => {
+        const { resolveLinkTarget, resolveLinkUrl } = await import("./docLinks");
+        const sameSite = l.site === "" || l.site.toLowerCase() === app.siteUrl.toLowerCase();
+        if (sameSite) {
+          const t = await resolveLinkTarget(app.siteUrl, l.uid);
+          const lib = t !== null ? byListId.get(t.listId.toLowerCase()) : undefined;
+          if (t !== null && lib !== undefined) {
+            const page = await renderListPage(
               app.siteUrl,
-              l.listId,
+              t.listId,
               buildRenderViewXml({
-                nameWords: q.split(/\s+/),
-                fields: docIdCol !== "" ? [docIdCol] : [],
-                rowLimit: 6,
+                idIn: [t.itemId],
+                fields: lib.config.columns.filter((c) => c.available).map((c) => c.internal),
+                rowLimit: 1,
               })
-            )
-          )
-        );
-        let shown = 0;
-        for (let i = 0; i < libs.length; i++) {
-          for (const hit of pages[i].rows) {
-            if (hit.uniqueId === row.uniqueId) continue;
-            if (shown >= 12) break;
-            shown++;
-            const b = el(
-              "button",
-              "app-docs-linkhit",
-              `${hit.name} — ${libs[i].config.title || libs[i].name}`
-            ) as HTMLButtonElement;
-            b.addEventListener("click", () => {
-              void (async () => {
-                if (running) return;
-                running = true;
-                status.textContent = "Linking…";
-                status.classList.remove("app-docs-addstatus-warn");
-                const lnk: DocLink = {
-                  uid: hit.uniqueId,
-                  rel,
-                  site: (libs[i].siteUrl ?? "") !== "" ? libs[i].siteUrl : app.siteUrl,
-                  listId: libs[i].listId,
-                  name: hit.name,
-                  docId: docIdCol !== "" ? (hit.values[docIdCol] ?? "") : "",
-                };
-                const r = await mutateLinks(row, (cur) => [...cur, lnk]);
-                running = false;
-                if (r.error !== "") {
-                  status.textContent = `Could not link: ${r.error}`;
-                  status.classList.add("app-docs-addstatus-warn");
-                } else if (r.warn !== "") {
-                  status.textContent = r.warn;
-                  status.classList.add("app-docs-addstatus-warn");
-                } else {
-                  dlg.close();
-                }
-              })();
-            });
-            hits.appendChild(b);
+            );
+            const target = page.rows[0];
+            if (target !== undefined) {
+              closeViewer?.(); // SWITCH, never stack
+              onRowOpen(target, { details: true });
+              return;
+            }
           }
         }
-        if (shown === 0) hits.appendChild(el("div", "app-field-hint", "No documents match."));
-      };
+        const url = await resolveLinkUrl(l);
+        if (url !== "") {
+          window.open(url, "_blank", "noopener");
+          return;
+        }
+        const dlg = openDialog({
+          host: dialogHost,
+          title: "Linked document not found",
+          buttons: [{ label: "Close", kind: "secondary", onClick: () => dlg.close() }],
+        });
+        dlg.body.appendChild(
+          el(
+            "div",
+            "app-field-hint",
+            `"${l.name || l.uid}" no longer resolves — it may have been deleted or ` +
+              "moved between sites. Document Control Health lists dangling links."
+          )
+        );
+      })();
     };
 
-    const linksCtlFor = (row: DocRow, lib: DocLibrary | null | undefined) => ({
+    const linksCtlFor = () => ({
       internal: linksInternalOf(),
-      canEdit: () => canEditProps(row, lib),
-      open: (l: DocLink) => {
-        void (async () => {
-          const { resolveLinkUrl } = await import("./docLinks");
-          const url = await resolveLinkUrl(l);
-          if (url !== "") {
-            window.open(url, "_blank", "noopener");
-          } else {
-            const dlg = openDialog({
-              host: dialogHost,
-              title: "Linked document not found",
-              buttons: [{ label: "Close", kind: "secondary", onClick: () => dlg.close() }],
-            });
-            dlg.body.appendChild(
-              el(
-                "div",
-                "app-field-hint",
-                `"${l.name || l.uid}" no longer resolves — it may have been deleted or ` +
-                  "moved between sites. Document Control Health lists dangling links."
-              )
-            );
-          }
-        })();
-      },
-      add: () => openLinkPicker(row),
-      remove: (l: DocLink) => {
-        void mutateLinks(row, (cur) =>
-          cur.filter((x) => !(x.uid.toLowerCase() === l.uid.toLowerCase() && x.rel === l.rel))
-        );
-      },
+      open: switchToLink,
     });
+
+    /** The open overlay's close handle — a link click SWITCHES the
+     *  overlay, so the incumbent must close first (the docSolo
+     *  stacking lesson). */
+    let closeViewer: (() => void) | null = null;
 
     const onRowOpen = (row: DocRow, openOpts?: { details?: boolean }) => {
       const lib = byListId.get(row.listId) ?? current;
@@ -2883,7 +2776,7 @@ export function mountDocs(
         const libStatusCol = lib?.config.columns.find((c) => c.role === "status") ?? null;
         // a previous overlay's repaint must not outlive it
         viewerRepaints.clear();
-        openDocViewer({
+        closeViewer = openDocViewer({
           site: app.siteUrl,
           row,
           driveId,
@@ -2913,8 +2806,9 @@ export function mountDocs(
           roles: Object.fromEntries(
             siteDict.columns.filter((c) => c.role !== "").map((c) => [c.internal, c.role])
           ),
-          // L1: the linked-documents section's actions
-          links: linksCtlFor(row, lib),
+          // L1: link clicks switch the overlay (editing lives in
+          // Edit properties)
+          links: linksCtlFor(),
           // dictionary order — the same order the add form uses,
           // adjustable under Settings → Documents → Document columns
           columns: lib
