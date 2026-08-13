@@ -2138,6 +2138,83 @@ export function parentCycles(
   return cycles;
 }
 
+// ---- the audit view (relationships plan A1, 2026-08-13) ---------------
+//
+// "Who did the step, what was the step, what did they say" — DERIVED
+// from version history, never stored. The lifecycle commands have
+// always written recognisable base comments ("Approved", "Submitted
+// for review", ... — model LIFECYCLE_COMMANDS; Mark reviewed and the
+// property/link edits write theirs), so the step is read back off the
+// comment; a version the heuristic cannot name is an honest "Edit".
+
+export interface AuditRow {
+  when: string;
+  who: string;
+  step: string;
+  /** What the actor SAID beyond the act itself ("" = nothing). */
+  comment: string;
+  version: string;
+}
+
+/** Comment base → step wording, longest bases first so "Submitted for
+ *  approval" never half-matches. */
+const AUDIT_STEPS: [string, string][] = [
+  ["Submitted for approval", "Submitted for approval"],
+  ["Submitted for review", "Submitted for review"],
+  ["Revision requested", "Revision requested"],
+  ["Revision started", "Revision started"],
+  ["Marked obsolete", "Marked obsolete"],
+  ["Periodic review", "Periodic review"],
+  ["Properties updated", "Properties updated"],
+  ["Links updated", "Links updated"],
+  ["Reinstated", "Reinstated"],
+  ["Superseded", "Marked superseded"],
+  ["Approved", "Approved"],
+];
+
+export function auditRowsFor(
+  versions: {
+    label: string;
+    when: string;
+    comment: string;
+    author: string;
+    modStatus: number | null;
+  }[]
+): AuditRow[] {
+  const num = (label: string): number => {
+    const m = label.match(/^(\d+)\.(\d+)$/);
+    return m ? Number(m[1]) * 512 + Number(m[2]) : -1;
+  };
+  const oldest = versions.reduce(
+    (best, v) => (num(v.label) >= 0 && (best === -1 || num(v.label) < best) ? num(v.label) : best),
+    -1
+  );
+  return versions.map((v) => {
+    const raw = v.comment.trim();
+    let step = "";
+    let rest = raw;
+    for (const [base, word] of AUDIT_STEPS) {
+      if (raw === base || raw.startsWith(`${base} — `)) {
+        step = word;
+        rest = raw === base ? "" : raw.slice(base.length + 3).trim();
+        break;
+      }
+    }
+    if (step === "") {
+      // unrecognised: the shape speaks — first version, major, or edit
+      step =
+        num(v.label) === oldest && oldest >= 0
+          ? "Created"
+          : /\.0$/.test(v.label)
+            ? "Major check-in"
+            : "Edit";
+    }
+    if (v.modStatus === 2) step += " · awaiting approval";
+    if (v.modStatus === 1) step += " · rejected";
+    return { when: v.when, who: v.author, step, comment: rest, version: v.label };
+  });
+}
+
 export function suspiciousCodePoints(s: string): string[] {
   const out = new Set<string>();
   for (const ch of s) {

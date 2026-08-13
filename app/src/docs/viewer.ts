@@ -37,6 +37,7 @@ import {
   DOC_LINK_GROUP,
   DOC_LINK_RELS,
   DocLink,
+  auditRowsFor,
   groupVersionsByMajor,
   parseDocLinks,
 } from "./model";
@@ -624,6 +625,9 @@ export function openDocViewer(opts: ViewerOpts): () => void {
   // while the overlay is open — the repaint re-runs the whole loader.
   // The generation guard drops a slow response overtaken by a newer one.
   let detailsGen = 0;
+  // A1: the audit view's mode survives detail repaints
+  let auditOn = false;
+
   const loadDetails = async () => {
     const gen = ++detailsGen;
     const details = await itemDetails(site, row);
@@ -866,7 +870,25 @@ export function openDocViewer(opts: ViewerOpts): () => void {
     }
     if (flags.children.length > 0) propsBox.appendChild(flags);
 
-    propsBox.appendChild(el("div", "app-field-label", "Version history"));
+    // A1: owners/controllers may flip the history into the audit
+    // view — the flat who · step · comment answer
+    const verHeadRow = el("div", "app-docs-verheadrow");
+    verHeadRow.appendChild(
+      el("div", "app-field-label", auditOn ? "Audit view" : "Version history")
+    );
+    if (opts.versionLinks?.() === true) {
+      const tog = el(
+        "button",
+        "app-docs-audittoggle",
+        auditOn ? "Cards" : "Audit view"
+      ) as HTMLButtonElement;
+      tog.addEventListener("click", () => {
+        auditOn = !auditOn;
+        void loadDetails();
+      });
+      verHeadRow.appendChild(tog);
+    }
+    propsBox.appendChild(verHeadRow);
     const vres =
       details.id > 0 && row.listId !== ""
         ? await itemVersions(site, row.listId, details.id)
@@ -883,6 +905,45 @@ export function openDocViewer(opts: ViewerOpts): () => void {
     // O3: one card per MAJOR — the milestones people mean by
     // "version" — each with its draft trail behind a disclosure. The
     // current group opens; the rest fold to a one-line summary.
+    if (auditOn && opts.versionLinks?.() === true) {
+      const rows = auditRowsFor(vres.versions);
+      const table = el("div", "app-docs-audittable");
+      table.append(
+        el("span", "app-docs-audith", "When"),
+        el("span", "app-docs-audith", "Who"),
+        el("span", "app-docs-audith", "Step"),
+        el("span", "app-docs-audith", "Comment")
+      );
+      for (const r of rows) {
+        table.append(
+          el("span", "app-docs-auditc", `${formatWhen(r.when)} · v${r.version}`),
+          el("span", "app-docs-auditc", r.who),
+          el("span", "app-docs-auditc app-docs-auditstep", r.step),
+          el("span", "app-docs-auditc", r.comment)
+        );
+      }
+      propsBox.appendChild(table);
+      const csv = el("button", "app-btn app-docs-auditcsv", "Export CSV") as HTMLButtonElement;
+      csv.addEventListener("click", () => {
+        const esc = (x: string) => `"${x.replace(/"/g, '""')}"`;
+        const text = [
+          ["When", "Version", "Who", "Step", "Comment"].map(esc).join(","),
+          ...rows.map((r) =>
+            [r.when, r.version, r.who, r.step, r.comment].map(esc).join(",")
+          ),
+        ].join("\n");
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(new Blob([text], { type: "text/csv" }));
+        a.download = `audit-${row.name.replace(/\.[^.]+$/, "")}-${new Date()
+          .toISOString()
+          .slice(0, 10)}.csv`;
+        a.click();
+        URL.revokeObjectURL(a.href);
+      });
+      propsBox.appendChild(csv);
+      return;
+    }
+
     const groups = groupVersionsByMajor(vres.versions);
     const origin = (() => {
       try {

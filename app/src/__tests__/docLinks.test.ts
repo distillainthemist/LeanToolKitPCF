@@ -91,3 +91,44 @@ describe("parentCycles", () => {
     ).toEqual([]);
   });
 });
+
+describe("auditRowsFor (the A1 audit view)", () => {
+  const v = (label: string, comment: string, modStatus: number | null = null) => ({
+    label,
+    when: "2026-08-01T00:00:00Z",
+    comment,
+    author: "Ben Pechey",
+    modStatus,
+  });
+  it("reads the step off the app's own comment bases", async () => {
+    const { auditRowsFor } = await import("../docs/model");
+    const rows = auditRowsFor([
+      v("3.0", "Approved — looks right"),
+      v("2.3", "Submitted for approval"),
+      v("2.2", "Periodic review — no changes — checked against site"),
+      v("2.1", "Links updated"),
+      v("1.0", "Approved"),
+      v("0.1", ""),
+    ]);
+    expect(rows[0]).toMatchObject({ step: "Approved", comment: "looks right" });
+    expect(rows[1]).toMatchObject({ step: "Submitted for approval", comment: "" });
+    expect(rows[2].step).toBe("Periodic review");
+    expect(rows[2].comment).toBe("no changes — checked against site");
+    expect(rows[3].step).toBe("Links updated");
+    expect(rows[5].step).toBe("Created");
+  });
+  it("names the shape honestly when the comment says nothing", async () => {
+    const { auditRowsFor } = await import("../docs/model");
+    const rows = auditRowsFor([v("2.0", "hand-typed words"), v("1.1", ""), v("1.0", "")]);
+    expect(rows[0].step).toBe("Major check-in");
+    expect(rows[0].comment).toBe("hand-typed words");
+    expect(rows[1].step).toBe("Edit");
+    expect(rows[2].step).toBe("Created");
+  });
+  it("carries moderation state into the step", async () => {
+    const { auditRowsFor } = await import("../docs/model");
+    expect(auditRowsFor([v("2.1", "Properties updated", 2)])[0].step).toBe(
+      "Properties updated · awaiting approval"
+    );
+  });
+});
