@@ -774,6 +774,29 @@ export function openDocViewer(opts: ViewerOpts): () => void {
       propsBox.appendChild(grid);
     }
 
+    // O2: the boolean roles as statement chips — quiet when they ask
+    // nothing, loud (amber) only when they demand something. The
+    // acknowledgement COUNT waits for the 5E ledger.
+    const isYes = (v: string) => /^(yes|true|1)$/i.test(v.trim());
+    const flags = el("div", "app-docs-flagchips");
+    const ackK = internalForRole("ackRequired");
+    const ackV = ackK !== undefined ? (details.values[ackK] ?? "").trim() : "";
+    if (ackV !== "") {
+      flags.appendChild(
+        isYes(ackV)
+          ? tonePill("Acknowledgement required", "amber")
+          : el("span", "app-docs-chip", "No acknowledgement")
+      );
+    }
+    const regK = internalForRole("regulatorApproved");
+    const regV = regK !== undefined ? (details.values[regK] ?? "").trim() : "";
+    if (regV !== "") {
+      flags.appendChild(
+        el("span", "app-docs-chip", isYes(regV) ? "✓ Regulator-approved" : "Not regulator-approved")
+      );
+    }
+    if (flags.children.length > 0) propsBox.appendChild(flags);
+
     // ---- L1: linked documents — grouped, uid-anchored ------------------
     if (linksInternal !== "") {
       const rawLinks = details.values[linksInternal] ?? "";
@@ -847,28 +870,6 @@ export function openDocViewer(opts: ViewerOpts): () => void {
       }
     }
 
-    // O2: the boolean roles as statement chips — quiet when they ask
-    // nothing, loud (amber) only when they demand something. The
-    // acknowledgement COUNT waits for the 5E ledger.
-    const isYes = (v: string) => /^(yes|true|1)$/i.test(v.trim());
-    const flags = el("div", "app-docs-flagchips");
-    const ackK = internalForRole("ackRequired");
-    const ackV = ackK !== undefined ? (details.values[ackK] ?? "").trim() : "";
-    if (ackV !== "") {
-      flags.appendChild(
-        isYes(ackV)
-          ? tonePill("Acknowledgement required", "amber")
-          : el("span", "app-docs-chip", "No acknowledgement")
-      );
-    }
-    const regK = internalForRole("regulatorApproved");
-    const regV = regK !== undefined ? (details.values[regK] ?? "").trim() : "";
-    if (regV !== "") {
-      flags.appendChild(
-        el("span", "app-docs-chip", isYes(regV) ? "✓ Regulator-approved" : "Not regulator-approved")
-      );
-    }
-    if (flags.children.length > 0) propsBox.appendChild(flags);
 
     // A1: owners/controllers may flip the history into the audit
     // view — the flat who · step · comment answer
