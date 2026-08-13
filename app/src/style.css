@@ -2692,3 +2692,27 @@ button.app-doclist-hsort:hover { color: var(--app-accent, #2563eb); }
 .app-issue-titlebar { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .app-issue-titlebar .app-issue-minelink { align-self: auto; font-weight: 400; flex: none; }
 .app-issue-needed { font-size: 12px; color: #92610f; min-height: 15px; }
+
+/* ---- Linked documents (relationships plan L1) ------------------------ */
+.app-docs-linksbox { display: flex; flex-direction: column; gap: 4px; margin-top: 10px; }
+.app-docs-linkshead { font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #6b675e; }
+.app-docs-linkgroup { font-size: 11.5px; font-weight: 600; color: #57534a; margin-top: 4px; }
+.app-docs-linkrow { display: flex; align-items: center; gap: 6px; min-height: 28px; }
+.app-docs-linkname {
+  border: none; background: none; padding: 0; cursor: pointer; text-align: left;
+  font-size: 12.5px; color: var(--app-accent); text-decoration: underline;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0;
+}
+.app-docs-linkname-still { color: inherit; text-decoration: none; cursor: default; }
+.app-docs-linkdocid { font-size: 11.5px; color: #6b675e; flex: none; }
+.app-docs-linkrm {
+  flex: none; border: 1px solid #d5d2cb; background: #fff; border-radius: 6px;
+  width: 22px; height: 22px; font-size: 11px; line-height: 1; cursor: pointer;
+}
+.app-docs-linkadd { align-self: flex-start; margin-top: 4px; padding: 4px 10px; font-size: 12px; }
+.app-docs-linkhits { display: flex; flex-direction: column; gap: 4px; max-height: 260px; overflow-y: auto; }
+.app-docs-linkhit {
+  text-align: left; border: 1px solid #e3e0d9; border-radius: 6px; background: #fff;
+  padding: 8px 10px; font-size: 12.5px; cursor: pointer;
+}
+.app-docs-linkhit:hover { background: #f7f6f3; }

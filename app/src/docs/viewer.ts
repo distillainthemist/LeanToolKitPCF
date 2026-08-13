@@ -33,7 +33,13 @@ import {
   transformPdfUrl,
 } from "./rows";
 import { itemDetails, itemVersions, pagePreviewUrl, presignedUrls } from "./data";
-import { groupVersionsByMajor } from "./model";
+import {
+  DOC_LINK_GROUP,
+  DOC_LINK_RELS,
+  DocLink,
+  groupVersionsByMajor,
+  parseDocLinks,
+} from "./model";
 
 interface ViewerOpts {
   site: string;
@@ -51,6 +57,18 @@ interface ViewerOpts {
   labels?: Record<string, string>;
   /** Columns holding links to other documents (values render as links). */
   linkColumns?: string[];
+  /** Document linking (relationships L1): the linked-documents column
+   *  and the SCREEN's actions on it. When the column's value is the
+   *  JSON link shape it renders as its own grouped section; legacy
+   *  free-text values keep the grid rendering. Absent (cards, kiosk) =
+   *  read-only section, no actions. */
+  links?: {
+    internal: string;
+    canEdit: () => boolean;
+    open: (l: DocLink) => void;
+    add: () => void;
+    remove: (l: DocLink) => void;
+  };
   /** Date columns (dictionary-derived): their values render in the
    *  app's one format ("5 Oct 2025") from the item's RAW ISO value —
    *  never re-parsed from locale display text, which is ambiguous. */
@@ -614,6 +632,12 @@ export function openDocViewer(opts: ViewerOpts): () => void {
     }
     const labels = { ...(opts.labels ?? {}) };
     const linkCols = new Set(opts.linkColumns ?? []);
+    // the links column is found by ROLE even when no actions were
+    // passed (cards, kiosk) — the section then renders read-only
+    const linksInternal =
+      opts.links?.internal ??
+      Object.entries(opts.roles ?? {}).find(([, r]) => r === "linkedDocuments")?.[0] ??
+      "";
     // O2: the identity line reads from these too, now that they exist
     lastValues = details.values;
     paintChips();
@@ -699,6 +723,9 @@ export function openDocViewer(opts: ViewerOpts): () => void {
         }
       }
       for (const [k, v] of shown) {
+        // L1: a JSON-shaped links value leaves the grid for its own
+        // section below; legacy text stays right here
+        if (k === linksInternal && parseDocLinks(v) !== null) continue;
         const heading = headingFor.get(k);
         if (heading !== undefined) {
           grid.appendChild(el("span", "app-docs-propgroup", heading));
@@ -735,6 +762,48 @@ export function openDocViewer(opts: ViewerOpts): () => void {
         }
       }
       propsBox.appendChild(grid);
+    }
+
+    // ---- L1: linked documents — grouped, uid-anchored ------------------
+    if (linksInternal !== "") {
+      const rawLinks = details.values[linksInternal] ?? "";
+      const parsedLinks = parseDocLinks(rawLinks) ?? [];
+      const mayEdit = opts.links?.canEdit() === true;
+      if (parsedLinks.length > 0 || mayEdit) {
+        const box = el("div", "app-docs-linksbox");
+        box.appendChild(el("div", "app-docs-linkshead", "Linked documents"));
+        for (const rel of DOC_LINK_RELS) {
+          const group = parsedLinks.filter((l) => l.rel === rel);
+          if (group.length === 0) continue;
+          box.appendChild(el("div", "app-docs-linkgroup", DOC_LINK_GROUP[rel]));
+          for (const l of group) {
+            const rowEl = el("div", "app-docs-linkrow");
+            const label = l.name !== "" ? l.name : l.uid;
+            if (opts.links !== undefined) {
+              const openBtn = el("button", "app-docs-linkname", label) as HTMLButtonElement;
+              openBtn.title = "Open the linked document";
+              openBtn.addEventListener("click", () => opts.links?.open(l));
+              rowEl.appendChild(openBtn);
+            } else {
+              rowEl.appendChild(el("span", "app-docs-linkname app-docs-linkname-still", label));
+            }
+            if (l.docId !== "") rowEl.appendChild(el("span", "app-docs-linkdocid", l.docId));
+            if (mayEdit) {
+              const rm = el("button", "app-docs-linkrm", "✕") as HTMLButtonElement;
+              rm.title = "Remove this link";
+              rm.addEventListener("click", () => opts.links?.remove(l));
+              rowEl.appendChild(rm);
+            }
+            box.appendChild(rowEl);
+          }
+        }
+        if (mayEdit) {
+          const add = el("button", "app-btn app-docs-linkadd", "＋ Link a document…") as HTMLButtonElement;
+          add.addEventListener("click", () => opts.links?.add());
+          box.appendChild(add);
+        }
+        propsBox.appendChild(box);
+      }
     }
 
     // O2: the boolean roles as statement chips — quiet when they ask

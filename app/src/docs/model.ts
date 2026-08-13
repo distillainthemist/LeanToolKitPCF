@@ -2012,6 +2012,132 @@ export function validateItemErrors(raw: unknown): { field: string; message: stri
  *  the U+2028/U+2029 separators a JavaScript string context cannot
  *  hold, the BOM, and lone surrogates (a broken emoji half). Returns
  *  each offender once, as "U+XXXX". */
+// ---- document linking (relationships plan L1, 2026-08-13) -------------
+//
+// Links live IN the document: a JSON array in the DMSLinkedDocuments
+// multiline column (Ben's call — SharePoint-embedded, not a side
+// store). The uniqueId GUID is the ANCHOR (renames don't break it);
+// name/docId are cached display, refreshed when the anchor resolves;
+// site+listId let the anchor be opened without guessing its register.
+// Declaring a link writes ONLY the declaring document — a site doc
+// names its corporate parent with no rights on the corporate side.
+
+export type DocLinkRel = "parent" | "peer" | "child";
+
+export interface DocLink {
+  uid: string;
+  rel: DocLinkRel;
+  site: string;
+  listId: string;
+  name: string;
+  docId: string;
+}
+
+export const DOC_LINK_RELS: DocLinkRel[] = ["parent", "peer", "child"];
+
+/** How a group of links reads on the DECLARING document's pane. */
+export const DOC_LINK_GROUP: Record<DocLinkRel, string> = {
+  parent: "Parent documents",
+  peer: "Related documents",
+  child: "Child documents",
+};
+
+/** How this document reads FROM the linked one (the inverse voice —
+ *  the derived "documents naming this one" list uses it). */
+export const DOC_LINK_INVERSE: Record<DocLinkRel, string> = {
+  parent: "names this as its parent",
+  peer: "names this as related",
+  child: "names this as a child",
+};
+
+/** Parse the column's value. JSON in the expected shape → links;
+ *  ANYTHING else (legacy free text, hand edits, half-JSON) → null,
+ *  and the caller keeps today's plain-text rendering — the column
+ *  predates this feature and its old values must keep meaning. */
+export function parseDocLinks(value: string): DocLink[] | null {
+  const raw = value.trim();
+  if (!raw.startsWith("[")) return null;
+  try {
+    const arr = JSON.parse(raw) as unknown;
+    if (!Array.isArray(arr)) return null;
+    const out: DocLink[] = [];
+    for (const e of arr) {
+      const o = (e ?? {}) as Record<string, unknown>;
+      const uid = typeof o.uid === "string" ? o.uid.trim() : "";
+      const rel = typeof o.rel === "string" ? o.rel : "";
+      if (uid === "" || !DOC_LINK_RELS.includes(rel as DocLinkRel)) continue;
+      out.push({
+        uid,
+        rel: rel as DocLinkRel,
+        site: typeof o.site === "string" ? o.site : "",
+        listId: typeof o.listId === "string" ? o.listId : "",
+        name: typeof o.name === "string" ? o.name : "",
+        docId: typeof o.docId === "string" ? o.docId : "",
+      });
+    }
+    return out;
+  } catch {
+    return null;
+  }
+}
+
+/** One link per (uid, rel) — a re-add updates the cached display
+ *  instead of duplicating. Order: parents, peers, children, stable
+ *  within a group. */
+export function serializeDocLinks(links: DocLink[]): string {
+  const seen = new Set<string>();
+  const kept = links.filter((l) => {
+    const key = `${l.uid.toLowerCase()}|${l.rel}`;
+    if (l.uid.trim() === "" || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  const rank: Record<DocLinkRel, number> = { parent: 0, peer: 1, child: 2 };
+  kept.sort((a, b) => rank[a.rel] - rank[b.rel]);
+  return JSON.stringify(kept);
+}
+
+/** A ↔ B declared as each other's parent (directly, or around a longer
+ *  loop) is a health finding, not a crash. Walks the parent edges of
+ *  the SCANNED corpus — links pointing outside it cannot cycle within
+ *  it. Returns one line per cycle, each cycle reported once. */
+export function parentCycles(
+  docs: { uid: string; name: string; links: DocLink[] }[]
+): string[] {
+  const parentOf = new Map<string, string[]>();
+  const nameOf = new Map<string, string>();
+  for (const d of docs) {
+    const uid = d.uid.toLowerCase();
+    nameOf.set(uid, d.name);
+    parentOf.set(
+      uid,
+      d.links.filter((l) => l.rel === "parent").map((l) => l.uid.toLowerCase())
+    );
+  }
+  const cycles: string[] = [];
+  const done = new Set<string>();
+  for (const start of parentOf.keys()) {
+    if (done.has(start)) continue;
+    const trail: string[] = [];
+    const at = new Map<string, number>();
+    let cur: string | undefined = start;
+    while (cur !== undefined && parentOf.has(cur) && !done.has(cur)) {
+      const seenAt = at.get(cur);
+      if (seenAt !== undefined) {
+        const loop = trail.slice(seenAt);
+        for (const n of loop) done.add(n);
+        cycles.push(loop.map((u) => nameOf.get(u) ?? u).join(" → "));
+        break;
+      }
+      at.set(cur, trail.length);
+      trail.push(cur);
+      cur = parentOf.get(cur)?.[0]; // first parent edge carries the walk
+    }
+    for (const n of trail) done.add(n);
+  }
+  return cycles;
+}
+
 export function suspiciousCodePoints(s: string): string[] {
   const out = new Set<string>();
   for (const ch of s) {
