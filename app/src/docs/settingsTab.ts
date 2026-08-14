@@ -1744,8 +1744,14 @@ export async function renderDocsSettings(body: HTMLElement, ctx: Ctx): Promise<v
       const st = el("div", "app-docs-addstatus");
       saveBtn.addEventListener("click", () => {
         void (async () => {
-          const key = siteIn.value.trim().toLowerCase();
-          if (key === "") {
+          const typed = siteIn.value.trim().toLowerCase();
+          // key by the site's TERM id when the name resolves — a later
+          // rename (sync keeps the GUID) then never orphans the mapping
+          const siteTerm = walk.nodes.find(
+            (n) => n.labels[n.labels.length - 1].toLowerCase() === typed
+          );
+          const key = siteTerm !== undefined ? siteTerm.id.toLowerCase() : typed;
+          if (typed === "") {
             st.textContent = "Name the site first.";
             st.classList.add("app-docs-addstatus-warn");
             return;
@@ -1774,14 +1780,16 @@ export async function renderDocsSettings(body: HTMLElement, ctx: Ctx): Promise<v
         dofBox.appendChild(el("div", "app-field-hint", "No site defaults mapped yet."));
       }
       for (const [site, ids] of Object.entries(app.defaultOrgFilter)) {
+        const keyed = walk.nodes.find((n) => n.id.toLowerCase() === site.toLowerCase());
+        const siteName = keyed !== undefined ? keyed.labels[keyed.labels.length - 1] : site;
         const row = el("div", "app-docs-dofmap");
         row.append(
-          el("span", "app-docs-dofsite", site),
+          el("span", "app-docs-dofsite", siteName),
           el("span", "app-field-hint", ids.map(labelOfId).join(" · "))
         );
         const edit = el("button", "app-btn", "Edit") as HTMLButtonElement;
         edit.addEventListener("click", () => {
-          siteIn.value = site;
+          siteIn.value = siteName;
           for (const [id, cb] of boxes) {
             cb.checked = ids.some((x) => x.toLowerCase() === id.toLowerCase());
           }

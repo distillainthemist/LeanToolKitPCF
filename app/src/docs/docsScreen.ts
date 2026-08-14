@@ -1989,10 +1989,26 @@ export function mountDocs(
       const me = await viewerPerson(viewer.objectId).catch(() => null);
       const siteKeyL = (me?.site ?? "").trim().toLowerCase();
       if (siteKeyL === "") return [];
-      const mapped = app.defaultOrgFilter[siteKeyL] ?? [];
+      // the site's own org term — the RENAME-PROOF mapping key (the
+      // sync renames in place, so the id outlives any label), and the
+      // branch that leads the pane
+      const siteTerm =
+        nodes.find((n) => n.labels[n.labels.length - 1].toLowerCase() === siteKeyL) ?? null;
+      const mapped =
+        (siteTerm !== null
+          ? app.defaultOrgFilter[siteTerm.id.toLowerCase()]
+          : undefined) ??
+        app.defaultOrgFilter[siteKeyL] ?? // legacy name-keyed entries
+        [];
       if (mapped.length > 0) {
         const wanted = new Set(mapped.map((id) => id.toLowerCase()));
-        return nodes.filter((n) => wanted.has(n.id.toLowerCase()));
+        const roots = nodes.filter((n) => wanted.has(n.id.toLowerCase()));
+        // the user's own site first (Ben, 2026-08-14), mapping order after
+        roots.sort((a, b) =>
+          (siteTerm !== null && a.id === siteTerm.id ? 0 : 1) -
+          (siteTerm !== null && b.id === siteTerm.id ? 0 : 1)
+        );
+        return roots;
       }
       const single = await viewerNode();
       return single !== null ? [single] : [];
@@ -2119,6 +2135,24 @@ export function mountDocs(
           myRoots.length === 0 ||
           showOtherSites ||
           myRoots.some((r) => isPrefix(n.labels, r.labels) || isPrefix(r.labels, n.labels));
+        // my-site-first ordering (Ben, 2026-08-14): each branch renders
+        // contiguously, the viewer's own site leading; unrelated
+        // branches (Show other sites) trail. Stable within a branch,
+        // so the walk's depth-first order keeps the hierarchy readable.
+        const branchRank = (n: TermNode): number => {
+          for (let i = 0; i < myRoots.length; i++) {
+            const r = myRoots[i];
+            if (isPrefix(n.labels, r.labels) || isPrefix(r.labels, n.labels)) return i;
+          }
+          return myRoots.length;
+        };
+        const ordered =
+          myRoots.length === 0
+            ? nodes
+            : nodes
+                .map((n, i) => ({ n, i }))
+                .sort((a, b) => branchRank(a.n) - branchRank(b.n) || a.i - b.i)
+                .map((x) => x.n);
         const disabled = groupBy === "" && orgProps.length === 0;
         const SEP = "\u0000";
         const key = (labels: string[]) => labels.join(SEP);
@@ -2149,7 +2183,7 @@ export function mountDocs(
             row.style.display = hidden ? "none" : "";
           }
         };
-        for (const n of nodes) {
+        for (const n of ordered) {
           if (!inScope(n)) continue;
           const row = el("div", "app-docs-treerow");
           row.style.paddingLeft = `${(n.labels.length - 1) * 14}px`;
