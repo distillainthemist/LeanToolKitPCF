@@ -1699,11 +1699,12 @@ export async function renderDocsSettings(body: HTMLElement, ctx: Ctx): Promise<v
   body.appendChild(section("Default filters"));
   body.appendChild(
     note(
-      "What a site's members see when they open the register: their own branch plus " +
-        "any corporate/functional branches ticked here. The folders pane shows just " +
-        "these (a Show-other-sites row reveals the rest) — everything stays one click " +
-        "away, nothing is hidden for good. Site names must match the site on user " +
-        "records; an unmapped site falls back to name-matching its org branch."
+      "Which SITES a site's members see in the folders pane: their own plus the " +
+        "corporate/functional sites ticked here — sites only, never departments; the " +
+        "pane's expansion handles the levels below. Only their OWN site is filtered by " +
+        "default; the rest sit collapsed, and Show-other-sites reveals everything else. " +
+        "Site names must match the site on user records; an unmapped site falls back to " +
+        "name-matching its org branch."
     )
   );
   const dofBox = el("div", "");
@@ -1731,9 +1732,16 @@ export async function renderDocsSettings(body: HTMLElement, ctx: Ctx): Promise<v
       siteIn.placeholder = "Site name (as on user records), e.g. Kwinana";
       const boxes = new Map<string, HTMLInputElement>();
       const tree = el("div", "app-docs-doftree");
-      for (const n of walk.nodes) {
+      // SITES only (Ben, 2026-08-14): depth 1, or depth 2 under a
+      // single company-level root — departments are an expansion
+      // concern, not a mapping one
+      const siteDepth =
+        walk.nodes.filter((n) => n.labels.length === 1).length === 1 &&
+        walk.nodes.some((n) => n.labels.length === 2)
+          ? 2
+          : 1;
+      for (const n of walk.nodes.filter((x) => x.labels.length === siteDepth)) {
         const row = el("label", "app-docs-dofrow");
-        row.style.paddingLeft = `${(n.labels.length - 1) * 14}px`;
         const cb = el("input", "") as HTMLInputElement;
         cb.type = "checkbox";
         boxes.set(n.id, cb);

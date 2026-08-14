@@ -2241,6 +2241,27 @@ export function mountDocs(
             treeBox.appendChild(tog);
           }
         }
+        // first visit (no saved collapse state): the pane opens with
+        // the OTHER mapped sites folded, MY site open to its
+        // departments, and MY OWN department opened one level more
+        // (Ben, 2026-08-14). A user's saved carets always win.
+        if (groupBy === "" && uiState.collapsed[setId] === undefined && myRoots.length > 0) {
+          const mySite = myRoots[0];
+          const def = new Set<string>();
+          for (const r of myRoots.slice(1)) def.add(key(r.labels));
+          const meP = await viewerPerson(currentViewer()?.objectId ?? "").catch(() => null);
+          const myDept = (meP?.department ?? "").trim().toLowerCase();
+          for (const n of nodes) {
+            if (
+              n.labels.length === mySite.labels.length + 1 &&
+              isPrefix(mySite.labels, n.labels) &&
+              n.labels[n.labels.length - 1].toLowerCase() !== myDept
+            ) {
+              def.add(key(n.labels));
+            }
+          }
+          collapsed = def;
+        }
         paintCollapse();
         paintTreeSelection();
         // boot: a shared/saved view's org filter first; otherwise land on
@@ -2254,7 +2275,10 @@ export function mountDocs(
           } else if (orgProps.length > 0 && bootView === null && !favMode) {
             const roots = await viewerBranchRoots(nodes);
             if (!dead && roots.length > 0 && filterFor("") === null) {
-              applyDefaultFilter(roots, nodes);
+              // the DEFAULT is the user's OWN site alone (Ben,
+              // 2026-08-14) — the other mapped sites sit in the pane
+              // collapsed, one click away, never pre-selected
+              applyDefaultFilter(roots.slice(0, 1), nodes);
             }
           }
         }
