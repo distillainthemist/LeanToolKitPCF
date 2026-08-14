@@ -57,6 +57,36 @@ export const DEFAULT_COLUMNS: CaptureColumn[] = [
   { key: "entry", label: "Entry", type: "text", multi: false, parent: "", options: [] },
 ];
 
+/** Parse a raw options array into ListOptions (shared with CanvasCard's
+ *  choice fields — the option shape is the capture card's). */
+export function parseListOptions(raw: unknown): ListOption[] {
+  const options: ListOption[] = [];
+  if (!Array.isArray(raw)) return options;
+  for (const op of raw) {
+    if (op === null || op === undefined) continue;
+    if (typeof op === "string") {
+      options.push({ value: op, label: op, icon: "", when: "" });
+      continue;
+    }
+    if (typeof op !== "object") continue;
+    const oo = op as Partial<ListOption>;
+    const value =
+      typeof oo.value === "string" && oo.value !== ""
+        ? oo.value
+        : typeof oo.label === "string"
+          ? oo.label
+          : "";
+    if (value === "") continue;
+    options.push({
+      value,
+      label: typeof oo.label === "string" && oo.label !== "" ? oo.label : value,
+      icon: typeof oo.icon === "string" ? oo.icon : "",
+      when: typeof oo.when === "string" ? oo.when : "",
+    });
+  }
+  return options;
+}
+
 /** Parse the columnsJSON input defensively; falls back to the simple card. */
 export function parseColumns(raw: string | null | undefined): CaptureColumn[] {
   const t = (raw ?? "").trim();
@@ -78,31 +108,7 @@ export function parseColumns(raw: string | null | undefined): CaptureColumn[] {
         o.type === "list"
           ? o.type
           : "text";
-      const options: ListOption[] = [];
-      if (Array.isArray(o.options)) {
-        for (const op of o.options) {
-          if (op === null || op === undefined) continue;
-          if (typeof op === "string") {
-            options.push({ value: op, label: op, icon: "", when: "" });
-            continue;
-          }
-          if (typeof op !== "object") continue;
-          const oo = op as Partial<ListOption>;
-          const value =
-            typeof oo.value === "string" && oo.value !== ""
-              ? oo.value
-              : typeof oo.label === "string"
-                ? oo.label
-                : "";
-          if (value === "") continue;
-          options.push({
-            value,
-            label: typeof oo.label === "string" && oo.label !== "" ? oo.label : value,
-            icon: typeof oo.icon === "string" ? oo.icon : "",
-            when: typeof oo.when === "string" ? oo.when : "",
-          });
-        }
-      }
+      const options = parseListOptions(o.options);
       out.push({
         key,
         label: typeof o.label === "string" && o.label !== "" ? o.label : key,
@@ -164,36 +170,41 @@ export function parseRows(raw: string | null | undefined): RowConfig {
   }
 }
 
+/** Parse a raw row array into CaptureRows (shared with CanvasCard's
+ *  mini-table fields, whose values are capture rows). */
+export function parseRowList(raw: unknown): CaptureRow[] {
+  const rows: CaptureRow[] = [];
+  if (!Array.isArray(raw)) return rows;
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+    const o = item as Partial<CaptureRow> & { cells?: unknown };
+    const cells: Record<string, CellValue> = {};
+    if (o.cells && typeof o.cells === "object") {
+      for (const [k, v] of Object.entries(o.cells as Record<string, unknown>)) {
+        if (
+          typeof v === "string" ||
+          typeof v === "number" ||
+          typeof v === "boolean"
+        ) {
+          cells[k] = v;
+        } else if (Array.isArray(v)) {
+          cells[k] = v.map((x) => String(x));
+        }
+      }
+    }
+    rows.push({
+      id: typeof o.id === "string" && o.id !== "" ? o.id : newId("row"),
+      rowKey: typeof o.rowKey === "string" ? o.rowKey : "",
+      cells,
+    });
+  }
+  return rows;
+}
+
 function parseData(data: unknown): CaptureData {
   if (!data || typeof data !== "object") return { rows: [] };
   const d = data as { rows?: unknown };
-  const rows: CaptureRow[] = [];
-  if (Array.isArray(d.rows)) {
-    for (const raw of d.rows) {
-      if (!raw || typeof raw !== "object") continue;
-      const o = raw as Partial<CaptureRow> & { cells?: unknown };
-      const cells: Record<string, CellValue> = {};
-      if (o.cells && typeof o.cells === "object") {
-        for (const [k, v] of Object.entries(o.cells as Record<string, unknown>)) {
-          if (
-            typeof v === "string" ||
-            typeof v === "number" ||
-            typeof v === "boolean"
-          ) {
-            cells[k] = v;
-          } else if (Array.isArray(v)) {
-            cells[k] = v.map((x) => String(x));
-          }
-        }
-      }
-      rows.push({
-        id: typeof o.id === "string" && o.id !== "" ? o.id : newId("row"),
-        rowKey: typeof o.rowKey === "string" ? o.rowKey : "",
-        cells,
-      });
-    }
-  }
-  return { rows };
+  return { rows: parseRowList(d.rows) };
 }
 
 export function parseCapture(
