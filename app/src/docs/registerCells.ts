@@ -156,7 +156,8 @@ export interface RegisterColumnOpts {
    *  caller — which columns is a VIEW question); sorted into dictionary
    *  order here, so two callers never disagree about sequence.
    *  "Modified" is the one non-dictionary passenger and lands last
-   *  among them; it is appended even when absent. */
+   *  among them — and ONLY when listed: a view that hides it stays
+   *  hidden (Ben, 2026-08-14; defaults list it explicitly). */
   wanted: string[];
   /** The pane-width bucket (Vault V3): the status column drops out
    *  first as the pane narrows, then every configured column — name
@@ -240,7 +241,6 @@ export function buildRegisterColumns(
       },
     });
   }
-  if (!wanted.includes("Modified")) columns.push(modifiedCol);
   for (const t of opts.trailing ?? []) columns.push(t);
   return columns;
 }

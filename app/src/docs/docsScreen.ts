@@ -2768,7 +2768,7 @@ export function mountDocs(
                   const c = dictBy.get(i);
                   return c !== undefined && columnOffered(c);
                 })
-            : defaultInternals(),
+            : [...defaultInternals(), "Modified"],
         bucket,
         // more than one library in view: say which one each row came from
         libraryLabel:
