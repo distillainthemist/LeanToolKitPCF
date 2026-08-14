@@ -14,6 +14,10 @@ are worth more than rushed coverage.
 - Report everything: confusing wording, things you expected to find
   and couldn't, slow moments, and things you liked. Small observations
   are exactly what we're after.
+- **Mark up your screenshots** before pasting them — circle the thing,
+  scribble an arrow, sketch what you'd rather see (Windows Snipping
+  Tool or macOS Preview both draw). A rough drawing of your idea beats
+  a paragraph describing it.
 - If the dialog shows "Already reported" items, tap **+1** instead of
   retyping — you'll get that issue's updates.
 - **My reports** (top of the Report dialog) shows what you've raised
