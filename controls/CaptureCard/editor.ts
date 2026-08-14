@@ -272,6 +272,14 @@ export class CaptureEditor {
       td.textContent = value === true || value === "true" ? "✓" : "—";
       return td;
     }
+    if (col.type === "flag") {
+      if (value === true || value === "true") {
+        td.appendChild(el("span", "ltk-cc-flag", "⚑"));
+      } else {
+        td.appendChild(el("span", "ltk-cc-empty", "—"));
+      }
+      return td;
+    }
     if (col.type === "list") {
       const values = Array.isArray(value) ? value : [String(value)];
       for (const v of values) {
@@ -304,8 +312,8 @@ export class CaptureEditor {
   private buildField(col: CaptureColumn, row: CaptureRow | null): FieldEditor {
     const value = row?.cells[col.key];
 
-    if (col.type === "yesno") {
-      const chk = checkItem(col.label);
+    if (col.type === "yesno" || col.type === "flag") {
+      const chk = checkItem(col.type === "flag" ? `⚑ ${col.label}` : col.label);
       chk.box.checked = value === true || value === "true";
       chk.wrap.classList.toggle("ltk-check-on", chk.box.checked);
       return { column: col, el: chk.wrap, read: () => chk.box.checked };

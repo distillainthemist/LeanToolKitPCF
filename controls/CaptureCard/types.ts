@@ -1,5 +1,5 @@
 // CaptureCard — a config-driven capture grid. Columns come from the
-// columnsJSON input: typed text / number / decimal / yesno / list, with
+// columnsJSON input: typed text / number / decimal / yesno / flag / list, with
 // list options optionally multi-select, icon-carrying (emoji or data URI),
 // and two-layer dependent (a child column declares `parent` and its options
 // carry `when` values matched against the parent's selection). Rows are
@@ -16,7 +16,7 @@ import {
 
 export const SCHEMA_ID = "ltk/capture@1";
 
-export type ColumnType = "text" | "number" | "decimal" | "yesno" | "list";
+export type ColumnType = "text" | "number" | "decimal" | "yesno" | "flag" | "list";
 
 export interface ListOption {
   value: string;
@@ -71,7 +71,11 @@ export function parseColumns(raw: string | null | undefined): CaptureColumn[] {
       const key = typeof o.key === "string" ? o.key.trim() : "";
       if (key === "") continue;
       const type: ColumnType =
-        o.type === "number" || o.type === "decimal" || o.type === "yesno" || o.type === "list"
+        o.type === "number" ||
+        o.type === "decimal" ||
+        o.type === "yesno" ||
+        o.type === "flag" ||
+        o.type === "list"
           ? o.type
           : "text";
       const options: ListOption[] = [];

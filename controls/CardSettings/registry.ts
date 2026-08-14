@@ -606,7 +606,7 @@ export const CARDS: CardSpec[] = [
         label: "Columns",
         kind: "captureColumns",
         help:
-          "The grid's typed columns. Picklist options can carry an icon (an emoji, or an image URL / data URI); a picklist can depend on another picklist so its options filter by the parent's selection.",
+          "The grid's typed columns. Picklist options can carry an icon (an emoji, or an image URL / data URI); a picklist can depend on another picklist so its options filter by the parent's selection. A Flag column (⚑) marks rows for a Capture rollup card on another board.",
       },
       {
         key: "rowsJSON",

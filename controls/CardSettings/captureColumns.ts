@@ -19,6 +19,7 @@ const COLUMN_TYPES = [
   { value: "number", label: "Whole number" },
   { value: "decimal", label: "Decimal" },
   { value: "yesno", label: "Yes / no" },
+  { value: "flag", label: "Flag" },
   { value: "list", label: "Picklist" },
 ];
 
@@ -98,7 +99,11 @@ function loadDrafts(v: unknown): ColDraft[] {
       keyTouched: true, // loaded keys are load-bearing (row cells reference them)
       label,
       type:
-        o.type === "number" || o.type === "decimal" || o.type === "yesno" || o.type === "list"
+        o.type === "number" ||
+        o.type === "decimal" ||
+        o.type === "yesno" ||
+        o.type === "flag" ||
+        o.type === "list"
           ? (o.type as string)
           : "text",
       multi: o.multi === true,

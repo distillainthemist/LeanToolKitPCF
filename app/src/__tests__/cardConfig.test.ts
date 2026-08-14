@@ -109,6 +109,24 @@ describe("Capture card columns reach the card", () => {
       "owner",
     ]);
   });
+
+  it("a flag column keeps its type; unknown types fall back to text", () => {
+    const config = storedConfig({
+      cardType: "CaptureCard",
+      config: {
+        columnsJSON: [
+          { key: "issue", label: "Issue", type: "text" },
+          { key: "flag", label: "Escalate", type: "flag" },
+          { key: "odd", label: "Odd", type: "sparkline" },
+        ],
+      },
+    });
+    expect(parseCaptureColumns(cfgRaw(config, "columnsJSON")).map((c) => c.type)).toEqual([
+      "text",
+      "flag",
+      "text",
+    ]);
+  });
 });
 
 describe("retired theme fields survive the narrowed Appearance section", () => {

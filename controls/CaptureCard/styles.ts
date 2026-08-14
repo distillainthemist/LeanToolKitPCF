@@ -69,6 +69,7 @@ export const CAPTURE_CSS = `
 }
 .ltk-cc-chip img { width: 14px; height: 14px; object-fit: contain; }
 .ltk-cc-empty { color: var(--ltk-muted); }
+.ltk-cc-flag { color: var(--ltk-accent); font-size: 15px; }
 .ltk-cc-add {
   align-self: flex-start;
   display: inline-flex;
