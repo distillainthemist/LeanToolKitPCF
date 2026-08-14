@@ -6,13 +6,7 @@
 import { applyThemeVars, defaultTheme, Theme } from "../../shared/tokens";
 import { LTK_BASE_CSS } from "../../shared/ui/baseCss";
 import { clear, el, ensureStylesheet } from "../../shared/ui/dom";
-import {
-  checkItem,
-  checklist,
-  fieldRow,
-  openDialog,
-  textInput,
-} from "../../shared/ui/dialog";
+import { openDialog } from "../../shared/ui/dialog";
 import { parsePrompts, Prompts, renderGhost, renderTitleBar, hintFor } from "../../shared/ui/chrome";
 import { renderKebab } from "../../shared/ui/menu";
 import { htmlToPng, htmlToSvg, saveSvg, SnapshotScheduler } from "../../shared/export/png";
@@ -21,35 +15,23 @@ import {
   CaptureColumn,
   CaptureEnvelope,
   CaptureRow,
-  CellValue,
   DEFAULT_COLUMNS,
-  ListOption,
   RowHeader,
   SCHEMA_ID,
 } from "./types";
+import {
+  buildCaptureField,
+  FieldEditor,
+  readFields,
+  renderCaptureCellInto,
+  wireDependentFields,
+} from "./fields";
 import { CAPTURE_CSS } from "./styles";
 
 const DEFAULT_GHOST = [
   "Nothing captured yet",
   "Tap to add the first entry.",
 ];
-
-/** An icon is rendered as an image when it's a data URI or a URL. */
-function isImageIcon(icon: string): boolean {
-  return /^(data:|https?:\/\/|\/)/i.test(icon);
-}
-
-/** A field editor inside the row dialog. */
-interface FieldEditor {
-  column: CaptureColumn;
-  el: HTMLElement;
-  read: () => CellValue | undefined;
-  /** Re-filter options against the parent's selected value(s) (dependent lists). */
-  refilter?: (parentValues: string[]) => void;
-  /** All currently selected values (a multi-select parent drives children with every pick). */
-  currentValues?: () => string[];
-  onChanged?: () => void; // wired by the dialog to cascade re-filters
-}
 
 export interface CaptureEditorCallbacks {
   onChange: (env: CaptureEnvelope) => void;
@@ -263,172 +245,17 @@ export class CaptureEditor {
 
   private renderCell(row: CaptureRow, col: CaptureColumn): HTMLElement {
     const td = el("td");
-    const value = row.cells[col.key];
-    if (value === undefined || value === "" || (Array.isArray(value) && value.length === 0)) {
-      td.appendChild(el("span", "ltk-cc-empty", "—"));
-      return td;
-    }
-    if (col.type === "yesno") {
-      td.textContent = value === true || value === "true" ? "✓" : "—";
-      return td;
-    }
-    if (col.type === "flag") {
-      if (value === true || value === "true") {
-        td.appendChild(el("span", "ltk-cc-flag", "⚑"));
-      } else {
-        td.appendChild(el("span", "ltk-cc-empty", "—"));
-      }
-      return td;
-    }
-    if (col.type === "list") {
-      const values = Array.isArray(value) ? value : [String(value)];
-      for (const v of values) {
-        const option = col.options.find((o) => o.value === v);
-        td.appendChild(this.optionChip(option, v));
-      }
-      return td;
-    }
-    td.textContent = String(value);
+    renderCaptureCellInto(td, col, row.cells[col.key]);
     return td;
   }
 
-  private optionChip(option: ListOption | undefined, value: string): HTMLElement {
-    const chip = el("span", "ltk-cc-chip");
-    const icon = option?.icon ?? "";
-    if (isImageIcon(icon)) {
-      const img = el("img") as HTMLImageElement;
-      img.src = icon;
-      img.alt = "";
-      chip.appendChild(img);
-    } else if (icon !== "") {
-      chip.appendChild(el("span", undefined, icon));
-    }
-    chip.appendChild(el("span", undefined, option?.label ?? value));
-    return chip;
-  }
-
-  // ---- the row dialog ----
-
-  private buildField(col: CaptureColumn, row: CaptureRow | null): FieldEditor {
-    const value = row?.cells[col.key];
-
-    if (col.type === "yesno" || col.type === "flag") {
-      const chk = checkItem(col.type === "flag" ? `⚑ ${col.label}` : col.label);
-      chk.box.checked = value === true || value === "true";
-      chk.wrap.classList.toggle("ltk-check-on", chk.box.checked);
-      return { column: col, el: chk.wrap, read: () => chk.box.checked };
-    }
-
-    if (col.type === "number" || col.type === "decimal") {
-      const input = textInput(value === undefined ? "" : String(value), {
-        type: "number",
-      });
-      if (col.type === "number") input.step = "1";
-      const wrap = fieldRow(col.label, input);
-      wrap.classList.add("ltk-field-half");
-      return {
-        column: col,
-        el: wrap,
-        read: () => {
-          if (input.value.trim() === "") return undefined;
-          const n = Number(input.value);
-          if (!Number.isFinite(n)) return undefined;
-          return col.type === "number" ? Math.round(n) : n;
-        },
-      };
-    }
-
-    if (col.type === "list") {
-      const wrap = el("div");
-      wrap.appendChild(el("div", "ltk-field-label", col.label));
-      const list = checklist();
-      wrap.appendChild(list);
-      const selected = new Set<string>(
-        Array.isArray(value) ? value : value !== undefined ? [String(value)] : []
-      );
-      let boxes: { box: HTMLInputElement; wrap: HTMLElement; value: string }[] = [];
-      const field: FieldEditor = {
-        column: col,
-        el: wrap,
-        read: () => {
-          const picked = boxes.filter((b) => b.box.checked).map((b) => b.value);
-          if (picked.length === 0) return undefined;
-          return col.multi ? picked : picked[0];
-        },
-        currentValues: () => boxes.filter((b) => b.box.checked).map((b) => b.value),
-      };
-      const rebuild = (parentValues: string[]) => {
-        while (list.firstChild) list.removeChild(list.firstChild);
-        boxes = [];
-        const options = col.options.filter(
-          (o) => o.when === "" || col.parent === "" || parentValues.includes(o.when)
-        );
-        for (const option of options) {
-          const item = checkItem("");
-          // chip content: icon + label
-          item.wrap.appendChild(this.optionChip(option, option.value));
-          if (selected.has(option.value)) {
-            item.box.checked = true;
-            item.wrap.classList.add("ltk-check-on");
-          }
-          item.box.addEventListener("change", () => {
-            if (!col.multi && item.box.checked) {
-              for (const other of boxes) {
-                if (other.box !== item.box && other.box.checked) {
-                  other.box.checked = false;
-                  other.wrap.classList.remove("ltk-check-on");
-                }
-              }
-            }
-            // keep the selection set current so a parent re-filter preserves it
-            selected.clear();
-            for (const b of boxes) if (b.box.checked) selected.add(b.value);
-            if (field.onChanged) field.onChanged();
-          });
-          list.appendChild(item.wrap);
-          boxes.push({ box: item.box, wrap: item.wrap, value: option.value });
-        }
-        if (options.length === 0) {
-          list.appendChild(
-            el("div", "ltk-cc-empty", col.parent !== "" ? "Pick the parent first" : "No options")
-          );
-        }
-      };
-      field.refilter = rebuild;
-      rebuild([]);
-      return field;
-    }
-
-    // text (default)
-    const input = textInput(value === undefined ? "" : String(value), {
-      placeholder: hintFor(this.prompts, col.key, ""),
-    });
-    return {
-      column: col,
-      el: fieldRow(col.label, input),
-      read: () => (input.value.trim() === "" ? undefined : input.value.trim()),
-    };
-  }
+  // ---- the row dialog (field machinery shared with CaptureRollup: fields.ts) ----
 
   private editRow(row: CaptureRow | null): void {
-    const fields = this.columns.map((col) => this.buildField(col, row));
-
-    // wire dependent lists: when a parent's selection changes, re-filter
-    // every child column keyed to it
-    for (const field of fields) {
-      const children = fields.filter(
-        (f) => f.column.parent !== "" && f.column.parent === field.column.key
-      );
-      if (children.length === 0) continue;
-      const cascade = () => {
-        const parentValues = field.currentValues ? field.currentValues() : [];
-        for (const child of children) {
-          if (child.refilter) child.refilter(parentValues);
-        }
-      };
-      field.onChanged = cascade;
-      cascade(); // initial filter against the loaded value
-    }
+    const fields: FieldEditor[] = this.columns.map((col) =>
+      buildCaptureField(col, row?.cells[col.key], hintFor(this.prompts, col.key, ""))
+    );
+    wireDependentFields(fields);
 
     const fixed = this.rowHeaders.length > 0;
     const buttons = [];
@@ -452,11 +279,7 @@ export class CaptureEditor {
       label: row ? "Save" : "Add",
       kind: "primary" as const,
       onClick: () => {
-        const cells: Record<string, CellValue> = {};
-        for (const field of fields) {
-          const v = field.read();
-          if (v !== undefined) cells[field.column.key] = v;
-        }
+        const cells = readFields(fields);
         if (row) {
           row.cells = cells;
         } else {

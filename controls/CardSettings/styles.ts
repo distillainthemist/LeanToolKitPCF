@@ -90,6 +90,30 @@ export const CARDSETTINGS_CSS = `
 
 /* ---- sections ---- */
 .ltk-cs-note { font-size: 12px; color: var(--ltk-muted); line-height: 1.4; }
+
+/* ---- capture-rollup Sources tab ---- */
+.ltk-cs-rollup-source { display: flex; gap: 6px; align-items: center; }
+.ltk-cs-rollup-source select { flex: 1; min-width: 0; }
+.ltk-cs-rollup-remove {
+  border: 1px solid var(--ltk-hairline);
+  background: none;
+  color: var(--ltk-muted);
+  border-radius: 6px;
+  cursor: pointer;
+  padding: 4px 8px;
+}
+.ltk-cs-rollup-add {
+  justify-self: start;
+  border: 1px dashed var(--ltk-hairline);
+  background: none;
+  color: var(--ltk-fg);
+  border-radius: 6px;
+  cursor: pointer;
+  padding: 5px 10px;
+}
+.ltk-cs-rollup-col { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.ltk-cs-rollup-warn { font-size: 11px; color: var(--ltk-muted); }
+.ltk-cs-rollup-mark { font-size: 11px; color: var(--ltk-muted); font-style: italic; }
 .ltk-cs-appbound { font-size: 11px; color: var(--ltk-muted); font-style: italic; }
 
 /* ---- field grid ---- */

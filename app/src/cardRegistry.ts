@@ -82,6 +82,18 @@ import {
   parseRows as parseCaptureRows,
   serializeCapture,
 } from "../../controls/CaptureCard/types";
+import { RollupEditor } from "../../controls/CaptureRollup/editor";
+import {
+  flagColumn,
+  parseColumnNames,
+  parseRollup,
+  parseRollupSources,
+  parseWindow,
+  parseWriteMode,
+  projectRollup,
+  serializeRollup,
+} from "../../controls/CaptureRollup/types";
+import { loadRollupSources, writeBackRow } from "./store/rollup";
 import { ActionBoardEditor, parseKanbanColumns } from "../../controls/ActionBoard/editor";
 import { EscalationViewerEditor } from "../../controls/EscalationViewer/editor";
 import { parseSources } from "../../controls/EscalationViewer/types";
@@ -793,6 +805,69 @@ const REGISTRY: Record<string, CardMounter> = {
     );
     editor.setEnvelope(parseCapture(opts.outputJson).envelope);
     return () => opts.host.replaceChildren();
+  },
+  CaptureRollup: (opts) => {
+    const s = saver(opts);
+    const sources = parseRollupSources(cfgRaw(opts, "sourcesJSON"));
+    const names = parseColumnNames(cfgRaw(opts, "columns"));
+    const window = parseWindow(cfgStr(opts, "window"), cfgNum(opts, "windowN"));
+    const flaggedOnly = config(opts).flaggedOnly === true;
+    // design time and closed meetings never write back
+    const writeMode =
+      opts.designTime === true || opts.readOnly
+        ? "readonly"
+        : parseWriteMode(cfgStr(opts, "writeMode"));
+    let disposed = false;
+
+    const editor = new RollupEditor(opts.host, {
+      onWriteBack: (ref, mutate) => writeBackRow(ref.docRowGuid, ref.rowId, mutate),
+      onRefresh: () => void load(),
+      onSnapshot: s.onSnapshot,
+    });
+    editor.setTheme(opts.theme);
+    editor.setChrome(opts.title, promptsRaw(opts));
+    editor.setReadOnly(opts.readOnly);
+    editor.setState({
+      names,
+      rows: [],
+      sources: [],
+      showWhen: window.mode === "lastN",
+      anyFlag: false,
+      writeMode,
+      flaggedOnly,
+      configured: sources.length > 0,
+      loading: true,
+    });
+
+    const load = async () => {
+      if (sources.length === 0) return; // the unconfigured ghost is showing
+      try {
+        const resolved = await loadRollupSources(sources, window);
+        if (disposed) return;
+        editor.setState({
+          names,
+          rows: projectRollup(resolved, names, flaggedOnly),
+          sources: resolved,
+          showWhen: window.mode === "lastN",
+          anyFlag: resolved.some((r) => !r.error && flagColumn(r.columns) !== null),
+          writeMode,
+          flaggedOnly,
+          configured: true,
+          loading: false,
+        });
+        // persist the (content-free) document so the freshest tile lands on
+        // the live row — that is what board tiles and close-meeting archives
+        // show for this card
+        s.save(serializeRollup(parseRollup(opts.outputJson).envelope));
+      } catch (err) {
+        console.warn("capture rollup load failed", err);
+      }
+    };
+    void load();
+    return () => {
+      disposed = true;
+      opts.host.replaceChildren();
+    };
   },
 
   // ---- model-based editors (a bare model rather than an envelope; actions

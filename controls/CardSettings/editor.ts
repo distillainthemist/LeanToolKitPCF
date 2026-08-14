@@ -15,7 +15,7 @@ import { applyThemeVars, defaultTheme, Theme } from "../../shared/tokens";
 import { LTK_BASE_CSS } from "../../shared/ui/baseCss";
 import { clear, el, ensureStylesheet } from "../../shared/ui/dom";
 import { parsePrompts, Prompts, renderTitleBar } from "../../shared/ui/chrome";
-import { sectionLabel, selectInput } from "../../shared/ui/dialog";
+import { checkItem, sectionLabel, selectInput } from "../../shared/ui/dialog";
 import {
   CARD_GROUPS,
   CARDS,
@@ -27,7 +27,7 @@ import {
   THEME_FIELDS,
 } from "./registry";
 import { renderField, renderPromptsField, FieldHost, labelRow } from "./fields";
-import { BoardRef, SettingsDraft, ThemeDraft, emptyDraft } from "./types";
+import { BoardRef, BoardRefCard, SettingsDraft, ThemeDraft, emptyDraft } from "./types";
 import { CARDSETTINGS_CSS } from "./styles";
 
 export interface CardSettingsCallbacks {
@@ -328,6 +328,10 @@ export class CardSettingsEditor {
     if (this.boards !== null && this.draft.cardType === "LinkCard") {
       tabs.push({ name: "Source", fill: (sec) => this.renderLinkSourceSection(sec) });
     }
+    // CaptureRollup (composer mode only): the linked capture cards + columns
+    if (this.boards !== null && this.draft.cardType === "CaptureRollup") {
+      tabs.push({ name: "Sources", fill: (sec) => this.renderRollupSourcesSection(sec) });
+    }
     if (!tabs.some((t) => t.name === this.tab)) this.tab = tabs[0].name;
 
     const bar = el("div", "ltk-cs-tabs");
@@ -503,6 +507,180 @@ export class CardSettingsEditor {
         srcCard,
         "Shown live and read-only, with the source card's own settings. " +
           "Embeds, action boards and other linked cards cannot be sources."
+      )
+    );
+  }
+
+  /**
+   * CaptureRollup's Sources tab (board mode only): the linked Capture cards
+   * (config.sourcesJSON) and the display-column picker (config.columns —
+   * names matched across sources BY LABEL). Warnings ride the pickers: a
+   * source without a ⚑ Flag column, a column missing from some sources, a
+   * stale selection no source offers any more.
+   */
+  private renderRollupSourcesSection(body: HTMLElement): void {
+    const boards = this.boards ?? [];
+    const cfg = this.draft.config;
+
+    const readSources = (): { boardId: string; cardId: string }[] => {
+      const v = cfg.sourcesJSON;
+      if (!Array.isArray(v)) return [];
+      return v
+        .filter((x): x is Record<string, unknown> => !!x && typeof x === "object")
+        .map((x) => ({
+          boardId: typeof x.boardId === "string" ? x.boardId : "",
+          cardId: typeof x.cardId === "string" ? x.cardId : "",
+        }));
+    };
+    const writeSources = (list: { boardId: string; cardId: string }[]): void => {
+      if (list.length === 0) delete cfg.sourcesJSON;
+      else cfg.sourcesJSON = list;
+      this.commit();
+      this.render();
+    };
+    const readColumns = (): string[] => {
+      const v = cfg.columns;
+      if (!Array.isArray(v)) return [];
+      return v.filter((x): x is string => typeof x === "string" && x.trim() !== "");
+    };
+    const writeColumns = (names: string[]): void => {
+      if (names.length === 0) delete cfg.columns;
+      else cfg.columns = names;
+      this.commit();
+      this.render();
+    };
+
+    const sources = readSources();
+    const grid = el("div", "ltk-cs-grid");
+    body.appendChild(grid);
+    grid.appendChild(subLabel("Linked capture cards"));
+
+    const captureCardsOf = (boardId: string) =>
+      (boards.find((ref) => ref.boardId === boardId)?.cards ?? []).filter(
+        (c) => c.cardType === "CaptureCard"
+      );
+    const cardOf = (src: { boardId: string; cardId: string }) =>
+      captureCardsOf(src.boardId).find((c) => c.cardId === src.cardId);
+
+    sources.forEach((src, i) => {
+      const row = el("div", "ltk-cs-rollup-source");
+      const brd = selectInput(src.boardId, [
+        { value: "", label: "Choose a board…" },
+        ...boards.map((ref) => ({ value: ref.boardId, label: ref.name })),
+      ]);
+      brd.disabled = this.readOnly;
+      brd.addEventListener("change", () => {
+        const next = sources.slice();
+        next[i] = { boardId: brd.value, cardId: "" };
+        writeSources(next);
+      });
+      const cards = captureCardsOf(src.boardId);
+      const crd = selectInput(src.cardId, [
+        {
+          value: "",
+          label:
+            src.boardId === ""
+              ? "Choose a board first"
+              : cards.length === 0
+                ? "No capture cards on that board"
+                : "Choose a capture card…",
+        },
+        ...cards.map((c) => ({ value: c.cardId, label: c.title !== "" ? c.title : c.cardId })),
+      ]);
+      crd.disabled = this.readOnly || src.boardId === "";
+      crd.addEventListener("change", () => {
+        const next = sources.slice();
+        next[i] = { boardId: src.boardId, cardId: crd.value };
+        writeSources(next);
+      });
+      const remove = el("button", "ltk-cs-rollup-remove", "✕") as HTMLButtonElement;
+      remove.type = "button";
+      remove.title = "Remove this source";
+      remove.disabled = this.readOnly;
+      remove.addEventListener("click", () => {
+        writeSources(sources.filter((_, j) => j !== i));
+      });
+      row.append(brd, crd, remove);
+      grid.appendChild(row);
+
+      const card = cardOf(src);
+      if (src.cardId !== "" && !card) {
+        grid.appendChild(
+          el("div", "ltk-cs-rollup-warn", "⚠ This card was not found on its board any more.")
+        );
+      } else if (card && card.hasFlag !== true) {
+        grid.appendChild(
+          el(
+            "div",
+            "ltk-cs-rollup-warn",
+            "⚠ No ⚑ Flag column — this card shows nothing while “Only show flagged items” is on."
+          )
+        );
+      }
+    });
+
+    if (!this.readOnly) {
+      const add = el("button", "ltk-cs-rollup-add", "＋ Add capture card") as HTMLButtonElement;
+      add.type = "button";
+      add.addEventListener("click", () => {
+        writeSources([...sources, { boardId: "", cardId: "" }]);
+      });
+      grid.appendChild(add);
+    }
+
+    // ---- the display-column picker ----
+    grid.appendChild(subLabel("Columns shown"));
+    const chosenCards = sources
+      .map(cardOf)
+      .filter((c): c is BoardRefCard => c !== undefined);
+    if (chosenCards.length === 0) {
+      grid.appendChild(
+        el("div", "ltk-cs-note", "Link a capture card above to choose its columns.")
+      );
+      return;
+    }
+
+    const selected = readColumns();
+    const lower = (s: string) => s.trim().toLowerCase();
+    // the union of the sources' labels, in source-then-column order
+    const union: string[] = [];
+    for (const card of chosenCards) {
+      if (!card) continue;
+      for (const name of card.captureColumns ?? []) {
+        if (!union.some((u) => lower(u) === lower(name))) union.push(name);
+      }
+    }
+    const inAll = (name: string) =>
+      chosenCards.every((c) => (c.captureColumns ?? []).some((n) => lower(n) === lower(name)));
+    // stale selections first-class: still listed, so they can be unticked
+    const stale = selected.filter((name) => !union.some((u) => lower(u) === lower(name)));
+
+    const toggle = (name: string, on: boolean) => {
+      const without = selected.filter((n) => lower(n) !== lower(name));
+      writeColumns(on ? [...without, name] : without);
+    };
+    for (const name of [...union, ...stale]) {
+      const isStale = stale.includes(name);
+      const on = selected.some((n) => lower(n) === lower(name));
+      const chk = checkItem(name);
+      chk.box.checked = on;
+      chk.wrap.classList.toggle("ltk-check-on", on);
+      chk.box.disabled = this.readOnly;
+      chk.box.addEventListener("change", () => toggle(name, chk.box.checked));
+      const line = el("div", "ltk-cs-rollup-col");
+      line.appendChild(chk.wrap);
+      if (isStale) {
+        line.appendChild(el("span", "ltk-cs-rollup-warn", "⚠ no linked card has this column"));
+      } else if (!inAll(name)) {
+        line.appendChild(el("span", "ltk-cs-rollup-mark", "not in all sources"));
+      }
+      grid.appendChild(line);
+    }
+    grid.appendChild(
+      el(
+        "div",
+        "ltk-cs-note",
+        "Columns are matched across the linked cards by name. The order picked is the order shown."
       )
     );
   }

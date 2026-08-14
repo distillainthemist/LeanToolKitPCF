@@ -83,6 +83,17 @@ model section) — the canvas/PCF sections there are historical.
   pasting a register view link; they load via the dynamic-import door
   and fetch after paint with jitter so a wall of boards can't
   synchronise into a 429 storm.
+- **Cross-board windows:** a **LinkCard** renders another board's card
+  read-only (its source's policy decides which document — live row for
+  shared, newest meeting otherwise). A **Capture rollup** generalises
+  this to many sources: it merges rows from Capture cards on other
+  boards into one table (columns matched by NAME across sources, the
+  ⚑ Flag column found by TYPE), filters to flagged items, and can
+  write back — un-flag or full row edits — via a read-modify-write
+  straight onto the source card's document (`store/rollup.ts`). Its
+  own document is content-free with a fixed shared policy, existing so
+  tiles and close-meeting archives ride the standard save road. Design
+  of record: [leanboard-capture-rollup-plan.md](leanboard-capture-rollup-plan.md).
 
 ## 4. The document management system
 

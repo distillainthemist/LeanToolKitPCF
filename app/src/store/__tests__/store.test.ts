@@ -62,6 +62,13 @@ describe("manifest", () => {
     // regardless: live row as document, archive stamp at close
     expect(slotPolicy(m.slots[0])).toBe("shared");
   });
+  it("a fixed-policy card (CaptureRollup) is shared whatever the blob says", () => {
+    const slot = {
+      pos: 1, w: 1, h: 1, nav: 0, cardId: "c-roll", cardType: "CaptureRollup",
+      title: "", settings: { board: { policy: "carry" } },
+    };
+    expect(slotPolicy(slot)).toBe("shared");
+  });
 });
 
 describe("policies", () => {

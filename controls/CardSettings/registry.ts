@@ -81,6 +81,13 @@ export interface CardSpec {
    */
   seriesBacked?: boolean;
   /**
+   * The card's policy is FIXED — no maker choice, no picker. Unlike
+   * seriesBacked (whose data lives in the series table) the card may still
+   * own a document; CaptureRollup fixes "shared" so its live row carries
+   * the freshest tile and close-meeting archives stamp it.
+   */
+  fixedPolicy?: DataPolicy;
+  /**
    * What the card studio's left pane is for this card (default "edit"):
    *
    *  - `"edit"` — the card's live row IS its standard content, so the pane
@@ -123,6 +130,8 @@ export const LINK_SOURCE_EXCLUDED = new Set([
   // live SharePoint views — linking a live view of a live view is noise
   "DocsCard",
   "DocHealth",
+  // a window onto other boards' capture cards — no chains, same as LinkCard
+  "CaptureRollup",
 ]);
 
 /** Display label for a card type ("ActionBoard" → "Actions"). */
@@ -620,6 +629,61 @@ export const CARDS: CardSpec[] = [
     appBound: [],
     policies: ["clear", "carry", "shared"],
     defaultPolicy: "carry",
+  },
+  {
+    type: "CaptureRollup",
+    label: "Capture rollup",
+    group: "Rituals",
+    standardContent: "preview",
+    standardContentNote:
+      "This card merges rows from other boards' capture cards — its content belongs to the sources.",
+    description:
+      "Rows from Capture cards on other boards, merged into one table — filter to flagged items, act on them at this ritual.",
+    config: [
+      {
+        key: "flaggedOnly",
+        label: "Only show flagged items",
+        kind: "boolean",
+        heading: "Filter",
+        help:
+          "Show only rows marked with a ⚑ Flag column. A linked card without a Flag column then contributes nothing.",
+      },
+      {
+        key: "window",
+        label: "Occurrences",
+        kind: "enum",
+        options: [
+          { value: "current", label: "Current content" },
+          { value: "lastN", label: "Last N occurrences" },
+        ],
+        help:
+          "Current content shows what each source card holds now. Last N merges the most recent N meetings' rows (newest wins on carried rows) — for sources that clear between meetings.",
+      },
+      {
+        key: "windowN",
+        label: "N (occurrences)",
+        kind: "number",
+        help: "How many recent occurrences Last N sweeps per source (1–50; 3 when blank).",
+        placeholder: "3",
+      },
+      {
+        key: "writeMode",
+        label: "Editing from this card",
+        kind: "enum",
+        options: [
+          { value: "readonly", label: "Read-only" },
+          { value: "unflag", label: "Remove flags only" },
+          { value: "full", label: "Full editing" },
+        ],
+        help:
+          "What a row's dialog allows. Changes save straight onto the source board's card.",
+      },
+    ],
+    appBound: [],
+    // no policy choice: fixed shared — the live row exists for tiles and
+    // close-meeting archives, never as authored content
+    policies: [],
+    fixedPolicy: "shared",
   },
   {
     type: "HeatmapCard",

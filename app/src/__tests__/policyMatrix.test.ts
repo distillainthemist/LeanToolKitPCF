@@ -43,6 +43,7 @@ describe("policy matrix coverage", () => {
     // live SharePoint views (a live view of a live view is noise)
     expect([...LINK_SOURCE_EXCLUDED].sort()).toEqual([
       "ActionBoard",
+      "CaptureRollup",
       "DocHealth",
       "DocsCard",
       "EmbedCard",
@@ -50,6 +51,18 @@ describe("policy matrix coverage", () => {
       "LinkCard",
       "MeetingScheduler",
     ]);
+  });
+
+  it("CaptureRollup: fixed shared, no picker, preview standard content", () => {
+    const spec = cardSpec("CaptureRollup")!;
+    expect(spec.group).toBe("Rituals");
+    // no maker choice — the live row exists for tiles/archives only
+    expect(spec.policies).toEqual([]);
+    expect(spec.fixedPolicy).toBe("shared");
+    expect(spec.defaultPolicy).toBeUndefined();
+    expect(spec.standardContent).toBe("preview");
+    // a rollup can never be a LinkCard source (no chains)
+    expect(LINK_SOURCE_EXCLUDED.has("CaptureRollup")).toBe(true);
   });
 
   it("a series-backed card offers no picker at all", () => {

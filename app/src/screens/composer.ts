@@ -12,7 +12,7 @@
 
 import { BoardGridView } from "../../../controls/BoardGrid/editor";
 import { BoardTile, parseColumns } from "../../../controls/BoardGrid/types";
-import { BoardRef } from "../../../controls/CardSettings/types";
+import { BoardRef, captureCardMeta } from "../../../controls/CardSettings/types";
 import { policyOnPick } from "../../../controls/CardSettings/registry";
 import { paletteMap, titleStripColor } from "../../../shared/palette";
 import { el } from "../../../shared/ui/dom";
@@ -239,18 +239,22 @@ async function renderComposer(
   };
   await refreshRows();
 
-  // link/rollup sources: every board's cards, from the boards list
+  // link/rollup sources: every board's cards, from the boards list. Capture
+  // cards carry their column labels + flag marker so the capture-rollup's
+  // pickers can warn about non-common columns without extra queries.
+  const cardRef = (s: ManifestSlot) => ({
+    cardId: s.cardId,
+    cardType: s.cardType,
+    title: s.title,
+    ...(s.cardType === "CaptureCard" ? captureCardMeta(s.settings) : {}),
+  });
   const boardRefs: BoardRef[] = (await listBoards()).map((b) => ({
     boardId: b.boardId,
     name: b.name,
     cards:
       b.boardId === board.boardId
         ? [] // filled per open so freshly added cards appear
-        : parseManifest(b.manifestRaw).slots.map((s) => ({
-            cardId: s.cardId,
-            cardType: s.cardType,
-            title: s.title,
-          })),
+        : parseManifest(b.manifestRaw).slots.map(cardRef),
   }));
   /** Board refs with THIS board's current cards folded in (minus `exclude`). */
   const sourceRefs = (exclude: string): BoardRef[] =>
@@ -258,9 +262,7 @@ async function renderComposer(
       ref.boardId === board.boardId
         ? {
             ...ref,
-            cards: manifest.slots
-              .filter((s) => s.cardId !== exclude)
-              .map((s) => ({ cardId: s.cardId, cardType: s.cardType, title: s.title })),
+            cards: manifest.slots.filter((s) => s.cardId !== exclude).map(cardRef),
           }
         : ref
     );

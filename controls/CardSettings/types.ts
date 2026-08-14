@@ -5,6 +5,8 @@
 // Serialization is SPARSE: only values the maker actually set are emitted, so
 // stored blobs keep inheriting future control defaults.
 
+import { parseColumns as parseCaptureColumns } from "../CaptureCard/types";
+
 export interface ThemeDraft {
   background: string;
   foreground: string;
@@ -169,7 +171,38 @@ export function serializeDraft(draft: SettingsDraft): string {
 export interface BoardRef {
   boardId: string;
   name: string;
-  cards: { cardId: string; cardType: string; title: string }[];
+  cards: BoardRefCard[];
+}
+
+export interface BoardRefCard {
+  cardId: string;
+  cardType: string;
+  title: string;
+  /** CaptureCard slots only: the configured column LABELS — the rollup's
+   *  column picker matches across sources by label. */
+  captureColumns?: string[];
+  /** CaptureCard slots only: the card has a ⚑ Flag column. */
+  hasFlag?: boolean;
+}
+
+/**
+ * The capture metadata a BoardRef card carries for the rollup pickers,
+ * from a CaptureCard slot's settings blob. Mirrors the app's cfgRaw rule:
+ * structured config values arrive as arrays, hand-typed ones as strings.
+ */
+export function captureCardMeta(settings: Record<string, unknown>): {
+  captureColumns: string[];
+  hasFlag: boolean;
+} {
+  const config = settings.config;
+  const c = config && typeof config === "object" ? (config as Record<string, unknown>) : {};
+  const v = c.columnsJSON;
+  const raw = typeof v === "string" ? v : v === undefined || v === null ? "" : JSON.stringify(v);
+  const cols = parseCaptureColumns(raw);
+  return {
+    captureColumns: cols.map((col) => col.label),
+    hasFlag: cols.some((col) => col.type === "flag"),
+  };
 }
 
 /**
@@ -198,11 +231,19 @@ export function parseBoardsManifest(
           const co = c as Record<string, unknown>;
           const cardId = s(co.cardId).trim();
           if (cardId === "") continue;
-          cards.push({
+          const card: BoardRefCard = {
             cardId,
             cardType: s(co.cardType).trim(),
             title: s(co.title).trim(),
-          });
+          };
+          if (Array.isArray(co.captureColumns)) {
+            card.captureColumns = co.captureColumns
+              .filter((x): x is string => typeof x === "string")
+              .map((x) => x.trim())
+              .filter((x) => x !== "");
+          }
+          if (typeof co.hasFlag === "boolean") card.hasFlag = co.hasFlag;
+          cards.push(card);
         }
       }
       out.push({ boardId, name: s(o.name).trim() || boardId, cards });

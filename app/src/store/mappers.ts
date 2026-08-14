@@ -162,7 +162,9 @@ export function serializeManifest(manifest: BoardManifest): string {
  * policy falls through to carry like any other unknown value.
  */
 export function slotPolicy(slot: ManifestSlot): "clear" | "carry" | "shared" {
-  if (cardSpec(slot.cardType)?.seriesBacked) return "shared";
+  const spec = cardSpec(slot.cardType);
+  if (spec?.seriesBacked) return "shared";
+  if (spec?.fixedPolicy) return spec.fixedPolicy;
   const board = (slot.settings.board ?? {}) as Record<string, unknown>;
   const policy = typeof board.policy === "string" ? board.policy : "";
   if (policy === "clear" || policy === "shared") return policy;
