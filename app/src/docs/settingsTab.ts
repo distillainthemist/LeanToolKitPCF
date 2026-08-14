@@ -1695,6 +1695,117 @@ export async function renderDocsSettings(body: HTMLElement, ctx: Ctx): Promise<v
   };
   paintTags();
 
+  // ---- F2: per-site default org filters (Ben, 2026-08-14) --------------
+  body.appendChild(section("Default filters"));
+  body.appendChild(
+    note(
+      "What a site's members see when they open the register: their own branch plus " +
+        "any corporate/functional branches ticked here. The folders pane shows just " +
+        "these (a Show-other-sites row reveals the rest) — everything stays one click " +
+        "away, nothing is hidden for good. Site names must match the site on user " +
+        "records; an unmapped site falls back to name-matching its org branch."
+    )
+  );
+  const dofBox = el("div", "");
+  body.appendChild(dofBox);
+  const paintDof = () => {
+    void (async () => {
+      clear(dofBox);
+      if (app.orgSetId === "" || app.siteUrl === "") {
+        dofBox.appendChild(note("Link the organisation term set first."));
+        return;
+      }
+      dofBox.appendChild(el("div", "app-loading-line", "Reading the organisation tree…"));
+      // live walk — an admin mapping branches must see fresh terms
+      const walk = await fetchTermPaths(app.siteUrl, app.orgSetId);
+      clear(dofBox);
+      if (walk.error !== "") {
+        dofBox.appendChild(note(`Term walk failed: ${walk.error}`));
+        return;
+      }
+      const labelOfId = (id: string) =>
+        walk.nodes.find((n) => n.id.toLowerCase() === id.toLowerCase())?.labels.join(" › ") ??
+        `(missing term ${id.slice(0, 8)}…)`;
+
+      const siteIn = el("input", "app-input") as HTMLInputElement;
+      siteIn.placeholder = "Site name (as on user records), e.g. Kwinana";
+      const boxes = new Map<string, HTMLInputElement>();
+      const tree = el("div", "app-docs-doftree");
+      for (const n of walk.nodes) {
+        const row = el("label", "app-docs-dofrow");
+        row.style.paddingLeft = `${(n.labels.length - 1) * 14}px`;
+        const cb = el("input", "") as HTMLInputElement;
+        cb.type = "checkbox";
+        boxes.set(n.id, cb);
+        row.append(cb, el("span", "", n.labels[n.labels.length - 1]));
+        tree.appendChild(row);
+      }
+      const saveBtn = el("button", "app-btn", "Save site default") as HTMLButtonElement;
+      const st = el("div", "app-docs-addstatus");
+      saveBtn.addEventListener("click", () => {
+        void (async () => {
+          const key = siteIn.value.trim().toLowerCase();
+          if (key === "") {
+            st.textContent = "Name the site first.";
+            st.classList.add("app-docs-addstatus-warn");
+            return;
+          }
+          saveBtn.disabled = true;
+          st.classList.remove("app-docs-addstatus-warn");
+          st.textContent = "Saving…";
+          const picked = [...boxes.entries()].filter(([, cb]) => cb.checked).map(([id]) => id);
+          const next = { ...app.defaultOrgFilter };
+          if (picked.length > 0) next[key] = picked;
+          else delete next[key];
+          app.defaultOrgFilter = next;
+          try {
+            await saveAppDocsConfig(app);
+            paintDof();
+          } catch (e) {
+            st.textContent = `The save was refused: ${String(e).slice(0, 160)}`;
+            st.classList.add("app-docs-addstatus-warn");
+            saveBtn.disabled = false;
+          }
+        })();
+      });
+
+      // existing mappings first — edit prefills the form, remove saves
+      if (Object.keys(app.defaultOrgFilter).length === 0) {
+        dofBox.appendChild(el("div", "app-field-hint", "No site defaults mapped yet."));
+      }
+      for (const [site, ids] of Object.entries(app.defaultOrgFilter)) {
+        const row = el("div", "app-docs-dofmap");
+        row.append(
+          el("span", "app-docs-dofsite", site),
+          el("span", "app-field-hint", ids.map(labelOfId).join(" · "))
+        );
+        const edit = el("button", "app-btn", "Edit") as HTMLButtonElement;
+        edit.addEventListener("click", () => {
+          siteIn.value = site;
+          for (const [id, cb] of boxes) {
+            cb.checked = ids.some((x) => x.toLowerCase() === id.toLowerCase());
+          }
+          siteIn.focus();
+        });
+        const rm = el("button", "app-btn", "Remove") as HTMLButtonElement;
+        rm.addEventListener("click", () => {
+          void (async () => {
+            rm.disabled = true;
+            const next = { ...app.defaultOrgFilter };
+            delete next[site];
+            app.defaultOrgFilter = next;
+            await saveAppDocsConfig(app).catch(() => undefined);
+            paintDof();
+          })();
+        });
+        row.append(edit, rm);
+        dofBox.appendChild(row);
+      }
+      dofBox.append(siteIn, tree, saveBtn, st);
+    })();
+  };
+  paintDof();
+
   body.appendChild(section("Write access"));
   body.appendChild(
     note(

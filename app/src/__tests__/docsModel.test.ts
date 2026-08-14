@@ -78,6 +78,7 @@ describe("app docs config", () => {
       spEditorsGroup: "DMSDocumentEditors",
       stagingLibrary: "DMS-Upload",
       sites: {},
+    defaultOrgFilter: {},
     });
     expect(parseAppDocsConfig(raw).siteUrl).toBe("https://x.sharepoint.com/sites/Dev");
     // the 5G groups round-trip beside the controllers group

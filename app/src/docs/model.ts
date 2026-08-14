@@ -821,6 +821,11 @@ export interface AppDocsConfig {
    *  claim-cached one. Named, not id'd: names are what the sitegroups
    *  REST resolves and what an admin reads in SharePoint. */
   spEditorsGroup: string;
+  /** F2 (Ben, 2026-08-14): per-site DEFAULT org filter — LeanBoard
+   *  site name (lowercased) → org term ids (the site's branch plus the
+   *  corporate/functional branches it sees by default). Rename-proof
+   *  by id; absent site falls back to name-matching. */
+  defaultOrgFilter: Record<string, string[]>;
   /** The upload STAGING library's title (5H2) — bytes cannot cross the
    *  connector, so uploads happen in SharePoint's own UI here, and the
    *  app copies server-side into the target. Never exposed in the nav;
@@ -859,6 +864,7 @@ export function emptyAppDocsConfig(): AppDocsConfig {
     editorsGroupId: "",
     editorsGroupName: "",
     spEditorsGroup: "",
+    defaultOrgFilter: {},
     stagingLibrary: "",
     sites: {},
   };
@@ -944,6 +950,14 @@ export function parseAppDocsConfig(raw: string | null | undefined): AppDocsConfi
     out.editorsGroupId = asStr(o.editorsGroupId);
     out.editorsGroupName = asStr(o.editorsGroupName);
     out.spEditorsGroup = asStr(o.spEditorsGroup);
+    const dof = (o.defaultOrgFilter ?? {}) as Record<string, unknown>;
+    for (const [site, ids] of Object.entries(dof)) {
+      if (!Array.isArray(ids)) continue;
+      const clean = ids.filter((x): x is string => typeof x === "string" && x.trim() !== "");
+      if (site.trim() !== "" && clean.length > 0) {
+        out.defaultOrgFilter[site.trim().toLowerCase()] = clean;
+      }
+    }
     out.stagingLibrary = asStr(o.stagingLibrary);
     if (o.sites && typeof o.sites === "object") {
       for (const [key, val] of Object.entries(o.sites as Record<string, unknown>)) {
@@ -1096,6 +1110,7 @@ export function serializeAppDocsConfig(cfg: AppDocsConfig): string {
   if (cfg.editorsGroupId !== "") o.editorsGroupId = cfg.editorsGroupId;
   if (cfg.editorsGroupName !== "") o.editorsGroupName = cfg.editorsGroupName;
   if (cfg.spEditorsGroup !== "") o.spEditorsGroup = cfg.spEditorsGroup;
+  if (Object.keys(cfg.defaultOrgFilter).length > 0) o.defaultOrgFilter = cfg.defaultOrgFilter;
   if (cfg.stagingLibrary !== "") o.stagingLibrary = cfg.stagingLibrary;
   const sites: Record<string, unknown> = {};
   for (const [key, dict] of Object.entries(cfg.sites)) {

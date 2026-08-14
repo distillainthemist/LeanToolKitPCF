@@ -1927,6 +1927,9 @@ export function mountDocs(
       ids: string[];
       /** Lowercased subtree labels — the REST-path label match. */
       labels: Set<string>;
+      /** F2: a DEFAULT filter unions several branches — every root id,
+       *  so the tree highlights all of them (absent = [node.id]). */
+      roots?: string[];
     }
     let filters: ActiveFilter[] = [];
     const filterFor = (col: string): ActiveFilter | null =>
@@ -1977,6 +1980,43 @@ export function mountDocs(
       void load(true);
     };
 
+    /** F2: the viewer's mapped org branches — the configured per-site
+     *  term-id mapping first, the site NAME match (F1) as fallback.
+     *  Resolved against the walked nodes so a stale id simply drops. */
+    const viewerBranchRoots = async (nodes: TermNode[]): Promise<TermNode[]> => {
+      const viewer = currentViewer();
+      if (!viewer) return [];
+      const me = await viewerPerson(viewer.objectId).catch(() => null);
+      const siteKeyL = (me?.site ?? "").trim().toLowerCase();
+      if (siteKeyL === "") return [];
+      const mapped = app.defaultOrgFilter[siteKeyL] ?? [];
+      if (mapped.length > 0) {
+        const wanted = new Set(mapped.map((id) => id.toLowerCase()));
+        return nodes.filter((n) => wanted.has(n.id.toLowerCase()));
+      }
+      const single = await viewerNode();
+      return single !== null ? [single] : [];
+    };
+
+    /** Apply the DEFAULT filter: one org filter whose subtree is the
+     *  UNION of the mapped branches — one entry, so the branches OR
+     *  (several entries on one column would AND to nothing). */
+    const applyDefaultFilter = (roots: TermNode[], nodes: TermNode[]) => {
+      if (roots.length === 0) return;
+      filters = filters.filter((f) => f.col !== "");
+      const ids: string[] = [];
+      const labels = new Set<string>();
+      for (const r of roots) {
+        const subtree = subtreeIn(nodes, r);
+        ids.push(...subtree.map((n) => n.id));
+        for (const n of [r, ...subtree]) labels.add(n.labels[n.labels.length - 1].toLowerCase());
+      }
+      filters.push({ col: "", node: roots[0], ids, labels, roots: roots.map((r) => r.id) });
+      paintTreeSelection();
+      paintChips();
+      void load(true);
+    };
+
     // ---- the tree ------------------------------------------------------
     // the tree is FIXED to the organisation hierarchy (Ben, 2026-08-02:
     // with the Filters popover covering every column, a configurable
@@ -1986,12 +2026,16 @@ export function mountDocs(
     const treeButtons = new Map<string, HTMLElement>();
     let allBtn: HTMLButtonElement | null = null;
     let collapsed = new Set<string>();
+    /** F2: other sites' branches sit behind a toggle — session-scoped,
+     *  the default view returns on the next open. */
+    let showOtherSites = false;
 
     const paintTreeSelection = () => {
       const active = filterFor(groupBy);
       allBtn?.classList.toggle("app-docs-navterm-on", active === null);
+      const activeIds = new Set(active?.roots ?? (active ? [active.node.id] : []));
       for (const [id, btn] of treeButtons) {
-        btn.classList.toggle("app-docs-navterm-on", active?.node.id === id);
+        btn.classList.toggle("app-docs-navterm-on", activeIds.has(id));
       }
     };
 
@@ -2063,6 +2107,18 @@ export function mountDocs(
           return;
         }
         treeNodes = nodes;
+        // F2 (Ben, 2026-08-14): the pane shows the viewer's mapped
+        // branches (their site + configured functional branches) plus
+        // the path down to them; everything else waits behind the
+        // "Show other sites" row. No mapping/site = the full tree.
+        const myRoots = groupBy === "" ? await viewerBranchRoots(nodes) : [];
+        if (dead || setFor(groupBy) !== setId) return;
+        const isPrefix = (a: string[], b: string[]) =>
+          a.length <= b.length && a.every((l, i) => l.toLowerCase() === b[i].toLowerCase());
+        const inScope = (n: TermNode): boolean =>
+          myRoots.length === 0 ||
+          showOtherSites ||
+          myRoots.some((r) => isPrefix(n.labels, r.labels) || isPrefix(r.labels, n.labels));
         const disabled = groupBy === "" && orgProps.length === 0;
         const SEP = "\u0000";
         const key = (labels: string[]) => labels.join(SEP);
@@ -2094,6 +2150,7 @@ export function mountDocs(
           }
         };
         for (const n of nodes) {
+          if (!inScope(n)) continue;
           const row = el("div", "app-docs-treerow");
           row.style.paddingLeft = `${(n.labels.length - 1) * 14}px`;
           const k = key(n.labels);
@@ -2128,6 +2185,23 @@ export function mountDocs(
           rows.set(n.id, row);
           treeBox.appendChild(row);
         }
+        if (myRoots.length > 0) {
+          const hiddenN = nodes.filter(
+            (n) => !myRoots.some((r) => isPrefix(n.labels, r.labels) || isPrefix(r.labels, n.labels))
+          ).length;
+          if (showOtherSites || hiddenN > 0) {
+            const tog = el(
+              "button",
+              "app-linklike app-docs-showsites",
+              showOtherSites ? "Show my sites only" : `Show other sites (${hiddenN})`
+            ) as HTMLButtonElement;
+            tog.addEventListener("click", () => {
+              showOtherSites = !showOtherSites;
+              paintTree();
+            });
+            treeBox.appendChild(tog);
+          }
+        }
         paintCollapse();
         paintTreeSelection();
         // boot: a shared/saved view's org filter first; otherwise land on
@@ -2139,8 +2213,10 @@ export function mountDocs(
             const match = nodes.find((x) => x.id === wantOrg);
             if (match) applyFilter("", match, nodes);
           } else if (orgProps.length > 0 && bootView === null && !favMode) {
-            const mine = await viewerNode();
-            if (!dead && mine && filterFor("") === null) applyFilter("", mine, nodes);
+            const roots = await viewerBranchRoots(nodes);
+            if (!dead && roots.length > 0 && filterFor("") === null) {
+              applyDefaultFilter(roots, nodes);
+            }
           }
         }
       });
