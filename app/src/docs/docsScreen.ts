@@ -30,6 +30,7 @@ import {
   DocRow,
   browseComparator,
   buildRenderViewXml,
+  clampRowLimit,
   formatDayMonthYear,
   formatWhen,
   isNonCurrentStatus,
@@ -118,6 +119,10 @@ let pendingLibs: string[] | null = null;
 import { openDocViewer } from "./viewer";
 
 const PAGE = 50;
+/** The very first batch on a reset (slow-wifi work, Ben 2026-08-14):
+ *  smaller, so time-to-first-row beats completeness - normal paging
+ *  resumes at PAGE from the cursor. */
+const FIRST_PAGE = 20;
 
 /**
  * How many rows the header's match total may read per library. Core
@@ -3641,6 +3646,8 @@ export function mountDocs(
       buf: DocRow[];
       next: string;
       done: boolean;
+      /** The first (FIRST_PAGE-sized) request has been made. */
+      primed?: boolean;
     }
     let feeds: BrowseFeed[] = [];
     /** Library-total for plain browsing ("50 of 150"); null = unknown. */
@@ -3830,12 +3837,47 @@ export function mountDocs(
       }
       inFlight = true;
       const gen = reset ? ++generation : generation;
+      // ---- the instant first paint (slow-wifi work, 2026-08-14) --------
+      // The org tree's own pattern applied to rows: the LAST session's
+      // first page paints immediately while the live rows refresh in the
+      // background. Plain browsing only — search, tasks and favourites
+      // always fetch live — and the state key means a changed selection,
+      // sort or filter never shows someone else's view.
+      const FIRST_CACHE = `ltk-docsfirst|${siteKey(app.siteUrl)}`;
+      const cacheEligible = () =>
+        query.trim() === "" &&
+        taskFilter === null &&
+        !favMode &&
+        dateFilters.length === 0 &&
+        modifiedDays === 0;
+      const cacheStateKey = () =>
+        JSON.stringify({
+          libs: [...(scopeAll ? allListIds : selectedIds)].sort(),
+          sort,
+          approved: onlyApproved,
+          cols: chosenColumns,
+          f: filters.map((f) => `${f.col}:${(f.roots ?? [f.node.id]).sort().join("+")}`).sort(),
+        });
+      let paintedFromCache = false;
       if (reset) {
         done = false;
         feeds = [];
         list.setRows([]);
+        if (cacheEligible()) {
+          try {
+            const raw = localStorage.getItem(FIRST_CACHE);
+            const hit = raw !== null ? (JSON.parse(raw) as { k: string; rows: DocRow[] }) : null;
+            if (hit !== null && hit.k === cacheStateKey() && hit.rows.length > 0) {
+              list.append(applyNonCurrent(hit.rows));
+              paintedFromCache = true;
+              status.textContent = "Refreshing…";
+            }
+          } catch {
+            /* an unreadable cache paints nothing — the live rows come */
+          }
+        }
       }
-      list.setLoading(true);
+      list.setLoading(!paintedFromCache);
       // RenderListDataAsStream renders EVERYTHING: it is the modern-view
       // engine, returns display-ready labels, and CAMLs name search, the
       // Modified window and taxonomy label filters server-side per
@@ -3905,9 +3947,6 @@ export function mountDocs(
           }
         }
       }
-      // the header's total, asked alongside the first page rather than
-      // before it — the rows are what the reader is waiting for
-      if (reset) refreshMatchTotal(gen);
       {
         // browse via RenderListDataAsStream (single library or union):
         // display-ready values for every field type, with name search,
@@ -4013,7 +4052,11 @@ export function mountDocs(
         let feedError = "";
         const fill = async (f: BrowseFeed) => {
           if (f.done || f.buf.length > 0) return;
-          const page = await renderListPage(app.siteUrl, f.listId, f.viewXml, f.next);
+          // the opening request is FIRST_PAGE-sized — the cursor
+          // resumes normal paging from wherever it stopped
+          const xml = f.primed === true ? f.viewXml : clampRowLimit(f.viewXml, FIRST_PAGE);
+          f.primed = true;
+          const page = await renderListPage(app.siteUrl, f.listId, xml, f.next);
           f.buf.push(...page.rows);
           f.next = page.next;
           if (page.error !== "") {
@@ -4025,16 +4068,34 @@ export function mountDocs(
         };
         const cmp = browseComparator(sort.key === "name" ? "name" : "modified", sort.asc);
         const rowsOut: DocRow[] = [];
-        while (rowsOut.length < PAGE) {
+        // a reset paints as soon as the SMALL first batch merges —
+        // time-to-first-row is the whole point; paging tops it up
+        const target = reset ? FIRST_PAGE : PAGE;
+        while (rowsOut.length < target) {
           await Promise.all(feeds.map(fill));
           if (dead || gen !== generation) return finish();
           const i = pickBrowseHead(feeds.map((f) => f.buf), cmp);
           if (i < 0) break;
           rowsOut.push(feeds[i].buf.shift()!);
         }
-        list.append(applyNonCurrent(rowsOut));
+        if (paintedFromCache) list.setRows(applyNonCurrent(rowsOut));
+        else list.append(applyNonCurrent(rowsOut));
         done = feeds.every((f) => f.done && f.buf.length === 0);
         paintStatus(knownTotal, feedError);
+        if (reset) {
+          // the count follows the rows, never competes with them (A)
+          refreshMatchTotal(gen);
+          if (cacheEligible() && feedError === "") {
+            try {
+              localStorage.setItem(
+                FIRST_CACHE,
+                JSON.stringify({ k: cacheStateKey(), rows: rowsOut.slice(0, FIRST_PAGE) })
+              );
+            } catch {
+              /* storage full/unavailable — next open just loads live */
+            }
+          }
+        }
       }
       list.setLoading(false);
       finish();
