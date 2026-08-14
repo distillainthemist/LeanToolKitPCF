@@ -351,8 +351,13 @@ export function mountDocs(
     );
     const dictBy = new Map(siteDict.columns.map((c) => [c.internal, c]));
     /** The libraries whose rows can appear right now. */
+    // T1 (Ben, 2026-08-14): template libraries are the CONTROLLERS'
+    // tooling — for everyone else they leave every selectable surface.
+    // The add-document template picker is untouched (it reads the
+    // template library server-side and never needed the nav).
+    const canSeeLib = (l: DocLibrary): boolean => l.libType !== "template" || docAdmin();
     const viewLibs = (): DocLibrary[] =>
-      scopeAll ? libraries : libraries.filter((l) => isSelected(l.listId));
+      (scopeAll ? libraries : libraries.filter((l) => isSelected(l.listId))).filter(canSeeLib);
     const roleOf = (internal: string): string => dictBy.get(internal)?.role ?? "";
     const labelOf = (internal: string): string => {
       const c = dictBy.get(internal);
@@ -430,19 +435,25 @@ export function mountDocs(
      *  failed lookup) — gates that hide affordances stay OPEN on
      *  unknown, SharePoint being the hard gate. */
     let meInPool: boolean | null = null;
+    /** Resolves when the admin/controller answers are in — surfaces
+     *  that differ by standing (T1: template library rows) reveal off
+     *  this rather than guessing at paint time. */
+    let adminReady: Promise<unknown> = Promise.resolve();
     if (whoId !== "") {
-      void viewerPerson(whoId).then(
-        (p) => {
-          meIsAdmin = p?.role === "superadmin" || p?.role === "siteadmin";
-        },
-        () => {}
-      );
-      void viewerIsController(whoId).then(
-        (v) => {
-          meIsController = v;
-        },
-        () => {}
-      );
+      adminReady = Promise.allSettled([
+        viewerPerson(whoId).then(
+          (p) => {
+            meIsAdmin = p?.role === "superadmin" || p?.role === "siteadmin";
+          },
+          () => {}
+        ),
+        viewerIsController(whoId).then(
+          (v) => {
+            meIsController = v;
+          },
+          () => {}
+        ),
+      ]);
       void viewerInPool(whoId).then(
         (v) => {
           meInPool = v;
@@ -1812,6 +1823,14 @@ export function mountDocs(
     for (const lib of libraries) {
       const on = !favMode && isSelected(lib.listId);
       const row = el("div", `app-docs-librow2${on ? " app-docs-librow2-on" : ""}`);
+      if (lib.libType === "template") {
+        // hidden until the admin answer lands — an admin's row appears,
+        // everyone else never sees it
+        row.style.display = "none";
+        void adminReady.then(() => {
+          if (!dead && docAdmin()) row.style.display = "";
+        });
+      }
       const box = el("input", "app-docs-libcheck") as HTMLInputElement;
       box.type = "checkbox";
       box.checked = on;
@@ -1990,9 +2009,10 @@ export function mountDocs(
       if (!viewer) return null;
       const me = await viewerPerson(viewer.objectId).catch(() => null);
       if (!me) return null;
-      const want = [me.site, me.department, me.area]
-        .map((s) => (s ?? "").trim().toLowerCase())
-        .filter((s) => s !== "");
+      // SITE level only (Ben, 2026-08-14): the default filter is the
+      // site's whole subtree — departments come along as children,
+      // and the earlier deepest-corner default over-narrowed
+      const want = [me.site].map((s) => (s ?? "").trim().toLowerCase()).filter((s) => s !== "");
       if (want.length === 0) return null;
       let best: TermNode | null = null;
       for (const n of treeNodes) {
