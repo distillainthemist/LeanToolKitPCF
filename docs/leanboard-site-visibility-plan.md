@@ -1,120 +1,75 @@
-# Site-scoped document visibility (proposal, 2026-08-14)
+# Site default filters (proposal v2, 2026-08-14)
 
-Ben's ask: a member of a specific site sees their OWN site's documents
-plus selected corporate libraries (functional teams), and not other
-sites'. Also: template libraries selectable by document controllers
-only.
+Ben's correction to v1: NOT visibility control — the organisational
+filtering pane should simply PRE-FILTER to the right org branches
+based on the user's site. Other sites' documents stay one click away
+(clear the filter); SharePoint is untouched.
 
-## The shape: an AUDIENCE per library
+## The shape: a default org filter per site
 
-Every piece already exists to say this cleanly:
+- **The user's site is known**: `ben_ltkpeoples.ben_site` (already read
+  for the site accent).
+- **The org filter already takes multiple subtrees**: the register's
+  term filters carry a label LIST per column — "Kwinana OR Corporate"
+  is one filter today when picked by hand. This feature just picks it
+  automatically.
 
-- **The user's site is already known.** `ben_ltkpeoples.ben_site` is
-  the LeanBoard user record's site — the app reads it today to pick
-  the site accent. It becomes the visibility key.
-- **Libraries are already the unit of exposure.** The register, cards,
-  pickers and scans all flow from `docsConfig()`'s library list — one
-  choke point.
+### The mapping
 
-So: each library's config gains an **audience**:
-
-```
-audience: { all: true } | { all: false, sites: ["Kwinana", "Corporate"] }
-```
-
-- Absent = `all: true` — today's behaviour, so nothing changes at
-  migration and a new library is visible everywhere until scoped.
-- A SITE library lists its own site. A CORPORATE/functional library
-  lists the sites that should see it — or stays `all`. This covers
-  "selected corporate sites per site" without a second mapping table:
-  the library says who sees it, rather than every site listing what it
-  sees. (One list per library beats N-per-site lists to maintain.)
-
-### Who sees what
+Per site, a list of ORG TERMS that make up its default view — the
+site's own branch plus the corporate/functional branches it should see
+by default:
 
 ```
-visibleLibraries(viewer) =
-  document controllers & app admins → every library
-  user with a site               → audience.all OR audience.sites ∋ their site
-  user with NO site set          → audience.all only
-  + template libraries           → controllers & admins ONLY, always
+defaultOrgFilter: { "Kwinana": ["<term-id site>", "<term-id corp-fn>"], … }
 ```
 
-The template rule folds in as a fixed audience: `libType === "template"`
-never reaches non-controllers regardless of its audience — but the
-ADD-DOCUMENT flow keeps working for everyone, because the template
-picker reads the template library server-side; it was never a
-navigable register and now visibly isn't one.
+- Stored by TERM ID (rename-proof, like every other term reference),
+  labels resolved from the cached walk at apply time.
+- Lives in the app docs config JSON (AppDocsConfig) — no schema.
+- Edited in Settings → Documents, a small "Default filters" section:
+  pick a site (the app's existing site list), tick org branches from
+  the term tree. Superadmin, like the rest of the tab.
+- A site with no mapping falls back to NAME-MATCHING the user's site
+  against the org tree's terms — zero-config default for the common
+  case where site names and org branch names align.
 
-## What this IS and IS NOT (stated up front)
+### The behaviour
 
-This is **UI scoping, not security**. The hard gate remains SharePoint:
-a user with SP permissions on another site's library could still reach
-it via SharePoint itself. For real enforcement the SP sites' own
-permission groups must align (site members per site) — the app's
-audience keeps the REGISTER honest and uncluttered, and prevents the
-app from even attempting reads that would be refused. Deep links and
-kiosk QRs deliberately stay SharePoint-gated: a shared link to a
-document the user can read in SP still opens (a share is an act of
-inclusion; the audience governs browsing, not sharing).
+On the documents register mount:
 
-## Where it bites (the enforcement points)
+1. A SAVED VIEW, shared link, docview payload or kiosk launch keeps its
+   own filters — the default applies ONLY to a plain open.
+2. Otherwise: viewer's site → mapping (or name match) → apply as the
+   NORMAL org filter, painted as the ordinary filter chips — visibly
+   removable with one click, changeable like any hand-picked filter.
+3. No site on the user record, or nothing matches → no default filter
+   (today's behaviour).
+4. Cards, health, pickers, search: UNTOUCHED — this is a register
+   default, not a scope.
 
-All downstream of one filter applied where `docsConfig()` is consumed:
+Nothing is hidden anywhere: it is exactly the filter the user would
+have clicked, clicked for them.
 
-1. **The register** — nav library cards, scope dropdown, feeds, count
-   sweep: filtered list in, everything else follows.
-2. **Board cards** (Standard documents / Document health) — the card
-   scope resolver filters the same way; a pasted view naming an
-   out-of-audience library reports "not visible to you" rather than
-   silently broadening (the resolver's existing convention).
-3. **Link picker + reverse index + search scope** — filtered, so links
-   to out-of-audience documents can't be minted by non-controllers,
-   the derived view doesn't leak names, and search stays in-audience.
-4. **Add-document targets** — already permission-gated; the audience
-   filter narrows the candidate list first.
-5. **Admin surfaces** (health report, settings, org sync) — controllers
-   see everything; no change.
+## Template libraries (unchanged from v1, still in scope)
 
-## Settings UI
-
-Settings → Documents → Libraries: each library row gains an audience
-control — "Everyone" (default) or "These sites…" with a multi-pick of
-the site names the app already knows (the same site list the Users tab
-and site cadence use). Template libraries show a fixed "Document
-controllers" chip instead of a control.
-
-## Honest limits
-
-- A user's `ben_site` must be maintained (Users tab) — an unset site
-  quietly narrows that user to Everyone-audience libraries; the Users
-  tab already surfaces site, and Access diagnostics can add a line.
-- Site RENAMES: audiences store site names (the app's site key today).
-  A rename would orphan audiences — the settings save can offer a
-  sweep, or we accept "rename = re-pick" for v1 (sites rarely rename).
-- Cross-site LINKS (corporate↔site) keep working for controllers who
-  mint them; a non-controller clicking a link to an out-of-audience
-  document falls back to the SharePoint open — SP decides, as with
-  kiosk shares.
+Template libraries leave the library nav for everyone except document
+controllers and app admins — the add-document template picker keeps
+working for all (it reads the template library server-side and never
+needed the nav entry).
 
 ## Phases
 
-- **V1 — model + filter + template rule** (audience parse/serialize +
-  `visibleLibraries` + the choke-point filter through register, cards,
-  pickers, index, search; template libraries controllers-only):
-  ~1 day, app-only.
-- **V2 — settings audience control** (the Libraries-row UI + site
-  multi-pick): ~0.5 day, app-only.
-- Ship together; nothing schema-carrying (audience rides the existing
-  library config JSON).
+- **T1 — template gate** (nav filter on libType): ~1 hour, app-only.
+- **F1 — default filter** (name-match fallback + apply-on-plain-open):
+  ~half day, app-only.
+- **F2 — the mapping + settings section** (term-id lists per site,
+  Default filters UI): ~half day, app-only.
 
 ## Open questions
 
-1. Confirm `ben_ltkpeoples.ben_site` as the authoritative site key
-   (vs deriving from the org tree).
-2. Should a user with NO site see nothing but Everyone-audience
-   libraries (proposed), or be treated as corporate?
-3. Do OWNERS of a document outside their audience need visibility
-   (e.g. a corporate owner of a site-specific document)? Proposed v1:
-   no special case — being named owner without SP/audience access is a
-   configuration smell the health report can flag instead.
+1. Is the name-match fallback (site name = org term label) right for
+   Pechey's tree, or should F1 wait for F2's explicit mapping?
+2. Should the default also apply when a user CLEARS all filters and
+   reloads later (proposed: yes — the default applies on every plain
+   open, never mid-session)?
