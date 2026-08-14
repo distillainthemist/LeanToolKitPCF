@@ -446,9 +446,10 @@ async function paintDocs(
     for (const lib of scope.libs) {
       for (const c of lib.config.columns) if (c.inDefault) wanted.add(c.internal);
     }
-    // Modified rides the DEFAULT view by name — a pasted view that
-    // hides it stays hidden (Ben, 2026-08-14)
-    return [...wanted, "Modified"];
+    // Modified rides the DEFAULT view by name ONLY where the
+    // dictionary does not govern it (Ben, 2026-08-14)
+    if (!scope.dict.columns.some((c) => c.internal === "Modified")) wanted.add("Modified");
+    return [...wanted];
   };
   const wanted =
     scope.view.columns.length > 0

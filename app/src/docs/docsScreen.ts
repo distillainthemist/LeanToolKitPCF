@@ -2768,7 +2768,13 @@ export function mountDocs(
                   const c = dictBy.get(i);
                   return c !== undefined && columnOffered(c);
                 })
-            : [...defaultInternals(), "Modified"],
+            : defaultInternals().concat(
+                // Modified is appended by NAME only where the
+                // DICTIONARY does not govern it — a site that manages
+                // Modified as a column (hide/default cells) is obeyed
+                // (Ben, 2026-08-14: "it's still appearing")
+                dictBy.has("Modified") ? [] : ["Modified"]
+              ),
         bucket,
         // more than one library in view: say which one each row came from
         libraryLabel:
@@ -4299,7 +4305,9 @@ export function mountDocs(
       const body = el("div", "app-docs-propsbody");
       dialog.appendChild(body);
       const effective =
-        chosenColumns.length > 0 ? chosenColumns : [...defaultInternals(), "Modified"];
+        chosenColumns.length > 0
+          ? chosenColumns
+          : defaultInternals().concat(dictBy.has("Modified") ? [] : ["Modified"]);
       // offerable = what the site says is available AND some library in
       // view actually carries; the chooser opens whatever the scope
       const carried = new Set(viewLibs().flatMap((l) => l.config.columns.map((c) => c.internal)));
