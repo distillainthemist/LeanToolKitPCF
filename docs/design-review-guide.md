@@ -27,37 +27,50 @@ are worth more than rushed coverage.
    its departments, with your own department opened further. Other
    sites sit collapsed below. Does the starting view feel right?*
 
-2. **Remove the site filter chip, browse another site's folders, then
-   click your own site again.**
-   *Look for: everything stays reachable — the default is a starting
-   point, not a wall.*
-
-3. **Find a specific document three ways**: search by name, the
-   Filters button, and clicking through the folder tree.
+2. **Find a specific document three ways**: search by name, the
+   Filters button, and clicking through the folder tree. In the scope
+   menu next to search, try "Match contents & every field" and search
+   a phrase you know is INSIDE a document.
    *Look for: which way felt most natural? Did the filters offer the
-   columns you'd expect?*
+   columns you'd expect? Did contents search find what name search
+   couldn't?*
 
-4. **Open a document.** Read it in the preview, then open the Details
+3. **Open a document.** Read it in the preview, then open the Details
    pane.
    *Look for: are the properties grouped sensibly? Anything missing or
    meaningless to you? Click a linked document if one is shown — it
    should switch to that document.*
 
-5. **Look at Version history** at the bottom of the details pane.
+4. **Look at Version history** at the bottom of the details pane.
    *Look for: as a general user you should see the history but no
    download links for old versions — does the story of the document
    read clearly?*
 
-6. **Star a couple of documents** (the ☆ in the overlay), then open
+5. **Star a couple of documents** (the ☆ in the overlay), then open
    Favourites in the left pane.
    *Look for: would you use this for your day-to-day documents?*
 
-7. **On a standard you'd genuinely want to change, use Request edit
+6. **Make the register yours**: try List vs Tiles, and "Choose
+   columns…" in the ⋮ menu — hide a column, add another.
+   *Look for: do the columns on offer cover what you'd want to see at
+   a glance?*
+
+7. **Share a document**: open one, use Share — copy the link and send
+   it to a neighbour (or yourself in Teams); try the QR with a phone.
+   *Look for: does the link land the recipient on the right document?
+   The QR should open JUST the document — a read-only kiosk.*
+
+8. **Save your view**: with some filters applied, use Copy link in the
+   ⋮ menu and open it in a new tab (or send it to a neighbour).
+   *Look for: the link should reproduce your exact view — filters,
+   columns, everything.*
+
+9. **On a standard you'd genuinely want to change, use Request edit
    access** and write a reason.
    *Look for: does the request feel like it went somewhere? (An owner
    will action these during the session.)*
 
-8. **If you have your phone**: open the register there, and scan a
+10. **If you have your phone**: open the register there, and scan a
    document QR if one is printed.
    *Look for: the scanned code should open just that document, nothing
    else. Note anything that feels broken on the phone.*
@@ -88,28 +101,34 @@ are worth more than rushed coverage.
    linked copy, you'll be asked to confirm publishing — is the wording
    clear?*
 
-5. **Use Mark reviewed** on a document that's due (or any approved one
+5. **Check "Action needed"** in the register toolbar (and the
+   Documents count on the home screen).
+   *Look for: does it show YOUR pending work — documents checked out
+   to you, reviews due, submissions waiting on you — and nothing
+   else's?*
+
+6. **Use Mark reviewed** on a document that's due (or any approved one
    you own).
    *Look for: one click, dates recompute, and the version history
    records the periodic review.*
 
-6. **Edit properties**: change the Importance, add a linked document
+7. **Edit properties**: change the Importance, add a linked document
    (try Parent), and try **"Propose a new tag…"** under the Tags
    field.
    *Look for: the review cadence should follow the importance; the
    link should appear on the document's pane; the tag proposal should
    say a controller will review it.*
 
-7. **After approving something, try the notification panel** (send
+8. **After approving something, try the notification panel** (send
    yourself or a colleague the Teams message).
    *Look for: is that a notification you'd want to receive?*
 
-8. **Action a Request edit access** that a general user raised in
+9. **Action a Request edit access** that a general user raised in
    Part 1.
    *Look for: does granting feel accountable — can you tell who asked,
    why, and what they got?*
 
-9. **Toggle Audit view** on a document's version history (owners see
+10. **Toggle Audit view** on a document's version history (owners see
    this).
    *Look for: who did what, when, and what they said — would this
    satisfy an auditor? Try Export CSV.*
@@ -129,7 +148,10 @@ are worth more than rushed coverage.
    *Look for: you should see the Templates library — general users
    should not (verify with a neighbour's screen).*
 
-4. **Open a document another user linked or tagged during the
+4. **Export the register** (⋮ menu → Export) with a filter applied.
+   *Look for: is the CSV the report you'd actually circulate?*
+
+5. **Open a document another user linked or tagged during the
    session.**
    *Look for: does the register reflect their work immediately?
    Anything stale or surprising?*
