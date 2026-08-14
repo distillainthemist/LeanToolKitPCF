@@ -77,13 +77,16 @@ are worth more than rushed coverage.
 
 ## Part 2 — document owners & approvers (after Part 1)
 
-1. **Add a document** (the ＋ Add document button): pick a template,
-   name it, fill in the metadata.
-   *Look for: did the form ask for the right things? Note anything you
-   didn't understand or couldn't answer.*
+1. **Add a document** (the ＋ Add document button) — twice: once from
+   a template, and once by **uploading an existing file** from your
+   computer (a real procedure you have lying around is perfect).
+   *Look for: did the form ask for the right things? Did the uploaded
+   file arrive intact with its metadata? Note anything you didn't
+   understand or couldn't answer.*
 
 2. **On an approved standard you own, use Start revision.** Make a
-   small edit, then **Discard check-out** and confirm everything
+   small edit — or use **Replace content** to swap in a file from your
+   computer — then **Discard check-out** and confirm everything
    reverted.
    *Look for: while you held the revision, others should keep seeing
    the approved version untouched.*
