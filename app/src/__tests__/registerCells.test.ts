@@ -40,14 +40,19 @@ describe("buildRegisterColumns", () => {
     expect(keys(cols)).toEqual(["name", "DocType", "DocStatus", "EffDate", "modified"]);
   });
 
-  it("appends Modified even when not asked for", () => {
-    const cols = buildRegisterColumns(ctx(), { wanted: ["DocOwner"], bucket: "full" });
-    expect(keys(cols)).toEqual(["name", "DocOwner", "modified"]);
+  it("shows Modified only when the view lists it (Ben, 2026-08-14)", () => {
+    const hidden = buildRegisterColumns(ctx(), { wanted: ["DocOwner"], bucket: "full" });
+    expect(keys(hidden)).toEqual(["name", "DocOwner"]);
+    const shown = buildRegisterColumns(ctx(), {
+      wanted: ["DocOwner", "Modified"],
+      bucket: "full",
+    });
+    expect(keys(shown)).toEqual(["name", "DocOwner", "modified"]);
   });
 
   it("drops the status column first as the pane narrows (mid bucket)", () => {
     const cols = buildRegisterColumns(ctx(), {
-      wanted: ["DocType", "DocStatus", "DocOwner"],
+      wanted: ["DocType", "DocStatus", "DocOwner", "Modified"],
       bucket: "mid",
     });
     expect(keys(cols)).toEqual(["name", "DocType", "DocOwner", "modified"]);
@@ -64,13 +69,13 @@ describe("buildRegisterColumns", () => {
   it("shows the library column when provided — except narrow", () => {
     const label = () => "Standards";
     const wide = buildRegisterColumns(ctx(), {
-      wanted: ["DocType"],
+      wanted: ["DocType", "Modified"],
       bucket: "full",
       libraryLabel: label,
     });
     expect(keys(wide)).toEqual(["name", "library", "DocType", "modified"]);
     const narrow = buildRegisterColumns(ctx(), {
-      wanted: ["DocType"],
+      wanted: ["DocType", "Modified"],
       bucket: "narrow",
       libraryLabel: label,
     });
@@ -79,7 +84,7 @@ describe("buildRegisterColumns", () => {
 
   it("appends trailing columns after Modified (the screen's kebab)", () => {
     const cols = buildRegisterColumns(ctx(), {
-      wanted: [],
+      wanted: ["Modified"],
       bucket: "full",
       trailing: [{ key: "kebab", label: "", render: () => "" }],
     });
@@ -88,7 +93,7 @@ describe("buildRegisterColumns", () => {
 
   it("labels come from the dictionary, internals label themselves", () => {
     const cols = buildRegisterColumns(ctx(), {
-      wanted: ["DocType", "Mystery"],
+      wanted: ["DocType", "Mystery", "Modified"],
       bucket: "full",
     });
     const byKey = new Map(cols.map((c) => [c.key, c.label]));
