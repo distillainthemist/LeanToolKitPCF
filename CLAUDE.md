@@ -5,6 +5,12 @@ LeanBoard is a Power Apps **code app** (`app/`) plus retired PCF controls
 schema (`data/`). Ben's Power Apps identity is partnership@pecheydistilling.com;
 his chat identity is ben@pecheydistilling.com.
 
+**Orientation**: read `docs/architecture.md` first — the maintained
+overview of structure, connectors, SharePoint interfacing, deployment
+and the security/DLP model. KEEP IT CURRENT: any change to
+architecture, connector usage, tables, or the auth/DLP story updates
+that page in the same commit.
+
 ## Toolchain
 
 Node 22 via Homebrew — every shell needs:
@@ -27,6 +33,9 @@ node tools/chunk-report.mjs
 
 If the change touched `shared/` or `controls/`, ALSO run `npm run typecheck`
 at the **repo root** — the app-only tsc once missed a red CI for two releases.
+When chaining gates in one command, verify the vitest COUNT line — a
+`grep` in the chain can match the failure line and still exit 0 (a
+commit shipped with 5 red tests that way, 2026-08-14).
 
 The import gate enforces: the board path (main.ts, cardRegistry.ts,
 screens/board.ts, screens/hub.ts) must not statically reach `src/docs/`;
@@ -73,6 +82,14 @@ CLI public client (04b07795-8ddb-461a-bbee-02f9e1bf7b46). Operating rules:
 - Tokens live only in the session scratchpad (mode 0600, umask 077) —
   never in the repo, never printed to the transcript. The same applies to
   presigned URLs: probe output reports status/host/parameter names only.
+
+After a schema deploy, wire new tables into the app with
+`pac code add-data-source -a dataverse -t <logical name>` (LOGICAL
+names — entity-set names fail) — it regenerates `src/generated/`.
+`data/exchange-token.mjs <resource> <in> <out>` re-scopes a device-code
+refresh token to a sibling resource (e.g. Graph) without a second
+sign-in; direct SPO REST rejects this client in this tenant, so Graph
+is the admin-scripting road.
 
 Schema changes go through the repo's own apparatus — do NOT hand-write
 ad-hoc Web API scripts (the established tools are also what the safety
