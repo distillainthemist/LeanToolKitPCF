@@ -25,6 +25,7 @@ export type FieldKind =
   | "objectList" // array of flat objects, edited as a small table (`fields`)
   | "kvList" // key→value map, edited as pairs, emitted as an object
   | "captureColumns" // CaptureCard's typed columns (dedicated builder)
+  | "canvasFields" // CanvasCard's layout (dedicated builder)
   | "json"; // raw JSON fallback (validated before emit)
 
 export interface ObjectField {
@@ -684,6 +685,29 @@ export const CARDS: CardSpec[] = [
     // close-meeting archives, never as authored content
     policies: [],
     fixedPolicy: "shared",
+  },
+  {
+    type: "CanvasCard",
+    label: "Canvas",
+    group: "Project management",
+    // hidden until the mounter ships (canvas plan C4) — the Layout
+    // builder and spec land first so the settings side is testable
+    hidden: true,
+    description:
+      "A charter / plan-on-a-page: typed, titled fields laid out in a 1–3 column grid — filled in on the card.",
+    config: [
+      {
+        key: "canvasJSON",
+        label: "Layout",
+        kind: "canvasFields",
+        help:
+          "The canvas's fields: drag to reorder; each has a type, a title, a width in columns and a height in steps. Field ids key the saved values — restructuring the layout never loses content.",
+      },
+    ],
+    appBound: [],
+    policies: ["clear", "carry", "shared"],
+    defaultPolicy: "carry",
+    standardContent: "edit",
   },
   {
     type: "HeatmapCard",

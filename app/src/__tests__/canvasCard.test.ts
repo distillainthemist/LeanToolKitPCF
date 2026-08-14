@@ -169,6 +169,47 @@ describe("sanitizeRichText", () => {
   });
 });
 
+describe("Layout builder emit ↔ card parser", () => {
+  it("a builder-authored layout survives serialize → parseCanvasConfig", async () => {
+    const { loadCanvasDraft, serializeCanvasDraft } = await import(
+      "../../../controls/CardSettings/canvasFields"
+    );
+    const stored = {
+      cols: 2,
+      fields: [
+        { id: "title", label: "Project", type: "heading", required: true, w: 2 },
+        { id: "sponsor", label: "Sponsor", type: "person", required: true },
+        {
+          id: "rag",
+          label: "Status",
+          type: "choice",
+          options: [{ value: "green", label: "On track", icon: "🟢" }],
+        },
+        {
+          id: "miles",
+          label: "Milestones",
+          type: "minitable",
+          h: 4,
+          columns: [{ key: "what", label: "What", type: "text" }],
+        },
+      ],
+    };
+    const emitted = serializeCanvasDraft(loadCanvasDraft(stored));
+    const cfg = parseCanvasConfig(JSON.stringify(emitted));
+    expect(cfg.cols).toBe(2);
+    expect(cfg.fields.map((f) => f.id)).toEqual(["title", "sponsor", "rag", "miles"]);
+    // heading required stripped at BOTH layers
+    expect(cfg.fields[0].required).toBe(false);
+    expect(cfg.fields[0].w).toBe(2);
+    expect(cfg.fields[1].required).toBe(true);
+    expect(cfg.fields[2].options[0]).toMatchObject({ value: "green", icon: "🟢" });
+    expect(cfg.fields[3].h).toBe(4);
+    expect(cfg.fields[3].columns.map((c) => c.key)).toEqual(["what"]);
+    // the emit is stable — loading it again emits the same thing
+    expect(serializeCanvasDraft(loadCanvasDraft(emitted))).toEqual(emitted);
+  });
+});
+
 describe("required", () => {
   const f = (id: string, type: string, required = true) =>
     parseCanvasConfig(JSON.stringify({ fields: [{ id, label: id, type, required }] }))

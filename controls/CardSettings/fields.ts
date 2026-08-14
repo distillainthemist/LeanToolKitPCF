@@ -9,6 +9,7 @@ import { checkItem } from "../../shared/ui/dialog";
 import { PaletteEntry, paletteMap, resolvePaletteColor } from "../../shared/palette";
 import { FieldSpec, ObjectField } from "./registry";
 import { captureColumnsEditor } from "./captureColumns";
+import { canvasFieldsEditor } from "./canvasFields";
 
 export interface FieldHost {
   readOnly: boolean;
@@ -706,6 +707,8 @@ export function renderField(
       return kvListEditor(spec, get, set, host);
     case "captureColumns":
       return captureColumnsEditor(spec, get, set, host);
+    case "canvasFields":
+      return canvasFieldsEditor(spec, get, set, host);
     case "json":
       return jsonEditor(spec, get, set, host);
     case "text":

@@ -248,6 +248,25 @@ export const CARDSETTINGS_CSS = `
   background: var(--ltk-bg);
 }
 .ltk-cs-col-head { display: flex; gap: 6px; align-items: center; }
+
+/* ---- canvas Layout builder ---- */
+.ltk-cs-drag {
+  cursor: grab;
+  color: var(--ltk-muted);
+  padding: 2px 4px;
+  user-select: none;
+  flex: 0 0 auto;
+}
+.ltk-cs-canvas-cols { display: flex; gap: 8px; align-items: center; }
+.ltk-cs-canvas-cols .ltk-cs-sublabel { margin: 0; }
+.ltk-cs-canvas-meta {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-top: 6px;
+}
+.ltk-cs-canvas-hint { flex: 1 1 160px; min-width: 0; }
 .ltk-cs-col-label { flex: 1 1 auto; min-width: 0; }
 /* Safari: fixed flex items need an explicit width, not shrink-to-fit */
 .ltk-cs-col-key {
