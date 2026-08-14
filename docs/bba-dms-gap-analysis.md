@@ -7,8 +7,10 @@
   The status stamp lives IN the templates/documents as a field bound to
   the status column (the 2026-08-08 watermark decision, reaffirmed).
   On-the-fly PDF rendering judged too difficult to implement reliably.
-- **§2 Document numbering — BACKLOG.** Needed; approach to be worked
-  out first.
+- **§2 Document numbering — PARKED (Ben, 2026-08-15).** The document
+  ID remains a MANUAL field carrying legacy numbering; auto-generation
+  is not built. FR-LC-002's spirit is met by convention + the health
+  check flagging controlled documents without an ID.
 - **§3 Bulk administration & migration — MET by process.** The curated,
   spreadsheet-driven ingestion already runs as a spreadsheet outside
   the app.

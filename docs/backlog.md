@@ -169,10 +169,7 @@ From `bba-dms-gap-analysis.md` — the items dispositioned to backlog
 management-system filters, audit trail — is tracked in its own plan
 when written):
 
-- **Document numbering (FR-LC-002 MUST, FR-LC-006 SHOULD).** Auto-
-  generated persistent document numbers with a short prefix; rename/
-  renumber with visible history. Approach to be worked out before
-  build.
+
 - **Workflow depth (FR-WF-003/007/009/011 MUST; WF-004/008/010,
   TM-002/003).** Regulator-approved gate, approval timeframes,
   delegation, formal on-behalf records, simple content revisions,
@@ -187,6 +184,10 @@ when written):
   export.
 
 **Decisions of record from the same disposition:**
+- Document numbering (FR-LC-002/006): PARKED (Ben, 2026-08-15) —
+  the document ID stays a MANUAL field carrying legacy numbering; no
+  auto-generation is built. Health already flags controlled documents
+  missing an ID, which is the whole guard a manual scheme needs.
 - PDF/reader layer (FR-DI-005/006/007, LC-003): handled IN the
   documents — a status stamp field bound to the status column; no
   app-side rendering. Too difficult to implement reliably.
