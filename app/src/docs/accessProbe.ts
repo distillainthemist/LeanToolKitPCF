@@ -77,11 +77,10 @@ export async function runAccessProbe(log: (line: string) => void): Promise<void>
       log(id !== "" ? `OK — ${label} linked: ${name}.` : `INFO — ${label} not linked yet.`);
     line("Document controllers group", cfg.controllersGroupId, cfg.controllersGroupName);
     line("Owners & approvers group", cfg.ownersGroupId, cfg.ownersGroupName);
-    line("Temporary editors group", cfg.editorsGroupId, cfg.editorsGroupName);
     log(
       cfg.spEditorsGroup !== ""
         ? `OK — SharePoint editors site group set: ${cfg.spEditorsGroup}.`
-        : "INFO — no SharePoint editors site group set (grants would use the Entra route, which propagates slowly)."
+        : "INFO — no SharePoint editors site group set — grants cannot seat editors until it is."
     );
     editorsId = cfg.editorsGroupId;
     ownersId = cfg.ownersGroupId;
@@ -196,47 +195,6 @@ export async function runAccessProbe(log: (line: string) => void): Promise<void>
     }
   }
 
-  // ---- probe 2: editors-group membership as a group owner --------------
-  log("— Entra editors-group probe (the fallback route) —");
-  if (editorsId === "") {
-    log("SKIP — no temporary editors group linked under Settings → Access control.");
-    return;
-  }
-  try {
-    // membership FIRST and plainly — "Start revision shows but check-out
-    // is denied" is answered by exactly this line (member = wait out
-    // propagation; not a member = the grant's group add never landed)
-    const member = await isGroupMember(editorsId, viewer.objectId);
-    log(
-      member
-        ? "OK — editors group: you ARE a member (SharePoint may lag membership by minutes)."
-        : "INFO — editors group: you are NOT a member."
-    );
-    const owner = await isGroupOwner(editorsId, viewer.objectId);
-    log(
-      owner
-        ? "OK — you are an Entra OWNER of the editors group."
-        : "INFO — you are NOT an owner of the editors group; membership changes below would be refused (the ownership hierarchy seeds owners in 5G3)."
-    );
-    if (member) {
-      log("SKIP — add/remove not attempted while you hold a membership — a live grant is never disturbed.");
-      return;
-    }
-    if (!owner) {
-      log("SKIP — add/remove not attempted (not an owner; the attempt would only be refused).");
-      return;
-    }
-    const { addMember, removeMember } = await import("../store/accessGroup");
-    await addMember(editorsId, viewer.objectId);
-    const added = await isGroupMember(editorsId, viewer.objectId);
-    log(added ? "OK — self-add landed (verified by read-back)." : "FAIL — add reported success but membership did not read back.");
-    await removeMember(editorsId, viewer.objectId);
-    const gone = !(await isGroupMember(editorsId, viewer.objectId));
-    log(gone ? "OK — self-remove landed; the group is back as it was." : "FAIL — remove reported success but membership persists — remove it in Entra.");
-  } catch (e) {
-    log(`FAIL — editors-group membership change refused: ${trim(e)}`);
-  }
 }
-
 const trim = (e: unknown): string =>
   (e instanceof Error ? e.message : String(e)).slice(0, 300);

@@ -810,6 +810,10 @@ export interface AppDocsConfig {
   controllersGroupName: string;
   ownersGroupId: string;
   ownersGroupName: string;
+  /** RETIRED (Ben, 2026-08-14): the Entra editors group is no longer
+   *  read or written — the SharePoint site group is the one enforcement
+   *  road. Parsed so stored configs stay valid; the settings tab clears
+   *  it on its next save. */
   editorsGroupId: string;
   editorsGroupName: string;
   /** The SHAREPOINT site group grants enforce through (5G3b) — its

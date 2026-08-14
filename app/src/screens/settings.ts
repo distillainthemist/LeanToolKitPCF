@@ -1142,15 +1142,12 @@ async function renderAccessControl(body: HTMLElement, me: RosterPerson): Promise
       cfg.ownersGroupName = name;
     }
   );
-  groupRow(
-    "Temporary document editors",
-    "Joined when an edit-access request is approved, left when the revision ends — the SharePoint enforcement of the grant.",
-    () => ({ id: cfg.editorsGroupId, name: cfg.editorsGroupName }),
-    (id, name) => {
-      cfg.editorsGroupId = id;
-      cfg.editorsGroupName = name;
-    }
-  );
+  // The Entra "Temporary document editors" group is RETIRED (Ben,
+  // 2026-08-14): the SharePoint site group is the one enforcement road
+  // (instant), the Entra route only ever propagated slowly. Any stored
+  // link self-clears with the next save of this tab.
+  cfg.editorsGroupId = "";
+  cfg.editorsGroupName = "";
 
   // the SHAREPOINT editors site group (5G3b): grants enforce through a
   // SITE group because its membership takes effect IMMEDIATELY — the
@@ -1168,7 +1165,7 @@ async function renderAccessControl(body: HTMLElement, me: RosterPerson): Promise
     spNote.textContent =
       cfg.spEditorsGroup !== ""
         ? "Grant approvals add people to this site group — effective immediately."
-        : "Not set — approvals fall back to the Entra editors group (membership can take a while to propagate).";
+        : "Not set — grants cannot seat editors until this names a site group with Contribute on the standards library.";
   };
   spSave.addEventListener("click", () => {
     void (async () => {

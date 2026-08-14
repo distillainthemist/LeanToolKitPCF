@@ -17,7 +17,6 @@ import { el } from "../../../shared/ui/dom";
 import { openDialog } from "../../../shared/ui/dialog";
 import { Ben_ltkdoclibrariesService } from "../generated/services/Ben_ltkdoclibrariesService";
 import { eq, firstWhere, upsertWhere } from "../store/dv";
-import { addMember, groupMembers, removeMember } from "../store/accessGroup";
 import { REQUESTS_LIST_ID, spErrorText, validateItemErrors } from "./model";
 import { NotifyContext } from "./notifyModel";
 import { attachNotifyPanel } from "./notifyPanel";
@@ -240,29 +239,9 @@ export async function grantHealth(): Promise<
       level: "info",
       title: "No SharePoint editors site group set",
       detail:
-        "Grants fall back to the Entra editors group, whose membership can take up " +
-        "to an hour to propagate — set the site group under Settings → Access control.",
+        "Grants cannot seat editors without it — set the site group under " +
+        "Settings → Access control.",
     });
-  }
-
-  // the Entra group is the fallback route — anyone still seated there
-  // without a grant is legacy drift worth sweeping
-  if (cfg.editorsGroupId !== "") {
-    try {
-      const members = await groupMembers(cfg.editorsGroupId);
-      const orphans = members.filter((m) => !grantedEmails.has(m.email.toLowerCase()));
-      if (orphans.length > 0) {
-        out.push({
-          level: "warn",
-          title: `${orphans.length} Entra editors-group member${orphans.length === 1 ? "" : "s"} with no live grant`,
-          detail:
-            `${orphans.map((m) => m.name || m.email).join(", ")} — remove them from ` +
-            `${cfg.editorsGroupName || "the Entra editors group"} in Entra.`,
-        });
-      }
-    } catch {
-      /* an unreadable fallback group is not worth a warning of its own */
-    }
   }
   return out;
 }
@@ -303,29 +282,11 @@ export async function releaseGrants(uniqueId: string, emails: string[]): Promise
     }
   }
 
-  // the Entra group's seat (the fallback route, and any legacy grants)
-  if (cfg.editorsGroupId !== "") {
-    try {
-      const members = await groupMembers(cfg.editorsGroupId);
-      for (const email of lower) {
-        if (stillGranted.has(email)) continue;
-        const m = members.find((x) => x.email.toLowerCase() === email);
-        if (m === undefined) continue; // never held a seat (or already gone)
-        try {
-          await removeMember(cfg.editorsGroupId, m.id);
-        } catch {
-          failed.push(email);
-        }
-      }
-    } catch {
-      failed.push("(the Entra editors group could not be read)");
-    }
-  }
   const who = [...new Set(failed)];
   return who.length === 0
     ? ""
     : `The editors seat was not released for ${who.join(", ")} — ` +
-        "remove them in SharePoint/Entra, or Access diagnostics will flag the drift.";
+        "remove them from the site group in SharePoint, or Access diagnostics will flag the drift.";
 }
 
 /** A tiny timeout wrapper matching lifecycleCmds' — a grant step that
@@ -507,8 +468,6 @@ export function openApproveRequest(opts: ApproveRequestOpts): void {
         }
       } else if (cfg.spEditorsGroup !== "") {
         warn = `The site group "${cfg.spEditorsGroup}" did not resolve — add them to it in SharePoint. `;
-      } else if (cfg.editorsGroupId !== "") {
-        await addMember(cfg.editorsGroupId, request.who.id);
       } else {
         warn = "No editors group is configured — the grant is app-only. ";
       }
