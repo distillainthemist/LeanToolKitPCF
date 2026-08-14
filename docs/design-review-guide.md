@@ -56,9 +56,8 @@ are worth more than rushed coverage.
    a glance?*
 
 7. **Share a document**: open one, use Share — copy the link and send
-   it to a neighbour (or yourself in Teams); try the QR with a phone.
-   *Look for: does the link land the recipient on the right document?
-   The QR should open JUST the document — a read-only kiosk.*
+   it to a neighbour (or yourself in Teams).
+   *Look for: does the link land the recipient on the right document?*
 
 8. **Save your view**: with some filters applied, use Copy link in the
    ⋮ menu and open it in a new tab (or send it to a neighbour).
@@ -70,10 +69,10 @@ are worth more than rushed coverage.
    *Look for: does the request feel like it went somewhere? (An owner
    will action these during the session.)*
 
-10. **If you have your phone**: open the register there, and scan a
-   document QR if one is printed.
-   *Look for: the scanned code should open just that document, nothing
-   else. Note anything that feels broken on the phone.*
+10. **If you have your phone**: open the register there and browse to
+   a document.
+   *Look for: note anything that feels broken or awkward on the
+   phone.*
 
 ## Part 2 — document owners & approvers (after Part 1)
 
