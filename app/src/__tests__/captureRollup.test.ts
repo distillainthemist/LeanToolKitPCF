@@ -11,6 +11,7 @@ import {
   flagColumn,
   isFlagged,
   matchColumns,
+  mutateCaptureRowJson,
   parseColumnNames,
   parseRollup,
   parseRollupSources,
@@ -212,6 +213,22 @@ describe("projectRollup", () => {
     expect(rows.map((r) => r.ref.rowId)).toEqual(["r1"]);
     // filter off: the flag-less source's rows return
     expect(projectRollup([flagged, noFlagCol], ["Issue"], false).length).toBe(3);
+  });
+
+  it("write-back mutates one row in a fresh document and stamps updated", () => {
+    const json = JSON.stringify(env([row("r1", { issue: "Jam", esc: true }), row("r2", { issue: "Leak" })]));
+    const next = mutateCaptureRowJson(json, "r1", (r) => (r.cells.esc = false), "2026-08-15T10:00:00Z");
+    expect(next).not.toBeNull();
+    const parsed = JSON.parse(next!) as { meta: { updated: string }; data: { rows: CaptureRow[] } };
+    expect(parsed.meta.updated).toBe("2026-08-15T10:00:00Z");
+    expect(parsed.data.rows.find((r) => r.id === "r1")?.cells.esc).toBe(false);
+    // the untouched row survives byte-for-byte
+    expect(parsed.data.rows.find((r) => r.id === "r2")?.cells).toEqual({ issue: "Leak" });
+  });
+
+  it("write-back refuses when the row has been edited away", () => {
+    const json = JSON.stringify(env([row("r2", { issue: "Leak" })]));
+    expect(mutateCaptureRowJson(json, "r1", (r) => (r.cells.esc = false), "2026-08-15")).toBeNull();
   });
 
   it("errored sources are skipped", () => {

@@ -88,6 +88,29 @@ export async function ensureLiveRow(
   } as never);
 }
 
+/** One row by its GUID — the rollup write-back's fresh read. null = gone. */
+export async function cardRowById(rowGuid: string): Promise<CardRow | null> {
+  const result = await Ben_ltkcarddatasService.get(rowGuid);
+  if (result.success === false) {
+    throw new Error(`Dataverse read failed: ${result.error?.message ?? "unknown error"}`);
+  }
+  return result.data ? fromRow(result.data) : null;
+}
+
+/**
+ * The rollup's write-back: outputJson ONLY — never the tile svg, which
+ * belongs to the source card's own snapshot road (saveCard would clobber
+ * it with whatever the rollup held).
+ */
+export async function updateOutputJson(rowGuid: string, outputJson: string): Promise<void> {
+  const result = await Ben_ltkcarddatasService.update(rowGuid, {
+    ben_outputjson: outputJson,
+  });
+  if (result.success === false) {
+    throw new Error(`Dataverse write failed: ${result.error?.message ?? "unknown error"}`);
+  }
+}
+
 /** The card's OnChange save: document + fresh tile in one patch. */
 export async function saveCard(
   rowGuid: string,

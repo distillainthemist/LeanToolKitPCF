@@ -12,7 +12,13 @@ import {
   parseEnvelope,
   serializeEnvelope,
 } from "../../shared/schema/envelope";
-import { CaptureColumn, CaptureEnvelope, CaptureRow } from "../CaptureCard/types";
+import {
+  CaptureColumn,
+  CaptureEnvelope,
+  CaptureRow,
+  parseCapture,
+  serializeCapture,
+} from "../CaptureCard/types";
 
 export const SCHEMA_ID = "ltk/capturerollup@1";
 
@@ -200,6 +206,27 @@ export function isFlagged(row: CaptureRow, flagKey: string): boolean {
   if (flagKey === "") return false;
   const v = row.cells[flagKey];
   return v === true || v === "true";
+}
+
+/**
+ * The write-back mutation, pure: parse the source document FRESH (the store
+ * road re-reads it at save time — that read-modify-write is the concurrency
+ * mitigation of record), mutate the one row, stamp updated, re-serialize.
+ * null = the row is no longer in the document (edited away on the source
+ * board) — the caller surfaces "changed on the source board" and refreshes.
+ */
+export function mutateCaptureRowJson(
+  json: string,
+  rowId: string,
+  mutate: (row: CaptureRow) => void,
+  updatedIso: string
+): string | null {
+  const envelope = parseCapture(json).envelope;
+  const target = envelope.data.rows.find((r) => r.id === rowId);
+  if (!target) return null;
+  mutate(target);
+  envelope.meta.updated = updatedIso;
+  return serializeCapture(envelope);
 }
 
 /**
