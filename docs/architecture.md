@@ -83,6 +83,15 @@ model section) — the canvas/PCF sections there are historical.
   pasting a register view link; they load via the dynamic-import door
   and fetch after paint with jitter so a wall of boards can't
   synchronise into a 429 storm.
+- **The Canvas card** is the charter/plan-on-a-page: a maker lays out
+  typed, titled fields (20 types — text through rich text, people,
+  status/RAG on the app palette, checklists, mini capture tables,
+  images) in a 1–3 column grid in the settings Layout builder; users
+  fill them in on the card (inline for typing types, dialogs for
+  pickers). Layout lives in config, values in the envelope keyed by
+  field id — restructuring never loses content. Actions are card-level
+  via the standard channel. Design of record:
+  [leanboard-canvas-card-plan.md](leanboard-canvas-card-plan.md).
 - **Cross-board windows:** a **LinkCard** renders another board's card
   read-only (its source's policy decides which document — live row for
   shared, newest meeting otherwise). A **Capture rollup** generalises

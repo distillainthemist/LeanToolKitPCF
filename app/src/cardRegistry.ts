@@ -82,6 +82,12 @@ import {
   parseRows as parseCaptureRows,
   serializeCapture,
 } from "../../controls/CaptureCard/types";
+import { CanvasEditor } from "../../controls/CanvasCard/editor";
+import {
+  parseCanvas,
+  parseCanvasConfig,
+  serializeCanvas,
+} from "../../controls/CanvasCard/types";
 import { RollupEditor } from "../../controls/CaptureRollup/editor";
 import {
   flagColumn,
@@ -804,6 +810,44 @@ const REGISTRY: Record<string, CardMounter> = {
       rows.titled
     );
     editor.setEnvelope(parseCapture(opts.outputJson).envelope);
+    return () => opts.host.replaceChildren();
+  },
+  CanvasCard: (opts) => {
+    const s = saver(opts);
+    // card-LEVEL actions (per the canvas plan's decision 6 — no per-field
+    // raising): the standard channel through the action manager, reached
+    // from the card's kebab
+    const actions = opts.actions.slice();
+    const doneColor = opts.theme.legend[1] ?? "#107c10";
+    const editor = new CanvasEditor(opts.host, {
+      onChange: (env) => s.save(serializeCanvas(env)),
+      onSnapshot: s.onSnapshot,
+      ...(actionsOff(opts)
+        ? {}
+        : {
+            onManageActions: () => {
+              openActionManager({
+                host: opts.host,
+                actions,
+                source: "canvas",
+                sourceId: opts.cardId,
+                seedIssue: opts.title,
+                people: opts.people,
+                doneColor,
+                readOnly: opts.readOnly,
+                canRaise: true,
+                onChanged: () => opts.onActions(stamped(opts, actions)),
+              });
+            },
+          }),
+    });
+    editor.setTheme(opts.theme);
+    editor.setChrome(opts.title, promptsRaw(opts));
+    editor.setReadOnly(opts.readOnly);
+    editor.setPalette(pal(opts));
+    editor.setPeople(opts.people);
+    editor.setConfig(parseCanvasConfig(cfgRaw(opts, "canvasJSON")));
+    editor.setEnvelope(parseCanvas(opts.outputJson).envelope);
     return () => opts.host.replaceChildren();
   },
   CaptureRollup: (opts) => {

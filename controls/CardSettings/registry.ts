@@ -690,9 +690,6 @@ export const CARDS: CardSpec[] = [
     type: "CanvasCard",
     label: "Canvas",
     group: "Project management",
-    // hidden until the mounter ships (canvas plan C4) — the Layout
-    // builder and spec land first so the settings side is testable
-    hidden: true,
     description:
       "A charter / plan-on-a-page: typed, titled fields laid out in a 1–3 column grid — filled in on the card.",
     config: [
