@@ -88,6 +88,14 @@ import {
   parseCanvasConfig,
   serializeCanvas,
 } from "../../controls/CanvasCard/types";
+import { CanvasRollupEditor } from "../../controls/CanvasRollup/editor";
+import {
+  canvasLabelUnion,
+  parseCanvasRollup,
+  parseCanvasWriteMode,
+  projectCanvasRollup,
+  serializeCanvasRollup,
+} from "../../controls/CanvasRollup/types";
 import { RollupEditor } from "../../controls/CaptureRollup/editor";
 import {
   flagColumn,
@@ -99,7 +107,12 @@ import {
   projectRollup,
   serializeRollup,
 } from "../../controls/CaptureRollup/types";
-import { loadRollupSources, writeBackRow } from "./store/rollup";
+import {
+  loadCanvasSources,
+  loadRollupSources,
+  writeBackCanvasField,
+  writeBackRow,
+} from "./store/rollup";
 import { ActionBoardEditor, parseKanbanColumns } from "../../controls/ActionBoard/editor";
 import { EscalationViewerEditor } from "../../controls/EscalationViewer/editor";
 import { parseSources } from "../../controls/EscalationViewer/types";
@@ -849,6 +862,66 @@ const REGISTRY: Record<string, CardMounter> = {
     editor.setConfig(parseCanvasConfig(cfgRaw(opts, "canvasJSON")));
     editor.setEnvelope(parseCanvas(opts.outputJson).envelope);
     return () => opts.host.replaceChildren();
+  },
+  CanvasRollup: (opts) => {
+    const s = saver(opts);
+    const sources = parseRollupSources(cfgRaw(opts, "sourcesJSON"));
+    const names = parseColumnNames(cfgRaw(opts, "columns"));
+    // design time and closed meetings never write back
+    const writeMode =
+      opts.designTime === true || opts.readOnly
+        ? "readonly"
+        : parseCanvasWriteMode(cfgStr(opts, "writeMode"));
+    let disposed = false;
+
+    const editor = new CanvasRollupEditor(opts.host, {
+      onWriteBack: (ref, fieldId, value) =>
+        writeBackCanvasField(ref.docRowGuid, fieldId, value),
+      onRefresh: () => void load(),
+      onSnapshot: s.onSnapshot,
+    });
+    editor.setTheme(opts.theme);
+    editor.setChrome(opts.title, promptsRaw(opts));
+    editor.setReadOnly(opts.readOnly);
+    editor.setPalette(pal(opts));
+    editor.setPeople(opts.people);
+    editor.setState({
+      names,
+      rows: [],
+      sources: [],
+      writeMode,
+      configured: sources.length > 0,
+      loading: true,
+    });
+
+    const load = async () => {
+      if (sources.length === 0) return; // the unconfigured ghost is showing
+      try {
+        const resolved = await loadCanvasSources(sources);
+        if (disposed) return;
+        // no columns picked yet → the label union (capped) so a freshly
+        // linked portfolio still shows something useful
+        const shown = names.length > 0 ? names : canvasLabelUnion(resolved).slice(0, 6);
+        editor.setState({
+          names: shown,
+          rows: projectCanvasRollup(resolved, shown),
+          sources: resolved,
+          writeMode,
+          configured: true,
+          loading: false,
+        });
+        // persist the (content-free) document so the freshest tile lands
+        // on the live row — board tiles and close-meeting archives
+        s.save(serializeCanvasRollup(parseCanvasRollup(opts.outputJson).envelope));
+      } catch (err) {
+        console.warn("canvas rollup load failed", err);
+      }
+    };
+    void load();
+    return () => {
+      disposed = true;
+      opts.host.replaceChildren();
+    };
   },
   CaptureRollup: (opts) => {
     const s = saver(opts);

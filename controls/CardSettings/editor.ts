@@ -34,6 +34,29 @@ export interface CardSettingsCallbacks {
   onChange: (draft: SettingsDraft) => void;
 }
 
+/** What differs between the two rollups' Sources tabs. */
+interface RollupKind {
+  cardType: string;
+  cardLabel: string;
+  columnsOf: (card: BoardRefCard) => string[];
+  /** Capture only: warn when a source has no ⚑ Flag column. */
+  flagWarning: boolean;
+}
+
+const CAPTURE_ROLLUP_KIND: RollupKind = {
+  cardType: "CaptureCard",
+  cardLabel: "capture card",
+  columnsOf: (c) => c.captureColumns ?? [],
+  flagWarning: true,
+};
+
+const CANVAS_ROLLUP_KIND: RollupKind = {
+  cardType: "CanvasCard",
+  cardLabel: "canvas card",
+  columnsOf: (c) => c.canvasFields ?? [],
+  flagWarning: false,
+};
+
 /** A small heading inside a tab, for a group that is not a tab of its own. */
 function subLabel(text: string): HTMLElement {
   const h = document.createElement("div");
@@ -328,9 +351,18 @@ export class CardSettingsEditor {
     if (this.boards !== null && this.draft.cardType === "LinkCard") {
       tabs.push({ name: "Source", fill: (sec) => this.renderLinkSourceSection(sec) });
     }
-    // CaptureRollup (composer mode only): the linked capture cards + columns
+    // Rollups (composer mode only): the linked source cards + columns
     if (this.boards !== null && this.draft.cardType === "CaptureRollup") {
-      tabs.push({ name: "Sources", fill: (sec) => this.renderRollupSourcesSection(sec) });
+      tabs.push({
+        name: "Sources",
+        fill: (sec) => this.renderRollupSourcesSection(sec, CAPTURE_ROLLUP_KIND),
+      });
+    }
+    if (this.boards !== null && this.draft.cardType === "CanvasRollup") {
+      tabs.push({
+        name: "Sources",
+        fill: (sec) => this.renderRollupSourcesSection(sec, CANVAS_ROLLUP_KIND),
+      });
     }
     if (!tabs.some((t) => t.name === this.tab)) this.tab = tabs[0].name;
 
@@ -512,13 +544,14 @@ export class CardSettingsEditor {
   }
 
   /**
-   * CaptureRollup's Sources tab (board mode only): the linked Capture cards
+   * The rollups' Sources tab (board mode only): the linked source cards
    * (config.sourcesJSON) and the display-column picker (config.columns —
    * names matched across sources BY LABEL). Warnings ride the pickers: a
-   * source without a ⚑ Flag column, a column missing from some sources, a
-   * stale selection no source offers any more.
+   * capture source without a ⚑ Flag column, a column missing from some
+   * sources, a stale selection no source offers any more. `kind` is what
+   * differs between the capture and canvas rollups.
    */
-  private renderRollupSourcesSection(body: HTMLElement): void {
+  private renderRollupSourcesSection(body: HTMLElement, kind: RollupKind): void {
     const boards = this.boards ?? [];
     const cfg = this.draft.config;
 
@@ -553,14 +586,14 @@ export class CardSettingsEditor {
     const sources = readSources();
     const grid = el("div", "ltk-cs-grid");
     body.appendChild(grid);
-    grid.appendChild(subLabel("Linked capture cards"));
+    grid.appendChild(subLabel(`Linked ${kind.cardLabel}s`));
 
-    const captureCardsOf = (boardId: string) =>
+    const sourceCardsOf = (boardId: string) =>
       (boards.find((ref) => ref.boardId === boardId)?.cards ?? []).filter(
-        (c) => c.cardType === "CaptureCard"
+        (c) => c.cardType === kind.cardType
       );
     const cardOf = (src: { boardId: string; cardId: string }) =>
-      captureCardsOf(src.boardId).find((c) => c.cardId === src.cardId);
+      sourceCardsOf(src.boardId).find((c) => c.cardId === src.cardId);
 
     sources.forEach((src, i) => {
       const row = el("div", "ltk-cs-rollup-source");
@@ -574,7 +607,7 @@ export class CardSettingsEditor {
         next[i] = { boardId: brd.value, cardId: "" };
         writeSources(next);
       });
-      const cards = captureCardsOf(src.boardId);
+      const cards = sourceCardsOf(src.boardId);
       const crd = selectInput(src.cardId, [
         {
           value: "",
@@ -582,8 +615,8 @@ export class CardSettingsEditor {
             src.boardId === ""
               ? "Choose a board first"
               : cards.length === 0
-                ? "No capture cards on that board"
-                : "Choose a capture card…",
+                ? `No ${kind.cardLabel}s on that board`
+                : `Choose a ${kind.cardLabel}…`,
         },
         ...cards.map((c) => ({ value: c.cardId, label: c.title !== "" ? c.title : c.cardId })),
       ]);
@@ -608,7 +641,7 @@ export class CardSettingsEditor {
         grid.appendChild(
           el("div", "ltk-cs-rollup-warn", "⚠ This card was not found on its board any more.")
         );
-      } else if (card && card.hasFlag !== true) {
+      } else if (card && kind.flagWarning && card.hasFlag !== true) {
         grid.appendChild(
           el(
             "div",
@@ -620,7 +653,7 @@ export class CardSettingsEditor {
     });
 
     if (!this.readOnly) {
-      const add = el("button", "ltk-cs-rollup-add", "＋ Add capture card") as HTMLButtonElement;
+      const add = el("button", "ltk-cs-rollup-add", `＋ Add ${kind.cardLabel}`) as HTMLButtonElement;
       add.type = "button";
       add.addEventListener("click", () => {
         writeSources([...sources, { boardId: "", cardId: "" }]);
@@ -635,7 +668,7 @@ export class CardSettingsEditor {
       .filter((c): c is BoardRefCard => c !== undefined);
     if (chosenCards.length === 0) {
       grid.appendChild(
-        el("div", "ltk-cs-note", "Link a capture card above to choose its columns.")
+        el("div", "ltk-cs-note", `Link a ${kind.cardLabel} above to choose its columns.`)
       );
       return;
     }
@@ -646,12 +679,12 @@ export class CardSettingsEditor {
     const union: string[] = [];
     for (const card of chosenCards) {
       if (!card) continue;
-      for (const name of card.captureColumns ?? []) {
+      for (const name of kind.columnsOf(card)) {
         if (!union.some((u) => lower(u) === lower(name))) union.push(name);
       }
     }
     const inAll = (name: string) =>
-      chosenCards.every((c) => (c.captureColumns ?? []).some((n) => lower(n) === lower(name)));
+      chosenCards.every((c) => kind.columnsOf(c).some((n) => lower(n) === lower(name)));
     // stale selections first-class: still listed, so they can be unticked
     const stale = selected.filter((name) => !union.some((u) => lower(u) === lower(name)));
 

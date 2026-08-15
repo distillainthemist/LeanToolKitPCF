@@ -12,7 +12,7 @@
 
 import { BoardGridView } from "../../../controls/BoardGrid/editor";
 import { BoardTile, parseColumns } from "../../../controls/BoardGrid/types";
-import { BoardRef, captureCardMeta } from "../../../controls/CardSettings/types";
+import { BoardRef, canvasCardMeta, captureCardMeta } from "../../../controls/CardSettings/types";
 import { policyOnPick } from "../../../controls/CardSettings/registry";
 import { paletteMap, titleStripColor } from "../../../shared/palette";
 import { el } from "../../../shared/ui/dom";
@@ -247,6 +247,7 @@ async function renderComposer(
     cardType: s.cardType,
     title: s.title,
     ...(s.cardType === "CaptureCard" ? captureCardMeta(s.settings) : {}),
+    ...(s.cardType === "CanvasCard" ? canvasCardMeta(s.settings) : {}),
   });
   const boardRefs: BoardRef[] = (await listBoards()).map((b) => ({
     boardId: b.boardId,

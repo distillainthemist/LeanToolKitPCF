@@ -103,6 +103,13 @@ model section) — the canvas/PCF sections there are historical.
   own document is content-free with a fixed shared policy, existing so
   tiles and close-meeting archives ride the standard save road. Design
   of record: [leanboard-capture-rollup-plan.md](leanboard-capture-rollup-plan.md).
+  The **Canvas rollup** is the same idea transposed for charters: one
+  row per linked Canvas card (current content only), columns matched by
+  field label, cells painted by the canvas display module, and full-mode
+  per-cell edits through the canvas's own field dialogs writing back to
+  the source document (mini-tables edit on their source card). Both
+  rollups share the store road's source-resolution skeleton
+  (`store/rollup.ts`).
 
 ## 4. The document management system
 

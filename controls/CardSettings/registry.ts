@@ -131,8 +131,9 @@ export const LINK_SOURCE_EXCLUDED = new Set([
   // live SharePoint views — linking a live view of a live view is noise
   "DocsCard",
   "DocHealth",
-  // a window onto other boards' capture cards — no chains, same as LinkCard
+  // windows onto other boards' cards — no chains, same as LinkCard
   "CaptureRollup",
+  "CanvasRollup",
 ]);
 
 /** Display label for a card type ("ActionBoard" → "Actions"). */
@@ -705,6 +706,34 @@ export const CARDS: CardSpec[] = [
     policies: ["clear", "carry", "shared"],
     defaultPolicy: "carry",
     standardContent: "edit",
+  },
+  {
+    type: "CanvasRollup",
+    label: "Canvas rollup",
+    group: "Project management",
+    standardContent: "preview",
+    standardContentNote:
+      "This card merges other boards' canvas cards into a portfolio table — its content belongs to the sources.",
+    description:
+      "The portfolio view: one row per Canvas card on other boards, with the fields you choose as columns.",
+    config: [
+      {
+        key: "writeMode",
+        label: "Editing from this card",
+        kind: "enum",
+        options: [
+          { value: "readonly", label: "Read-only" },
+          { value: "full", label: "Full editing" },
+        ],
+        help:
+          "Full editing opens each cell's own field editor; changes save straight onto the source board's canvas. Mini-table fields always edit on their source card.",
+      },
+    ],
+    appBound: [],
+    // no policy choice: fixed shared — the live row exists for tiles and
+    // close-meeting archives, never as authored content
+    policies: [],
+    fixedPolicy: "shared",
   },
   {
     type: "HeatmapCard",

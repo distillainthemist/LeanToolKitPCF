@@ -5,18 +5,19 @@
 // snapshots true: htmlToSvg serialises the DOM, and live input state
 // would vanish from it.
 
-import { applyThemeVars, defaultTheme, textOn, Theme } from "../../shared/tokens";
+import { applyThemeVars, defaultTheme, Theme } from "../../shared/tokens";
 import { LTK_BASE_CSS } from "../../shared/ui/baseCss";
 import { clear, el, ensureStylesheet } from "../../shared/ui/dom";
 import { hintFor, parsePrompts, Prompts, renderTitleBar } from "../../shared/ui/chrome";
 import { renderKebab } from "../../shared/ui/menu";
-import { openDialog, textInput } from "../../shared/ui/dialog";
+import { openDialog } from "../../shared/ui/dialog";
 import { htmlToPng, htmlToSvg, saveSvg, SnapshotScheduler } from "../../shared/export/png";
-import { fileToDataUrl, shrinkImage } from "../../shared/ui/imageIngest";
 import { newId, nowIso } from "../../shared/schema/id";
-import { initialsFor, Person } from "../../shared/schema/people";
-import { buildCaptureField, readFields, renderCaptureCellInto } from "../CaptureCard/fields";
+import { Person } from "../../shared/schema/people";
+import { buildCaptureField, readFields } from "../CaptureCard/fields";
 import { CaptureRow } from "../CaptureCard/types";
+import { canvasFieldDialog } from "./fieldDialog";
+import { paintCanvasValue } from "./display";
 import { CAPTURE_CSS } from "../CaptureCard/styles";
 import {
   CanvasConfig,
@@ -24,21 +25,14 @@ import {
   CanvasField,
   CanvasValue,
   clampPercent,
-  clampRating,
-  dateLabel,
   isEmptyValue,
   missingRequired,
-  rangeLabel,
-  sanitizeRichText,
   SCHEMA_ID,
   vBool,
-  vChecklist,
   vNumber,
-  vPeople,
   vRange,
   vRows,
   vString,
-  vStrings,
 } from "./types";
 import { CANVAS_CSS } from "./styles";
 
@@ -274,222 +268,21 @@ export class CanvasEditor {
     return box;
   }
 
-  /** Render a field's DISPLAY state into `area`. */
+  /** Render a field's DISPLAY state (display.ts paints — shared with the
+   *  canvas rollup's cells; the hooks are this card's tap-set layer). */
   private paintDisplay(
     area: HTMLElement,
     field: CanvasField,
     value: CanvasValue | undefined
   ): void {
-    clear(area);
-    const hint = hintFor(this.prompts, field.id, field.hint);
-    const empty = (): void => {
-      area.appendChild(el("span", "ltk-cv-empty", hint !== "" ? hint : "—"));
-    };
-
-    switch (field.type) {
-      case "text":
-      case "number":
-      case "decimal": {
-        const s =
-          field.type === "text" ? vString(value) : (vNumber(value)?.toString() ?? "");
-        if (s === "") return empty();
-        area.appendChild(el("span", undefined, s));
-        return;
-      }
-      case "longtext": {
-        const s = vString(value);
-        if (s.trim() === "") return empty();
-        area.appendChild(el("div", "ltk-cv-pre", s));
-        return;
-      }
-      case "richtext": {
-        const html = sanitizeRichText(vString(value));
-        if (html.replace(/<[^>]*>/g, "").trim() === "") return empty();
-        const rich = el("div", "ltk-cv-rich");
-        rich.innerHTML = html; // sanitised on render — never trusted stored
-        area.appendChild(rich);
-        return;
-      }
-      case "date": {
-        const s = vString(value);
-        if (s === "") return empty();
-        area.appendChild(el("span", undefined, dateLabel(s)));
-        return;
-      }
-      case "daterange": {
-        const s = rangeLabel(vRange(value));
-        if (s === "") return empty();
-        area.appendChild(el("span", undefined, s));
-        return;
-      }
-      case "percent": {
-        const n = vNumber(value);
-        if (n === undefined) return empty();
-        const bar = el("div", "ltk-cv-bar");
-        const track = el("div", "ltk-cv-bar-track");
-        const fill = el("div", "ltk-cv-bar-fill");
-        fill.style.width = `${clampPercent(n)}%`;
-        track.appendChild(fill);
-        bar.appendChild(track);
-        bar.appendChild(el("span", undefined, `${clampPercent(n)}%`));
-        area.appendChild(bar);
-        return;
-      }
-      case "rating": {
-        const n = clampRating(vNumber(value) ?? 0);
-        const stars = el("div", "ltk-cv-stars");
-        for (let k = 1; k <= 5; k++) {
-          const star = el(
-            "span",
-            "ltk-cv-star" + (k <= n ? " ltk-cv-star-on" : ""),
-            k <= n ? "★" : "☆"
-          );
-          if (!this.readOnly) {
-            star.addEventListener("click", (e) => {
-              e.stopPropagation();
-              // tapping the current rating again clears it
-              this.commitValue(field, k === n ? undefined : k);
-            });
-          }
-          stars.appendChild(star);
-        }
-        area.appendChild(stars);
-        return;
-      }
-      case "url": {
-        const s = vString(value);
-        if (s === "") return empty();
-        const row = el("div", "ltk-cv-url");
-        const a = el("a", undefined, s) as HTMLAnchorElement;
-        if (/^https?:\/\//i.test(s)) {
-          a.href = s;
-          a.target = "_blank";
-          a.rel = "noopener noreferrer";
-          a.addEventListener("click", (e) => e.stopPropagation()); // open, don't edit
-        }
-        row.appendChild(a);
-        area.appendChild(row);
-        return;
-      }
-      case "yesno": {
-        if (value === undefined) return empty();
-        area.appendChild(
-          el("span", "ltk-cv-yes", vBool(value) ? "✓ Yes" : "— No")
-        );
-        return;
-      }
-      case "choice":
-      case "multichoice": {
-        const picked = vStrings(value);
-        if (picked.length === 0) return empty();
-        // the capture chip renderer paints icons/labels from the options
-        renderCaptureCellInto(
-          area,
-          {
-            key: field.id,
-            label: field.label,
-            type: "list",
-            multi: field.type === "multichoice",
-            parent: "",
-            options: field.options,
-          },
-          picked.length === 1 && field.type === "choice" ? picked[0] : picked
-        );
-        return;
-      }
-      case "status": {
-        const key = vString(value);
-        if (key === "") return empty();
-        const color = this.palette[key] ?? "";
-        const chip = el("span", "ltk-cv-status", statusLabel(key));
-        if (color !== "") {
-          chip.style.background = color;
-          chip.style.color = textOn(color);
-        }
-        area.appendChild(chip);
-        return;
-      }
-      case "person":
-      case "people": {
-        const people = vPeople(value);
-        if (people.length === 0) return empty();
-        for (const p of people) {
-          const chip = el("span", "ltk-cv-person");
-          chip.appendChild(el("span", "ltk-cv-person-dot", initialsFor(p.name)));
-          chip.appendChild(el("span", undefined, p.name));
-          area.appendChild(chip);
-        }
-        return;
-      }
-      case "checklist": {
-        const items = vChecklist(value);
-        if (items.length === 0) return empty();
-        const list = el("div", "ltk-cv-check");
-        items.forEach((item, i) => {
-          const row = el(
-            "div",
-            "ltk-cv-check-item" + (item.done ? " ltk-cv-check-done" : "")
-          );
-          row.appendChild(el("span", "ltk-cv-check-box", item.done ? "☑" : "☐"));
-          row.appendChild(el("span", "ltk-cv-check-text", item.text));
-          if (!this.readOnly) {
-            row.addEventListener("click", (e) => {
-              e.stopPropagation();
-              const next = items.map((it, j) =>
-                j === i ? { text: it.text, done: !it.done } : it
-              );
-              this.commitValue(field, next);
-            });
-          }
-          list.appendChild(row);
-        });
-        area.appendChild(list);
-        return;
-      }
-      case "minitable": {
-        const rows = vRows(value);
-        if (rows.length === 0) return empty();
-        const wrap = el("div", "ltk-cv-mini");
-        const table = el("table", "ltk-cc-table");
-        const thead = el("thead");
-        const hr = el("tr");
-        for (const col of field.columns) hr.appendChild(el("th", undefined, col.label));
-        thead.appendChild(hr);
-        table.appendChild(thead);
-        const tbody = el("tbody");
-        for (const row of rows) {
-          const tr = el("tr", "ltk-cc-row");
-          for (const col of field.columns) {
-            const td = el("td");
-            renderCaptureCellInto(td, col, row.cells[col.key]);
-            tr.appendChild(td);
-          }
-          if (!this.readOnly) {
-            // a row edits itself; the area click (add row) must not also fire
-            tr.addEventListener("click", (e) => {
-              e.stopPropagation();
-              this.openMiniRow(field, row);
-            });
-          }
-          tbody.appendChild(tr);
-        }
-        table.appendChild(tbody);
-        wrap.appendChild(table);
-        area.appendChild(wrap);
-        return;
-      }
-      case "image": {
-        const src = vString(value);
-        if (!src.startsWith("data:image/")) return empty();
-        const img = el("img", "ltk-cv-img") as HTMLImageElement;
-        img.src = src;
-        img.alt = field.label;
-        area.appendChild(img);
-        return;
-      }
-      default:
-        return empty();
-    }
+    paintCanvasValue(area, field, value, {
+      palette: this.palette,
+      hint: hintFor(this.prompts, field.id, field.hint),
+      readOnly: this.readOnly,
+      onRatingSet: (n) => this.commitValue(field, n),
+      onCheckToggle: (items) => this.commitValue(field, items),
+      onMiniRowClick: (row) => this.openMiniRow(field, row),
+    });
   }
 
   // ---- inline editing (typing types) ----
@@ -609,286 +402,17 @@ export class CanvasEditor {
 
   private openPicker(field: CanvasField): void {
     if (this.readOnly) return;
-    switch (field.type) {
-      case "choice":
-      case "multichoice":
-        return this.openChoicePicker(field);
-      case "status":
-        return this.openStatusPicker(field);
-      case "person":
-      case "people":
-        return this.openPeoplePicker(field);
-      case "richtext":
-        return this.openRichText(field);
-      case "checklist":
-        return this.openChecklistEditor(field);
-      case "minitable":
-        return this.openMiniRow(field, null);
-      case "image":
-        return this.openImagePicker(field);
-      default:
-        return;
-    }
-  }
-
-  /** Choice/multi-choice: the CAPTURE list field over the same options —
-   *  chips, single-as-radio, identical to the capture row dialog. */
-  private openChoicePicker(field: CanvasField): void {
-    const fe = buildCaptureField(
-      {
-        key: field.id,
-        label: field.label,
-        type: "list",
-        multi: field.type === "multichoice",
-        parent: "",
-        options: field.options,
-      },
-      (() => {
-        const picked = vStrings(this.env.data.values[field.id]);
-        if (picked.length === 0) return undefined;
-        return field.type === "multichoice" ? picked : picked[0];
-      })(),
-      ""
-    );
-    const dlg = openDialog({
+    // mini-tables have their own add/edit-row flow; everything else is the
+    // shared field dialog (fieldDialog.ts — the canvas ROLLUP uses the same)
+    if (field.type === "minitable") return this.openMiniRow(field, null);
+    canvasFieldDialog({
       host: this.root,
-      title: field.label,
-      buttons: [
-        { label: "Cancel", kind: "secondary" as const, onClick: () => dlg.close() },
-        {
-          label: "Save",
-          kind: "primary" as const,
-          onClick: () => {
-            const v = fe.read();
-            dlg.close();
-            this.commitValue(
-              field,
-              v === undefined ? undefined : (v as CanvasValue)
-            );
-          },
-        },
-      ],
+      field,
+      value: this.env.data.values[field.id],
+      palette: this.palette,
+      people: this.people,
+      onSave: (v) => this.commitValue(field, v),
     });
-    dlg.body.appendChild(fe.el);
-  }
-
-  /** Status: one tap on a palette chip sets and closes. */
-  private openStatusPicker(field: CanvasField): void {
-    const current = vString(this.env.data.values[field.id]);
-    const dlg = openDialog({
-      host: this.root,
-      title: field.label,
-      buttons: [
-        { label: "Clear", kind: "secondary" as const, onClick: () => { dlg.close(); this.commitValue(field, undefined); } },
-        { label: "Cancel", kind: "secondary" as const, onClick: () => dlg.close() },
-      ],
-    });
-    const wrap = el("div", "ltk-cv-statuspick");
-    for (const [key, color] of Object.entries(this.palette)) {
-      const chip = el("button", "ltk-cv-status ltk-cv-statusopt", statusLabel(key)) as HTMLButtonElement;
-      chip.type = "button";
-      chip.style.background = color;
-      chip.style.color = textOn(color);
-      if (key === current) chip.classList.add("ltk-cv-statusopt-on");
-      chip.addEventListener("click", () => {
-        dlg.close();
-        this.commitValue(field, key);
-      });
-      wrap.appendChild(chip);
-    }
-    if (Object.keys(this.palette).length === 0) {
-      wrap.appendChild(el("div", "ltk-cv-empty", "No states in the app palette."));
-    }
-    dlg.body.appendChild(wrap);
-  }
-
-  /** Person/people: board people as chips up front, everyone else behind
-   *  the search box (the action form's own convention — `secondary`). */
-  private openPeoplePicker(field: CanvasField): void {
-    const single = field.type === "person";
-    const selected = new Map(
-      vPeople(this.env.data.values[field.id]).map((p) => [p.id, p.name])
-    );
-    const primaries = this.people.filter((p) => p.secondary !== true);
-    const chipsBox = el("div", "ltk-cv-peoplepick");
-    const searchBox = el("div", "ltk-cv-peoplepick");
-
-    const chip = (person: Person): HTMLElement => {
-      const b = el("button", "ltk-cv-person ltk-cv-personopt") as HTMLButtonElement;
-      b.type = "button";
-      b.appendChild(el("span", "ltk-cv-person-dot", person.initials || initialsFor(person.who)));
-      b.appendChild(el("span", undefined, person.who));
-      const paint = () => b.classList.toggle("ltk-cv-personopt-on", selected.has(person.whoId));
-      paint();
-      b.addEventListener("click", () => {
-        if (selected.has(person.whoId)) {
-          selected.delete(person.whoId);
-        } else {
-          if (single) selected.clear();
-          selected.set(person.whoId, person.who);
-        }
-        repaintAll();
-      });
-      return b;
-    };
-
-    let repaintSearch: () => void = () => undefined;
-    const repaintAll = () => {
-      clear(chipsBox);
-      for (const p of primaries) chipsBox.appendChild(chip(p));
-      repaintSearch();
-    };
-
-    const search = textInput("", { placeholder: "Search everyone…" });
-    search.addEventListener("input", () => repaintSearch());
-    repaintSearch = () => {
-      clear(searchBox);
-      const q = search.value.trim().toLowerCase();
-      if (q === "") return;
-      const hits = this.people
-        .filter((p) => p.who.toLowerCase().includes(q))
-        .slice(0, 12);
-      if (hits.length === 0) {
-        searchBox.appendChild(el("div", "ltk-cv-empty", "No one matches."));
-        return;
-      }
-      for (const p of hits) searchBox.appendChild(chip(p));
-    };
-
-    const dlg = openDialog({
-      host: this.root,
-      title: field.label,
-      buttons: [
-        { label: "Cancel", kind: "secondary" as const, onClick: () => dlg.close() },
-        {
-          label: "Save",
-          kind: "primary" as const,
-          onClick: () => {
-            dlg.close();
-            const people = [...selected.entries()].map(([id, name]) => ({ id, name }));
-            this.commitValue(field, people.length === 0 ? undefined : people);
-          },
-        },
-      ],
-    });
-    repaintAll();
-    dlg.body.appendChild(chipsBox);
-    dlg.body.appendChild(search);
-    dlg.body.appendChild(searchBox);
-    search.focus();
-  }
-
-  /** Rich text: contenteditable with a minimal toolbar; sanitised on save
-   *  (and again on every render — stored HTML is never trusted). */
-  private openRichText(field: CanvasField): void {
-    const surface = el("div", "ltk-cv-rich ltk-cv-richedit");
-    surface.contentEditable = "true";
-    surface.innerHTML = sanitizeRichText(vString(this.env.data.values[field.id]));
-
-    const bar = el("div", "ltk-cv-richbar");
-    const cmd = (label: string, title: string, run: () => void) => {
-      const b = el("button", "ltk-cv-richbtn", label) as HTMLButtonElement;
-      b.type = "button";
-      b.title = title;
-      // mousedown so the surface keeps its selection
-      b.addEventListener("mousedown", (e) => {
-        e.preventDefault();
-        run();
-      });
-      bar.appendChild(b);
-    };
-    cmd("B", "Bold", () => document.execCommand("bold"));
-    cmd("I", "Italic", () => document.execCommand("italic"));
-    cmd("U", "Underline", () => document.execCommand("underline"));
-    cmd("• list", "Bullet list", () => document.execCommand("insertUnorderedList"));
-    cmd("1. list", "Numbered list", () => document.execCommand("insertOrderedList"));
-    const linkIn = textInput("", { placeholder: "https://… then ⤿" });
-    linkIn.classList.add("ltk-cv-richlink");
-    cmd("⤿ link", "Link the selected text to the URL on the left", () => {
-      const url = linkIn.value.trim();
-      if (/^https?:\/\//i.test(url)) document.execCommand("createLink", false, url);
-    });
-
-    const dlg = openDialog({
-      host: this.root,
-      title: field.label,
-      buttons: [
-        { label: "Cancel", kind: "secondary" as const, onClick: () => dlg.close() },
-        {
-          label: "Save",
-          kind: "primary" as const,
-          onClick: () => {
-            const html = sanitizeRichText(surface.innerHTML);
-            dlg.close();
-            this.commitValue(
-              field,
-              html.replace(/<[^>]*>/g, "").trim() === "" ? undefined : html
-            );
-          },
-        },
-      ],
-    });
-    bar.appendChild(linkIn);
-    dlg.body.appendChild(bar);
-    dlg.body.appendChild(surface);
-    surface.focus();
-  }
-
-  /** Checklist item management (ticks stay inline on the card). */
-  private openChecklistEditor(field: CanvasField): void {
-    const items = vChecklist(this.env.data.values[field.id]).map((i) => ({ ...i }));
-    const list = el("div", "ltk-cv-checkedit");
-    const paint = () => {
-      clear(list);
-      items.forEach((item, i) => {
-        const row = el("div", "ltk-cv-checkedit-row");
-        const input = textInput(item.text, { placeholder: "Item…" });
-        input.addEventListener("input", () => {
-          item.text = input.value;
-        });
-        const x = el("button", "ltk-cs-chip-x", "×") as HTMLButtonElement;
-        x.type = "button";
-        x.title = "Remove item";
-        x.addEventListener("click", () => {
-          items.splice(i, 1);
-          paint();
-        });
-        row.append(input, x);
-        list.appendChild(row);
-      });
-      const add = el("button", "ltk-cv-addbtn", "＋ Add item") as HTMLButtonElement;
-      add.type = "button";
-      add.addEventListener("click", () => {
-        items.push({ text: "", done: false });
-        paint();
-        const inputs = list.querySelectorAll<HTMLInputElement>("input");
-        inputs[inputs.length - 1]?.focus();
-      });
-      list.appendChild(add);
-    };
-    const dlg = openDialog({
-      host: this.root,
-      title: field.label,
-      buttons: [
-        { label: "Cancel", kind: "secondary" as const, onClick: () => dlg.close() },
-        {
-          label: "Save",
-          kind: "primary" as const,
-          onClick: () => {
-            dlg.close();
-            const kept = items
-              .map((i) => ({ text: i.text.trim(), done: i.done }))
-              .filter((i) => i.text !== "");
-            this.commitValue(field, kept.length === 0 ? undefined : kept);
-          },
-        },
-      ],
-    });
-    paint();
-    dlg.body.appendChild(list);
-    if (items.length === 0) {
-      list.querySelector<HTMLButtonElement>(".ltk-cv-addbtn")?.click();
-    }
   }
 
   /** Mini-table rows: the CAPTURE row dialog over the field's columns.
@@ -936,85 +460,6 @@ export class CanvasEditor {
     if (firstInput) firstInput.focus();
   }
 
-  /** Image: pick or paste, shrunk on ingest (shared road), stored as a
-   *  data URI — the player's CSP blocks blob: images. */
-  private openImagePicker(field: CanvasField): void {
-    const current = vString(this.env.data.values[field.id]);
-    const note = el("div", "ltk-cv-empty", "");
-
-    const ingest = async (file: File) => {
-      note.textContent = "Preparing image…";
-      try {
-        // tighter than the issues dialog: this data URI lives INSIDE the
-        // card document, so shrink harder and refuse the truly huge
-        let out = await shrinkImage(file, { threshold: 150_000, maxEdge: 800, quality: 0.8 });
-        let url = await fileToDataUrl(out);
-        if (url.length > 500_000) {
-          out = await shrinkImage(file, { threshold: 0, maxEdge: 600, quality: 0.6 });
-          url = await fileToDataUrl(out);
-        }
-        if (url.length > 500_000) {
-          note.textContent = "That image is too large even after shrinking — try a smaller one.";
-          return;
-        }
-        if (!url.startsWith("data:image/")) {
-          note.textContent = "That file isn't an image.";
-          return;
-        }
-        dlg.close();
-        this.commitValue(field, url);
-      } catch {
-        note.textContent = "The image could not be read.";
-      }
-    };
-
-    const buttons = [];
-    if (current !== "") {
-      buttons.push({
-        label: "Remove image",
-        kind: "danger" as const,
-        onClick: () => {
-          dlg.close();
-          this.commitValue(field, undefined);
-        },
-      });
-    }
-    buttons.push({ label: "Cancel", kind: "secondary" as const, onClick: () => dlg.close() });
-    const dlg = openDialog({ host: this.root, title: field.label, buttons });
-
-    const pick = el("button", "ltk-cv-addbtn", "Choose an image…") as HTMLButtonElement;
-    pick.type = "button";
-    const fileIn = el("input") as HTMLInputElement;
-    fileIn.type = "file";
-    fileIn.accept = "image/*";
-    fileIn.style.display = "none";
-    fileIn.addEventListener("change", () => {
-      const f = fileIn.files?.[0];
-      if (f) void ingest(f);
-    });
-    pick.addEventListener("click", () => fileIn.click());
-
-    const paste = el("div", "ltk-cv-pastezone", "…or paste an image here (Ctrl/Cmd+V)");
-    paste.tabIndex = 0;
-    paste.addEventListener("paste", (e) => {
-      const items = e.clipboardData?.items;
-      const item = items
-        ? Array.from(items).find((i) => i.type.startsWith("image/"))
-        : undefined;
-      const f = item?.getAsFile();
-      if (f) {
-        e.preventDefault();
-        void ingest(f);
-      }
-    });
-
-    dlg.body.appendChild(pick);
-    dlg.body.appendChild(fileIn);
-    dlg.body.appendChild(paste);
-    dlg.body.appendChild(note);
-    paste.focus();
-  }
-
   // ---- mutations ----
 
   private commitValue(field: CanvasField, next: CanvasValue | undefined): void {
@@ -1053,11 +498,4 @@ export class CanvasEditor {
       link.click();
     });
   }
-}
-
-/** A palette key as a human label ("at_risk" → "At risk") — the mount's
- *  palette is key→colour only; keys are slugs of the site's own labels. */
-function statusLabel(key: string): string {
-  const s = key.replace(/_/g, " ").trim();
-  return s === "" ? key : s[0].toUpperCase() + s.slice(1);
 }

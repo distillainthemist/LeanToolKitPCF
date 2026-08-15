@@ -6,6 +6,7 @@
 // stored blobs keep inheriting future control defaults.
 
 import { parseColumns as parseCaptureColumns } from "../CaptureCard/types";
+import { parseCanvasConfig } from "../CanvasCard/types";
 
 export interface ThemeDraft {
   background: string;
@@ -183,6 +184,9 @@ export interface BoardRefCard {
   captureColumns?: string[];
   /** CaptureCard slots only: the card has a ⚑ Flag column. */
   hasFlag?: boolean;
+  /** CanvasCard slots only: the field LABELS (headings excluded) — the
+   *  canvas rollup's column picker matches by label the same way. */
+  canvasFields?: string[];
 }
 
 /**
@@ -194,15 +198,33 @@ export function captureCardMeta(settings: Record<string, unknown>): {
   captureColumns: string[];
   hasFlag: boolean;
 } {
-  const config = settings.config;
-  const c = config && typeof config === "object" ? (config as Record<string, unknown>) : {};
-  const v = c.columnsJSON;
-  const raw = typeof v === "string" ? v : v === undefined || v === null ? "" : JSON.stringify(v);
-  const cols = parseCaptureColumns(raw);
+  const cols = parseCaptureColumns(cfgValueRaw(settings, "columnsJSON"));
   return {
     captureColumns: cols.map((col) => col.label),
     hasFlag: cols.some((col) => col.type === "flag"),
   };
+}
+
+/** The canvas metadata a BoardRef card carries for the CANVAS rollup's
+ *  pickers: field labels, headings excluded (they carry no value). */
+export function canvasCardMeta(settings: Record<string, unknown>): {
+  canvasFields: string[];
+} {
+  const config = parseCanvasConfig(cfgValueRaw(settings, "canvasJSON"));
+  return {
+    canvasFields: config.fields
+      .filter((f) => f.type !== "heading" && f.label.trim() !== "")
+      .map((f) => f.label),
+  };
+}
+
+/** A settings-blob config value as the raw string the parsers expect
+ *  (the app's cfgRaw rule: structured values arrive as arrays/objects). */
+function cfgValueRaw(settings: Record<string, unknown>, key: string): string {
+  const config = settings.config;
+  const c = config && typeof config === "object" ? (config as Record<string, unknown>) : {};
+  const v = c[key];
+  return typeof v === "string" ? v : v === undefined || v === null ? "" : JSON.stringify(v);
 }
 
 /**
@@ -236,12 +258,17 @@ export function parseBoardsManifest(
             cardType: s(co.cardType).trim(),
             title: s(co.title).trim(),
           };
-          if (Array.isArray(co.captureColumns)) {
-            card.captureColumns = co.captureColumns
-              .filter((x): x is string => typeof x === "string")
-              .map((x) => x.trim())
-              .filter((x) => x !== "");
-          }
+          const strList = (v: unknown): string[] | undefined =>
+            Array.isArray(v)
+              ? v
+                  .filter((x): x is string => typeof x === "string")
+                  .map((x) => x.trim())
+                  .filter((x) => x !== "")
+              : undefined;
+          const cap = strList(co.captureColumns);
+          if (cap) card.captureColumns = cap;
+          const cf = strList(co.canvasFields);
+          if (cf) card.canvasFields = cf;
           if (typeof co.hasFlag === "boolean") card.hasFlag = co.hasFlag;
           cards.push(card);
         }

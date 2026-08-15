@@ -43,6 +43,7 @@ describe("policy matrix coverage", () => {
     // live SharePoint views (a live view of a live view is noise)
     expect([...LINK_SOURCE_EXCLUDED].sort()).toEqual([
       "ActionBoard",
+      "CanvasRollup",
       "CaptureRollup",
       "DocHealth",
       "DocsCard",
@@ -51,6 +52,15 @@ describe("policy matrix coverage", () => {
       "LinkCard",
       "MeetingScheduler",
     ]);
+  });
+
+  it("CanvasRollup mirrors the capture rollup's contract", () => {
+    const spec = cardSpec("CanvasRollup")!;
+    expect(spec.group).toBe("Project management");
+    expect(spec.policies).toEqual([]);
+    expect(spec.fixedPolicy).toBe("shared");
+    expect(spec.standardContent).toBe("preview");
+    expect(LINK_SOURCE_EXCLUDED.has("CanvasRollup")).toBe(true);
   });
 
   it("CaptureRollup: fixed shared, no picker, preview standard content", () => {
