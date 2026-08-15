@@ -173,6 +173,7 @@ export const CANVAS_CSS = `
   outline: 2px solid var(--ltk-accent);
   outline-offset: 1px;
   position: relative;
+  overflow: visible; /* the edge handles sit on the border */
 }
 .ltk-cv-readout {
   position: absolute;
@@ -185,6 +186,40 @@ export const CANVAS_CSS = `
   padding: 0 4px;
   border-radius: 4px;
 }
+/* direct manipulation (D2) */
+.ltk-cv-drag {
+  position: absolute;
+  top: 3px;
+  left: 4px;
+  font-size: 12px;
+  color: var(--ltk-accent);
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+  padding: 0 3px;
+  background: var(--ltk-bg);
+  border-radius: 4px;
+  line-height: 1.2;
+}
+.ltk-cv-selected .ltk-cv-label { padding-left: 22px; }
+.ltk-cv-selected.ltk-cv-field-heading .ltk-cv-heading-text { padding-left: 22px; }
+.ltk-cv-dragging { opacity: 0.45; }
+.ltk-cv-drop-before { box-shadow: -4px 0 0 0 var(--ltk-accent); }
+.ltk-cv-drop-after { box-shadow: 4px 0 0 0 var(--ltk-accent); }
+.ltk-cv-dropzone-on { background: color-mix(in srgb, var(--ltk-accent) 18%, transparent); }
+.ltk-cv-rs {
+  position: absolute;
+  background: var(--ltk-accent);
+  border: 2px solid var(--ltk-bg);
+  border-radius: 3px;
+  touch-action: none;
+  z-index: 2;
+}
+.ltk-cv-rs-e { right: -2px; top: 50%; width: 10px; height: 18px; margin-top: -9px; cursor: ew-resize; }
+.ltk-cv-rs-s { bottom: -2px; left: 50%; width: 18px; height: 10px; margin-left: -9px; cursor: ns-resize; }
+.ltk-cv-rs-se { right: -2px; bottom: -2px; width: 12px; height: 12px; cursor: nwse-resize; }
+.ltk-cv-resizing { outline-style: dashed; }
+
 .ltk-cv-toolbar {
   display: flex;
   align-items: center;

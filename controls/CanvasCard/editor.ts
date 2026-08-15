@@ -30,6 +30,7 @@ import {
   DEFAULT_H,
   isEmptyValue,
   missingRequired,
+  GridLayout,
   Placement,
   placeFields,
   SCHEMA_ID,
@@ -39,7 +40,7 @@ import {
   vRows,
   vString,
 } from "./types";
-import { CANVAS_CSS } from "./styles";
+import { CANVAS_CSS, CANVAS_STEP } from "./styles";
 
 export interface CanvasEditorCallbacks {
   onChange: (env: CanvasEnvelope) => void;
@@ -88,6 +89,9 @@ export class CanvasEditor {
   private previewing = false;
   /** Design mode: gridlines + empty cells. */
   private gridOn = true;
+  /** The last render's placement + grid element (gesture geometry). */
+  private layout: GridLayout = { placements: [], rows: 0, empty: [] };
+  private gridEl: HTMLElement | null = null;
   private readonly snapshots: SnapshotScheduler;
   private resizeObserver: ResizeObserver | null = null;
 
@@ -281,6 +285,8 @@ export class CanvasEditor {
     // explicit placement in BOTH modes — design and run agree by construction
     const layout = placeFields(this.config.cols, this.config.fields);
     const at = new Map(layout.placements.map((p) => [p.id, p]));
+    this.layout = layout;
+    this.gridEl = grid;
     for (const field of this.config.fields) {
       grid.appendChild(this.renderField(field, at.get(field.id)));
     }
@@ -404,7 +410,21 @@ export class CanvasEditor {
       box.classList.add("ltk-cv-designable");
       if (field.id === this.selectedField) {
         box.classList.add("ltk-cv-selected");
-        box.appendChild(el("span", "ltk-cv-readout", `${w} × ${field.h}`));
+        const readout = el("span", "ltk-cv-readout", `${w} × ${field.h}`);
+        box.appendChild(readout);
+        // direct manipulation (D2): ⋮⋮ moves, edges/corner resize
+        const drag = el("span", "ltk-cv-drag", "⋮⋮");
+        drag.title = "Drag to move";
+        box.appendChild(drag);
+        this.attachMove(drag, box, field);
+        if (place) {
+          for (const dir of ["e", "s", "se"] as const) {
+            const hnd = el("span", `ltk-cv-rs ltk-cv-rs-${dir}`);
+            hnd.title = dir === "e" ? "Drag to change width" : dir === "s" ? "Drag to change height" : "Drag to resize";
+            box.appendChild(hnd);
+            this.attachResize(hnd, box, field, place, dir, readout);
+          }
+        }
       }
       box.addEventListener("click", (e) => {
         e.stopPropagation();
@@ -475,6 +495,194 @@ export class CanvasEditor {
       }
     }
     return box;
+  }
+
+  // ---- direct manipulation (design mode, D2) ----
+
+  /** The grid's cell geometry: column pitch and row pitch in px, from the
+   *  live element (the gap is CANVAS_STEP's sibling: 8px). */
+  private cellGeometry(): { left: number; top: number; colPitch: number; rowPitch: number } | null {
+    if (!this.gridEl) return null;
+    const rect = this.gridEl.getBoundingClientRect();
+    if (rect.width <= 0) return null;
+    const gap = 8;
+    return {
+      left: rect.left,
+      top: rect.top,
+      colPitch: (rect.width + gap) / this.config.cols,
+      rowPitch: CANVAS_STEP + gap,
+    };
+  }
+
+  /** ⋮⋮: pointer-drag reorders (the model is a flow grid — a move IS a
+   *  reorder). An insertion marker shows where the field will land. */
+  private attachMove(handle: HTMLElement, box: HTMLElement, field: CanvasField): void {
+    handle.addEventListener("pointerdown", (down) => {
+      if (down.button !== 0) return;
+      down.preventDefault();
+      down.stopPropagation();
+      handle.setPointerCapture(down.pointerId);
+      const others = this.config.fields.filter((f) => f.id !== field.id);
+      let target: { index: number; markEl: HTMLElement | null; side: "before" | "after" | "zone" } | null = null;
+      let cancelled = false;
+      box.classList.add("ltk-cv-dragging");
+
+      const clearMarks = () => {
+        this.gridEl
+          ?.querySelectorAll(".ltk-cv-drop-before, .ltk-cv-drop-after, .ltk-cv-dropzone-on")
+          .forEach((e) => e.classList.remove("ltk-cv-drop-before", "ltk-cv-drop-after", "ltk-cv-dropzone-on"));
+      };
+
+      const onMove = (ev: PointerEvent) => {
+        const g = this.cellGeometry();
+        if (!g || !this.gridEl) return;
+        clearMarks();
+        const c = Math.max(0, Math.min(this.config.cols - 1, Math.floor((ev.clientX - g.left) / g.colPitch)));
+        const r = Math.floor((ev.clientY - g.top) / g.rowPitch);
+        const zone = this.gridEl.querySelector<HTMLElement>(".ltk-cv-dropzone");
+        // past the last row (or on the drop zone itself) → the end
+        if (r >= this.layout.rows) {
+          target = { index: others.length, markEl: zone, side: "zone" };
+          zone?.classList.add("ltk-cv-dropzone-on");
+          return;
+        }
+        const covering = this.layout.placements.find(
+          (p) => p.id !== field.id && r >= p.r && r < p.r + p.h && c >= p.c && c < p.c + p.w
+        );
+        if (covering) {
+          const el2 = this.gridEl.querySelector<HTMLElement>(`[data-field-id="${CSS.escape(covering.id)}"]`);
+          const rect = el2?.getBoundingClientRect();
+          const before = rect ? ev.clientX < rect.left + rect.width / 2 : true;
+          const idx = others.findIndex((f) => f.id === covering.id);
+          target = { index: idx + (before ? 0 : 1), markEl: el2, side: before ? "before" : "after" };
+          el2?.classList.add(before ? "ltk-cv-drop-before" : "ltk-cv-drop-after");
+          return;
+        }
+        // an empty cell: after the last field that sits row-major before it
+        let last: Placement | null = null;
+        for (const p of this.layout.placements) {
+          if (p.id === field.id) continue;
+          if (p.r < r || (p.r === r && p.c < c)) {
+            if (!last || p.r > last.r || (p.r === last.r && p.c > last.c)) last = p;
+          }
+        }
+        if (!last) {
+          target = { index: 0, markEl: null, side: "before" };
+          const first = this.gridEl.querySelector<HTMLElement>(`[data-field-id="${CSS.escape(others[0]?.id ?? "")}"]`);
+          first?.classList.add("ltk-cv-drop-before");
+          return;
+        }
+        const el2 = this.gridEl.querySelector<HTMLElement>(`[data-field-id="${CSS.escape(last.id)}"]`);
+        const idx = others.findIndex((f) => f.id === last!.id);
+        target = { index: idx + 1, markEl: el2, side: "after" };
+        el2?.classList.add("ltk-cv-drop-after");
+      };
+      const finish = () => {
+        handle.removeEventListener("pointermove", onMove);
+        handle.removeEventListener("pointerup", onUp);
+        handle.removeEventListener("pointercancel", onCancel);
+        window.removeEventListener("keydown", onKey, true);
+        clearMarks();
+        box.classList.remove("ltk-cv-dragging");
+      };
+      const onUp = () => {
+        finish();
+        if (cancelled || !target) return;
+        const next = others.slice();
+        next.splice(Math.max(0, Math.min(next.length, target.index)), 0, field);
+        if (next.map((f) => f.id).join("|") === this.config.fields.map((f) => f.id).join("|")) return;
+        this.commitLayout({ ...this.config, fields: next });
+      };
+      const onCancel = () => {
+        cancelled = true;
+        finish();
+      };
+      const onKey = (e: KeyboardEvent) => {
+        if (e.key === "Escape") {
+          e.preventDefault();
+          onCancel();
+        }
+      };
+      handle.addEventListener("pointermove", onMove);
+      handle.addEventListener("pointerup", onUp);
+      handle.addEventListener("pointercancel", onCancel);
+      window.addEventListener("keydown", onKey, true);
+    });
+  }
+
+  /** Edge/corner handles: width snaps to column boundaries, height to
+   *  steps; the readout follows live; the change commits on release. */
+  private attachResize(
+    handle: HTMLElement,
+    box: HTMLElement,
+    field: CanvasField,
+    place: Placement,
+    dir: "e" | "s" | "se",
+    readout: HTMLElement
+  ): void {
+    handle.addEventListener("pointerdown", (down) => {
+      if (down.button !== 0) return;
+      down.preventDefault();
+      down.stopPropagation();
+      handle.setPointerCapture(down.pointerId);
+      const startW = Math.min(field.w, this.config.cols);
+      const startH = field.h;
+      let w = startW;
+      let h = startH;
+      let cancelled = false;
+      const boxRect = box.getBoundingClientRect();
+      const g = this.cellGeometry();
+      box.classList.add("ltk-cv-resizing");
+
+      const onMove = (ev: PointerEvent) => {
+        if (!g) return;
+        if (dir !== "s") {
+          const raw = Math.round((ev.clientX - boxRect.left + 4) / g.colPitch);
+          w = Math.max(1, Math.min(this.config.cols - place.c, raw));
+        }
+        if (dir !== "e") {
+          const raw = Math.round((ev.clientY - boxRect.top + 4) / g.rowPitch);
+          h = Math.max(1, Math.min(8, raw));
+        }
+        box.style.gridColumn = `${place.c + 1} / span ${w}`;
+        box.style.gridRow = `${place.r + 1} / span ${h}`;
+        readout.textContent = `${w} × ${h}`;
+      };
+      const finish = () => {
+        handle.removeEventListener("pointermove", onMove);
+        handle.removeEventListener("pointerup", onUp);
+        handle.removeEventListener("pointercancel", onCancel);
+        window.removeEventListener("keydown", onKey, true);
+        box.classList.remove("ltk-cv-resizing");
+      };
+      const onUp = () => {
+        finish();
+        if (cancelled) {
+          this.render();
+          return;
+        }
+        if (w === startW && h === startH) return;
+        this.commitLayout({
+          ...this.config,
+          fields: this.config.fields.map((f) => (f.id === field.id ? { ...f, w, h } : f)),
+        });
+      };
+      const onCancel = () => {
+        cancelled = true;
+        finish();
+        this.render();
+      };
+      const onKey = (e: KeyboardEvent) => {
+        if (e.key === "Escape") {
+          e.preventDefault();
+          onCancel();
+        }
+      };
+      handle.addEventListener("pointermove", onMove);
+      handle.addEventListener("pointerup", onUp);
+      handle.addEventListener("pointercancel", onCancel);
+      window.addEventListener("keydown", onKey, true);
+    });
   }
 
   /** The type-true skeleton a field wears in build mode: what KIND of
