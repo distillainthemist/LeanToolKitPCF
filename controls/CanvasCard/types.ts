@@ -422,6 +422,32 @@ export function richTextPlain(html: string | null | undefined): string {
     .trim();
 }
 
+// ---- display labels --------------------------------------------------------
+
+const MONTHS = [
+  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+];
+
+/** "2026-08-12" → "12 Aug 2026" — pure string work, no Date re-parse. */
+export function dateLabel(iso: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso.trim());
+  if (!m) return iso;
+  const month = MONTHS[Number(m[2]) - 1];
+  if (!month) return iso;
+  return `${Number(m[3])} ${month} ${m[1]}`;
+}
+
+/** A date range as people say it: both sides, "from …", or "until …". */
+export function rangeLabel(range: DateRange): string {
+  const s = range.start.trim();
+  const e = range.end.trim();
+  if (s !== "" && e !== "") return `${dateLabel(s)} – ${dateLabel(e)}`;
+  if (s !== "") return `from ${dateLabel(s)}`;
+  if (e !== "") return `until ${dateLabel(e)}`;
+  return "";
+}
+
 // ---- required --------------------------------------------------------------
 
 /** Whether a field currently holds no answer (per-type emptiness). */

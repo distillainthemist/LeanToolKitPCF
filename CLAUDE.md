@@ -35,7 +35,11 @@ If the change touched `shared/` or `controls/`, ALSO run `npm run typecheck`
 at the **repo root** — the app-only tsc once missed a red CI for two releases.
 When chaining gates in one command, verify the vitest COUNT line — a
 `grep` in the chain can match the failure line and still exit 0 (a
-commit shipped with 5 red tests that way, 2026-08-14).
+commit shipped with 5 red tests that way, 2026-08-14). Same trap with
+pipes: `tsc | tail` reports TAIL's exit code, so a failed typecheck
+lets the chain continue — `set -o pipefail` first (a red root
+typecheck slid past that way, 2026-08-15; the errors were visible but
+the chain ran on).
 
 The import gate enforces: the board path (main.ts, cardRegistry.ts,
 screens/board.ts, screens/hub.ts) must not statically reach `src/docs/`;

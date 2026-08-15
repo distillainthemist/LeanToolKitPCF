@@ -6,6 +6,8 @@ import { describe, expect, it } from "vitest";
 import {
   clampPercent,
   clampRating,
+  dateLabel,
+  rangeLabel,
   isEmptyValue,
   missingRequired,
   parseCanvas,
@@ -112,6 +114,18 @@ describe("canvas values", () => {
     // round-trip survives
     const again = parseCanvas(serializeCanvas(parseCanvas(raw).envelope));
     expect(again.envelope.data.values.orphan_of_deleted_field).toBe("still here");
+  });
+
+  it("date labels are pure string work — no locale re-parse", () => {
+    expect(dateLabel("2026-08-12")).toBe("12 Aug 2026");
+    expect(dateLabel("2026-13-12")).toBe("2026-13-12"); // nonsense stays raw
+    expect(dateLabel("not a date")).toBe("not a date");
+    expect(rangeLabel({ start: "2026-08-12", end: "2026-09-30" })).toBe(
+      "12 Aug 2026 – 30 Sep 2026"
+    );
+    expect(rangeLabel({ start: "2026-08-12", end: "" })).toBe("from 12 Aug 2026");
+    expect(rangeLabel({ start: "", end: "2026-09-30" })).toBe("until 30 Sep 2026");
+    expect(rangeLabel({ start: "", end: "" })).toBe("");
   });
 
   it("coercers are forgiving at the read boundary", () => {
