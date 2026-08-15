@@ -92,7 +92,7 @@ import {
 import {
   loadCanvasDraft,
   serializeCanvasDraft,
-} from "../../controls/CardSettings/canvasFields";
+} from "../../controls/CanvasCard/draft";
 import { CanvasRollupEditor } from "../../controls/CanvasRollup/editor";
 import {
   canvasLabelUnion,

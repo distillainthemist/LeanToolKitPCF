@@ -262,6 +262,18 @@ export const CARDSETTINGS_CSS = `
   user-select: none;
   flex: 0 0 auto;
 }
+.ltk-cs-col-compact { padding: 4px 6px; }
+.ltk-cs-col-compact .ltk-cs-col-head { gap: 5px; }
+.ltk-cs-canvas-glyph { color: var(--ltk-muted); flex: 0 0 auto; font-size: 13px; }
+.ltk-cs-canvas-size {
+  color: var(--ltk-muted);
+  font-size: 11px;
+  white-space: nowrap;
+  flex: 0 0 auto;
+}
+.ltk-cs-canvas-warnmark { color: #b45309; flex: 0 0 auto; visibility: hidden; cursor: help; }
+.ltk-cs-canvas-warns { display: flex; flex-direction: column; gap: 2px; }
+.ltk-cs-canvas-warns:empty { display: none; }
 .ltk-cs-canvas-cols { display: flex; gap: 8px; align-items: center; }
 .ltk-cs-canvas-cols .ltk-cs-sublabel { margin: 0; }
 .ltk-cs-canvas-meta {
