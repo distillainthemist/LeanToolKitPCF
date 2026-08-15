@@ -76,6 +76,55 @@ export interface CanvasConfig {
   fields: CanvasField[];
 }
 
+/** Human labels per type (the builder's type select, the design-mode
+ *  skeletons' captions). */
+export const CANVAS_TYPE_LABEL: Record<CanvasFieldType, string> = {
+  heading: "Heading",
+  text: "Text",
+  longtext: "Long text",
+  richtext: "Rich text",
+  number: "Whole number",
+  decimal: "Decimal",
+  date: "Date",
+  daterange: "Date range",
+  choice: "Choice",
+  multichoice: "Multi choice",
+  yesno: "Yes / no",
+  person: "Person",
+  people: "People",
+  status: "Status",
+  percent: "Percent",
+  rating: "Rating",
+  url: "Link",
+  checklist: "Checklist",
+  minitable: "Mini table",
+  image: "Image",
+};
+
+/** Type glyphs worn by fields in design mode. */
+export const CANVAS_TYPE_GLYPH: Record<CanvasFieldType, string> = {
+  heading: "§",
+  text: "¶",
+  longtext: "¶",
+  richtext: "¶",
+  number: "#",
+  decimal: "#",
+  date: "▭",
+  daterange: "▭",
+  choice: "◉",
+  multichoice: "☷",
+  yesno: "☑",
+  person: "◇",
+  people: "◇",
+  status: "●",
+  percent: "%",
+  rating: "★",
+  url: "⤴",
+  checklist: "☑",
+  minitable: "▦",
+  image: "▣",
+};
+
 /** Default height steps per type — one-liners 1, block types taller. */
 export const DEFAULT_H: Record<CanvasFieldType, number> = {
   heading: 1,
@@ -169,6 +218,72 @@ export function parseCanvasConfig(raw: string | null | undefined): CanvasConfig 
     });
   }
   return { cols, fields };
+}
+
+// ---- placement -------------------------------------------------------------
+
+/** One field's cell rectangle on the grid (0-based rows/cols). */
+export interface Placement {
+  id: string;
+  r: number;
+  c: number;
+  w: number;
+  h: number;
+}
+
+export interface GridLayout {
+  placements: Placement[];
+  /** Total rows the layout occupies (0 when there are no fields). */
+  rows: number;
+  /** Cells no field covers, row-major — the design view's gutters. */
+  empty: { r: number; c: number }[];
+}
+
+/**
+ * Where each field lands: a pure simulation of CSS grid's SPARSE row
+ * auto-placement (the cursor only moves forward; an item goes in the
+ * first free rectangle at or after it, row-major). The card sets these
+ * as EXPLICIT grid positions in both design and run modes, so the two
+ * agree by construction and the design view can draw the empty cells —
+ * and D2's drag/resize has real geometry to hit-test against.
+ */
+export function placeFields(cols: number, fields: CanvasField[]): GridLayout {
+  const taken = new Set<string>();
+  const key = (r: number, c: number) => `${r}:${c}`;
+  const free = (r: number, c: number, w: number, h: number): boolean => {
+    for (let dr = 0; dr < h; dr++) {
+      for (let dc = 0; dc < w; dc++) if (taken.has(key(r + dr, c + dc))) return false;
+    }
+    return true;
+  };
+  const placements: Placement[] = [];
+  let cur = { r: 0, c: 0 };
+  let rows = 0;
+  for (const f of fields) {
+    const w = Math.max(1, Math.min(f.w, cols));
+    const h = Math.max(1, f.h);
+    let { r, c } = cur;
+    for (;;) {
+      if (c + w > cols) {
+        r++;
+        c = 0;
+        continue;
+      }
+      if (free(r, c, w, h)) break;
+      c++;
+    }
+    for (let dr = 0; dr < h; dr++) {
+      for (let dc = 0; dc < w; dc++) taken.add(key(r + dr, c + dc));
+    }
+    placements.push({ id: f.id, r, c, w, h });
+    rows = Math.max(rows, r + h);
+    cur = { r, c: c + w };
+  }
+  const empty: { r: number; c: number }[] = [];
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) if (!taken.has(key(r, c))) empty.push({ r, c });
+  }
+  return { placements, rows, empty };
 }
 
 // ---- values ----------------------------------------------------------------

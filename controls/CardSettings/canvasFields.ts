@@ -11,6 +11,7 @@ import { draggableRow } from "../../shared/ui/dragList";
 import { checkItem } from "../../shared/ui/dialog";
 import { el } from "../../shared/ui/dom";
 import {
+  CANVAS_TYPE_LABEL,
   CANVAS_TYPES,
   CanvasFieldType,
   DEFAULT_H,
@@ -22,28 +23,18 @@ import { FieldHost, labelRow } from "./fields";
 type Get = () => unknown;
 type Set = (v: unknown) => void;
 
-export const CANVAS_TYPE_LABELS: { value: CanvasFieldType; label: string }[] = [
-  { value: "heading", label: "Heading" },
-  { value: "text", label: "Text" },
-  { value: "longtext", label: "Long text" },
-  { value: "richtext", label: "Rich text" },
-  { value: "number", label: "Whole number" },
-  { value: "decimal", label: "Decimal" },
-  { value: "date", label: "Date" },
-  { value: "daterange", label: "Date range" },
-  { value: "choice", label: "Choice" },
-  { value: "multichoice", label: "Multi choice" },
-  { value: "yesno", label: "Yes / no" },
-  { value: "person", label: "Person" },
-  { value: "people", label: "People" },
-  { value: "status", label: "Status (palette)" },
-  { value: "percent", label: "Percent" },
-  { value: "rating", label: "Rating (1–5)" },
-  { value: "url", label: "Link (URL)" },
-  { value: "checklist", label: "Checklist" },
-  { value: "minitable", label: "Mini table" },
-  { value: "image", label: "Image" },
-];
+export const CANVAS_TYPE_LABELS: { value: CanvasFieldType; label: string }[] =
+  CANVAS_TYPES.map((value) => ({
+    value,
+    label:
+      value === "status"
+        ? "Status (palette)"
+        : value === "rating"
+          ? "Rating (1–5)"
+          : value === "url"
+            ? "Link (URL)"
+            : CANVAS_TYPE_LABEL[value],
+  }));
 
 interface OptDraft {
   value: string;

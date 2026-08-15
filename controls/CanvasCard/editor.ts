@@ -14,19 +14,24 @@ import { openDialog } from "../../shared/ui/dialog";
 import { htmlToPng, htmlToSvg, saveSvg, SnapshotScheduler } from "../../shared/export/png";
 import { newId, nowIso } from "../../shared/schema/id";
 import { Person } from "../../shared/schema/people";
-import { buildCaptureField, readFields } from "../CaptureCard/fields";
+import { buildCaptureField, optionChip, readFields } from "../CaptureCard/fields";
 import { CaptureRow } from "../CaptureCard/types";
 import { canvasFieldDialog } from "./fieldDialog";
 import { paintCanvasValue } from "./display";
 import { CAPTURE_CSS } from "../CaptureCard/styles";
 import {
+  CANVAS_TYPE_GLYPH,
+  CANVAS_TYPE_LABEL,
   CanvasConfig,
   CanvasEnvelope,
   CanvasField,
   CanvasValue,
   clampPercent,
+  DEFAULT_H,
   isEmptyValue,
   missingRequired,
+  Placement,
+  placeFields,
   SCHEMA_ID,
   vBool,
   vNumber,
@@ -79,6 +84,10 @@ export class CanvasEditor {
   /** Studio-only: the card is THE layout editor (canvas plan D0–D2). */
   private designMode = false;
   private selectedField: string | null = null;
+  /** Design mode: temporarily show the runtime look. */
+  private previewing = false;
+  /** Design mode: gridlines + empty cells. */
+  private gridOn = true;
   private readonly snapshots: SnapshotScheduler;
   private resizeObserver: ResizeObserver | null = null;
 
@@ -160,7 +169,10 @@ export class CanvasEditor {
   setDesignMode(on: boolean): void {
     if (this.designMode === on) return;
     this.designMode = on;
-    if (!on) this.selectedField = null;
+    if (!on) {
+      this.selectedField = null;
+      this.previewing = false;
+    }
     this.render();
   }
 
@@ -207,13 +219,20 @@ export class CanvasEditor {
     for (const o of overlays) this.root.appendChild(o);
   }
 
+  /** Design mode without preview = the layout editor's own rendering. */
+  private designing(): boolean {
+    return this.designMode && !this.previewing;
+  }
+
   private renderBody(): void {
     clear(this.root);
     applyThemeVars(this.root, this.theme);
     if (this.readOnly) this.root.classList.add("ltk-readonly");
     else this.root.classList.remove("ltk-readonly");
     renderTitleBar(this.root, this.cardTitle, this.prompts);
-    if (!this.readOnly) {
+    if (this.designMode) {
+      this.renderToolbar();
+    } else if (!this.readOnly) {
       const items = [
         { label: "Download PNG", onClick: () => this.downloadPng() },
         { label: "Download SVG", onClick: () => this.downloadSvg() },
@@ -227,25 +246,28 @@ export class CanvasEditor {
     const body = el("div", "ltk-cv-body");
     this.root.appendChild(body);
 
-    const missing = missingRequired(this.config.fields, this.env.data.values);
-    if (missing.length > 0) {
-      const banner = el("div", "ltk-cv-banner");
-      banner.appendChild(el("b", undefined, `${missing.length} to complete`));
-      banner.appendChild(
-        document.createTextNode(` — ${missing.slice(0, 4).join(", ")}${missing.length > 4 ? "…" : ""}`)
-      );
-      body.appendChild(banner);
+    if (!this.designing()) {
+      const missing = missingRequired(this.config.fields, this.env.data.values);
+      if (missing.length > 0) {
+        const banner = el("div", "ltk-cv-banner");
+        banner.appendChild(el("b", undefined, `${missing.length} to complete`));
+        banner.appendChild(
+          document.createTextNode(` — ${missing.slice(0, 4).join(", ")}${missing.length > 4 ? "…" : ""}`)
+        );
+        body.appendChild(banner);
+      }
     }
 
     const grid = el("div", "ltk-cv-grid");
     grid.style.gridTemplateColumns = `repeat(${this.config.cols}, 1fr)`;
+    if (this.designing() && this.gridOn) grid.classList.add("ltk-cv-gridon");
     body.appendChild(grid);
-    if (this.designMode) {
+    if (this.designing()) {
       // clicking empty canvas clears the selection
       body.addEventListener("click", () => this.setSelected(null));
     }
 
-    if (this.config.fields.length === 0) {
+    if (this.config.fields.length === 0 && !this.designing()) {
       grid.style.gridTemplateColumns = "1fr";
       const ghost = el(
         "div",
@@ -256,23 +278,134 @@ export class CanvasEditor {
       grid.appendChild(ghost);
     }
 
+    // explicit placement in BOTH modes — design and run agree by construction
+    const layout = placeFields(this.config.cols, this.config.fields);
+    const at = new Map(layout.placements.map((p) => [p.id, p]));
     for (const field of this.config.fields) {
-      grid.appendChild(this.renderField(field));
+      grid.appendChild(this.renderField(field, at.get(field.id)));
+    }
+    if (this.designing()) {
+      if (this.gridOn) {
+        for (const cell of layout.empty) {
+          const e = el("div", "ltk-cv-emptycell");
+          e.style.gridRow = `${cell.r + 1} / span 1`;
+          e.style.gridColumn = `${cell.c + 1} / span 1`;
+          grid.appendChild(e);
+        }
+      }
+      // the permanent last row: the drop target + Add field
+      const zone = el("div", "ltk-cv-dropzone");
+      zone.style.gridRow = `${layout.rows + 1} / span 1`;
+      zone.appendChild(el("span", undefined, "Drop a field here"));
+      zone.appendChild(el("span", "ltk-cv-toolbar-label", "·"));
+      const add = el("button", "ltk-cv-dropzone-add", "＋ Add field") as HTMLButtonElement;
+      add.type = "button";
+      add.addEventListener("click", (e) => {
+        e.stopPropagation();
+        this.addField();
+      });
+      zone.appendChild(add);
+      zone.addEventListener("click", (e) => {
+        e.stopPropagation();
+        this.addField();
+      });
+      grid.appendChild(zone);
     }
     this.applyNarrow();
   }
 
-  private renderField(field: CanvasField): HTMLElement {
+  /** The design-mode toolbar (replaces the kebab): columns, grid, preview.
+   *  Undo/redo live in the studio head beside the pane — the studio owns
+   *  the stack. */
+  private renderToolbar(): void {
+    const bar = el("div", "ltk-cv-toolbar");
+    bar.appendChild(el("span", "ltk-cv-toolbar-label", "Columns"));
+    const seg = el("div", "ltk-cv-seg");
+    for (const n of [1, 2, 3] as const) {
+      const b = el(
+        "button",
+        "ltk-cv-seg-btn" + (this.config.cols === n ? " ltk-cv-seg-on" : ""),
+        String(n)
+      ) as HTMLButtonElement;
+      b.type = "button";
+      b.disabled = this.previewing;
+      b.addEventListener("click", () => {
+        if (this.config.cols === n) return;
+        this.commitLayout({
+          cols: n,
+          fields: this.config.fields.map((f) => ({ ...f, w: Math.min(f.w, n) })),
+        });
+      });
+      seg.appendChild(b);
+    }
+    bar.appendChild(seg);
+
+    const grid = el("button", "ltk-cv-toolbtn" + (this.gridOn ? " ltk-cv-toolbtn-on" : ""), "⊞ Grid") as HTMLButtonElement;
+    grid.type = "button";
+    grid.title = "Show gridlines and empty cells";
+    grid.disabled = this.previewing;
+    grid.addEventListener("click", () => {
+      this.gridOn = !this.gridOn;
+      this.render();
+    });
+    bar.appendChild(grid);
+
+    bar.appendChild(el("span", "ltk-cv-toolbar-spacer"));
+    const preview = el("button", "ltk-cv-toolbtn" + (this.previewing ? " ltk-cv-toolbtn-on" : ""), this.previewing ? "✎ Design" : "▷ Preview") as HTMLButtonElement;
+    preview.type = "button";
+    preview.title = this.previewing ? "Back to designing the layout" : "See the card as people will fill it in";
+    preview.addEventListener("click", () => {
+      this.previewing = !this.previewing;
+      this.render();
+    });
+    bar.appendChild(preview);
+    this.root.appendChild(bar);
+  }
+
+  /** Design mode: append a new text field, select it (the inspector's
+   *  bridge scrolls to — and focuses — its block). */
+  private addField(): void {
+    const taken = new Set(this.config.fields.map((f) => f.id));
+    let n = this.config.fields.length + 1;
+    let id = `field_${n}`;
+    while (taken.has(id)) id = `field_${++n}`;
+    const field: CanvasField = {
+      id,
+      type: "text",
+      label: "",
+      w: 1,
+      h: DEFAULT_H.text,
+      hint: "",
+      required: false,
+      options: [],
+      columns: [],
+    };
+    this.commitLayout({ ...this.config, fields: [...this.config.fields, field] });
+    this.setSelected(id);
+  }
+
+  private renderField(field: CanvasField, place: Placement | undefined): HTMLElement {
     const box = el("div", "ltk-cv-field");
-    box.style.gridColumn = `span ${Math.min(field.w, this.config.cols)}`;
-    box.style.gridRow = `span ${field.h}`;
+    const w = Math.min(field.w, this.config.cols);
+    if (place) {
+      box.style.gridColumn = `${place.c + 1} / span ${w}`;
+      box.style.gridRow = `${place.r + 1} / span ${field.h}`;
+    } else {
+      box.style.gridColumn = `span ${w}`;
+      box.style.gridRow = `span ${field.h}`;
+    }
+    box.style.setProperty("--h", String(field.h));
     box.dataset.fieldId = field.id;
 
-    // design mode: the field is a selectable layout object (D1/D2 add the
-    // handles, skeletons and toolbar on top of this seam)
-    if (this.designMode) {
+    const designing = this.designing();
+    // design mode: the field is a selectable layout object (D2 adds the
+    // drag/resize handles on top of this)
+    if (designing) {
       box.classList.add("ltk-cv-designable");
-      if (field.id === this.selectedField) box.classList.add("ltk-cv-selected");
+      if (field.id === this.selectedField) {
+        box.classList.add("ltk-cv-selected");
+        box.appendChild(el("span", "ltk-cv-readout", `${w} × ${field.h}`));
+      }
       box.addEventListener("click", (e) => {
         e.stopPropagation();
         this.setSelected(field.id);
@@ -281,22 +414,36 @@ export class CanvasEditor {
 
     if (field.type === "heading") {
       box.classList.add("ltk-cv-field-heading");
-      box.appendChild(el("div", "ltk-cv-heading-text", field.label));
+      const text = el("div", "ltk-cv-heading-text");
+      if (designing) text.appendChild(el("span", "ltk-cv-glyph", CANVAS_TYPE_GLYPH.heading));
+      text.appendChild(el("span", undefined, field.label !== "" ? field.label : designing ? "Heading" : ""));
+      box.appendChild(text);
       return box;
     }
 
     const value = this.env.data.values[field.id];
     const label = el("div", "ltk-cv-label");
-    label.appendChild(el("span", undefined, field.label));
-    if (field.required && isEmptyValue(field.type, value)) {
+    if (designing) label.appendChild(el("span", "ltk-cv-glyph", CANVAS_TYPE_GLYPH[field.type]));
+    label.appendChild(
+      el("span", undefined, field.label !== "" ? field.label : designing ? "Untitled field" : "")
+    );
+    // required renders at BOTH times — the one property with real consequence
+    if (field.required) label.appendChild(el("span", "ltk-cv-req", "✱"));
+    if (!designing && field.required && isEmptyValue(field.type, value)) {
       label.appendChild(el("span", "ltk-cv-needed", "· needed"));
     }
     box.appendChild(label);
 
     const area = el("div", "ltk-cv-value");
-    this.paintDisplay(area, field, value);
     box.appendChild(area);
 
+    if (designing) {
+      // build mode: a field advertises its TYPE, not its emptiness
+      this.paintSkeleton(area, field);
+      return box;
+    }
+
+    this.paintDisplay(area, field, value);
     if (!this.readOnly) {
       if (INLINE_TYPES.has(field.type)) {
         area.classList.add("ltk-cv-editable");
@@ -328,6 +475,101 @@ export class CanvasEditor {
       }
     }
     return box;
+  }
+
+  /** The type-true skeleton a field wears in build mode: what KIND of
+   *  thing goes here, at its honest height. */
+  private paintSkeleton(area: HTMLElement, field: CanvasField): void {
+    const caption = (text: string) => {
+      const hint = field.hint.trim();
+      return hint !== "" ? `${text} · “${hint}”` : text;
+    };
+    switch (field.type) {
+      case "choice":
+      case "multichoice": {
+        const box = el("div", "ltk-cv-skel");
+        if (field.options.length === 0) {
+          box.appendChild(el("span", undefined, caption(`${CANVAS_TYPE_LABEL[field.type]} · no options yet`)));
+        } else {
+          for (const o of field.options.slice(0, 6)) {
+            box.appendChild(optionChip(o, o.value));
+          }
+          if (field.options.length > 6) box.appendChild(el("span", undefined, `+${field.options.length - 6}`));
+        }
+        area.appendChild(box);
+        return;
+      }
+      case "status": {
+        const box = el("div", "ltk-cv-skel ltk-cv-skel-line");
+        const chip = el("span", "ltk-cv-status", "Status");
+        chip.style.background = "var(--ltk-hairline)";
+        box.appendChild(chip);
+        box.appendChild(el("span", undefined, "from the app palette"));
+        area.appendChild(box);
+        return;
+      }
+      case "rating": {
+        const box = el("div", "ltk-cv-skel ltk-cv-skel-line");
+        box.appendChild(el("span", "ltk-cv-stars", "☆☆☆☆☆"));
+        area.appendChild(box);
+        return;
+      }
+      case "yesno": {
+        area.appendChild(el("div", "ltk-cv-skel ltk-cv-skel-line", caption("☐ Yes / no")));
+        return;
+      }
+      case "checklist": {
+        const box = el("div", "ltk-cv-skel");
+        box.appendChild(el("span", undefined, caption("☐ Checklist")));
+        area.appendChild(box);
+        return;
+      }
+      case "minitable": {
+        // the configured column headers with — cells: the layout preview
+        // CAN show layout
+        const wrap = el("div", "ltk-cv-mini ltk-cv-skel");
+        const table = el("table", "ltk-cc-table");
+        const thead = el("thead");
+        const hr = el("tr");
+        for (const col of field.columns) hr.appendChild(el("th", undefined, col.label));
+        thead.appendChild(hr);
+        table.appendChild(thead);
+        const tbody = el("tbody");
+        const tr = el("tr");
+        for (const _ of field.columns) tr.appendChild(el("td", "ltk-cc-empty", "—"));
+        tbody.appendChild(tr);
+        table.appendChild(tbody);
+        wrap.appendChild(table);
+        area.appendChild(wrap);
+        return;
+      }
+      case "person":
+      case "people":
+        area.appendChild(el("div", "ltk-cv-skel ltk-cv-skel-line", caption(field.type === "person" ? "Person picker" : "People picker")));
+        return;
+      case "percent": {
+        const box = el("div", "ltk-cv-skel ltk-cv-skel-line");
+        const bar = el("div", "ltk-cv-bar");
+        bar.style.width = "100%";
+        const track = el("div", "ltk-cv-bar-track");
+        track.appendChild(el("div", "ltk-cv-bar-fill"));
+        bar.appendChild(track);
+        bar.appendChild(el("span", undefined, "%"));
+        box.appendChild(bar);
+        area.appendChild(box);
+        return;
+      }
+      case "image":
+        area.appendChild(el("div", "ltk-cv-skel", caption("▣ Image")));
+        return;
+      case "longtext":
+      case "richtext":
+        area.appendChild(el("div", "ltk-cv-skel", caption(CANVAS_TYPE_LABEL[field.type])));
+        return;
+      default:
+        area.appendChild(el("div", "ltk-cv-skel ltk-cv-skel-line", caption(CANVAS_TYPE_LABEL[field.type])));
+        return;
+    }
   }
 
   /** Render a field's DISPLAY state (display.ts paints — shared with the

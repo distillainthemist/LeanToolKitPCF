@@ -25,7 +25,11 @@ export const CANVAS_CSS = `
   grid-auto-flow: row;
 }
 .ltk-cv-narrow .ltk-cv-grid { grid-template-columns: 1fr !important; }
-.ltk-cv-narrow .ltk-cv-field { grid-column: auto / span 1 !important; }
+.ltk-cv-narrow .ltk-cv-field {
+  grid-column: auto / span 1 !important;
+  grid-row: auto / span var(--h, 1) !important;
+}
+.ltk-cv-narrow .ltk-cv-emptycell { display: none; }
 
 .ltk-cv-field {
   border: 1px solid var(--ltk-hairline);
@@ -160,11 +164,105 @@ export const CANVAS_CSS = `
 
 .ltk-cv-yes { font-weight: 600; }
 
+/* ---- required marker (both modes) ---- */
+.ltk-cv-req { color: #b42318; font-weight: 700; }
+
 /* ---- design mode (studio only, canvas plan D0+) ---- */
 .ltk-cv-designable { cursor: pointer; }
 .ltk-cv-selected {
   outline: 2px solid var(--ltk-accent);
   outline-offset: 1px;
+  position: relative;
+}
+.ltk-cv-readout {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ltk-accent);
+  background: var(--ltk-bg);
+  padding: 0 4px;
+  border-radius: 4px;
+}
+.ltk-cv-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 6px 10px 8px;
+  border-bottom: 1px solid var(--ltk-hairline);
+  margin-bottom: 8px;
+  font-size: 12px;
+}
+.ltk-cv-toolbar-label { color: var(--ltk-muted); }
+.ltk-cv-seg { display: inline-flex; border: 1px solid var(--ltk-hairline); border-radius: 6px; overflow: hidden; }
+.ltk-cv-seg-btn {
+  border: none;
+  background: none;
+  color: var(--ltk-fg);
+  padding: 3px 9px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+}
+.ltk-cv-seg-btn + .ltk-cv-seg-btn { border-left: 1px solid var(--ltk-hairline); }
+.ltk-cv-seg-btn.ltk-cv-seg-on { background: var(--ltk-fg); color: var(--ltk-bg); }
+.ltk-cv-toolbtn {
+  border: 1px solid var(--ltk-hairline);
+  background: none;
+  color: var(--ltk-fg);
+  border-radius: 6px;
+  padding: 3px 9px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+}
+.ltk-cv-toolbtn.ltk-cv-toolbtn-on { background: var(--ltk-fg); color: var(--ltk-bg); }
+.ltk-cv-toolbar-spacer { flex: 1; }
+.ltk-cv-glyph { color: var(--ltk-muted); margin-right: 2px; }
+.ltk-cv-emptycell {
+  border: 1px dashed var(--ltk-hairline);
+  border-radius: 8px;
+  opacity: 0.7;
+}
+.ltk-cv-gridon .ltk-cv-field { border-style: dashed; }
+.ltk-cv-skel {
+  border: 1px dashed var(--ltk-hairline);
+  border-radius: 6px;
+  color: var(--ltk-muted);
+  font-size: 12px;
+  padding: 4px 8px;
+  height: 100%;
+  box-sizing: border-box;
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  overflow: hidden;
+}
+.ltk-cv-skel-line { align-items: center; }
+.ltk-cv-skel .ltk-cc-chip { opacity: 0.7; }
+.ltk-cv-dropzone {
+  grid-column: 1 / -1;
+  border: 1px dashed var(--ltk-accent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--ltk-accent) 6%, transparent);
+  color: var(--ltk-accent);
+  font-weight: 600;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+}
+.ltk-cv-dropzone-add {
+  border: none;
+  background: none;
+  color: var(--ltk-accent);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
 }
 
 /* ---- picker dialogs (C3) ---- */

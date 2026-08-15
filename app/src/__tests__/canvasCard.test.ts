@@ -12,6 +12,7 @@ import {
   missingRequired,
   parseCanvas,
   parseCanvasConfig,
+  placeFields,
   richTextPlain,
   sanitizeRichText,
   serializeCanvas,
@@ -180,6 +181,68 @@ describe("sanitizeRichText", () => {
     expect(sanitizeRichText("x".repeat(30000)).length).toBeLessThanOrEqual(20000 + 20);
     expect(richTextPlain("<p><b>Scope</b>: <i>all lines</i></p>")).toBe("Scope : all lines");
     expect(richTextPlain("<p><br></p>")).toBe("");
+  });
+});
+
+describe("placeFields — CSS sparse auto-placement, simulated", () => {
+  const cfg = (cols: number, spec: [string, number, number][]) =>
+    parseCanvasConfig(
+      JSON.stringify({
+        cols,
+        fields: spec.map(([id, w, h]) => ({ id, label: id, w, h })),
+      })
+    );
+
+  it("flows row-major and wraps when a span does not fit", () => {
+    const c = cfg(2, [
+      ["a", 1, 1],
+      ["b", 2, 1], // does not fit beside a → next row
+      ["c", 1, 1],
+    ]);
+    const { placements, rows, empty } = placeFields(c.cols, c.fields);
+    expect(placements).toEqual([
+      { id: "a", r: 0, c: 0, w: 1, h: 1 },
+      { id: "b", r: 1, c: 0, w: 2, h: 1 },
+      { id: "c", r: 2, c: 0, w: 1, h: 1 },
+    ]);
+    expect(rows).toBe(3);
+    // the cell beside a and the cell beside c are the gutters
+    expect(empty).toEqual([
+      { r: 0, c: 1 },
+      { r: 2, c: 1 },
+    ]);
+  });
+
+  it("a tall item blocks the cells beneath it; the cursor never moves back", () => {
+    const c = cfg(3, [
+      ["tall", 2, 3],
+      ["x", 2, 1], // does not fit in col 2 → rows 1..2 blocked → lands at row 3
+      ["y", 1, 1], // sparse: continues after x, never fills the col-2 hole
+    ]);
+    const { placements, empty } = placeFields(c.cols, c.fields);
+    expect(placements[1]).toEqual({ id: "x", r: 3, c: 0, w: 2, h: 1 });
+    expect(placements[2]).toEqual({ id: "y", r: 3, c: 2, w: 1, h: 1 });
+    expect(empty).toEqual([
+      { r: 0, c: 2 },
+      { r: 1, c: 2 },
+      { r: 2, c: 2 },
+    ]);
+  });
+
+  it("a quad chart is two columns of two, no gutters", () => {
+    const c = cfg(2, [
+      ["goals", 1, 3],
+      ["status", 1, 3],
+      ["done", 1, 3],
+      ["next", 1, 3],
+    ]);
+    const { rows, empty } = placeFields(c.cols, c.fields);
+    expect(rows).toBe(6);
+    expect(empty).toEqual([]);
+  });
+
+  it("empty layout is empty", () => {
+    expect(placeFields(2, [])).toEqual({ placements: [], rows: 0, empty: [] });
   });
 });
 

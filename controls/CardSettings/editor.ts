@@ -143,6 +143,10 @@ export class CardSettingsEditor {
     if (id !== null) {
       const block = this.root.querySelector<HTMLElement>(`[data-field-id="${CSS.escape(id)}"]`);
       block?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      // a field the maker just added on the canvas has no title yet —
+      // put the cursor where the next keystroke belongs
+      const label = block?.querySelector<HTMLInputElement>(".ltk-cs-col-label");
+      if (label && label.value.trim() === "" && !this.readOnly) label.focus();
     }
   }
 
