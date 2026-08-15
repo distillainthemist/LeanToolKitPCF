@@ -160,6 +160,73 @@ export const CANVAS_CSS = `
 
 .ltk-cv-yes { font-weight: 600; }
 
+/* ---- picker dialogs (C3) ---- */
+.ltk-cv-statuspick { display: flex; flex-wrap: wrap; gap: 8px; }
+.ltk-cv-statusopt { border: 2px solid transparent; cursor: pointer; font: inherit; }
+.ltk-cv-statusopt-on { border-color: var(--ltk-fg); }
+
+.ltk-cv-peoplepick { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.ltk-cv-personopt { background: none; cursor: pointer; font: inherit; }
+.ltk-cv-personopt-on {
+  border-color: var(--ltk-accent);
+  box-shadow: 0 0 0 1px var(--ltk-accent);
+}
+
+.ltk-cv-richbar {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+.ltk-cv-richbtn {
+  border: 1px solid var(--ltk-hairline);
+  background: none;
+  color: var(--ltk-fg);
+  border-radius: 6px;
+  cursor: pointer;
+  padding: 3px 9px;
+  font-size: 13px;
+}
+.ltk-cv-richbtn:first-child { font-weight: 700; }
+.ltk-cv-richlink { flex: 1 1 140px; min-width: 0; }
+.ltk-cv-richedit {
+  min-height: 140px;
+  max-height: 45vh;
+  overflow: auto;
+  border: 1px solid var(--ltk-hairline);
+  border-radius: 8px;
+  padding: 8px 10px;
+  outline: none;
+}
+.ltk-cv-richedit:focus { border-color: var(--ltk-accent); }
+
+.ltk-cv-checkedit { display: flex; flex-direction: column; gap: 6px; }
+.ltk-cv-checkedit-row { display: flex; gap: 6px; align-items: center; }
+.ltk-cv-checkedit-row input { flex: 1; min-width: 0; }
+
+.ltk-cv-addbtn {
+  align-self: flex-start;
+  border: 1px dashed var(--ltk-hairline);
+  background: none;
+  color: var(--ltk-fg);
+  border-radius: 6px;
+  cursor: pointer;
+  padding: 5px 10px;
+  font: inherit;
+}
+
+.ltk-cv-pastezone {
+  border: 1px dashed var(--ltk-hairline);
+  border-radius: 8px;
+  padding: 18px 12px;
+  text-align: center;
+  color: var(--ltk-muted);
+  margin-top: 8px;
+  outline: none;
+}
+.ltk-cv-pastezone:focus { border-color: var(--ltk-accent); }
+
 .ltk-cv-value input,
 .ltk-cv-value textarea {
   width: 100%;

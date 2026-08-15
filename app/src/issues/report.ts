@@ -22,6 +22,7 @@ import { Ben_ltkissuefilesService } from "../generated/services/Ben_ltkissuefile
 import { Ben_ltkissuemessagesService } from "../generated/services/Ben_ltkissuemessagesService";
 import { Ben_ltkissuewatchsService } from "../generated/services/Ben_ltkissuewatchsService";
 import type { Ben_ltkissues } from "../generated/models/Ben_ltkissuesModel";
+import { shrinkImage } from "../../../shared/ui/imageIngest";
 
 export type IssueArea = "boards" | "cards" | "documents" | "settings" | "other";
 
@@ -56,27 +57,9 @@ function contextBlob(): Record<string, string> {
   };
 }
 
-/** Downscale a screenshot before upload: long edge capped at 1600,
- *  JPEG — a pasted 4K screenshot is bytes nobody needs. Small files
- *  pass through untouched (text screenshots keep their crisp PNG). */
-async function shrinkImage(file: File): Promise<File> {
-  if (file.size <= 1_500_000) return file;
-  try {
-    const bmp = await createImageBitmap(file);
-    const scale = Math.min(1, 1600 / Math.max(bmp.width, bmp.height));
-    const canvas = document.createElement("canvas");
-    canvas.width = Math.max(1, Math.round(bmp.width * scale));
-    canvas.height = Math.max(1, Math.round(bmp.height * scale));
-    canvas.getContext("2d")!.drawImage(bmp, 0, 0, canvas.width, canvas.height);
-    const blob = await new Promise<Blob | null>((resolve) =>
-      canvas.toBlob(resolve, "image/jpeg", 0.85)
-    );
-    if (blob === null || blob.size >= file.size) return file;
-    return new File([blob], file.name.replace(/\.\w+$/, "") + ".jpg", { type: "image/jpeg" });
-  } catch {
-    return file; // an undecodable image still uploads as-is
-  }
-}
+// Screenshot downscaling now lives in shared/ui/imageIngest.ts (the
+// canvas card's image field shares it); the defaults ARE this dialog's
+// historical behaviour (1.5MB threshold, 1600px edge, JPEG 0.85).
 
 export function openReportDialog(opts: { host: HTMLElement }): void {
   const viewer = currentViewer();
