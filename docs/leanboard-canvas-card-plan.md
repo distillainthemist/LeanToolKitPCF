@@ -195,6 +195,67 @@ click-through, per-cell full-edit write-back) + Sources tab + BoardRef
 charters on two boards rolled up, cell edit writes back, read-only
 mode, stale source warning.
 
+## Design-mode revision — "canvas is the editor" (Ben, 2026-08-15)
+
+The C1 Layout tab shipped, and a design review found what a one-way
+studio must produce: no direct manipulation, no grid affordance, no
+drop target, no selection link, no design-time preview (a mini table
+rendered as an empty box), inconsistent empty states, invisible
+required, no label validation. Root cause: the studio flows settings →
+card only; nothing flows back. Decision 2 ("no in-card design mode") is
+REVISED: the canvas card gets a **design mode, studio-only** (the
+runtime card never enters it), and the settings pane becomes the
+property panel of the *selected* field — the keyboard-accessible
+equivalent, not the only route.
+
+**Decisions of record:**
+- **Flow grid with spans stays** — drag = reorder, resize = spans,
+  zero migration. Free x/y placement rejected (anchor coordinates,
+  empty-cell semantics, mobile reflow, no gain for charters).
+- **Design mode is studio-only, board mode, CanvasCard only.**
+- Undo/redo = studio-session stack of canvasJSON snapshots.
+- One empty-state rule: at DESIGN time a field advertises its TYPE
+  (type-true skeleton, `Long text · "hint"`); at RUN time it shows its
+  hint, else an em dash. Required renders ✱ at both times.
+
+### D0 — reverse channel + selection bridge (studio plumbing, generic)
+`CardMount.designLayout?: boolean` (this mount is THE layout editor)
+and `CardMount.onConfigPatch?: (key, value) => void`; the studio applies
+patches to `draft.config`, marks dirty and repaints the settings pane
+WITHOUT remounting the card (the card already reflects itself).
+Selection bridge both ways: `CardMount.onSelectField?(id)` →
+`CardSettingsEditor.setSelection(id)`; inspector block focus →
+`CanvasEditor.selectField(id)` via a studio-held handle. Undo/redo
+stack in the studio (`canvasJSON` snapshots; undo re-applies and
+repaints both panes). Nothing canvas-specific — any card can take the
+door.
+
+### D1 — design-mode rendering (`CanvasEditor.setDesignMode`)
+Canvas toolbar replacing the kebab: Columns 1/2/3, Grid toggle,
+Undo/Redo, Preview (design mode off = today's studio pane, now the
+check). Gridlines + gutters + faint empty trailing cells when Grid is
+on. Per field: type glyph, required ✱, type-true skeleton (mini table
+= configured headers with — cells; long text = honest height; person =
+picker look). Selection outline with live "2 × 3" readout; ⋮⋮ handle
+and resize handles on the selected field only. Permanent last row:
+"Drop a field here · + Add field".
+
+### D2 — direct manipulation (pointer events)
+Drag ⋮⋮ to move (insertion marker; release = reorder), right edge =
+width snapping to column boundaries, bottom edge = height snapping to
+44px steps, corner = both, readout live. Add field from the drop zone
+→ text field, selected, label focused in the inspector.
+
+### D3 — inspector as property panel + validation
+Layout tab = compact field list (drag handles kept as the keyboard
+route) with the SELECTED field's block expanded: label (spellcheck on,
+empty-label and DUPLICATE-label warnings — duplicates break the Canvas
+rollup's label matching), type, id, hint, required, w/h selects,
+options / mini-table columns. Canvas click ↔ inspector block selection
+both ways.
+
+### D4 — gates, push, hosted pass on a rebuilt charter.
+
 ## Deferred (logged, on evidence)
 
 Computed/derived fields (dependency graph — needs a concrete recurring

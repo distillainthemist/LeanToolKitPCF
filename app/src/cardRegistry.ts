@@ -84,10 +84,15 @@ import {
 } from "../../controls/CaptureCard/types";
 import { CanvasEditor } from "../../controls/CanvasCard/editor";
 import {
+  CanvasConfig,
   parseCanvas,
   parseCanvasConfig,
   serializeCanvas,
 } from "../../controls/CanvasCard/types";
+import {
+  loadCanvasDraft,
+  serializeCanvasDraft,
+} from "../../controls/CardSettings/canvasFields";
 import { CanvasRollupEditor } from "../../controls/CanvasRollup/editor";
 import {
   canvasLabelUnion,
@@ -172,6 +177,31 @@ export interface CardMount {
    *    meetings' `board:cardId` channel (see `actionsOff`).
    */
   designTime?: boolean;
+  /**
+   * This mount IS the layout editor for its card (the studio, board mode,
+   * cards with an on-canvas design mode — CanvasCard). The card renders
+   * its design affordances and pushes layout changes back through
+   * `onConfigPatch`; the studio applies them to its draft WITHOUT
+   * remounting the card (the card already reflects itself). Never set at
+   * run time — meetings must not be able to knock a layout about.
+   */
+  designLayout?: boolean;
+  /**
+   * The reverse channel: the card changed one of its OWN config keys
+   * (canvasJSON…). Only honoured alongside `designLayout`.
+   */
+  onConfigPatch?: (key: string, value: unknown) => void;
+  /**
+   * Selection bridge, card → inspector: the maker selected a field on the
+   * canvas (null = cleared). The studio scrolls the settings pane to it.
+   */
+  onSelectField?: (id: string | null) => void;
+  /**
+   * Selection bridge, inspector → card: the mounter hands back a
+   * function the studio calls when a field is picked in the settings
+   * pane. Registered by the mounter, cleared on unmount.
+   */
+  registerSelectField?: (fn: (id: string | null) => void) => void;
   /** Board cards offered as escalation sources ({instanceKey, label}). */
   sources: { instanceId: string; label: string }[];
   /** The signed-in viewer (EscalationViewer acknowledgements). */
@@ -835,6 +865,13 @@ const REGISTRY: Record<string, CardMounter> = {
     const editor = new CanvasEditor(opts.host, {
       onChange: (env) => s.save(serializeCanvas(env)),
       onSnapshot: s.onSnapshot,
+      ...(opts.designLayout === true
+        ? {
+            onLayoutChange: (config: CanvasConfig) =>
+              opts.onConfigPatch?.("canvasJSON", serializeCanvasDraft(loadCanvasDraft(config))),
+            onSelectField: (id: string | null) => opts.onSelectField?.(id),
+          }
+        : {}),
       ...(actionsOff(opts)
         ? {}
         : {
@@ -861,6 +898,14 @@ const REGISTRY: Record<string, CardMounter> = {
     editor.setPeople(opts.people);
     editor.setConfig(parseCanvasConfig(cfgRaw(opts, "canvasJSON")));
     editor.setEnvelope(parseCanvas(opts.outputJson).envelope);
+    // the studio's design mode: the canvas IS the layout editor; layout
+    // edits go back up as canvasJSON patches (in the Layout builder's own
+    // sparse shape so the inspector reloads them cleanly), and selection
+    // is bridged both ways
+    if (opts.designLayout === true) {
+      editor.setDesignMode(true);
+      opts.registerSelectField?.((id) => editor.selectField(id));
+    }
     return () => opts.host.replaceChildren();
   },
   CanvasRollup: (opts) => {

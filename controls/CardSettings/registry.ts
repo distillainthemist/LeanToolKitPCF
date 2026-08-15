@@ -89,6 +89,13 @@ export interface CardSpec {
    */
   fixedPolicy?: DataPolicy;
   /**
+   * The card has an ON-CANVAS design mode: in the studio (board mode) it
+   * is mounted as THE layout editor (`CardMount.designLayout`) and pushes
+   * its own config changes back through `onConfigPatch`; the settings
+   * pane becomes the selected field's property panel. Canvas card only.
+   */
+  designable?: boolean;
+  /**
    * What the card studio's left pane is for this card (default "edit"):
    *
    *  - `"edit"` — the card's live row IS its standard content, so the pane
@@ -706,6 +713,7 @@ export const CARDS: CardSpec[] = [
     policies: ["clear", "carry", "shared"],
     defaultPolicy: "carry",
     standardContent: "edit",
+    designable: true,
   },
   {
     type: "CanvasRollup",

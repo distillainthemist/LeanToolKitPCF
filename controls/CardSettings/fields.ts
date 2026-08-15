@@ -18,6 +18,10 @@ export interface FieldHost {
   /** The app title-strip palette — feeds titleColor selects. */
   titlePalette: PaletteEntry[];
   onChanged: () => void;
+  /** Layout builders (canvasFields): the currently selected field id, and
+   *  the way to change it — the selection bridge's inspector side. */
+  selectedField?: string | null;
+  onSelectField?: (id: string | null) => void;
 }
 
 type Get = () => unknown;

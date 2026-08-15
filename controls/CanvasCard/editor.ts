@@ -42,6 +42,15 @@ export interface CanvasEditorCallbacks {
   /** Card-level actions (the plan's decision 6): the mounter opens the
    *  standard action manager. Present = an "Actions…" kebab entry. */
   onManageActions?: () => void;
+  /**
+   * Design mode (studio only): the layout changed on the canvas — the
+   * mounter forwards it as a config patch (canvasJSON) to the studio's
+   * draft. Never fires outside design mode.
+   */
+  onLayoutChange?: (config: CanvasConfig) => void;
+  /** Design mode: the selected field changed (null = cleared) — the
+   *  selection bridge, card → inspector. */
+  onSelectField?: (id: string | null) => void;
 }
 
 /** Types whose value area swaps to an inline editor on click. */
@@ -67,6 +76,9 @@ export class CanvasEditor {
   private readOnly = false;
   private palette: Record<string, string> = {};
   private people: Person[] = [];
+  /** Studio-only: the card is THE layout editor (canvas plan D0–D2). */
+  private designMode = false;
+  private selectedField: string | null = null;
   private readonly snapshots: SnapshotScheduler;
   private resizeObserver: ResizeObserver | null = null;
 
@@ -140,6 +152,40 @@ export class CanvasEditor {
     // no render — people only feed the picker dialog
   }
 
+  /**
+   * Studio-only design mode: the canvas becomes the layout editor (grid
+   * affordance, type-true skeletons, selection, drag/resize — D1/D2) and
+   * layout edits flow back through onLayoutChange. Runtime never sets it.
+   */
+  setDesignMode(on: boolean): void {
+    if (this.designMode === on) return;
+    this.designMode = on;
+    if (!on) this.selectedField = null;
+    this.render();
+  }
+
+  /** Selection bridge, inspector → card. */
+  selectField(id: string | null): void {
+    if (id === this.selectedField) return;
+    this.selectedField = id;
+    if (this.designMode) this.render();
+  }
+
+  /** The card's own selection changes go out through the bridge. */
+  private setSelected(id: string | null): void {
+    if (id === this.selectedField) return;
+    this.selectedField = id;
+    this.render();
+    this.cb.onSelectField?.(id);
+  }
+
+  /** Design mode: apply a layout change locally, repaint, push it up. */
+  private commitLayout(next: CanvasConfig): void {
+    this.config = next;
+    this.render();
+    this.cb.onLayoutChange?.(next);
+  }
+
   destroy(): void {
     this.snapshots.cancel();
     if (this.resizeObserver) this.resizeObserver.disconnect();
@@ -194,6 +240,10 @@ export class CanvasEditor {
     const grid = el("div", "ltk-cv-grid");
     grid.style.gridTemplateColumns = `repeat(${this.config.cols}, 1fr)`;
     body.appendChild(grid);
+    if (this.designMode) {
+      // clicking empty canvas clears the selection
+      body.addEventListener("click", () => this.setSelected(null));
+    }
 
     if (this.config.fields.length === 0) {
       grid.style.gridTemplateColumns = "1fr";
@@ -216,6 +266,18 @@ export class CanvasEditor {
     const box = el("div", "ltk-cv-field");
     box.style.gridColumn = `span ${Math.min(field.w, this.config.cols)}`;
     box.style.gridRow = `span ${field.h}`;
+    box.dataset.fieldId = field.id;
+
+    // design mode: the field is a selectable layout object (D1/D2 add the
+    // handles, skeletons and toolbar on top of this seam)
+    if (this.designMode) {
+      box.classList.add("ltk-cv-designable");
+      if (field.id === this.selectedField) box.classList.add("ltk-cv-selected");
+      box.addEventListener("click", (e) => {
+        e.stopPropagation();
+        this.setSelected(field.id);
+      });
+    }
 
     if (field.type === "heading") {
       box.classList.add("ltk-cv-field-heading");

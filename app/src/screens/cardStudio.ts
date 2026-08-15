@@ -179,6 +179,15 @@ export function openCardStudio(opts: StudioOptions): Promise<StudioResult> {
       });
       headActions.appendChild(archive);
     }
+    // undo/redo for on-canvas layout edits (designable cards only); wired
+    // once the reverse channel below exists
+    const undoBtn = el("button", "app-btn app-studio-undo", "↶ Undo") as HTMLButtonElement;
+    const redoBtn = el("button", "app-btn app-studio-undo", "↷ Redo") as HTMLButtonElement;
+    undoBtn.title = "Undo the last layout change";
+    redoBtn.title = "Redo";
+    if (mode === "board" && spec?.designable === true) {
+      headActions.prepend(undoBtn, redoBtn);
+    }
     head.appendChild(headActions);
     panel.appendChild(head);
 
@@ -240,6 +249,59 @@ export function openCardStudio(opts: StudioOptions): Promise<StudioResult> {
       dirty = true;
       dot.style.visibility = "visible";
     };
+
+    // ---- the reverse channel (canvas plan D0) ----
+    // A card with an on-canvas design mode edits its OWN config and pushes
+    // the change back here. The draft takes it, the settings pane repaints
+    // to match, and the card is NOT remounted — it already reflects itself.
+    // Undo/redo is a studio-session stack of those config keys' values.
+    const designLayout =
+      mode === "board" && (spec?.designable ?? false) === true;
+    /** Card → inspector selection, set by the mounter's registerSelectField. */
+    let selectOnCard: ((id: string | null) => void) | null = null;
+    interface PatchSnapshot {
+      key: string;
+      value: unknown;
+    }
+    const undoStack: PatchSnapshot[] = [];
+    const redoStack: PatchSnapshot[] = [];
+    const cfgValue = (key: string): unknown => draft.config[key];
+    const applyConfig = (key: string, value: unknown) => {
+      if (value === undefined) delete draft.config[key];
+      else draft.config[key] = value;
+      markDirty();
+      settings?.setDraft(draft, true); // repaint the pane; no card remount
+    };
+    const onConfigPatch = (key: string, value: unknown) => {
+      undoStack.push({ key, value: cfgValue(key) });
+      if (undoStack.length > 50) undoStack.shift();
+      redoStack.length = 0;
+      applyConfig(key, value);
+      paintUndo();
+    };
+    const undo = () => {
+      const s = undoStack.pop();
+      if (!s) return;
+      redoStack.push({ key: s.key, value: cfgValue(s.key) });
+      applyConfig(s.key, s.value);
+      mountCard(); // the card must now show the reverted layout
+      paintUndo();
+    };
+    const redo = () => {
+      const s = redoStack.pop();
+      if (!s) return;
+      undoStack.push({ key: s.key, value: cfgValue(s.key) });
+      applyConfig(s.key, s.value);
+      mountCard();
+      paintUndo();
+    };
+    const paintUndo = () => {
+      undoBtn.disabled = undoStack.length === 0;
+      redoBtn.disabled = redoStack.length === 0;
+    };
+    undoBtn.addEventListener("click", undo);
+    redoBtn.addEventListener("click", redo);
+    paintUndo();
 
     const tryCancel = () => {
       void (async () => {
@@ -310,6 +372,7 @@ export function openCardStudio(opts: StudioOptions): Promise<StudioResult> {
     const mountCard = () => {
       unmountCard();
       unmountCard = () => undefined;
+      selectOnCard = null; // the mounter re-registers if it can
       clear(cardHost);
       const mounter = cardMounter(opts.slot.cardType);
       if (!mounter) {
@@ -352,10 +415,23 @@ export function openCardStudio(opts: StudioOptions): Promise<StudioResult> {
           if (svg !== "") pendingSvg = svg;
         },
         onActions: () => undefined,
+        // the reverse channel + selection bridge (designable cards only)
+        ...(designLayout
+          ? {
+              designLayout: true,
+              onConfigPatch,
+              onSelectField: (id: string | null) => settings?.setSelection(id),
+              registerSelectField: (fn: (id: string | null) => void) => {
+                selectOnCard = fn;
+              },
+            }
+          : {}),
       });
     };
 
     const settingsEditor = new CardSettingsEditor(settingsHost, {
+      // inspector → card: the maker picked a field block in the pane
+      onSelectField: (id) => selectOnCard?.(id),
       onChange: () => {
         markDirty();
         titleEl.textContent = draft.title.trim() || typeLabel;

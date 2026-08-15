@@ -32,6 +32,9 @@ import { CARDSETTINGS_CSS } from "./styles";
 
 export interface CardSettingsCallbacks {
   onChange: (draft: SettingsDraft) => void;
+  /** Selection bridge, inspector → card: the maker picked a field block
+   *  in a layout builder (canvasFields). null = cleared. */
+  onSelectField?: (id: string | null) => void;
 }
 
 /** What differs between the two rollups' Sources tabs. */
@@ -83,6 +86,9 @@ export class CardSettingsEditor {
   private titlePalette: PaletteEntry[] = defaultTitlePalette();
   /** Which properties tab is showing. */
   private tab = "Common";
+  /** The selected layout field (canvasFields builder) — the selection
+   *  bridge's inspector side. null = none. */
+  private selectedField: string | null = null;
 
   constructor(host: HTMLElement, private readonly cb: CardSettingsCallbacks) {
     ensureStylesheet("ltk-base-css", LTK_BASE_CSS);
@@ -117,6 +123,26 @@ export class CardSettingsEditor {
     if (this.readOnly !== ro) {
       this.readOnly = ro;
       this.render();
+    }
+  }
+
+  /**
+   * Selection bridge, card → inspector: a field was picked on the canvas.
+   * Switches to the tab holding the layout builder, repaints with that
+   * field's block marked, and scrolls it into view. null clears.
+   */
+  setSelection(id: string | null): void {
+    if (id === this.selectedField) return;
+    this.selectedField = id;
+    if (id !== null) {
+      // the layout builder lives on the card-specific tab
+      const spec = cardSpec(this.draft.cardType);
+      if (spec?.config.some((f) => f.kind === "canvasFields")) this.tab = "Card specific";
+    }
+    this.render();
+    if (id !== null) {
+      const block = this.root.querySelector<HTMLElement>(`[data-field-id="${CSS.escape(id)}"]`);
+      block?.scrollIntoView({ block: "nearest", behavior: "smooth" });
     }
   }
 
@@ -253,6 +279,18 @@ export class CardSettingsEditor {
       palette: this.palette,
       titlePalette: this.titlePalette,
       onChanged: () => this.commit(),
+      // the selection bridge, both directions, for layout builders
+      selectedField: this.selectedField,
+      onSelectField: (id) => {
+        if (id === this.selectedField) return;
+        this.selectedField = id;
+        this.cb.onSelectField?.(id);
+        // no full render — the builder marks its own blocks; a render here
+        // would steal focus from the input the maker just clicked into
+        this.root
+          .querySelectorAll<HTMLElement>("[data-field-id]")
+          .forEach((b) => b.classList.toggle("ltk-cs-col-selected", b.dataset.fieldId === id));
+      },
     };
 
     // ---- the tabs' contents ----

@@ -160,6 +160,13 @@ export const CANVAS_CSS = `
 
 .ltk-cv-yes { font-weight: 600; }
 
+/* ---- design mode (studio only, canvas plan D0+) ---- */
+.ltk-cv-designable { cursor: pointer; }
+.ltk-cv-selected {
+  outline: 2px solid var(--ltk-accent);
+  outline-offset: 1px;
+}
+
 /* ---- picker dialogs (C3) ---- */
 .ltk-cv-statuspick { display: flex; flex-wrap: wrap; gap: 8px; }
 .ltk-cv-statusopt { border: 2px solid transparent; cursor: pointer; font: inherit; }

@@ -250,6 +250,11 @@ export const CARDSETTINGS_CSS = `
 .ltk-cs-col-head { display: flex; gap: 6px; align-items: center; }
 
 /* ---- canvas Layout builder ---- */
+.ltk-cs-col-selected {
+  outline: 2px solid var(--ltk-accent);
+  outline-offset: 2px;
+  border-radius: 8px;
+}
 .ltk-cs-drag {
   cursor: grab;
   color: var(--ltk-muted);

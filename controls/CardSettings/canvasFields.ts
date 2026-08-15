@@ -304,6 +304,15 @@ export function canvasFieldsEditor(
 
   const fieldBlock = (f: FieldDraft, i: number): HTMLElement => {
     const block = el("div", "ltk-cs-col");
+    // the selection bridge: this block IS field f.id — the canvas can find
+    // and mark it, and clicking into it selects the field on the canvas
+    const effectiveId = () => (f.id.trim() !== "" ? f.id.trim() : slug(f.label));
+    block.dataset.fieldId = effectiveId();
+    if (host.selectedField !== undefined && host.selectedField === effectiveId()) {
+      block.classList.add("ltk-cs-col-selected");
+    }
+    block.addEventListener("focusin", () => host.onSelectField?.(effectiveId()));
+    block.addEventListener("click", () => host.onSelectField?.(effectiveId()));
 
     const headRow = el("div", "ltk-cs-col-head");
     const handle = el("span", "ltk-cs-drag", "≡");
