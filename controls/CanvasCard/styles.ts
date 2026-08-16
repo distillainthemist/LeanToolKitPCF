@@ -13,7 +13,9 @@ export const CANVAS_CSS = `
   flex: 1;
   min-height: 0;
   overflow: auto;
-  padding: 0 10px 10px;
+  /* air above the first row and below the last — fields sat flush
+     against the title bar and the card's bottom edge */
+  padding: 12px 10px 14px;
 }
 .ltk-cv-banner {
   font-size: 12px;

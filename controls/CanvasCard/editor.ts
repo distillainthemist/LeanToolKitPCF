@@ -45,9 +45,6 @@ import { CANVAS_CSS, CANVAS_STEP } from "./styles";
 export interface CanvasEditorCallbacks {
   onChange: (env: CanvasEnvelope) => void;
   onSnapshot?: (svgMarkup: string) => void;
-  /** Card-level actions (the plan's decision 6): the mounter opens the
-   *  standard action manager. Present = an "Actions…" kebab entry. */
-  onManageActions?: () => void;
   /**
    * Design mode (studio only): the layout changed on the canvas — the
    * mounter forwards it as a config patch (canvasJSON) to the studio's
@@ -237,14 +234,12 @@ export class CanvasEditor {
     if (this.designMode) {
       this.renderToolbar();
     } else if (!this.readOnly) {
-      const items = [
+      // no "Actions…" here: the focused editor's universal ＋ Action button
+      // in the title bar is the card-level road (Ben, 2026-08-17)
+      renderKebab(this.root, [
         { label: "Download PNG", onClick: () => this.downloadPng() },
         { label: "Download SVG", onClick: () => this.downloadSvg() },
-      ];
-      if (this.cb.onManageActions) {
-        items.unshift({ label: "Actions…", onClick: () => this.cb.onManageActions!() });
-      }
-      renderKebab(this.root, items);
+      ]);
     }
 
     const body = el("div", "ltk-cv-body");

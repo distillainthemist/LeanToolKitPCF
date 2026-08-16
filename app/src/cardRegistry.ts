@@ -857,11 +857,8 @@ const REGISTRY: Record<string, CardMounter> = {
   },
   CanvasCard: (opts) => {
     const s = saver(opts);
-    // card-LEVEL actions (per the canvas plan's decision 6 — no per-field
-    // raising): the standard channel through the action manager, reached
-    // from the card's kebab
-    const actions = opts.actions.slice();
-    const doneColor = opts.theme.legend[1] ?? "#107c10";
+    // card-LEVEL actions come from the focused editor's universal ＋ Action
+    // in the title bar (cardEditor) — no per-field raising, no kebab entry
     const editor = new CanvasEditor(opts.host, {
       onChange: (env) => s.save(serializeCanvas(env)),
       onSnapshot: s.onSnapshot,
@@ -872,24 +869,6 @@ const REGISTRY: Record<string, CardMounter> = {
             onSelectField: (id: string | null) => opts.onSelectField?.(id),
           }
         : {}),
-      ...(actionsOff(opts)
-        ? {}
-        : {
-            onManageActions: () => {
-              openActionManager({
-                host: opts.host,
-                actions,
-                source: "canvas",
-                sourceId: opts.cardId,
-                seedIssue: opts.title,
-                people: opts.people,
-                doneColor,
-                readOnly: opts.readOnly,
-                canRaise: true,
-                onChanged: () => opts.onActions(stamped(opts, actions)),
-              });
-            },
-          }),
     });
     editor.setTheme(opts.theme);
     editor.setChrome(opts.title, promptsRaw(opts));
