@@ -3,7 +3,10 @@
 // capture card's classes (the editor loads CAPTURE_CSS too) so shared
 // vocabulary stays visually identical.
 
-export const CANVAS_STEP = 44;
+// One height step. A single-row field must hold its label (11px) AND one
+// line of value — a person chip, a status chip, a date — with the field's
+// own padding: 44 clipped both (Ben, 2026-08-17); 60 fits with air.
+export const CANVAS_STEP = 60;
 
 export const CANVAS_CSS = `
 .ltk-cv-body {
@@ -73,7 +76,11 @@ export const CANVAS_CSS = `
   overflow: auto;
   font-size: 14px;
   line-height: 1.35;
+  scrollbar-width: thin;
 }
+/* one-line values (chips, dates, numbers) never scroll — clip instead of
+   growing a bar beside a single person chip */
+.ltk-cv-field.ltk-cv-h1 .ltk-cv-value { overflow: hidden; }
 .ltk-cv-editable { cursor: pointer; }
 .ltk-cv-empty { color: var(--ltk-muted); }
 .ltk-cv-pre { white-space: pre-wrap; overflow-wrap: break-word; }

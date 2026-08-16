@@ -401,6 +401,7 @@ export class CanvasEditor {
       box.style.gridRow = `span ${field.h}`;
     }
     box.style.setProperty("--h", String(field.h));
+    if (field.h === 1) box.classList.add("ltk-cv-h1");
     box.dataset.fieldId = field.id;
 
     const designing = this.designing();

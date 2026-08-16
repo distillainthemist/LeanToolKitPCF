@@ -35,6 +35,16 @@ export function renderKebab(host: HTMLElement, items: MenuItem[]): HTMLElement {
   });
 
   wrap.append(btn, menu);
-  host.appendChild(wrap);
+  // when the host has a title bar (every editor renders it first), the
+  // kebab lives IN its action slot — flowed, not absolutely overlaying the
+  // body: a 44px button pinned top-right sat over the first row of content
+  // in every card's focused view. Without a bar (untitled), it still pins.
+  const slot = host.querySelector<HTMLElement>(":scope > .ltk-titlebar > .ltk-titlebar-actions");
+  if (slot) {
+    wrap.classList.add("ltk-kebab-inbar");
+    slot.appendChild(wrap);
+  } else {
+    host.appendChild(wrap);
+  }
   return wrap;
 }

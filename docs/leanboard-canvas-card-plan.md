@@ -47,7 +47,7 @@ Project charters, plans-on-a-page, quad charts. Plus a **Canvas rollup**
   the card studio work unchanged. Deleting a field orphans its value
   harmlessly (kept in the doc, not rendered).
 - **Flow grid with spans, not free x/y.** Fields carry `w` (1..cols)
-  and `h` (height STEPS, ~44px) and flow in list order. A quad chart is
+  and `h` (height STEPS, ~60px) and flow in list order. A quad chart is
   2 columns × 4 tall fields. Deterministic snapshots; stacks to one
   column on phones.
 - **Display-first rendering.** Every field renders its value as styled
@@ -243,7 +243,7 @@ and resize handles on the selected field only. Permanent last row:
 ### D2 — direct manipulation (pointer events)
 Drag ⋮⋮ to move (insertion marker; release = reorder), right edge =
 width snapping to column boundaries, bottom edge = height snapping to
-44px steps, corner = both, readout live. Add field from the drop zone
+60px steps, corner = both, readout live. Add field from the drop zone
 → text field, selected, label focused in the inspector.
 
 ### D3 — inspector as property panel + validation

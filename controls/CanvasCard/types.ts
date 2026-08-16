@@ -59,7 +59,7 @@ export interface CanvasField {
   label: string;
   /** Column span, 1..cols. */
   w: number;
-  /** Height in grid steps (~44px), 1..8; headings auto-height. */
+  /** Height in grid steps (~60px), 1..8; headings auto-height. */
   h: number;
   /** Placeholder/prompt shown while the field is empty. */
   hint: string;

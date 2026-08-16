@@ -24,6 +24,8 @@ import {
   startOfDay,
 } from "../../../shared/schema/recurrence";
 import { readableShade, textOn } from "../../../shared/tokens";
+import { openActionManager } from "../../../shared/ui/actionUi";
+import { setTitleBarExtras } from "../../../shared/ui/chrome";
 import { el } from "../../../shared/ui/dom";
 import { statusChip } from "../../../shared/ui/format";
 import { cardMounter, supportedCardTypes } from "../cardRegistry";
@@ -528,6 +530,52 @@ export function mountCardEditor(
       host = editorHost(wrap);
     }
     const rowGuid = row?.id ?? "";
+
+    // The universal "＋ Action" button — a card-LEVEL linked action from
+    // every card's title bar (in addition to whatever a card raises from
+    // its own elements). Registered as a title-bar extra so it survives
+    // the editors' re-renders. Not on action surfaces (they ARE the
+    // actions), not on the template's live row (a template must not
+    // accumulate meeting actions), not when the card disables actions.
+    const actionsDisabled =
+      ((slot.settings.config ?? {}) as Record<string, unknown>).disableActions === true;
+    const closedNow = instance ? effectivelyClosed(instance) : false;
+    if (!surface && !isLive && !actionsDisabled) {
+      const dlgHost = el("div", "app-dlghost");
+      host.appendChild(dlgHost);
+      setTitleBarExtras(host, () => {
+        const btn = el("button", "ltk-titlebar-btn", "＋ Action") as HTMLButtonElement;
+        btn.type = "button";
+        btn.title = "Raise or manage an action linked to this card";
+        btn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          openActionManager({
+            host: dlgHost,
+            actions,
+            source: "card",
+            sourceId: cardId,
+            seedIssue: slot.title || cardLabel(slot.cardType),
+            people: assigneePeople(
+              (() => {
+                const info = parseMeetingInfo(board.occurrenceSettingsRaw);
+                return [...(info?.owner ? [info.owner] : []), ...(info?.participants ?? [])];
+              })(),
+              roster
+            ),
+            doneColor: theme.legend[1] ?? "#107c10",
+            readOnly: closedNow,
+            canRaise: !closedNow,
+            onChanged: () =>
+              pushActions(
+                actions.map((a) => (a.instanceId === "" ? { ...a, instanceId: instanceKey } : a))
+              ),
+          });
+        });
+        return [btn];
+      });
+      cleanups.push(() => setTitleBarExtras(host, null));
+    }
+
     cleanups.push(
       mounter({
         host,

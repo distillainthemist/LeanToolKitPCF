@@ -39,7 +39,30 @@ export const LTK_BASE_CSS = `
   background: var(--ltk-titlebar, transparent);
   color: var(--ltk-titlebar-fg, inherit);
 }
-.ltk-titlebar-text { font-size: 20px; font-weight: 600; line-height: 1.2; }
+.ltk-titlebar-text { font-size: 20px; font-weight: 600; line-height: 1.2; min-width: 0; }
+/* the right-hand slot: app extras (＋ Action) then the kebab, flowed */
+.ltk-titlebar-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+}
+.ltk-kebab.ltk-kebab-inbar { position: relative; top: auto; right: auto; }
+.ltk-titlebar-btn {
+  border: 1px solid color-mix(in srgb, currentColor 35%, transparent);
+  background: none;
+  color: var(--ltk-titlebar-fg, var(--ltk-fg));
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: 6px;
+  padding: 5px 10px;
+  min-height: 34px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.ltk-titlebar-btn:hover { background: color-mix(in srgb, currentColor 12%, transparent); }
 .ltk-info-btn {
   border: none; background: none; color: var(--ltk-muted);
   font-size: 14px; cursor: pointer; padding: 2px 6px; border-radius: 999px;

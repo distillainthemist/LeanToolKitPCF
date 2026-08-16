@@ -53,6 +53,24 @@ export function hintFor(prompts: Prompts, field: string, fallback: string): stri
  * Render the optional title bar. Returns the bar (already appended) or null
  * when no title is set — in which case the card has no chrome at all.
  */
+/**
+ * App-supplied title-bar extras (e.g. the focused card editor's universal
+ * "＋ Action" button), keyed by the MOUNT host — the element the editor's
+ * .ltk-root sits in. Editors rebuild their root on every render, so an
+ * injected button would vanish; registering a builder here means every
+ * renderTitleBar call re-creates it in the bar's action slot. Cleared by
+ * passing null.
+ */
+const titleBarExtras = new WeakMap<HTMLElement, () => HTMLElement[]>();
+
+export function setTitleBarExtras(
+  mountHost: HTMLElement,
+  build: (() => HTMLElement[]) | null
+): void {
+  if (build) titleBarExtras.set(mountHost, build);
+  else titleBarExtras.delete(mountHost);
+}
+
 export function renderTitleBar(
   host: HTMLElement,
   title: string,
@@ -62,6 +80,12 @@ export function renderTitleBar(
   if (t === "") return null;
   const bar = el("div", "ltk-titlebar");
   bar.appendChild(el("div", "ltk-titlebar-text", t));
+  // the right-hand slot: app extras, then the kebab (renderKebab appends
+  // itself here when the bar exists — so nothing overlays the body)
+  const slot = el("div", "ltk-titlebar-actions");
+  const extras = host.parentElement ? titleBarExtras.get(host.parentElement) : undefined;
+  if (extras) for (const e of extras()) slot.appendChild(e);
+  bar.appendChild(slot);
   if (prompts.general.length > 0) {
     const info = el("button", "ltk-info-btn", "ⓘ");
     info.type = "button";
