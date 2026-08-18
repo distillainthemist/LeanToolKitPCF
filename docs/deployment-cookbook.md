@@ -138,3 +138,37 @@ filename it will watch for; `ben_targetlibrary` says where the user was
 headed (informational — the app's own handoff performs the move to the
 target). What the flow must never do: write anywhere but staging, or
 touch rows whose status it did not set.
+
+## Prerequisite — Power BI embeds on boards (browser policy)
+
+Diagnosed 2026-08-17 (Ben, prod). Embed cards load Power BI's **secure
+embed** URL (`app.powerbi.com/reportEmbed…&autoAuth=true`) in a persistent
+iframe. Two browser-side conditions must hold, and neither is in the
+app's gift:
+
+1. **Third-party cookies / storage access for `powerbi.com`.** The frame
+   is third-party under the Power Apps player; Power BI's autoAuth needs
+   its sign-in cookie there. Blocked → "Sign in to view this report",
+   and the Sign in popup loops. The app delegates `storage-access` on
+   its frame (v0.45.2) so the browser can prompt where it is allowed to.
+2. **Chromium Local Network Access (Chrome/Edge 138+).** If a proxy,
+   PAC or security agent (Entra Global Secure Access, Zscaler, Netskope,
+   Umbrella, WARP…) routes Power BI hosts through a LOCAL address while
+   the player is reached publicly, Chrome denies the frame's fetches:
+   *"blocked by CORS policy: Permission was denied for this request to
+   access the 'local' address space"* — the report never renders, and
+   the app cannot prompt on the frame's behalf. Confirmed by
+   `chrome://flags/#local-network-access-check` = Disabled making it
+   work; VPN off did NOT (the agent persists). Diagnose with
+   `chrome://net-internals/#proxy` and `nslookup app.powerbi.com`.
+
+**Fix = policy, pushed to every device that runs boards (incl. meeting
+rooms):** the Chrome/Edge enterprise Local Network Access URL allow-list
+(`LocalNetworkAccessAllowedForUrls`) for `[*.]powerbi.com` and
+`[*.]powerapps.com` — scoped, survives proxy changes. Alternatively the
+proxy/agent owner bypasses `*.powerbi.com`, `*.analysis.windows.net`,
+`*.pbidedicated.windows.net` so they route like the rest of M365. Do
+NOT roll out the flag: it disables the check globally per user.
+
+The card's "Open in a tab" link always works (a tab is first-party) and
+is the in-meeting fallback while policy lands.
