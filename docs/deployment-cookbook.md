@@ -151,29 +151,34 @@ app's gift:
    its sign-in cookie there. Blocked → "Sign in to view this report",
    and the Sign in popup loops. The app delegates `storage-access` on
    its frame (v0.45.2) so the browser can prompt where it is allowed to.
-2. **Chromium Local Network Access (Chrome/Edge 142+).** Chrome
-   requires the `local-network-access` permission for requests it
-   classifies as targeting the local address space, and a NESTED
-   cross-origin frame only has it when EVERY parent frame delegates it
-   (`allow="local-network-access"`). The chain is player → code app →
-   our frame → Power BI: ours delegates (v0.45.2); the Power Apps
-   PLAYER's frame does not, and that is Microsoft's (Teams has the same
-   open issue: microsoft-teams-library-js #2919). Symptom: *"blocked by
-   CORS policy: Permission was denied for this request to access the
-   'local' address space"* on Power BI's token request; the report
-   never renders. Confirmed by `chrome://flags/#local-network-access-
-   check` = Disabled making it work. NOT a DNS/VPN/proxy matter — a
-   hostname destination stays "public" even if it resolves locally
-   (Chrome's own design post); WHY Power BI's token call is classified
-   local was still open on 2026-08-17.
+2. **Chromium Local Network Access × Windows work-account SSO
+   (Chrome/Edge 142+, RESOLVED 2026-08-18).** On Windows, Edge ("Allow
+   single sign-on for work or school sites", policy
+   `AADWebSiteSSOUsingThisProfileEnabled`) and Chrome (`CloudAPAuthEnabled`)
+   hand sign-ins to `login.microsoftonline.com` to the Windows account
+   broker instead of the wire. Chromium's Local Network Access treats
+   that hand-off as a local-endpoint request; a NESTED cross-origin frame
+   only has the permission when every parent delegates it, and the Power
+   Apps PLAYER's frame does not (Microsoft's; Teams has the same open
+   issue, microsoft-teams-library-js #2919). So Power BI's in-frame MSAL
+   token POST is blocked before it is sent: *"blocked by CORS policy:
+   Permission was denied for this request to access the 'local' address
+   space"*, DevTools shows "Provisional headers", the report never
+   renders. Proof: Edge with the SSO setting OFF works; Chrome (no user
+   toggle) fails; `chrome://flags/#local-network-access-check` = Disabled
+   works. NOT DNS/VPN/proxy. Our frame delegates `storage-access` and
+   `local-network-access` (v0.45.2) — necessary, not sufficient.
 
-**Levers, honestly:** (a) report to Microsoft — the player must delegate
-the permission; (b) the enterprise policy `LocalNetworkAccessRestrictionsEnabled=false`
-(Intune/GPO) turns the check off org-wide — the only policy that reaches
-a nested frame; `LocalNetworkAccessAllowedForUrls` does NOT (top-level
-origins only); (c) the embed-token road (Power BI JS SDK, token minted
-top-level via a relay) so the frame never calls the auth endpoint. Do
-NOT roll out the flag per user.
+**Levers:** (a) report to Microsoft/Chromium — the real fix (player
+delegation, or the broker path not being LNA-gated); (b) meeting-room /
+shared devices: policy `AADWebSiteSSOUsingThisProfileEnabled=Disabled`
+(Edge) and `CloudAPAuthEnabled=0` (Chrome) for that device group — SSO
+matters least there; (c) laptops: the same policy costs M365 seamless
+SSO — instead `LocalNetworkAccessRestrictionsEnabled=false` (org-wide
+off-switch) or an in-app "Present in window" mode (top-level window, no
+frame chain — not built). `LocalNetworkAccessAllowedForUrls` does NOT
+reach nested frames. Do NOT roll out the flag per user. Embed tokens
+(custom API relay) would sidestep it but is ON HOLD (Ben, 2026-08-18).
 
 The card's "Open in a tab" link always works (a tab is first-party) and
 is the in-meeting fallback while policy lands.
