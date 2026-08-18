@@ -21,7 +21,7 @@ import {
   openActionDialog,
   openActionManager,
 } from "../../shared/ui/actionUi";
-import { sanitizeRichHtml } from "./types";
+import { isPowerBiUrl, sanitizeRichHtml } from "./types";
 import { EMBED_CSS } from "./styles";
 import { closePresentation, isPresenting, present } from "./presentWindow";
 
@@ -44,6 +44,8 @@ export class EmbedView {
   private readonly openBtn: HTMLAnchorElement;
   private readonly popBtn: HTMLButtonElement;
   private readonly presentPanel: HTMLElement;
+  private readonly hint: HTMLElement;
+  private hintTimer: ReturnType<typeof setTimeout> | null = null;
   private readonly actionsChip: HTMLButtonElement;
   private readonly aside: HTMLElement;
   private readonly notesHost: HTMLElement;
@@ -104,7 +106,15 @@ export class EmbedView {
     this.actsHost = el("div", "ltk-em-acts");
     this.aside.append(this.toolbar, this.notesHost, this.actsHost);
 
-    main.append(this.body, this.aside);
+    // the "not showing?" hint (see scheduleHint) — built once, shown late.
+    // A SIBLING below the frame slot, not an overlay: the host's persistent
+    // frame is a document-level fixed layer that would cover anything
+    // absolutely positioned inside the body.
+    this.hint = el("div", "ltk-em-hint");
+    this.hint.style.display = "none";
+    const column = el("div", "ltk-em-col");
+    column.append(this.body, this.hint);
+    main.append(column, this.aside);
     this.root.appendChild(main);
 
     this.refreshBtn = el("button", "ltk-em-refresh", "⟳") as HTMLButtonElement;
@@ -232,6 +242,7 @@ export class EmbedView {
       this.openBtn.style.display = "none";
       this.openBtn.removeAttribute("href");
       this.popBtn.style.display = "none";
+      this.cancelHint();
       this.paintPresent();
       return;
     }
@@ -239,6 +250,7 @@ export class EmbedView {
     this.openBtn.href = url;
     this.openBtn.style.display = "";
     this.popBtn.style.display = this.readOnly ? "none" : "";
+    this.scheduleHint(url);
     if (this.presentMode) {
       // never a frame: the panel is the body
       this.frame.style.display = "none";
@@ -266,6 +278,7 @@ export class EmbedView {
     this.presentPanel.style.display = on ? "" : "none";
     this.refreshBtn.style.display = on || this.readOnly ? "none" : "";
     if (on) {
+      this.cancelHint();
       this.frame.style.display = "none";
       this.frame.removeAttribute("src");
       this.veil.classList.remove("ltk-em-on");
@@ -287,6 +300,107 @@ export class EmbedView {
         this.frame.src = this.currentUrl;
       }
     }
+  }
+
+  // ---- the "not showing?" hint ----
+  //
+  // A Power BI secure embed cannot tell us whether it rendered: the frame is
+  // cross-origin, its load event fires on the "Sign in to view" page too,
+  // and it posts no messages to its parent (probed 2026-08-18). So this is
+  // a RISK-PROFILE hint, not a failure signal: Windows + Chromium ≥ 142 +
+  // a Power BI url is where browser work-account SSO × Local Network Access
+  // blocks the embedded sign-in (deployment cookbook). Shown late (20s),
+  // in the focused view only (tiles hide it), dismissible per browser. It
+  // WILL show for a Windows user whose report loaded fine — once.
+
+  private static readonly HINT_KEY = "ltk-embed-hint-dismissed";
+
+  private static riskProfile(url: string): boolean {
+    if (!isPowerBiUrl(url)) return false;
+    const nav = navigator as Navigator & {
+      userAgentData?: { platform?: string; brands?: { brand: string; version: string }[] };
+    };
+    const ua = navigator.userAgent;
+    const platform = nav.userAgentData?.platform ?? (/Windows/i.test(ua) ? "Windows" : "");
+    if (platform !== "Windows") return false;
+    let chromium = 0;
+    for (const b of nav.userAgentData?.brands ?? []) {
+      if (/chromium/i.test(b.brand)) chromium = Math.max(chromium, Number(b.version) || 0);
+    }
+    if (chromium === 0) {
+      const m = /Chrom(?:e|ium)\/(\d+)/.exec(ua);
+      if (m) chromium = Number(m[1]);
+    }
+    return chromium >= 142;
+  }
+
+  private scheduleHint(url: string): void {
+    this.cancelHint();
+    if (this.presentMode) return;
+    try {
+      if (localStorage.getItem(EmbedView.HINT_KEY) === "1") return;
+    } catch {
+      /* storage unavailable — still hint */
+    }
+    if (!EmbedView.riskProfile(url)) return;
+    this.hintTimer = setTimeout(() => {
+      this.hintTimer = null;
+      this.paintHint();
+    }, 20_000);
+  }
+
+  private cancelHint(): void {
+    if (this.hintTimer !== null) {
+      clearTimeout(this.hintTimer);
+      this.hintTimer = null;
+    }
+    this.hint.style.display = "none";
+  }
+
+  private paintHint(): void {
+    const h = this.hint;
+    while (h.firstChild) h.removeChild(h.firstChild);
+    const isEdge = /Edg\//.test(navigator.userAgent);
+    h.appendChild(el("span", "ltk-em-hint-text", "Not showing? On Windows, the browser's work-account sign-in can block embedded Power BI."));
+    const present = el("button", "ltk-em-hint-btn", "⧉ Present in window") as HTMLButtonElement;
+    present.type = "button";
+    present.addEventListener("click", () => {
+      this.presentNow();
+      this.hint.style.display = "none";
+    });
+    h.appendChild(present);
+    const how = el("button", "ltk-em-hint-link", "How to fix") as HTMLButtonElement;
+    how.type = "button";
+    const detail = el("div", "ltk-em-hint-detail");
+    detail.style.display = "none";
+    detail.appendChild(
+      el(
+        "div",
+        undefined,
+        isEdge
+          ? "Edge: Settings → Profiles → your profile → turn off “Allow single sign-on for work or school sites using this profile”, then reload. Or use Present in window."
+          : "Chrome: there is no per-user switch — use Present in window, or ask IT (Chrome policy CloudAPAuthEnabled / Local Network Access)."
+      )
+    );
+    detail.appendChild(el("div", undefined, "IT can fix this for everyone by policy — see the deployment cookbook."));
+    how.addEventListener("click", () => {
+      detail.style.display = detail.style.display === "none" ? "" : "none";
+    });
+    h.appendChild(how);
+    const dismiss = el("button", "ltk-em-hint-x", "✕") as HTMLButtonElement;
+    dismiss.type = "button";
+    dismiss.title = "Don't show this again in this browser";
+    dismiss.addEventListener("click", () => {
+      try {
+        localStorage.setItem(EmbedView.HINT_KEY, "1");
+      } catch {
+        /* fine */
+      }
+      this.hint.style.display = "none";
+    });
+    h.appendChild(dismiss);
+    h.appendChild(detail);
+    h.style.display = "";
   }
 
   private presentNow(): void {
@@ -362,6 +476,7 @@ export class EmbedView {
   }
 
   destroy(): void {
+    this.cancelHint();
     if (this.presentTicker !== null) {
       clearInterval(this.presentTicker);
       this.presentTicker = null;

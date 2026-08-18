@@ -185,6 +185,51 @@ export const EMBED_CSS = `
 }
 .ltk-tile .ltk-em-present-row { display: none; }
 
+.ltk-em-col {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* the "not showing?" hint: a slim bar BELOW the frame area (a sibling, so
+   the host's fixed persistent frame cannot cover it) */
+.ltk-em-hint {
+  flex: 0 0 auto;
+  margin: 6px 8px 8px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--ltk-hairline);
+  border-radius: 8px;
+  background: var(--ltk-bg);
+  box-shadow: 0 2px 10px rgba(0,0,0,0.12);
+  font-size: 12.5px;
+}
+.ltk-em-hint-text { flex: 1 1 260px; color: var(--ltk-fg); }
+.ltk-em-hint-btn {
+  border: none; background: var(--ltk-accent); color: #fff;
+  border-radius: 6px; padding: 6px 10px; font: inherit; font-weight: 600; cursor: pointer;
+}
+.ltk-em-hint-link {
+  border: none; background: none; color: var(--ltk-accent);
+  font: inherit; text-decoration: underline; cursor: pointer; padding: 4px;
+}
+.ltk-em-hint-x {
+  border: none; background: none; color: var(--ltk-muted);
+  font: inherit; font-size: 14px; cursor: pointer; padding: 4px 6px;
+}
+.ltk-em-hint-detail {
+  flex: 1 1 100%;
+  color: var(--ltk-muted);
+  display: flex; flex-direction: column; gap: 4px;
+  padding-top: 4px; border-top: 1px dashed var(--ltk-hairline);
+}
+.ltk-tile .ltk-em-hint { display: none !important; }
+
 /* loading veil: covers the frame while a (re)load is in flight */
 .ltk-em-loading {
   position: absolute;
