@@ -583,6 +583,14 @@ export const CARDS: CardSpec[] = [
         help: "Power BI links only: hides the page-navigation pane.",
       },
       {
+        key: "presentInWindow",
+        label: "Present in a window",
+        kind: "boolean",
+        heading: "Display",
+        help:
+          "The card shows a Present button instead of embedding; the page opens in its own window, outside the app. Use where the embedded sign-in is blocked (Power BI on Windows with browser work-account SSO — see the deployment cookbook). Any embed card also has a ⧉ chip to present on demand.",
+      },
+      {
         key: "pageName",
         label: "Page name",
         kind: "text",

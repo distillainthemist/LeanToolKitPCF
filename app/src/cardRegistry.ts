@@ -1304,7 +1304,18 @@ const REGISTRY: Record<string, CardMounter> = {
       hidePageNav: config(opts).hidePageNav === true,
       pageName: cfgStr(opts, "pageName"),
     });
-    if (opts.onEmbedFrame) {
+    // the presentation window is keyed per card so the ⧉ chip and the
+    // present-mode panel reuse one window across screens
+    const presentKey = `${opts.boardId}|${opts.cardId}`;
+    if (config(opts).presentInWindow === true) {
+      // "Present in a window": no frame anywhere — not the card's, not the
+      // host's persistent one. The body is a launch panel and the page
+      // opens in its own top-level window (outside the frame chain that
+      // blocks Power BI's embedded sign-in on Windows — cookbook).
+      view.setPresentMode(true, presentKey);
+      view.setUrl(embedUrl);
+    } else if (opts.onEmbedFrame) {
+      view.setPresentMode(false, presentKey);
       // the host drives a persistent frame; the card keeps its chrome,
       // commentary and the open-in-a-tab link, but not the iframe
       view.useExternalFrame(true);
@@ -1313,6 +1324,7 @@ const REGISTRY: Record<string, CardMounter> = {
       view.setUrl(opts.embedPreload === false ? "" : embedUrl);
       opts.onEmbedFrame(view.frameSlot(), embedUrl);
     } else {
+      view.setPresentMode(false, presentKey);
       view.setUrl(embedUrl);
     }
     return () => opts.host.replaceChildren();

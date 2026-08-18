@@ -23,6 +23,7 @@ import {
 } from "../../shared/ui/actionUi";
 import { sanitizeRichHtml } from "./types";
 import { EMBED_CSS } from "./styles";
+import { closePresentation, isPresenting, present } from "./presentWindow";
 
 export interface EmbedViewCallbacks {
   /** The full notes map (heading → sanitized html) after an edit. */
@@ -41,6 +42,8 @@ export class EmbedView {
   private readonly veil: HTMLElement;
   private readonly refreshBtn: HTMLButtonElement;
   private readonly openBtn: HTMLAnchorElement;
+  private readonly popBtn: HTMLButtonElement;
+  private readonly presentPanel: HTMLElement;
   private readonly actionsChip: HTMLButtonElement;
   private readonly aside: HTMLElement;
   private readonly notesHost: HTMLElement;
@@ -53,6 +56,11 @@ export class EmbedView {
   private currentUrl = "";
   /** The host owns the iframe (see useExternalFrame). */
   private externalFrame = false;
+  /** "Present in a window": no frame at all — the body is a launch panel
+   *  and the report opens in its own top-level window (presentWindow.ts). */
+  private presentMode = false;
+  private presentKey = "";
+  private presentTicker: ReturnType<typeof setInterval> | null = null;
   private readOnly = false;
   private headings: string[] = [];
   private notes: Record<string, string> = {};
@@ -115,6 +123,21 @@ export class EmbedView {
     this.openBtn.style.display = "none";
     this.root.appendChild(this.openBtn);
 
+    // present-in-window: a chip left of open-in-tab pops the report into
+    // its own top-level window on demand (the fallback where the embedded
+    // sign-in is blocked by the frame chain — see presentWindow.ts)
+    this.popBtn = el("button", "ltk-em-pop", "⧉") as HTMLButtonElement;
+    this.popBtn.type = "button";
+    this.popBtn.title = "Present in its own window";
+    this.popBtn.style.display = "none";
+    this.popBtn.addEventListener("click", () => this.presentNow());
+    this.root.appendChild(this.popBtn);
+
+    // present mode's body: the launch panel (built once, painted on state)
+    this.presentPanel = el("div", "ltk-em-present");
+    this.presentPanel.style.display = "none";
+    this.body.appendChild(this.presentPanel);
+
     // actions with no commentary pane: a chip beside refresh opens the
     // shared manager (hidden whenever the pane carries the actions list)
     this.actionsChip = el("button", "ltk-em-actchip", "Actions") as HTMLButtonElement;
@@ -154,7 +177,8 @@ export class EmbedView {
   setReadOnly(ro: boolean): void {
     if (this.readOnly === ro) return;
     this.readOnly = ro;
-    this.refreshBtn.style.display = ro ? "none" : "";
+    this.refreshBtn.style.display = ro || this.presentMode ? "none" : "";
+    this.popBtn.style.display = ro || this.currentUrl === "" ? "none" : "";
     this.paintNotes();
     this.paintActions();
   }
@@ -207,15 +231,107 @@ export class EmbedView {
       this.frame.removeAttribute("src");
       this.openBtn.style.display = "none";
       this.openBtn.removeAttribute("href");
+      this.popBtn.style.display = "none";
+      this.paintPresent();
       return;
     }
     this.ghost.style.display = "none";
     this.openBtn.href = url;
     this.openBtn.style.display = "";
+    this.popBtn.style.display = this.readOnly ? "none" : "";
+    if (this.presentMode) {
+      // never a frame: the panel is the body
+      this.frame.style.display = "none";
+      this.frame.removeAttribute("src");
+      this.veil.classList.remove("ltk-em-on");
+      this.paintPresent();
+      return;
+    }
     if (this.externalFrame) return; // the host's frame is already showing it
     this.frame.style.display = "";
     this.veil.classList.add("ltk-em-on");
     this.frame.src = url;
+  }
+
+  /**
+   * "Present in a window" mode: the card holds no frame; its body is a
+   * launch panel and the report lives in its own top-level window (outside
+   * the frame chain, so frame-chain permission blocks can't reach it).
+   * `key` identifies the window across screens (board|card).
+   */
+  setPresentMode(on: boolean, key: string): void {
+    if (this.presentMode === on && this.presentKey === key) return;
+    this.presentMode = on;
+    this.presentKey = key;
+    this.presentPanel.style.display = on ? "" : "none";
+    this.refreshBtn.style.display = on || this.readOnly ? "none" : "";
+    if (on) {
+      this.frame.style.display = "none";
+      this.frame.removeAttribute("src");
+      this.veil.classList.remove("ltk-em-on");
+      if (this.currentUrl !== "") this.ghost.style.display = "none";
+      this.paintPresent();
+      // the window's open/closed state is polled: there is no event for a
+      // popup the user closes with its own ✕
+      if (this.presentTicker === null) {
+        this.presentTicker = setInterval(() => this.paintPresent(), 1500);
+      }
+    } else {
+      if (this.presentTicker !== null) {
+        clearInterval(this.presentTicker);
+        this.presentTicker = null;
+      }
+      if (this.currentUrl !== "" && !this.externalFrame) {
+        this.frame.style.display = "";
+        this.veil.classList.add("ltk-em-on");
+        this.frame.src = this.currentUrl;
+      }
+    }
+  }
+
+  private presentNow(): void {
+    if (this.currentUrl === "") return;
+    const key = this.presentKey !== "" ? this.presentKey : this.currentUrl;
+    const ok = present(key, this.currentUrl);
+    if (!ok) {
+      // the browser refused the popup — the tab link is the way through
+      window.open(this.currentUrl, "_blank", "noopener,noreferrer");
+    }
+    this.paintPresent();
+  }
+
+  private paintPresent(): void {
+    if (!this.presentMode) return;
+    const panel = this.presentPanel;
+    while (panel.firstChild) panel.removeChild(panel.firstChild);
+    if (this.currentUrl === "") return; // the ghost is showing instead
+    const key = this.presentKey !== "" ? this.presentKey : this.currentUrl;
+    const open = isPresenting(key);
+    panel.appendChild(el("div", "ltk-em-present-title", open ? "Presenting" : "Shown in its own window"));
+    panel.appendChild(
+      el(
+        "div",
+        "ltk-em-present-text",
+        open
+          ? "The report is open in a separate window."
+          : "This card opens its report in a separate window — outside the app, where it signs in like any tab."
+      )
+    );
+    const row = el("div", "ltk-em-present-row");
+    const go = el("button", "ltk-em-present-btn", open ? "Bring to front" : "▶ Present in window") as HTMLButtonElement;
+    go.type = "button";
+    go.addEventListener("click", () => this.presentNow());
+    row.appendChild(go);
+    if (open) {
+      const close = el("button", "ltk-em-present-sec", "Close window") as HTMLButtonElement;
+      close.type = "button";
+      close.addEventListener("click", () => {
+        closePresentation(key);
+        this.paintPresent();
+      });
+      row.appendChild(close);
+    }
+    panel.appendChild(row);
   }
 
   /**
@@ -246,6 +362,10 @@ export class EmbedView {
   }
 
   destroy(): void {
+    if (this.presentTicker !== null) {
+      clearInterval(this.presentTicker);
+      this.presentTicker = null;
+    }
     if (this.noteTimer !== null) clearTimeout(this.noteTimer);
     this.root.remove();
   }

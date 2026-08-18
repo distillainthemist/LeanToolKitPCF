@@ -125,6 +125,66 @@ export const EMBED_CSS = `
 .ltk-em-open:hover { color: var(--ltk-accent); border-color: var(--ltk-accent); }
 .ltk-em-notitle .ltk-em-open { right: 42px; opacity: 0.85; }
 
+/* present-in-window chip: left of open-in-tab, same chip styling */
+.ltk-em-pop {
+  position: absolute;
+  top: 8px;
+  right: 102px; /* left of the open chip */
+  z-index: 3;
+  border: 1px solid var(--ltk-hairline);
+  background: var(--ltk-bg);
+  color: var(--ltk-muted);
+  border-radius: 6px;
+  font-size: 15px;
+  line-height: 1;
+  padding: 5px 9px;
+  cursor: pointer;
+}
+.ltk-em-pop:hover { color: var(--ltk-accent); border-color: var(--ltk-accent); }
+.ltk-em-notitle .ltk-em-pop { right: 76px; opacity: 0.85; }
+.ltk-tile .ltk-em-pop { display: none !important; }
+
+/* present mode: the body is a launch panel, never a frame */
+.ltk-em-present {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 16px;
+  text-align: center;
+  background: var(--ltk-bg);
+  z-index: 2;
+}
+.ltk-em-present-title { font-size: 16px; font-weight: 700; }
+.ltk-em-present-text { font-size: 13px; color: var(--ltk-muted); max-width: 420px; }
+.ltk-em-present-row { display: flex; gap: 8px; margin-top: 6px; flex-wrap: wrap; justify-content: center; }
+.ltk-em-present-btn {
+  border: none;
+  background: var(--ltk-accent);
+  color: #fff;
+  border-radius: 8px;
+  padding: 10px 18px;
+  font: inherit;
+  font-weight: 700;
+  font-size: 15px;
+  cursor: pointer;
+  min-height: 44px;
+}
+.ltk-em-present-sec {
+  border: 1px solid var(--ltk-hairline);
+  background: none;
+  color: var(--ltk-fg);
+  border-radius: 8px;
+  padding: 10px 14px;
+  font: inherit;
+  cursor: pointer;
+  min-height: 44px;
+}
+.ltk-tile .ltk-em-present-row { display: none; }
+
 /* loading veil: covers the frame while a (re)load is in flight */
 .ltk-em-loading {
   position: absolute;

@@ -179,8 +179,7 @@ shared devices: policy `AADWebSiteSSOUsingThisProfileEnabled=Disabled`
 (Edge) and `CloudAPAuthEnabled=0` (Chrome) for that device group — SSO
 matters least there; (c) laptops: the same policy costs M365 seamless
 SSO — instead `LocalNetworkAccessRestrictionsEnabled=false` (org-wide
-off-switch) or an in-app "Present in window" mode (top-level window, no
-frame chain — not built). `LocalNetworkAccessAllowedForUrls` does NOT
+off-switch) or the Embed card's **Present in a window** setting (BUILT 2026-08-18: the card holds no frame; a ▶ Present button opens the page in its own top-level window, outside the frame chain — and every embed card has a ⧉ chip to present on demand). `LocalNetworkAccessAllowedForUrls` does NOT
 reach nested frames. Do NOT roll out the flag per user. Embed tokens
 (custom API relay) would sidestep it but is ON HOLD (Ben, 2026-08-18).
 
