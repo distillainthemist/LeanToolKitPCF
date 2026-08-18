@@ -47,7 +47,7 @@ import { parseManifest, slotLinkSource, slotPolicy } from "../store/mappers";
 import { listPeople } from "../store/people";
 import { isActionSurface } from "../store/policies";
 import { showLoading } from "../loading";
-import { acquireFrame, frameKey, parkAllFrames, placeFrame } from "../embedFrames";
+import { acquireFrame, frameKey, placeFrame } from "../embedFrames";
 
 /**
  * "Tuesday 21 July · 06:00 · Day shift · Crew A" for the walk header —
@@ -635,7 +635,13 @@ export function mountCardEditor(
         },
       })
     );
-    cleanups.push(() => parkAllFrames());
+    // Park THIS card's frame on teardown — not every frame. A walk hop
+    // mounts the next card BEFORE tearing the old one down (hold-until-
+    // ready), so parkAllFrames() here hid the frame the incoming Embed
+    // card had just placed: hop away from a Power BI embed and back, and
+    // it stayed blank (Ben, 2026-08-17). Only the current card's frame is
+    // ever placed in the editor, so its own key is the whole job.
+    cleanups.push(() => placeFrame(frameKey(boardId, cardId), null));
     stopLoading();
     finish();
   })().catch((err) => {
