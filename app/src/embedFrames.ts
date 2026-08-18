@@ -40,7 +40,13 @@ function createEntry(key: string, url: string): Entry {
   // ("Sign in to view this report" after a successful popup, Ben,
   // 2026-08-17). Delegating here can't hurt and removes us as the link
   // that fails to pass it on; a sandbox on the PLAYER's frame is beyond us.
-  frame.setAttribute("allow", "fullscreen; storage-access");
+  // local-network-access: Chromium 138+ blocks a cross-origin frame's
+  // fetches to private/CGNAT-resolved hosts unless the permission is
+  // delegated ("Permission was denied for this request to access the
+  // 'local' address space" — Ben's VPN/proxy resolves a Power BI host
+  // locally, 2026-08-17). Delegated here; the player's own frame is the
+  // other link in the chain.
+  frame.setAttribute("allow", "fullscreen; storage-access; local-network-access");
   frame.setAttribute("allowfullscreen", "true");
   frame.title = "Embedded content";
   host.appendChild(frame);
