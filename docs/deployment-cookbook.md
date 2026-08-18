@@ -164,8 +164,12 @@ app's gift:
    token POST is blocked before it is sent: *"blocked by CORS policy:
    Permission was denied for this request to access the 'local' address
    space"*, DevTools shows "Provisional headers", the report never
-   renders. Proof: Edge with the SSO setting OFF works; Chrome (no user
-   toggle) fails; `chrome://flags/#local-network-access-check` = Disabled
+   renders. Proof: Edge with the SSO setting OFF works; Chrome fails with the
+   setting it has no toggle for — the `CloudAPAuthEnabled` route is
+   INFERRED from the pattern, NOT verified (could not be tested,
+   2026-08-18): confirm on one machine (registry
+   `HKLM\SOFTWARE\Policies\Google\Chrome\CloudAPAuthEnabled=0`, restart,
+   `chrome://policy`, load the board) before rolling it to a device group; `chrome://flags/#local-network-access-check` = Disabled
    works. NOT DNS/VPN/proxy. Our frame delegates `storage-access` and
    `local-network-access` (v0.45.2) — necessary, not sufficient.
 
