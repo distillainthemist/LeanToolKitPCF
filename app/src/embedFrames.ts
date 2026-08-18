@@ -34,7 +34,13 @@ function createEntry(key: string, url: string): Entry {
   host.className = "app-embed-frame-host";
   host.dataset.frameKey = key;
   const frame = document.createElement("iframe");
-  frame.setAttribute("allow", "fullscreen");
+  // storage-access: Power BI's secure-embed "Sign in" is a
+  // requestStorageAccess() call — under storage partitioning the frame
+  // needs the permission delegated down the chain, or the sign-in loops
+  // ("Sign in to view this report" after a successful popup, Ben,
+  // 2026-08-17). Delegating here can't hurt and removes us as the link
+  // that fails to pass it on; a sandbox on the PLAYER's frame is beyond us.
+  frame.setAttribute("allow", "fullscreen; storage-access");
   frame.setAttribute("allowfullscreen", "true");
   frame.title = "Embedded content";
   host.appendChild(frame);
