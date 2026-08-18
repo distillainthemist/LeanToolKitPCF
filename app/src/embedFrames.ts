@@ -24,6 +24,34 @@ interface Entry {
 const frames = new Map<string, Entry>();
 let syncing = false;
 
+// ---- probe (2026-08-18): does a Power BI secure embed talk to its parent?
+// If the report host posts loaded/rendered events without the JS SDK
+// handshake, "no such message within ~20s" is a REAL failure signal for a
+// "not showing? — sign-in setting" prompt (Windows work-account SSO ×
+// LNA). Logged to the console for a hosted look; nothing else reads it.
+let probeInstalled = false;
+function installProbe(): void {
+  if (probeInstalled) return;
+  probeInstalled = true;
+  window.addEventListener("message", (e) => {
+    for (const [key, entry] of frames) {
+      if (e.source !== entry.frame.contentWindow) continue;
+      let shape = "";
+      try {
+        const d = e.data as unknown;
+        shape =
+          typeof d === "string"
+            ? d.slice(0, 160)
+            : JSON.stringify(d, (_, v) => (typeof v === "string" && v.length > 80 ? v.slice(0, 80) + "…" : v)).slice(0, 240);
+      } catch {
+        shape = String(typeof e.data);
+      }
+      console.info(`[embed-probe] ${key} ← ${e.origin}: ${shape}`);
+      return;
+    }
+  });
+}
+
 /** A frame belongs to a card, not a screen — both screens use this key. */
 export function frameKey(boardId: string, cardId: string): string {
   return `${boardId}|${cardId}`;
@@ -52,6 +80,8 @@ function createEntry(key: string, url: string): Entry {
   host.appendChild(frame);
   document.body.appendChild(host);
   const entry: Entry = { host, frame, url: "", target: null };
+  installProbe();
+  frame.addEventListener("load", () => console.info(`[embed-probe] ${key} frame load event`));
   setUrl(entry, url);
   frames.set(key, entry);
   return entry;
