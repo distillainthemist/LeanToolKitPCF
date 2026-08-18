@@ -142,6 +142,33 @@ artefact).
     hosted checks pending; design of record in
     `leanboard-docs-settings-consolidation-plan.md` Part II.
 
+## Cards & embed tranche — carried forward (2026-08-18)
+
+Shipped v0.45.0–v0.46.0 (all app-only): Capture Flag column, Capture
+rollup, Canvas card + studio design mode, Canvas rollup, universal
+＋ Action in the focused editor, kebab into the title bar, Embed
+Present-in-window + ⧉ chip + "Not showing?" hint. Open items:
+
+- **Power BI embed on Windows (browser platform).** Diagnosis of record
+  in `deployment-cookbook.md` → Power BI embed prerequisites. TO DO
+  (Ben/IT): raise the Microsoft/Chromium report (player frame lacks
+  `allow="local-network-access"`; Teams precedent #2919); verify the
+  Chrome `CloudAPAuthEnabled` lever on one machine before any device-
+  group policy; decide meeting-room device policy. **Embed-token relay
+  (Dataverse Custom API + service principal + Power BI GenerateToken,
+  needs capacity) — ON HOLD (Ben, 2026-08-18)**; specified in the
+  cookbook section and the 2026-08-18 conversation: SP setup, tenant
+  setting, workspace access, GenerateToken with effective identity for
+  RLS, powerbi-client SDK mode on the Embed card, token refresh.
+- **Canvas rollup status/choice filter** — fast-follow if portfolios
+  grow (logged in the canvas plan).
+- **Capture card inline add-row** — only if testers find the row dialog
+  slow (decision 8 in the canvas plan: capture keeps its dialog).
+- **Computed/derived canvas fields** — deferred; needs a concrete
+  recurring case.
+- **Design-review findings** (the ⚐ Report queue) — triage drives the
+  next tranche.
+
 ## Future (formally logged, no date)
 
 - **SOP review & sign-off card (was 5E).** Redesigned 2026-08-07: not a

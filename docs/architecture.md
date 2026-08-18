@@ -8,7 +8,7 @@ the per-feature plans (linked throughout); when this page and a plan
 disagree, fix this page — it is meant to be current, the plans are
 meant to be history.
 
-Last reviewed: 2026-08-15 (v0.44.1).
+Last reviewed: 2026-08-18 (v0.46.0).
 
 ---
 
@@ -92,6 +92,62 @@ model section) — the canvas/PCF sections there are historical.
   field id — restructuring never loses content. Actions are card-level
   via the standard channel. Design of record:
   [leanboard-canvas-card-plan.md](leanboard-canvas-card-plan.md).
+- **On-canvas design mode (the studio's reverse channel).** The card
+  studio was one-way — settings drove the card, nothing flowed back —
+  so layout editing lived in dropdowns. Cards with `CardSpec.designable`
+  (Canvas today) are mounted in the studio (board mode) as THE layout
+  editor: `CardMount.designLayout` + `onConfigPatch(key, value)` push
+  the card's own config changes into the studio draft, which repaints
+  the settings pane WITHOUT remounting the card; a selection bridge runs
+  both ways (`onSelectField` / `registerSelectField` ↔
+  `CardSettingsEditor.setSelection`); the studio holds a session
+  undo/redo stack of config snapshots. On the canvas: a toolbar
+  (columns, grid, preview), gridlines and empty cells from a pure
+  `placeFields` simulation of CSS sparse auto-placement (design and run
+  use the same explicit placement, so they agree by construction),
+  type-true skeletons, ⋮⋮ pointer-drag to reorder, edge/corner resize
+  snapping to columns/steps; the inspector becomes the selected field's
+  property panel with title/id validation (duplicate titles break rollup
+  matching). Design mode is studio-only — meetings never enter it. The
+  pure draft model (`CanvasCard/draft.ts`) is UI-free so the mounter's
+  reverse channel does not drag settings editors into the board path.
+- **Title-bar contract & the universal ＋ Action.** When a card has a
+  title, `renderTitleBar` gives the bar a right-hand action slot and
+  `renderKebab` appends there (no longer overlaying the body); app code
+  registers extras with `setTitleBarExtras(mountHost, builder)` — a
+  builder, because editors rebuild their root on every render. The
+  focused card editor registers **＋ Action** on every card (not action
+  surfaces, not the template's live row, not when the card disables
+  actions): a card-LEVEL linked action through the standard action
+  manager on the card's channel, in addition to whatever a card raises
+  from its own elements. Dialogs opened from app code need an
+  `.app-dlghost` for the toolkit CSS variables — and inside the editor
+  host it must take no space (`flex: 0; height: 0`), or it splits the
+  card's height.
+- **The card walk swap.** Hopping between cards in the focused view
+  mounts the NEXT card before tearing the previous one down
+  (hold-until-ready). Consequence: a card's teardown must release only
+  ITS OWN resources — an embed card parks only its own persistent frame
+  key (a global `parkAllFrames()` there hid the incoming card's frame).
+- **The Embed card** (Power BI, SharePoint pages, any framing-friendly
+  https page). One long-lived `<iframe>` per card lives in a
+  `position:fixed` host on `<body>` (`app/src/embedFrames.ts`), OUTSIDE
+  the routed DOM — re-parenting an iframe reloads it, so screens never
+  take the frame, they only PARK it over a slot (scaled over a board
+  tile, full-size in the card editor); the same document survives
+  screen changes and Power BI's autoAuth handshake happens once. Frames
+  delegate `fullscreen; storage-access; local-network-access`. Power BI
+  links are normalised (`buildEmbedUrl`: pane toggles, page name);
+  SharePoint doc links become `action=embedview`. Two escape hatches
+  from the frame chain: the ↗ open-in-tab link, and **Present in a
+  window** (`presentWindow.ts` — a card setting that holds NO frame and
+  opens the page in its own top-level window, one per card, reused and
+  focused; plus a ⧉ chip on every embed card to present on demand). A
+  cross-origin frame cannot tell us whether its content rendered (its
+  load event fires on a sign-in page too, and the Power BI secure embed
+  posts nothing to its parent), so the "Not showing?" hint is a
+  RISK-PROFILE hint (Windows + Chromium ≥ 142 + Power BI, focused view,
+  20 s, dismissible per browser) — never a failure detector.
 - **Cross-board windows:** a **LinkCard** renders another board's card
   read-only (its source's policy decides which document — live row for
   shared, newest meeting otherwise). A **Capture rollup** generalises
@@ -223,9 +279,13 @@ Operating instructions of record: [../CLAUDE.md](../CLAUDE.md) (agent),
 [deployment-cookbook.md](deployment-cookbook.md) (operational recipes).
 
 - **Gates before any push**: `tsc --noEmit`, the import gate, vitest
-  (~450 tests), `npm run build`, chunk report — plus repo-root
+  (~500 tests), `npm run build`, chunk report — plus repo-root
   typecheck when `shared/`/`controls/` change. Check the test COUNT
-  line, not just exit codes, when chaining.
+  line, not just exit codes, when chaining, and `set -o pipefail`
+  (`tsc | tail` reports tail's exit). The chunk report's ceiling on
+  `cardRegistry` is a LEAK detector: a mounter that needs a pure helper
+  from a settings module must import a UI-free module (the
+  `CanvasCard/draft.ts` precedent), never the settings editors.
 - **Dev deploys**: `pac code push` from `app/` (authenticated as the
   maker; the player caches bundles — close/reopen after every push).
   `pac code add-data-source -a dataverse -t <logical name>` wires new
@@ -303,6 +363,14 @@ selections), a task-badge count, and the register's cached first page
 saw; cleared by cache-key mismatch). No tokens, credentials, or
 document content are ever cached.
 
+**Frames & popups**: the only iframes the app creates are the Embed
+card's (user-configured https URLs, `safeEmbedUrl`-validated, no
+`javascript:`/`data:`), delegated `fullscreen; storage-access;
+local-network-access` and nothing more; the only popups are user-gesture
+"Present in window" / open-in-tab of that same URL. Rich text (canvas
+fields, embed commentary) is sanitised by allowlist REBUILDERS on write
+and render — stored HTML is never trusted.
+
 **Admin scripting hygiene** (§6): human-performed device-code
 sign-ins, short-lived tokens in 0600 temp files outside the repo,
 deleted after use; the deploy tooling is committed and reviewable —
@@ -320,6 +388,19 @@ no ad-hoc credential handling.
 - Entra group membership propagates slowly to SP tokens — which is why
   temporary edit grants seat a SharePoint **site group** (instant)
   instead.
+- **Chromium Local Network Access × Windows work-account SSO** (Edge/
+  Chrome ≥ 142): the browser hands the Power BI frame's Entra token POST
+  to the Windows account broker, Chromium gates that as a local-network
+  request, and a NESTED cross-origin frame only holds the permission if
+  every parent delegates it — the Power Apps player's frame does not
+  (Microsoft's; Teams has the same open issue). Result: the embedded
+  Power BI sign-in loops on Windows. Not DNS/VPN/proxy. Levers are
+  outside the app (device-group SSO policies, the LNA off-switch
+  policy, a Microsoft fix) plus the in-app Present-in-window mode and
+  hint. Full diagnosis + policy names:
+  [deployment-cookbook.md](deployment-cookbook.md) → Power BI embed
+  prerequisites. The embed-token relay road (Custom API + service
+  principal, needs Power BI capacity) is specified there and ON HOLD.
 
 ## 8. Living documents map
 
@@ -331,6 +412,10 @@ no ad-hoc credential handling.
 | SharePoint write mechanics | [sharepoint-writes.md](sharepoint-writes.md) |
 | Links, audit view, tags | [leanboard-relationships-plan.md](leanboard-relationships-plan.md) |
 | Issues/reporting | [leanboard-issues-plan.md](leanboard-issues-plan.md) |
+| Capture rollup (Flag column, cross-board capture rows) | [leanboard-capture-rollup-plan.md](leanboard-capture-rollup-plan.md) |
+| Canvas card, design mode, Canvas rollup | [leanboard-canvas-card-plan.md](leanboard-canvas-card-plan.md) |
+| Power BI embed prerequisites (browser policy) | [deployment-cookbook.md](deployment-cookbook.md) |
+| Backlog & decisions of record | [backlog.md](backlog.md) |
 | Notifications | [leanboard-notifications-plan.md](leanboard-notifications-plan.md) |
 | New environment setup | [deploy-to-new-org.md](deploy-to-new-org.md) |
 | Operational recipes (flows etc.) | [deployment-cookbook.md](deployment-cookbook.md) |

@@ -1,6 +1,13 @@
 # Canvas card — plan of record
 
-(2026-08-15; scope expanded same day. Decisions Ben's.)
+(2026-08-15; scope expanded same day. Decisions Ben's.) **STATUS: C0–C5
+BUILT (v0.45.0); design-mode revision D0–D3 BUILT (v0.45.0); D4 =
+Ben's hosted pass. Post-review tweaks shipped: CANVAS_STEP 44→60 (a
+one-row field must hold label + a chip), body top/bottom padding, the
+kebab "Actions…" removed in favour of the focused editor's universal
+＋ Action (v0.45.1). Chunk-ceiling lesson: the pure draft model was
+extracted to `CanvasCard/draft.ts` so the mounter's reverse channel
+stays out of the settings editors' weight.**
 
 A new board card, **Canvas** (`CanvasCard`), for charter-style one-pagers:
 a maker lays out typed, titled fields in a 1–3 column grid (drag to

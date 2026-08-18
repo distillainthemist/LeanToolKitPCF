@@ -41,6 +41,14 @@ lets the chain continue — `set -o pipefail` first (a red root
 typecheck slid past that way, 2026-08-15; the errors were visible but
 the chain ran on).
 
+The chunk report's `cardRegistry` ceiling is a LEAK detector, not a
+budget to re-baseline past: when a mounter needs a pure helper that
+lives in a settings module, extract it to a UI-free module (the
+`controls/CanvasCard/draft.ts` precedent, 2026-08-16 — importing
+`canvasFields.ts` had dragged 26 kB of settings editors into the board
+path). Legitimate growth (a new card editor) is the only reason to
+re-baseline.
+
 The import gate enforces: the board path (main.ts, cardRegistry.ts,
 screens/board.ts, screens/hub.ts) must not statically reach `src/docs/`;
 the docs-only connectors (`shared_sharepointonline`, `shared_teams`,
@@ -64,6 +72,26 @@ hard way:
 - `pac` is already authenticated as partnership@pecheydistilling.com. If
   auth has expired, do not attempt an interactive login yourself — tell Ben,
   he runs `pac auth create` and completes the sign-in.
+
+## Things the browser will not tell you
+
+- A cross-origin iframe's content state is invisible: its `load` event
+  fires on a sign-in page too, and Power BI's secure embed posts nothing
+  to its parent (probed 2026-08-18). Never build a "did it render"
+  signal on those; say plainly when a hint is heuristic.
+- The card walk mounts the NEXT card before tearing the previous down
+  (hold-until-ready). A card's teardown must release only ITS OWN
+  resources — never a global "park/close everything".
+- Dialogs opened by app code need an `.app-dlghost` (toolkit CSS vars);
+  inside `.app-editor-host` it must be `flex:0; height:0` or it takes
+  half the card.
+- Browser-platform behaviour that post-dates my knowledge (Chromium
+  Local Network Access shipped 142, Oct 2025; the client is on 151):
+  WEB-VERIFY before sending Ben down a diagnostic path. The 2026-08-17
+  Power BI embed saga cost a day of DNS/VPN/proxy tests that Chrome's own
+  design post ruled out in one paragraph; the real cause (Windows
+  work-account SSO broker × LNA in a nested frame the player does not
+  delegate to) is in the deployment cookbook.
 
 ## Verification split
 

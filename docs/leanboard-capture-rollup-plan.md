@@ -1,6 +1,8 @@
 # Capture Rollup — plan of record
 
-(2026-08-15. Decisions Ben's, same date.)
+(2026-08-15. Decisions Ben's, same date.) **STATUS: R0–R4 BUILT and
+released in v0.45.0 (2026-08-16).** Ben's hosted checks pending on the
+released build; findings feed the backlog.
 
 A new board card, **Capture rollup**, that merges rows from Capture cards
 on other boards/rituals into one filtered, column-projected table — plus a
