@@ -3224,3 +3224,4 @@ textarea.app-cp-statement { font-size: 14px; font-weight: 500; }
 .app-pr-floor-row { display: flex; align-items: center; gap: 12px; }
 .app-pr-floor-site { font-weight: 600; min-width: 180px; }
 .app-cp-review-note { font-size: 12px; margin-top: 4px; }
+.app-cp-floor-note { font-size: 13px; color: #6d675c; padding: 0 6px; white-space: nowrap; }

@@ -285,8 +285,10 @@ reschedule/cancel history with a reason picklist.
   siteadmin their own) = the deepest org level that may "Accept &
   customise" a cascade — Site only / Down to department / Down to team
   (area, the default). Below the floor the review list offers Accept /
-  Hold / Reject only with a quiet note; nothing else changes (adopt
-  as-is keeps decision 2). Stored in the SITE row's
+  Hold / Reject only with a quiet note, AND ＋ Priority is withheld (the
+  header reads "Adopts priorities from above") — below the floor an org
+  only carries what cascades down; existing own rows keep their kebab.
+  Adopt as-is keeps decision 2. Stored in the SITE row's
   ben_prioritysettings as {customiseLevel}; model `canCustomiseAt`.
   Also since P4: re-send a declined/parked cascade (Lineage rail
   Re-send; re-tickable rows in every Cascade to list; "re-sent" event).

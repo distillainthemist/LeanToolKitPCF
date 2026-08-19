@@ -475,11 +475,17 @@ export function mountPriorities(parent: HTMLElement, opts: PrioritiesMountOpts =
       walk.title = "One pillar at a time, with a final step for cascades to accept";
       walk.addEventListener("click", () => openWalk(0));
       bar.appendChild(walk);
-      if (canManage()) {
+      // the site's customisation floor gates authoring too (Ben, 2026-08-19):
+      // below it an org only adopts what cascades down — no ＋ Priority
+      if (canManage() && ctx.canCustomise(state.org)) {
         const add = el("button", "app-btn app-btn-primary app-cp-tvbtn", "＋ Priority") as HTMLButtonElement;
         add.type = "button";
         add.addEventListener("click", () => void addPriority());
         bar.appendChild(add);
+      } else if (canManage()) {
+        const note = el("span", "app-cp-floor-note", "Adopts priorities from above");
+        note.title = "This site's cascade setting keeps priorities at a higher level — this org accepts what cascades down rather than writing its own (Settings → Priorities → Cascade customisation).";
+        bar.appendChild(note);
       }
       const more = el("button", "app-btn app-cp-more app-cp-tvbtn", "⋮") as HTMLButtonElement;
       more.type = "button";
