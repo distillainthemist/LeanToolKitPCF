@@ -219,7 +219,6 @@ interface ScreenState {
   groupByPillar: boolean;
   lastColumn: string; // the sub-pillar last interacted with (＋ Priority preselect)
   view: ViewMode; // Simple (default, TV) | Dynamic — persists per user per org
-  tv: boolean; // presentation mode (design §7 "TV"): org name only, toolbar hidden, type ×1.4, vision full-width
 }
 
 /** P1 stub: what a priority's initiatives look like. Initiatives arrive
@@ -230,7 +229,7 @@ function ragsFor(_p: Priority): Rag[] {
 
 export function mountPriorities(parent: HTMLElement, opts: PrioritiesMountOpts = {}): () => void {
   const card = opts.card ?? null;
-  const wrap = el("div", "app-cp-wrap" + (card ? ` app-cp-card app-cp-card-${card.mode}` : ""));
+  const wrap = el("div", "app-cp-wrap app-cp-tv" + (card ? ` app-cp-card app-cp-card-${card.mode}` : ""));
   parent.appendChild(wrap);
   const stopLoading = showLoading(wrap, false, card !== null);
   let dead = false;
@@ -279,7 +278,6 @@ export function mountPriorities(parent: HTMLElement, opts: PrioritiesMountOpts =
       org: startOrg,
       l1: null,
       focus: card?.focus && card.focus.length > 0 ? card.focus : null,
-      tv: false,
       period: currentPeriod,
       status: "active",
       rule: prefs.rule,
@@ -371,15 +369,15 @@ export function mountPriorities(parent: HTMLElement, opts: PrioritiesMountOpts =
     const render = () => {
       clear(wrap);
       persist();
-      wrap.classList.toggle("app-cp-tv", state.tv);
       if (walkOpen) {
         renderWalk();
         return;
       }
-      // presentation / tile: org name only, no toolbar (§7); otherwise the full bar
-      // and the vision band directly over the pillars (Ben, 2026-08-19)
-      if (state.tv || card?.mode === "tile") wrap.append(renderTvBar(), renderVision());
-      else wrap.append(renderOrgBar(), renderToolbar(), renderVision());
+      // ONE header (Ben, 2026-08-19: the presentation layout IS the view):
+      // title with the clickable org chain, the cascade chip, ▶ Walk
+      // through, ＋ Priority, ⋮ for everything else; then the vision band
+      // directly over the pillars
+      wrap.append(renderHeader(), renderVision());
       const columns = objectiveColumns(data.pillars, state.focus ?? state.l1);
       if (state.groupByPillar && state.l1 === null && densityFor(columns.length) === "scroll") {
         for (const l1 of strategyChips(data.pillars)) {
@@ -409,19 +407,38 @@ export function mountPriorities(parent: HTMLElement, opts: PrioritiesMountOpts =
     };
 
     /** Presentation / tile bar: the org name at ×1.4, ▶ Walk, Exit presentation. */
-    const renderTvBar = (): HTMLElement => {
+    /** The header: "FY26 Cascaded Priorities | Company › Site ▾" (lead in
+     *  the accent; ancestors click to go up, the current node's ▾ opens
+     *  Switch · Descend · Browse all…), then the cascade chip, ▶ Walk
+     *  through, ＋ Priority and ⋮. Cards: a Focus/All toggle instead. */
+    const renderHeader = (): HTMLElement => {
       const bar = el("div", "app-cp-tvbar");
-      // "FY26 Cascaded Priorities | Company › Site › Department" — the
-      // first part in the app accent, the org chain as far as it goes
       const title = el("div", "app-cp-tvorg");
       title.appendChild(el("span", "app-cp-tvorg-lead", `${state.period} Cascaded Priorities`));
       title.appendChild(el("span", "app-cp-tvorg-sep", " | "));
-      title.appendChild(el("span", "app-cp-tvorg-chain", orgPath(state.org).map(orgName).join(" › ")));
-      if (card?.topic) title.appendChild(el("span", "app-cp-tvorg-topic", ` · ${card.topic}`));
+      if (card) {
+        title.appendChild(el("span", "app-cp-tvorg-chain", orgPath(state.org).map(orgName).join(" › ")));
+        if (card.topic) title.appendChild(el("span", "app-cp-tvorg-topic", ` · ${card.topic}`));
+      } else {
+        const crumbs = el("span", "app-cp-crumbs app-cp-tvorg-chain");
+        const path = orgPath(state.org);
+        path.forEach((node, i) => {
+          if (i > 0) crumbs.appendChild(el("span", "app-cp-crumb-sep", "›"));
+          const last = i === path.length - 1;
+          const b = el("button", "app-cp-crumb" + (last ? " app-cp-crumb-here" : ""), orgName(node) + (last ? " ▾" : "")) as HTMLButtonElement;
+          b.type = "button";
+          b.title = last ? "Switch, descend or browse" : `Go up to ${orgName(node)}`;
+          b.addEventListener("click", () => {
+            if (last) openOrgMenu(b);
+            else void goTo(node);
+          });
+          crumbs.appendChild(b);
+        });
+        title.appendChild(crumbs);
+      }
       bar.appendChild(title);
-      if (card && card.mode !== "tile") {
-        // the card toggles between its rotation focus and every pillar
-        if (card.focus && card.focus.length > 0) {
+      if (card) {
+        if (card.mode !== "tile" && card.focus && card.focus.length > 0) {
           const focused = state.focus !== null;
           const toggle = el("button", "app-btn app-cp-tvbtn", focused ? "⊞ All pillars" : "◎ Focus pillars") as HTMLButtonElement;
           toggle.type = "button";
@@ -432,21 +449,39 @@ export function mountPriorities(parent: HTMLElement, opts: PrioritiesMountOpts =
           });
           bar.appendChild(toggle);
         }
-      } else if (!card) {
-        const walk = el("button", "app-btn app-cp-tvbtn", "▶ Walk") as HTMLButtonElement;
-        walk.type = "button";
-        walk.addEventListener("click", () => openWalk(0));
-        bar.appendChild(walk);
-        {
-          const exit = el("button", "app-btn app-cp-tvbtn", "Exit presentation") as HTMLButtonElement;
-          exit.type = "button";
-          exit.addEventListener("click", () => {
-            state.tv = false;
-            render();
-          });
-          bar.appendChild(exit);
-        }
+        return bar;
       }
+      // cascade chip — the one cascade surface
+      const pending = pendingCascades(state.org, data.assignments).length;
+      if (pending > 0) {
+        const chip = el("button", "app-cp-cascadechip", `⇩ ${pending} cascade${pending === 1 ? "" : "s"} to accept`) as HTMLButtonElement;
+        chip.type = "button";
+        chip.title = "Review the cascades sent to this org";
+        chip.addEventListener("click", () => cascadeReview(ctx, state.org));
+        bar.appendChild(chip);
+      } else if (reviewQueueLen() > 0) {
+        const chip = el("button", "app-cp-cascadechip app-cp-cascadechip-quiet", `⏸ ${reviewQueueLen()} parked`) as HTMLButtonElement;
+        chip.type = "button";
+        chip.title = "Cascades this org put on hold";
+        chip.addEventListener("click", () => cascadeReview(ctx, state.org));
+        bar.appendChild(chip);
+      }
+      const walk = el("button", "app-btn app-cp-tvbtn", "▶ Walk through") as HTMLButtonElement;
+      walk.type = "button";
+      walk.title = "One pillar at a time, with a final step for cascades to accept";
+      walk.addEventListener("click", () => openWalk(0));
+      bar.appendChild(walk);
+      if (canManage()) {
+        const add = el("button", "app-btn app-btn-primary app-cp-tvbtn", "＋ Priority") as HTMLButtonElement;
+        add.type = "button";
+        add.addEventListener("click", () => void addPriority());
+        bar.appendChild(add);
+      }
+      const more = el("button", "app-btn app-cp-more app-cp-tvbtn", "⋮") as HTMLButtonElement;
+      more.type = "button";
+      more.title = "Period · status · view · roll-up rule · more";
+      more.addEventListener("click", () => openViewOptions(more));
+      bar.appendChild(more);
       return bar;
     };
 
@@ -491,26 +526,6 @@ export function mountPriorities(parent: HTMLElement, opts: PrioritiesMountOpts =
     // ancestor to go up — and a single ▾ on the current node opening a
     // popover with Switch (siblings) · Descend (children, with pending-
     // cascade counts) · Browse all… (the tree picker for far jumps).
-    const renderOrgBar = (): HTMLElement => {
-      const bar = el("div", "app-cp-orgbar");
-      const crumbs = el("div", "app-cp-crumbs");
-      const path = orgPath(state.org);
-      path.forEach((node, i) => {
-        if (i > 0) crumbs.appendChild(el("span", "app-cp-crumb-sep", "›"));
-        const last = i === path.length - 1;
-        const b = el("button", "app-cp-crumb" + (last ? " app-cp-crumb-here" : ""), orgName(node) + (last ? " ▾" : "")) as HTMLButtonElement;
-        b.type = "button";
-        b.title = last ? "Switch, descend or browse" : `Go up to ${orgName(node)}`;
-        b.addEventListener("click", () => {
-          if (last) openOrgMenu(b);
-          else void goTo(node);
-        });
-        crumbs.appendChild(b);
-      });
-      bar.appendChild(crumbs);
-      return bar;
-    };
-
     const openOrgMenu = (anchor: HTMLElement) => {
       document.querySelectorAll(".app-cp-menu").forEach((m) => m.remove());
       const menu = el("div", "app-cp-menu app-cp-orgmenu");
@@ -592,95 +607,6 @@ export function mountPriorities(parent: HTMLElement, opts: PrioritiesMountOpts =
       return row;
     };
 
-    const renderToolbar = (): HTMLElement => {
-      const bar = el("div", "app-cp-toolbar");
-      // period
-      const per = el("select", "app-input app-cp-select") as HTMLSelectElement;
-      for (const p of periodsOnOffer()) {
-        const o = el("option", "", p) as HTMLOptionElement;
-        o.value = p;
-        if (p === state.period) o.selected = true;
-        per.appendChild(o);
-      }
-      per.addEventListener("change", () => {
-        state.period = per.value;
-        render();
-      });
-      bar.appendChild(per);
-      // status
-      const st = el("select", "app-input app-cp-select") as HTMLSelectElement;
-      for (const [v, l] of [
-        ["active", "Active"],
-        ["completed", "Completed"],
-        ["all", "All"],
-      ] as const) {
-        const o = el("option", "", l) as HTMLOptionElement;
-        o.value = v;
-        if (v === state.status) o.selected = true;
-        st.appendChild(o);
-      }
-      st.addEventListener("change", () => {
-        state.status = st.value as ScreenState["status"];
-        render();
-      });
-      bar.appendChild(st);
-      // view toggle — persists per user per org (§5)
-      const seg = el("div", "app-cp-seg");
-      const simple = el("button", "app-cp-seg-btn" + (state.view === "simple" ? " app-cp-seg-on" : ""), "Simple") as HTMLButtonElement;
-      simple.type = "button";
-      const dynamic = el("button", "app-cp-seg-btn" + (state.view === "dynamic" ? " app-cp-seg-on" : ""), "Dynamic") as HTMLButtonElement;
-      dynamic.type = "button";
-      simple.title = "The physical template — matrix of pillars × priorities";
-      dynamic.title = "Card per priority with headline metric and owner";
-      simple.addEventListener("click", () => {
-        state.view = "simple";
-        render();
-      });
-      dynamic.addEventListener("click", () => {
-        state.view = "dynamic";
-        render();
-      });
-      seg.append(simple, dynamic);
-      bar.appendChild(seg);
-      // cascade chip (review list arrives with P2)
-      const pending = pendingCascades(state.org, data.assignments).length;
-      if (pending > 0) {
-        const chip = el("button", "app-cp-cascadechip", `⇩ ${pending} cascade${pending === 1 ? "" : "s"} to accept`) as HTMLButtonElement;
-        chip.type = "button";
-        chip.title = "Review the cascades sent to this org";
-        chip.addEventListener("click", () => cascadeReview(ctx, state.org));
-        bar.appendChild(chip);
-      } else if (reviewQueueLen() > 0) {
-        const chip = el("button", "app-cp-cascadechip app-cp-cascadechip-quiet", `⏸ ${reviewQueueLen()} parked`) as HTMLButtonElement;
-        chip.type = "button";
-        chip.title = "Cascades this org put on hold";
-        chip.addEventListener("click", () => cascadeReview(ctx, state.org));
-        bar.appendChild(chip);
-      }
-      bar.appendChild(el("span", "app-cp-spacer"));
-      const present = el("button", "app-btn", "▶ Present") as HTMLButtonElement;
-      present.type = "button";
-      present.title = "Presentation mode — full-width, larger type, then ▶ Walk one pillar at a time";
-      present.addEventListener("click", () => {
-        state.tv = true;
-        render();
-      });
-      bar.appendChild(present);
-      if (canManage()) {
-        const add = el("button", "app-btn app-btn-primary", "＋ Priority") as HTMLButtonElement;
-        add.type = "button";
-        add.addEventListener("click", () => void addPriority());
-        bar.appendChild(add);
-      }
-      // ⋮ view options
-      const more = el("button", "app-btn app-cp-more", "⋮") as HTMLButtonElement;
-      more.type = "button";
-      more.title = "View options";
-      more.addEventListener("click", () => openViewOptions(more));
-      bar.appendChild(more);
-      return bar;
-    };
-
     const openViewOptions = (anchor: HTMLElement) => {
       document.querySelectorAll(".app-cp-menu").forEach((m) => m.remove());
       const menu = el("div", "app-cp-menu");
@@ -693,6 +619,33 @@ export function mountPriorities(parent: HTMLElement, opts: PrioritiesMountOpts =
         });
         menu.appendChild(b);
       };
+      menu.appendChild(el("div", "app-cp-menu-h", "Period"));
+      for (const per of periodsOnOffer()) {
+        item(per, state.period === per, () => {
+          state.period = per;
+          render();
+        });
+      }
+      menu.appendChild(el("div", "app-cp-menu-h", "Status"));
+      for (const [v, l] of [
+        ["active", "Active"],
+        ["completed", "Completed"],
+        ["all", "All"],
+      ] as const) {
+        item(l, state.status === v, () => {
+          state.status = v;
+          render();
+        });
+      }
+      menu.appendChild(el("div", "app-cp-menu-h", "View"));
+      item("Priority/Objective view", state.view === "simple", () => {
+        state.view = "simple";
+        render();
+      });
+      item("Priority only view", state.view === "dynamic", () => {
+        state.view = "dynamic";
+        render();
+      });
       menu.appendChild(el("div", "app-cp-menu-h", "Roll-up rule"));
       item("Strict — any red is red", state.rule === "strict", () => {
         state.rule = "strict";
@@ -712,7 +665,7 @@ export function mountPriorities(parent: HTMLElement, opts: PrioritiesMountOpts =
         render();
       });
       if (canManage()) {
-        menu.appendChild(el("div", "app-cp-menu-h", "Period"));
+        menu.appendChild(el("div", "app-cp-menu-h", "Period end"));
         item(`Carry forward ${state.period} to next period…`, null, () => {
           const mine = data.priorities.filter((p) => orgKey(p.org) === orgKey(state.org) && p.period === state.period && p.status === "active");
           carryForwardFlow(ctx, state.org, state.period, mine);
@@ -1140,15 +1093,6 @@ export function mountPriorities(parent: HTMLElement, opts: PrioritiesMountOpts =
       }
     };
 
-    wrap.addEventListener("ltk-exit-tv", () => {
-      state.tv = false;
-      render();
-    });
-    // the focused card IS presentation mode (Ben, 2026-08-19): same bar and
-    // title as the normal interface's presentation, opening in the walk
-    // the focused card IS presentation mode: the matrix of the focus
-    // pillars (all of them at once — no walk in the card; Ben, 2026-08-19)
-    if (card?.mode === "focused") state.tv = true;
     render();
   })().catch((err) => {
     stopLoading();
@@ -1157,15 +1101,8 @@ export function mountPriorities(parent: HTMLElement, opts: PrioritiesMountOpts =
     );
   });
 
-  const onKey = (e: KeyboardEvent) => {
-    if (e.key !== "Escape" || !wrap.classList.contains("app-cp-tv")) return;
-    if (document.querySelector(".app-modal-overlay, .app-cp-scrim, .app-cp-walk")) return;
-    wrap.dispatchEvent(new CustomEvent("ltk-exit-tv"));
-  };
-  document.addEventListener("keydown", onKey);
   return () => {
     dead = true;
-    document.removeEventListener("keydown", onKey);
     for (const fn of cleanups) fn();
     wrap.remove();
   };

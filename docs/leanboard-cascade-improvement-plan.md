@@ -280,6 +280,15 @@ reschedule/cancel history with a reason picklist.
   specified — card per priority (pillar title strip, 14.5px
   statement, 22px metric + 96×40 sparkline with target line, owner chip,
   tallies + count); per-user-per-org persistence.
+- **LAYOUT CONSOLIDATION (Ben, 2026-08-19, after P4)**: the presentation
+  layout IS the Priorities view — one header "FY26 Cascaded Priorities |
+  Company › Site ▾" (lead in the accent; ancestors click up, ▾ = Switch ·
+  Descend · Browse all…) · ⇩ cascade chip · **▶ Walk through** · **＋
+  Priority** · ⋮ (Period · Status · View = "Priority/Objective view"
+  (was Simple) / "Priority only view" (was Dynamic) · Roll-up rule · Show
+  Other · Group by pillar · Carry forward). No separate org bar, toolbar
+  or presentation toggle; card kebabs and vision edit stay. The ×1.4
+  type, full-width title and plain labels apply always.
 - **P4 TV walk mode + embedded ritual card — BUILT 2026-08-19 (dev,
   app-only)** — `priorities/walk.ts` (mountWalk into any host: one
   objective per step, header strip in the sub-pillar colour with L1 · org
