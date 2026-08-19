@@ -401,6 +401,24 @@ export async function prioritySettingsJson(): Promise<string> {
   return rows[0]?.ben_prioritysettings ?? "";
 }
 
+/** Per-site priorities settings JSON (cascade customisation floor) — the
+ *  same column, on the site's own row. */
+export async function allSitePrioritySettings(): Promise<Record<string, string>> {
+  const rows = await allWhere(Ben_ltksitesettingsesService.getAll);
+  const out: Record<string, string> = {};
+  for (const r of rows) if (r.ben_site && r.ben_site !== APP_ROW) out[r.ben_site] = r.ben_prioritysettings ?? "";
+  return out;
+}
+
+export async function saveSitePrioritySettingsJson(site: string, json: string): Promise<void> {
+  await upsertWhere(
+    Ben_ltksitesettingsesService,
+    eq("ben_site", site),
+    (row) => row.ben_ltksitesettingsid,
+    { ben_site: site, ben_name: site, ben_prioritysettings: json }
+  );
+}
+
 export async function savePrioritySettingsJson(json: string): Promise<void> {
   await upsertWhere(
     Ben_ltksitesettingsesService,

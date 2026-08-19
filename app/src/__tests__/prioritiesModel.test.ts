@@ -313,3 +313,20 @@ describe("rotation focus (P4)", () => {
     expect(m.focusForTopic(m.parseTopicMap("{oops"), "Safety")).toBeNull();
   });
 });
+
+describe("site cascade customisation floor", () => {
+  it("parses with a safe default, serialises blank for the default, and gates by depth", async () => {
+    const m = await import("../priorities/model");
+    expect(m.parseSiteCascadeSettings("")).toEqual({ customiseLevel: "area" });
+    expect(m.parseSiteCascadeSettings('{"customiseLevel":"site"}').customiseLevel).toBe("site");
+    expect(m.parseSiteCascadeSettings('{"customiseLevel":"bogus"}').customiseLevel).toBe("area");
+    expect(m.serializeSiteCascadeSettings({ customiseLevel: "area" })).toBe("");
+    expect(m.serializeSiteCascadeSettings({ customiseLevel: "department" })).toBe('{"customiseLevel":"department"}');
+    expect(m.canCustomiseAt(site, "site")).toBe(true);
+    expect(m.canCustomiseAt(dept, "site")).toBe(false);
+    expect(m.canCustomiseAt(dept, "department")).toBe(true);
+    expect(m.canCustomiseAt(area, "department")).toBe(false);
+    expect(m.canCustomiseAt(area, "area")).toBe(true);
+    expect(m.canCustomiseAt(co, "site")).toBe(true);
+  });
+});

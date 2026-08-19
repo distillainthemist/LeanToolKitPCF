@@ -19,21 +19,26 @@
 import { el, clear } from "../../../shared/ui/dom";
 import type { RosterPerson } from "../store/mappers";
 import {
+  allSitePrioritySettings,
   companies,
   orgJson,
   orgVisions,
   prioritySettingsJson,
   saveOrgVision,
   savePrioritySettingsJson,
+  saveSitePrioritySettingsJson,
   siteCompanies,
 } from "../store/config";
 import { deletePillar, listPillars, savePillar } from "../store/priorities";
 import {
+  CustomiseLevel,
   DEFAULT_PRIORITY_SETTINGS,
   parsePrioritySettings,
+  parseSiteCascadeSettings,
   periodFor,
   Pillar,
   serializePrioritySettings,
+  serializeSiteCascadeSettings,
 } from "./model";
 import { newId, todayIso } from "../../../shared/schema/id";
 
@@ -111,7 +116,53 @@ export async function renderPrioritiesSettings(
     await renderPillars(body, ctx, saves);
     await renderPeriod(body, ctx, saves);
   }
+  await renderCascadeFloor(body, me, ctx, saves);
   await renderVisions(body, me, ctx, saves);
+}
+
+// ---- per-site cascade customisation floor -----------------------------------------
+
+async function renderCascadeFloor(body: HTMLElement, me: RosterPerson, ctx: DirtyCtx, saves: (() => Promise<void>)[]) {
+  const box = sectionTitle(
+    "Cascade customisation",
+    "Per site: the deepest level that may accept a cascaded priority with its own wording (Accept & customise). Below that level, cascades are adopted as-is. Site = only the site customises; departments and teams adopt. Team = everyone may customise."
+  );
+  body.appendChild(box);
+  const isSuper = me.role === "superadmin";
+  const [tree, all] = await Promise.all([orgJson(), allSitePrioritySettings()]);
+  const sites = (JSON.parse(tree || "[]") as { site?: unknown }[]).map((r) => (typeof r.site === "string" ? r.site : "")).filter((x) => x !== "");
+  const editable = (site: string) => isSuper || (me.role === "siteadmin" && me.site === site);
+  const pending = new Map<string, string>();
+  const list = el("div", "app-pr-pillars");
+  for (const site of sites) {
+    const row = el("div", "app-pr-row app-pr-floor-row");
+    row.appendChild(el("span", "app-pr-floor-site", site));
+    const sel = el("select", "app-input app-pr-short") as HTMLSelectElement;
+    const cur = parseSiteCascadeSettings(all[site] ?? "").customiseLevel;
+    for (const [v, l] of [
+      ["site", "Site only"],
+      ["department", "Down to department"],
+      ["area", "Down to team (area)"],
+    ] as const) {
+      const o = el("option", "", l) as HTMLOptionElement;
+      o.value = v;
+      if (v === cur) o.selected = true;
+      sel.appendChild(o);
+    }
+    sel.disabled = !editable(site);
+    sel.addEventListener("change", () => {
+      pending.set(site, serializeSiteCascadeSettings({ customiseLevel: sel.value as CustomiseLevel }));
+      ctx.markDirty();
+    });
+    row.append(sel);
+    list.appendChild(row);
+  }
+  if (sites.length === 0) list.appendChild(el("div", "app-settings-note", "No sites yet — add one under Organisation first."));
+  box.appendChild(list);
+  saves.push(async () => {
+    for (const [site, json] of pending) await saveSitePrioritySettingsJson(site, json);
+    pending.clear();
+  });
 }
 
 // ---- pillars ------------------------------------------------------------------

@@ -280,6 +280,16 @@ reschedule/cancel history with a reason picklist.
   specified — card per priority (pillar title strip, 14.5px
   statement, 22px metric + 96×40 sparkline with target line, owner chip,
   tallies + count); per-user-per-org persistence.
+- **CASCADE CUSTOMISATION FLOOR (Ben, 2026-08-19)**: per-site setting
+  (Settings → Priorities → "Cascade customisation"; superadmin any site,
+  siteadmin their own) = the deepest org level that may "Accept &
+  customise" a cascade — Site only / Down to department / Down to team
+  (area, the default). Below the floor the review list offers Accept /
+  Hold / Reject only with a quiet note; nothing else changes (adopt
+  as-is keeps decision 2). Stored in the SITE row's
+  ben_prioritysettings as {customiseLevel}; model `canCustomiseAt`.
+  Also since P4: re-send a declined/parked cascade (Lineage rail
+  Re-send; re-tickable rows in every Cascade to list; "re-sent" event).
 - **LAYOUT CONSOLIDATION (Ben, 2026-08-19, after P4)**: the presentation
   layout IS the Priorities view — one header "FY26 Cascaded Priorities |
   Company › Site ▾" (lead in the accent; ancestors click up, ▾ = Switch ·

@@ -674,3 +674,40 @@ export function focusForTopic(map: TopicMap, topic: string): string[] | null {
   }
   return null;
 }
+
+// ---- per-site cascade settings: how far down customisation is allowed ---------
+
+/** Customisation floor for a site: the deepest org level that may "Accept
+ *  & customise" a cascaded priority. Below it, cascades are accepted as-is
+ *  (adopted) only. Stored per site in the site row's ben_prioritysettings
+ *  JSON as {customiseLevel}. Default = area (no restriction). */
+export type CustomiseLevel = "site" | "department" | "area";
+
+export interface SiteCascadeSettings {
+  customiseLevel: CustomiseLevel;
+}
+
+export const DEFAULT_SITE_CASCADE: SiteCascadeSettings = { customiseLevel: "area" };
+
+export function parseSiteCascadeSettings(raw: string): SiteCascadeSettings {
+  try {
+    const o = JSON.parse(raw || "{}") as { customiseLevel?: unknown };
+    const v = o.customiseLevel;
+    return { customiseLevel: v === "site" || v === "department" || v === "area" ? v : "area" };
+  } catch {
+    return { ...DEFAULT_SITE_CASCADE };
+  }
+}
+
+export function serializeSiteCascadeSettings(s: SiteCascadeSettings): string {
+  return s.customiseLevel === "area" ? "" : JSON.stringify({ customiseLevel: s.customiseLevel });
+}
+
+const LEVEL_DEPTH: Record<OrgLevel, number> = { company: 0, site: 1, department: 2, area: 3 };
+
+/** May this org customise a cascade it receives, under its site's floor?
+ *  Company and site always may; departments need a floor of department or
+ *  area; areas need area. */
+export function canCustomiseAt(org: OrgRef, floor: CustomiseLevel): boolean {
+  return LEVEL_DEPTH[orgLevel(org)] <= LEVEL_DEPTH[floor];
+}

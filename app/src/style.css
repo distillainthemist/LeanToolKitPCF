@@ -3221,3 +3221,6 @@ textarea.app-cp-statement { font-size: 14px; font-weight: 500; }
 .app-org-archived-row { display: flex; align-items: center; gap: 10px; padding: 6px 0; }
 .app-cp-cascade-prior { font-size: 12px; }
 .app-cp-ov-resend { margin-left: 8px; font-weight: 600; }
+.app-pr-floor-row { display: flex; align-items: center; gap: 12px; }
+.app-pr-floor-site { font-weight: 600; min-width: 180px; }
+.app-cp-review-note { font-size: 12px; margin-top: 4px; }

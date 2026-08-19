@@ -25,6 +25,7 @@ import { todayIso } from "../../../shared/schema/id";
 import { showLoading } from "../loading";
 import { currentViewer } from "../runtime";
 import {
+  allSitePrioritySettings,
   appPalettes,
   orgJson,
   orgOwnersMap,
@@ -56,6 +57,7 @@ import { mountWalk } from "./walk";
 import { initialsFor } from "../../../shared/schema/people";
 import { carryForwardFlow, cascadeDialog, cascadeReview, closeDialog, closePriority, LifecycleCtx, openPriorityOverlay, reopenPriority, sendCascade } from "./lifecycle";
 import {
+  canCustomiseAt,
   canManageOrg,
   densityFor,
   groupByColumn,
@@ -72,6 +74,7 @@ import {
   orgRef,
   parentClosed,
   parsePrioritySettings,
+  parseSiteCascadeSettings,
   pendingCascades,
   periodFor,
   Pillar,
@@ -236,7 +239,7 @@ export function mountPriorities(parent: HTMLElement, opts: PrioritiesMountOpts =
 
   void (async () => {
     const who = currentViewer();
-    const [rawTree, siteCo, roster, visions, settingsRaw, owners, palettes, prefs] = await Promise.all([
+    const [rawTree, siteCo, roster, visions, settingsRaw, owners, palettes, prefs, siteCascade] = await Promise.all([
       memo("org", orgJson),
       memo("siteCo", siteCompanies),
       memo("roster", () => listPeople()),
@@ -245,6 +248,7 @@ export function mountPriorities(parent: HTMLElement, opts: PrioritiesMountOpts =
       memo("owners", orgOwnersMap),
       memo("palettes", appPalettes),
       loadPriorityPrefs(who?.objectId ?? ""),
+      memo("siteCascade", allSitePrioritySettings),
     ]);
     if (dead) return;
     const companyList = [...new Set(Object.values(siteCo).filter((c) => c !== ""))];
@@ -349,6 +353,7 @@ export function mountPriorities(parent: HTMLElement, opts: PrioritiesMountOpts =
       palette,
       actor: actorRef,
       canManage: (o) => canManageOrg(viewer, o, owners),
+      canCustomise: (o) => canCustomiseAt(o, parseSiteCascadeSettings(siteCascade[o.site] ?? "").customiseLevel),
       ownerNameFor,
       periodsOnOffer: () => periodsOnOffer(),
       currentPeriod,

@@ -58,6 +58,8 @@ export interface LifecycleCtx {
   palette: Record<string, string>;
   actor: () => { whoId: string; who: string };
   canManage: (org: OrgRef) => boolean;
+  /** Site setting: may this org "Accept & customise" (vs adopt as-is)? */
+  canCustomise: (org: OrgRef) => boolean;
   ownerNameFor: (org: OrgRef) => string;
   periodsOnOffer: () => string[];
   currentPeriod: string;
@@ -356,7 +358,13 @@ export function renderReviewList(ctx: LifecycleCtx, org: OrgRef, list: HTMLEleme
       customise.addEventListener("click", () => void acceptCustomised(a, p));
       hold.addEventListener("click", () => void decide(a, p, "onhold"));
       reject.addEventListener("click", () => void decide(a, p, "rejected"));
-      acts.append(accept, customise, hold, reject);
+      // the site's customisation floor (Settings → Priorities): below it a
+      // cascade is adopted as-is — no customise button, a quiet note instead
+      if (ctx.canCustomise(org)) acts.append(accept, customise, hold, reject);
+      else {
+        acts.append(accept, hold, reject);
+        main.appendChild(el("div", "app-cp-muted app-cp-review-note", "Cascades to this level are adopted as-is — customising is set off for this site."));
+      }
       row.appendChild(acts);
       list.appendChild(row);
     }
