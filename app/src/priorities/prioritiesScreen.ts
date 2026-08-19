@@ -187,6 +187,27 @@ function buildTree(raw: string, siteCo: Record<string, string>, companyList: str
   return { companies: [...companies.values()].filter((c) => c.name !== "" || c.sites.length > 0) };
 }
 
+/**
+ * Short-lived memo for the screen's boot reads. The board grid re-renders
+ * live tiles often and each render remounts the Priorities card; without
+ * this every remount refetched seven tables and sat on a spinner. 60s
+ * bounds staleness; every write goes through `reload`, which refreshes
+ * the cascade entry, so the tab still sees its own changes at once.
+ */
+const MEMO_TTL_MS = 60_000;
+const memoMap = new Map<string, { at: number; value: Promise<unknown> }>();
+function memo<T>(key: string, load: () => Promise<T>): Promise<T> {
+  const hit = memoMap.get(key);
+  if (hit && Date.now() - hit.at < MEMO_TTL_MS) return hit.value as Promise<T>;
+  const value = load();
+  memoMap.set(key, { at: Date.now(), value });
+  value.catch(() => memoMap.delete(key));
+  return value;
+}
+function memoSet<T>(key: string, v: T): void {
+  memoMap.set(key, { at: Date.now(), value: Promise.resolve(v) });
+}
+
 interface ScreenState {
   org: OrgRef;
   l1: string | null; // pillar filter (chip)
@@ -211,20 +232,20 @@ export function mountPriorities(parent: HTMLElement, opts: PrioritiesMountOpts =
   const card = opts.card ?? null;
   const wrap = el("div", "app-cp-wrap" + (card ? ` app-cp-card app-cp-card-${card.mode}` : ""));
   parent.appendChild(wrap);
-  const stopLoading = showLoading(wrap);
+  const stopLoading = showLoading(wrap, false, card !== null);
   let dead = false;
   const cleanups: (() => void)[] = [];
 
   void (async () => {
     const who = currentViewer();
     const [rawTree, siteCo, roster, visions, settingsRaw, owners, palettes, prefs] = await Promise.all([
-      orgJson(),
-      siteCompanies(),
-      listPeople(),
-      orgVisions(),
-      prioritySettingsJson(),
-      orgOwnersMap(),
-      appPalettes(),
+      memo("org", orgJson),
+      memo("siteCo", siteCompanies),
+      memo("roster", () => listPeople()),
+      memo("visions", orgVisions),
+      memo("settings", prioritySettingsJson),
+      memo("owners", orgOwnersMap),
+      memo("palettes", appPalettes),
       loadPriorityPrefs(who?.objectId ?? ""),
     ]);
     if (dead) return;
@@ -279,7 +300,7 @@ export function mountPriorities(parent: HTMLElement, opts: PrioritiesMountOpts =
       savePriorityPrefs(viewer.whoId, prefs);
     };
 
-    let data: CascadeData = await loadCascade(state.org.company);
+    let data: CascadeData = await memo(`cascade|${state.org.company}`, () => loadCascade(state.org.company));
     if (dead) return;
     stopLoading();
     if (cardL1) state.l1 = cardL1(data.pillars);
@@ -299,6 +320,7 @@ export function mountPriorities(parent: HTMLElement, opts: PrioritiesMountOpts =
       const sc = scroller();
       const top = sc.scrollTop;
       data = await loadCascade(state.org.company);
+      memoSet(`cascade|${state.org.company}`, data);
       if (dead) return;
       render();
       sc.scrollTop = top;

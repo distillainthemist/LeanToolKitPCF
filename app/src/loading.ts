@@ -27,15 +27,19 @@ export function bootFail(host: HTMLElement, what: string): (err: unknown) => voi
   };
 }
 
-export function showLoading(host: HTMLElement, overlay = false): () => void {
+export function showLoading(host: HTMLElement, overlay = false, quiet = false): () => void {
   const wrap = el(
     "div",
     overlay ? "app-loading app-loading-overlay" : "app-loading"
   );
   wrap.appendChild(el("div", "app-loading-spinner"));
-  const pick = QUOTES[Math.floor(Math.random() * QUOTES.length)];
-  wrap.appendChild(el("div", "app-loading-quote", `“${pick.q}”`));
-  wrap.appendChild(el("div", "app-loading-by", `— ${pick.by}`));
+  // quiet = spinner only — card tiles and small hosts, where the quote
+  // would be the biggest thing on screen
+  if (!quiet) {
+    const pick = QUOTES[Math.floor(Math.random() * QUOTES.length)];
+    wrap.appendChild(el("div", "app-loading-quote", `“${pick.q}”`));
+    wrap.appendChild(el("div", "app-loading-by", `— ${pick.by}`));
+  }
   host.appendChild(wrap);
   return () => wrap.remove();
 }
