@@ -397,24 +397,25 @@ export function mountPriorities(parent: HTMLElement, opts: PrioritiesMountOpts =
       title.appendChild(el("span", "app-cp-tvorg-chain", orgPath(state.org).map(orgName).join(" › ")));
       if (card?.topic) title.appendChild(el("span", "app-cp-tvorg-topic", ` · ${card.topic}`));
       bar.appendChild(title);
-      if (card?.mode !== "tile") {
-        // card with a rotation focus, currently widened to all pillars:
-        // the way back to the focus (re-opens the walk at step 1)
-        if (card?.focus && card.focus.length > 0 && state.focus === null) {
-          const back = el("button", "app-btn app-cp-tvbtn", "◎ Focus pillars") as HTMLButtonElement;
-          back.type = "button";
-          back.title = card.topic ? `Back to the ${card.topic} focus` : "Back to the focused pillars";
-          back.addEventListener("click", () => {
-            state.focus = card.focus ?? null;
-            openWalk(0);
+      if (card && card.mode !== "tile") {
+        // the card toggles between its rotation focus and every pillar
+        if (card.focus && card.focus.length > 0) {
+          const focused = state.focus !== null;
+          const toggle = el("button", "app-btn app-cp-tvbtn", focused ? "⊞ All pillars" : "◎ Focus pillars") as HTMLButtonElement;
+          toggle.type = "button";
+          toggle.title = focused ? "Show every pillar" : card.topic ? `Back to the ${card.topic} focus` : "Back to the focused pillars";
+          toggle.addEventListener("click", () => {
+            state.focus = focused ? null : (card.focus ?? null);
+            render();
           });
-          bar.appendChild(back);
+          bar.appendChild(toggle);
         }
+      } else if (!card) {
         const walk = el("button", "app-btn app-cp-tvbtn", "▶ Walk") as HTMLButtonElement;
         walk.type = "button";
         walk.addEventListener("click", () => openWalk(0));
         bar.appendChild(walk);
-        if (!card) {
+        {
           const exit = el("button", "app-btn app-cp-tvbtn", "Exit presentation") as HTMLButtonElement;
           exit.type = "button";
           exit.addEventListener("click", () => {
@@ -457,9 +458,6 @@ export function mountPriorities(parent: HTMLElement, opts: PrioritiesMountOpts =
           walkOpen = false;
           closeWalk?.();
           closeWalk = null;
-          // ⊞ All pillars in the card: widen to every pillar; the bar's
-          // ◎ Focus pillars brings the rotation focus back
-          if (card) state.focus = null;
           render();
         },
         onOpen: (p) => openOverlay(p),
@@ -1126,10 +1124,9 @@ export function mountPriorities(parent: HTMLElement, opts: PrioritiesMountOpts =
     });
     // the focused card IS presentation mode (Ben, 2026-08-19): same bar and
     // title as the normal interface's presentation, opening in the walk
-    if (card?.mode === "focused") {
-      state.tv = true;
-      walkOpen = true;
-    }
+    // the focused card IS presentation mode: the matrix of the focus
+    // pillars (all of them at once — no walk in the card; Ben, 2026-08-19)
+    if (card?.mode === "focused") state.tv = true;
     render();
   })().catch((err) => {
     stopLoading();

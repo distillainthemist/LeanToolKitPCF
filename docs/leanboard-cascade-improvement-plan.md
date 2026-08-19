@@ -295,8 +295,10 @@ reschedule/cancel history with a reason picklist.
   blank = the board's own org via getBoard, prPillar name filter, prView;
   LINK_SOURCE_EXCLUDED) — mounter is a dynamic import of
   `priorities/prioritiesCard.ts` (+0.5 kB on cardRegistry); tile vs
-  focused decided by host size (≥700×400 = focused → walk at step 1;
-  tile = compact non-interactive matrix); period from instanceWhen; tile
+  focused decided by host size (≥700×400 = focused → PRESENTATION
+  matrix of the focus pillars all at once, ⊞ All pillars / ◎ Focus
+  pillars toggle — no walk in the card, Ben 2026-08-19; tile = compact
+  non-interactive matrix); period from instanceWhen; tile
   snapshot `prioritiesSnapshotSvg` (vision band + objective headings +
   status edges, no metric text). Card mounts never persist prefs. ROTATION
   FOCUS (Ben, 2026-08-19: an explicit topic→pillars map, since rotation
