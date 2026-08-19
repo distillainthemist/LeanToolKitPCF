@@ -3300,18 +3300,19 @@ textarea.app-cp-statement { font-size: 14px; font-weight: 500; }
 .app-tw-templates-h { margin: 16px 0 8px; }
 .app-tw-stdrole { min-height: 30px; font-size: 12.5px; cursor: pointer; }
 .app-tw-slots { margin-top: 8px; }
-.app-tw-methods { display: flex; flex-direction: column; gap: 4px; max-width: 340px; }
+/* methods: the org editor's row look (area rows), full-width */
+.app-tw-methods { display: flex; flex-direction: column; gap: 6px; padding: 10px 0 12px; }
 .app-tw-method {
   display: flex;
   align-items: center;
   gap: 8px;
-  border: 1px solid #e4dfd6;
+  background: #faf9f7;
+  border: 1px solid #f1efec;
   border-radius: 8px;
-  background: #fff;
-  padding: 6px 10px;
-  font-size: 13px;
+  padding: 8px 12px;
+  font-size: 13.5px;
   user-select: none;
 }
 .app-tw-method-name { flex: 1; }
-.app-tw-method-handle { font-size: 12px; color: #a39c90; cursor: grab; }
+.app-tw-method-handle { cursor: grab; }
 .app-tw-method-handle:active { cursor: grabbing; }

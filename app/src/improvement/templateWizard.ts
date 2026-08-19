@@ -822,7 +822,7 @@ export async function renderImprovementSettings(body: HTMLElement, isSuper: bool
           persist();
           paintMethods();
         });
-        const x = el("button", "ltk-mw-chip-x", "×") as HTMLButtonElement;
+        const x = el("button", "app-org-x", "\u00d7") as HTMLButtonElement;
         x.type = "button";
         x.title = "Remove (existing templates keep their method)";
         x.addEventListener("click", () => {
@@ -833,9 +833,10 @@ export async function renderImprovementSettings(body: HTMLElement, isSuper: bool
         rowEl.appendChild(x);
         chips.appendChild(rowEl);
       });
-      const addRow = el("div", "app-tw-inline");
-      const input = el("input", "app-input app-pr-short") as HTMLInputElement;
-      input.placeholder = "Add method…";
+      // the org editor's adder shape: input + ＋
+      const addRow = el("div", "app-org-row");
+      const input = el("input", "app-input") as HTMLInputElement;
+      input.placeholder = "Add method";
       const commit = () => {
         const v = input.value.trim();
         if (v === "" || imp.methods.includes(v)) return;
@@ -847,7 +848,7 @@ export async function renderImprovementSettings(body: HTMLElement, isSuper: bool
       input.addEventListener("keydown", (e) => {
         if (e.key === "Enter") commit();
       });
-      const add = el("button", "app-btn", "＋ Add") as HTMLButtonElement;
+      const add = el("button", "app-btn", "\uFF0B") as HTMLButtonElement;
       add.type = "button";
       add.addEventListener("click", commit);
       addRow.append(input, add);
