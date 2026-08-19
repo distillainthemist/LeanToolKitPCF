@@ -60,13 +60,16 @@ function parseOrgTree(raw: string): OrgSiteNode[] {
         const o = s as { site: string; departments?: unknown };
         const departments = Array.isArray(o.departments)
           ? o.departments
-              .map((d) =>
-                typeof d === "string"
-                  ? { name: d }
-                  : d && typeof d === "object" && typeof (d as { name?: unknown }).name === "string"
-                    ? { name: (d as { name: string }).name }
-                    : null
-              )
+              .map((d) => {
+                if (typeof d === "string") return { name: d };
+                if (!d || typeof d !== "object") return null;
+                // the site-settings shape is {department, areas}; accept
+                // {name} too for hand-authored data
+                const o = d as { department?: unknown; name?: unknown };
+                const name =
+                  typeof o.department === "string" ? o.department : typeof o.name === "string" ? o.name : "";
+                return name !== "" ? { name } : null;
+              })
               .filter((d): d is { name: string } => d !== null)
           : [];
         return { site: o.site, departments };

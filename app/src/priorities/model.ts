@@ -458,3 +458,74 @@ export function canManageOrg(viewer: Viewer, org: OrgRef, owners: OrgOwnersMap):
 export function canEditPillars(viewer: Viewer): boolean {
   return viewer.role === "superadmin";
 }
+
+// ---- the matrix (screen-shaped, still pure) ---------------------------------
+
+/** Priorities of an org's matrix grouped under each sub-pillar column;
+ *  a priority whose pillar is not a shown column goes to `unplaced`
+ *  (retired pillar / no pillar) so nothing silently disappears. */
+export function groupByColumn(
+  columns: Pillar[],
+  priorities: Priority[]
+): { byColumn: Map<string, Priority[]>; unplaced: Priority[] } {
+  const byColumn = new Map<string, Priority[]>(columns.map((c) => [c.id, []]));
+  const unplaced: Priority[] = [];
+  for (const p of priorities) {
+    const list = byColumn.get(p.pillarId);
+    if (list) list.push(p);
+    else unplaced.push(p);
+  }
+  return { byColumn, unplaced };
+}
+
+export type Density = "comfortable" | "compact" | "scroll";
+
+/** Design spec §14: ≤4 columns comfortable, 5–6 compact, 7+ scroll. */
+export function densityFor(columns: number): Density {
+  if (columns <= 4) return "comfortable";
+  if (columns <= 6) return "compact";
+  return "scroll";
+}
+
+/** The site palette KEY a RAG state paints with (defaults: good / atrisk
+ *  / issue / neutral). Palettes are site-configured; never a hex here. */
+export function ragPaletteKey(rag: Rag): string {
+  switch (rag) {
+    case "green":
+      return "good";
+    case "amber":
+      return "atrisk";
+    case "red":
+      return "issue";
+    default:
+      return "neutral";
+  }
+}
+
+/** The tally line's parts: [glyph, count, rag] triplets + the total —
+ *  symbols not letters, always all three (design spec §3). */
+export function tallyLine(t: Tally): { glyph: string; count: number; rag: Rag }[] {
+  return [
+    { glyph: "✓", count: t.green, rag: "green" },
+    { glyph: "!", count: t.amber, rag: "amber" },
+    { glyph: "✕", count: t.red, rag: "red" },
+  ];
+}
+
+/** Lineage glyph line copy (design spec §3): "↑ Pacific" · "↓ 3 areas" ·
+ *  "↓ 2 areas · 1 pending" · "↓ 3 areas · 1 declined". */
+export function lineageWords(l: LineageSummary, unit = "org"): string[] {
+  const out: string[] = [];
+  if (l.from) out.push(`↑ ${orgName(l.from)}`);
+  if (l.sent > 0) {
+    const noun = l.sent === 1 ? unit : `${unit}s`;
+    let s = `↓ ${l.sent} ${noun}`;
+    const tails: string[] = [];
+    if (l.pending > 0) tails.push(`${l.pending} pending`);
+    if (l.declined > 0) tails.push(`${l.declined} declined`);
+    if (l.held > 0) tails.push(`${l.held} on hold`);
+    if (tails.length > 0) s += ` · ${tails.join(" · ")}`;
+    out.push(s);
+  }
+  return out;
+}

@@ -242,7 +242,22 @@ export function mountHub(parent: HTMLElement): () => void {
     // never a second count of its own (R7: two counters drift).
     const whoId = currentViewer()?.objectId ?? "";
     let docsTaskCount = readTaskCount(whoId);
-    const mountDocsTab = (_key: string, tabHost: HTMLElement) => {
+    // Priorities (the cascade) rides the same way — dynamic import, so
+    // the priorities screen never enters the hub's chunk.
+    const mountPrioritiesTab = (tabHost: HTMLElement) => {
+      void import("../priorities/prioritiesScreen").then(({ mountPriorities }) => {
+        cleanups.push(mountPriorities(tabHost, { embedded: true }));
+      });
+    };
+    const extraTabs = (docsCount: number) => [
+      { key: "documents", label: "Documents", count: docsCount },
+      { key: "priorities", label: "Priorities" },
+    ];
+    const mountDocsTab = (key: string, tabHost: HTMLElement) => {
+      if (key === "priorities") {
+        mountPrioritiesTab(tabHost);
+        return;
+      }
       void import("../docs/docsScreen").then(({ mountDocs }) => {
         cleanups.push(
           mountDocs(tabHost, "", {
@@ -253,19 +268,13 @@ export function mountHub(parent: HTMLElement): () => void {
               // re-labels in place: the control keeps its extra-tab host,
               // so the mounted register is NOT torn down (verified in
               // LeanHub.render — a cached host only mounts once)
-              view.setExtraTabs(
-                [{ key: "documents", label: "Documents", count: n }],
-                mountDocsTab
-              );
+              view.setExtraTabs(extraTabs(n), mountDocsTab);
             },
           })
         );
       });
     };
-    view.setExtraTabs(
-      [{ key: "documents", label: "Documents", count: docsTaskCount }],
-      mountDocsTab
-    );
+    view.setExtraTabs(extraTabs(docsTaskCount), mountDocsTab);
     // a shared Documents link launched the app (or an old #/docs
     // bookmark landed here), or a notification's WORK link named a
     // document (N1): front the tab — its mount consumes any pending
@@ -276,6 +285,8 @@ export function mountHub(parent: HTMLElement): () => void {
       window.location.hash.startsWith("#/docs")
     ) {
       view.selectTab("documents");
+    } else if (window.location.hash.startsWith("#/priorities")) {
+      view.selectTab("priorities");
     }
     if (hosted) {
       // categories and boards came in with the boot round — no re-query

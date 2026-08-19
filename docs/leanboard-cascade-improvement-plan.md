@@ -203,7 +203,24 @@ reschedule/cancel history with a reason picklist.
   own+adopted, lineage, tallies/roll-up, initiative RAG, periods,
   permissions — 13 tests); store `store/priorities.ts` (GUID↔id bridge,
   `loadCascade` in one call).
-- **P1 Priorities — Simple view spine** — org bar (breadcrumb dropdowns
+- **P1 Priorities — Simple view spine — BUILT 2026-08-19 (dev, app-only)** —
+  `app/src/priorities/prioritiesScreen.ts` + `dialogs.ts`, riding the hub as
+  an extra tab "Priorities" beside Documents (dynamic import; `#/priorities`
+  fronts it). Built as designed, with these P1 stand-ins: statuses come
+  from a stub resolver (every card grey, "· 0 initiatives"; Objectives
+  cells read "No metric set") until initiatives land in P5; the Dynamic
+  toggle is shown disabled (P3); the cascade chip shows the count only
+  (review list is P2); TV mode is absent from ⋮ (P4); the card kebab
+  offers Edit / Move up / Move down with Cascade to… and Complete greyed
+  (P2). PULLED FORWARD from P2: the add/edit priority dialog (§9 —
+  statement, sub-pillar grouped under pillars, owner picker from the
+  roster, period, primary initiative placeholder, cascade-to child+peer
+  orgs with owner names → proposed assignments + `cascaded` event, confirm
+  line, notes) and reorder — so the matrix can be filled and checked in
+  the player. Org tree = site-settings rows (`{department, areas}`) under
+  the site→company map; default org = viewer's site; view prefs (org,
+  pillar filter, rule, Other, group-by) in localStorage. Design as
+  specified — org bar (breadcrumb dropdowns
   + Descend chips + Org-picker dialog on the DMS tree), vision band,
   toolbar (pillar two-level filter, period, status, Simple/Dynamic
   toggle, cascade chip, ＋ Priority, ⋮ view options incl. strict/ratio,

@@ -201,7 +201,8 @@ function route(): void {
         mount = () => mountSettings(screenRoot, parts[1] ?? "");
       } else {
         // "#/docs" lands here too: the hub fronts its Documents tab for
-        // old bookmarks — the standalone page (no app chrome) is retired
+        // old bookmarks — the standalone page (no app chrome) is retired;
+        // "#/priorities" fronts the Priorities tab the same way
         const { mountHub } = await import("./screens/hub");
         mount = () => mountHub(screenRoot);
       }

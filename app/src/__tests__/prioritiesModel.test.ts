@@ -218,3 +218,25 @@ describe("permissions (decision 7)", () => {
     expect(canManageOrg({ whoId: "x", role: "superadmin", site: "" }, co, {})).toBe(true);
   });
 });
+
+describe("matrix helpers", () => {
+  it("groups by column and parks unplaced", async () => {
+    const m = await import("../priorities/model");
+    const cols = [
+      { id: "o1", name: "A", level: 2 as const, parentId: "s", color: "", order: 1, active: true, company: "" },
+      { id: "o2", name: "B", level: 2 as const, parentId: "s", color: "", order: 2, active: true, company: "" },
+    ];
+    const ps = [pr("x", site, { pillarId: "o1" }), pr("y", site, { pillarId: "o2" }), pr("z", site, { pillarId: "gone" })];
+    const { byColumn, unplaced } = m.groupByColumn(cols, ps);
+    expect(byColumn.get("o1")?.map((p) => p.id)).toEqual(["x"]);
+    expect(unplaced.map((p) => p.id)).toEqual(["z"]);
+    expect(m.densityFor(4)).toBe("comfortable");
+    expect(m.densityFor(6)).toBe("compact");
+    expect(m.densityFor(7)).toBe("scroll");
+    expect(m.ragPaletteKey("red")).toBe("issue");
+    expect(m.tallyLine(tally(["green", "red"])).map((t) => `${t.glyph}${t.count}`)).toEqual(["✓1", "!0", "✕1"]);
+    expect(
+      m.lineageWords({ from: site, sent: 3, accepted: 1, pending: 1, declined: 1, held: 0 }, "area")
+    ).toEqual(["↑ Bendigo", "↓ 3 areas · 1 pending · 1 declined"]);
+  });
+});
