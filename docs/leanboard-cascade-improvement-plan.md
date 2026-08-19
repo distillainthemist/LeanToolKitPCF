@@ -2,9 +2,8 @@
 
 (2026-08-19. Source: "Cascaded Priorities, Improvement & Problem Solving
 Brief.docx"; decisions Ben's, same date. **STATUS: decisions taken;
-UI design pass next (see `leanboard-cascade-design-brief.md`); the
-implementation phasing below is PROVISIONAL until the design pass
-lands.**)
+design pass for §4.1–4.3 signed off and folded in (see "Design pass —
+outcome"); phasing revised to the build order; P0 next on Ben's go.**)
 
 Two new pillars of the app: **cascaded priorities** (what we want to
 achieve, at every org level, cascading down and across) and
@@ -126,31 +125,121 @@ simulation, a **Gantt** over actions, **stage/PDCA gates** on boards.
   link.
 - Admin settings: RAG ratio threshold X; period definition.
 
-## Provisional phasing (to be revised after the design pass)
+## Design pass — outcome (2026-08-19)
 
-- **P0 Foundations**: schema + roles; org owners & vision in settings;
-  pillars (superadmin); period settings; action extensions (start date,
-  reasons/history, evidence, verification, bulk reassign); notify road
-  opened to boards (DLP story updated).
-- **P1 Cascade**: priorities CRUD per org; cascade assignments (send /
-  accept / reject / hold / complete with reasons; child priorities);
-  lineage; orphan/revision prompts; the cascaded-priorities screen
-  (simple + dynamic views, pillar filter, org filter, up/down
-  navigation, R/A/G counts + strict/ratio toggle, "Other"); priority
-  detail drill-down; the embedded card; actions Gantt overview.
-- **P2 Initiatives**: templates (stages/PDCA/gates/roles/custom fields/
-  mandatory + optional cards); Improvement tab (mine-first); create flow
-  from both tabs; header + project board; Canvas bound fields; metrics;
-  commentary; flag/escalate (+ Teams/email prompt); confidentiality;
-  health checks; endorsement; digest.
-- **P3 VDT**: tree editor per site; formulas; values; initiative→VDT
-  metric linking; roll-up + simulation view.
-- **P4 Reporting**: counts, overdue/completed/due-soon, stopped/
-  cancelled/rescheduled, flags, value delivered (hard via VDT, trend
-  for specific metrics), health trend, site value delivery; period
-  comparison; org filters.
+The design pass is signed off. Its outputs live beside this plan:
+`leanboard-cascade-build-brief.md` (the hand-off + build order),
+`leanboard-cascade-priorities-design.md` (§4.1 spec),
+`leanboard-cascade-initiative-board-design.md` (§4.2–4.3 spec),
+`leanboard-design-review.dc.html` (visual reference — sections 9a, 10a).
+**Presentation: the specs win. Model: this plan wins; conflicts were
+asked, not assumed** (three below).
 
-## Open items for the design pass
+Presentation decisions taken by the review, adopted here: the wall
+template is the Simple view (vision band → L1 pillar chips ("medium-term
+strategy") → L2 pillars as matrix columns → **Priorities** row →
+**Objectives** row = the primary initiative's headline metric); status
+tallies are **symbols + total** (`✓ n ! n ✕ n · n initiatives`), never
+letters or colour alone; no owner chip on matrix cards; no per-column
+add cells (toolbar `＋ Priority`); ONE cascade surface (toolbar
+`⇩ n cascades to accept` chip → review list; a final walk-mode step);
+priority detail = the Documents overlay + rail; density rule for 5–6
+columns with the pillar filter as the primary width answer; TV is
+displayed (matrix) AND walked (one objective per step); Improvement tab
+= one table, three groups (Mine → Owned by my team with scope select →
+All I can see); initiative board = two-tier header (tier 2 collapsible,
+persisted), chevron stage stepper doubling as the gate control, gate
+line with `Request gate` / `Approve` / `Decline`, flag/escalate as header
+chips, board grid with stage-tagged cards + Current/All stages filter,
+bound Canvas fields as sunken dashed tiles with ⛓, kanban gains a
+**Verify** column; PDCA colours are fixed app tokens (Plan amber, Do
+blue, Check green, Act purple).
 
-See `leanboard-cascade-design-brief.md` — the brief handed to the UI
-design pass; its answers update this plan before implementation.
+### Model points raised by the specs — answered (Ben, 2026-08-19)
+
+- **Accept keeps decision 2**: accepting a cascade AS-IS records the
+  assignment only and the receiving org's matrix renders the parent's
+  record in its column tagged "adopted"; a CHILD row exists only when
+  customised. Presentation consequence: the review list offers
+  **Accept** (adopt) and **Accept & customise** (child) — the one
+  adjustment to the spec's "accept creates the child".
+- **Initiative R/A/G = worst of metric AND actions**: red if the primary
+  metric is red OR the initiative is escalated; amber if the metric is
+  amber OR any action is overdue OR it needs support; green otherwise;
+  no metric and no actions → grey (excluded from tallies, counted in the
+  total). One pure, tested function feeds the row edge, the priority
+  tallies (strict / ratio) and reporting.
+- **Templates builder is designed before the initiative board is
+  built**: no seed-JSON interim; build items 5–6 wait for the next
+  design pass (templates builder + Gantt + VDT + reporting). Items 1–4
+  (priorities) do not depend on initiatives and proceed.
+
+### Model additions from the specs (adopted)
+
+pillar `level` (1/2) + colour + order; priority `order`; per-user prefs
+(view mode per org, tier-2 collapsed, TV mode, last pillar filter);
+`initiativegate` (initiative × stage transition × approver role ×
+person × decision × comment × when) instead of folding approvals into
+the stage log; **stage target dates** on the initiative (the "Next
+gate — Do → Check, 28 Aug" column); template `mandatoryMetrics` (target
++ good direction) and per-slot `stage` + `mandatory` flags in the board
+template manifest; commentary rows carry High / Low / Next; the single-
+action initiative writes one action linked to the header; actions gain
+status `verify` (awaiting verification), start date, evidence files,
+reschedule/cancel history with a reason picklist.
+
+## Phasing (revised to the build order — 2026-08-19)
+
+- **P0 Foundations** — schema (all of the above; solution-carrying);
+  org owners + vision (settings, org dictionary section); pillars L1/L2
+  (superadmin); period + RAG-ratio settings; user prefs; the notify road
+  opened to boards (DLP story updated in architecture.md); action model
+  changes (start date, `verify`, history, evidence) — model only, UI in
+  P6.
+- **P1 Priorities — Simple view spine** — org bar (breadcrumb dropdowns
+  + Descend chips + Org-picker dialog on the DMS tree), vision band,
+  toolbar (pillar two-level filter, period, status, Simple/Dynamic
+  toggle, cascade chip, ＋ Priority, ⋮ view options incl. strict/ratio,
+  Other, completed, TV mode), the matrix (`126px repeat(n,1fr)`), the
+  priority card (status edge, statement, tallies + total, lineage
+  glyph line, worded flags), Objectives row (metric line + sparkline),
+  Other strip, density rule (≤4 / 5–6 compact + collapsed Objectives
+  strip / 7+ scroll + group-by-strategy), phone stacking, empty/vision
+  copy. Statuses read from a stub resolver until initiatives exist.
+- **P2 Detail overlay + rail + cascade lifecycle** — overlay
+  (Initiatives / Charter / Actions / History tabs; Status / Lineage /
+  Actions rail; one solid primary; restore org+filters+scroll on
+  close); the cascade review list (Accept / Accept & customise / Hold /
+  Reject with reasons; sender's-view flags for declined/parked); add /
+  edit priority dialog (statement, pillar, owner, period, primary
+  initiative, cascade-to with confirm line, notes); complete/archive
+  with reason picklist; parent completed/revised prompts on children;
+  reorder; period carry-forward flow.
+- **P3 Dynamic view** — card per priority (pillar title strip, 14.5px
+  statement, 22px metric + 96×40 sparkline with target line, owner chip,
+  tallies + count); per-user-per-org persistence.
+- **P4 TV walk mode + embedded ritual card** — walk one objective per
+  step (progress dots, named prev/next, ⊞ All objectives, keyboard /
+  remote / swipe), final "Cascades to accept" step, filters carry in;
+  the card: settings (org, pillar, view mode), tile = displayed matrix
+  (vision band + headings + status edges), focused editor opens in walk
+  mode at step 1 with the meeting's week as the window.
+- **— next design pass —** templates builder, actions Gantt, VDT
+  editor + simulation, reporting shapes (brief §4.4–4.5, §6 Q7/11/12).
+  Entry points (`Gantt ›`, settings tabs) stay stubs until then.
+- **P5 Improvement tab** — three-group table with scope select, row
+  anatomy, List/Tiles, filters, three-step create modal incl. Single
+  action (needs templates → after the templates builder).
+- **P6 Initiative board** — two-tier header, stepper + gate line +
+  request/approve/decline (+ Teams/email to approvers), flag/escalate
+  (+ sponsor prompt), commentary, health check, stage-tagged grid with
+  Current/All filter, future-stage placeholders, optional-card add,
+  undeletable mandatory cards, Canvas bound fields, metric blocks,
+  kanban Verify column + evidence + reschedule prompt + endorsement,
+  bulk reassign, open-actions digest.
+- **P7 Templates builder · P8 Gantt · P9 VDT + simulation · P10
+  Reporting** — after their design.
+
+Each phase ships behind the usual gates + `pac code push`; the specs'
+acceptance checks are the PR checklist. Schema phases make the next
+release solution-carrying.
