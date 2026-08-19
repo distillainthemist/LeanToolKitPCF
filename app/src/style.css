@@ -2813,6 +2813,9 @@ button.app-doclist-hsort:hover { color: var(--app-accent, #2563eb); }
 
 /* ---- Cascaded priorities screen (docs/leanboard-cascade-priorities-design.md) ---- */
 .app-cp-wrap { position: relative; display: flex; flex-direction: column; gap: 10px; padding: 10px 14px 24px; min-height: 240px; }
+/* while loading, the spinner sits mid-page, not at the top (Ben, 2026-08-19) */
+.app-cp-wrap:has(> .app-loading) { min-height: calc(100vh - 180px); justify-content: center; }
+.app-cp-card:has(> .app-loading) { min-height: 100%; }
 .app-cp-muted { color: #6d675c; }
 /* org bar */
 .app-cp-orgbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
@@ -3137,11 +3140,11 @@ textarea.app-cp-statement { font-size: 14px; font-weight: 500; }
 .app-cp-tv .app-cp-vision { font-size: 21px; padding: 16px 22px; }
 .app-cp-tv .app-cp-label { font-size: 13px; }
 .app-cp-tv .app-cp-l1span, .app-cp-tv .app-cp-colhead { font-size: 17px; min-height: 52px; }
-.app-cp-tv .app-cp-statement { font-size: 18px; }
-.app-cp-tv .app-cp-dcard-statement { font-size: 19px; }
-.app-cp-tv .app-cp-tallies { font-size: 16px; }
+.app-cp-tv .app-cp-statement { font-size: 14px; font-weight: 600; }
+.app-cp-tv .app-cp-dcard-statement { font-size: 14.5px; }
+.app-cp-tv .app-cp-tallies { font-size: 13px; }
 .app-cp-tv .app-cp-lineage, .app-cp-tv .app-cp-flag { font-size: 15px; }
-.app-cp-tv .app-cp-metric { font-size: 16px; }
+.app-cp-tv .app-cp-metric { font-size: 13.5px; }
 .app-cp-tv .app-cp-dcard-initials { width: 36px; height: 36px; font-size: 14px; }
 .app-cp-tv .app-cp-dcard-num { font-size: 30px; }
 .app-cp-tv .app-cp-dcard-spark { width: 130px; height: 54px; }
