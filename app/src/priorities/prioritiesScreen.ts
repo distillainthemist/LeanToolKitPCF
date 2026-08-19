@@ -53,6 +53,7 @@ import {
   siblingOrgs,
 } from "./dialogs";
 import { loadPriorityPrefs, savePriorityPrefs, ViewMode } from "./prefs";
+import { mountWalk } from "./walk";
 import { initialsFor } from "../../../shared/schema/people";
 import { carryForwardFlow, cascadeDialog, cascadeReview, closeDialog, closePriority, LifecycleCtx, openPriorityOverlay, reopenPriority } from "./lifecycle";
 import {
@@ -95,6 +96,60 @@ import {
 
 export interface PrioritiesMountOpts {
   embedded?: boolean;
+  /** Embedded ritual card (§8): a fixed org (blank parts fall back to the
+   *  viewer's site), optional pillar filter by name, view mode, and the
+   *  meeting's period. `mode: "tile"` = compact displayed matrix; "focused"
+   *  = opens the walk at step 1 with ⊞ All objectives returning to the
+   *  matrix. Card mounts never persist prefs. */
+  card?: {
+    mode: "tile" | "focused";
+    org?: Partial<OrgRef>;
+    pillarName?: string;
+    view?: ViewMode;
+    /** The meeting's date (ISO) — the period is derived from it. */
+    periodDate?: string;
+    /** Receives the tile snapshot SVG after each paint (§8). */
+    onSnapshot?: (svg: string) => void;
+  };
+}
+
+const esc = (t: string): string => t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+/** Tile snapshot (§8): vision band, objective headings and status edges
+ *  only — no metric text, unreadable at tile size. Pure. */
+export function prioritiesSnapshotSvg(
+  title: string,
+  vision: string,
+  columns: { name: string; color: string; edges: string[] }[]
+): string {
+  const W = 480;
+  const H = 320;
+  const n = Math.max(1, Math.min(columns.length, 6));
+  const gap = 8;
+  const left = 16;
+  const colW = (W - left * 2 - gap * (n - 1)) / n;
+  const parts: string[] = [];
+  parts.push(`<rect width="${W}" height="${H}" fill="#ffffff"/>`);
+  parts.push(`<text x="16" y="30" font-size="18" font-weight="600" fill="#111" font-family="system-ui, sans-serif">${esc(title.slice(0, 44))}</text>`);
+  parts.push(`<rect x="16" y="44" width="${W - 32}" height="34" rx="6" fill="${vision !== "" ? "#26241f" : "#f4f1ea"}"/>`);
+  parts.push(
+    `<text x="${W / 2}" y="66" text-anchor="middle" font-size="13" font-weight="600" fill="${vision !== "" ? "#fff" : "#8b8478"}" font-family="system-ui, sans-serif">${esc((vision || "No vision statement set").slice(0, 70))}</text>`
+  );
+  columns.slice(0, 6).forEach((c, i) => {
+    const x = left + i * (colW + gap);
+    parts.push(`<rect x="${x}" y="92" width="${colW}" height="40" rx="5" fill="${esc(c.color || "#6d675c")}"/>`);
+    const words = c.name.split(/\s+/);
+    const l1 = words.slice(0, 2).join(" ");
+    const l2 = words.slice(2, 4).join(" ");
+    parts.push(`<text x="${x + 6}" y="${l2 ? 108 : 116}" font-size="11" font-weight="700" fill="#fff" font-family="system-ui, sans-serif">${esc(l1.slice(0, 16))}</text>`);
+    if (l2) parts.push(`<text x="${x + 6}" y="122" font-size="11" font-weight="700" fill="#fff" font-family="system-ui, sans-serif">${esc(l2.slice(0, 16))}</text>`);
+    c.edges.slice(0, 5).forEach((edge, j) => {
+      const y = 142 + j * 32;
+      parts.push(`<rect x="${x}" y="${y}" width="${colW}" height="26" rx="4" fill="#faf8f4" stroke="#e4dfd6"/>`);
+      parts.push(`<rect x="${x}" y="${y}" width="4" height="26" rx="2" fill="${esc(edge || "#9a948a")}"/>`);
+    });
+  });
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}">${parts.join("")}</svg>`;
 }
 
 interface OrgSiteRow {
@@ -140,6 +195,7 @@ interface ScreenState {
   groupByPillar: boolean;
   lastColumn: string; // the sub-pillar last interacted with (＋ Priority preselect)
   view: ViewMode; // Simple (default, TV) | Dynamic — persists per user per org
+  tv: boolean; // TV mode (§7): org name only, toolbar hidden, type ×1.4
 }
 
 /** P1 stub: what a priority's initiatives look like. Initiatives arrive
@@ -148,8 +204,9 @@ function ragsFor(_p: Priority): Rag[] {
   return [];
 }
 
-export function mountPriorities(parent: HTMLElement, _opts: PrioritiesMountOpts = {}): () => void {
-  const wrap = el("div", "app-cp-wrap");
+export function mountPriorities(parent: HTMLElement, opts: PrioritiesMountOpts = {}): () => void {
+  const card = opts.card ?? null;
+  const wrap = el("div", "app-cp-wrap" + (card ? ` app-cp-card app-cp-card-${card.mode}` : ""));
   parent.appendChild(wrap);
   const stopLoading = showLoading(wrap);
   let dead = false;
@@ -184,19 +241,31 @@ export function mountPriorities(parent: HTMLElement, _opts: PrioritiesMountOpts 
     // default org = viewer's own site (under its company); else the first site
     const mySite = me?.site && siteCo[me.site] !== undefined ? orgRef(siteCo[me.site], me.site) : null;
     const firstSite = tree.companies.flatMap((c) => c.sites.map((s) => orgRef(c.name, s.name)))[0] ?? orgRef(companyList[0] ?? "");
-    const startOrg = prefs.lastOrg !== "" ? orgFromKey(prefs.lastOrg) : (mySite ?? firstSite);
+    // card: the configured org, blank parts falling back to the viewer's
+    // site (the board's own org is what the card is normally set to)
+    const cardOrg = (): OrgRef | null => {
+      if (!card) return null;
+      const site = card.org?.site ?? mySite?.site ?? "";
+      const company = card.org?.company ?? (site !== "" ? (siteCo[site] ?? "") : (mySite?.company ?? companyList[0] ?? ""));
+      return orgRef(company, site, card.org?.department ?? "", card.org?.area ?? "");
+    };
+    const startOrg = cardOrg() ?? (prefs.lastOrg !== "" ? orgFromKey(prefs.lastOrg) : (mySite ?? firstSite));
+    const cardL1 = card?.pillarName ? (data0Pillars: Pillar[]) => data0Pillars.find((x) => x.level === 1 && x.name.toLowerCase() === card.pillarName!.toLowerCase())?.id ?? null : null;
     const state: ScreenState = {
       org: startOrg,
       l1: null,
+      tv: false,
       period: currentPeriod,
       status: "active",
       rule: prefs.rule,
       showOther: prefs.showOther,
       groupByPillar: prefs.groupByPillar,
       lastColumn: "",
-      view: prefs.viewByOrg[orgKey(startOrg)] ?? "simple",
+      view: card?.view ?? (prefs.viewByOrg[orgKey(startOrg)] ?? "simple"),
     };
+    if (card?.periodDate) state.period = periodFor(settings.period, card.periodDate) || currentPeriod;
     const persist = () => {
+      if (card) return; // card mounts never touch the person's prefs
       prefs.lastOrg = orgKey(state.org);
       prefs.rule = state.rule;
       prefs.showOther = state.showOther;
@@ -209,6 +278,7 @@ export function mountPriorities(parent: HTMLElement, _opts: PrioritiesMountOpts 
     let data: CascadeData = await loadCascade(state.org.company);
     if (dead) return;
     stopLoading();
+    if (cardL1) state.l1 = cardL1(data.pillars);
 
     /** The nearest scrolling ancestor — closing the overlay / repainting
      *  after a write must land where the user was (§13). */
@@ -269,11 +339,21 @@ export function mountPriorities(parent: HTMLElement, _opts: PrioritiesMountOpts 
 
     // ---- the render -------------------------------------------------------
 
+    let walkOpen = false;
+    let walkStep = 0;
+    let closeWalk: (() => void) | null = null;
     const render = () => {
       clear(wrap);
       persist();
-      // the vision band sits directly over the pillars (Ben, 2026-08-19)
-      wrap.append(renderOrgBar(), renderToolbar(), renderVision());
+      wrap.classList.toggle("app-cp-tv", state.tv);
+      if (walkOpen) {
+        renderWalk();
+        return;
+      }
+      // TV / tile: org name only, no toolbar (§7); otherwise the full bar
+      // and the vision band directly over the pillars (Ben, 2026-08-19)
+      if (state.tv || card?.mode === "tile") wrap.append(renderTvBar(), renderVision());
+      else wrap.append(renderOrgBar(), renderToolbar(), renderVision());
       const columns = objectiveColumns(data.pillars, state.l1);
       if (state.groupByPillar && state.l1 === null && densityFor(columns.length) === "scroll") {
         for (const l1 of strategyChips(data.pillars)) {
@@ -285,6 +365,80 @@ export function mountPriorities(parent: HTMLElement, _opts: PrioritiesMountOpts 
         wrap.appendChild(renderMatrix(columns, null));
       }
       wrap.appendChild(renderOther());
+      if (card?.onSnapshot) {
+        const visible = visibleFor(state.org);
+        const { byColumn } = groupByColumn(columns, visible);
+        card.onSnapshot(
+          prioritiesSnapshotSvg(
+            `${orgName(state.org)} · ${state.period}`,
+            visions[orgKey(state.org)] ?? "",
+            columns.map((c) => ({
+              name: c.name,
+              color: c.color || data.pillars.find((x) => x.id === c.parentId)?.color || "",
+              edges: (byColumn.get(c.id) ?? []).map((p) => palette[ragPaletteKey(rollup(tally(ragsFor(p)), state.rule, settings.ragRatioPct))] ?? "#9a948a"),
+            }))
+          )
+        );
+      }
+    };
+
+    /** TV / tile bar: the org name at ×1.4, ▶ Walk, and Exit TV. */
+    const renderTvBar = (): HTMLElement => {
+      const bar = el("div", "app-cp-tvbar");
+      bar.appendChild(el("div", "app-cp-tvorg", `${orgName(state.org)} · ${state.period}`));
+      if (card?.mode !== "tile") {
+        const walk = el("button", "app-btn app-cp-tvbtn", "▶ Walk") as HTMLButtonElement;
+        walk.type = "button";
+        walk.addEventListener("click", () => openWalk(0));
+        bar.appendChild(walk);
+        if (!card) {
+          const exit = el("button", "app-btn app-cp-tvbtn", "Exit TV") as HTMLButtonElement;
+          exit.type = "button";
+          exit.addEventListener("click", () => {
+            state.tv = false;
+            render();
+          });
+          bar.appendChild(exit);
+        }
+      }
+      return bar;
+    };
+
+    /** The walk (§15): objectives visible under the current filters. */
+    const openWalk = (startStep: number) => {
+      walkOpen = true;
+      walkStep = startStep;
+      render();
+    };
+    const renderWalk = () => {
+      const columns = objectiveColumns(data.pillars, state.l1);
+      const visible = visibleFor(state.org);
+      const { byColumn } = groupByColumn(columns, visible);
+      const adoptedIds = new Set(prioritiesForOrg(state.org, data.priorities, data.assignments).adopted.map((p) => p.id));
+      closeWalk?.();
+      closeWalk = mountWalk({
+        host: wrap,
+        ctx,
+        org: state.org,
+        period: state.period,
+        columns,
+        pillars: data.pillars,
+        byColumn,
+        adoptedIds,
+        startStep: walkStep,
+        className: card ? "" : "app-cp-walk-fixed",
+        onStep: (i) => {
+          walkStep = i;
+        },
+        onExit: () => {
+          walkOpen = false;
+          closeWalk?.();
+          closeWalk = null;
+          render();
+        },
+        onOpen: (p) => openOverlay(p),
+      });
+      cleanups.push(() => closeWalk?.());
     };
 
     // One row, one control (Ben, 2026-08-19): plain crumbs — click an
@@ -494,6 +648,12 @@ export function mountPriorities(parent: HTMLElement, _opts: PrioritiesMountOpts 
         state.rule = "ratio";
         render();
       });
+      menu.appendChild(el("div", "app-cp-menu-h", "Present"));
+      item("TV mode", null, () => {
+        state.tv = true;
+        render();
+      });
+      item("Walk objectives", null, () => openWalk(0));
       menu.appendChild(el("div", "app-cp-menu-h", "Show"));
       item("Other (unlinked initiatives)", state.showOther, () => {
         state.showOther = !state.showOther;
@@ -988,6 +1148,11 @@ export function mountPriorities(parent: HTMLElement, _opts: PrioritiesMountOpts 
       }
     };
 
+    wrap.addEventListener("ltk-exit-tv", () => {
+      state.tv = false;
+      render();
+    });
+    if (card?.mode === "focused") walkOpen = true;
     render();
   })().catch((err) => {
     stopLoading();
@@ -996,8 +1161,15 @@ export function mountPriorities(parent: HTMLElement, _opts: PrioritiesMountOpts 
     );
   });
 
+  const onKey = (e: KeyboardEvent) => {
+    if (e.key !== "Escape" || !wrap.classList.contains("app-cp-tv")) return;
+    if (document.querySelector(".app-modal-overlay, .app-cp-scrim, .app-cp-walk")) return;
+    wrap.dispatchEvent(new CustomEvent("ltk-exit-tv"));
+  };
+  document.addEventListener("keydown", onKey);
   return () => {
     dead = true;
+    document.removeEventListener("keydown", onKey);
     for (const fn of cleanups) fn();
     wrap.remove();
   };

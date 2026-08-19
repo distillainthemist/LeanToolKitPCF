@@ -51,6 +51,7 @@ describe("policy matrix coverage", () => {
       "EscalationViewer",
       "LinkCard",
       "MeetingScheduler",
+      "PrioritiesCard",
     ]);
   });
 

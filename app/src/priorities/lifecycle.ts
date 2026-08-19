@@ -285,7 +285,16 @@ export function cascadeReview(ctx: LifecycleCtx, org: OrgRef): void {
   const m = modal(ctx.host, "Cascades to accept", `Sent to ${orgName(org)} from above or beside. Accept as-is, accept and customise the wording, hold, or reject — the sender sees your reason.`, true);
   const list = el("div", "app-cp-review");
   m.body.appendChild(list);
+  renderReviewList(ctx, org, list);
+  const close = btn("Close", "app-link");
+  close.addEventListener("click", () => m.close());
+  m.footer.appendChild(close);
+}
 
+/** The review list itself — the modal above and the walk's final
+ *  "Cascades to accept" step (§15) both render it. Repaints in place
+ *  after every decision. */
+export function renderReviewList(ctx: LifecycleCtx, org: OrgRef, list: HTMLElement): void {
   const paint = () => {
     clear(list);
     const data = ctx.data();
@@ -390,9 +399,6 @@ export function cascadeReview(ctx: LifecycleCtx, org: OrgRef): void {
   };
 
   paint();
-  const close = btn("Close", "app-link");
-  close.addEventListener("click", () => m.close());
-  m.footer.appendChild(close);
 }
 
 // ---- detail overlay (§6) -------------------------------------------------------------

@@ -138,6 +138,7 @@ export const LINK_SOURCE_EXCLUDED = new Set([
   // live SharePoint views — linking a live view of a live view is noise
   "DocsCard",
   "DocHealth",
+  "PrioritiesCard",
   // windows onto other boards' cards — no chains, same as LinkCard
   "CaptureRollup",
   "CanvasRollup",
@@ -957,6 +958,61 @@ export const CARDS: CardSpec[] = [
     ],
     appBound: [],
     // no policy choice: the card holds no document of its own
+    policies: [],
+  },
+  {
+    // Cascaded priorities in the ritual (cascade plan P4, design §8): the
+    // org's priority matrix on the board — tile shows vision + objective
+    // headings + status edges; focused opens the walk at step 1.
+    type: "PrioritiesCard",
+    standardContent: "preview",
+    standardContentNote:
+      "This card shows the org's live priorities from the Priorities area — there is no standard content to author.",
+    label: "Priorities",
+    group: "Reference",
+    description:
+      "The org's cascaded priorities — pillars, sub-pillars and each priority's roll-up — walked one objective at a time in the ritual.",
+    config: [
+      {
+        key: "prSite",
+        label: "Site",
+        kind: "text",
+        help: "Blank = this board's own site.",
+        placeholder: "Bendigo Distillery",
+      },
+      {
+        key: "prDepartment",
+        label: "Department",
+        kind: "text",
+        help: "Blank = this board's own department (or the whole site when the board has none).",
+        placeholder: "Packaging",
+      },
+      {
+        key: "prArea",
+        label: "Area",
+        kind: "text",
+        help: "Optional — an area under the department.",
+        placeholder: "",
+      },
+      {
+        key: "prPillar",
+        label: "Pillar filter",
+        kind: "text",
+        help: "A pillar's name to show only its sub-pillars; blank shows all.",
+        placeholder: "Safety & people",
+      },
+      {
+        key: "prView",
+        label: "View",
+        kind: "enum",
+        options: [
+          { value: "simple", label: "Simple (matrix)" },
+          { value: "dynamic", label: "Dynamic (rich cards)" },
+        ],
+        help: "How the matrix cards read when the card is focused.",
+      },
+    ],
+    appBound: [],
     policies: [],
   },
   {

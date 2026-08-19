@@ -246,6 +246,23 @@ function docsCardMounter(kind: "docs" | "health"): CardMounter {
   };
 }
 
+/** The Priorities ritual card (cascade plan P4) lives in src/priorities/
+ *  (lazy chunk) — the board pays only for this wrapper. */
+function prioritiesCardMounter(): CardMounter {
+  return (opts) => {
+    let dead = false;
+    let inner: (() => void) | null = null;
+    void import("./priorities/prioritiesCard").then((m) => {
+      if (!dead) inner = m.mountPrioritiesCard(opts);
+    });
+    return () => {
+      dead = true;
+      inner?.();
+      opts.host.replaceChildren();
+    };
+  };
+}
+
 // ---- shared plumbing ----
 
 function config(opts: CardMount): Record<string, unknown> {
@@ -1164,6 +1181,9 @@ const REGISTRY: Record<string, CardMounter> = {
   // fetches after paint with jitter (see docsCards.ts).
   DocsCard: docsCardMounter("docs"),
   DocHealth: docsCardMounter("health"),
+  // Cascaded priorities in the ritual (cascade plan P4, design §8) —
+  // dynamic import keeps the priorities screen out of the board chunk.
+  PrioritiesCard: prioritiesCardMounter(),
 
   // A live, read-only window onto ANOTHER board's card: resolves the source
   // slot and mounts the source's real card type with the SOURCE's ids and

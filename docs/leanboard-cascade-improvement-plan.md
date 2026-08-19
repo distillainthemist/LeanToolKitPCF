@@ -280,7 +280,25 @@ reschedule/cancel history with a reason picklist.
   specified — card per priority (pillar title strip, 14.5px
   statement, 22px metric + 96×40 sparkline with target line, owner chip,
   tallies + count); per-user-per-org persistence.
-- **P4 TV walk mode + embedded ritual card** — walk one objective per
+- **P4 TV walk mode + embedded ritual card — BUILT 2026-08-19 (dev,
+  app-only)** — `priorities/walk.ts` (mountWalk into any host: one
+  objective per step, header strip in the sub-pillar colour with L1 · org
+  · period, progress dots + n/N, rows = 6px status edge · 19px statement
+  · owner chip · worded flags · three large tallies · metric cell; footer
+  ‹ named prev · ⊞ All objectives · named next ›; ←/→, Esc, swipe;
+  final "Cascades to accept · n" step renders the same review list —
+  `renderReviewList` extracted from the modal). Screen: ⋮ → Present: TV
+  mode (org name + ▶ Walk + Exit TV, toolbar hidden, ×1.4 type, kebabs/
+  add-cells hidden, Esc exits) · Walk objectives. CARD `PrioritiesCard`
+  (registry spec, group Reference, config prSite/prDepartment/prArea
+  blank = the board's own org via getBoard, prPillar name filter, prView;
+  LINK_SOURCE_EXCLUDED) — mounter is a dynamic import of
+  `priorities/prioritiesCard.ts` (+0.5 kB on cardRegistry); tile vs
+  focused decided by host size (≥700×400 = focused → walk at step 1;
+  tile = compact non-interactive matrix); period from instanceWhen; tile
+  snapshot `prioritiesSnapshotSvg` (vision band + objective headings +
+  status edges, no metric text). Card mounts never persist prefs. Design
+  as specified — walk one objective per
   step (progress dots, named prev/next, ⊞ All objectives, keyboard /
   remote / swipe), final "Cascades to accept" step, filters carry in;
   the card: settings (org, pillar, view mode), tile = displayed matrix
