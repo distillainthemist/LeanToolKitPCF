@@ -437,7 +437,7 @@ export function mountTemplateWizard(parent: HTMLElement, templateId: string): ()
         form.appendChild(row("Add a standard role", stdRow, "Company-wide roles from Settings → Improvement — e.g. a Finance lead who does financial approvals. Adding one makes it available to this template's gates."));
       }
       const adder = el("div", "app-tw-inline");
-      const input = textInput("", () => undefined, "e.g. Union rep");
+      const input = textInput("", () => undefined, "e.g. Trial coordinator");
       const add = btn("＋ Add role", "ltk-mw-btn");
       add.addEventListener("click", () => {
         const v = input.value.trim();
