@@ -83,9 +83,22 @@ describe("improvement settings (methods + standard roles)", () => {
     expect(d.standardRoles).toEqual([]);
     const s = m.parseImprovementSettings('{"methods":["A3","Just do it"],"standardRoles":[{"key":"finance","label":"Finance lead","multi":false,"timeCommitment":true},{"label":"nokey"}]}');
     expect(s.methods).toEqual(["A3", "Just do it"]);
-    expect(s.standardRoles).toEqual([{ key: "finance", label: "Finance lead", standard: true, multi: false, timeCommitment: true }]);
+    expect(s.standardRoles).toEqual([{ key: "finance", label: "Finance lead", standard: true, multi: false, timeCommitment: true, people: {} }]);
     const back = m.parseImprovementSettings(m.serializeImprovementSettings(s));
     expect(back).toEqual(s);
     expect(m.parseImprovementSettings("{oops").methods).toEqual(m.METHODS);
+  });
+});
+
+describe("standard roles: people per site", () => {
+  it("round-trips per-site people and resolves fillers", async () => {
+    const m = await import("../improvement/templateModel");
+    const raw = '{"standardRoles":[{"key":"finance","label":"Finance lead","people":{"Mine":[{"whoId":"p1","who":"A"},{"whoId":"p2","who":"B"}],"Refinery":[{"whoId":"","who":"bad"}]}}]}';
+    const s = m.parseImprovementSettings(raw);
+    expect(s.standardRoles[0].people).toEqual({ Mine: [{ whoId: "p1", who: "A" }, { whoId: "p2", who: "B" }] });
+    expect(m.roleFillersAt(s.standardRoles[0], "Mine").map((p) => p.whoId)).toEqual(["p1", "p2"]);
+    expect(m.roleFillersAt(s.standardRoles[0], "Elsewhere")).toEqual([]);
+    const back = m.parseImprovementSettings(m.serializeImprovementSettings(s));
+    expect(back.standardRoles[0].people).toEqual(s.standardRoles[0].people);
   });
 });

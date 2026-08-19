@@ -394,8 +394,13 @@ reschedule/cancel history with a reason picklist.
   role) live beside them — both in `ben_improvementsettings` on the
   APP_ROW, edited at the top of Settings → Improvement; the wizard's
   Method select reads the list, its Roles step offers ＋ chips for
-  standard roles, added roles default to several people; per-site people
-  assignment for standard roles arrives with P5. The board step is
+  standard roles, added roles default to several people; standard roles carry
+  WHO FILLS THEM PER SITE (Ben, 2026-08-19: a people list per role per
+  site in the same JSON, edited under each role in Settings →
+  Improvement via the owner picker) — the template carries only the role
+  key; at runtime ANY of the initiative's site's fillers may complete an
+  approval step assigned to the role (`roleFillersAt`, the rule P6's
+  gates implement). The board step is
   INLINE (mountDesigner in .ltk-mw-boardhost, the meeting wizard's exact
   pattern) — no overlay.
 - **P8 Gantt · P9 VDT + simulation · P10 Reporting** — designed

@@ -15,13 +15,15 @@ import { appTheme, editorHost } from "../cardHost";
 import { showLoading } from "../loading";
 import { currentViewer, detectHost } from "../runtime";
 import { promptConfirm } from "../prompts";
-import { viewerPerson } from "../store/people";
-import { companies, improvementSettingsJson, saveImprovementSettingsJson } from "../store/config";
+import { listPeople, viewerPerson } from "../store/people";
+import { companies, improvementSettingsJson, orgJson, saveImprovementSettingsJson } from "../store/config";
 import { getBoard, saveManifest } from "../store/boards";
 import { parseManifest } from "../store/mappers";
 import { deleteTemplate, ensureTemplateBoard, getTemplate, listTemplates, saveTemplate } from "../store/templates";
 import { cardLabel } from "../../../controls/CardSettings/registry";
 import { createWizardShell } from "./wizardShell";
+import { pickOwner } from "../priorities/dialogs";
+import { parseOrgTree } from "../../../shared/schema/meeting";
 import {
   FieldKind,
   Gate,
@@ -439,8 +441,11 @@ export function mountTemplateWizard(parent: HTMLElement, templateId: string): ()
         stdRow.appendChild(el("span", "ltk-mw-help", "Standard roles:"));
         for (const r of missing) {
           const chip = btn(`＋ ${r.label}`, "app-cp-l1chip app-tw-stdrole");
+          chip.title = "Who fills it per site is set in Settings → Improvement; any of a site's people can complete this role's approvals.";
           chip.addEventListener("click", () => {
-            t.roles.push({ ...r });
+            // the template carries the ROLE, not the people — those resolve
+            // per site when an initiative runs (roleFillersAt)
+            t.roles.push({ key: r.key, label: r.label, standard: true, multi: r.multi, timeCommitment: r.timeCommitment });
             mark();
             shell.refresh();
           });
@@ -857,39 +862,27 @@ export async function renderImprovementSettings(body: HTMLElement, isSuper: bool
     paintMethods();
     mBox.appendChild(chips);
 
-    const rBox = section("Standard roles", "Company-wide roles beyond the built-in five — e.g. a Finance lead who does financial approvals. Every template can add them as roles and gate approvers; people are assigned per initiative.");
-    const roleList = el("div", "app-tw-table");
+    const rBox = section(
+      "Standard roles",
+      "Company-wide roles beyond the built-in five — e.g. a Finance lead who does financial approvals. Under each role, WHO FILLS IT AT EACH SITE: when an initiative's approval step names the role, any of that site's people can complete it."
+    );
+    const [treeRaw, roster] = await Promise.all([orgJson(), listPeople()]);
+    const siteNames = parseOrgTree(treeRaw).map((x) => x.site);
+    const roleList = el("div", "app-tw-methods");
     const paintRoles = () => {
       clear(roleList);
-      if (imp.standardRoles.length > 0) {
-        const head = el("div", "app-tw-tr app-tw-th");
-        head.append(el("span", undefined, "Role"), el("span", undefined, "People"), el("span", undefined, "Time commitment"), el("span", undefined, ""));
-        roleList.appendChild(head);
-      }
       imp.standardRoles.forEach((r, i) => {
-        const tr = el("div", "app-tw-tr");
-        const label = el("input", "ltk-mw-input") as HTMLInputElement;
+        const card = el("div", "app-tw-role");
+        const head = el("div", "app-tw-role-head");
+        const label = el("input", "ltk-mw-input app-tw-role-label") as HTMLInputElement;
         label.value = r.label;
         label.addEventListener("change", () => {
           r.label = label.value.trim() || r.label;
           persist();
         });
-        tr.appendChild(label);
-        const multi = el("select", "ltk-mw-input") as HTMLSelectElement;
-        for (const [v, l] of [["multi", "Several"], ["single", "One person"]] as const) {
-          const o = el("option", undefined, l) as HTMLOptionElement;
-          o.value = v;
-          multi.appendChild(o);
-        }
-        multi.value = r.multi ? "multi" : "single";
-        multi.addEventListener("change", () => {
-          r.multi = multi.value === "multi";
-          persist();
-        });
-        tr.appendChild(multi);
-        const tc = el("div", "app-tw-inline");
-        const tcSel = el("select", "ltk-mw-input") as HTMLSelectElement;
-        for (const [v, l] of [["off", "Not asked"], ["on", "Asked"]] as const) {
+        head.appendChild(label);
+        const tcSel = el("select", "ltk-mw-input app-tw-role-tc") as HTMLSelectElement;
+        for (const [v, l] of [["off", "Time commitment not asked"], ["on", "Time commitment asked"]] as const) {
           const o = el("option", undefined, l) as HTMLOptionElement;
           o.value = v;
           tcSel.appendChild(o);
@@ -899,9 +892,8 @@ export async function renderImprovementSettings(body: HTMLElement, isSuper: bool
           r.timeCommitment = tcSel.value === "on";
           persist();
         });
-        tc.appendChild(tcSel);
-        tr.appendChild(tc);
-        const x = el("button", "ltk-mw-chip-x", "×") as HTMLButtonElement;
+        head.appendChild(tcSel);
+        const x = el("button", "app-org-x", "\u00d7") as HTMLButtonElement;
         x.type = "button";
         x.title = "Remove (templates that already added it keep it)";
         x.addEventListener("click", () => {
@@ -909,22 +901,64 @@ export async function renderImprovementSettings(body: HTMLElement, isSuper: bool
           persist();
           paintRoles();
         });
-        tr.appendChild(x);
-        roleList.appendChild(tr);
+        head.appendChild(x);
+        card.appendChild(head);
+        // who fills the role at each site — the approval pool (any may act)
+        for (const site of siteNames) {
+          const rowEl = el("div", "app-tw-role-site");
+          rowEl.appendChild(el("span", "app-tw-role-sitename", site));
+          const chips = el("span", "app-tw-role-people");
+          const list = r.people[site] ?? [];
+          list.forEach((p, pi) => {
+            const chip = el("span", "ltk-mw-chip", p.who);
+            const px = el("button", "ltk-mw-chip-x", "×") as HTMLButtonElement;
+            px.type = "button";
+            px.addEventListener("click", () => {
+              list.splice(pi, 1);
+              if (list.length === 0) delete r.people[site];
+              persist();
+              paintRoles();
+            });
+            chip.appendChild(px);
+            chips.appendChild(chip);
+          });
+          const add = el("button", "app-owner app-owner-none", "\uFF0B Person") as HTMLButtonElement;
+          add.type = "button";
+          add.title = `Add someone who fills ${r.label} at ${site}`;
+          add.addEventListener("click", () => {
+            void pickOwner(body, roster, null).then((res) => {
+              if (res === null || res === "clear") return;
+              const cur = r.people[site] ?? [];
+              if (cur.some((p) => p.whoId === res.whoId)) return;
+              r.people[site] = [...cur, { whoId: res.whoId, who: res.who }];
+              persist();
+              paintRoles();
+            });
+          });
+          chips.appendChild(add);
+          rowEl.appendChild(chips);
+          card.appendChild(rowEl);
+        }
+        if (siteNames.length === 0) card.appendChild(el("div", "app-settings-note", "No sites yet — add them under Organisation."));
+        roleList.appendChild(card);
       });
-      const addRow = el("div", "app-tw-inline");
-      const input = el("input", "app-input app-pr-short") as HTMLInputElement;
-      input.placeholder = "e.g. Finance lead";
-      const add = el("button", "app-btn", "＋ Add standard role") as HTMLButtonElement;
-      add.type = "button";
-      add.addEventListener("click", () => {
+      const addRow = el("div", "app-org-row");
+      const input = el("input", "app-input") as HTMLInputElement;
+      input.placeholder = "Add standard role (e.g. Finance lead)";
+      const commit = () => {
         const v = input.value.trim();
         if (v === "") return;
-        imp.standardRoles.push({ key: keyFor(v, [...imp.standardRoles.map((x) => x.key), "sponsor", "owner", "lead", "team", "support"]), label: v, standard: true, multi: true, timeCommitment: false });
+        imp.standardRoles.push({ key: keyFor(v, [...imp.standardRoles.map((x) => x.key), "sponsor", "owner", "lead", "team", "support"]), label: v, standard: true, multi: true, timeCommitment: false, people: {} });
         input.value = "";
         persist();
         paintRoles();
+      };
+      input.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") commit();
       });
+      const add = el("button", "app-btn", "\uFF0B") as HTMLButtonElement;
+      add.type = "button";
+      add.addEventListener("click", commit);
       addRow.append(input, add);
       roleList.appendChild(addRow);
     };

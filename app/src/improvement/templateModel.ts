@@ -92,29 +92,60 @@ export interface InitiativeTemplate {
  *  versions). */
 export const METHODS = ["A3", "DMAIC", "Kaizen", "8D", "Project", "Single action"];
 
+export interface RolePerson {
+  whoId: string;
+  who: string;
+}
+
+/** A company-wide standard role, FILLED PER SITE (Ben, 2026-08-19): the
+ *  people who hold it at each site. When an initiative on that site has
+ *  an approval step assigned to this role, ANY of the site's people may
+ *  complete it (the resolution rule P6's gates implement). */
+export interface StandardRole extends TemplateRole {
+  /** site → the people filling the role there. */
+  people: Record<string, RolePerson[]>;
+}
+
 /** App-level improvement settings (ben_improvementsettings on the APP_ROW). */
 export interface ImprovementSettings {
   methods: string[];
-  /** Standard roles beyond the five built-ins (e.g. Finance lead) —
-   *  offered on every template as roles / gate approvers. People are
-   *  assigned per initiative (and per site defaults arrive with P5). */
-  standardRoles: TemplateRole[];
+  standardRoles: StandardRole[];
+}
+
+/** The people who may act for a role on a SITE's initiative: the role's
+ *  list for that site. Pure — P6's approval gates call this. */
+export function roleFillersAt(role: StandardRole, site: string): RolePerson[] {
+  return role.people[site] ?? [];
 }
 
 export function parseImprovementSettings(raw: string): ImprovementSettings {
   try {
     const o = JSON.parse(raw || "{}") as { methods?: unknown; standardRoles?: unknown };
     const methods = Array.isArray(o.methods) ? o.methods.filter((m): m is string => typeof m === "string" && m.trim() !== "") : [];
-    const roles = Array.isArray(o.standardRoles)
+    const roles: StandardRole[] = Array.isArray(o.standardRoles)
       ? o.standardRoles
           .map((x) => (x && typeof x === "object" ? (x as Record<string, unknown>) : {}))
-          .map((x) => ({
-            key: typeof x.key === "string" ? x.key : "",
-            label: typeof x.label === "string" ? x.label : "",
-            standard: true,
-            multi: x.multi !== false,
-            timeCommitment: x.timeCommitment === true,
-          }))
+          .map((x) => {
+            const people: Record<string, RolePerson[]> = {};
+            if (x.people && typeof x.people === "object" && !Array.isArray(x.people)) {
+              for (const [site, list] of Object.entries(x.people as Record<string, unknown>)) {
+                if (!Array.isArray(list)) continue;
+                const clean = list
+                  .map((p) => (p && typeof p === "object" ? (p as Record<string, unknown>) : {}))
+                  .map((p) => ({ whoId: typeof p.whoId === "string" ? p.whoId : "", who: typeof p.who === "string" ? p.who : "" }))
+                  .filter((p) => p.whoId !== "" && p.who !== "");
+                if (clean.length > 0) people[site] = clean;
+              }
+            }
+            return {
+              key: typeof x.key === "string" ? x.key : "",
+              label: typeof x.label === "string" ? x.label : "",
+              standard: true,
+              multi: x.multi !== false,
+              timeCommitment: x.timeCommitment === true,
+              people,
+            };
+          })
           .filter((r) => r.key !== "" && r.label !== "")
       : [];
     return { methods: methods.length > 0 ? methods : [...METHODS], standardRoles: roles };
@@ -126,7 +157,7 @@ export function parseImprovementSettings(raw: string): ImprovementSettings {
 export function serializeImprovementSettings(s: ImprovementSettings): string {
   return JSON.stringify({
     methods: s.methods,
-    standardRoles: s.standardRoles.map((r) => ({ key: r.key, label: r.label, multi: r.multi, timeCommitment: r.timeCommitment })),
+    standardRoles: s.standardRoles.map((r) => ({ key: r.key, label: r.label, multi: r.multi, timeCommitment: r.timeCommitment, people: r.people })),
   });
 }
 
