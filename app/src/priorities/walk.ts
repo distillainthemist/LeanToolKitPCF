@@ -12,8 +12,6 @@ import { el, clear } from "../../../shared/ui/dom";
 import { initialsFor } from "../../../shared/schema/people";
 import { LifecycleCtx, renderReviewList } from "./lifecycle";
 import {
-  lineageFor,
-  lineageWords,
   OrgRef,
   orgName,
   parentClosed,
@@ -22,7 +20,6 @@ import {
   Priority,
   ragPaletteKey,
   rollup,
-  senderFlags,
   tally,
   tallyLine,
 } from "./model";
@@ -146,16 +143,9 @@ export function mountWalk(o: WalkOpts): () => void {
     owner.appendChild(el("span", "app-cp-dcard-initials app-cp-walk-initials", p.ownerName !== "" ? initialsFor(p.ownerName) : "—"));
     owner.appendChild(el("span", p.ownerName !== "" ? "" : "app-cp-muted", p.ownerName !== "" ? p.ownerName : "No owner"));
     main.appendChild(owner);
+    // cascade lineage / sender flags stay in the detail overlay, not on
+    // the walk row (Ben, 2026-08-19) — same rule as the matrix cards
     const flags = el("div", "app-cp-walk-flags");
-    const lin = lineageFor(p, data.priorities, data.assignments);
-    const words = lineageWords(lin, "org");
-    if (o.adoptedIds.has(p.id) && lin.from === null) words.unshift(`↑ ${orgName(p.org)}`);
-    for (const w of words) flags.appendChild(el("span", "app-cp-lineage-part" + (/declined/.test(w) ? " app-cp-lineage-declined" : ""), w));
-    for (const f of senderFlags(p, data.assignments).slice(0, 2)) {
-      flags.appendChild(
-        el("span", "app-cp-flag" + (f.kind === "declined" ? " app-cp-flag-red" : ""), f.kind === "declined" ? `✕ ${orgName(f.org)} declined${f.reason !== "" ? ` — “${f.reason}”` : ""}` : `⏸ ${orgName(f.org)} parked${f.reason !== "" ? ` — “${f.reason}”` : ""}`)
-      );
-    }
     if (parentClosed(p, data.priorities)) flags.appendChild(el("span", "app-cp-flag app-cp-flag-amber", "▲ Parent completed — decide"));
     if (p.status !== "active") flags.appendChild(el("span", "app-cp-flag", p.status === "completed" ? "✓ Completed" : "▣ " + p.status));
     if (flags.childElementCount > 0) main.appendChild(flags);
