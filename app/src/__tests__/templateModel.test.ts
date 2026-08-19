@@ -74,3 +74,18 @@ describe("initiative templates — model", () => {
     expect(withSlotFlags(s, { stage: "", mandatory: false })).toEqual({ title: "x" });
   });
 });
+
+describe("improvement settings (methods + standard roles)", () => {
+  it("defaults, round-trips, and forces standard/multi flags", async () => {
+    const m = await import("../improvement/templateModel");
+    const d = m.parseImprovementSettings("");
+    expect(d.methods).toEqual(m.METHODS);
+    expect(d.standardRoles).toEqual([]);
+    const s = m.parseImprovementSettings('{"methods":["A3","Just do it"],"standardRoles":[{"key":"finance","label":"Finance lead","multi":false,"timeCommitment":true},{"label":"nokey"}]}');
+    expect(s.methods).toEqual(["A3", "Just do it"]);
+    expect(s.standardRoles).toEqual([{ key: "finance", label: "Finance lead", standard: true, multi: false, timeCommitment: true }]);
+    const back = m.parseImprovementSettings(m.serializeImprovementSettings(s));
+    expect(back).toEqual(s);
+    expect(m.parseImprovementSettings("{oops").methods).toEqual(m.METHODS);
+  });
+});

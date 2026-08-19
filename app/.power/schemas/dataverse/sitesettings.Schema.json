@@ -66,6 +66,14 @@
           "x-ms-schema-name": "ben_hubtabs",
           "maxLength": 1000
         },
+        "ben_improvementsettings": {
+          "type": "string",
+          "title": "Improvement settings (JSON)",
+          "x-ms-dataverse-attribute": "ben_improvementsettings",
+          "x-ms-dataverse-type": "MemoType",
+          "x-ms-schema-name": "ben_improvementsettings",
+          "maxLength": 8000
+        },
         "ben_isarchived": {
           "type": "string",
           "title": "Archived",

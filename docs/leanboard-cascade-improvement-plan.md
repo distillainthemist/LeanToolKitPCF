@@ -388,7 +388,16 @@ reschedule/cancel history with a reason picklist.
   (cards, retired last, ⋮ Duplicate/Retire/Delete). DEFERRED to P6: the
   ⛓ bound-field toggle in the Canvas builder + stage/mandatory on the
   card studio Common tab (§1.5–1.6 runtime halves); "n initiatives use
-  this" reads 0 until P5.
+  this" reads 0 until P5. REVISED same day (Ben): METHODS are an
+  app-level configurable list and STANDARD ROLES (e.g. Finance lead —
+  addable to any template as role/gate approver, several people per
+  role) live beside them — both in `ben_improvementsettings` on the
+  APP_ROW, edited at the top of Settings → Improvement; the wizard's
+  Method select reads the list, its Roles step offers ＋ chips for
+  standard roles, added roles default to several people; per-site people
+  assignment for standard roles arrives with P5. The board step is
+  INLINE (mountDesigner in .ltk-mw-boardhost, the meeting wizard's exact
+  pattern) — no overlay.
 - **P8 Gantt · P9 VDT + simulation · P10 Reporting** — designed
   (spec §2–§4); build after P5/P6.
 

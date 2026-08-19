@@ -160,6 +160,12 @@ export const TABLES = [
       // Archived sites stay as rows (data intact, restorable) but leave
       // every org list / picker.
       ben_hubtabs: { ...memo(1000), display: "Hub tabs (JSON)" },
+      // Improvement app settings on the APP_ROW (P7, Ben 2026-08-19):
+      // {methods:[...], standardRoles:[{key,label,multi,timeCommitment}]}
+      // — methods are an app-level configurable list (problem-solving
+      // types survive template versions); standard roles (e.g. Finance
+      // lead) are addable to any template as roles / gate approvers.
+      ben_improvementsettings: { ...memo(8000), display: "Improvement settings (JSON)" },
       ben_isarchived: { kind: "bool", display: "Archived", default: false },
       // sites reorder by drag within their company (Ben, 2026-08-19);
       // unset sorts after the ordered ones, then by row order

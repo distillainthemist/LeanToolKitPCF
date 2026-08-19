@@ -3297,3 +3297,6 @@ textarea.app-cp-statement { font-size: 14px; font-weight: 500; }
 .app-tw-card-name { font-weight: 700; font-size: 15px; }
 .app-tw-card-method { font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: #ece8e0; color: #26241f; }
 .app-tw-card-method-single { background: #dbe7ff; color: #1d4ed8; }
+.app-tw-templates-h { margin: 16px 0 8px; }
+.app-tw-stdrole { min-height: 30px; font-size: 12.5px; cursor: pointer; }
+.app-tw-slots { margin-top: 8px; }

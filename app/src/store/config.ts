@@ -396,6 +396,20 @@ export async function saveOrgVision(
 
 // ---- priorities settings (APP_ROW): RAG ratio + period definition ----
 
+export async function improvementSettingsJson(): Promise<string> {
+  const rows = await allWhere(Ben_ltksitesettingsesService.getAll, eq("ben_site", APP_ROW));
+  return rows[0]?.ben_improvementsettings ?? "";
+}
+
+export async function saveImprovementSettingsJson(json: string): Promise<void> {
+  await upsertWhere(
+    Ben_ltksitesettingsesService,
+    eq("ben_site", APP_ROW),
+    (row) => row.ben_ltksitesettingsid,
+    { ben_site: APP_ROW, ben_name: "App branding", ben_improvementsettings: json }
+  );
+}
+
 export async function prioritySettingsJson(): Promise<string> {
   const rows = await allWhere(Ben_ltksitesettingsesService.getAll, eq("ben_site", APP_ROW));
   return rows[0]?.ben_prioritysettings ?? "";

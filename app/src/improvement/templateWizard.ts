@@ -15,7 +15,7 @@ import { showLoading } from "../loading";
 import { currentViewer, detectHost } from "../runtime";
 import { promptConfirm } from "../prompts";
 import { viewerPerson } from "../store/people";
-import { companies } from "../store/config";
+import { companies, improvementSettingsJson, saveImprovementSettingsJson } from "../store/config";
 import { getBoard, saveManifest } from "../store/boards";
 import { parseManifest } from "../store/mappers";
 import { deleteTemplate, ensureTemplateBoard, getTemplate, listTemplates, saveTemplate } from "../store/templates";
@@ -26,10 +26,12 @@ import {
   Gate,
   GoodDirection,
   InitiativeTemplate,
+  ImprovementSettings,
   keyFor,
-  METHODS,
   newTemplate,
+  parseImprovementSettings,
   presetStages,
+  serializeImprovementSettings,
   Pdca,
   PDCA_ORDER,
   PDCA_TOKENS,
@@ -127,6 +129,8 @@ export function mountTemplateWizard(parent: HTMLElement, templateId: string): ()
     const t: InitiativeTemplate = existing ?? newTemplate(newId("tpl"));
     if (isNew) t.order = all.length + 1;
     const companyList = await companies();
+    const imp = parseImprovementSettings(await improvementSettingsJson());
+    // app-level standard roles ride every template (addable; label edits stay template-local)
     const usage = 0; // initiatives arrive with P5; the note reads "No initiatives…" until then
     let dirty = false;
     const mark = () => {
@@ -136,14 +140,10 @@ export function mountTemplateWizard(parent: HTMLElement, templateId: string): ()
     // ---- step 1: Basics ------------------------------------------------------------
     const basics = (form: HTMLElement) => {
       form.appendChild(row("Name", textInput(t.name, (v) => (t.name = v), "e.g. A3 problem solving"), "How it reads in the template picker."));
-      const methodOpts = [...METHODS, ...(METHODS.includes(t.method) || t.method === "" ? [] : [t.method])].map((m) => ({ value: m, label: m }));
-      methodOpts.push({ value: "__custom", label: "Other…" });
-      const methodSel = selectInput(t.method || "A3", methodOpts, (v) => {
-        if (v === "__custom") {
-          const custom = prompt("Method name") ?? "";
-          t.method = custom.trim() || t.method;
-          shell.refresh();
-        } else {
+      // the method list is app configuration (Settings → Improvement → Methods)
+      const methodOpts = [...imp.methods, ...(imp.methods.includes(t.method) || t.method === "" ? [] : [t.method])].map((m) => ({ value: m, label: m }));
+      const methodSel = selectInput(t.method || methodOpts[0]?.value || "", methodOpts, (v) => {
+        {
           t.method = v;
           if (v === "Single action") {
             t.singleAction = true;
@@ -168,7 +168,7 @@ export function mountTemplateWizard(parent: HTMLElement, templateId: string): ()
         }
         mark();
       });
-      form.appendChild(row("Method", methodSel, "The problem-solving or project method this template encodes."));
+      form.appendChild(row("Method", methodSel, "The problem-solving or project method this template encodes. The list is managed in Settings → Improvement."));
       const desc = el("textarea", "ltk-mw-input") as HTMLTextAreaElement;
       desc.rows = 3;
       desc.value = t.description;
@@ -420,19 +420,35 @@ export function mountTemplateWizard(parent: HTMLElement, templateId: string): ()
         list.appendChild(tr);
       });
       form.appendChild(list);
+      // app-level standard roles (Settings → Improvement) not yet on the template
+      const missing = imp.standardRoles.filter((r) => !t.roles.some((x) => x.key === r.key));
+      if (missing.length > 0) {
+        const stdRow = el("div", "app-tw-inline");
+        stdRow.appendChild(el("span", "ltk-mw-help", "Standard roles:"));
+        for (const r of missing) {
+          const chip = btn(`＋ ${r.label}`, "app-cp-l1chip app-tw-stdrole");
+          chip.addEventListener("click", () => {
+            t.roles.push({ ...r });
+            mark();
+            shell.refresh();
+          });
+          stdRow.appendChild(chip);
+        }
+        form.appendChild(row("Add a standard role", stdRow, "Company-wide roles from Settings → Improvement — e.g. a Finance lead who does financial approvals. Adding one makes it available to this template's gates."));
+      }
       const adder = el("div", "app-tw-inline");
-      const input = textInput("", () => undefined, "e.g. Finance lead");
+      const input = textInput("", () => undefined, "e.g. Union rep");
       const add = btn("＋ Add role", "ltk-mw-btn");
       add.addEventListener("click", () => {
         const v = input.value.trim();
         if (v === "") return;
-        t.roles.push({ key: keyFor(v, t.roles.map((x) => x.key)), label: v, standard: false, multi: false, timeCommitment: false });
+        t.roles.push({ key: keyFor(v, t.roles.map((x) => x.key)), label: v, standard: false, multi: true, timeCommitment: false });
         input.value = "";
         mark();
         shell.refresh();
       });
       adder.append(input, add);
-      form.appendChild(row("Template role", adder, "Standard roles (sponsor, owner, improvement lead, team, support) are always present; add roles the gates or the charter need — a finance lead, a union rep."));
+      form.appendChild(row("Template role", adder, "Roles only this template needs. Every role can hold several people when its People setting says so."));
     };
 
     // ---- step 4: Fields -----------------------------------------------------------------
@@ -570,40 +586,72 @@ export function mountTemplateWizard(parent: HTMLElement, templateId: string): ()
       form.appendChild(amberNote());
     };
 
-    // ---- step 6: Initiative board ----------------------------------------------------
+    // ---- step 6: Initiative board — INLINE designer, the meeting wizard's
+    // pattern (Ben, 2026-08-19): the composer's designer mounts inside the
+    // step in a .ltk-mw-boardhost (the wizard CSS widens the column), built
+    // once and re-attached so board edits survive step navigation.
+    let designerDiv: HTMLDivElement | null = null;
+    let designerCleanup: (() => void) | null = null;
     const boardStep = (form: HTMLElement) => {
       if (t.singleAction) {
         form.appendChild(el("div", "app-board-note", "Single-action templates have no board."));
         return;
       }
-      const intro = el("div", "ltk-mw-help", "The cards every initiative on this template starts with, laid out in the composer. Tag each card with the stage it belongs to and whether it is mandatory (undeletable on the initiative; the charter always is).");
-      form.appendChild(intro);
-      const slotsBox = el("div", "app-tw-table");
-      form.appendChild(slotsBox);
-      const actions = el("div", "app-tw-inline");
-      const open = btn(t.boardId === "" ? "Lay out the board…" : "Open the composer…", "ltk-mw-btn ltk-mw-btn-primary");
-      open.addEventListener("click", () => void openComposer());
-      actions.appendChild(open);
-      form.appendChild(actions);
-      form.appendChild(amberNote());
-      void paintSlots();
+      const hostBox = el("div", "ltk-mw-boardhost");
+      form.appendChild(hostBox);
+      hostBox.appendChild(
+        el("div", "ltk-mw-help", "The cards every initiative on this template starts with. Lay them out below, then tag each with its stage and whether it is mandatory (the charter always is).")
+      );
+      const slotsBox = el("div", "app-tw-table app-tw-slots");
+      if (designerDiv) {
+        hostBox.appendChild(designerDiv);
+      } else {
+        designerDiv = document.createElement("div");
+        designerDiv.className = "app-wizard-designer";
+        hostBox.appendChild(designerDiv);
+        void (async () => {
+          if (t.boardId === "") {
+            if (t.name.trim() === "") {
+              designerDiv!.appendChild(el("div", "app-board-note", "Name the template (step 1) first — the board is created under that name."));
+              designerDiv = null;
+              return;
+            }
+            const note = el("div", "app-board-note", "Creating the template board…");
+            designerDiv!.appendChild(note);
+            t.boardId = await ensureTemplateBoard(t);
+            await saveTemplate(t); // the board id must survive an abandoned wizard
+            note.remove();
+          }
+          const stop = showLoading(designerDiv!);
+          try {
+            const { mountDesigner } = await import("../screens/composer");
+            designerCleanup = await mountDesigner(designerDiv!, t.boardId);
+          } finally {
+            stop();
+          }
+          await refreshSlotCounts();
+          paintSlotsInto(slotsBox);
+        })();
+      }
+      hostBox.appendChild(slotsBox);
+      paintSlotsInto(slotsBox);
+    };
 
-      async function paintSlots() {
+    function paintSlotsInto(slotsBox: HTMLElement) {
+      void (async () => {
         clear(slotsBox);
-        if (t.boardId === "") {
-          slotsBox.appendChild(el("div", "ltk-mw-help", "No board yet — the first open seeds a Charter (Canvas) and an Action plan (Actions)."));
-          return;
-        }
+        if (t.boardId === "") return;
         const b = await getBoard(t.boardId);
-        if (!b) {
-          slotsBox.appendChild(el("div", "ltk-mw-help", "The template board could not be read."));
+        if (!b) return;
+        const manifest = parseManifest(b.manifestRaw);
+        if (manifest.slots.length === 0) {
+          slotsBox.appendChild(el("div", "ltk-mw-help", "The board is empty — add cards above."));
           return;
         }
-        const manifest = parseManifest(b.manifestRaw);
         const head = el("div", "app-tw-tr app-tw-th app-tw-tr-slots");
         head.append(el("span", undefined, "Card"), el("span", undefined, "Stage"), el("span", undefined, "Mandatory"));
         slotsBox.appendChild(head);
-        const stageOpts = [{ value: "", label: "Every stage" }, ...t.stages.map((s) => ({ value: s.id, label: s.name || s.id }))];
+        const stageOpts = [{ value: "", label: "Every stage" }, ...t.stages.map((st) => ({ value: st.id, label: st.name || st.id }))];
         for (const slot of manifest.slots) {
           const f = slotFlags(slot.settings);
           const tr = el("div", "app-tw-tr app-tw-tr-slots");
@@ -614,7 +662,7 @@ export function mountTemplateWizard(parent: HTMLElement, templateId: string): ()
               void saveManifest(b.id, manifest).then(() => refreshSlotCounts());
             })
           );
-          const isCharter = slot.cardType === "CanvasCard" && manifest.slots.filter((s) => s.cardType === "CanvasCard").indexOf(slot) === 0;
+          const isCharter = slot.cardType === "CanvasCard" && manifest.slots.filter((x) => x.cardType === "CanvasCard").indexOf(slot) === 0;
           const md = el("div", "app-tw-inline");
           md.append(
             toggle(f.mandatory || isCharter, (v) => {
@@ -627,45 +675,8 @@ export function mountTemplateWizard(parent: HTMLElement, templateId: string): ()
           tr.appendChild(md);
           slotsBox.appendChild(tr);
         }
-        if (manifest.slots.length === 0) slotsBox.appendChild(el("div", "ltk-mw-help", "The board is empty — open the composer to add cards."));
-      }
-
-      async function openComposer() {
-        if (t.name.trim() === "") {
-          alert("Name the template (step 1) before laying out its board.");
-          return;
-        }
-        if (t.boardId === "") {
-          t.boardId = await ensureTemplateBoard(t);
-          await saveTemplate(t); // the board id must not be lost if the wizard is abandoned
-        }
-        const scrim = el("div", "app-tw-scrim");
-        const box = el("div", "app-tw-composer");
-        const bar = el("div", "app-tw-composer-bar");
-        bar.appendChild(el("span", "app-tw-composer-title", `Initiative board — ${t.name}`));
-        const done = btn("Done", "ltk-mw-btn ltk-mw-btn-primary");
-        bar.appendChild(done);
-        box.appendChild(bar);
-        const hostEl = el("div", "app-tw-composer-host");
-        box.appendChild(hostEl);
-        scrim.appendChild(box);
-        host.appendChild(scrim);
-        const { mountComposer } = await import("../screens/composer");
-        const teardown = mountComposer(hostEl, t.boardId);
-        const close = () => {
-          teardown();
-          scrim.remove();
-          void refreshSlotCounts().then(() => {
-            shell.refresh();
-          });
-        };
-        done.addEventListener("click", close);
-        cleanups.push(() => {
-          teardown();
-          scrim.remove();
-        });
-      }
-    };
+      })();
+    }
 
     // ---- step 7: Review ----------------------------------------------------------------
     const review = (form: HTMLElement) => {
@@ -739,6 +750,7 @@ export function mountTemplateWizard(parent: HTMLElement, templateId: string): ()
       },
     });
     cleanups.push(() => shell.destroy());
+    cleanups.push(() => designerCleanup?.());
 
     // leave guard
     cancel.addEventListener("click", (e) => {
@@ -770,6 +782,125 @@ export async function renderImprovementSettings(body: HTMLElement, isSuper: bool
   body.appendChild(
     el("div", "app-settings-note", "Initiative templates are the gate on everything in Improvement — method, stages and gates, roles, fields, mandatory metrics and the board an initiative starts from. Super admins author them; everyone picks from them when creating an initiative.")
   );
+
+  // ---- app-level lists: methods + standard roles (Ben, 2026-08-19) ----
+  const imp = parseImprovementSettings(await improvementSettingsJson());
+  const persist = () => void saveImprovementSettingsJson(serializeImprovementSettings(imp));
+  const section = (title: string, note: string): HTMLElement => {
+    const box = el("div", "app-pr-section");
+    box.appendChild(el("h3", "app-pr-h3", title));
+    box.appendChild(el("div", "app-settings-note", note));
+    body.appendChild(box);
+    return box;
+  };
+  if (isSuper) {
+    const mBox = section("Methods", "The problem-solving / project methods templates classify under — tracked even as templates change and version.");
+    const chips = el("div", "app-tw-inline");
+    const paintMethods = () => {
+      clear(chips);
+      imp.methods.forEach((m, i) => {
+        const chip = el("span", "ltk-mw-chip", m);
+        const x = el("button", "ltk-mw-chip-x", "×") as HTMLButtonElement;
+        x.type = "button";
+        x.title = "Remove (existing templates keep their method)";
+        x.addEventListener("click", () => {
+          imp.methods.splice(i, 1);
+          persist();
+          paintMethods();
+        });
+        chip.appendChild(x);
+        chips.appendChild(chip);
+      });
+      const input = el("input", "app-input app-pr-short") as HTMLInputElement;
+      input.placeholder = "Add method…";
+      input.addEventListener("keydown", (e) => {
+        if (e.key !== "Enter") return;
+        const v = input.value.trim();
+        if (v === "" || imp.methods.includes(v)) return;
+        imp.methods.push(v);
+        persist();
+        paintMethods();
+      });
+      chips.appendChild(input);
+    };
+    paintMethods();
+    mBox.appendChild(chips);
+
+    const rBox = section("Standard roles", "Company-wide roles beyond the built-in five — e.g. a Finance lead who does financial approvals. Every template can add them as roles and gate approvers; people are assigned per initiative.");
+    const roleList = el("div", "app-tw-table");
+    const paintRoles = () => {
+      clear(roleList);
+      if (imp.standardRoles.length > 0) {
+        const head = el("div", "app-tw-tr app-tw-th");
+        head.append(el("span", undefined, "Role"), el("span", undefined, "People"), el("span", undefined, "Time commitment"), el("span", undefined, ""));
+        roleList.appendChild(head);
+      }
+      imp.standardRoles.forEach((r, i) => {
+        const tr = el("div", "app-tw-tr");
+        const label = el("input", "ltk-mw-input") as HTMLInputElement;
+        label.value = r.label;
+        label.addEventListener("change", () => {
+          r.label = label.value.trim() || r.label;
+          persist();
+        });
+        tr.appendChild(label);
+        const multi = el("select", "ltk-mw-input") as HTMLSelectElement;
+        for (const [v, l] of [["multi", "Several"], ["single", "One person"]] as const) {
+          const o = el("option", undefined, l) as HTMLOptionElement;
+          o.value = v;
+          multi.appendChild(o);
+        }
+        multi.value = r.multi ? "multi" : "single";
+        multi.addEventListener("change", () => {
+          r.multi = multi.value === "multi";
+          persist();
+        });
+        tr.appendChild(multi);
+        const tc = el("div", "app-tw-inline");
+        const tcSel = el("select", "ltk-mw-input") as HTMLSelectElement;
+        for (const [v, l] of [["off", "Not asked"], ["on", "Asked"]] as const) {
+          const o = el("option", undefined, l) as HTMLOptionElement;
+          o.value = v;
+          tcSel.appendChild(o);
+        }
+        tcSel.value = r.timeCommitment ? "on" : "off";
+        tcSel.addEventListener("change", () => {
+          r.timeCommitment = tcSel.value === "on";
+          persist();
+        });
+        tc.appendChild(tcSel);
+        tr.appendChild(tc);
+        const x = el("button", "ltk-mw-chip-x", "×") as HTMLButtonElement;
+        x.type = "button";
+        x.title = "Remove (templates that already added it keep it)";
+        x.addEventListener("click", () => {
+          imp.standardRoles.splice(i, 1);
+          persist();
+          paintRoles();
+        });
+        tr.appendChild(x);
+        roleList.appendChild(tr);
+      });
+      const addRow = el("div", "app-tw-inline");
+      const input = el("input", "app-input app-pr-short") as HTMLInputElement;
+      input.placeholder = "e.g. Finance lead";
+      const add = el("button", "app-btn", "＋ Add standard role") as HTMLButtonElement;
+      add.type = "button";
+      add.addEventListener("click", () => {
+        const v = input.value.trim();
+        if (v === "") return;
+        imp.standardRoles.push({ key: keyFor(v, [...imp.standardRoles.map((x) => x.key), "sponsor", "owner", "lead", "team", "support"]), label: v, standard: true, multi: true, timeCommitment: false });
+        input.value = "";
+        persist();
+        paintRoles();
+      });
+      addRow.append(input, add);
+      roleList.appendChild(addRow);
+    };
+    paintRoles();
+    rBox.appendChild(roleList);
+    body.appendChild(el("h3", "app-pr-h3 app-tw-templates-h", "Initiative templates"));
+  }
   const all = await listTemplates();
   // retired last (design 1.1)
   const templates = [...all.filter((t) => t.active), ...all.filter((t) => !t.active)];

@@ -21,6 +21,7 @@ export interface Ben_ltksitesettingsesBase {
   ben_company?: string;
   ben_departments?: string;
   ben_hubtabs?: string;
+  ben_improvementsettings?: string;
   ben_isarchived?: boolean;
   ben_logo?: string;
   ben_ltksitesettingsid: string;

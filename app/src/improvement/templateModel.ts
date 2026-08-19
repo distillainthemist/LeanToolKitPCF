@@ -86,7 +86,49 @@ export interface InitiativeTemplate {
   boardId: string;
 }
 
+/** The default methods list — the app-level Settings → Improvement list
+ *  starts from these and is fully editable (Ben, 2026-08-19: methods are
+ *  configuration, so problem-solving types can be tracked across template
+ *  versions). */
 export const METHODS = ["A3", "DMAIC", "Kaizen", "8D", "Project", "Single action"];
+
+/** App-level improvement settings (ben_improvementsettings on the APP_ROW). */
+export interface ImprovementSettings {
+  methods: string[];
+  /** Standard roles beyond the five built-ins (e.g. Finance lead) —
+   *  offered on every template as roles / gate approvers. People are
+   *  assigned per initiative (and per site defaults arrive with P5). */
+  standardRoles: TemplateRole[];
+}
+
+export function parseImprovementSettings(raw: string): ImprovementSettings {
+  try {
+    const o = JSON.parse(raw || "{}") as { methods?: unknown; standardRoles?: unknown };
+    const methods = Array.isArray(o.methods) ? o.methods.filter((m): m is string => typeof m === "string" && m.trim() !== "") : [];
+    const roles = Array.isArray(o.standardRoles)
+      ? o.standardRoles
+          .map((x) => (x && typeof x === "object" ? (x as Record<string, unknown>) : {}))
+          .map((x) => ({
+            key: typeof x.key === "string" ? x.key : "",
+            label: typeof x.label === "string" ? x.label : "",
+            standard: true,
+            multi: x.multi !== false,
+            timeCommitment: x.timeCommitment === true,
+          }))
+          .filter((r) => r.key !== "" && r.label !== "")
+      : [];
+    return { methods: methods.length > 0 ? methods : [...METHODS], standardRoles: roles };
+  } catch {
+    return { methods: [...METHODS], standardRoles: [] };
+  }
+}
+
+export function serializeImprovementSettings(s: ImprovementSettings): string {
+  return JSON.stringify({
+    methods: s.methods,
+    standardRoles: s.standardRoles.map((r) => ({ key: r.key, label: r.label, multi: r.multi, timeCommitment: r.timeCommitment })),
+  });
+}
 
 /** Standard stage sets per method — offered as a starting point when the
  *  method is chosen (design 1.1b), never forced. */
