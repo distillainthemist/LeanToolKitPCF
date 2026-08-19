@@ -385,7 +385,13 @@ export function mountPriorities(parent: HTMLElement, opts: PrioritiesMountOpts =
     /** Presentation / tile bar: the org name at ×1.4, ▶ Walk, Exit presentation. */
     const renderTvBar = (): HTMLElement => {
       const bar = el("div", "app-cp-tvbar");
-      bar.appendChild(el("div", "app-cp-tvorg", `${orgName(state.org)} · ${state.period}`));
+      // "FY26 Cascaded Priorities | Company › Site › Department" — the
+      // first part in the app accent, the org chain as far as it goes
+      const title = el("div", "app-cp-tvorg");
+      title.appendChild(el("span", "app-cp-tvorg-lead", `${state.period} Cascaded Priorities`));
+      title.appendChild(el("span", "app-cp-tvorg-sep", " | "));
+      title.appendChild(el("span", "app-cp-tvorg-chain", orgPath(state.org).map(orgName).join(" › ")));
+      bar.appendChild(title);
       if (card?.mode !== "tile") {
         const walk = el("button", "app-btn app-cp-tvbtn", "▶ Walk") as HTMLButtonElement;
         walk.type = "button";

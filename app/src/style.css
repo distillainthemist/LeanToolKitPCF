@@ -3118,7 +3118,11 @@ textarea.app-cp-statement { font-size: 14px; font-weight: 500; }
 .app-cp-cascade-peer .app-cp-cascade-org { font-weight: 500; }
 /* presentation mode (design §7 "TV") + walk (§15) + embedded card (§8) */
 .app-cp-tvbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-.app-cp-tvorg { font-size: 20px; font-weight: 700; flex: 1; }
+.app-cp-tvorg { font-size: 20px; font-weight: 700; flex: 1; min-width: 0; }
+.app-cp-tvorg-lead { color: var(--app-accent); }
+.app-cp-tvorg-sep { color: #a39c90; font-weight: 400; padding: 0 4px; }
+.app-cp-tvorg-chain { color: #26241f; }
+.app-cp-card-tile .app-cp-tvorg-lead { font-size: 12px; }
 .app-cp-tvbtn { min-height: 44px; padding: 0 18px; font-size: 15px; }
 .app-cp-tv { font-size: 1.4em; padding: 16px 22px 30px; }
 .app-cp-tv .app-cp-vision { font-size: 21px; padding: 16px 22px; }
