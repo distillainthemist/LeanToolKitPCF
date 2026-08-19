@@ -287,8 +287,9 @@ reschedule/cancel history with a reason picklist.
   · owner chip · worded flags · three large tallies · metric cell; footer
   ‹ named prev · ⊞ All objectives · named next ›; ←/→, Esc, swipe;
   final "Cascades to accept · n" step renders the same review list —
-  `renderReviewList` extracted from the modal). Screen: ⋮ → Present: TV
-  mode (org name + ▶ Walk + Exit TV, toolbar hidden, ×1.4 type, kebabs/
+  `renderReviewList` extracted from the modal). Screen: ⋮ → Present: Presentation
+  mode (Ben's name for the spec's TV mode; org name + ▶ Walk + Exit
+  presentation, vision band full-width, toolbar hidden, ×1.4 type, kebabs/
   add-cells hidden, Esc exits) · Walk objectives. CARD `PrioritiesCard`
   (registry spec, group Reference, config prSite/prDepartment/prArea
   blank = the board's own org via getBoard, prPillar name filter, prView;

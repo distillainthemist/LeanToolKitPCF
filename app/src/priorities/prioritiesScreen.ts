@@ -195,7 +195,7 @@ interface ScreenState {
   groupByPillar: boolean;
   lastColumn: string; // the sub-pillar last interacted with (＋ Priority preselect)
   view: ViewMode; // Simple (default, TV) | Dynamic — persists per user per org
-  tv: boolean; // TV mode (§7): org name only, toolbar hidden, type ×1.4
+  tv: boolean; // presentation mode (design §7 "TV"): org name only, toolbar hidden, type ×1.4, vision full-width
 }
 
 /** P1 stub: what a priority's initiatives look like. Initiatives arrive
@@ -350,7 +350,7 @@ export function mountPriorities(parent: HTMLElement, opts: PrioritiesMountOpts =
         renderWalk();
         return;
       }
-      // TV / tile: org name only, no toolbar (§7); otherwise the full bar
+      // presentation / tile: org name only, no toolbar (§7); otherwise the full bar
       // and the vision band directly over the pillars (Ben, 2026-08-19)
       if (state.tv || card?.mode === "tile") wrap.append(renderTvBar(), renderVision());
       else wrap.append(renderOrgBar(), renderToolbar(), renderVision());
@@ -382,7 +382,7 @@ export function mountPriorities(parent: HTMLElement, opts: PrioritiesMountOpts =
       }
     };
 
-    /** TV / tile bar: the org name at ×1.4, ▶ Walk, and Exit TV. */
+    /** Presentation / tile bar: the org name at ×1.4, ▶ Walk, Exit presentation. */
     const renderTvBar = (): HTMLElement => {
       const bar = el("div", "app-cp-tvbar");
       bar.appendChild(el("div", "app-cp-tvorg", `${orgName(state.org)} · ${state.period}`));
@@ -392,7 +392,7 @@ export function mountPriorities(parent: HTMLElement, opts: PrioritiesMountOpts =
         walk.addEventListener("click", () => openWalk(0));
         bar.appendChild(walk);
         if (!card) {
-          const exit = el("button", "app-btn app-cp-tvbtn", "Exit TV") as HTMLButtonElement;
+          const exit = el("button", "app-btn app-cp-tvbtn", "Exit presentation") as HTMLButtonElement;
           exit.type = "button";
           exit.addEventListener("click", () => {
             state.tv = false;
@@ -649,7 +649,7 @@ export function mountPriorities(parent: HTMLElement, opts: PrioritiesMountOpts =
         render();
       });
       menu.appendChild(el("div", "app-cp-menu-h", "Present"));
-      item("TV mode", null, () => {
+      item("Presentation mode", null, () => {
         state.tv = true;
         render();
       });

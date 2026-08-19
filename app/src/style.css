@@ -3130,7 +3130,7 @@ textarea.app-cp-statement { font-size: 14px; font-weight: 500; }
 .app-cp-cascade-h { font-size: 12px; font-weight: 700; padding: 6px 0 2px; border-top: 1px dashed #e4dfd6; margin-top: 4px; }
 .app-cp-cascade-h:first-child { border-top: none; margin-top: 0; }
 .app-cp-cascade-peer .app-cp-cascade-org { font-weight: 500; }
-/* TV mode (§7) + walk (§15) + embedded card (§8) */
+/* presentation mode (design §7 "TV") + walk (§15) + embedded card (§8) */
 .app-cp-tvbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .app-cp-tvorg { font-size: 20px; font-weight: 700; flex: 1; }
 .app-cp-tvbtn { min-height: 44px; padding: 0 18px; font-size: 15px; }
@@ -3149,7 +3149,8 @@ textarea.app-cp-statement { font-size: 14px; font-weight: 500; }
 .app-cp-tv .app-cp-kebab, .app-cp-tv .app-cp-addcell { display: none; }
 .app-cp-tv .app-cp-vision-edit { display: none; }
 .app-cp-tv .app-cp-grid { grid-template-columns: 160px repeat(auto-fit, minmax(0, 1fr)); }
-.app-cp-tv .app-cp-visionrow { grid-template-columns: 160px 1fr; }
+.app-cp-tv .app-cp-visionrow { grid-template-columns: 1fr; }
+.app-cp-tv .app-cp-visionrow .app-cp-label { display: none; }
 /* the walk */
 .app-cp-walk { display: flex; flex-direction: column; background: #fff; min-height: 100%; }
 .app-cp-walk-fixed { position: fixed; inset: 0; z-index: 8000; }
