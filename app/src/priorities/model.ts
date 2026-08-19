@@ -111,9 +111,14 @@ export interface Pillar {
  *  then each pillar's sub-pillars by their own order. Sub-pillars whose
  *  pillar is retired or missing trail at the end (still columns — their
  *  priorities must not vanish). */
-export function objectiveColumns(pillars: Pillar[], l1: string | null): Pillar[] {
+export function objectiveColumns(pillars: Pillar[], l1: string | string[] | null): Pillar[] {
   const byOrder = (a: Pillar, b: Pillar) => a.order - b.order || a.name.localeCompare(b.name);
-  const subs = pillars.filter((p) => p.level === 2 && p.active && (l1 === null || p.parentId === l1));
+  // a focus SET (rotation focus, P4): pillar ids keep all their sub-pillars,
+  // sub-pillar ids keep just themselves
+  const focus = Array.isArray(l1) ? new Set(l1) : null;
+  const inFocus = (p: Pillar) =>
+    focus === null ? l1 === null || p.parentId === l1 : focus.has(p.parentId) || focus.has(p.id);
+  const subs = pillars.filter((p) => p.level === 2 && p.active && inFocus(p));
   const out: Pillar[] = [];
   for (const top of strategyChips(pillars)) {
     out.push(...subs.filter((s) => s.parentId === top.id).sort(byOrder));
@@ -639,4 +644,33 @@ export function parsePriorityPrefs(raw: string): PriorityPrefs {
     /* defaults */
   }
   return d;
+}
+
+// ---- rotation focus (P4): meeting topic → pillars ------------------------------
+
+/** `prTopicMap` — topic text → pillar / sub-pillar ids; "" = no topic. */
+export type TopicMap = Record<string, string[]>;
+
+export function parseTopicMap(raw: string): TopicMap {
+  try {
+    const o = JSON.parse(raw || "{}") as unknown;
+    if (!o || typeof o !== "object" || Array.isArray(o)) return {};
+    const out: TopicMap = {};
+    for (const [k, v] of Object.entries(o as Record<string, unknown>)) {
+      if (Array.isArray(v)) out[k] = v.filter((x): x is string => typeof x === "string" && x !== "");
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+/** The pillar ids in focus for a topic (case/space-insensitive lookup;
+ *  "" for occurrences without a topic). null = no focus → all pillars. */
+export function focusForTopic(map: TopicMap, topic: string): string[] | null {
+  const want = topic.trim().toLowerCase();
+  for (const [k, ids] of Object.entries(map)) {
+    if (k.trim().toLowerCase() === want) return ids.length > 0 ? ids : null;
+  }
+  return null;
 }

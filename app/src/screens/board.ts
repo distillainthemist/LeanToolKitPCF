@@ -8,6 +8,7 @@ import { BoardGridView } from "../../../controls/BoardGrid/editor";
 import { BoardTile, parseColumns } from "../../../controls/BoardGrid/types";
 import { MeetingSchedulerView } from "../../../controls/MeetingScheduler/editor";
 import {
+  topicForDate,
   generateInstances,
   parseCategory,
   parseColumns as parseMeetingColumns,
@@ -242,6 +243,7 @@ async function renderBoard(
       settings: slot.settings,
       instanceKey,
       instanceWhen: current?.when ?? "",
+      instanceTopic: current ? topicForDate(board.occurrenceSettingsRaw, current.when) : "",
       actions: boardActions.filter((a) => a.instanceId === instanceKey),
       // an embed tile uses the persistent frame, so opening the card is
       // instant instead of a cold cross-origin load mid-meeting

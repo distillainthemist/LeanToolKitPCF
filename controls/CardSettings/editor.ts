@@ -26,7 +26,7 @@ import {
   policyOnPick,
   THEME_FIELDS,
 } from "./registry";
-import { renderField, renderPromptsField, FieldHost, labelRow } from "./fields";
+import { renderField, renderPromptsField, FieldHost, labelRow, RotationContext } from "./fields";
 import { BoardRef, BoardRefCard, SettingsDraft, ThemeDraft, emptyDraft } from "./types";
 import { CARDSETTINGS_CSS } from "./styles";
 
@@ -84,6 +84,8 @@ export class CardSettingsEditor {
   private palette: PaletteEntry[] = defaultStatePalette();
   /** The app title-strip palette (the Common section's titleColor select). */
   private titlePalette: PaletteEntry[] = defaultTitlePalette();
+  /** Rotation-focus context (PrioritiesCard): board topics + org pillars. */
+  private rotation: RotationContext | null = null;
   /** Which properties tab is showing. */
   private tab = "Common";
   /** The selected layout field (canvasFields builder) — the selection
@@ -159,6 +161,13 @@ export class CardSettingsEditor {
 
   /** The app palettes: states (paletteColor fields) + title strips
    *  (the Common tab's titleColor select). */
+  /** The board's rotation topics + the org's pillars — feeds the
+   *  PrioritiesCard's Rotation focus builder. */
+  setRotationContext(ctx: RotationContext | null): void {
+    this.rotation = ctx;
+    this.render();
+  }
+
   setPalettes(palette: PaletteEntry[], titlePalette: PaletteEntry[]): void {
     if (
       JSON.stringify(palette) === JSON.stringify(this.palette) &&
@@ -282,6 +291,7 @@ export class CardSettingsEditor {
       readOnly: this.readOnly,
       palette: this.palette,
       titlePalette: this.titlePalette,
+      rotation: this.rotation ?? undefined,
       onChanged: () => this.commit(),
       // the selection bridge, both directions, for layout builders
       selectedField: this.selectedField,

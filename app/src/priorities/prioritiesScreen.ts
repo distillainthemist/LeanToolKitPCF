@@ -102,6 +102,11 @@ export interface PrioritiesMountOpts {
     mode: "tile" | "focused";
     org?: Partial<OrgRef>;
     pillarName?: string;
+    /** Rotation focus (P4): pillar / sub-pillar ids in focus for this
+     *  occurrence's topic; wins over pillarName. */
+    focus?: string[];
+    /** The occurrence's rotation topic, shown in the presentation title. */
+    topic?: string;
     view?: ViewMode;
     /** The meeting's date (ISO) — the period is derived from it. */
     periodDate?: string;
@@ -184,7 +189,8 @@ function buildTree(raw: string, siteCo: Record<string, string>, companyList: str
 
 interface ScreenState {
   org: OrgRef;
-  l1: string | null; // pillar filter
+  l1: string | null; // pillar filter (chip)
+  focus: string[] | null; // rotation focus set (card) — wins over l1
   period: string;
   status: "active" | "completed" | "all";
   rule: RollupRule;
@@ -251,6 +257,7 @@ export function mountPriorities(parent: HTMLElement, opts: PrioritiesMountOpts =
     const state: ScreenState = {
       org: startOrg,
       l1: null,
+      focus: card?.focus && card.focus.length > 0 ? card.focus : null,
       tv: false,
       period: currentPeriod,
       status: "active",
@@ -351,7 +358,7 @@ export function mountPriorities(parent: HTMLElement, opts: PrioritiesMountOpts =
       // and the vision band directly over the pillars (Ben, 2026-08-19)
       if (state.tv || card?.mode === "tile") wrap.append(renderTvBar(), renderVision());
       else wrap.append(renderOrgBar(), renderToolbar(), renderVision());
-      const columns = objectiveColumns(data.pillars, state.l1);
+      const columns = objectiveColumns(data.pillars, state.focus ?? state.l1);
       if (state.groupByPillar && state.l1 === null && densityFor(columns.length) === "scroll") {
         for (const l1 of strategyChips(data.pillars)) {
           const cols = objectiveColumns(data.pillars, l1.id);
@@ -388,6 +395,7 @@ export function mountPriorities(parent: HTMLElement, opts: PrioritiesMountOpts =
       title.appendChild(el("span", "app-cp-tvorg-lead", `${state.period} Cascaded Priorities`));
       title.appendChild(el("span", "app-cp-tvorg-sep", " | "));
       title.appendChild(el("span", "app-cp-tvorg-chain", orgPath(state.org).map(orgName).join(" › ")));
+      if (card?.topic) title.appendChild(el("span", "app-cp-tvorg-topic", ` · ${card.topic}`));
       bar.appendChild(title);
       if (card?.mode !== "tile") {
         const walk = el("button", "app-btn app-cp-tvbtn", "▶ Walk") as HTMLButtonElement;
@@ -414,7 +422,7 @@ export function mountPriorities(parent: HTMLElement, opts: PrioritiesMountOpts =
       render();
     };
     const renderWalk = () => {
-      const columns = objectiveColumns(data.pillars, state.l1);
+      const columns = objectiveColumns(data.pillars, state.focus ?? state.l1);
       const visible = visibleFor(state.org);
       const { byColumn } = groupByColumn(columns, visible);
       const adoptedIds = new Set(prioritiesForOrg(state.org, data.priorities, data.assignments).adopted.map((p) => p.id));

@@ -156,6 +156,9 @@ export interface CardMount {
   /** The meeting instance's scheduled datetime ("" = live/template) —
    *  series cards derive their data window from it. */
   instanceWhen: string;
+  /** The occurrence's rotation topic ("" = none) — the PrioritiesCard's
+   *  rotation focus reads it (cascade plan P4). */
+  instanceTopic?: string;
   /** The card's current actions from the central table. */
   actions: LtkAction[];
   /**
@@ -1369,7 +1372,7 @@ export type TileMount = Pick<
   | "instanceWhen"
   | "actions"
 > &
-  Pick<CardMount, "onEmbedFrame" | "embedPreload" | "palette">;
+  Pick<CardMount, "onEmbedFrame" | "embedPreload" | "palette" | "instanceTopic">;
 
 /**
  * Mount a card as a BOARD TILE: the same editor, rendering the same data,

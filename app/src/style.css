@@ -3122,6 +3122,7 @@ textarea.app-cp-statement { font-size: 14px; font-weight: 500; }
 .app-cp-tvorg-lead { color: var(--app-accent); }
 .app-cp-tvorg-sep { color: #a39c90; font-weight: 400; padding: 0 4px; }
 .app-cp-tvorg-chain { color: #26241f; }
+.app-cp-tvorg-topic { color: #6d675c; font-weight: 500; }
 .app-cp-card-tile .app-cp-tvorg-lead { font-size: 12px; }
 .app-cp-tvbtn { min-height: 44px; padding: 0 18px; font-size: 15px; }
 .app-cp-tv { font-size: 1.4em; padding: 16px 22px 30px; }

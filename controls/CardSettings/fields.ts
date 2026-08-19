@@ -22,6 +22,14 @@ export interface FieldHost {
    *  the way to change it — the selection bridge's inspector side. */
   selectedField?: string | null;
   onSelectField?: (id: string | null) => void;
+  /** Rotation-focus builder (PrioritiesCard): the board's rotation topics
+   *  and the org's pillars. Absent = the builder falls back to JSON. */
+  rotation?: RotationContext;
+}
+
+export interface RotationContext {
+  topics: { key: string; label: string }[];
+  pillars: { id: string; name: string; sub: boolean; parentName: string }[];
 }
 
 type Get = () => unknown;
@@ -680,6 +688,126 @@ export function renderPromptsField(
   return fieldWrap(spec, ta, true);
 }
 
+// ---- rotation focus: topic → pillars (PrioritiesCard) ------------------------------
+
+/** One row per rotation topic (plus "No topic / ad hoc"), each a chip list
+ *  of chosen pillars with an "Add…" select. Stored as JSON
+ *  {topic: [ids]}. Topics in the stored map that the current rotation no
+ *  longer names are kept, flagged, and removable. */
+function topicPillarsEditor(spec: FieldSpec, get: Get, set: Set, host: FieldHost): HTMLElement {
+  const rot = host.rotation;
+  if (!rot) {
+    return jsonEditor({ ...spec, kind: "json", help: (spec.help ?? "") + " (the board's rotation was not available here — edited as JSON)" }, get, set, host);
+  }
+  let map: Record<string, string[]> = {};
+  try {
+    const raw = get();
+    const o = typeof raw === "string" ? (JSON.parse(raw || "{}") as unknown) : raw;
+    if (o && typeof o === "object" && !Array.isArray(o)) {
+      for (const [k, v] of Object.entries(o as Record<string, unknown>)) {
+        if (Array.isArray(v)) map[k] = v.filter((x): x is string => typeof x === "string");
+      }
+    }
+  } catch {
+    map = {};
+  }
+  const push = () => {
+    const clean = Object.fromEntries(Object.entries(map).filter(([, ids]) => ids.length > 0));
+    set(Object.keys(clean).length > 0 ? JSON.stringify(clean) : undefined);
+    host.onChanged();
+  };
+  const nameOf = (id: string) => {
+    const p = rot.pillars.find((x) => x.id === id);
+    return p ? (p.sub ? `${p.parentName} › ${p.name}` : p.name) : `(retired ${id.slice(0, 6)})`;
+  };
+  const box = el("div", "ltk-cs-topics");
+  const rows: { key: string; label: string; stale: boolean }[] = [
+    ...rot.topics.map((t) => ({ ...t, stale: false })),
+    { key: "", label: "No topic / ad hoc", stale: false },
+    ...Object.keys(map)
+      .filter((k) => k !== "" && !rot.topics.some((t) => t.key === k))
+      .map((k) => ({ key: k, label: `${k} — not in the current rotation`, stale: true })),
+  ];
+  const paint = () => {
+    box.replaceChildren();
+    if (rot.topics.length === 0) {
+      box.appendChild(el("div", "ltk-cs-help", "This meeting has no rotation topics yet — set them in the meeting wizard (weekly: 1st–5th week; daily: by weekday). Until then only the \"No topic\" row applies."));
+    }
+    for (const r of rows) {
+      const row = el("div", "ltk-cs-topic-row" + (r.stale ? " ltk-cs-topic-stale" : ""));
+      const lab = el("div", "ltk-cs-topic-label", r.label);
+      row.appendChild(lab);
+      const chips = el("div", "ltk-cs-chips");
+      const ids = map[r.key] ?? [];
+      for (const id of ids) {
+        const chip = el("span", "ltk-cs-chip");
+        chip.appendChild(el("span", undefined, nameOf(id)));
+        if (!host.readOnly) {
+          const x = el("button", "ltk-cs-chip-x", "×");
+          x.type = "button";
+          x.title = "Remove";
+          x.addEventListener("click", () => {
+            map[r.key] = (map[r.key] ?? []).filter((v) => v !== id);
+            paint();
+            push();
+          });
+          chip.appendChild(x);
+        }
+        chips.appendChild(chip);
+      }
+      if (ids.length === 0) chips.appendChild(el("span", "ltk-cs-help", "All pillars"));
+      if (!host.readOnly) {
+        const sel = el("select", "ltk-input ltk-cs-topic-add") as HTMLSelectElement;
+        const first = el("option", undefined, "Add pillar…") as HTMLOptionElement;
+        first.value = "";
+        sel.appendChild(first);
+        const tops = rot.pillars.filter((p) => !p.sub);
+        const grpTop = el("optgroup") as HTMLOptGroupElement;
+        grpTop.label = "Pillars";
+        for (const p of tops) {
+          if (ids.includes(p.id)) continue;
+          const o = el("option", undefined, p.name) as HTMLOptionElement;
+          o.value = p.id;
+          grpTop.appendChild(o);
+        }
+        if (grpTop.childElementCount > 0) sel.appendChild(grpTop);
+        const grpSub = el("optgroup") as HTMLOptGroupElement;
+        grpSub.label = "Sub-pillars";
+        for (const p of rot.pillars.filter((x) => x.sub)) {
+          if (ids.includes(p.id)) continue;
+          const o = el("option", undefined, `${p.parentName} › ${p.name}`) as HTMLOptionElement;
+          o.value = p.id;
+          grpSub.appendChild(o);
+        }
+        if (grpSub.childElementCount > 0) sel.appendChild(grpSub);
+        sel.addEventListener("change", () => {
+          if (sel.value === "") return;
+          map[r.key] = [...(map[r.key] ?? []), sel.value];
+          paint();
+          push();
+        });
+        chips.appendChild(sel);
+        if (r.stale) {
+          const rm = el("button", "ltk-cs-chip-x", "remove row");
+          rm.type = "button";
+          rm.addEventListener("click", () => {
+            delete map[r.key];
+            const i = rows.findIndex((x) => x.key === r.key);
+            if (i >= 0) rows.splice(i, 1);
+            paint();
+            push();
+          });
+          chips.appendChild(rm);
+        }
+      }
+      row.appendChild(chips);
+      box.appendChild(row);
+    }
+  };
+  paint();
+  return fieldWrap(spec, box, true);
+}
+
 // ---- dispatcher -----------------------------------------------------------------
 
 export function renderField(
@@ -713,6 +841,8 @@ export function renderField(
       return captureColumnsEditor(spec, get, set, host);
     case "canvasFields":
       return canvasFieldsEditor(spec, get, set, host);
+    case "topicPillars":
+      return topicPillarsEditor(spec, get, set, host);
     case "json":
       return jsonEditor(spec, get, set, host);
     case "text":

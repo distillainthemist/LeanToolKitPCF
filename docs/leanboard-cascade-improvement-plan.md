@@ -298,8 +298,20 @@ reschedule/cancel history with a reason picklist.
   focused decided by host size (≥700×400 = focused → walk at step 1;
   tile = compact non-interactive matrix); period from instanceWhen; tile
   snapshot `prioritiesSnapshotSvg` (vision band + objective headings +
-  status edges, no metric text). Card mounts never persist prefs. Design
-  as specified — walk one objective per
+  status edges, no metric text). Card mounts never persist prefs. ROTATION
+  FOCUS (Ben, 2026-08-19: an explicit topic→pillars map, since rotation
+  names are usually simpler than pillar names): card setting `prTopicMap`
+  = a `topicPillars` builder in Card settings listing the board's rotation
+  topics (from the wizard blob via `rotationTopics()` in
+  shared/schema/recurrence.ts) + a "No topic / ad hoc" row + stale rows,
+  each a chip list of pillars/sub-pillars (ids); the studio feeds the pane
+  `setRotationContext` (topics + pillars, lazy). At meeting time the
+  occurrence's topic (`topicForDate`, same rule the engine stamps) rides
+  `CardMount.instanceTopic` from both mount paths → `focusForTopic` →
+  the screen's focus SET (`objectiveColumns` accepts an id set: pillar ids
+  keep their sub-pillars, sub-pillar ids keep themselves) → matrix, walk
+  and snapshot narrow to it; no focus → `prPillar` name → all. Title in
+  presentation shows " · Topic". Design as specified — walk one objective per
   step (progress dots, named prev/next, ⊞ All objectives, keyboard /
   remote / swipe), final "Cascades to accept" step, filters carry in;
   the card: settings (org, pillar, view mode), tile = displayed matrix

@@ -293,3 +293,23 @@ describe("priority prefs (P3)", () => {
     expect(parsePriorityPrefs("{bad")).toEqual(parsePriorityPrefs(""));
   });
 });
+
+describe("rotation focus (P4)", () => {
+  const P = (id: string, level: 1 | 2, order: number, parentId = "") => ({ id, name: id, level, parentId, color: "", order, active: true, company: "" });
+  const pillars = [P("s1", 1, 1), P("s2", 1, 2), P("s1a", 2, 1, "s1"), P("s1b", 2, 2, "s1"), P("s2a", 2, 1, "s2")];
+  it("a focus set keeps a pillar's sub-pillars and named sub-pillars", async () => {
+    const m = await import("../priorities/model");
+    expect(m.objectiveColumns(pillars, ["s2"]).map((c) => c.id)).toEqual(["s2a"]);
+    expect(m.objectiveColumns(pillars, ["s1b", "s2"]).map((c) => c.id)).toEqual(["s1b", "s2a"]);
+    expect(m.objectiveColumns(pillars, "s1").map((c) => c.id)).toEqual(["s1a", "s1b"]);
+  });
+  it("topic map parses and matches loosely; blank / unknown → no focus", async () => {
+    const m = await import("../priorities/model");
+    const map = m.parseTopicMap('{"Safety":["s1"],"Ops":["s2","s1b"],"":["s2"],"bad":"x"}');
+    expect(map).toEqual({ Safety: ["s1"], Ops: ["s2", "s1b"], "": ["s2"] });
+    expect(m.focusForTopic(map, " safety ")).toEqual(["s1"]);
+    expect(m.focusForTopic(map, "")).toEqual(["s2"]);
+    expect(m.focusForTopic(map, "Quality")).toBeNull();
+    expect(m.focusForTopic(m.parseTopicMap("{oops"), "Safety")).toBeNull();
+  });
+});

@@ -26,6 +26,7 @@ export type FieldKind =
   | "kvList" // key→value map, edited as pairs, emitted as an object
   | "captureColumns" // CaptureCard's typed columns (dedicated builder)
   | "canvasFields" // CanvasCard's layout (dedicated builder)
+  | "topicPillars" // PrioritiesCard's rotation focus: meeting topic → pillars (dedicated builder)
   | "json"; // raw JSON fallback (validated before emit)
 
 export interface ObjectField {
@@ -995,10 +996,19 @@ export const CARDS: CardSpec[] = [
         placeholder: "",
       },
       {
+        // rotation focus (Ben, 2026-08-19): the meeting's rotation topics
+        // (from the wizard) each mapped to one or more pillars / sub-pillars
+        key: "prTopicMap",
+        label: "Rotation focus",
+        kind: "topicPillars",
+        help:
+          "For each meeting topic in this board's rotation, the pillars (or sub-pillars) the card focuses on that week or day. Blank = all pillars. The rotation itself is set in the meeting wizard.",
+      },
+      {
         key: "prPillar",
-        label: "Pillar filter",
+        label: "Pillar filter (no rotation)",
         kind: "text",
-        help: "A pillar's name to show only its sub-pillars; blank shows all.",
+        help: "Used only when the meeting has no rotation topic, or the topic has no focus set: a pillar's name to show only its sub-pillars; blank shows all.",
         placeholder: "Safety & people",
       },
       {

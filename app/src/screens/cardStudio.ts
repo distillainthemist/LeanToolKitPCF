@@ -450,6 +450,33 @@ export function openCardStudio(opts: StudioOptions): Promise<StudioResult> {
     settingsEditor.setTheme(appTheme());
     settingsEditor.setChrome("", "");
     settingsEditor.setBoards(opts.boards);
+    if (opts.slot.cardType === "PrioritiesCard") {
+      // rotation focus (cascade plan P4): the board's rotation topics + the
+      // org's pillars feed the builder — loaded lazily, never on the board path
+      void (async () => {
+        try {
+          const [{ getBoard }, { listPillars }, rec] = await Promise.all([
+            import("../store/boards"),
+            import("../store/priorities"),
+            import("../../../shared/schema/recurrence"),
+          ]);
+          const [board, pillars] = await Promise.all([getBoard(opts.boardId), listPillars()]);
+          if (!overlay.isConnected) return;
+          const tops = pillars.filter((p) => p.level === 1 && p.active);
+          settingsEditor.setRotationContext({
+            topics: rec.rotationTopics(board?.occurrenceSettingsRaw ?? ""),
+            pillars: [
+              ...tops.map((p) => ({ id: p.id, name: p.name, sub: false, parentName: "" })),
+              ...pillars
+                .filter((p) => p.level === 2 && p.active)
+                .map((p) => ({ id: p.id, name: p.name, sub: true, parentName: tops.find((t) => t.id === p.parentId)?.name ?? "" })),
+            ],
+          });
+        } catch {
+          /* the builder falls back to JSON */
+        }
+      })();
+    }
     settingsEditor.setDraft(draft, true); // type is fixed: chosen at add time
     settings = settingsEditor;
     mountCard();

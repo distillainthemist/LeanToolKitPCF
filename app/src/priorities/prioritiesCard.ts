@@ -9,6 +9,7 @@
 import type { CardMount } from "../cardRegistry";
 import { getBoard } from "../store/boards";
 import { mountPriorities } from "./prioritiesScreen";
+import { focusForTopic, parseTopicMap } from "./model";
 
 const cfg = (opts: CardMount, key: string): string => {
   const c = (opts.settings.config ?? {}) as Record<string, unknown>;
@@ -39,6 +40,10 @@ export function mountPrioritiesCard(opts: CardMount): () => void {
     if (dead) return;
     const focused = opts.host.clientWidth >= 700 && opts.host.clientHeight >= 400;
     const view = cfg(opts, "prView") === "dynamic" ? "dynamic" : "simple";
+    // rotation focus: the occurrence's topic → pillars; no focus → the
+    // plain pillar-name filter → all
+    const topic = opts.instanceTopic ?? "";
+    const focus = focusForTopic(parseTopicMap(cfg(opts, "prTopicMap")), topic);
     teardown = mountPriorities(opts.host, {
       embedded: true,
       card: {
@@ -49,6 +54,8 @@ export function mountPrioritiesCard(opts: CardMount): () => void {
           ...(cfg(opts, "prArea") !== "" ? { area: cfg(opts, "prArea") } : {}),
         },
         pillarName: cfg(opts, "prPillar"),
+        focus: focus ?? undefined,
+        topic,
         view,
         periodDate: opts.instanceWhen !== "" ? opts.instanceWhen.slice(0, 10) : undefined,
         onSnapshot: (svg) => opts.onTile?.(svg),

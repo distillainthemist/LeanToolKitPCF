@@ -11,6 +11,7 @@ import { paletteMap, titleStripColor } from "../../../shared/palette";
 import { assigneePeople } from "../../../shared/schema/people";
 import { parseMeetingInfo } from "../../../shared/schema/meeting";
 import {
+  topicForDate,
   generateInstances,
   parseCategory,
   parseCrews,
@@ -605,6 +606,7 @@ export function mountCardEditor(
         settings: slot.settings,
         instanceKey,
         instanceWhen: instance?.when ?? "",
+        instanceTopic: instance ? topicForDate(board.occurrenceSettingsRaw, instance.when) : "",
         actions,
         sources: manifest.slots
           .filter((s) => !isActionSurface(s))

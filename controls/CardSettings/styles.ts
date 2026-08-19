@@ -135,6 +135,11 @@ export const CARDSETTINGS_CSS = `
 }
 
 /* ---- chips (string lists) ---- */
+.ltk-cs-topics { display: flex; flex-direction: column; gap: 8px; }
+.ltk-cs-topic-row { display: flex; flex-direction: column; gap: 4px; padding: 6px 8px; border: 1px solid var(--ltk-border, #ddd); border-radius: 6px; }
+.ltk-cs-topic-label { font-size: 12px; font-weight: 600; }
+.ltk-cs-topic-stale .ltk-cs-topic-label { color: #b3261e; }
+.ltk-cs-topic-add { max-width: 220px; font-size: 12px; }
 .ltk-cs-chips {
   display: flex;
   flex-wrap: wrap;

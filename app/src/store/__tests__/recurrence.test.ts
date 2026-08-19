@@ -134,3 +134,28 @@ describe("attendeesFor", () => {
     expect(attendeesFor(people, "").map((p) => p.who)).toEqual(["Ben", "Sam", "Jo"]);
   });
 });
+
+describe("rotation topics + topic for date", () => {
+  const weekly = JSON.stringify({ config: { category: "weekly", weekTopics: ["Safety", "Ops", "", "Cost"] } });
+  const daily = JSON.stringify({ config: { category: "daily", dayTopics: { 1: "Safety", 3: "Ops" } } });
+  it("lists the rotation in order, skipping blanks and repeats", async () => {
+    const { rotationTopics } = await import("../../../../shared/schema/recurrence");
+    expect(rotationTopics(weekly)).toEqual([
+      { key: "Safety", label: "1st week · Safety" },
+      { key: "Ops", label: "2nd week · Ops" },
+      { key: "Cost", label: "4th week · Cost" },
+    ]);
+    expect(rotationTopics(daily).map((t) => t.label)).toEqual(["Monday · Safety", "Wednesday · Ops"]);
+    expect(rotationTopics("")).toEqual([]);
+    expect(rotationTopics(JSON.stringify({ config: { category: "monthly" } }))).toEqual([]);
+  });
+  it("derives the topic for a date the way the engine stamps it", async () => {
+    const { topicForDate } = await import("../../../../shared/schema/recurrence");
+    expect(topicForDate(weekly, "2026-08-04T09:00")).toBe("Safety"); // 1st week
+    expect(topicForDate(weekly, "2026-08-12T09:00")).toBe("Ops"); // 2nd week
+    expect(topicForDate(weekly, "2026-08-19T09:00")).toBe(""); // 3rd blank
+    expect(topicForDate(daily, "2026-08-19")).toBe("Ops"); // a Wednesday
+    expect(topicForDate(daily, "2026-08-18")).toBe(""); // Tuesday unset
+    expect(topicForDate("garbage", "2026-08-18")).toBe("");
+  });
+});

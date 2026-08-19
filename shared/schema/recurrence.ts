@@ -616,3 +616,65 @@ export function attendeesFor(people: Person[], instanceCrew: string): Person[] {
     (p) => p.crew === undefined || p.crew.toLowerCase() === crew
   );
 }
+
+// ---- the rotation as a list, and the topic for one date --------------------
+
+/** The rotation topics a wizard blob defines, in rotation order, as
+ *  the card settings pane lists them ("Week 2 · Ops", "Tuesday · Cost").
+ *  Weekly → week-of-month entries; daily/shiftly → weekday entries; other
+ *  categories have no rotation. Blank entries are skipped. */
+export function rotationTopics(occurrenceSettingsRaw: string): { key: string; label: string }[] {
+  const cfg = rotationConfig(occurrenceSettingsRaw);
+  if (!cfg) return [];
+  const out: { key: string; label: string }[] = [];
+  const seen = new Set<string>();
+  const push = (key: string, label: string) => {
+    if (key === "" || seen.has(key)) return;
+    seen.add(key);
+    out.push({ key, label });
+  };
+  if (cfg.category === "weekly") {
+    const ord = ["1st", "2nd", "3rd", "4th", "5th"];
+    cfg.weekTopics.forEach((t, i) => push(t, `${ord[i] ?? `${i + 1}th`} week · ${t}`));
+  } else if (cfg.category === "daily" || cfg.category === "shiftly") {
+    const names = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+    for (const d of [1, 2, 3, 4, 5, 6, 0]) {
+      const t = cfg.dayTopics[d] ?? "";
+      push(t, `${names[d]} · ${t}`);
+    }
+  }
+  return out;
+}
+
+/** The rotation topic for one occurrence date ("" = none). Same rule the
+ *  engine stamps on instances (weekly by week-of-month, daily by weekday). */
+export function topicForDate(occurrenceSettingsRaw: string, whenIso: string): string {
+  const cfg = rotationConfig(occurrenceSettingsRaw);
+  if (!cfg || whenIso.length < 10) return "";
+  const date = new Date(`${whenIso.slice(0, 10)}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return "";
+  if (cfg.category === "weekly") return cfg.weekTopics[Math.ceil(date.getDate() / 7) - 1] ?? "";
+  if (cfg.category === "daily" || cfg.category === "shiftly") return cfg.dayTopics[date.getDay()] ?? "";
+  return "";
+}
+
+function rotationConfig(
+  occurrenceSettingsRaw: string
+): { category: Category; weekTopics: string[]; dayTopics: Record<number, string> } | null {
+  try {
+    const raw = String(occurrenceSettingsRaw ?? "").trim();
+    if (!raw.startsWith("{")) return null;
+    const blob = JSON.parse(raw) as Record<string, unknown>;
+    const config = (blob.config ?? {}) as Record<string, unknown>;
+    const s = (k: string) => String(config[k] ?? "");
+    return {
+      category: parseCategory(s("category")),
+      weekTopics: parseWeekTopics(Array.isArray(config.weekTopics) ? JSON.stringify(config.weekTopics) : s("weekTopics")),
+      dayTopics: parseDayTopics(
+        config.dayTopics && typeof config.dayTopics === "object" ? JSON.stringify(config.dayTopics) : s("dayTopics")
+      ),
+    };
+  } catch {
+    return null;
+  }
+}
