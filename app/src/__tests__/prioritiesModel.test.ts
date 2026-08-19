@@ -240,3 +240,17 @@ describe("matrix helpers", () => {
     ).toEqual(["↑ Bendigo", "↓ 3 areas · 1 pending · 1 declined"]);
   });
 });
+
+describe("pillar order and spans", () => {
+  const P = (id: string, level: 1 | 2, order: number, parentId = "", active = true) => ({
+    id, name: id, level, parentId, color: "", order, active, company: "",
+  });
+  const pillars = [P("s2", 1, 2), P("s1", 1, 1), P("s2b", 2, 1, "s2"), P("s1b", 2, 2, "s1"), P("s1a", 2, 1, "s1"), P("orphan", 2, 1, "gone")];
+  it("columns walk pillars in settings order, sub-pillars within; orphans trail", async () => {
+    const m = await import("../priorities/model");
+    const cols = m.objectiveColumns(pillars, null);
+    expect(cols.map((c) => c.id)).toEqual(["s1a", "s1b", "s2b", "orphan"]);
+    expect(m.pillarSpans(pillars, cols).map((x) => `${x.pillar?.id ?? "-"}:${x.span}`)).toEqual(["s1:2", "s2:1", "-:1"]);
+    expect(m.objectiveColumns(pillars, "s1").map((c) => c.id)).toEqual(["s1a", "s1b"]);
+  });
+});

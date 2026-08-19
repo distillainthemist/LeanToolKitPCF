@@ -2920,22 +2920,25 @@ button.app-doclist-hsort:hover { color: var(--app-accent, #2563eb); }
   min-height: 90px;
 }
 .app-cp-rail-tall { min-height: 110px; }
-.app-cp-chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 2px 0 4px; }
-.app-cp-l1chip {
+.app-cp-l1span {
   border: 1.5px solid #d9d3c8;
   background: #fff;
-  border-radius: 999px;
+  border-radius: 6px;
   font: inherit;
-  font-size: 12.5px;
-  font-weight: 600;
-  padding: 4px 12px;
-  min-height: 30px;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 8px 12px;
+  min-height: 40px;
   cursor: pointer;
   color: #26241f;
+  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
-.app-cp-l1chip:hover { filter: brightness(0.96); }
-.app-cp-l1chip-on { background: #26241f; color: #fff; border-color: #26241f; }
-.app-cp-l1chip-static { cursor: default; background: #f4f1ea; }
+.app-cp-l1span:hover { filter: brightness(0.96); }
+.app-cp-l1span-on { background: #26241f; color: #fff; border-color: #26241f; }
+.app-cp-l1span-none { cursor: default; background: #f4f1ea; color: #6d675c; border-style: dashed; font-weight: 500; }
 .app-cp-colhead {
   background: #6d675c;
   color: #fff;

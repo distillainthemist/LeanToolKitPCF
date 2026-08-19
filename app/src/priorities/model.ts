@@ -107,10 +107,34 @@ export interface Pillar {
 }
 
 /** Level-2 pillars in display order, optionally under one L1. */
+/** Sub-pillar columns in the order Settings shows them: pillar by pillar,
+ *  then each pillar's sub-pillars by their own order. Sub-pillars whose
+ *  pillar is retired or missing trail at the end (still columns — their
+ *  priorities must not vanish). */
 export function objectiveColumns(pillars: Pillar[], l1: string | null): Pillar[] {
-  return pillars
-    .filter((p) => p.level === 2 && p.active && (l1 === null || p.parentId === l1))
-    .sort((a, b) => a.order - b.order || a.name.localeCompare(b.name));
+  const byOrder = (a: Pillar, b: Pillar) => a.order - b.order || a.name.localeCompare(b.name);
+  const subs = pillars.filter((p) => p.level === 2 && p.active && (l1 === null || p.parentId === l1));
+  const out: Pillar[] = [];
+  for (const top of strategyChips(pillars)) {
+    out.push(...subs.filter((s) => s.parentId === top.id).sort(byOrder));
+  }
+  const placed = new Set(out.map((s) => s.id));
+  out.push(...subs.filter((s) => !placed.has(s.id)).sort(byOrder));
+  return out;
+}
+
+/** The pillar row over the columns: one span per pillar covering its
+ *  consecutive sub-pillar columns; orphan sub-pillars share a "—" span. */
+export function pillarSpans(pillars: Pillar[], columns: Pillar[]): { pillar: Pillar | null; span: number }[] {
+  const out: { pillar: Pillar | null; span: number }[] = [];
+  const tops = new Map(strategyChips(pillars).map((p) => [p.id, p]));
+  for (const col of columns) {
+    const top = tops.get(col.parentId) ?? null;
+    const last = out[out.length - 1];
+    if (last && last.pillar?.id === top?.id && (last.pillar !== null || top === null)) last.span += 1;
+    else out.push({ pillar: top, span: 1 });
+  }
+  return out;
 }
 
 export function strategyChips(pillars: Pillar[]): Pillar[] {

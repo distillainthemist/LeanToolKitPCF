@@ -4,10 +4,11 @@
 // filled and tested). Rides as a hub tab like Documents (dynamic import).
 //
 // Screen anatomy top to bottom: org bar (breadcrumb dropdowns · Descend
-// chips · ⌗ Org picker) → vision band → toolbar (period · status ·
-// Simple/Dynamic · cascade chip · ＋ Priority · ⋮ view options) → the
-// matrix (rail: "Strategic Priorities" over the pillar chips + sub-pillar
-// columns; "Priorities" row; "Objectives" row) → the Other strip.
+// chips · ⌗ Org picker) → toolbar (period · status · Simple/Dynamic ·
+// cascade chip · ＋ Priority · ⋮ view options) → vision band (directly
+// over the pillars) → the matrix (rail: "Strategic Pillars" over one
+// rectangle per pillar spanning its sub-pillar columns, settings order;
+// "Priorities" row; "Objectives" row) → the Other strip.
 // Density: ≤4 comfortable · 5–6 compact · 7+ scroll (or group by pillar).
 // Phone (<720px): sub-pillar headings with their cards stacked.
 //
@@ -68,6 +69,7 @@ import {
   pendingCascades,
   periodFor,
   Pillar,
+  pillarSpans,
   Priority,
   prioritiesForOrg,
   PrioritySettings,
@@ -229,7 +231,8 @@ export function mountPriorities(parent: HTMLElement, _opts: PrioritiesMountOpts 
     const render = () => {
       clear(wrap);
       savePrefs(state);
-      wrap.append(renderOrgBar(), renderVision(), renderToolbar());
+      // the vision band sits directly over the pillars (Ben, 2026-08-19)
+      wrap.append(renderOrgBar(), renderToolbar(), renderVision());
       const columns = objectiveColumns(data.pillars, state.l1);
       if (state.groupByPillar && state.l1 === null && densityFor(columns.length) === "scroll") {
         for (const l1 of strategyChips(data.pillars)) {
@@ -463,33 +466,42 @@ export function mountPriorities(parent: HTMLElement, _opts: PrioritiesMountOpts 
       grid.style.gridTemplateColumns = `126px repeat(${Math.max(1, columns.length)}, 1fr)`;
       box.appendChild(grid);
 
-      // row 1: rail "Strategic Priorities" spanning the pillar chips + column heads
-      const rail1 = el("div", "app-cp-rail app-cp-rail-tall", "Strategic Priorities");
+      // row 1: rail "Strategic Pillars" over the pillar spans + column heads.
+      // Each pillar is a rectangle stretched over its own sub-pillar
+      // columns (settings order); click filters to that pillar, ✕ clears.
+      const rail1 = el("div", "app-cp-rail app-cp-rail-tall", "Strategic Pillars");
       rail1.style.gridRow = "1 / span 2";
       grid.appendChild(rail1);
-      const chips = el("div", "app-cp-chips");
-      chips.style.gridColumn = `2 / span ${Math.max(1, columns.length)}`;
-      if (onlyL1) {
-        chips.appendChild(el("span", "app-cp-l1chip app-cp-l1chip-static", onlyL1.name));
-      } else {
-        for (const l1 of strategyChips(data.pillars)) {
-          const on = state.l1 === l1.id;
-          const c = el("button", "app-cp-l1chip" + (on ? " app-cp-l1chip-on" : ""), on ? `${l1.name} ✕` : l1.name) as HTMLButtonElement;
-          c.type = "button";
-          if (l1.color !== "" && !on) c.style.borderColor = l1.color;
-          if (l1.color !== "" && !on) c.style.color = l1.color;
-          c.title = on ? "Clear the pillar filter" : `Show only ${l1.name}`;
-          c.addEventListener("click", () => {
+      const spans = columns.length > 0 ? pillarSpans(data.pillars, columns) : [];
+      if (spans.length === 0) {
+        const none = el("div", "app-cp-l1span app-cp-l1span-none");
+        none.appendChild(el("span", "app-cp-muted", "No pillars yet — a super admin sets them in Settings → Priorities."));
+        grid.appendChild(none);
+      }
+      for (const sp of spans) {
+        const l1 = sp.pillar;
+        const on = l1 !== null && state.l1 === l1.id;
+        const box = el(l1 ? "button" : "div", "app-cp-l1span" + (on ? " app-cp-l1span-on" : "") + (l1 ? "" : " app-cp-l1span-none"));
+        box.style.gridColumn = `span ${sp.span}`;
+        if (l1) {
+          const b = box as HTMLButtonElement;
+          b.type = "button";
+          b.textContent = on ? `${l1.name} ✕` : l1.name;
+          b.title = on ? "Clear the pillar filter" : `Show only ${l1.name}`;
+          if (l1.color !== "" && !on) {
+            b.style.borderColor = l1.color;
+            b.style.color = l1.color;
+          }
+          b.addEventListener("click", () => {
             state.l1 = on ? null : l1.id;
             render();
           });
-          chips.appendChild(c);
+        } else {
+          box.textContent = "—";
+          box.title = "Sub-pillars whose pillar is retired";
         }
-        if (strategyChips(data.pillars).length === 0) {
-          chips.appendChild(el("span", "app-cp-muted", "No pillars yet — a super admin sets them in Settings → Priorities."));
-        }
+        grid.appendChild(box);
       }
-      grid.appendChild(chips);
       for (const col of columns) {
         const head = el("div", "app-cp-colhead", col.name);
         const parentL1 = data.pillars.find((p) => p.id === col.parentId);
