@@ -9,6 +9,7 @@
 // mandatory. Route: #/template/<id|new>; cancel → Settings → Improvement.
 
 import { el, clear } from "../../../shared/ui/dom";
+import { draggableRow } from "../../../shared/ui/dragList";
 import { newId } from "../../../shared/schema/id";
 import { appTheme, editorHost } from "../cardHost";
 import { showLoading } from "../loading";
@@ -795,49 +796,16 @@ export async function renderImprovementSettings(body: HTMLElement, isSuper: bool
   };
   if (isSuper) {
     const mBox = section("Methods", "The problem-solving / project methods templates classify under — tracked even as templates change and version. Drag to reorder; the order is the picker's order.");
-    const chips = el("div", "app-tw-inline app-tw-methods");
-    let draggingMethod: number | null = null;
+    const chips = el("div", "app-tw-methods");
     const paintMethods = () => {
       clear(chips);
       imp.methods.forEach((m, i) => {
-        const chip = el("span", "ltk-mw-chip app-tw-method", "");
-        chip.appendChild(el("span", "app-drag-handle app-tw-method-handle", "⠿"));
-        chip.appendChild(el("span", undefined, m));
-        chip.draggable = true;
-        chip.title = "Drag to reorder";
-        chip.addEventListener("dragstart", (e) => {
-          draggingMethod = i;
-          chip.classList.add("app-dragging");
-          e.dataTransfer?.setData("text/plain", m);
-          if (e.dataTransfer) e.dataTransfer.effectAllowed = "move";
-        });
-        chip.addEventListener("dragend", () => {
-          draggingMethod = null;
-          chip.classList.remove("app-dragging");
-        });
-        const clearMarks = () => chip.classList.remove("app-tw-drop-left", "app-tw-drop-right");
-        chip.addEventListener("dragover", (e) => {
-          if (draggingMethod === null || draggingMethod === i) return;
-          e.preventDefault();
-          // a horizontal chip row: before/after by the pointer's X
-          const r = chip.getBoundingClientRect();
-          const after = e.clientX > r.left + r.width / 2;
-          chip.classList.toggle("app-tw-drop-right", after);
-          chip.classList.toggle("app-tw-drop-left", !after);
-        });
-        chip.addEventListener("dragleave", clearMarks);
-        chip.addEventListener("drop", (e) => {
-          clearMarks();
-          if (draggingMethod === null || draggingMethod === i) return;
-          e.preventDefault();
-          const from = draggingMethod;
-          draggingMethod = null;
-          const r = chip.getBoundingClientRect();
-          const after = e.clientX > r.left + r.width / 2;
-          let to = i + (after ? 1 : 0);
-          if (from < to) to--;
-          const [moved] = imp.methods.splice(from, 1);
-          imp.methods.splice(to, 0, moved);
+        const rowEl = el("div", "app-tw-method");
+        const handle = el("span", "app-drag-handle app-tw-method-handle", "⠿");
+        handle.title = "Drag to reorder";
+        rowEl.appendChild(handle);
+        rowEl.appendChild(el("span", "app-tw-method-name", m));
+        draggableRow(rowEl, handle, "imp-methods", i, imp.methods, () => {
           persist();
           paintMethods();
         });
@@ -849,20 +817,28 @@ export async function renderImprovementSettings(body: HTMLElement, isSuper: bool
           persist();
           paintMethods();
         });
-        chip.appendChild(x);
-        chips.appendChild(chip);
+        rowEl.appendChild(x);
+        chips.appendChild(rowEl);
       });
+      const addRow = el("div", "app-tw-inline");
       const input = el("input", "app-input app-pr-short") as HTMLInputElement;
       input.placeholder = "Add method…";
-      input.addEventListener("keydown", (e) => {
-        if (e.key !== "Enter") return;
+      const commit = () => {
         const v = input.value.trim();
         if (v === "" || imp.methods.includes(v)) return;
         imp.methods.push(v);
+        input.value = "";
         persist();
         paintMethods();
+      };
+      input.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") commit();
       });
-      chips.appendChild(input);
+      const add = el("button", "app-btn", "＋ Add") as HTMLButtonElement;
+      add.type = "button";
+      add.addEventListener("click", commit);
+      addRow.append(input, add);
+      chips.appendChild(addRow);
     };
     paintMethods();
     mBox.appendChild(chips);
