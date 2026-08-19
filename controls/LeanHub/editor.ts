@@ -78,6 +78,9 @@ export class LeanHubView {
    *  plain DOM keeps its state across re-appends. onExtraTab fires once
    *  per key, on first activation (lazy mounting). */
   private extraTabs: { key: string; label: string; count?: number }[] = [];
+  /** The main tabs in order; keys absent are hidden. null = built-ins
+   *  then extras in registration order (the pre-layout behaviour). */
+  private tabLayout: string[] | null = null;
   private onExtraTab: ((key: string, host: HTMLElement) => void) | null = null;
   private extraHosts = new Map<string, HTMLElement>();
   /** Board directory for the Rituals view; null = option hidden. */
@@ -219,14 +222,40 @@ export class LeanHubView {
     this.render();
   }
 
+  /** The hub's main-tab layout (per-site enablement + order): keys in
+   *  display order, built-in or extra; a key not listed is hidden. If the
+   *  current tab disappears, the first visible one fronts. */
+  setTabLayout(keys: string[] | null): void {
+    this.tabLayout = keys;
+    const visible = this.visibleTabs().map((t) => t.key);
+    if (this.tab !== "settings" && !visible.includes(this.tab)) this.tab = visible[0] ?? "myday";
+    this.render();
+  }
+
+  private visibleTabs(): { key: Tab | string; label: string; count?: number }[] {
+    const builtIn: { key: Tab | string; label: string }[] = [
+      { key: "myday", label: "My day" },
+      { key: "calendar", label: "Cadence" },
+      { key: "actions", label: "Actions" },
+    ];
+    if (this.tabLayout === null) return [...builtIn, ...this.extraTabs];
+    const out: { key: Tab | string; label: string; count?: number }[] = [];
+    for (const key of this.tabLayout) {
+      const b = builtIn.find((t) => t.key === key);
+      if (b) {
+        out.push(b);
+        continue;
+      }
+      const x = this.extraTabs.find((t) => t.key === key);
+      if (x) out.push(x);
+    }
+    return out;
+  }
+
   /** Front a tab programmatically — a deep link landing on an extra tab
    *  (e.g. a shared Documents view) selects it the way a click would. */
   selectTab(key: string): void {
-    const known =
-      key === "myday" ||
-      key === "calendar" ||
-      key === "actions" ||
-      this.extraTabs.some((t) => t.key === key);
+    const known = this.visibleTabs().some((t) => t.key === key);
     if (!known || this.tab === key) return;
     this.tab = key;
     this.render();
@@ -281,12 +310,7 @@ export class LeanHubView {
     renderTitleBar(this.root, this.cardTitle, this.prompts);
 
     const tabs = el("div", "ltk-lh-tabs");
-    const defs: { key: Tab | string; label: string; count?: number }[] = [
-      { key: "myday", label: "My day" },
-      { key: "calendar", label: "Cadence" },
-      { key: "actions", label: "Actions" },
-    ];
-    for (const t of this.extraTabs) defs.push(t);
+    const defs: { key: Tab | string; label: string; count?: number }[] = this.visibleTabs();
     if (!this.hideSettingsTab) defs.push({ key: "settings", label: "Settings" });
     // the Actions tab wears its overdue count (design review Phase 1.3)
     const overdueCount = this.actions.filter(

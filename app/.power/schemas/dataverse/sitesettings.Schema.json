@@ -58,6 +58,45 @@
           "x-ms-schema-name": "ben_departments",
           "maxLength": 10000
         },
+        "ben_hubtabs": {
+          "type": "string",
+          "title": "Hub tabs (JSON)",
+          "x-ms-dataverse-attribute": "ben_hubtabs",
+          "x-ms-dataverse-type": "MemoType",
+          "x-ms-schema-name": "ben_hubtabs",
+          "maxLength": 1000
+        },
+        "ben_isarchived": {
+          "type": "string",
+          "title": "Archived",
+          "x-ms-dataverse-attribute": "ben_isarchived",
+          "x-ms-dataverse-type": "BooleanType",
+          "x-ms-schema-name": "ben_isarchived",
+          "enum": [
+            "No",
+            "Yes"
+          ],
+          "x-ms-enum-values": [
+            0,
+            1
+          ],
+          "Color": [
+            null,
+            null
+          ],
+          "x-ms-optionsetmetadataid": "08c01101-aa9b-f111-b8db-00224814800b",
+          "x-ms-isGlobal": false,
+          "x-ms-optionsetdisplayname": "Archived",
+          "x-ms-optionSetType": "Boolean"
+        },
+        "ben_isarchivedname": {
+          "type": "string",
+          "title": "ben_isarchivedname",
+          "x-ms-dataverse-attribute": "ben_isarchivedname",
+          "x-ms-dataverse-type": "VirtualType",
+          "x-ms-schema-name": "ben_isarchivedName",
+          "x-ms-read-only": true
+        },
         "ben_logo": {
           "type": "string",
           "title": "Logo (data URI)",

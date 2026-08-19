@@ -11,6 +11,7 @@ import {
   parseProtectedTimes,
 } from "../../../controls/LeanHub/types";
 import { LtkAction, parseActionsJson } from "../../../shared/schema/actions";
+import { effectiveTabs } from "../../../shared/schema/hubTabs";
 import { parseOrgTree } from "../../../shared/schema/meeting";
 import { parsePeople } from "../../../shared/schema/people";
 import { appTheme, editorHost } from "../cardHost";
@@ -26,6 +27,7 @@ import {
   orgJson,
   saveProtectedTimes,
   mergeUserPrefs,
+  siteHubTabs,
   userPrefsJson,
 } from "../store/config";
 import { parseManifest } from "../store/mappers";
@@ -277,6 +279,15 @@ export function mountHub(parent: HTMLElement): () => void {
       });
     };
     view.setExtraTabs(extraTabs(docsTaskCount), mountDocsTab);
+    // main-tab layout: the default order (Priorities before Actions and
+    // Documents) narrowed by the viewer's site enablement (Organisation
+    // settings) — applied before any deep link fronts a tab
+    view.setTabLayout(effectiveTabs(null));
+    void siteHubTabs(me?.site ?? "")
+      .then((enabled: string[] | null) => {
+        if (view && enabled !== null) view.setTabLayout(effectiveTabs(enabled));
+      })
+      .catch(() => undefined);
     // a shared Documents link launched the app (or an old #/docs
     // bookmark landed here), or a notification's WORK link named a
     // document (N1): front the tab — its mount consumes any pending

@@ -3202,3 +3202,13 @@ textarea.app-cp-statement { font-size: 14px; font-weight: 500; }
 .app-cp-card-tile .app-cp-tallies, .app-cp-card-tile .app-cp-lineage, .app-cp-card-tile .app-cp-flag, .app-cp-card-tile .app-cp-cell-obj, .app-cp-card-tile .app-cp-other, .app-cp-card-tile .app-cp-kebab { display: none; }
 .app-cp-card-tile .app-cp-cell { min-height: 40px; }
 .app-cp-card-focused .app-cp-walk { min-height: 100%; }
+/* organisation: per-site hub tabs + archive */
+.app-site-tabs { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding: 4px 0 8px; }
+.app-site-tabs-label { font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.05em; color: #6d675c; font-weight: 700; margin-right: 4px; }
+.app-site-tab { font-size: 12px; min-height: 28px; padding: 3px 10px; opacity: 0.55; }
+.app-site-tab-on { opacity: 1; background: #26241f; color: #fff; border-color: #26241f; }
+.app-site-tab:disabled { cursor: default; }
+.app-site-archive { font-size: 12px; min-height: 30px; }
+.app-org-archived { margin-top: 14px; padding: 8px 12px; border: 1px dashed #d9d3c8; border-radius: 8px; font-size: 13px; }
+.app-org-archived summary { cursor: pointer; font-weight: 600; color: #6d675c; }
+.app-org-archived-row { display: flex; align-items: center; gap: 10px; padding: 6px 0; }

@@ -155,6 +155,12 @@ export const TABLES = [
       // APP_ROW ({ragRatioPct, period:{mode,startMonth,prefix}, currentPeriod})
       ben_orgvisions: { ...memo(20000), display: "Org visions (JSON)" },
       ben_prioritysettings: { ...memo(4000), display: "Priorities settings (JSON)" },
+      // per-site hub tabs (Ben, 2026-08-19): JSON array of enabled tab keys
+      // (myday · calendar · priorities · actions · documents); blank = all.
+      // Archived sites stay as rows (data intact, restorable) but leave
+      // every org list / picker.
+      ben_hubtabs: { ...memo(1000), display: "Hub tabs (JSON)" },
+      ben_isarchived: { kind: "bool", display: "Archived", default: false },
       // [{key, label, color}] — the site state palette cards select from
       ben_statepalette: { ...memo(10000), display: "State palette (JSON)" },
       // [{key, label, color}] — title-strip association colours (branding)

@@ -76,7 +76,13 @@ model section) — the canvas/PCF sections there are historical.
   actions register; `ben_ltkpeoples` is the app's user record (role:
   user/siteadmin/superadmin, site, department — the site drives the
   DMS default filter); `ben_ltksitesettings` and `ben_ltkuserprefs`
-  hold settings. **Cascaded priorities (P0, 2026-08-19):**
+  hold settings — the site row also carries `ben_hubtabs` (per-site
+  enablement of the hub's main tabs; `shared/schema/hubTabs.ts` is the
+  one list, default order My day · Cadence · Priorities · Actions ·
+  Documents) and `ben_isarchived` (an archived site keeps its row and
+  data but leaves `orgJson()` and so every picker; Organisation settings
+  lists it under "Archived sites" with Restore) — both 2026-08-19,
+  solution-carrying. **Cascaded priorities (P0, 2026-08-19):**
   `ben_ltkpillar` (company pillars, two levels via a self lookup),
   `ben_ltkpriority` (one row per priority, owned by its originating org
   by NAME — company/site/department/area columns — with pillar and

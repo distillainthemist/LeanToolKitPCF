@@ -20,6 +20,8 @@ export interface Ben_ltksitesettingsesBase {
   ben_companies?: string;
   ben_company?: string;
   ben_departments?: string;
+  ben_hubtabs?: string;
+  ben_isarchived?: boolean;
   ben_logo?: string;
   ben_ltksitesettingsid: string;
   ben_meetingcategories?: string;
@@ -42,6 +44,7 @@ export interface Ben_ltksitesettingsesBase {
 }
 
 export interface Ben_ltksitesettingses extends Ben_ltksitesettingsesBase {
+  ben_isarchivedname?: string;
   createdbyname?: string;
   createdbyyominame: string;
   createdon?: string;

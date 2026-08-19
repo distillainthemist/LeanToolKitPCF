@@ -4,6 +4,7 @@
 
 import { Ben_ltksitesettingsesService } from "../generated/services/Ben_ltksitesettingsesService";
 import { Ben_ltkuserprefsesService } from "../generated/services/Ben_ltkuserprefsesService";
+import { parseHubTabs, serializeHubTabs } from "../../../shared/schema/hubTabs";
 import {
   defaultPalette,
   defaultTitlePalette,
@@ -16,9 +17,55 @@ import { orgTreeFromRows, protectedTimesForSite } from "./mappers";
 /** Reserved sitesettings row that carries app-level branding. */
 export const APP_ROW = "__app__";
 
-export async function orgJson(): Promise<string> {
+/** The org tree as JSON. Archived sites are LEFT OUT unless asked for —
+ *  every picker, scope select and the priorities screen read this, and an
+ *  archived site must vanish from all of them (Ben, 2026-08-19). */
+export async function orgJson(includeArchived = false): Promise<string> {
   const rows = await allWhere(Ben_ltksitesettingsesService.getAll);
-  return JSON.stringify(orgTreeFromRows(rows.filter((r) => r.ben_site !== APP_ROW)));
+  return JSON.stringify(
+    orgTreeFromRows(rows.filter((r) => r.ben_site !== APP_ROW && (includeArchived || r.ben_isarchived !== true)))
+  );
+}
+
+/** Sites currently archived (rows kept, hidden everywhere). */
+export async function archivedSites(): Promise<string[]> {
+  const rows = await allWhere(Ben_ltksitesettingsesService.getAll);
+  return rows
+    .filter((r) => r.ben_site !== APP_ROW && r.ben_isarchived === true)
+    .map((r) => r.ben_site ?? "")
+    .filter((s) => s !== "");
+}
+
+export async function setSiteArchived(site: string, archived: boolean): Promise<void> {
+  await upsertWhere(
+    Ben_ltksitesettingsesService,
+    eq("ben_site", site),
+    (row) => row.ben_ltksitesettingsid,
+    { ben_site: site, ben_name: site, ben_isarchived: archived }
+  );
+}
+
+/** Per-site hub tab enablement (shared/schema/hubTabs): null = all. */
+export async function siteHubTabs(site: string): Promise<string[] | null> {
+  if (site === "") return null;
+  const rows = await allWhere(Ben_ltksitesettingsesService.getAll, eq("ben_site", site));
+  return parseHubTabs(rows[0]?.ben_hubtabs);
+}
+
+export async function allSiteHubTabs(): Promise<Record<string, string[] | null>> {
+  const rows = await allWhere(Ben_ltksitesettingsesService.getAll);
+  const out: Record<string, string[] | null> = {};
+  for (const r of rows) if (r.ben_site && r.ben_site !== APP_ROW) out[r.ben_site] = parseHubTabs(r.ben_hubtabs);
+  return out;
+}
+
+export async function saveSiteHubTabs(site: string, enabled: string[] | null): Promise<void> {
+  await upsertWhere(
+    Ben_ltksitesettingsesService,
+    eq("ben_site", site),
+    (row) => row.ben_ltksitesettingsid,
+    { ben_site: site, ben_name: site, ben_hubtabs: serializeHubTabs(enabled) }
+  );
 }
 
 export interface Branding {

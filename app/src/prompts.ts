@@ -98,3 +98,45 @@ export function promptText(opts: {
     input.select();
   });
 }
+
+/** A yes/no confirmation — centred modal, Esc/click-out = no. */
+export function promptConfirm(opts: {
+  title: string;
+  note?: string;
+  confirmLabel?: string;
+  danger?: boolean;
+}): Promise<boolean> {
+  return new Promise((resolve) => {
+    const overlay = el("div", "app-modal-overlay");
+    const box = el("div", "app-modal");
+    box.appendChild(el("div", "app-modal-title", opts.title));
+    if (opts.note) box.appendChild(el("div", "app-modal-note", opts.note));
+    const footer = el("div", "app-modal-footer");
+    const cancel = el("button", "app-link", "Cancel") as HTMLButtonElement;
+    cancel.type = "button";
+    const ok = el("button", "app-btn " + (opts.danger ? "app-btn-danger" : "app-btn-primary"), opts.confirmLabel ?? "OK") as HTMLButtonElement;
+    ok.type = "button";
+    footer.append(cancel, ok);
+    box.appendChild(footer);
+    const done = (v: boolean) => {
+      overlay.remove();
+      document.removeEventListener("keydown", onKey, true);
+      resolve(v);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        done(false);
+      }
+    };
+    cancel.addEventListener("click", () => done(false));
+    ok.addEventListener("click", () => done(true));
+    overlay.addEventListener("click", (e) => {
+      if (e.target === overlay) done(false);
+    });
+    overlay.appendChild(box);
+    document.body.appendChild(overlay);
+    document.addEventListener("keydown", onKey, true);
+    ok.focus();
+  });
+}

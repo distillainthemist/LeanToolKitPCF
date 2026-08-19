@@ -20,7 +20,7 @@ import { statusChip } from "../../../shared/ui/format";
 import { boardHash, boardUrl } from "../links";
 import { bootFail } from "../loading";
 import { setLeaveGuard } from "../navGuard";
-import { promptText, promptUnsaved } from "../prompts";
+import { promptConfirm, promptText, promptUnsaved } from "../prompts";
 import { currentViewer, detectHost } from "../runtime";
 import { EmulatedRole, effectivePerson, setViewAsRole, viewAsRole } from "../viewAs";
 import {
@@ -66,8 +66,13 @@ import {
   siteCompanies,
   siteSettings,
   SiteRosterPattern,
+  archivedSites,
+  allSiteHubTabs,
+  saveSiteHubTabs,
+  setSiteArchived,
 } from "../store/config";
 import { parseMeetingInfo, parseOrgTree } from "../../../shared/schema/meeting";
+import { effectiveTabs, HUB_TABS } from "../../../shared/schema/hubTabs";
 import {
   crewStateOn,
   parseCategory,
@@ -1857,8 +1862,12 @@ async function renderOrg(
 ): Promise<void> {
   clear(body);
   const isSuper = me.role === "superadmin";
-  const tree = parseOrgTree(await orgJson()) as OrgSiteNode[];
-  const sites = tree.map((s) => s.site);
+  const tree = parseOrgTree(await orgJson(true)) as OrgSiteNode[];
+  const archived = await archivedSites();
+  const hubTabsBySite = await allSiteHubTabs();
+  // archived sites keep their rows but leave the live tree; they list at
+  // the bottom with Restore (Ben, 2026-08-19)
+  const sites = tree.map((s) => s.site).filter((s) => !archived.includes(s));
   const companyList = await companies();
   const siteCompany = await siteCompanies();
   const ownersBySite = await allSiteOwners();
@@ -2094,7 +2103,51 @@ async function renderOrg(
       })
     );
     if (!canEdit) head.appendChild(el("span", "app-status-badge", "view only"));
+    if (isSuper) {
+      head.appendChild(el("span", "app-bar-gap"));
+      const arch = el("button", "app-btn app-btn-danger app-site-archive", "Archive site") as HTMLButtonElement;
+      arch.type = "button";
+      arch.title = "Hide this site from every list and picker; its boards, people and priorities are kept and it can be restored";
+      arch.addEventListener("click", () => {
+        void (async () => {
+          if (!(await guardLeave())) return;
+          const yes = await promptConfirm({
+            title: `Archive ${site}?`,
+            note: "The site leaves every org list, scope and picker. Its boards, people, documents and priorities are kept, and it can be restored from the bottom of this page.",
+            confirmLabel: "Archive site",
+            danger: true,
+          });
+          if (!yes) return;
+          await setSiteArchived(site, true);
+          await renderOrg(body, me, ctx);
+        })();
+      });
+      head.appendChild(arch);
+    }
     card.appendChild(head);
+
+    // which main hub tabs this site's people see (Ben, 2026-08-19)
+    const tabsRow = el("div", "app-site-tabs");
+    tabsRow.appendChild(el("span", "app-site-tabs-label", "Hub tabs"));
+    const enabled = new Set(effectiveTabs(hubTabsBySite[site] ?? null));
+    for (const t of HUB_TABS) {
+      const chip = el("button", "app-cp-l1chip app-site-tab" + (enabled.has(t.key) ? " app-site-tab-on" : ""), t.label) as HTMLButtonElement;
+      chip.type = "button";
+      chip.disabled = !canEdit;
+      chip.title = canEdit ? (enabled.has(t.key) ? `Hide ${t.label} for ${site}` : `Show ${t.label} for ${site}`) : "";
+      chip.addEventListener("click", () => {
+        if (enabled.has(t.key)) {
+          if (enabled.size === 1) return; // never lock a site out
+          enabled.delete(t.key);
+        } else enabled.add(t.key);
+        const next = [...enabled];
+        hubTabsBySite[site] = next.length === HUB_TABS.length ? null : next;
+        chip.classList.toggle("app-site-tab-on", enabled.has(t.key));
+        void saveSiteHubTabs(site, hubTabsBySite[site] ?? null);
+      });
+      tabsRow.appendChild(chip);
+    }
+    card.appendChild(tabsRow);
 
     const deptList = el("div", "app-dept-list");
     card.appendChild(deptList);
@@ -2263,6 +2316,29 @@ async function renderOrg(
       const addCo = el("button", "app-org-add app-org-addco", "\uFF0B Add company") as HTMLButtonElement;
       addCo.addEventListener("click", addCompanyFlow);
       treeBox.appendChild(addCo);
+    }
+    if (archived.length > 0) {
+      const box = el("details", "app-org-archived") as HTMLDetailsElement;
+      box.appendChild(el("summary", undefined, `Archived sites (${archived.length})`));
+      for (const site of archived) {
+        const row = el("div", "app-org-archived-row");
+        row.appendChild(el("span", "app-site-name", site));
+        row.appendChild(el("span", "app-settings-note", siteCompany[site] ? ` · ${siteCompany[site]}` : ""));
+        if (isSuper) {
+          const restore = el("button", "app-btn", "Restore") as HTMLButtonElement;
+          restore.type = "button";
+          restore.addEventListener("click", () => {
+            void (async () => {
+              if (!(await guardLeave())) return;
+              await setSiteArchived(site, false);
+              await renderOrg(body, me, ctx);
+            })();
+          });
+          row.appendChild(restore);
+        }
+        box.appendChild(row);
+      }
+      treeBox.appendChild(box);
     }
   };
   draw();
