@@ -3219,3 +3219,5 @@ textarea.app-cp-statement { font-size: 14px; font-weight: 500; }
 .app-org-archived { margin-top: 14px; padding: 8px 12px; border: 1px dashed #d9d3c8; border-radius: 8px; font-size: 13px; }
 .app-org-archived summary { cursor: pointer; font-weight: 600; color: #6d675c; }
 .app-org-archived-row { display: flex; align-items: center; gap: 10px; padding: 6px 0; }
+.app-cp-cascade-prior { font-size: 12px; }
+.app-cp-ov-resend { margin-left: 8px; font-weight: 600; }

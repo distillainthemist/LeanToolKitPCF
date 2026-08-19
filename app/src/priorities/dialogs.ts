@@ -238,7 +238,7 @@ export interface CascadeTarget {
  *  first, then peers — each row a checkbox; returns the picked-set. */
 export function cascadeTargetList(
   targets: CascadeTarget[],
-  already: Set<string>,
+  already: Map<string, { status: string; reason: string }>,
   from: OrgRef,
   onChange: (picked: Set<string>) => void
 ): { box: HTMLElement; picked: Set<string> } {
@@ -259,7 +259,11 @@ export function cascadeTargetList(
       const lab = el("label", "app-cp-cascade-row" + (kind === "peer" ? " app-cp-cascade-peer" : "")) as HTMLLabelElement;
       const cb = el("input") as HTMLInputElement;
       cb.type = "checkbox";
-      if (already.has(key)) {
+      const prior = already.get(key);
+      // sent and live (proposed / accepted / completed) → ticked and locked;
+      // declined or parked → unticked, re-tickable = re-send (Ben, 2026-08-19)
+      const resendable = prior !== undefined && (prior.status === "rejected" || prior.status === "onhold");
+      if (prior && !resendable) {
         cb.checked = true;
         cb.disabled = true;
       }
@@ -273,6 +277,15 @@ export function cascadeTargetList(
         el("span", "app-cp-cascade-org", orgName(t.org)),
         el("span", "app-cp-muted", t.ownerName !== "" ? ` · ${t.ownerName}` : " · no owner")
       );
+      if (resendable) {
+        lab.appendChild(
+          el(
+            "span",
+            prior.status === "rejected" ? "app-cp-flag-red app-cp-cascade-prior" : "app-cp-muted app-cp-cascade-prior",
+            prior.status === "rejected" ? ` · declined${prior.reason !== "" ? ` — “${prior.reason}”` : ""} · tick to re-send` : ` · parked${prior.reason !== "" ? ` — “${prior.reason}”` : ""} · tick to re-send`
+          )
+        );
+      }
       box.appendChild(lab);
     }
   };
@@ -294,8 +307,9 @@ export interface PriorityDialogOpts {
   /** Cascade targets on offer: children of the org + peers, each with its
    *  owner's name for the row ("Warehouse · K. Lowe"). */
   cascadeTargets: CascadeTarget[];
-  /** Orgs already cascaded to (shown ticked and locked). */
-  alreadyCascaded: OrgRef[];
+  /** Existing assignments of this priority: live ones show ticked and
+   *  locked; declined / parked ones can be ticked again to re-send. */
+  alreadyCascaded: { org: OrgRef; status: string; reason: string }[];
   primaryInitiativeLabel: string; // "" = none yet
 }
 
@@ -367,7 +381,7 @@ export function priorityDialog(o: PriorityDialogOpts): Promise<PriorityDialogRes
     const primary = el("div", "app-cp-muted", o.primaryInitiativeLabel !== "" ? o.primaryInitiativeLabel : "None yet — link one when initiatives exist.");
 
     // cascade to — children and peers, clearly separated (Ben, 2026-08-19)
-    const already = new Set(o.alreadyCascaded.map(orgKey));
+    const already = new Map(o.alreadyCascaded.map((a) => [orgKey(a.org), { status: a.status, reason: a.reason }]));
     const { box: cascadeBox, picked } = cascadeTargetList(o.cascadeTargets, already, p.org, () => paintConfirm());
     const confirm = el("div", "app-cp-confirm", "");
     const paintConfirm = () => {

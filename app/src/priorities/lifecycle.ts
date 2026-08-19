@@ -198,6 +198,31 @@ export async function reopenPriority(ctx: LifecycleCtx, p: Priority): Promise<vo
   await ctx.changed();
 }
 
+/** Send (or re-send) a priority to orgs: a fresh assignment for new
+ *  targets; a declined / parked one goes back to proposed (its old reason
+ *  and decision stay in History via the event). */
+export async function sendCascade(ctx: LifecycleCtx, p: Priority, targets: OrgRef[]): Promise<void> {
+  const data = ctx.data();
+  const mine = data.assignments.filter((a) => a.priorityId === p.id);
+  const sent: string[] = [];
+  const resent: string[] = [];
+  for (const org of targets) {
+    const prior = mine.find((a) => orgKey(a.org) === orgKey(org));
+    if (!prior) {
+      await saveAssignment(
+        { id: "", priorityId: p.id, org, status: "proposed", reason: "", decidedById: "", decidedByName: "", decidedAt: "", childPriorityId: "" },
+        data
+      );
+      sent.push(orgName(org));
+    } else if (prior.status === "rejected" || prior.status === "onhold") {
+      await saveAssignment({ ...prior, status: "proposed", reason: "", decidedById: "", decidedByName: "", decidedAt: "", childPriorityId: "" }, data);
+      resent.push(orgName(org));
+    }
+  }
+  if (sent.length > 0) await appendEvent(p, "cascaded", { to: sent }, ctx.actor());
+  if (resent.length > 0) await appendEvent(p, "cascaded", { to: resent, resent: true }, ctx.actor());
+}
+
 /** Bulk carry-forward at period end (toolbar ⋮): pick which active
  *  priorities of the current period roll into the next. */
 export function carryForwardFlow(ctx: LifecycleCtx, org: OrgRef, period: string, candidates: Priority[]): void {
@@ -250,7 +275,7 @@ export function cascadeDialog(ctx: LifecycleCtx, p: Priority): void {
     ...kids.map((o) => ({ org: o, ownerName: ctx.ownerNameFor(o), kind: "child" as const })),
     ...peers.map((o) => ({ org: o, ownerName: ctx.ownerNameFor(o), kind: "peer" as const })),
   ];
-  const already = new Set(data.assignments.filter((a) => a.priorityId === p.id).map((a) => orgKey(a.org)));
+  const already = new Map(data.assignments.filter((a) => a.priorityId === p.id).map((a) => [orgKey(a.org), { status: a.status, reason: a.reason }]));
   const m = modal(ctx.host, "Cascade to…", "Children receive it to cascade down; peers receive it to share sideways. Each is a request to accept.");
   const { box: list, picked } = cascadeTargetList(targets, already, p.org, (set) => {
     confirm.textContent = set.size > 0 ? `This will send the priority to ${set.size} org${set.size === 1 ? "" : "s"} for acceptance.` : "";
@@ -266,13 +291,7 @@ export function cascadeDialog(ctx: LifecycleCtx, p: Priority): void {
     m.close();
     if (chosen.length === 0) return;
     void (async () => {
-      for (const org of chosen) {
-        await saveAssignment(
-          { id: "", priorityId: p.id, org, status: "proposed", reason: "", decidedById: "", decidedByName: "", decidedAt: "", childPriorityId: "" },
-          data
-        );
-      }
-      await appendEvent(p, "cascaded", { to: chosen.map(orgName) }, ctx.actor());
+      await sendCascade(ctx, p, chosen);
       await ctx.changed();
     })();
   });
@@ -589,6 +608,19 @@ export function openPriorityOverlay(ctx: LifecycleCtx, p: Priority, onEdit: (p: 
             ctx.open(child);
           });
         }
+        if (can && live.status === "active" && (a.status === "rejected" || a.status === "onhold")) {
+          const resend = btn("Re-send", "app-cp-ov-link app-cp-ov-resend");
+          resend.title = `Send this priority to ${orgName(a.org)} again for acceptance`;
+          resend.addEventListener("click", (e) => {
+            e.stopPropagation();
+            void sendCascade(ctx, live, [a.org]).then(async () => {
+              await ctx.changed();
+              events = null;
+              if (scrim.isConnected) paint();
+            });
+          });
+          row.appendChild(resend);
+        }
         ul.appendChild(row);
       }
       ln.appendChild(ul);
@@ -675,7 +707,7 @@ function eventWords(e: PriorityEvent): string {
     case "edited":
       return str("keptAfterParentClosed") !== "" ? `kept after parent closed — “${str("keptAfterParentClosed")}”` : str("to") !== "" ? `statement → “${str("to")}”` : "properties changed";
     case "cascaded":
-      return Array.isArray(d.to) ? `sent to ${(d.to as string[]).join(", ")}` : "sent";
+      return Array.isArray(d.to) ? `${d.resent === true ? "re-sent" : "sent"} to ${(d.to as string[]).join(", ")}` : "sent";
     case "accepted":
       return `${str("org")} accepted as-is`;
     case "customised":

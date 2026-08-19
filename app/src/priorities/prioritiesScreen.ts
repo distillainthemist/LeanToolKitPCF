@@ -40,7 +40,6 @@ import {
   CascadeData,
   loadCascade,
   newPriority,
-  saveAssignment,
   savePriority,
 } from "../store/priorities";
 import {
@@ -55,7 +54,7 @@ import {
 import { loadPriorityPrefs, savePriorityPrefs, ViewMode } from "./prefs";
 import { mountWalk } from "./walk";
 import { initialsFor } from "../../../shared/schema/people";
-import { carryForwardFlow, cascadeDialog, cascadeReview, closeDialog, closePriority, LifecycleCtx, openPriorityOverlay, reopenPriority } from "./lifecycle";
+import { carryForwardFlow, cascadeDialog, cascadeReview, closeDialog, closePriority, LifecycleCtx, openPriorityOverlay, reopenPriority, sendCascade } from "./lifecycle";
 import {
   canManageOrg,
   densityFor,
@@ -1041,7 +1040,7 @@ export function mountPriorities(parent: HTMLElement, opts: PrioritiesMountOpts =
 
     const editPriority = async (p: Priority) => {
       const copy: Priority = { ...p, org: { ...p.org } };
-      const already = data.assignments.filter((a) => a.priorityId === p.id).map((a) => a.org);
+      const already = data.assignments.filter((a) => a.priorityId === p.id).map((a) => ({ org: a.org, status: a.status, reason: a.reason }));
       const r = await priorityDialog({
         host: wrap,
         title: "Edit priority",
@@ -1070,27 +1069,7 @@ export function mountPriorities(parent: HTMLElement, opts: PrioritiesMountOpts =
     /** Create proposed assignments for the chosen orgs (skipping any that
      *  already have one) and log the cascade event. */
     const cascade = async (p: Priority, targets: OrgRef[]) => {
-      const existing = new Set(data.assignments.filter((a) => a.priorityId === p.id).map((a) => orgKey(a.org)));
-      const fresh = targets.filter((o) => !existing.has(orgKey(o)) && !isDescendant(p.org, o));
-      for (const org of fresh) {
-        await saveAssignment(
-          {
-            id: "",
-            priorityId: p.id,
-            org,
-            status: "proposed",
-            reason: "",
-            decidedById: "",
-            decidedByName: "",
-            decidedAt: "",
-            childPriorityId: "",
-          },
-          data
-        );
-      }
-      if (fresh.length > 0) {
-        await appendEvent(p, "cascaded", { to: fresh.map(orgName) }, actor());
-      }
+      await sendCascade(ctx, p, targets.filter((o) => !isDescendant(p.org, o)));
     };
 
     render();
