@@ -61,8 +61,6 @@ import {
   densityFor,
   groupByColumn,
   isDescendant,
-  lineageFor,
-  lineageWords,
   nextPeriod,
   objectiveColumns,
   OrgRef,
@@ -87,7 +85,6 @@ import {
   rollup,
   RollupRule,
   sameOrg,
-  senderFlags,
   strategyChips,
   tally,
   tallyLine,
@@ -881,30 +878,7 @@ export function mountPriorities(parent: HTMLElement, opts: PrioritiesMountOpts =
       }
       meta.appendChild(el("span", "app-cp-total", `· ${t.total} initiative${t.total === 1 ? "" : "s"}`));
       body.appendChild(meta);
-      const lin = lineageFor(p, data.priorities, data.assignments);
-      const words = lineageWords(lin, "org");
-      if (adopted && lin.from === null) words.unshift(`↑ ${orgName(p.org)}`);
-      if (words.length > 0) {
-        const line = el("div", "app-cp-lineage");
-        for (const w of words) {
-          const s = el("span", "app-cp-lineage-part", w);
-          if (/declined/.test(w)) s.classList.add("app-cp-lineage-declined");
-          line.appendChild(s);
-        }
-        body.appendChild(line);
-      }
       if (p.status !== "active") body.appendChild(el("div", "app-cp-flag", p.status === "completed" ? "✓ Completed" : p.status === "archived" ? "▣ Archived" : "▣ Retired"));
-      for (const f of senderFlags(p, data.assignments).slice(0, 2)) {
-        body.appendChild(
-          el(
-            "div",
-            "app-cp-flag" + (f.kind === "declined" ? " app-cp-flag-red" : ""),
-            f.kind === "declined"
-              ? `✕ ${orgName(f.org)} declined this priority${f.reason !== "" ? ` — “${f.reason}”` : ""}`
-              : `⏸ ${orgName(f.org)} parked${f.reason !== "" ? ` — “${f.reason}”` : ""}`
-          )
-        );
-      }
       if (parentClosed(p, data.priorities)) body.appendChild(el("div", "app-cp-flag app-cp-flag-amber", "▲ Parent completed — decide"));
       card.appendChild(body);
       card.addEventListener("click", () => {
@@ -932,32 +906,10 @@ export function mountPriorities(parent: HTMLElement, opts: PrioritiesMountOpts =
         el("span", "app-cp-total", density === "compact" ? `·${t.total}` : `· ${t.total} initiative${t.total === 1 ? "" : "s"}`)
       );
       card.appendChild(meta);
-      const lin = lineageFor(p, data.priorities, data.assignments);
-      const words = lineageWords(lin, "org");
-      if (adopted && lin.from === null) words.unshift(`↑ ${orgName(p.org)}`);
-      if (words.length > 0) {
-        const line = el("div", "app-cp-lineage");
-        for (const w of words) {
-          const s = el("span", "app-cp-lineage-part", density === "compact" ? w.replace(/ (orgs?|areas?)/, "") : w);
-          if (/declined/.test(w)) s.classList.add("app-cp-lineage-declined");
-          line.appendChild(s);
-        }
-        card.appendChild(line);
-      }
+      // cascade lineage and sender flags live in the detail overlay, not
+      // on the card (Ben, 2026-08-19)
       if (p.status !== "active") {
         card.appendChild(el("div", "app-cp-flag", p.status === "completed" ? "✓ Completed" : p.status === "archived" ? "▣ Archived" : "▣ Retired"));
-      }
-      // sender's-view flags (§10) — worded, never colour alone
-      for (const f of senderFlags(p, data.assignments).slice(0, 2)) {
-        card.appendChild(
-          el(
-            "div",
-            "app-cp-flag" + (f.kind === "declined" ? " app-cp-flag-red" : ""),
-            f.kind === "declined"
-              ? `✕ ${orgName(f.org)} declined this priority${f.reason !== "" ? ` — “${f.reason}”` : ""}`
-              : `⏸ ${orgName(f.org)} parked${f.reason !== "" ? ` — “${f.reason}”` : ""}`
-          )
-        );
       }
       if (parentClosed(p, data.priorities)) card.appendChild(el("div", "app-cp-flag app-cp-flag-amber", "▲ Parent completed — decide"));
       // owner actions (⋮): P1 offers Edit + reorder; Cascade to… / Complete arrive with P2
