@@ -322,6 +322,10 @@ reschedule/cancel history with a reason picklist.
 - **— next design pass —** templates builder, actions Gantt, VDT
   editor + simulation, reporting shapes (brief §4.4–4.5, §6 Q7/11/12).
   Entry points (`Gantt ›`, settings tabs) stay stubs until then.
+  BRIEF DRAFTED 2026-08-19: `leanboard-cascade-design-brief-2.md` (what
+  is built, the new primitives to reuse, §4.1–4.5 scope, 12 questions,
+  deliverables) — hand it over with brief 1, the two specs and the
+  review HTML.
 - **P5 Improvement tab** — three-group table with scope select, row
   anatomy, List/Tiles, filters, three-step create modal incl. Single
   action (needs templates → after the templates builder).
