@@ -159,3 +159,52 @@ describe("rotation topics + topic for date", () => {
     expect(topicForDate("garbage", "2026-08-18")).toBe("");
   });
 });
+
+describe("times that vary by day / week (kickoff-closeout cycles)", () => {
+  it("parses per-day and per-week times, rejecting malformed", async () => {
+    const m = await import("../../../../shared/schema/recurrence");
+    expect(m.parseDayTimes('{"Mon":"7:00","Fri":"15:00","Tue":"25:99"}')).toEqual({ 1: "07:00", 5: "15:00" });
+    expect(m.parseDayTimes("mon:07:00,fri:15:00")).toEqual({ 1: "07:00", 5: "15:00" });
+    expect(m.parseWeekTimes('["07:00","","","15:00"]')).toEqual(["07:00", "", "", "15:00"]);
+    expect(m.parseWeekTimes("07:00,,bad,15:00,,")).toEqual(["07:00", "", "", "15:00"]);
+    expect(m.parseWeekTimes("")).toEqual([]);
+  });
+  it("timeFor: day override > week override > default; weekly-only for weeks", async () => {
+    const m = await import("../../../../shared/schema/recurrence");
+    const base = { category: "weekly" as const, timeOfDay: "09:00", dayTimes: { 5: "15:00" }, weekTimes: ["07:00", "", "", "16:00"] };
+    expect(m.timeFor(base, new Date(2026, 7, 3))).toBe("07:00"); // Mon 3 Aug — 1st week
+    expect(m.timeFor(base, new Date(2026, 7, 7))).toBe("15:00"); // Fri 7 Aug — day override wins
+    expect(m.timeFor(base, new Date(2026, 7, 10))).toBe("09:00"); // Mon 10 Aug — 2nd week blank → default
+    expect(m.timeFor(base, new Date(2026, 7, 24))).toBe("16:00"); // Mon 24 Aug — 4th week
+    expect(m.timeFor({ ...base, category: "daily" }, new Date(2026, 7, 3))).toBe("09:00"); // daily ignores week table
+    expect(m.timeVaries(base)).toBe(true);
+    expect(m.timeVaries({ category: "weekly", timeOfDay: "09:00", dayTimes: { 1: "09:00" } })).toBe(false);
+  });
+  it("generateInstances stamps the varied time (and shiftly night = day + 12h)", async () => {
+    const m = await import("../../../../shared/schema/recurrence");
+    const cfg: import("../../../../shared/schema/recurrence").SchedulerConfig = {
+      finalDate: new Date(2026, 7, 7),
+      daysPrior: 6,
+      category: "weekly",
+      daysOfWeek: [1, 5],
+      timeOfDay: "09:00",
+      crews: [],
+      roster: [],
+      baseStart: new Date(2026, 7, 3),
+      weekTopics: [],
+      dayTopics: { 1: "Kickoff", 5: "Closeout" },
+      dayTimes: { 1: "07:00", 5: "15:00" },
+    };
+    const rows = m.generateInstances(cfg, [], new Date(0));
+    expect(rows.map((r) => `${r.day} ${r.time} ${r.topic}`)).toEqual(["Fri 15:00 Closeout", "Mon 07:00 Kickoff"]);
+    const shift = m.generateInstances({ ...cfg, category: "shiftly", dayTopics: {} }, [], new Date(0));
+    expect(shift.filter((r) => r.day === "Mon").map((r) => `${r.shift} ${r.time}`)).toEqual(["night 19:00", "day 07:00"]);
+  });
+  it("cadenceFromConfig reads the two tables like the rest", async () => {
+    const m = await import("../../../../shared/schema/recurrence");
+    const c = m.cadenceFromConfig({ category: "weekly", daysOfWeek: "Mon,Fri", timeOfDay: "09:00", dayTimes: { Mon: "07:00" }, weekTimes: ["", "10:00"] }, new Date(2026, 0, 1));
+    expect(c.dayTimes).toEqual({ 1: "07:00" });
+    expect(c.weekTimes).toEqual(["", "10:00"]);
+    expect(c.daysOfWeek).toEqual([1, 5]);
+  });
+});

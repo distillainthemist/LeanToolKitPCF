@@ -11,15 +11,23 @@ snapshots, and does not appear in the card catalog.
 / area) → Cadence → Crews & roster (rostered cadences only) → Participants
 → Meeting records → Review (with the **Create meeting** button).
 
-**Cadence step details:** weekly and fortnightly meetings run on exactly
-**one day** (the toggles are single-select); annually / quarterly / monthly
-/ fortnightly get a **First occurrence** anchor date — the recurrence
-projects forward from it (fortnightly = same week parity; monthly+ = the
-date's nth weekday, e.g. its 2nd Tuesday). Weekly meetings can define a
-**topic rotation** through the month (1st–5th occurrence, 5th only when the
-month has one); daily/shiftly meetings can define **topics by day of
-week**. Topics land in `config.weekTopics` / `config.dayTopics` and show on
-every MeetingScheduler row.
+**Cadence step details:** fortnightly meetings run on exactly **one day**;
+weekly, daily and shiftly may run on **several days** (a weekly ritual with
+a Monday kickoff and a Friday closeout is one meeting — 2026-08-19);
+annually / quarterly / monthly / fortnightly get a **First occurrence**
+anchor date — the recurrence projects forward from it (fortnightly = same
+week parity; monthly+ = the date's nth weekday, e.g. its 2nd Tuesday).
+**Time** is the default; the **By day — time · topic** table (weekly,
+daily, shiftly) gives each running day its own time and topic, and weekly
+meetings also get **By week of month — time · topic** (1st–5th occurrence,
+5th only when the month has one). Resolution per occurrence: the day's
+time, else the week's, else the default (`timeFor` in
+`shared/schema/recurrence.ts`); topics the same way (`topicForCfg`).
+Overrides land in `config.dayTimes` (`{Mon:"07:00"}`), `config.weekTimes`
+(`["07:00","","","15:00"]`), `config.dayTopics`, `config.weekTopics` and
+show on every MeetingScheduler row; the hub agenda, the board's scheduler
+pane and the card editor all read the same engine. Record matching is by
+date (+ day/night shift), so changing times never orphans existing records.
 
 - **Schema id:** none · **Document:** ✖ · **Actions:** ✖ · **Snapshots:** ✖
 

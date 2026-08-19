@@ -8,16 +8,10 @@
 // protected-time edits are emitted for the app to persist.
 
 import {
+  cadenceFromConfig,
   generateInstances,
   MeetingInstance,
-  parseCategory,
-  parseCrews,
   parseDaysOfWeek,
-  parseDayTopics,
-  parseLocalDate,
-  parseRosterPattern,
-  parseTimeOfDay,
-  parseWeekTopics,
   SchedulerConfig,
   startOfDay,
 } from "../../shared/schema/recurrence";
@@ -145,24 +139,7 @@ export function parseHubMeetings(raw: string | null | undefined): HubMeeting[] {
       title: asStr(blob.title) !== "" ? asStr(blob.title) : boardId,
       barColor: asStr(theme.titlebar),
       info: parseMeetingInfo(blobRaw),
-      cadence: {
-        category: parseCategory(asStr(config.category)),
-        daysOfWeek: parseDaysOfWeek(asStr(config.daysOfWeek)),
-        timeOfDay: parseTimeOfDay(asStr(config.timeOfDay)),
-        crews: parseCrews(asStr(config.crewList)),
-        roster: parseRosterPattern(asStr(config.rosterPattern)),
-        baseStart: parseLocalDate(asStr(config.baseStartDate)) ?? today,
-        weekTopics: parseWeekTopics(
-          Array.isArray(config.weekTopics)
-            ? JSON.stringify(config.weekTopics)
-            : asStr(config.weekTopics)
-        ),
-        dayTopics: parseDayTopics(
-          config.dayTopics && typeof config.dayTopics === "object"
-            ? JSON.stringify(config.dayTopics)
-            : asStr(config.dayTopics)
-        ),
-      },
+      cadence: cadenceFromConfig(config, today),
     });
   }
   return out;

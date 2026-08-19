@@ -75,12 +75,14 @@ import {
 import { parseMeetingInfo, parseOrgTree } from "../../../shared/schema/meeting";
 import { effectiveTabs, HUB_TABS } from "../../../shared/schema/hubTabs";
 import {
+  cadenceFromConfig,
   crewStateOn,
   parseCategory,
   parseDaysOfWeek,
   parseLocalDate,
   parseRosterPattern,
   startOfDay,
+  timeVaries,
 } from "../../../shared/schema/recurrence";
 import { RosterPerson } from "../store/mappers";
 import {
@@ -3013,7 +3015,9 @@ function cadenceSummary(blobRaw: string): string {
     const cfg = (blob.config ?? {}) as Record<string, unknown>;
     const cat = parseCategory(String(cfg.category ?? ""));
     const catLabel = cat.charAt(0).toUpperCase() + cat.slice(1);
-    const time = String(cfg.timeOfDay ?? "").trim();
+    const cad = cadenceFromConfig(cfg, new Date());
+    // times that vary by day / week read "07:00 (varies)" — the rows carry the detail
+    const time = String(cfg.timeOfDay ?? "").trim() + (timeVaries(cad) ? " (varies)" : "");
     if (cat === "shiftly") {
       return ["Every shift", time !== "" ? `from ${time}` : ""].filter(Boolean).join(" \u00b7 ");
     }

@@ -255,6 +255,9 @@ export const WIZARD_CSS = `
 }
 
 /* topic rotation rows (cadence step) */
+.ltk-mw-rotrow { display: flex; align-items: center; gap: 8px; }
+.ltk-mw-rotrow .ltk-mw-time { flex: 0 0 110px; }
+.ltk-mw-rotrow .ltk-mw-input:last-child { flex: 1; }
 .ltk-mw-topic-ordinal {
   flex: 0 0 84px;
   font-size: 11px;

@@ -49,6 +49,13 @@ export interface SchedulerConfig {
   weekTopics: string[];
   /** Daily/shiftly topics by weekday (0=Sun .. 6=Sat). */
   dayTopics: Record<number, string>;
+  /** Per-day time overrides (0=Sun .. 6=Sat), HH:MM — any multi-day
+   *  cadence (daily, shiftly, weekly). Optional; blank = timeOfDay. */
+  dayTimes?: Record<number, string>;
+  /** Per-week-of-month time overrides [1st..5th], HH:MM — weekly.
+   *  Optional; "" = timeOfDay. A per-day override wins over a per-week one
+   *  (Ben, 2026-08-19). */
+  weekTimes?: string[];
 }
 
 /** A per-meeting text column (topic, chair, notetaker…), maker-configured. */
@@ -260,6 +267,103 @@ export function parseDayTopics(raw: string | null | undefined): Record<number, s
     if (idx >= 0 && topic !== "") out[idx] = topic;
   }
   return out;
+}
+
+/** Validate one HH:MM; "" when malformed. */
+function cleanTime(v: unknown): string {
+  const t = String(v ?? "").trim();
+  return /^([01]?\d|2[0-3]):[0-5]\d$/.test(t) ? t.padStart(5, "0") : "";
+}
+
+/** dayTimes input — per-weekday times: JSON object ({"Mon":"07:00"}) or
+ *  CSV pairs ("Mon:07:00,Fri:15:00"); keys as for dayTopics. */
+export function parseDayTimes(raw: string | null | undefined): Record<number, string> {
+  const t = String(raw ?? "").trim();
+  if (t === "") return {};
+  const names = DAY_LABELS.map((d) => d.toLowerCase());
+  const dayIndex = (key: string): number => {
+    const k = key.trim().toLowerCase();
+    const n = Number(k);
+    if (Number.isInteger(n) && n >= 0 && n <= 6) return n;
+    return names.findIndex((d) => k.startsWith(d));
+  };
+  const out: Record<number, string> = {};
+  if (t.startsWith("{")) {
+    try {
+      const obj = JSON.parse(t) as Record<string, unknown>;
+      for (const [k, v] of Object.entries(obj)) {
+        const idx = dayIndex(k);
+        const time = cleanTime(v);
+        if (idx >= 0 && time !== "") out[idx] = time;
+      }
+      return out;
+    } catch {
+      return {};
+    }
+  }
+  for (const pair of t.split(",")) {
+    const sep = pair.indexOf(":");
+    if (sep < 0) continue;
+    const idx = dayIndex(pair.slice(0, sep));
+    const time = cleanTime(pair.slice(sep + 1));
+    if (idx >= 0 && time !== "") out[idx] = time;
+  }
+  return out;
+}
+
+/** weekTimes input — per-week-of-month times [1st..5th]: JSON array or CSV;
+ *  blank entries = the default time. */
+export function parseWeekTimes(raw: string | null | undefined): string[] {
+  const t = String(raw ?? "").trim();
+  if (t === "") return [];
+  let items: unknown[];
+  if (t.startsWith("[")) {
+    try {
+      const arr = JSON.parse(t) as unknown;
+      items = Array.isArray(arr) ? arr : [];
+    } catch {
+      items = t.split(",");
+    }
+  } else {
+    items = t.split(",");
+  }
+  const out = items.slice(0, 5).map(cleanTime);
+  while (out.length > 0 && out[out.length - 1] === "") out.pop();
+  return out;
+}
+
+/** The rotation topic for a date: weekly = the day's topic (multi-day
+ *  weekly rituals name their days — kickoff / closeout) else the
+ *  week-of-month topic; daily/shiftly = the day's topic. */
+export function topicForCfg(
+  cfg: Pick<SchedulerConfig, "category" | "weekTopics" | "dayTopics">,
+  date: Date
+): string {
+  if (cfg.category === "weekly") {
+    return cfg.dayTopics[date.getDay()] ?? cfg.weekTopics[Math.ceil(date.getDate() / 7) - 1] ?? "";
+  }
+  if (cfg.category === "daily" || cfg.category === "shiftly") return cfg.dayTopics[date.getDay()] ?? "";
+  return "";
+}
+
+/** The time an occurrence runs: per-day override, else per-week-of-month
+ *  override (weekly), else the default. Pure; the engine and every summary
+ *  must agree, so they all call this. */
+export function timeFor(cfg: Pick<SchedulerConfig, "category" | "timeOfDay" | "dayTimes" | "weekTimes">, date: Date): string {
+  const byDay = cfg.dayTimes?.[date.getDay()];
+  if (byDay) return byDay;
+  if (cfg.category === "weekly") {
+    const byWeek = cfg.weekTimes?.[Math.ceil(date.getDate() / 7) - 1];
+    if (byWeek) return byWeek;
+  }
+  return cfg.timeOfDay;
+}
+
+/** True when any override differs from the default (summaries say "varies"). */
+export function timeVaries(cfg: Pick<SchedulerConfig, "category" | "timeOfDay" | "dayTimes" | "weekTimes">): boolean {
+  const d = Object.values(cfg.dayTimes ?? {}).some((t) => t !== "" && t !== cfg.timeOfDay);
+  const w = cfg.category === "weekly" && (cfg.weekTimes ?? []).some((t) => t !== "" && t !== cfg.timeOfDay);
+  return d || w;
 }
 
 function slug(s: string): string {
@@ -516,15 +620,7 @@ export function generateInstances(
 
   // the occurrence's rotation topic: weekly rotates through the month
   // (1st..5th occurrence of the weekday), daily/shiftly follows the weekday
-  const topicFor = (date: Date): string => {
-    if (cfg.category === "weekly") {
-      return cfg.weekTopics[Math.ceil(date.getDate() / 7) - 1] ?? "";
-    }
-    if (cfg.category === "daily" || cfg.category === "shiftly") {
-      return cfg.dayTopics[date.getDay()] ?? "";
-    }
-    return "";
-  };
+  const topicFor = (date: Date): string => topicForCfg(cfg, date);
 
   const out: MeetingInstance[] = [];
   const push = (date: Date, time: string, shift: "" | "day" | "night", crew: string) => {
@@ -550,17 +646,18 @@ export function generateInstances(
   };
 
   for (const date of dates) {
+    const time = timeFor(cfg, date);
     if (cfg.category === "shiftly") {
-      push(date, cfg.timeOfDay, "day",
+      push(date, time, "day",
         hasRoster ? crewOnShift(cfg.roster, cfg.crews, cfg.baseStart, date, "D") : "");
-      push(date, addHours(cfg.timeOfDay, 12), "night",
+      push(date, addHours(time, 12), "night",
         hasRoster ? crewOnShift(cfg.roster, cfg.crews, cfg.baseStart, date, "N") : "");
     } else {
       const crew =
         hasRoster && (cfg.category === "daily")
           ? crewOnShift(cfg.roster, cfg.crews, cfg.baseStart, date, "D")
           : "";
-      push(date, cfg.timeOfDay, "", crew);
+      push(date, time, "", crew);
     }
   }
 
@@ -633,15 +730,16 @@ export function rotationTopics(occurrenceSettingsRaw: string): { key: string; la
     seen.add(key);
     out.push({ key, label });
   };
-  if (cfg.category === "weekly") {
-    const ord = ["1st", "2nd", "3rd", "4th", "5th"];
-    cfg.weekTopics.forEach((t, i) => push(t, `${ord[i] ?? `${i + 1}th`} week · ${t}`));
-  } else if (cfg.category === "daily" || cfg.category === "shiftly") {
-    const names = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+  const names = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+  if (cfg.category === "weekly" || cfg.category === "daily" || cfg.category === "shiftly") {
     for (const d of [1, 2, 3, 4, 5, 6, 0]) {
       const t = cfg.dayTopics[d] ?? "";
       push(t, `${names[d]} · ${t}`);
     }
+  }
+  if (cfg.category === "weekly") {
+    const ord = ["1st", "2nd", "3rd", "4th", "5th"];
+    cfg.weekTopics.forEach((t, i) => push(t, `${ord[i] ?? `${i + 1}th`} week · ${t}`));
   }
   return out;
 }
@@ -653,9 +751,36 @@ export function topicForDate(occurrenceSettingsRaw: string, whenIso: string): st
   if (!cfg || whenIso.length < 10) return "";
   const date = new Date(`${whenIso.slice(0, 10)}T00:00:00`);
   if (Number.isNaN(date.getTime())) return "";
-  if (cfg.category === "weekly") return cfg.weekTopics[Math.ceil(date.getDate() / 7) - 1] ?? "";
-  if (cfg.category === "daily" || cfg.category === "shiftly") return cfg.dayTopics[date.getDay()] ?? "";
-  return "";
+  return topicForCfg(cfg, date);
+}
+
+/**
+ * The cadence part of a SchedulerConfig from a wizard/scheduler blob's
+ * `config` object — ONE reader for the board pane, the card editor, the
+ * hub and the topic helpers (they used to carry four copies). `finalDate`,
+ * `daysPrior` and `baseStart` fallback are the caller's.
+ */
+export function cadenceFromConfig(
+  config: Record<string, unknown>,
+  baseFallback: Date
+): Omit<SchedulerConfig, "finalDate" | "daysPrior"> {
+  const s = (k: string) => String(config[k] ?? "");
+  return {
+    category: parseCategory(s("category")),
+    daysOfWeek: parseDaysOfWeek(s("daysOfWeek")),
+    timeOfDay: parseTimeOfDay(s("timeOfDay")),
+    crews: parseCrews(s("crewList")),
+    roster: parseRosterPattern(s("rosterPattern")),
+    baseStart: parseLocalDate(s("baseStartDate")) ?? baseFallback,
+    weekTopics: parseWeekTopics(Array.isArray(config.weekTopics) ? JSON.stringify(config.weekTopics) : s("weekTopics")),
+    dayTopics: parseDayTopics(
+      config.dayTopics && typeof config.dayTopics === "object" ? JSON.stringify(config.dayTopics) : s("dayTopics")
+    ),
+    dayTimes: parseDayTimes(
+      config.dayTimes && typeof config.dayTimes === "object" ? JSON.stringify(config.dayTimes) : s("dayTimes")
+    ),
+    weekTimes: parseWeekTimes(Array.isArray(config.weekTimes) ? JSON.stringify(config.weekTimes) : s("weekTimes")),
+  };
 }
 
 function rotationConfig(

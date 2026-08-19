@@ -39,8 +39,15 @@ export function hasWeekdays(category: string): boolean {
 }
 
 /** Cadences that meet on exactly ONE day of the week. */
+/** Fortnightly runs on one day. Weekly may run on several (a kickoff /
+ *  closeout cycle — Ben, 2026-08-19), each with its own time and topic. */
 export function isSingleDay(category: string): boolean {
-  return category === "weekly" || category === "fortnightly";
+  return category === "fortnightly";
+}
+
+/** Cadences whose days can each carry their own time and topic. */
+export function hasDayRows(category: string): boolean {
+  return category === "weekly" || category === "daily" || category === "shiftly";
 }
 
 /**
@@ -82,8 +89,12 @@ export interface WizardDraft {
   confidential: boolean;
   /** Weekly topic rotation through the month: [1st..5th week]. */
   weekTopics: string[];
-  /** Daily/shiftly topics keyed by weekday label ("Mon".."Sun"). */
+  /** Daily/shiftly/weekly topics keyed by weekday label ("Mon".."Sun"). */
   dayTopics: Record<string, string>;
+  /** Per-day time overrides keyed by weekday label, HH:MM; absent = default. */
+  dayTimes: Record<string, string>;
+  /** Weekly per-week-of-month time overrides [1st..5th]; "" = default. */
+  weekTimes: string[];
   participants: MeetingPerson[];
   /** Unmanaged top-level keys (theme, prompts, board, …), kept verbatim. */
   extraTop: Record<string, unknown>;
@@ -111,6 +122,8 @@ export function emptyDraft(): WizardDraft {
     confidential: false,
     weekTopics: [],
     dayTopics: {},
+    dayTimes: {},
+    weekTimes: [],
     participants: [],
     extraTop: {},
     extraConfig: {},
@@ -130,6 +143,8 @@ const MANAGED_CONFIG = [
   "columns",
   "weekTopics",
   "dayTopics",
+  "dayTimes",
+  "weekTimes",
 ];
 
 function s(v: unknown): string {
@@ -176,6 +191,17 @@ export function parseWizardDraft(raw: string | null | undefined): WizardDraft {
         const day = WEEKDAYS.find((d) => k.trim().toLowerCase().startsWith(d.toLowerCase()));
         if (day && s(v) !== "") draft.dayTopics[day] = s(v);
       }
+    }
+    if (config.dayTimes && typeof config.dayTimes === "object" && !Array.isArray(config.dayTimes)) {
+      for (const [k, v] of Object.entries(config.dayTimes as Record<string, unknown>)) {
+        const day = WEEKDAYS.find((d) => k.trim().toLowerCase().startsWith(d.toLowerCase()));
+        if (day && s(v) !== "") draft.dayTimes[day] = s(v);
+      }
+    }
+    if (Array.isArray(config.weekTimes)) {
+      draft.weekTimes = config.weekTimes.slice(0, 5).map((v) => s(v));
+    } else if (s(config.weekTimes) !== "") {
+      draft.weekTimes = s(config.weekTimes).split(",").slice(0, 5).map((v) => v.trim());
     }
     for (const key of Object.keys(config)) {
       if (!MANAGED_CONFIG.includes(key)) draft.extraConfig[key] = config[key];
@@ -228,13 +254,22 @@ export function serializeWizardDraft(draft: WizardDraft): string {
     const topics = draft.weekTopics.map((t) => t.trim());
     while (topics.length > 0 && topics[topics.length - 1] === "") topics.pop();
     if (topics.some((t) => t !== "")) config.weekTopics = topics;
+    const times = draft.weekTimes.map((t) => t.trim());
+    while (times.length > 0 && times[times.length - 1] === "") times.pop();
+    if (times.some((t) => t !== "")) config.weekTimes = times;
   }
-  if (isRostered(draft.category)) {
+  if (hasDayRows(draft.category)) {
     const days: Record<string, string> = {};
     for (const [day, topic] of Object.entries(draft.dayTopics)) {
       if (topic.trim() !== "") days[day] = topic.trim();
     }
     if (Object.keys(days).length > 0) config.dayTopics = days;
+    const times: Record<string, string> = {};
+    for (const [day, time] of Object.entries(draft.dayTimes)) {
+      // an override equal to the default is noise — drop it
+      if (time.trim() !== "" && time.trim() !== draft.timeOfDay) times[day] = time.trim();
+    }
+    if (Object.keys(times).length > 0) config.dayTimes = times;
   }
   if (draft.columns !== "") config.columns = draft.columns;
 

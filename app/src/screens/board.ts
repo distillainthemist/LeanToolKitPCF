@@ -8,19 +8,13 @@ import { BoardGridView } from "../../../controls/BoardGrid/editor";
 import { BoardTile, parseColumns } from "../../../controls/BoardGrid/types";
 import { MeetingSchedulerView } from "../../../controls/MeetingScheduler/editor";
 import {
-  topicForDate,
+  cadenceFromConfig,
   generateInstances,
-  parseCategory,
   parseColumns as parseMeetingColumns,
   parseCrews,
-  parseDaysOfWeek,
-  parseDayTopics,
   parseExistingMeetings,
-  parseLocalDate,
-  parseRosterPattern,
-  parseTimeOfDay,
-  parseWeekTopics,
   startOfDay,
+  topicForDate,
 } from "../../../shared/schema/recurrence";
 import { parseMeetingInfo } from "../../../shared/schema/meeting";
 import { openDialog } from "../../../shared/ui/dialog";
@@ -634,24 +628,9 @@ async function renderBoard(
     schedulerView.setInstances(
       generateInstances(
         {
+          ...cadenceFromConfig(config, today),
           finalDate: new Date(today.getTime() + ahead * 86_400_000),
           daysPrior: Number(config.daysPrior ?? 14) + ahead,
-          category: parseCategory(s("category")),
-          daysOfWeek: parseDaysOfWeek(s("daysOfWeek")),
-          timeOfDay: parseTimeOfDay(s("timeOfDay")),
-          crews: parseCrews(s("crewList")),
-          roster: parseRosterPattern(s("rosterPattern")),
-          baseStart: parseLocalDate(s("baseStartDate")) ?? today,
-          weekTopics: parseWeekTopics(
-            Array.isArray(config.weekTopics)
-              ? JSON.stringify(config.weekTopics)
-              : s("weekTopics")
-          ),
-          dayTopics: parseDayTopics(
-            config.dayTopics && typeof config.dayTopics === "object"
-              ? JSON.stringify(config.dayTopics)
-              : s("dayTopics")
-          ),
         },
         parseExistingMeetings(existingJson),
         new Date()

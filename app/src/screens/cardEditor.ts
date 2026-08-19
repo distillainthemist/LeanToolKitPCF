@@ -11,18 +11,11 @@ import { paletteMap, titleStripColor } from "../../../shared/palette";
 import { assigneePeople } from "../../../shared/schema/people";
 import { parseMeetingInfo } from "../../../shared/schema/meeting";
 import {
-  topicForDate,
+  cadenceFromConfig,
   generateInstances,
-  parseCategory,
-  parseCrews,
-  parseDaysOfWeek,
-  parseDayTopics,
   parseExistingMeetings,
-  parseLocalDate,
-  parseRosterPattern,
-  parseTimeOfDay,
-  parseWeekTopics,
   startOfDay,
+  topicForDate,
 } from "../../../shared/schema/recurrence";
 import { readableShade, textOn } from "../../../shared/tokens";
 import { openActionManager } from "../../../shared/ui/actionUi";
@@ -71,27 +64,9 @@ function occurrenceMeta(
       ? (JSON.parse(blobRaw) as Record<string, unknown>)
       : {};
     const config = (blob.config ?? {}) as Record<string, unknown>;
-    const s = (k: string) => String(config[k] ?? "");
     const anchor = startOfDay(day);
     const rows = generateInstances(
-      {
-        finalDate: anchor,
-        daysPrior: 1,
-        category: parseCategory(s("category")),
-        daysOfWeek: parseDaysOfWeek(s("daysOfWeek")),
-        timeOfDay: parseTimeOfDay(s("timeOfDay")),
-        crews: parseCrews(s("crewList")),
-        roster: parseRosterPattern(s("rosterPattern")),
-        baseStart: parseLocalDate(s("baseStartDate")) ?? anchor,
-        weekTopics: parseWeekTopics(
-          Array.isArray(config.weekTopics) ? JSON.stringify(config.weekTopics) : s("weekTopics")
-        ),
-        dayTopics: parseDayTopics(
-          config.dayTopics && typeof config.dayTopics === "object"
-            ? JSON.stringify(config.dayTopics)
-            : s("dayTopics")
-        ),
-      },
+      { ...cadenceFromConfig(config, anchor), finalDate: anchor, daysPrior: 1 },
       parseExistingMeetings(
         JSON.stringify([{ date: instance.when, recordId: instance.id, adhoc: instance.isAdhoc }])
       ),

@@ -847,7 +847,20 @@ export const CARDS: CardSpec[] = [
         key: "timeOfDay",
         label: "Time",
         kind: "time",
-        help: "24h HH:MM. For shiftly, the night meeting is 12 hours later.",
+        help: "24h HH:MM — the default. For shiftly, the night meeting is 12 hours later.",
+      },
+      {
+        key: "dayTimes",
+        label: "Time by day",
+        kind: "kvList",
+        help: "Per-weekday times that override the default (weekly, daily, shiftly): Mon → 07:00, Fri → 15:00. The wizard's Cadence step edits the same thing.",
+      },
+      {
+        key: "weekTimes",
+        label: "Time by week of month",
+        kind: "csvChips",
+        help: "Weekly only: 1st..5th occurrence each month, blank = default; a day's own time wins.",
+        placeholder: "07:00, , , 15:00",
       },
       {
         key: "daysPrior",

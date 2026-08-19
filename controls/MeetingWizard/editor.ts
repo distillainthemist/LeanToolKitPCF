@@ -20,6 +20,7 @@ import {
   csvItems,
   csvJoin,
   emptyDraft,
+  hasDayRows,
   hasWeekdays,
   isAnchored,
   isRostered,
@@ -757,7 +758,13 @@ export class MeetingWizardView {
       body.appendChild(
         single
           ? this.row("Day of week", days, "The one day this meeting runs on.")
-          : this.row("Days of week", days, "None selected = every day.")
+          : this.row(
+              "Days of week",
+              days,
+              d.category === "weekly"
+                ? "One or more days — a kickoff and a closeout, say. Each day can carry its own time and topic below."
+                : "None selected = every day."
+            )
       );
     }
     if (isAnchored(d.category)) {
@@ -774,11 +781,13 @@ export class MeetingWizardView {
     }
     body.appendChild(
       this.row(
-        "Time",
+        hasDayRows(d.category) ? "Default time" : "Time",
         this.textInput(d.timeOfDay, (v) => (d.timeOfDay = v), "07:00", "time"),
         d.category === "shiftly"
-          ? "The day-shift meeting; the night-shift meeting is 12 hours later."
-          : undefined
+          ? "The day-shift meeting; the night-shift meeting is 12 hours later. Days below may override it."
+          : hasDayRows(d.category)
+            ? "Used unless a day (or week) below sets its own time."
+            : undefined
       )
     );
     body.appendChild(
@@ -796,13 +805,69 @@ export class MeetingWizardView {
       )
     );
 
-    // topic rotation: weekly rotates through the month, daily/shiftly by day
+    // rotation tables (Ben, 2026-08-19): each day — and for weekly each
+    // week of the month — can carry its own TIME and topic. Blank time =
+    // the default. A day's time beats a week's time.
+    const timeCell = (value: string, onChange: (v: string) => void): HTMLInputElement => {
+      const input = el("input", "ltk-mw-input ltk-mw-time") as HTMLInputElement;
+      input.type = "time";
+      input.value = value;
+      input.placeholder = d.timeOfDay;
+      input.title = "Blank = the default time";
+      input.disabled = this.readOnly;
+      input.addEventListener("change", () => {
+        onChange(input.value.trim());
+        this.commit();
+      });
+      return input;
+    };
+    if (hasDayRows(d.category)) {
+      const active = csvItems(d.daysOfWeek);
+      const scope = active.length > 0 ? active : WEEKDAYS;
+      const box = el("div", "ltk-mw-people");
+      for (const day of scope) {
+        const row = el("div", "ltk-mw-person ltk-mw-rotrow");
+        row.appendChild(el("span", "ltk-mw-topic-ordinal", day));
+        row.appendChild(
+          timeCell(this.draft.dayTimes[day] ?? "", (v) => {
+            if (v === "") delete this.draft.dayTimes[day];
+            else this.draft.dayTimes[day] = v;
+          })
+        );
+        const input = el("input", "ltk-mw-input") as HTMLInputElement;
+        input.type = "text";
+        input.value = this.draft.dayTopics[day] ?? "";
+        input.placeholder = d.category === "weekly" ? "e.g. Kickoff" : "e.g. Quality focus";
+        input.disabled = this.readOnly;
+        input.addEventListener("change", () => {
+          const v = input.value.trim();
+          if (v === "") delete this.draft.dayTopics[day];
+          else this.draft.dayTopics[day] = v;
+          this.commit();
+        });
+        row.appendChild(input);
+        box.appendChild(row);
+      }
+      body.appendChild(
+        this.row(
+          "By day — time · topic",
+          box,
+          "Optional — a time and a topic for each day it runs; a blank time uses the default. Shown on every scheduler row."
+        )
+      );
+    }
     if (d.category === "weekly") {
       const box = el("div", "ltk-mw-people");
       const ORDINALS = ["1st week", "2nd week", "3rd week", "4th week", "5th week"];
       ORDINALS.forEach((label, i) => {
-        const row = el("div", "ltk-mw-person");
+        const row = el("div", "ltk-mw-person ltk-mw-rotrow");
         row.appendChild(el("span", "ltk-mw-topic-ordinal", label));
+        row.appendChild(
+          timeCell(this.draft.weekTimes[i] ?? "", (v) => {
+            while (this.draft.weekTimes.length <= i) this.draft.weekTimes.push("");
+            this.draft.weekTimes[i] = v;
+          })
+        );
         const input = el("input", "ltk-mw-input") as HTMLInputElement;
         input.type = "text";
         input.value = this.draft.weekTopics[i] ?? "";
@@ -818,38 +883,9 @@ export class MeetingWizardView {
       });
       body.appendChild(
         this.row(
-          "Topic rotation",
+          "By week of month — time · topic",
           box,
-          "Optional — the meeting topic for the 1st to 5th occurrence each month; shown on every scheduler row."
-        )
-      );
-    }
-    if (isRostered(d.category)) {
-      const active = csvItems(d.daysOfWeek);
-      const scope = active.length > 0 ? active : WEEKDAYS;
-      const box = el("div", "ltk-mw-people");
-      for (const day of scope) {
-        const row = el("div", "ltk-mw-person");
-        row.appendChild(el("span", "ltk-mw-topic-ordinal", day));
-        const input = el("input", "ltk-mw-input") as HTMLInputElement;
-        input.type = "text";
-        input.value = this.draft.dayTopics[day] ?? "";
-        input.placeholder = "e.g. Quality focus";
-        input.disabled = this.readOnly;
-        input.addEventListener("change", () => {
-          const v = input.value.trim();
-          if (v === "") delete this.draft.dayTopics[day];
-          else this.draft.dayTopics[day] = v;
-          this.commit();
-        });
-        row.appendChild(input);
-        box.appendChild(row);
-      }
-      body.appendChild(
-        this.row(
-          "Topics by day",
-          box,
-          "Optional — the meeting topic for each day it runs; shown on every scheduler row."
+          "Optional — the 1st to 5th occurrence each month; a day's own time (above) wins over a week's. Shown on every scheduler row."
         )
       );
     }
@@ -1165,7 +1201,13 @@ export class MeetingWizardView {
       );
     }
     if (isAnchored(d.category)) add("First occurrence", d.baseStartDate);
-    add("Time", d.timeOfDay);
+    {
+      const dayBits = WEEKDAYS.filter((day) => d.dayTimes[day]).map((day) => `${day} ${d.dayTimes[day]}`);
+      const ords = ["1st", "2nd", "3rd", "4th", "5th"];
+      const weekBits = d.category === "weekly" ? d.weekTimes.map((t, i) => (t ? `${ords[i]} wk ${t}` : "")).filter((v) => v !== "") : [];
+      const extra = [...dayBits, ...weekBits];
+      add("Time", extra.length > 0 ? `${d.timeOfDay} (${extra.join(" · ")})` : d.timeOfDay);
+    }
     if (isRostered(d.category)) {
       add("Crews", d.crewList);
       add("Roster", d.rosterPattern);
@@ -1181,7 +1223,7 @@ export class MeetingWizardView {
           .join(" · ")
       );
     }
-    if (isRostered(d.category) && Object.keys(d.dayTopics).length > 0) {
+    if (hasDayRows(d.category) && Object.keys(d.dayTopics).length > 0) {
       add(
         "Topics by day",
         WEEKDAYS.filter((day) => d.dayTopics[day])
