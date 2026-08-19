@@ -19,7 +19,7 @@ import {
   savePriority,
   newPriority,
 } from "../store/priorities";
-import { modal, field, OrgTree, childOrgs, priorityDialog } from "./dialogs";
+import { modal, field, OrgTree, childOrgs, priorityDialog, cascadeTargetList, CascadeTarget } from "./dialogs";
 import {
   carryForwardCopy,
   CLOSE_REASONS,
@@ -187,6 +187,17 @@ export async function closePriority(
   await ctx.changed();
 }
 
+/** Set a completed / archived priority back to active. A carry-forward
+ *  copy, if one was made, is left in place — History shows both. */
+export async function reopenPriority(ctx: LifecycleCtx, p: Priority): Promise<void> {
+  const was = p.status;
+  p.status = "active";
+  p.statusReason = "";
+  await savePriority(p, ctx.data());
+  await appendEvent(p, "reopened", { from: was }, ctx.actor());
+  await ctx.changed();
+}
+
 /** Bulk carry-forward at period end (toolbar ⋮): pick which active
  *  priorities of the current period roll into the next. */
 export function carryForwardFlow(ctx: LifecycleCtx, org: OrgRef, period: string, candidates: Priority[]): void {
@@ -235,30 +246,15 @@ export function cascadeDialog(ctx: LifecycleCtx, p: Priority): void {
   const kids = childOrgs(ctx.tree, p.org);
   const parent = orgParent(p.org);
   const peers = parent ? childOrgs(ctx.tree, parent).filter((o) => !sameOrg(o, p.org)) : [];
-  const targets = [...kids, ...peers];
+  const targets: CascadeTarget[] = [
+    ...kids.map((o) => ({ org: o, ownerName: ctx.ownerNameFor(o), kind: "child" as const })),
+    ...peers.map((o) => ({ org: o, ownerName: ctx.ownerNameFor(o), kind: "peer" as const })),
+  ];
   const already = new Set(data.assignments.filter((a) => a.priorityId === p.id).map((a) => orgKey(a.org)));
-  const m = modal(ctx.host, "Cascade to…", "Child orgs and peers. Each receives it as a request to accept.");
-  const picked = new Set<string>();
-  const list = el("div", "app-cp-cascade");
-  for (const o of targets) {
-    const key = orgKey(o);
-    const lab = el("label", "app-cp-cascade-row") as HTMLLabelElement;
-    const cb = el("input") as HTMLInputElement;
-    cb.type = "checkbox";
-    if (already.has(key)) {
-      cb.checked = true;
-      cb.disabled = true;
-    }
-    cb.addEventListener("change", () => {
-      if (cb.checked) picked.add(key);
-      else picked.delete(key);
-      confirm.textContent = picked.size > 0 ? `This will send the priority to ${picked.size} org${picked.size === 1 ? "" : "s"} for acceptance.` : "";
-    });
-    const owner = ctx.ownerNameFor(o);
-    lab.append(cb, el("span", "app-cp-cascade-org", orgName(o)), el("span", "app-cp-muted", owner !== "" ? ` · ${owner}` : " · no owner"));
-    list.appendChild(lab);
-  }
-  if (targets.length === 0) list.appendChild(el("div", "app-cp-muted", "No child or peer orgs to cascade to from here."));
+  const m = modal(ctx.host, "Cascade to…", "Children receive it to cascade down; peers receive it to share sideways. Each is a request to accept.");
+  const { box: list, picked } = cascadeTargetList(targets, already, p.org, (set) => {
+    confirm.textContent = set.size > 0 ? `This will send the priority to ${set.size} org${set.size === 1 ? "" : "s"} for acceptance.` : "";
+  });
   m.body.appendChild(list);
   const confirm = el("div", "app-cp-confirm", "");
   m.body.appendChild(confirm);
@@ -266,7 +262,7 @@ export function cascadeDialog(ctx: LifecycleCtx, p: Priority): void {
   cancel.addEventListener("click", () => m.close());
   const ok = btn("Send", "app-btn app-btn-primary");
   ok.addEventListener("click", () => {
-    const chosen = targets.filter((o) => picked.has(orgKey(o)));
+    const chosen = targets.map((t) => t.org).filter((o) => picked.has(orgKey(o)));
     m.close();
     if (chosen.length === 0) return;
     void (async () => {
@@ -372,7 +368,7 @@ export function cascadeReview(ctx: LifecycleCtx, org: OrgRef): void {
       pillars: data.pillars,
       periods: ctx.periodsOnOffer(),
       roster: ctx.roster,
-      cascadeTargets: childOrgs(ctx.tree, org).map((o) => ({ org: o, ownerName: ctx.ownerNameFor(o) })),
+      cascadeTargets: childOrgs(ctx.tree, org).map((o) => ({ org: o, ownerName: ctx.ownerNameFor(o), kind: "child" as const })),
       alreadyCascaded: [],
       primaryInitiativeLabel: "",
     });
@@ -601,6 +597,17 @@ export function openPriorityOverlay(ctx: LifecycleCtx, p: Priority, onEdit: (p: 
     add.disabled = true;
     add.title = "Initiatives arrive with the initiative board";
     foot.appendChild(add);
+    if (can && live.status !== "active") {
+      const reopen = btn("Reopen");
+      reopen.title = "Set back to active";
+      reopen.addEventListener("click", () => {
+        void reopenPriority(ctx, live).then(() => {
+          events = null;
+          if (scrim.isConnected) paint();
+        });
+      });
+      foot.appendChild(reopen);
+    }
     if (can && live.status === "active") {
       const casc = btn("Cascade to…");
       casc.addEventListener("click", () => cascadeDialog(ctx, live));
@@ -676,6 +683,8 @@ function eventWords(e: PriorityEvent): string {
       return `${str("reason")}${str("note") !== "" ? " — " + str("note") : ""}`;
     case "carriedForward":
       return str("toPeriod") !== "" ? `carried to ${str("toPeriod")}` : `carried from ${str("fromPeriod")}`;
+    case "reopened":
+      return `reopened (was ${str("from")})`;
     case "reordered":
       return `moved to position ${String(d.to ?? "")}`;
     default:

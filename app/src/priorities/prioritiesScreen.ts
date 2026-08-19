@@ -44,6 +44,7 @@ import {
   savePriority,
 } from "../store/priorities";
 import {
+  CascadeTarget,
   childOrgs,
   editVision,
   OrgTree,
@@ -53,7 +54,7 @@ import {
 } from "./dialogs";
 import { loadPriorityPrefs, savePriorityPrefs, ViewMode } from "./prefs";
 import { initialsFor } from "../../../shared/schema/people";
-import { carryForwardFlow, cascadeDialog, cascadeReview, closeDialog, closePriority, LifecycleCtx, openPriorityOverlay } from "./lifecycle";
+import { carryForwardFlow, cascadeDialog, cascadeReview, closeDialog, closePriority, LifecycleCtx, openPriorityOverlay, reopenPriority } from "./lifecycle";
 import {
   canManageOrg,
   densityFor,
@@ -841,6 +842,7 @@ export function mountPriorities(parent: HTMLElement, _opts: PrioritiesMountOpts 
       item("Cascade to…", () => cascadeDialog(ctx, p), p.status !== "active");
       item("Complete…", () => void closeFromCard(p, "complete"), p.status !== "active");
       item("Archive…", () => void closeFromCard(p, "archive"), p.status !== "active");
+      item("Reopen", () => void reopenPriority(ctx, p), p.status === "active");
       const r = anchor.getBoundingClientRect();
       menu.style.top = `${r.bottom + 4}px`;
       menu.style.left = `${Math.min(r.left, window.innerWidth - 240)}px`;
@@ -886,7 +888,7 @@ export function mountPriorities(parent: HTMLElement, _opts: PrioritiesMountOpts 
 
     // ---- add / edit -----------------------------------------------------------
 
-    const cascadeTargetsFor = (p: Priority | null): { org: OrgRef; ownerName: string }[] => {
+    const cascadeTargetsFor = (p: Priority | null): CascadeTarget[] => {
       const org = p ? p.org : state.org;
       const kids = childOrgs(tree, org);
       const parent = orgParent(org);
@@ -896,7 +898,10 @@ export function mountPriorities(parent: HTMLElement, _opts: PrioritiesMountOpts 
         const govern = orgLevel(o) === "area" ? { ...o, area: "" } : o;
         return owners[orgKey(govern)]?.[0]?.who ?? "";
       };
-      return [...kids, ...peers].map((o) => ({ org: o, ownerName: named(o) }));
+      return [
+        ...kids.map((o) => ({ org: o, ownerName: named(o), kind: "child" as const })),
+        ...peers.map((o) => ({ org: o, ownerName: named(o), kind: "peer" as const })),
+      ];
     };
 
     const actor = () => ({ whoId: viewer.whoId, who: me?.who ?? who?.name ?? "" });

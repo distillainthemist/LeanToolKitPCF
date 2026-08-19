@@ -10,6 +10,7 @@ import {
   orgKey,
   orgLevel,
   orgName,
+  orgParent,
   orgRef,
   Pillar,
   Priority,
@@ -226,6 +227,61 @@ export function pickOwner(host: HTMLElement, roster: RosterPerson[], current: Pe
 
 // ---- add / edit priority (design spec §9) -----------------------------------
 
+/** A cascade target: a child of the priority's org, or a peer beside it. */
+export interface CascadeTarget {
+  org: OrgRef;
+  ownerName: string;
+  kind: "child" | "peer";
+}
+
+/** Renders cascade targets as two clearly separated groups — children
+ *  first, then peers — each row a checkbox; returns the picked-set. */
+export function cascadeTargetList(
+  targets: CascadeTarget[],
+  already: Set<string>,
+  from: OrgRef,
+  onChange: (picked: Set<string>) => void
+): { box: HTMLElement; picked: Set<string> } {
+  const box = el("div", "app-cp-cascade");
+  const picked = new Set<string>();
+  const parent = orgParent(from);
+  const group = (kind: "child" | "peer") => {
+    const rows = targets.filter((t) => t.kind === kind);
+    if (rows.length === 0) return;
+    const h = el("div", "app-cp-cascade-h");
+    h.appendChild(
+      el("span", undefined, kind === "child" ? `↓ Children of ${orgName(from)}` : `↔ Peers of ${orgName(from)}${parent ? ` (under ${orgName(parent)})` : ""}`)
+    );
+    h.appendChild(el("span", "app-cp-muted", kind === "child" ? " — cascade down" : " — share sideways"));
+    box.appendChild(h);
+    for (const t of rows) {
+      const key = orgKey(t.org);
+      const lab = el("label", "app-cp-cascade-row" + (kind === "peer" ? " app-cp-cascade-peer" : "")) as HTMLLabelElement;
+      const cb = el("input") as HTMLInputElement;
+      cb.type = "checkbox";
+      if (already.has(key)) {
+        cb.checked = true;
+        cb.disabled = true;
+      }
+      cb.addEventListener("change", () => {
+        if (cb.checked) picked.add(key);
+        else picked.delete(key);
+        onChange(picked);
+      });
+      lab.append(
+        cb,
+        el("span", "app-cp-cascade-org", orgName(t.org)),
+        el("span", "app-cp-muted", t.ownerName !== "" ? ` · ${t.ownerName}` : " · no owner")
+      );
+      box.appendChild(lab);
+    }
+  };
+  group("child");
+  group("peer");
+  if (targets.length === 0) box.appendChild(el("div", "app-cp-muted", "No child or peer orgs to cascade to from here."));
+  return { box, picked };
+}
+
 export interface PriorityDialogOpts {
   host: HTMLElement;
   title: string;
@@ -237,7 +293,7 @@ export interface PriorityDialogOpts {
   roster: RosterPerson[];
   /** Cascade targets on offer: children of the org + peers, each with its
    *  owner's name for the row ("Warehouse · K. Lowe"). */
-  cascadeTargets: { org: OrgRef; ownerName: string }[];
+  cascadeTargets: CascadeTarget[];
   /** Orgs already cascaded to (shown ticked and locked). */
   alreadyCascaded: OrgRef[];
   primaryInitiativeLabel: string; // "" = none yet
@@ -310,34 +366,9 @@ export function priorityDialog(o: PriorityDialogOpts): Promise<PriorityDialogRes
     // primary initiative (initiatives arrive with P5)
     const primary = el("div", "app-cp-muted", o.primaryInitiativeLabel !== "" ? o.primaryInitiativeLabel : "None yet — link one when initiatives exist.");
 
-    // cascade to
-    const cascadeBox = el("div", "app-cp-cascade");
-    const picked = new Set<string>();
+    // cascade to — children and peers, clearly separated (Ben, 2026-08-19)
     const already = new Set(o.alreadyCascaded.map(orgKey));
-    for (const t of o.cascadeTargets) {
-      const key = orgKey(t.org);
-      const lab = el("label", "app-cp-cascade-row") as HTMLLabelElement;
-      const cb = el("input") as HTMLInputElement;
-      cb.type = "checkbox";
-      if (already.has(key)) {
-        cb.checked = true;
-        cb.disabled = true;
-      }
-      cb.addEventListener("change", () => {
-        if (cb.checked) picked.add(key);
-        else picked.delete(key);
-        paintConfirm();
-      });
-      lab.append(
-        cb,
-        el("span", "app-cp-cascade-org", orgName(t.org)),
-        el("span", "app-cp-muted", t.ownerName !== "" ? ` · ${t.ownerName}` : " · no owner")
-      );
-      cascadeBox.appendChild(lab);
-    }
-    if (o.cascadeTargets.length === 0) {
-      cascadeBox.appendChild(el("div", "app-cp-muted", "No child or peer orgs to cascade to from here."));
-    }
+    const { box: cascadeBox, picked } = cascadeTargetList(o.cascadeTargets, already, p.org, () => paintConfirm());
     const confirm = el("div", "app-cp-confirm", "");
     const paintConfirm = () => {
       const n = picked.size;
