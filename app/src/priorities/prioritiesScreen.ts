@@ -301,7 +301,10 @@ export function mountPriorities(parent: HTMLElement, _opts: PrioritiesMountOpts 
     };
 
     const renderVision = (): HTMLElement => {
+      const row = el("div", "app-cp-visionrow");
+      row.appendChild(el("div", "app-cp-label", "Vision"));
       const band = el("div", "app-cp-vision");
+      row.appendChild(band);
       const text = visions[orgKey(state.org)] ?? "";
       band.appendChild(el("div", "app-cp-vision-text", text !== "" ? text : "No vision statement set for this org."));
       if (text === "") band.classList.add("app-cp-vision-empty");
@@ -319,7 +322,7 @@ export function mountPriorities(parent: HTMLElement, _opts: PrioritiesMountOpts 
         });
         band.appendChild(edit);
       }
-      return band;
+      return row;
     };
 
     const renderToolbar = (): HTMLElement => {
@@ -469,7 +472,7 @@ export function mountPriorities(parent: HTMLElement, _opts: PrioritiesMountOpts 
       // row 1: rail "Strategic Pillars" over the pillar spans + column heads.
       // Each pillar is a rectangle stretched over its own sub-pillar
       // columns (settings order); click filters to that pillar, ✕ clears.
-      const rail1 = el("div", "app-cp-rail app-cp-rail-tall", "Strategic Pillars");
+      const rail1 = el("div", "app-cp-label", "Strategic pillars");
       rail1.style.gridRow = "1 / span 2";
       grid.appendChild(rail1);
       const spans = columns.length > 0 ? pillarSpans(data.pillars, columns) : [];
@@ -488,9 +491,10 @@ export function mountPriorities(parent: HTMLElement, _opts: PrioritiesMountOpts 
           b.type = "button";
           b.textContent = on ? `${l1.name} ✕` : l1.name;
           b.title = on ? "Clear the pillar filter" : `Show only ${l1.name}`;
-          if (l1.color !== "" && !on) {
+          if (l1.color !== "") {
+            b.style.background = l1.color;
             b.style.borderColor = l1.color;
-            b.style.color = l1.color;
+            b.style.color = "#fff";
           }
           b.addEventListener("click", () => {
             state.l1 = on ? null : l1.id;
@@ -521,7 +525,7 @@ export function mountPriorities(parent: HTMLElement, _opts: PrioritiesMountOpts 
       }
 
       // row 3: Priorities
-      grid.appendChild(el("div", "app-cp-rail", "Priorities"));
+      grid.appendChild(el("div", "app-cp-label", "Priorities"));
       for (const col of columns) {
         const cell = el("div", "app-cp-cell");
         cell.addEventListener("click", () => {
@@ -549,7 +553,7 @@ export function mountPriorities(parent: HTMLElement, _opts: PrioritiesMountOpts 
 
       // row 4: Objectives (headline metrics — P5 fills these)
       if (density !== "compact") {
-        grid.appendChild(el("div", "app-cp-rail", "Objectives"));
+        grid.appendChild(el("div", "app-cp-label", "Objectives"));
         for (const col of columns) {
           const cell = el("div", "app-cp-cell app-cp-cell-obj");
           const items = byColumn.get(col.id) ?? [];
