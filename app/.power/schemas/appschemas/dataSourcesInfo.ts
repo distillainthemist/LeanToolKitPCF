@@ -19,6 +19,13 @@ export const dataSourcesInfo = {
     "dataSourceType": "Dataverse",
     "apis": {}
   },
+  "ben_ltkinitiativetemplates": {
+    "tableId": "",
+    "version": "",
+    "primaryKey": "ben_ltkinitiativetemplateid",
+    "dataSourceType": "Dataverse",
+    "apis": {}
+  },
   "ben_ltkissuefiles": {
     "tableId": "",
     "version": "",

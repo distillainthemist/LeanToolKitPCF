@@ -193,6 +193,10 @@ function route(): void {
       } else if (parts[0] === "wizard") {
         const { mountWizard } = await import("./screens/wizard");
         mount = () => mountWizard(screenRoot, parts[1] ?? "");
+      } else if (parts[0] === "template") {
+        // Improvement: the initiative template wizard (design review 11a)
+        const { mountTemplateWizard } = await import("./improvement/templateWizard");
+        mount = () => mountTemplateWizard(screenRoot, decodeURIComponent(parts[1] ?? ""));
       } else if (parts[0] === "people") {
         const { mountPeople } = await import("./screens/people");
         mount = () => mountPeople(screenRoot);

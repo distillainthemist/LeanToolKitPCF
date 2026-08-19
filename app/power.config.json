@@ -153,6 +153,10 @@
         "sitesettings": {
           "entitySetName": "ben_ltksitesettingses",
           "logicalName": "ben_ltksitesettings"
+        },
+        "leanboardinitiativetemplates": {
+          "entitySetName": "ben_ltkinitiativetemplates",
+          "logicalName": "ben_ltkinitiativetemplate"
         }
       },
       "environmentVariableName": ""

@@ -357,8 +357,40 @@ reschedule/cancel history with a reason picklist.
   undeletable mandatory cards, Canvas bound fields, metric blocks,
   kanban Verify column + evidence + reschedule prompt + endorsement,
   bulk reassign, open-actions digest.
-- **P7 Templates builder · P8 Gantt · P9 VDT + simulation · P10
-  Reporting** — after their design.
+- **— design pass 2 RECEIVED 2026-08-19** —
+  `leanboard-cascade-templates-gantt-vdt-reporting-design.md` (§1
+  templates builder, §2 Gantt one-control-two-scopes, §3 VDT tree +
+  simulation, §4 reporting shapes, §5 health questions + carry-forward;
+  visual reference sections 11a/12a of the review HTML). Indicative for
+  styling/layout, not 1:1 (Ben); notably the board editor is the SAME
+  composer as meeting boards, not the spec's re-drawn tile editor. No §5
+  decision changed. Model notes adopted: initiatives will snapshot their
+  resolved stages/gates/mandatory sets at creation (P5); metric `Link to
+  a value driver` arrives with the VDT (P9).
+- **P7 Templates builder — BUILT 2026-08-19 (dev; next release
+  SOLUTION-CARRYING: ben_ltkinitiativetemplate)** — model
+  `improvement/templateModel.ts` (stages+gates incl. the always-shown
+  Complete gate, PDCA tokens, method presets, roles/fields/metrics
+  parsing, stepperChips, validation, propagation words, slot
+  stage/mandatory flags; 6 tests); store `store/templates.ts` (+
+  `ensureTemplateBoard`: a project-kind isTemplate board seeded with
+  Charter (Canvas, mandatory) + Action plan); reusable wizard shell
+  `improvement/wizardShell.ts` (the meeting wizard's chrome as a
+  function); wizard `improvement/templateWizard.ts` at
+  `#/template/<id|new>` — 7 steps per §1 (Basics with method-preset
+  offer; Stages & gates with live chevron preview, boundary gate rows,
+  delete-blocked-with-reason, amber propagation note on steps 2/5/6/7;
+  Roles standard-locked/label-editable, remove blocked while a gate
+  names it; Fields; Metrics with target-required validation; Initiative
+  board = the COMPOSER as a full-screen overlay + a stage/mandatory
+  table, charter always mandatory; Review = linked summary grid, Save
+  blocks and lists with fix › links); Settings → Improvement landing
+  (cards, retired last, ⋮ Duplicate/Retire/Delete). DEFERRED to P6: the
+  ⛓ bound-field toggle in the Canvas builder + stage/mandatory on the
+  card studio Common tab (§1.5–1.6 runtime halves); "n initiatives use
+  this" reads 0 until P5.
+- **P8 Gantt · P9 VDT + simulation · P10 Reporting** — designed
+  (spec §2–§4); build after P5/P6.
 
 Each phase ships behind the usual gates + `pac code push`; the specs'
 acceptance checks are the PR checklist. Schema phases make the next

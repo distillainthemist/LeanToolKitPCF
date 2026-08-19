@@ -485,6 +485,34 @@ export const TABLES = [
     },
     role: { delete: true },
   },
+  // ---- Improvement (P7 templates builder, 2026-08-19; design review 11a) ---
+  {
+    // An initiative template: method, stages (each mapped to PDCA, with an
+    // optional gate = approver roles), roles, custom header fields,
+    // mandatory metrics, and a TEMPLATE BOARD (a project-kind board with
+    // isTemplate) whose slots carry stage + mandatory flags. Superadmin.
+    schema: "ben_LTKInitiativeTemplate",
+    logical: "ben_ltkinitiativetemplate",
+    display: "LeanBoard Initiative Template",
+    plural: "LeanBoard Initiative Templates",
+    primaryNameMax: 200,
+    columns: {
+      ben_templateid: { ...text(40), display: "Template Id", required: true },
+      ben_method: { ...text(60), display: "Method" }, // A3 · DMAIC · Kaizen · 8D · Project · Single action · custom
+      ben_description: { ...memo(2000), display: "Description" },
+      ben_singleaction: { kind: "bool", display: "Single action (no board)", default: false },
+      ben_active: { kind: "bool", display: "Active", default: true },
+      ben_order: { kind: "int", display: "Order" },
+      ben_company: { ...text(100), display: "Company (blank = all)" },
+      ben_stagesjson: { ...memo(20000), display: "Stages (JSON)" },
+      ben_rolesjson: { ...memo(10000), display: "Roles (JSON)" },
+      ben_fieldsjson: { ...memo(10000), display: "Custom fields (JSON)" },
+      ben_metricsjson: { ...memo(10000), display: "Mandatory metrics (JSON)" },
+      ben_boardid: { ...text(80), display: "Template board Id" },
+    },
+    key: ["ben_templateid"],
+    role: { delete: true },
+  },
 ];
 
 /** 1:N relationships (lookup column lives on the referencing table). */

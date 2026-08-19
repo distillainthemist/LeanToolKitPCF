@@ -277,6 +277,15 @@ export function mountSettings(parent: HTMLElement, initialTab = ""): () => void 
     }
     if (me.role === "superadmin") {
       tabs.push({
+        key: "improvement",
+        label: "Improvement",
+        // initiative templates (design review 11a) — lazy, like Priorities
+        render: async () => {
+          const { renderImprovementSettings } = await import("../improvement/templateWizard");
+          await renderImprovementSettings(body, true);
+        },
+      });
+      tabs.push({
         key: "access",
         label: "Access control",
         render: () => renderAccessControl(body, me),
