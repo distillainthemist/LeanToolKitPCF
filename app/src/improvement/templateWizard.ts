@@ -87,7 +87,16 @@ function toggle(on: boolean, onChange: (v: boolean) => void, title = ""): HTMLBu
   b.setAttribute("aria-checked", String(on));
   b.title = title;
   b.appendChild(el("span", "app-tw-toggle-knob"));
-  b.addEventListener("click", () => onChange(!on));
+  // self-updating: flip the visual immediately — callers that repaint
+  // anyway just repaint consistently, and callers that only mark dirty
+  // (roles' time commitment, fields' required) still show the change
+  let cur = on;
+  b.addEventListener("click", () => {
+    cur = !cur;
+    b.classList.toggle("app-tw-toggle-on", cur);
+    b.setAttribute("aria-checked", String(cur));
+    onChange(cur);
+  });
   return b;
 }
 
@@ -400,12 +409,14 @@ export function mountTemplateWizard(parent: HTMLElement, templateId: string): ()
           })
         );
         const tc = el("div", "app-tw-inline");
+        const tcLabel = el("span", "ltk-mw-help", r.timeCommitment ? "asked" : "not asked");
         tc.append(
           toggle(r.timeCommitment, (v) => {
             r.timeCommitment = v;
+            tcLabel.textContent = v ? "asked" : "not asked";
             mark();
           }),
-          el("span", "ltk-mw-help", r.timeCommitment ? "asked" : "not asked")
+          tcLabel
         );
         tr.appendChild(tc);
         const x = btn("×", "ltk-mw-chip-x");
@@ -665,12 +676,14 @@ export function mountTemplateWizard(parent: HTMLElement, templateId: string): ()
           );
           const isCharter = slot.cardType === "CanvasCard" && manifest.slots.filter((x) => x.cardType === "CanvasCard").indexOf(slot) === 0;
           const md = el("div", "app-tw-inline");
+          const mdLabel = el("span", "ltk-mw-help", isCharter ? "charter — always" : f.mandatory ? "undeletable" : "optional");
           md.append(
             toggle(f.mandatory || isCharter, (v) => {
               slot.settings = withSlotFlags(slot.settings, { ...slotFlags(slot.settings), mandatory: v });
+              if (!isCharter) mdLabel.textContent = v ? "undeletable" : "optional";
               void saveManifest(b.id, manifest);
             }, isCharter ? "The charter is always mandatory" : ""),
-            el("span", "ltk-mw-help", isCharter ? "charter — always" : f.mandatory ? "undeletable" : "optional")
+            mdLabel
           );
           if (isCharter) (md.firstChild as HTMLButtonElement).disabled = true;
           tr.appendChild(md);
