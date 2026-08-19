@@ -3300,3 +3300,9 @@ textarea.app-cp-statement { font-size: 14px; font-weight: 500; }
 .app-tw-templates-h { margin: 16px 0 8px; }
 .app-tw-stdrole { min-height: 30px; font-size: 12.5px; cursor: pointer; }
 .app-tw-slots { margin-top: 8px; }
+.app-tw-methods { align-items: center; }
+.app-tw-method { display: inline-flex; align-items: center; gap: 6px; cursor: grab; user-select: none; }
+.app-tw-method:active { cursor: grabbing; }
+.app-tw-method-handle { font-size: 11px; color: #a39c90; cursor: grab; }
+.app-tw-drop-left { box-shadow: -2px 0 0 0 var(--app-accent); }
+.app-tw-drop-right { box-shadow: 2px 0 0 0 var(--app-accent); }

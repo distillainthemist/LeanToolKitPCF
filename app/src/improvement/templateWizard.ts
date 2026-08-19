@@ -794,12 +794,53 @@ export async function renderImprovementSettings(body: HTMLElement, isSuper: bool
     return box;
   };
   if (isSuper) {
-    const mBox = section("Methods", "The problem-solving / project methods templates classify under — tracked even as templates change and version.");
-    const chips = el("div", "app-tw-inline");
+    const mBox = section("Methods", "The problem-solving / project methods templates classify under — tracked even as templates change and version. Drag to reorder; the order is the picker's order.");
+    const chips = el("div", "app-tw-inline app-tw-methods");
+    let draggingMethod: number | null = null;
     const paintMethods = () => {
       clear(chips);
       imp.methods.forEach((m, i) => {
-        const chip = el("span", "ltk-mw-chip", m);
+        const chip = el("span", "ltk-mw-chip app-tw-method", "");
+        chip.appendChild(el("span", "app-drag-handle app-tw-method-handle", "⠿"));
+        chip.appendChild(el("span", undefined, m));
+        chip.draggable = true;
+        chip.title = "Drag to reorder";
+        chip.addEventListener("dragstart", (e) => {
+          draggingMethod = i;
+          chip.classList.add("app-dragging");
+          e.dataTransfer?.setData("text/plain", m);
+          if (e.dataTransfer) e.dataTransfer.effectAllowed = "move";
+        });
+        chip.addEventListener("dragend", () => {
+          draggingMethod = null;
+          chip.classList.remove("app-dragging");
+        });
+        const clearMarks = () => chip.classList.remove("app-tw-drop-left", "app-tw-drop-right");
+        chip.addEventListener("dragover", (e) => {
+          if (draggingMethod === null || draggingMethod === i) return;
+          e.preventDefault();
+          // a horizontal chip row: before/after by the pointer's X
+          const r = chip.getBoundingClientRect();
+          const after = e.clientX > r.left + r.width / 2;
+          chip.classList.toggle("app-tw-drop-right", after);
+          chip.classList.toggle("app-tw-drop-left", !after);
+        });
+        chip.addEventListener("dragleave", clearMarks);
+        chip.addEventListener("drop", (e) => {
+          clearMarks();
+          if (draggingMethod === null || draggingMethod === i) return;
+          e.preventDefault();
+          const from = draggingMethod;
+          draggingMethod = null;
+          const r = chip.getBoundingClientRect();
+          const after = e.clientX > r.left + r.width / 2;
+          let to = i + (after ? 1 : 0);
+          if (from < to) to--;
+          const [moved] = imp.methods.splice(from, 1);
+          imp.methods.splice(to, 0, moved);
+          persist();
+          paintMethods();
+        });
         const x = el("button", "ltk-mw-chip-x", "×") as HTMLButtonElement;
         x.type = "button";
         x.title = "Remove (existing templates keep their method)";
