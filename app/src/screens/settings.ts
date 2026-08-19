@@ -2131,7 +2131,7 @@ async function renderOrg(
     tabsRow.appendChild(el("span", "app-site-tabs-label", "Hub tabs"));
     const enabled = new Set(effectiveTabs(hubTabsBySite[site] ?? null));
     for (const t of HUB_TABS) {
-      const chip = el("button", "app-cp-l1chip app-site-tab" + (enabled.has(t.key) ? " app-site-tab-on" : ""), t.label) as HTMLButtonElement;
+      const chip = el("button", "app-site-tab" + (enabled.has(t.key) ? " app-site-tab-on" : ""), t.label) as HTMLButtonElement;
       chip.type = "button";
       chip.disabled = !canEdit;
       chip.title = canEdit ? (enabled.has(t.key) ? `Hide ${t.label} for ${site}` : `Show ${t.label} for ${site}`) : "";

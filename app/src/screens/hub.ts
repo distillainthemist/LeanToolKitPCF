@@ -27,6 +27,7 @@ import {
   orgJson,
   saveProtectedTimes,
   mergeUserPrefs,
+  archivedSites,
   siteHubTabs,
   userPrefsJson,
 } from "../store/config";
@@ -76,7 +77,7 @@ async function fetchHubData(viewer: {
   // ONE parallel round for every independent read — this chain used
   // to run serially, and ~ten connector round trips in a row were
   // the visible seconds before My day painted
-  const [, meFirst, allBoards, roster, myActions, org, prefs, cats] = await Promise.all([
+  const [, meFirst, allBoards, roster, myActions, org, prefs, cats, archived] = await Promise.all([
     selfHealCatalog(),
     viewerPerson(viewerId),
     listBoards(),
@@ -85,6 +86,7 @@ async function fetchHubData(viewer: {
     orgJson(),
     userPrefsJson(viewerId),
     meetingCategories(),
+    archivedSites().catch(() => [] as string[]),
   ]);
   // self-register the viewer into the roster on first visit
   let me = meFirst;
@@ -105,8 +107,11 @@ async function fetchHubData(viewer: {
   }
   const site = me.site;
 
-  // confidential meetings exist only for their owner + participants
-  const boards = allBoards.filter((b) => canViewBoard(b.occurrenceSettingsRaw, viewerId));
+  // confidential meetings exist only for their owner + participants; an
+  // archived site's boards leave the hub with the site (Ben, 2026-08-19)
+  const boards = allBoards.filter(
+    (b) => canViewBoard(b.occurrenceSettingsRaw, viewerId) && !(b.site !== "" && archived.includes(b.site))
+  );
   const sourceLabels: Record<string, string> = {};
   for (const b of boards) {
     for (const slot of parseManifest(b.manifestRaw).slots) {

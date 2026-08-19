@@ -3205,9 +3205,21 @@ textarea.app-cp-statement { font-size: 14px; font-weight: 500; }
 /* organisation: per-site hub tabs + archive */
 .app-site-tabs { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding: 4px 0 8px; }
 .app-site-tabs-label { font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.05em; color: #6d675c; font-weight: 700; margin-right: 4px; }
-.app-site-tab { font-size: 12px; min-height: 28px; padding: 3px 10px; opacity: 0.55; }
-.app-site-tab-on { opacity: 1; background: #26241f; color: #fff; border-color: #26241f; }
-.app-site-tab:disabled { cursor: default; }
+.app-site-tab {
+  font: inherit;
+  font-size: 12px;
+  min-height: 28px;
+  padding: 3px 12px;
+  border: 1.5px solid #d9d3c8;
+  border-radius: 999px;
+  background: #fff;
+  color: #6d675c;
+  box-shadow: none;
+  cursor: pointer;
+}
+.app-site-tab:hover:not(:disabled) { border-color: #26241f; color: #26241f; }
+.app-site-tab-on { background: #26241f; color: #fff; border-color: #26241f; }
+.app-site-tab:disabled { cursor: default; opacity: 0.7; }
 .app-site-archive { font-size: 12px; min-height: 30px; }
 .app-org-archived { margin-top: 14px; padding: 8px 12px; border: 1px dashed #d9d3c8; border-radius: 8px; font-size: 13px; }
 .app-org-archived summary { cursor: pointer; font-weight: 600; color: #6d675c; }
