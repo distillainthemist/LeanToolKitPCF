@@ -291,4 +291,5 @@ export const ACTIONBOARD_CSS = `
   transition: border-color 150ms ease, color 150ms ease;
 }
 .ltk-ab-add:hover { border-color: var(--ltk-accent); color: var(--ltk-accent); }
+.ltk-ab-verify { color: var(--ltk-muted); font-style: italic; margin-left: 6px; }
 `;

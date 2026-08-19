@@ -76,7 +76,22 @@ model section) — the canvas/PCF sections there are historical.
   actions register; `ben_ltkpeoples` is the app's user record (role:
   user/siteadmin/superadmin, site, department — the site drives the
   DMS default filter); `ben_ltksitesettings` and `ben_ltkuserprefs`
-  hold settings.
+  hold settings. **Cascaded priorities (P0, 2026-08-19):**
+  `ben_ltkpillar` (company pillars, two levels via a self lookup),
+  `ben_ltkpriority` (one row per priority, owned by its originating org
+  by NAME — company/site/department/area columns — with pillar and
+  parent-priority lookups), `ben_ltkpriorityassignment` (priority ×
+  receiving org: proposed/accepted/rejected/onhold/completed + reason;
+  `childpriorityid` when customised), `ben_ltkpriorityevent` (the
+  history tab), `ben_ltkactionfile` (evidence files on actions); actions
+  gained `verify` status, verification stamps, reschedule/cancel history
+  and an initiative id; site settings gained per-org visions and the
+  app-level priorities settings (period definition, RAG ratio). The
+  initiative-side tables arrive with P5 once the templates builder is
+  designed. Pure model + tests: `app/src/priorities/model.ts`; IO:
+  `store/priorities.ts`; the org's OWNERS (site + department, plural)
+  and visions ride the existing site-settings JSON (`store/config.ts`).
+  Plan of record: [leanboard-cascade-improvement-plan.md](leanboard-cascade-improvement-plan.md).
 - **The hub** is the landing screen: My day agenda, boards, actions,
   a Documents tab count. **Doc cards** (Standard documents, Document
   health) render register-true rows inside boards, configured by

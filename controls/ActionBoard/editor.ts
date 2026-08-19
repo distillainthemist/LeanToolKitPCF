@@ -307,7 +307,11 @@ export class ActionBoardEditor {
       return STATUS_COLUMNS.map((c) => ({
         key: c.status,
         label: c.label,
-        items: visible.filter((a) => a.status === c.status),
+        // "verify" (done, awaiting the initiative owner) shows in Done with
+        // its own marker until the initiative board's Verify column (P6)
+        items: visible.filter(
+          (a) => a.status === c.status || (c.status === "done" && a.status === "verify")
+        ),
       }));
     }
     // configured columns: exactly these, in this order, ALWAYS shown — an
@@ -395,6 +399,9 @@ export class ActionBoardEditor {
     const meta = el("div", "ltk-ab-card-meta");
     const whoEl = el("span", undefined, a.assignees[0]?.who ?? "Unassigned");
     meta.appendChild(whoEl);
+    if (a.status === "verify") {
+      meta.appendChild(el("span", "ltk-ab-verify", "◐ awaiting verification"));
+    }
     if (a.due !== "") {
       const dueEl = el("span", undefined, `Due ${a.due}`);
       if (isOverdue(a)) dueEl.style.color = this.overdueColor();

@@ -216,6 +216,247 @@ export async function saveCompanyOwners(map: Record<string, PersonRef>): Promise
   );
 }
 
+// ---- cascaded priorities (plan P0): additional owners, visions, settings ----
+//
+// Decision 7 wants OWNERS (plural) at site and department; the org editor
+// stores one primary owner per node in ben_orgowners. Additional owners
+// ride the same JSON under new keys (siteOwners / departmentOwners; the
+// company's under companyOwners on the APP_ROW) so nothing existing moves.
+// The model's OrgOwnersMap is the UNION of primary + additional per node.
+
+export interface SiteOwnersExtra {
+  siteOwners: PersonRef[];
+  departmentOwners: Record<string, PersonRef[]>;
+}
+
+function parseRefList(v: unknown): PersonRef[] {
+  if (!Array.isArray(v)) return [];
+  const out: PersonRef[] = [];
+  for (const x of v) {
+    const ref = parseRef(x);
+    if (ref && !out.some((o) => o.whoId === ref.whoId)) out.push(ref);
+  }
+  return out;
+}
+
+function parseSiteOwnersExtra(raw: string): SiteOwnersExtra {
+  const out: SiteOwnersExtra = { siteOwners: [], departmentOwners: {} };
+  if (!raw.trim().startsWith("{")) return out;
+  try {
+    const o = JSON.parse(raw) as Record<string, unknown>;
+    out.siteOwners = parseRefList(o.siteOwners);
+    for (const [k, v] of Object.entries((o.departmentOwners as object) ?? {})) {
+      const list = parseRefList(v);
+      if (list.length > 0) out.departmentOwners[k] = list;
+    }
+  } catch {
+    /* fresh */
+  }
+  return out;
+}
+
+/** Read the raw owners JSON of one site row (both the primary and the
+ *  extra shapes live in it), or "" when there is no row. */
+async function ownersRaw(site: string): Promise<string> {
+  const rows = await allWhere(Ben_ltksitesettingsesService.getAll, eq("ben_site", site));
+  return rows[0]?.ben_orgowners ?? "";
+}
+
+export async function siteOwnersExtra(site: string): Promise<SiteOwnersExtra> {
+  return parseSiteOwnersExtra(await ownersRaw(site));
+}
+
+/** Save the additional owners of a site row, preserving the primary keys. */
+export async function saveSiteOwnersExtra(site: string, extra: SiteOwnersExtra): Promise<void> {
+  const raw = await ownersRaw(site);
+  let o: Record<string, unknown> = {};
+  try {
+    if (raw.trim().startsWith("{")) o = JSON.parse(raw) as Record<string, unknown>;
+  } catch {
+    o = {};
+  }
+  o.siteOwners = extra.siteOwners;
+  o.departmentOwners = extra.departmentOwners;
+  await upsertWhere(
+    Ben_ltksitesettingsesService,
+    eq("ben_site", site),
+    (row) => row.ben_ltksitesettingsid,
+    { ben_site: site, ben_name: site, ben_orgowners: JSON.stringify(o) }
+  );
+}
+
+/** Additional company owners (APP_ROW, key companyOwners). */
+export async function companyOwnersExtra(): Promise<Record<string, PersonRef[]>> {
+  const raw = await ownersRaw(APP_ROW);
+  const out: Record<string, PersonRef[]> = {};
+  if (!raw.trim().startsWith("{")) return out;
+  try {
+    const o = JSON.parse(raw) as { companyOwners?: Record<string, unknown> };
+    for (const [k, v] of Object.entries(o.companyOwners ?? {})) {
+      const list = parseRefList(v);
+      if (list.length > 0) out[k] = list;
+    }
+  } catch {
+    /* fresh */
+  }
+  return out;
+}
+
+export async function saveCompanyOwnersExtra(map: Record<string, PersonRef[]>): Promise<void> {
+  const raw = await ownersRaw(APP_ROW);
+  let o: Record<string, unknown> = {};
+  try {
+    if (raw.trim().startsWith("{")) o = JSON.parse(raw) as Record<string, unknown>;
+  } catch {
+    o = {};
+  }
+  o.companyOwners = map;
+  await upsertWhere(
+    Ben_ltksitesettingsesService,
+    eq("ben_site", APP_ROW),
+    (row) => row.ben_ltksitesettingsid,
+    { ben_site: APP_ROW, ben_name: "App branding", ben_orgowners: JSON.stringify(o) }
+  );
+}
+
+/**
+ * The model's owners map: org key ("company|site|department|area") →
+ * every owner (primary + additional) for company, site and department
+ * nodes. Areas are governed by their department (decision 7), so they
+ * carry no entry.
+ */
+export async function orgOwnersMap(): Promise<Record<string, PersonRef[]>> {
+  const [rows, siteCo] = await Promise.all([
+    allWhere(Ben_ltksitesettingsesService.getAll),
+    siteCompanies(),
+  ]);
+  const out: Record<string, PersonRef[]> = {};
+  const add = (key: string, refs: (PersonRef | undefined)[]) => {
+    for (const r of refs) {
+      if (!r) continue;
+      const list = (out[key] ??= []);
+      if (!list.some((x) => x.whoId === r.whoId)) list.push(r);
+    }
+  };
+  for (const r of rows) {
+    const raw = r.ben_orgowners ?? "";
+    if (r.ben_site === APP_ROW) {
+      let o: { companies?: Record<string, unknown>; companyOwners?: Record<string, unknown> } = {};
+      try {
+        if (raw.trim().startsWith("{")) o = JSON.parse(raw) as typeof o;
+      } catch {
+        o = {};
+      }
+      for (const [k, v] of Object.entries(o.companies ?? {})) add(`${k}|||`, [parseRef(v)]);
+      for (const [k, v] of Object.entries(o.companyOwners ?? {})) add(`${k}|||`, parseRefList(v));
+      continue;
+    }
+    if (!r.ben_site) continue;
+    const company = siteCo[r.ben_site] ?? "";
+    const primary = parseSiteOwners(raw);
+    const extra = parseSiteOwnersExtra(raw);
+    add(`${company}|${r.ben_site}||`, [primary.site, ...extra.siteOwners]);
+    const depts = new Set([
+      ...Object.keys(primary.departments),
+      ...Object.keys(extra.departmentOwners),
+    ]);
+    for (const d of depts) {
+      add(`${company}|${r.ben_site}|${d}|`, [
+        primary.departments[d],
+        ...(extra.departmentOwners[d] ?? []),
+      ]);
+    }
+  }
+  return out;
+}
+
+// ---- vision statements (one per org node) ----
+
+/** Every vision, keyed by org key. Site rows hold {site, departments:{}};
+ *  the APP_ROW holds {companies:{}}. */
+export async function orgVisions(): Promise<Record<string, string>> {
+  const [rows, siteCo] = await Promise.all([
+    allWhere(Ben_ltksitesettingsesService.getAll),
+    siteCompanies(),
+  ]);
+  const out: Record<string, string> = {};
+  for (const r of rows) {
+    const raw = r.ben_orgvisions ?? "";
+    if (!raw.trim().startsWith("{")) continue;
+    let o: Record<string, unknown> = {};
+    try {
+      o = JSON.parse(raw) as Record<string, unknown>;
+    } catch {
+      continue;
+    }
+    if (r.ben_site === APP_ROW) {
+      for (const [k, v] of Object.entries((o.companies as object) ?? {})) {
+        if (typeof v === "string" && v.trim() !== "") out[`${k}|||`] = v;
+      }
+      continue;
+    }
+    if (!r.ben_site) continue;
+    const company = siteCo[r.ben_site] ?? "";
+    if (typeof o.site === "string" && o.site.trim() !== "") out[`${company}|${r.ben_site}||`] = o.site;
+    for (const [k, v] of Object.entries((o.departments as object) ?? {})) {
+      if (typeof v === "string" && v.trim() !== "") out[`${company}|${r.ben_site}|${k}|`] = v;
+    }
+  }
+  return out;
+}
+
+/** Save one org node's vision (company → APP_ROW; site/department → the
+ *  site row; areas have no vision of their own). */
+export async function saveOrgVision(
+  org: { company: string; site: string; department: string },
+  text: string
+): Promise<void> {
+  const rowSite = org.site !== "" ? org.site : APP_ROW;
+  const rows = await allWhere(Ben_ltksitesettingsesService.getAll, eq("ben_site", rowSite));
+  let o: Record<string, unknown> = {};
+  const raw = rows[0]?.ben_orgvisions ?? "";
+  try {
+    if (raw.trim().startsWith("{")) o = JSON.parse(raw) as Record<string, unknown>;
+  } catch {
+    o = {};
+  }
+  if (org.site === "") {
+    const companies = ((o.companies as Record<string, string>) ??= {});
+    companies[org.company] = text;
+  } else if (org.department === "") {
+    o.site = text;
+  } else {
+    const departments = ((o.departments as Record<string, string>) ??= {});
+    departments[org.department] = text;
+  }
+  await upsertWhere(
+    Ben_ltksitesettingsesService,
+    eq("ben_site", rowSite),
+    (row) => row.ben_ltksitesettingsid,
+    {
+      ben_site: rowSite,
+      ben_name: rowSite === APP_ROW ? "App branding" : rowSite,
+      ben_orgvisions: JSON.stringify(o),
+    }
+  );
+}
+
+// ---- priorities settings (APP_ROW): RAG ratio + period definition ----
+
+export async function prioritySettingsJson(): Promise<string> {
+  const rows = await allWhere(Ben_ltksitesettingsesService.getAll, eq("ben_site", APP_ROW));
+  return rows[0]?.ben_prioritysettings ?? "";
+}
+
+export async function savePrioritySettingsJson(json: string): Promise<void> {
+  await upsertWhere(
+    Ben_ltksitesettingsesService,
+    eq("ben_site", APP_ROW),
+    (row) => row.ben_ltksitesettingsid,
+    { ben_site: APP_ROW, ben_name: "App branding", ben_prioritysettings: json }
+  );
+}
+
 /** Rename the site's settings row (key column + display name). */
 export async function renameSiteRow(oldSite: string, newSite: string): Promise<void> {
   const rows = await allWhere(Ben_ltksitesettingsesService.getAll, eq("ben_site", oldSite));

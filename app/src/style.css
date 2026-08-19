@@ -2769,3 +2769,23 @@ button.app-doclist-hsort:hover { color: var(--app-accent, #2563eb); }
 .app-docs-dofrow { display: flex; align-items: center; gap: 8px; font-size: 12.5px; cursor: pointer; }
 .app-docs-dofmap { display: flex; align-items: center; gap: 8px; padding: 6px 0; }
 .app-docs-dofsite { font-weight: 600; font-size: 13px; text-transform: capitalize; }
+
+/* ---- Settings → Priorities (cascade plan P0) ---- */
+.app-pr-section { padding: 14px 16px 6px; border-bottom: 1px solid #ece8e0; }
+.app-pr-h3 { margin: 0 0 4px; font-size: 15px; font-weight: 700; }
+.app-pr-pillars { display: flex; flex-direction: column; gap: 6px; padding: 10px 0 12px; }
+.app-pr-pillar { display: flex; align-items: center; gap: 8px; }
+.app-pr-pillar-l2 { padding-left: 34px; }
+.app-pr-pillar .app-input { flex: 1; min-width: 0; }
+.app-pr-order { flex: 0 0 64px !important; }
+.app-pr-addobj { padding-left: 34px; align-self: flex-start; font-size: 12.5px; }
+.app-pr-short { max-width: 140px; }
+.app-pr-org { padding: 10px 0 12px; border-top: 1px dashed #e4dfd6; }
+.app-pr-org-co { border-top: none; }
+.app-pr-orgname { font-weight: 700; font-size: 14px; margin-bottom: 4px; }
+.app-pr-dept { margin: 8px 0 0 18px; padding-left: 12px; border-left: 2px solid #ece8e0; }
+.app-pr-deptname { font-weight: 600; font-size: 13px; margin-bottom: 4px; }
+.app-pr-vision { width: 100%; resize: vertical; font: inherit; }
+.app-pr-owners { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
+.app-pr-chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.app-pr-chip-x { border: none; background: none; cursor: pointer; margin-left: 4px; color: #6d675c; }

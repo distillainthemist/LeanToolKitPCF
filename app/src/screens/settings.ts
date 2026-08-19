@@ -256,6 +256,16 @@ export function mountSettings(parent: HTMLElement, initialTab = ""): () => void 
         label: "Site cadence",
         render: () => renderSiteCadence(body, me, ctx),
       });
+      // cascaded priorities (plan P0): pillars + period/RAG (superadmin),
+      // owners + vision per site/department (site admins for their site)
+      tabs.push({
+        key: "priorities",
+        label: "Priorities",
+        render: async () => {
+          const { renderPrioritiesSettings } = await import("../priorities/settingsTab");
+          await renderPrioritiesSettings(body, me, ctx);
+        },
+      });
     }
     if (me.role === "superadmin") {
       tabs.push({
@@ -1676,7 +1686,7 @@ interface OrgSiteNode {
 }
 
 /** Owner-picker result: set a person, clear the owner, or cancel. */
-type PickPersonResult =
+export type PickPersonResult =
   | { action: "set"; person: PersonRef }
   | { action: "clear" }
   | null;
@@ -1686,7 +1696,7 @@ type PickPersonResult =
  * with a directory search for anyone not on the roster yet (picking a
  * directory hit registers them as an app user, like the wizard does).
  */
-function pickPerson(host: HTMLElement, allowClear: boolean): Promise<PickPersonResult> {
+export function pickPerson(host: HTMLElement, allowClear: boolean): Promise<PickPersonResult> {
   return new Promise((resolve) => {
     const overlay = el("div", "app-modal-overlay");
     const box = el("div", "app-modal");

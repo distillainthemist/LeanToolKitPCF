@@ -190,12 +190,19 @@ reschedule/cancel history with a reason picklist.
 
 ## Phasing (revised to the build order — 2026-08-19)
 
-- **P0 Foundations** — schema (all of the above; solution-carrying);
-  org owners + vision (settings, org dictionary section); pillars L1/L2
-  (superadmin); period + RAG-ratio settings; user prefs; the notify road
-  opened to boards (DLP story updated in architecture.md); action model
-  changes (start date, `verify`, history, evidence) — model only, UI in
-  P6.
+- **P0 Foundations — BUILT 2026-08-19 (dev; next release SOLUTION-CARRYING)** — schema (priorities side + actions + settings columns; INITIATIVE tables deferred to P5 so their shape follows the templates-builder design; the notify road stays docs-only until P6 first uses it);
+  org owners (plural, site + department) + vision + pillars L1/L2 +
+  period/RAG in a NEW Settings → Priorities tab (the org editor's primary
+  owner stays; additional owners ride the same JSON) — a deviation from
+  "in the org dictionary section" to keep the intricate org editor
+  untouched; user prefs (P3, when the view mode exists); action model
+  changes (`verify` tolerated by the kanban in Done with a marker,
+  excluded from overdue; history + verification + initiative id mapped;
+  `ben_start` already existed) — UI in P6. Pure model
+  `app/src/priorities/model.ts` (org refs, pillars, matrix membership
+  own+adopted, lineage, tallies/roll-up, initiative RAG, periods,
+  permissions — 13 tests); store `store/priorities.ts` (GUID↔id bridge,
+  `loadCascade` in one call).
 - **P1 Priorities — Simple view spine** — org bar (breadcrumb dropdowns
   + Descend chips + Org-picker dialog on the DMS tree), vision band,
   toolbar (pillar two-level filter, period, status, Simple/Dynamic

@@ -125,6 +125,34 @@
         "leanboardtagproposals": {
           "entitySetName": "ben_ltktagproposals",
           "logicalName": "ben_ltktagproposal"
+        },
+        "leanboardpillars": {
+          "entitySetName": "ben_ltkpillars",
+          "logicalName": "ben_ltkpillar"
+        },
+        "leanboardpriorities": {
+          "entitySetName": "ben_ltkpriorities",
+          "logicalName": "ben_ltkpriority"
+        },
+        "leanboardpriorityassignments": {
+          "entitySetName": "ben_ltkpriorityassignments",
+          "logicalName": "ben_ltkpriorityassignment"
+        },
+        "leanboardpriorityevents": {
+          "entitySetName": "ben_ltkpriorityevents",
+          "logicalName": "ben_ltkpriorityevent"
+        },
+        "leanboardactionfiles": {
+          "entitySetName": "ben_ltkactionfiles",
+          "logicalName": "ben_ltkactionfile"
+        },
+        "actions": {
+          "entitySetName": "ben_ltkactions",
+          "logicalName": "ben_ltkaction"
+        },
+        "sitesettings": {
+          "entitySetName": "ben_ltksitesettingses",
+          "logicalName": "ben_ltksitesettings"
         }
       },
       "environmentVariableName": ""

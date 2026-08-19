@@ -123,6 +123,13 @@ export const TABLES = [
       ben_source: { ...text(40), display: "Source" },
       ben_sourceid: { ...text(80), display: "Source Id" },
       ben_hint: { ...text(200), display: "Hint" },
+      // cascade/improvement P0 (2026-08-19): owner endorsement + the
+      // reschedule/cancel history the reporting counts. Status gains
+      // "verify" (done, awaiting the initiative owner's verification).
+      ben_verifiedby: { ...text(120), display: "Verified by (whoId)" },
+      ben_verifiedat: { kind: "datetime", display: "Verified at" },
+      ben_historyjson: { ...memo(20000), display: "History (JSON)" },
+      ben_initiativeid: { ...text(40), display: "Initiative Id" },
     },
     key: ["ben_actionid"],
   },
@@ -142,6 +149,12 @@ export const TABLES = [
       ben_timezone: { ...text(60), display: "Time zone (IANA)" },
       ben_accent: { ...text(20), display: "Accent colour" },
       ben_rosterpatterns: { ...memo(10000), display: "Roster Patterns (JSON)" },
+      // cascade P0: vision statements per org node on the site row
+      // ({site, departments:{name}}; the company's on the APP_ROW as
+      // {companies:{name}}), and the app-level priorities settings on the
+      // APP_ROW ({ragRatioPct, period:{mode,startMonth,prefix}, currentPeriod})
+      ben_orgvisions: { ...memo(20000), display: "Org visions (JSON)" },
+      ben_prioritysettings: { ...memo(4000), display: "Priorities settings (JSON)" },
       // [{key, label, color}] — the site state palette cards select from
       ben_statepalette: { ...memo(10000), display: "State palette (JSON)" },
       // [{key, label, color}] — title-strip association colours (branding)
@@ -358,10 +371,151 @@ export const TABLES = [
     // un-+1 is a delete of your own watch row
     role: { delete: true },
   },
+  // ---- Cascaded priorities (P0, 2026-08-19; plan:
+  //      docs/leanboard-cascade-improvement-plan.md) --------------------
+  {
+    // Company-level strategic pillars, two levels: L1 "medium-term
+    // strategy" (parent) and L2 "strategic objectives" (matrix columns).
+    schema: "ben_LTKPillar",
+    logical: "ben_ltkpillar",
+    display: "LeanBoard Pillar",
+    plural: "LeanBoard Pillars",
+    primaryNameMax: 200,
+    columns: {
+      ben_pillarid: { ...text(40), display: "Pillar Id", required: true },
+      ben_level: { kind: "int", display: "Level (1 or 2)" },
+      ben_color: { ...text(20), display: "Colour" },
+      ben_order: { kind: "int", display: "Order" },
+      ben_active: { kind: "bool", display: "Active", default: true },
+      ben_company: { ...text(100), display: "Company" },
+    },
+    key: ["ben_pillarid"],
+    role: { delete: true },
+  },
+  {
+    // A priority belongs to ONE originating org (company/site/department/
+    // area by name — the boards' org dictionary; blank levels = higher
+    // node). Cascading = assignments; customising = a child row (parent
+    // lookup). Status: active | completed | archived | retired.
+    schema: "ben_LTKPriority",
+    logical: "ben_ltkpriority",
+    display: "LeanBoard Priority",
+    plural: "LeanBoard Priorities",
+    primaryNameMax: 400,
+    columns: {
+      ben_priorityid: { ...text(40), display: "Priority Id", required: true },
+      ben_statement: { ...memo(2000), display: "Statement" },
+      ben_company: { ...text(100), display: "Company" },
+      ben_site: { ...text(100), display: "Site" },
+      ben_department: { ...text(100), display: "Department" },
+      ben_area: { ...text(100), display: "Area" },
+      ben_ownerid: { ...text(120), display: "Owner (whoId)" },
+      ben_ownername: { ...text(200), display: "Owner name" },
+      ben_period: { ...text(40), display: "Period" },
+      ben_status: { ...text(20), display: "Status" },
+      ben_statusreason: { ...memo(2000), display: "Status reason" },
+      ben_order: { kind: "int", display: "Order" },
+      ben_primaryinitiativeid: { ...text(40), display: "Primary initiative Id" },
+      ben_notes: { ...memo(4000), display: "Notes" },
+    },
+    key: ["ben_priorityid"],
+    role: { delete: true },
+  },
+  {
+    // priority × receiving org: proposed | accepted | rejected | onhold |
+    // completed, with the receiver's reason; child = the customised row
+    // it produced, if any (adopt-as-is leaves it blank — decision 2).
+    schema: "ben_LTKPriorityAssignment",
+    logical: "ben_ltkpriorityassignment",
+    display: "LeanBoard Priority Assignment",
+    plural: "LeanBoard Priority Assignments",
+    primaryNameMax: 400,
+    columns: {
+      ben_company: { ...text(100), display: "Company" },
+      ben_site: { ...text(100), display: "Site" },
+      ben_department: { ...text(100), display: "Department" },
+      ben_area: { ...text(100), display: "Area" },
+      ben_status: { ...text(20), display: "Status" },
+      ben_reason: { ...memo(2000), display: "Reason" },
+      ben_decidedbyid: { ...text(120), display: "Decided by (whoId)" },
+      ben_decidedbyname: { ...text(200), display: "Decided by name" },
+      ben_decidedat: { kind: "datetime", display: "Decided at" },
+      ben_childpriorityid: { ...text(40), display: "Child priority Id" },
+    },
+    role: { delete: true },
+  },
+  {
+    // The priority's history tab: created, cascaded, accepted/held/
+    // rejected, revised, completed, carried forward — who/when/detail.
+    schema: "ben_LTKPriorityEvent",
+    logical: "ben_ltkpriorityevent",
+    display: "LeanBoard Priority Event",
+    plural: "LeanBoard Priority Events",
+    primaryNameMax: 400,
+    columns: {
+      ben_kind: { ...text(40), display: "Kind" },
+      ben_detailjson: { ...memo(4000), display: "Detail (JSON)" },
+      ben_actorid: { ...text(120), display: "Actor (whoId)" },
+      ben_actorname: { ...text(200), display: "Actor name" },
+      ben_at: { kind: "datetime", display: "At" },
+    },
+    role: { delete: false },
+  },
+  {
+    // Evidence attached to actions (decision 6) — the issue-file road.
+    schema: "ben_LTKActionFile",
+    logical: "ben_ltkactionfile",
+    display: "LeanBoard Action File",
+    plural: "LeanBoard Action Files",
+    primaryNameMax: 300,
+    columns: {
+      ben_actionid: { ...text(40), display: "Action Id" },
+      ben_file: { kind: "file", maxKB: 8192, display: "File" },
+      ben_caption: { ...text(300), display: "Caption" },
+      ben_uploadedbyid: { ...text(120), display: "Uploaded by (whoId)" },
+    },
+    role: { delete: true },
+  },
 ];
 
 /** 1:N relationships (lookup column lives on the referencing table). */
 export const LOOKUPS = [
+  // ---- Cascaded priorities (P0) ---------------------------------------
+  {
+    schemaName: "ben_ltkpillar_children",
+    referenced: "ben_ltkpillar",
+    referencing: "ben_ltkpillar",
+    lookupSchema: "ben_ParentPillar",
+    display: "Parent pillar",
+  },
+  {
+    schemaName: "ben_ltkpillar_priorities",
+    referenced: "ben_ltkpillar",
+    referencing: "ben_ltkpriority",
+    lookupSchema: "ben_Pillar",
+    display: "Pillar",
+  },
+  {
+    schemaName: "ben_ltkpriority_children",
+    referenced: "ben_ltkpriority",
+    referencing: "ben_ltkpriority",
+    lookupSchema: "ben_ParentPriority",
+    display: "Parent priority",
+  },
+  {
+    schemaName: "ben_ltkpriority_assignments",
+    referenced: "ben_ltkpriority",
+    referencing: "ben_ltkpriorityassignment",
+    lookupSchema: "ben_Priority",
+    display: "Priority",
+  },
+  {
+    schemaName: "ben_ltkpriority_events",
+    referenced: "ben_ltkpriority",
+    referencing: "ben_ltkpriorityevent",
+    lookupSchema: "ben_Priority",
+    display: "Priority",
+  },
   {
     schemaName: "ben_ltkboard_instances",
     referenced: "ben_ltkboard",

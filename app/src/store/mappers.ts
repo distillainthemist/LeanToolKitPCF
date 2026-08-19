@@ -210,6 +210,12 @@ export function actionFromRow(row: Ben_ltkactions): LtkAction {
       sourceId: row.ben_sourceid ?? "",
       hint: row.ben_hint || undefined,
     },
+    history: parseJsonOr(row.ben_historyjson, undefined),
+    verified:
+      row.ben_verifiedat && row.ben_verifiedat !== ""
+        ? { whoId: row.ben_verifiedby ?? "", who: "", when: row.ben_verifiedat }
+        : undefined,
+    initiativeId: row.ben_initiativeid || undefined,
   });
 }
 
@@ -236,6 +242,10 @@ export function actionToRow(
     ben_source: action.context.source,
     ben_sourceid: action.context.sourceId,
     ben_hint: action.context.hint ?? "",
+    ben_historyjson: action.history ? JSON.stringify(action.history) : "",
+    ben_verifiedby: action.verified?.whoId ?? "",
+    ben_verifiedat: action.verified?.when ?? undefined,
+    ben_initiativeid: action.initiativeId ?? "",
   };
 }
 

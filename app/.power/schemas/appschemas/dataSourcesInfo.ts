@@ -5,6 +5,20 @@
  */
 
 export const dataSourcesInfo = {
+  "ben_ltkactions": {
+    "tableId": "",
+    "version": "",
+    "primaryKey": "ben_ltkactionid",
+    "dataSourceType": "Dataverse",
+    "apis": {}
+  },
+  "ben_ltkactionfiles": {
+    "tableId": "",
+    "version": "",
+    "primaryKey": "ben_ltkactionfileid",
+    "dataSourceType": "Dataverse",
+    "apis": {}
+  },
   "ben_ltkissuefiles": {
     "tableId": "",
     "version": "",
@@ -33,6 +47,34 @@ export const dataSourcesInfo = {
     "dataSourceType": "Dataverse",
     "apis": {}
   },
+  "ben_ltkpillars": {
+    "tableId": "",
+    "version": "",
+    "primaryKey": "ben_ltkpillarid",
+    "dataSourceType": "Dataverse",
+    "apis": {}
+  },
+  "ben_ltkpriorities": {
+    "tableId": "",
+    "version": "",
+    "primaryKey": "ben_ltkpriorityid",
+    "dataSourceType": "Dataverse",
+    "apis": {}
+  },
+  "ben_ltkpriorityassignments": {
+    "tableId": "",
+    "version": "",
+    "primaryKey": "ben_ltkpriorityassignmentid",
+    "dataSourceType": "Dataverse",
+    "apis": {}
+  },
+  "ben_ltkpriorityevents": {
+    "tableId": "",
+    "version": "",
+    "primaryKey": "ben_ltkpriorityeventid",
+    "dataSourceType": "Dataverse",
+    "apis": {}
+  },
   "ben_ltktagproposals": {
     "tableId": "",
     "version": "",
@@ -44,13 +86,6 @@ export const dataSourcesInfo = {
     "tableId": "",
     "version": "",
     "primaryKey": "ben_ltkuploadid",
-    "dataSourceType": "Dataverse",
-    "apis": {}
-  },
-  "ben_ltkactions": {
-    "tableId": "",
-    "version": "",
-    "primaryKey": "ben_ltkactionid",
     "dataSourceType": "Dataverse",
     "apis": {}
   },
