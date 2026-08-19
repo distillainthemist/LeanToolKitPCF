@@ -3,8 +3,8 @@
 // add/edit priority dialog pulled forward from item 2 so the matrix can be
 // filled and tested). Rides as a hub tab like Documents (dynamic import).
 //
-// Screen anatomy top to bottom: org bar (breadcrumb dropdowns · Descend
-// chips · ⌗ Org picker) → toolbar (period · status · Simple/Dynamic ·
+// Screen anatomy top to bottom: org bar (plain crumbs, one ▾ popover on
+// the current node: Switch · Descend · Browse all…) → toolbar (period · status · Simple/Dynamic ·
 // cascade chip · ＋ Priority · ⋮ view options) → vision band (directly
 // over the pillars) → the matrix (rail: "Strategic Pillars" over one
 // rectangle per pillar spanning its sub-pillar columns, settings order;
@@ -246,50 +246,75 @@ export function mountPriorities(parent: HTMLElement, _opts: PrioritiesMountOpts 
       wrap.appendChild(renderOther());
     };
 
+    // One row, one control (Ben, 2026-08-19): plain crumbs — click an
+    // ancestor to go up — and a single ▾ on the current node opening a
+    // popover with Switch (siblings) · Descend (children, with pending-
+    // cascade counts) · Browse all… (the tree picker for far jumps).
     const renderOrgBar = (): HTMLElement => {
       const bar = el("div", "app-cp-orgbar");
-      // breadcrumb: each level a dropdown of siblings
       const crumbs = el("div", "app-cp-crumbs");
       const path = orgPath(state.org);
       path.forEach((node, i) => {
         if (i > 0) crumbs.appendChild(el("span", "app-cp-crumb-sep", "›"));
-        const sel = el("select", "app-cp-crumb") as HTMLSelectElement;
-        for (const sib of siblingOrgs(tree, node)) {
-          const opt = el("option", "", orgName(sib)) as HTMLOptionElement;
-          opt.value = orgKey(sib);
-          if (sameOrg(sib, node)) opt.selected = true;
-          sel.appendChild(opt);
-        }
-        sel.title = `Switch ${orgLevel(node)}`;
-        sel.addEventListener("change", () => {
-          const [company = "", site = "", department = "", area = ""] = sel.value.split("|");
-          void goTo(orgRef(company, site, department, area));
+        const last = i === path.length - 1;
+        const b = el("button", "app-cp-crumb" + (last ? " app-cp-crumb-here" : ""), orgName(node) + (last ? " ▾" : "")) as HTMLButtonElement;
+        b.type = "button";
+        b.title = last ? "Switch, descend or browse" : `Go up to ${orgName(node)}`;
+        b.addEventListener("click", () => {
+          if (last) openOrgMenu(b);
+          else void goTo(node);
         });
-        crumbs.appendChild(sel);
+        crumbs.appendChild(b);
       });
       bar.appendChild(crumbs);
-      // descend chips
+      return bar;
+    };
+
+    const openOrgMenu = (anchor: HTMLElement) => {
+      document.querySelectorAll(".app-cp-menu").forEach((m) => m.remove());
+      const menu = el("div", "app-cp-menu app-cp-orgmenu");
+      const row = (o: OrgRef, here: boolean, badge: number) => {
+        const b = el("button", "app-cp-menu-item app-cp-orgmenu-item" + (here ? " app-cp-orgmenu-here" : "")) as HTMLButtonElement;
+        b.type = "button";
+        b.appendChild(el("span", "app-cp-orgmenu-name", (here ? "✓ " : "") + orgName(o)));
+        if (badge > 0) b.appendChild(el("span", "app-cp-orgmenu-badge", `⇩ ${badge}`));
+        b.addEventListener("click", () => {
+          menu.remove();
+          if (!here) void goTo(o);
+        });
+        menu.appendChild(b);
+      };
+      const sibs = siblingOrgs(tree, state.org);
+      if (sibs.length > 1) {
+        menu.appendChild(el("div", "app-cp-menu-h", `Switch ${orgLevel(state.org)}`));
+        for (const o of sibs) row(o, sameOrg(o, state.org), pendingCascades(o, data.assignments).length);
+      }
       const kids = childOrgs(tree, state.org);
       if (kids.length > 0) {
-        const row = el("div", "app-cp-descend");
-        row.appendChild(el("span", "app-cp-descend-label", "Descend:"));
-        for (const k of kids) {
-          const chip = el("button", "app-cp-chip", orgName(k)) as HTMLButtonElement;
-          chip.type = "button";
-          chip.addEventListener("click", () => void goTo(k));
-          row.appendChild(chip);
-        }
-        bar.appendChild(row);
+        menu.appendChild(el("div", "app-cp-menu-h", "Descend"));
+        for (const o of kids) row(o, false, pendingCascades(o, data.assignments).length);
       }
-      const picker = el("button", "app-cp-chip app-cp-chip-quiet", "⌗ Org picker") as HTMLButtonElement;
-      picker.type = "button";
-      picker.addEventListener("click", () => {
+      const browse = el("button", "app-cp-menu-item app-cp-orgmenu-browse", "Browse all…") as HTMLButtonElement;
+      browse.type = "button";
+      browse.addEventListener("click", () => {
+        menu.remove();
         void pickOrg(wrap, tree, state.org).then((o) => {
           if (o) void goTo(o);
         });
       });
-      bar.appendChild(picker);
-      return bar;
+      menu.appendChild(browse);
+      const r = anchor.getBoundingClientRect();
+      menu.style.top = `${r.bottom + 4}px`;
+      menu.style.left = `${Math.min(r.left, window.innerWidth - 300)}px`;
+      document.body.appendChild(menu);
+      const close = (e: PointerEvent) => {
+        if (!menu.contains(e.target as Node)) {
+          menu.remove();
+          document.removeEventListener("pointerdown", close, true);
+        }
+      };
+      setTimeout(() => document.addEventListener("pointerdown", close, true), 0);
+      cleanups.push(() => menu.remove());
     };
 
     const goTo = async (o: OrgRef) => {

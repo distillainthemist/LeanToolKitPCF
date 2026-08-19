@@ -217,7 +217,14 @@ reschedule/cancel history with a reason picklist.
   roster, period, primary initiative placeholder, cascade-to child+peer
   orgs with owner names → proposed assignments + `cascaded` event, confirm
   line, notes) and reorder — so the matrix can be filled and checked in
-  the player. Org tree = site-settings rows (`{department, areas}`) under
+  the player. ORG NAV streamlined after Ben's review (2026-08-19): plain
+  crumbs (click an ancestor to go up) + ONE ▾ popover on the current node
+  — Switch (siblings, ✓ current) · Descend (children) · Browse all… (tree
+  picker) — each row carrying its ⇩ pending-cascade count; the Descend
+  chip row and the standalone Org-picker button are gone. Row labels are
+  plain small-caps in the 126px gutter (Vision · Strategic pillars ·
+  Priorities · Objectives), pillars/sub-pillars fill with their set
+  colour, the vision band is dark on the matrix grid. Org tree = site-settings rows (`{department, areas}`) under
   the site→company map; default org = viewer's site; view prefs (org,
   pillar filter, rule, Other, group-by) in localStorage. Design as
   specified — org bar (breadcrumb dropdowns
