@@ -216,114 +216,18 @@ export async function saveCompanyOwners(map: Record<string, PersonRef>): Promise
   );
 }
 
-// ---- cascaded priorities (plan P0): additional owners, visions, settings ----
+// ---- cascaded priorities (plan P0): owners map, visions, settings ----
 //
-// Decision 7 wants OWNERS (plural) at site and department; the org editor
-// stores one primary owner per node in ben_orgowners. Additional owners
-// ride the same JSON under new keys (siteOwners / departmentOwners; the
-// company's under companyOwners on the APP_ROW) so nothing existing moves.
-// The model's OrgOwnersMap is the UNION of primary + additional per node.
-
-export interface SiteOwnersExtra {
-  siteOwners: PersonRef[];
-  departmentOwners: Record<string, PersonRef[]>;
-}
-
-function parseRefList(v: unknown): PersonRef[] {
-  if (!Array.isArray(v)) return [];
-  const out: PersonRef[] = [];
-  for (const x of v) {
-    const ref = parseRef(x);
-    if (ref && !out.some((o) => o.whoId === ref.whoId)) out.push(ref);
-  }
-  return out;
-}
-
-function parseSiteOwnersExtra(raw: string): SiteOwnersExtra {
-  const out: SiteOwnersExtra = { siteOwners: [], departmentOwners: {} };
-  if (!raw.trim().startsWith("{")) return out;
-  try {
-    const o = JSON.parse(raw) as Record<string, unknown>;
-    out.siteOwners = parseRefList(o.siteOwners);
-    for (const [k, v] of Object.entries((o.departmentOwners as object) ?? {})) {
-      const list = parseRefList(v);
-      if (list.length > 0) out.departmentOwners[k] = list;
-    }
-  } catch {
-    /* fresh */
-  }
-  return out;
-}
-
-/** Read the raw owners JSON of one site row (both the primary and the
- *  extra shapes live in it), or "" when there is no row. */
-async function ownersRaw(site: string): Promise<string> {
-  const rows = await allWhere(Ben_ltksitesettingsesService.getAll, eq("ben_site", site));
-  return rows[0]?.ben_orgowners ?? "";
-}
-
-export async function siteOwnersExtra(site: string): Promise<SiteOwnersExtra> {
-  return parseSiteOwnersExtra(await ownersRaw(site));
-}
-
-/** Save the additional owners of a site row, preserving the primary keys. */
-export async function saveSiteOwnersExtra(site: string, extra: SiteOwnersExtra): Promise<void> {
-  const raw = await ownersRaw(site);
-  let o: Record<string, unknown> = {};
-  try {
-    if (raw.trim().startsWith("{")) o = JSON.parse(raw) as Record<string, unknown>;
-  } catch {
-    o = {};
-  }
-  o.siteOwners = extra.siteOwners;
-  o.departmentOwners = extra.departmentOwners;
-  await upsertWhere(
-    Ben_ltksitesettingsesService,
-    eq("ben_site", site),
-    (row) => row.ben_ltksitesettingsid,
-    { ben_site: site, ben_name: site, ben_orgowners: JSON.stringify(o) }
-  );
-}
-
-/** Additional company owners (APP_ROW, key companyOwners). */
-export async function companyOwnersExtra(): Promise<Record<string, PersonRef[]>> {
-  const raw = await ownersRaw(APP_ROW);
-  const out: Record<string, PersonRef[]> = {};
-  if (!raw.trim().startsWith("{")) return out;
-  try {
-    const o = JSON.parse(raw) as { companyOwners?: Record<string, unknown> };
-    for (const [k, v] of Object.entries(o.companyOwners ?? {})) {
-      const list = parseRefList(v);
-      if (list.length > 0) out[k] = list;
-    }
-  } catch {
-    /* fresh */
-  }
-  return out;
-}
-
-export async function saveCompanyOwnersExtra(map: Record<string, PersonRef[]>): Promise<void> {
-  const raw = await ownersRaw(APP_ROW);
-  let o: Record<string, unknown> = {};
-  try {
-    if (raw.trim().startsWith("{")) o = JSON.parse(raw) as Record<string, unknown>;
-  } catch {
-    o = {};
-  }
-  o.companyOwners = map;
-  await upsertWhere(
-    Ben_ltksitesettingsesService,
-    eq("ben_site", APP_ROW),
-    (row) => row.ben_ltksitesettingsid,
-    { ben_site: APP_ROW, ben_name: "App branding", ben_orgowners: JSON.stringify(o) }
-  );
-}
+// Owners are the ORG EDITOR's owners — one per node (company / site /
+// department / area) in ben_orgowners — and nowhere else (Ben,
+// 2026-08-19: no separate owner lists under priorities). The model's
+// OrgOwnersMap is built from them; areas are governed by their
+// department (decision 7), so area owners are not consulted here.
 
 /**
  * The model's owners map: org key ("company|site|department|area") →
- * every owner (primary + additional) for company, site and department
- * nodes. Areas are governed by their department (decision 7), so they
- * carry no entry.
+ * the node's owner(s) for company, site and department nodes, read from
+ * the org editor's ben_orgowners JSON.
  */
 export async function orgOwnersMap(): Promise<Record<string, PersonRef[]>> {
   const [rows, siteCo] = await Promise.all([
@@ -331,40 +235,29 @@ export async function orgOwnersMap(): Promise<Record<string, PersonRef[]>> {
     siteCompanies(),
   ]);
   const out: Record<string, PersonRef[]> = {};
-  const add = (key: string, refs: (PersonRef | undefined)[]) => {
-    for (const r of refs) {
-      if (!r) continue;
-      const list = (out[key] ??= []);
-      if (!list.some((x) => x.whoId === r.whoId)) list.push(r);
-    }
+  const add = (key: string, ref: PersonRef | undefined) => {
+    if (!ref) return;
+    const list = (out[key] ??= []);
+    if (!list.some((x) => x.whoId === ref.whoId)) list.push(ref);
   };
   for (const r of rows) {
     const raw = r.ben_orgowners ?? "";
     if (r.ben_site === APP_ROW) {
-      let o: { companies?: Record<string, unknown>; companyOwners?: Record<string, unknown> } = {};
+      let o: { companies?: Record<string, unknown> } = {};
       try {
         if (raw.trim().startsWith("{")) o = JSON.parse(raw) as typeof o;
       } catch {
         o = {};
       }
-      for (const [k, v] of Object.entries(o.companies ?? {})) add(`${k}|||`, [parseRef(v)]);
-      for (const [k, v] of Object.entries(o.companyOwners ?? {})) add(`${k}|||`, parseRefList(v));
+      for (const [k, v] of Object.entries(o.companies ?? {})) add(`${k}|||`, parseRef(v));
       continue;
     }
     if (!r.ben_site) continue;
     const company = siteCo[r.ben_site] ?? "";
-    const primary = parseSiteOwners(raw);
-    const extra = parseSiteOwnersExtra(raw);
-    add(`${company}|${r.ben_site}||`, [primary.site, ...extra.siteOwners]);
-    const depts = new Set([
-      ...Object.keys(primary.departments),
-      ...Object.keys(extra.departmentOwners),
-    ]);
-    for (const d of depts) {
-      add(`${company}|${r.ben_site}|${d}|`, [
-        primary.departments[d],
-        ...(extra.departmentOwners[d] ?? []),
-      ]);
+    const owners = parseSiteOwners(raw);
+    add(`${company}|${r.ben_site}||`, owners.site);
+    for (const [d, ref] of Object.entries(owners.departments)) {
+      add(`${company}|${r.ben_site}|${d}|`, ref);
     }
   }
   return out;

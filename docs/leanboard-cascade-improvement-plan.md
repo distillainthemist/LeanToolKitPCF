@@ -191,11 +191,11 @@ reschedule/cancel history with a reason picklist.
 ## Phasing (revised to the build order — 2026-08-19)
 
 - **P0 Foundations — BUILT 2026-08-19 (dev; next release SOLUTION-CARRYING)** — schema (priorities side + actions + settings columns; INITIATIVE tables deferred to P5 so their shape follows the templates-builder design; the notify road stays docs-only until P6 first uses it);
-  org owners (plural, site + department) + vision + pillars L1/L2 +
-  period/RAG in a NEW Settings → Priorities tab (the org editor's primary
-  owner stays; additional owners ride the same JSON) — a deviation from
-  "in the org dictionary section" to keep the intricate org editor
-  untouched; user prefs (P3, when the view mode exists); action model
+  pillars L1/L2 + period/RAG + VISIONS in a NEW Settings → Priorities
+  tab; OWNERS are the org editor's owners (Organisation tab) and nowhere
+  else — Ben, 2026-08-19: no separate owner lists under priorities; the
+  permission map reads them (company/site/department; areas fall to
+  their department); user prefs (P3, when the view mode exists); action model
   changes (`verify` tolerated by the kanban in Done with a marker,
   excluded from overdue; history + verification + initiative id mapped;
   `ben_start` already existed) — UI in P6. Pure model

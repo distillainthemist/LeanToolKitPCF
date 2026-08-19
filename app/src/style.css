@@ -2786,6 +2786,3 @@ button.app-doclist-hsort:hover { color: var(--app-accent, #2563eb); }
 .app-pr-dept { margin: 8px 0 0 18px; padding-left: 12px; border-left: 2px solid #ece8e0; }
 .app-pr-deptname { font-weight: 600; font-size: 13px; margin-bottom: 4px; }
 .app-pr-vision { width: 100%; resize: vertical; font: inherit; }
-.app-pr-owners { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
-.app-pr-chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
-.app-pr-chip-x { border: none; background: none; cursor: pointer; margin-left: 4px; color: #6d675c; }

@@ -6,32 +6,28 @@
 //                      name, colour, order, active, parent
 //   Period & roll-up   superadmin — the period definition (FY start /
 //                      calendar / custom label) and the ratio-rule X%
-//   Owners & vision    superadmin, or a site admin for their site — per
-//                      site and department: additional owners (the org
-//                      editor's primary owner stays where it is) and the
-//                      vision statement shown across the matrix
+//   Vision             superadmin, or a site admin for their site — the
+//                      vision statement per company / site / department,
+//                      shown as the band across the priorities matrix
 //
-// Lazy chunk (dynamic import from settings.ts). Reuses the settings
-// screen's person picker and its dirty/save contract.
+// Owners are NOT here: the org editor's owners (Organisation tab) are the
+// one source of truth for who governs an org (Ben, 2026-08-19).
+//
+// Lazy chunk (dynamic import from settings.ts); the settings screen's
+// dirty/save contract.
 
 import { el, clear } from "../../../shared/ui/dom";
 import type { RosterPerson } from "../store/mappers";
 import {
   companies,
-  companyOwnersExtra,
   orgJson,
   orgVisions,
   prioritySettingsJson,
-  saveCompanyOwnersExtra,
   saveOrgVision,
   savePrioritySettingsJson,
-  saveSiteOwnersExtra,
   siteCompanies,
-  siteOwnersExtra,
-  type PersonRef,
 } from "../store/config";
 import { deletePillar, listPillars, savePillar } from "../store/priorities";
-import { pickPerson } from "../screens/settings";
 import {
   DEFAULT_PRIORITY_SETTINGS,
   parsePrioritySettings,
@@ -113,7 +109,7 @@ export async function renderPrioritiesSettings(
     await renderPillars(body, ctx, saves);
     await renderPeriod(body, ctx, saves);
   }
-  await renderOwnersVision(body, me, ctx, saves);
+  await renderVisions(body, me, ctx, saves);
 }
 
 // ---- pillars ------------------------------------------------------------------
@@ -355,9 +351,9 @@ async function renderPeriod(body: HTMLElement, ctx: DirtyCtx, saves: (() => Prom
   });
 }
 
-// ---- owners + vision per site / department ---------------------------------
+// ---- vision per company / site / department ---------------------------------
 
-async function renderOwnersVision(
+async function renderVisions(
   body: HTMLElement,
   me: RosterPerson,
   ctx: DirtyCtx,
@@ -365,64 +361,19 @@ async function renderOwnersVision(
 ) {
   const isSuper = me.role === "superadmin";
   const box = sectionTitle(
-    "Org owners & vision",
-    "Owners create and edit their org's priorities, accept or decline cascades sent to it, and set its vision. The org editor's primary owner counts too — these are additional owners. Areas are managed by their department's owners."
+    "Vision statements",
+    "One per org, shown as the band across the top of its priorities matrix. Who may edit an org's priorities is the org's owner — set on the Organisation tab."
   );
   body.appendChild(box);
 
-  const [tree, coList, siteCo, visions, coExtra] = await Promise.all([
+  const [tree, coList, siteCo, visions] = await Promise.all([
     orgJson().then(parseOrgTree),
     companies(),
     siteCompanies(),
     orgVisions(),
-    companyOwnersExtra(),
   ]);
   const sites = isSuper ? tree : tree.filter((s) => s.site === me.site);
-  const extras: Record<string, Awaited<ReturnType<typeof siteOwnersExtra>>> = {};
-  for (const s of sites) extras[s.site] = await siteOwnersExtra(s.site);
-  const touchedSites = new Set<string>();
-  let coTouched = false;
   const visionEdits: Record<string, string> = {}; // orgKey → text
-
-  const ownersRow = (
-    label: string,
-    list: PersonRef[],
-    onChange: () => void
-  ): HTMLElement => {
-    const row = el("div", "app-pr-owners");
-    row.appendChild(el("span", "app-field-label", label));
-    const chips = el("div", "app-pr-chips");
-    const paintChips = () => {
-      clear(chips);
-      for (const p of list) {
-        const chip = el("span", "app-owner");
-        chip.appendChild(document.createTextNode(p.who || p.whoId));
-        const x = el("button", "app-pr-chip-x", "×") as HTMLButtonElement;
-        x.title = "Remove owner";
-        x.addEventListener("click", () => {
-          const i = list.findIndex((o) => o.whoId === p.whoId);
-          if (i >= 0) list.splice(i, 1);
-          onChange();
-          paintChips();
-        });
-        chip.appendChild(x);
-        chips.appendChild(chip);
-      }
-      const add = el("button", "app-link", "＋ Add owner") as HTMLButtonElement;
-      add.addEventListener("click", () => {
-        void pickPerson(body, false).then((r) => {
-          if (!r || r.action !== "set") return;
-          if (!list.some((o) => o.whoId === r.person.whoId)) list.push(r.person);
-          onChange();
-          paintChips();
-        });
-      });
-      chips.appendChild(add);
-    };
-    paintChips();
-    row.appendChild(chips);
-    return row;
-  };
 
   const visionField = (key: string, placeholder: string): HTMLElement => {
     const ta = el("textarea", "app-input app-pr-vision") as HTMLTextAreaElement;
@@ -433,7 +384,7 @@ async function renderOwnersVision(
       visionEdits[key] = ta.value;
       ctx.markDirty();
     });
-    return field("Vision", ta, "Shown as the band across the top of the priorities matrix.");
+    return ta;
   };
 
   if (isSuper) {
@@ -441,13 +392,6 @@ async function renderOwnersVision(
       const block = el("div", "app-pr-org app-pr-org-co");
       block.appendChild(el("div", "app-pr-orgname", co));
       block.appendChild(visionField(`${co}|||`, "The company's vision statement…"));
-      const list = (coExtra[co] ??= []);
-      block.appendChild(
-        ownersRow("Company owners", list, () => {
-          coTouched = true;
-          ctx.markDirty();
-        })
-      );
       box.appendChild(block);
     }
   }
@@ -456,23 +400,10 @@ async function renderOwnersVision(
     const block = el("div", "app-pr-org");
     block.appendChild(el("div", "app-pr-orgname", s.site));
     block.appendChild(visionField(`${co}|${s.site}||`, "This site's vision statement…"));
-    block.appendChild(
-      ownersRow("Site owners", extras[s.site].siteOwners, () => {
-        touchedSites.add(s.site);
-        ctx.markDirty();
-      })
-    );
     for (const d of s.departments ?? []) {
       const dep = el("div", "app-pr-dept");
       dep.appendChild(el("div", "app-pr-deptname", d.name));
       dep.appendChild(visionField(`${co}|${s.site}|${d.name}|`, "This department's vision (optional)…"));
-      const list = (extras[s.site].departmentOwners[d.name] ??= []);
-      dep.appendChild(
-        ownersRow("Department owners", list, () => {
-          touchedSites.add(s.site);
-          ctx.markDirty();
-        })
-      );
       block.appendChild(dep);
     }
     box.appendChild(block);
@@ -482,25 +413,10 @@ async function renderOwnersVision(
   }
 
   saves.push(async () => {
-    for (const site of touchedSites) {
-      const e = extras[site];
-      // drop empty department lists so the JSON stays tidy
-      for (const k of Object.keys(e.departmentOwners)) {
-        if (e.departmentOwners[k].length === 0) delete e.departmentOwners[k];
-      }
-      await saveSiteOwnersExtra(site, e);
-    }
-    if (coTouched) {
-      const map: Record<string, PersonRef[]> = {};
-      for (const [k, v] of Object.entries(coExtra)) if (v.length > 0) map[k] = v;
-      await saveCompanyOwnersExtra(map);
-    }
     for (const [key, text] of Object.entries(visionEdits)) {
       const [company = "", site = "", department = ""] = key.split("|");
       await saveOrgVision({ company, site, department }, text.trim());
     }
-    touchedSites.clear();
-    coTouched = false;
     for (const k of Object.keys(visionEdits)) delete visionEdits[k];
   });
 }
