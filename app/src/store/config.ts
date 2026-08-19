@@ -547,6 +547,22 @@ export async function userPrefsJson(whoId: string): Promise<string> {
   return rows[0]?.ben_preferences ?? "";
 }
 
+/** Merge a namespaced patch into the person's ben_preferences JSON
+ *  (the hub's own keys ride at the top level; other areas — priorities —
+ *  keep theirs under one key). Read-merge-write so neither side drops the
+ *  other's keys; last write wins per key. */
+export async function mergeUserPrefs(whoId: string, patch: Record<string, unknown>): Promise<void> {
+  const raw = await userPrefsJson(whoId);
+  let cur: Record<string, unknown> = {};
+  try {
+    const o = JSON.parse(raw || "{}") as unknown;
+    if (o && typeof o === "object" && !Array.isArray(o)) cur = o as Record<string, unknown>;
+  } catch {
+    cur = {};
+  }
+  await saveUserPrefs(whoId, JSON.stringify({ ...cur, ...patch }));
+}
+
 export async function saveUserPrefs(whoId: string, prefsJson: string): Promise<void> {
   await upsertWhere(
     Ben_ltkuserprefsesService,

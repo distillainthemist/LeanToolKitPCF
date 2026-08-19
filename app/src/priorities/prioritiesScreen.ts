@@ -16,7 +16,8 @@
 // priority is grey with "· 0 initiatives" and every objective cell reads
 // "No metric set". The detail overlay, cascade review list, close /
 // carry-forward flows live in lifecycle.ts (P2); P3 adds the Dynamic
-// view; P4 TV walk mode + the embedded card.
+// view — built (P3), persists per user per org via prefs.ts; P4 adds TV
+// walk mode + the embedded card.
 
 import { el, clear } from "../../../shared/ui/dom";
 import { paletteMap } from "../../../shared/palette";
@@ -50,6 +51,8 @@ import {
   priorityDialog,
   siblingOrgs,
 } from "./dialogs";
+import { loadPriorityPrefs, savePriorityPrefs, ViewMode } from "./prefs";
+import { initialsFor } from "../../../shared/schema/people";
 import { carryForwardFlow, cascadeDialog, cascadeReview, closeDialog, closePriority, LifecycleCtx, openPriorityOverlay } from "./lifecycle";
 import {
   canManageOrg,
@@ -62,6 +65,7 @@ import {
   objectiveColumns,
   OrgRef,
   orgKey,
+  orgFromKey,
   orgLevel,
   orgName,
   orgParent,
@@ -134,28 +138,7 @@ interface ScreenState {
   showOther: boolean;
   groupByPillar: boolean;
   lastColumn: string; // the sub-pillar last interacted with (＋ Priority preselect)
-}
-
-const PREF_KEY = "ltk-priorities-view";
-
-function loadPrefs(): Partial<ScreenState> {
-  try {
-    const raw = localStorage.getItem(PREF_KEY);
-    return raw ? (JSON.parse(raw) as Partial<ScreenState>) : {};
-  } catch {
-    return {};
-  }
-}
-
-function savePrefs(s: ScreenState): void {
-  try {
-    localStorage.setItem(
-      PREF_KEY,
-      JSON.stringify({ org: s.org, l1: s.l1, rule: s.rule, showOther: s.showOther, groupByPillar: s.groupByPillar })
-    );
-  } catch {
-    /* fine */
-  }
+  view: ViewMode; // Simple (default, TV) | Dynamic — persists per user per org
 }
 
 /** P1 stub: what a priority's initiatives look like. Initiatives arrive
@@ -173,7 +156,7 @@ export function mountPriorities(parent: HTMLElement, _opts: PrioritiesMountOpts 
 
   void (async () => {
     const who = currentViewer();
-    const [rawTree, siteCo, roster, visions, settingsRaw, owners, palettes] = await Promise.all([
+    const [rawTree, siteCo, roster, visions, settingsRaw, owners, palettes, prefs] = await Promise.all([
       orgJson(),
       siteCompanies(),
       listPeople(),
@@ -181,6 +164,7 @@ export function mountPriorities(parent: HTMLElement, _opts: PrioritiesMountOpts 
       prioritySettingsJson(),
       orgOwnersMap(),
       appPalettes(),
+      loadPriorityPrefs(who?.objectId ?? ""),
     ]);
     if (dead) return;
     const companyList = [...new Set(Object.values(siteCo).filter((c) => c !== ""))];
@@ -199,16 +183,26 @@ export function mountPriorities(parent: HTMLElement, _opts: PrioritiesMountOpts 
     // default org = viewer's own site (under its company); else the first site
     const mySite = me?.site && siteCo[me.site] !== undefined ? orgRef(siteCo[me.site], me.site) : null;
     const firstSite = tree.companies.flatMap((c) => c.sites.map((s) => orgRef(c.name, s.name)))[0] ?? orgRef(companyList[0] ?? "");
-    const prefs = loadPrefs();
+    const startOrg = prefs.lastOrg !== "" ? orgFromKey(prefs.lastOrg) : (mySite ?? firstSite);
     const state: ScreenState = {
-      org: prefs.org && typeof prefs.org === "object" ? (prefs.org as OrgRef) : (mySite ?? firstSite),
-      l1: typeof prefs.l1 === "string" ? prefs.l1 : null,
+      org: startOrg,
+      l1: null,
       period: currentPeriod,
       status: "active",
-      rule: prefs.rule === "ratio" ? "ratio" : "strict",
-      showOther: prefs.showOther === true,
-      groupByPillar: prefs.groupByPillar === true,
+      rule: prefs.rule,
+      showOther: prefs.showOther,
+      groupByPillar: prefs.groupByPillar,
       lastColumn: "",
+      view: prefs.viewByOrg[orgKey(startOrg)] ?? "simple",
+    };
+    const persist = () => {
+      prefs.lastOrg = orgKey(state.org);
+      prefs.rule = state.rule;
+      prefs.showOther = state.showOther;
+      prefs.groupByPillar = state.groupByPillar;
+      if (state.view === "dynamic") prefs.viewByOrg[orgKey(state.org)] = "dynamic";
+      else delete prefs.viewByOrg[orgKey(state.org)];
+      savePriorityPrefs(viewer.whoId, prefs);
     };
 
     let data: CascadeData = await loadCascade(state.org.company);
@@ -276,10 +270,15 @@ export function mountPriorities(parent: HTMLElement, _opts: PrioritiesMountOpts 
 
     const render = () => {
       clear(wrap);
-      savePrefs(state);
+      persist();
       // the vision band sits directly over the pillars (Ben, 2026-08-19)
       wrap.append(renderOrgBar(), renderToolbar(), renderVision());
       const columns = objectiveColumns(data.pillars, state.l1);
+      if (state.view === "dynamic") {
+        wrap.appendChild(renderDynamic(columns));
+        wrap.appendChild(renderOther());
+        return;
+      }
       if (state.groupByPillar && state.l1 === null && densityFor(columns.length) === "scroll") {
         for (const l1 of strategyChips(data.pillars)) {
           const cols = objectiveColumns(data.pillars, l1.id);
@@ -367,6 +366,7 @@ export function mountPriorities(parent: HTMLElement, _opts: PrioritiesMountOpts 
       const companyChanged = o.company !== state.org.company;
       state.org = o;
       state.lastColumn = "";
+      state.view = prefs.viewByOrg[orgKey(o)] ?? "simple";
       if (companyChanged) await reload();
       else render();
     };
@@ -428,14 +428,22 @@ export function mountPriorities(parent: HTMLElement, _opts: PrioritiesMountOpts 
         render();
       });
       bar.appendChild(st);
-      // view toggle (Dynamic arrives with P3)
+      // view toggle — persists per user per org (§5)
       const seg = el("div", "app-cp-seg");
-      const simple = el("button", "app-cp-seg-btn app-cp-seg-on", "Simple") as HTMLButtonElement;
+      const simple = el("button", "app-cp-seg-btn" + (state.view === "simple" ? " app-cp-seg-on" : ""), "Simple") as HTMLButtonElement;
       simple.type = "button";
-      const dynamic = el("button", "app-cp-seg-btn", "Dynamic") as HTMLButtonElement;
+      const dynamic = el("button", "app-cp-seg-btn" + (state.view === "dynamic" ? " app-cp-seg-on" : ""), "Dynamic") as HTMLButtonElement;
       dynamic.type = "button";
-      dynamic.disabled = true;
-      dynamic.title = "Dynamic view arrives with the next update";
+      simple.title = "The physical template — matrix of pillars × priorities";
+      dynamic.title = "Card per priority with headline metric and owner";
+      simple.addEventListener("click", () => {
+        state.view = "simple";
+        render();
+      });
+      dynamic.addEventListener("click", () => {
+        state.view = "dynamic";
+        render();
+      });
       seg.append(simple, dynamic);
       bar.appendChild(seg);
       // cascade chip (review list arrives with P2)
@@ -665,6 +673,116 @@ export function mountPriorities(parent: HTMLElement, _opts: PrioritiesMountOpts 
         box.appendChild(note);
       }
       return box;
+    };
+
+    // ---- Dynamic view (§5): card per priority in a wrapping grid --------
+    const renderDynamic = (columns: Pillar[]): HTMLElement => {
+      const box = el("div", "app-cp-dyn");
+      const visible = visibleFor(state.org);
+      const { byColumn, unplaced } = groupByColumn(columns, visible);
+      const adoptedIds = new Set(prioritiesForOrg(state.org, data.priorities, data.assignments).adopted.map((p) => p.id));
+      const ordered: { p: Priority; col: Pillar | null }[] = [];
+      for (const col of columns) for (const p of byColumn.get(col.id) ?? []) ordered.push({ p, col });
+      for (const p of unplaced) ordered.push({ p, col: null });
+      if (ordered.length === 0) {
+        box.appendChild(
+          el(
+            "div",
+            "app-cp-dyn-empty",
+            canManage()
+              ? `No priorities for ${state.period} yet. Add the few things this org must achieve, or accept one cascaded from above.`
+              : `This org hasn't published priorities for ${state.period}.`
+          )
+        );
+        return box;
+      }
+      for (const { p, col } of ordered) box.appendChild(dynamicCard(p, col, adoptedIds.has(p.id)));
+      return box;
+    };
+
+    const dynamicCard = (p: Priority, col: Pillar | null, adopted: boolean): HTMLElement => {
+      const rags = ragsFor(p);
+      const t = tally(rags);
+      const rag = rollup(t, state.rule, settings.ragRatioPct);
+      const card = el("div", "app-cp-dcard");
+      card.style.borderLeftColor = palette[ragPaletteKey(rag)] ?? "#9a948a";
+      // title strip = the pillar (coloured), ⋮ in the action slot
+      const parentL1 = col ? data.pillars.find((x) => x.id === col.parentId) : undefined;
+      const strip = el("div", "app-cp-dcard-strip");
+      const colour = col?.color || parentL1?.color || "";
+      if (colour !== "") {
+        strip.style.background = colour;
+        strip.style.color = "#fff";
+      }
+      strip.appendChild(el("span", "app-cp-dcard-pillar", col ? `${parentL1 ? parentL1.name + " › " : ""}${col.name}` : "No sub-pillar"));
+      if (canManage() && !adopted) {
+        const kebab = el("button", "app-cp-dcard-kebab", "⋮") as HTMLButtonElement;
+        kebab.type = "button";
+        kebab.title = "Edit · cascade · reorder · complete";
+        kebab.addEventListener("click", (e) => {
+          e.stopPropagation();
+          openCardMenu(kebab, p);
+        });
+        strip.appendChild(kebab);
+      }
+      card.appendChild(strip);
+      const body = el("div", "app-cp-dcard-body");
+      body.appendChild(el("div", "app-cp-dcard-statement", p.statement));
+      // headline metric: large value + target + 96×40 sparkline (P5 fills)
+      const metric = el("div", "app-cp-dcard-metric");
+      const val = el("div", "app-cp-dcard-value");
+      val.appendChild(el("span", "app-cp-dcard-num app-cp-muted", "—"));
+      val.appendChild(el("span", "app-cp-dcard-target", "No metric set"));
+      metric.appendChild(val);
+      const spark = el("div", "app-cp-dcard-spark");
+      spark.title = "Sparkline — follows the headline metric";
+      metric.appendChild(spark);
+      body.appendChild(metric);
+      // owner chip + name (dynamic shows it; the matrix card omits it)
+      const owner = el("div", "app-cp-dcard-owner");
+      const chip = el("span", "app-cp-dcard-initials", p.ownerName !== "" ? initialsFor(p.ownerName) : "—");
+      owner.append(chip, el("span", p.ownerName !== "" ? "" : "app-cp-muted", p.ownerName !== "" ? p.ownerName : "No owner"));
+      body.appendChild(owner);
+      // tallies + total, lineage, flags — same as the matrix card
+      const meta = el("div", "app-cp-tallies");
+      for (const part of tallyLine(t)) {
+        const s = el("span", "app-cp-tally" + (part.count === 0 ? " app-cp-tally-zero" : ""), `${part.glyph} ${part.count}`);
+        if (part.count > 0) s.style.color = palette[ragPaletteKey(part.rag)] ?? "";
+        meta.appendChild(s);
+      }
+      meta.appendChild(el("span", "app-cp-total", `· ${t.total} initiative${t.total === 1 ? "" : "s"}`));
+      body.appendChild(meta);
+      const lin = lineageFor(p, data.priorities, data.assignments);
+      const words = lineageWords(lin, "org");
+      if (adopted && lin.from === null) words.unshift(`↑ ${orgName(p.org)}`);
+      if (words.length > 0) {
+        const line = el("div", "app-cp-lineage");
+        for (const w of words) {
+          const s = el("span", "app-cp-lineage-part", w);
+          if (/declined/.test(w)) s.classList.add("app-cp-lineage-declined");
+          line.appendChild(s);
+        }
+        body.appendChild(line);
+      }
+      if (p.status !== "active") body.appendChild(el("div", "app-cp-flag", p.status === "completed" ? "✓ Completed" : p.status === "archived" ? "▣ Archived" : "▣ Retired"));
+      for (const f of senderFlags(p, data.assignments).slice(0, 2)) {
+        body.appendChild(
+          el(
+            "div",
+            "app-cp-flag" + (f.kind === "declined" ? " app-cp-flag-red" : ""),
+            f.kind === "declined"
+              ? `✕ ${orgName(f.org)} declined this priority${f.reason !== "" ? ` — “${f.reason}”` : ""}`
+              : `⏸ ${orgName(f.org)} parked${f.reason !== "" ? ` — “${f.reason}”` : ""}`
+          )
+        );
+      }
+      if (parentClosed(p, data.priorities)) body.appendChild(el("div", "app-cp-flag app-cp-flag-amber", "▲ Parent completed — decide"));
+      card.appendChild(body);
+      card.addEventListener("click", () => {
+        state.lastColumn = p.pillarId;
+        openOverlay(p);
+      });
+      return card;
     };
 
     const priorityCard = (p: Priority, adopted: boolean, density: ReturnType<typeof densityFor>): HTMLElement => {

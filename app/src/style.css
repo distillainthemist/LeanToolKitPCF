@@ -3106,3 +3106,30 @@ textarea.app-cp-statement { font-size: 14px; font-weight: 500; }
   .app-cp-ov-left { border-right: none; }
   .app-cp-overlay { max-height: 100%; overflow: auto; }
 }
+/* Dynamic view (P3): card per priority, wrapping grid */
+.app-cp-dyn { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 10px; }
+.app-cp-dyn-empty { grid-column: 1 / -1; padding: 24px; text-align: center; color: #6d675c; font-size: 14px; background: #faf8f4; border-radius: 8px; }
+.app-cp-dcard {
+  background: #fff;
+  border: 1px solid #e4dfd6;
+  border-left: 4px solid #9a948a;
+  border-radius: 8px;
+  overflow: hidden;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+}
+.app-cp-dcard:hover { border-color: #cfc8bc; border-left-width: 4px; }
+.app-cp-dcard-strip { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 6px 6px 12px; background: #ece8e0; font-size: 12px; font-weight: 700; min-height: 34px; }
+.app-cp-dcard-pillar { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.app-cp-dcard-kebab { border: none; background: rgba(255, 255, 255, 0.25); color: inherit; font: inherit; font-size: 16px; line-height: 1; border-radius: 5px; padding: 2px 8px; cursor: pointer; min-height: 26px; }
+.app-cp-dcard-kebab:hover { background: rgba(255, 255, 255, 0.45); }
+.app-cp-dcard-body { padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 8px; }
+.app-cp-dcard-statement { font-size: 14.5px; font-weight: 600; line-height: 1.35; text-wrap: pretty; }
+.app-cp-dcard-metric { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 0; }
+.app-cp-dcard-value { display: flex; flex-direction: column; }
+.app-cp-dcard-num { font-size: 22px; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.app-cp-dcard-target { font-size: 12px; color: #6d675c; }
+.app-cp-dcard-spark { width: 96px; height: 40px; border-bottom: 1px dashed #d9d3c8; border-radius: 2px; background: repeating-linear-gradient(90deg, transparent 0 22px, #f4f1ea 22px 24px); }
+.app-cp-dcard-owner { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.app-cp-dcard-initials { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 50%; background: #26241f; color: #fff; font-size: 11px; font-weight: 700; }

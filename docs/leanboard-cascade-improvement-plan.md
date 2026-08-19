@@ -264,7 +264,19 @@ reschedule/cancel history with a reason picklist.
   initiative, cascade-to with confirm line, notes); complete/archive
   with reason picklist; parent completed/revised prompts on children;
   reorder; period carry-forward flow.
-- **P3 Dynamic view** — card per priority (pillar title strip, 14.5px
+- **P3 Dynamic view — BUILT 2026-08-19 (dev, app-only)** — Simple |
+  Dynamic toggle live; `renderDynamic` in the screen: wrapping grid
+  (min 320px), card = pillar-coloured title strip with ⋮ in the action
+  slot · 14.5px statement · headline metric block (22px value + target
+  line + 96×40 sparkline — placeholders reading "No metric set" until
+  P5) · owner initials chip + name · ✓ ! ✕ tallies + "n initiatives" ·
+  lineage line · flags; same overlay/kebab as the matrix. PREFS
+  (`priorities/prefs.ts`, parser in model.ts): view mode per user PER
+  ORG + last org + rule/Other/group-by, stored under the `priorities`
+  key of ben_ltkuserprefs.ben_preferences via the new `mergeUserPrefs`
+  (read-merge-write; the hub's onPrefs now merges too instead of
+  overwriting) — no schema change; localStorage prefs retired. Design as
+  specified — card per priority (pillar title strip, 14.5px
   statement, 22px metric + 96×40 sparkline with target line, owner chip,
   tallies + count); per-user-per-org persistence.
 - **P4 TV walk mode + embedded ritual card** — walk one objective per

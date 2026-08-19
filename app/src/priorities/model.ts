@@ -601,3 +601,41 @@ export function reviewQueue(org: OrgRef, assignments: PriorityAssignment[]): Pri
   const mine = assignments.filter((a) => orgKey(a.org) === key);
   return [...mine.filter((a) => a.status === "proposed"), ...mine.filter((a) => a.status === "onhold")];
 }
+
+// ---- per-user presentation prefs (P3) -----------------------------------------------
+
+export type ViewMode = "simple" | "dynamic";
+
+export interface PriorityPrefs {
+  /** orgKey → view mode (absent = simple). */
+  viewByOrg: Record<string, ViewMode>;
+  /** Last org visited (orgKey), restored on next open. */
+  lastOrg: string;
+  rule: RollupRule;
+  showOther: boolean;
+  groupByPillar: boolean;
+}
+
+/** Reads the `priorities` key of the person's ben_preferences JSON (the
+ *  hub's own keys ride at the top level and are ignored here). */
+export function parsePriorityPrefs(raw: string): PriorityPrefs {
+  const d: PriorityPrefs = { viewByOrg: {}, lastOrg: "", rule: "strict", showOther: false, groupByPillar: false };
+  try {
+    const o = JSON.parse(raw || "{}") as { priorities?: unknown };
+    const p = o && typeof o === "object" ? (o.priorities as Record<string, unknown> | undefined) : undefined;
+    if (!p || typeof p !== "object") return d;
+    const v = p.viewByOrg;
+    if (v && typeof v === "object" && !Array.isArray(v)) {
+      for (const [k, m] of Object.entries(v as Record<string, unknown>)) {
+        if (m === "simple" || m === "dynamic") d.viewByOrg[k] = m;
+      }
+    }
+    if (typeof p.lastOrg === "string") d.lastOrg = p.lastOrg;
+    if (p.rule === "ratio") d.rule = "ratio";
+    d.showOther = p.showOther === true;
+    d.groupByPillar = p.groupByPillar === true;
+  } catch {
+    /* defaults */
+  }
+  return d;
+}

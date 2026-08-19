@@ -283,3 +283,13 @@ describe("lifecycle (P2)", () => {
     expect(m.reviewQueue(dept, as).map((a) => a.status)).toEqual(["rejected"].filter(() => false));
   });
 });
+
+describe("priority prefs (P3)", () => {
+  it("parses the priorities key inside ben_preferences and ignores the hub's keys", async () => {
+    const { parsePriorityPrefs } = await import("../priorities/model");
+    const raw = JSON.stringify({ scopeKind: "org", priorities: { viewByOrg: { "Pechey|Bendigo||": "dynamic", x: "nope" }, lastOrg: "Pechey|Bendigo||", rule: "ratio", showOther: true } });
+    expect(parsePriorityPrefs(raw)).toEqual({ viewByOrg: { "Pechey|Bendigo||": "dynamic" }, lastOrg: "Pechey|Bendigo||", rule: "ratio", showOther: true, groupByPillar: false });
+    expect(parsePriorityPrefs("")).toEqual({ viewByOrg: {}, lastOrg: "", rule: "strict", showOther: false, groupByPillar: false });
+    expect(parsePriorityPrefs("{bad")).toEqual(parsePriorityPrefs(""));
+  });
+});

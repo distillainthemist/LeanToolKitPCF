@@ -25,7 +25,7 @@ import {
   protectedTimesJson,
   orgJson,
   saveProtectedTimes,
-  saveUserPrefs,
+  mergeUserPrefs,
   userPrefsJson,
 } from "../store/config";
 import { parseManifest } from "../store/mappers";
@@ -213,9 +213,11 @@ export function mountHub(parent: HTMLElement): () => void {
       },
       onActions: (all) =>
         hosted ? void upsertActions(all) : console.log("demo: actions", all),
+      // merge, not overwrite: other areas (Priorities view prefs) keep
+      // their own keys in the same ben_preferences JSON
       onPrefs: (prefs) =>
         hosted
-          ? void saveUserPrefs(viewerId, JSON.stringify(prefs))
+          ? void mergeUserPrefs(viewerId, prefs as unknown as Record<string, unknown>)
           : console.log("demo: prefs", prefs),
       onProtected: (times) =>
         hosted && site !== ""
