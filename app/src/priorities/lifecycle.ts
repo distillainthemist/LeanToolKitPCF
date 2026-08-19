@@ -470,10 +470,12 @@ export function openPriorityOverlay(ctx: LifecycleCtx, p: Priority, onEdit: (p: 
       chip.style.color = "#fff";
     }
     head.appendChild(chip);
-    head.appendChild(el("h2", "app-cp-ov-statement", live.statement));
-    head.appendChild(
-      el("div", "app-cp-ov-meta", [orgName(live.org), live.period, live.ownerName !== "" ? live.ownerName : "No owner", live.status !== "active" ? live.status : ""].filter((s) => s !== "").join(" · "))
+    const headText = el("div", "app-cp-ov-headtext");
+    headText.appendChild(el("h2", "app-cp-ov-statement", live.statement));
+    headText.appendChild(
+      el("div", "app-cp-ov-meta", [orgName(live.org), live.period, live.ownerName !== "" ? `owner ${live.ownerName}` : "no owner", live.status !== "active" ? live.status : ""].filter((s) => s !== "").join(" · "))
     );
+    head.appendChild(headText);
     const x = btn("✕", "app-btn app-cp-ov-close");
     x.title = "Close";
     x.addEventListener("click", close);
@@ -570,23 +572,26 @@ export function openPriorityOverlay(ctx: LifecycleCtx, p: Priority, onEdit: (p: 
     const st = section("Status");
     const t = tally(rags);
     const rag = rollup(t, ctx.rule(), ctx.settings.ragRatioPct);
-    const tl = el("div", "app-cp-tallies");
+    const tl = el("div", "app-cp-ov-tallies");
     for (const part of tallyLine(t)) {
-      const s = el("span", "app-cp-tally" + (part.count === 0 ? " app-cp-tally-zero" : ""), `${part.glyph} ${part.count}`);
-      if (part.count > 0) s.style.color = ctx.palette[ragPaletteKey(part.rag)] ?? "";
-      tl.appendChild(s);
+      const chipEl = el("span", "app-cp-ov-tally" + (part.count === 0 ? " app-cp-ov-tally-zero" : ""), `${part.glyph}${part.count}`);
+      if (part.count > 0) {
+        const c = ctx.palette[ragPaletteKey(part.rag)] ?? "";
+        chipEl.style.color = c;
+        chipEl.style.background = `color-mix(in srgb, ${c || "#9a948a"} 14%, white)`;
+      }
+      tl.appendChild(chipEl);
     }
-    tl.appendChild(el("span", "app-cp-total", `· ${t.total} initiative${t.total === 1 ? "" : "s"}`));
+    tl.appendChild(el("span", "app-cp-total", `· ${t.total} total`));
     st.appendChild(tl);
-    const words = el("div", "app-cp-ov-rollup", rollupWords(rag, ctx.rule(), ctx.settings.ragRatioPct));
-    words.style.borderLeftColor = ctx.palette[ragPaletteKey(rag)] ?? "#9a948a";
-    st.appendChild(words);
+    st.appendChild(el("div", "app-cp-ov-rollup", rollupWords(rag, ctx.rule(), ctx.settings.ragRatioPct)));
     if (live.status !== "active") st.appendChild(el("div", "app-cp-muted", `${live.status[0].toUpperCase()}${live.status.slice(1)}${live.statusReason !== "" ? " — " + live.statusReason : ""}`));
 
     const ln = section("Lineage");
     const parent = live.parentId !== "" ? data.priorities.find((x) => x.id === live.parentId) : undefined;
     if (parent) {
-      const prow = btn(`↑ ${orgName(parent.org)} — ${parent.statement.slice(0, 80)}`, "app-cp-ov-link");
+      const prow = btn(`↑ ${orgName(parent.org)} (customised from)`, "app-cp-ov-link");
+      prow.title = parent.statement;
       prow.addEventListener("click", () => {
         close();
         ctx.open(parent);
@@ -602,13 +607,14 @@ export function openPriorityOverlay(ctx: LifecycleCtx, p: Priority, onEdit: (p: 
         const glyph = a.status === "accepted" || a.status === "completed" ? "✓" : a.status === "proposed" ? "⏳" : a.status === "onhold" ? "⏸" : "✕";
         const child = a.childPriorityId !== "" ? data.priorities.find((x) => x.id === a.childPriorityId) : undefined;
         const row = el("div", "app-cp-ov-child" + (a.status === "rejected" ? " app-cp-lineage-declined" : ""));
-        let text = `${glyph} ${orgName(a.org)}`;
-        if (a.status === "rejected") text = `✕ ${orgName(a.org)} declined this priority${a.reason !== "" ? ` — “${a.reason}”` : ""}`;
-        else if (a.status === "onhold") text = `⏸ ${orgName(a.org)} parked${a.reason !== "" ? ` — “${a.reason}”` : ""}`;
-        else if (child) text = `✓ ${orgName(a.org)} — customised: “${child.statement.slice(0, 60)}”`;
-        else if (a.status === "proposed") text = `⏳ ${orgName(a.org)} — awaiting decision`;
-        else text = `✓ ${orgName(a.org)} — accepted as-is`;
+        // the design's grammar: "↓ Org ✓" · "↓ Org ⏳ pending" · "↓ Org ✕ declined — “…”"
+        let text = `↓ ${orgName(a.org)} ${glyph}`;
+        if (a.status === "rejected") text = `↓ ${orgName(a.org)} ✕ declined${a.reason !== "" ? ` — “${a.reason}”` : ""}`;
+        else if (a.status === "onhold") text = `↓ ${orgName(a.org)} ⏸ parked${a.reason !== "" ? ` — “${a.reason}”` : ""}`;
+        else if (child) text = `↓ ${orgName(a.org)} ✓ customised`;
+        else if (a.status === "proposed") text = `↓ ${orgName(a.org)} ⏳ pending`;
         row.textContent = text;
+        if (child) row.title = child.statement;
         if (child) {
           row.classList.add("app-cp-ov-link");
           row.addEventListener("click", () => {
@@ -635,7 +641,14 @@ export function openPriorityOverlay(ctx: LifecycleCtx, p: Priority, onEdit: (p: 
     }
 
     const ac = section("Actions");
-    ac.appendChild(el("div", "app-cp-muted", "0 open · 0 overdue — counts follow the initiatives."));
+    const acLine = el("div", "app-cp-ov-actions");
+    acLine.appendChild(el("span", undefined, "0 open · "));
+    acLine.appendChild(el("span", "app-cp-ov-overdue-zero", "0 overdue"));
+    ac.appendChild(acLine);
+    const gantt = btn("Gantt ›", "app-cp-ov-link app-cp-ov-gantt");
+    gantt.disabled = true;
+    gantt.title = "The actions Gantt arrives with the initiative board";
+    ac.appendChild(gantt);
 
     // bottom-anchored buttons: one solid primary
     const foot = el("div", "app-cp-ov-foot");
@@ -658,7 +671,7 @@ export function openPriorityOverlay(ctx: LifecycleCtx, p: Priority, onEdit: (p: 
       const casc = btn("Cascade to…");
       casc.addEventListener("click", () => cascadeDialog(ctx, live));
       foot.appendChild(casc);
-      const more = btn("⋮ More");
+      const more = btn("⋮ More", "app-cp-ov-more");
       more.addEventListener("click", () => {
         const menu = el("div", "app-cp-menu");
         const item = (label: string, run: () => void) => {
