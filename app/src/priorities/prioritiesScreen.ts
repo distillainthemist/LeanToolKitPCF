@@ -274,11 +274,6 @@ export function mountPriorities(parent: HTMLElement, _opts: PrioritiesMountOpts 
       // the vision band sits directly over the pillars (Ben, 2026-08-19)
       wrap.append(renderOrgBar(), renderToolbar(), renderVision());
       const columns = objectiveColumns(data.pillars, state.l1);
-      if (state.view === "dynamic") {
-        wrap.appendChild(renderDynamic(columns));
-        wrap.appendChild(renderOther());
-        return;
-      }
       if (state.groupByPillar && state.l1 === null && densityFor(columns.length) === "scroll") {
         for (const l1 of strategyChips(data.pillars)) {
           const cols = objectiveColumns(data.pillars, l1.id);
@@ -548,12 +543,14 @@ export function mountPriorities(parent: HTMLElement, _opts: PrioritiesMountOpts 
       const { byColumn, unplaced } = groupByColumn(columns, visible);
       const adoptedIds = new Set(prioritiesForOrg(state.org, data.priorities, data.assignments).adopted.map((p) => p.id));
 
+      const cardFor = (p: Priority, col: Pillar) =>
+        state.view === "dynamic" ? dynamicCard(p, col, adoptedIds.has(p.id)) : priorityCard(p, adoptedIds.has(p.id), density);
       if (phone) {
         for (const col of columns) {
           box.appendChild(el("div", "app-cp-ph-h", col.name));
           const items = byColumn.get(col.id) ?? [];
           if (items.length === 0) box.appendChild(el("div", "app-cp-empty-cell", "—"));
-          for (const p of items) box.appendChild(priorityCard(p, adoptedIds.has(p.id), density));
+          for (const p of items) box.appendChild(cardFor(p, col));
         }
         return box;
       }
@@ -625,7 +622,7 @@ export function mountPriorities(parent: HTMLElement, _opts: PrioritiesMountOpts 
           state.lastColumn = col.id;
         });
         const items = byColumn.get(col.id) ?? [];
-        for (const p of items) cell.appendChild(priorityCard(p, adoptedIds.has(p.id), density));
+        for (const p of items) cell.appendChild(cardFor(p, col));
         if (items.length === 0) {
           if (canManage()) {
             const add = el("button", "app-cp-addcell", "＋ Add priority") as HTMLButtonElement;
@@ -645,7 +642,11 @@ export function mountPriorities(parent: HTMLElement, _opts: PrioritiesMountOpts 
       if (columns.length === 0) grid.appendChild(el("div", "app-cp-cell"));
 
       // row 4: Objectives (headline metrics — P5 fills these). Always shown
-      // at every density (Ben, 2026-08-19).
+      // at every density (Ben, 2026-08-19); in Dynamic the metric lives on
+      // the card, so the row is not repeated.
+      if (state.view === "dynamic") {
+        // fall through to the unplaced note
+      } else {
       grid.appendChild(el("div", "app-cp-label", "Objectives"));
       for (const col of columns) {
         const cell = el("div", "app-cp-cell app-cp-cell-obj");
@@ -659,6 +660,7 @@ export function mountPriorities(parent: HTMLElement, _opts: PrioritiesMountOpts 
         grid.appendChild(cell);
       }
       if (columns.length === 0) grid.appendChild(el("div", "app-cp-cell"));
+      }
 
       // priorities whose sub-pillar is not a shown column
       if (unplaced.length > 0 && onlyL1 === null) {
@@ -675,57 +677,26 @@ export function mountPriorities(parent: HTMLElement, _opts: PrioritiesMountOpts 
       return box;
     };
 
-    // ---- Dynamic view (§5): card per priority in a wrapping grid --------
-    const renderDynamic = (columns: Pillar[]): HTMLElement => {
-      const box = el("div", "app-cp-dyn");
-      const visible = visibleFor(state.org);
-      const { byColumn, unplaced } = groupByColumn(columns, visible);
-      const adoptedIds = new Set(prioritiesForOrg(state.org, data.priorities, data.assignments).adopted.map((p) => p.id));
-      const ordered: { p: Priority; col: Pillar | null }[] = [];
-      for (const col of columns) for (const p of byColumn.get(col.id) ?? []) ordered.push({ p, col });
-      for (const p of unplaced) ordered.push({ p, col: null });
-      if (ordered.length === 0) {
-        box.appendChild(
-          el(
-            "div",
-            "app-cp-dyn-empty",
-            canManage()
-              ? `No priorities for ${state.period} yet. Add the few things this org must achieve, or accept one cascaded from above.`
-              : `This org hasn't published priorities for ${state.period}.`
-          )
-        );
-        return box;
-      }
-      for (const { p, col } of ordered) box.appendChild(dynamicCard(p, col, adoptedIds.has(p.id)));
-      return box;
-    };
-
+    // ---- Dynamic view (§5, as Ben wants it 2026-08-19): SAME matrix —
+    // pillars over sub-pillar columns — the card carries every detail
+    // (metric, owner, tallies, lineage) and the Objectives row folds into it.
     const dynamicCard = (p: Priority, col: Pillar | null, adopted: boolean): HTMLElement => {
       const rags = ragsFor(p);
       const t = tally(rags);
       const rag = rollup(t, state.rule, settings.ragRatioPct);
       const card = el("div", "app-cp-dcard");
       card.style.borderLeftColor = palette[ragPaletteKey(rag)] ?? "#9a948a";
-      // title strip = the pillar (coloured), ⋮ in the action slot
-      const parentL1 = col ? data.pillars.find((x) => x.id === col.parentId) : undefined;
-      const strip = el("div", "app-cp-dcard-strip");
-      const colour = col?.color || parentL1?.color || "";
-      if (colour !== "") {
-        strip.style.background = colour;
-        strip.style.color = "#fff";
-      }
-      strip.appendChild(el("span", "app-cp-dcard-pillar", col ? `${parentL1 ? parentL1.name + " › " : ""}${col.name}` : "No sub-pillar"));
+      void col; // the column head names the pillar — no strip on the card
       if (canManage() && !adopted) {
-        const kebab = el("button", "app-cp-dcard-kebab", "⋮") as HTMLButtonElement;
+        const kebab = el("button", "app-cp-kebab", "⋮") as HTMLButtonElement;
         kebab.type = "button";
         kebab.title = "Edit · cascade · reorder · complete";
         kebab.addEventListener("click", (e) => {
           e.stopPropagation();
           openCardMenu(kebab, p);
         });
-        strip.appendChild(kebab);
+        card.appendChild(kebab);
       }
-      card.appendChild(strip);
       const body = el("div", "app-cp-dcard-body");
       body.appendChild(el("div", "app-cp-dcard-statement", p.statement));
       // headline metric: large value + target + 96×40 sparkline (P5 fills)

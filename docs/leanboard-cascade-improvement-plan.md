@@ -265,9 +265,10 @@ reschedule/cancel history with a reason picklist.
   with reason picklist; parent completed/revised prompts on children;
   reorder; period carry-forward flow.
 - **P3 Dynamic view — BUILT 2026-08-19 (dev, app-only)** — Simple |
-  Dynamic toggle live; `renderDynamic` in the screen: wrapping grid
-  (min 320px), card = pillar-coloured title strip with ⋮ in the action
-  slot · 14.5px statement · headline metric block (22px value + target
+  Dynamic toggle live. Ben's call the same day: Dynamic keeps THE SAME
+  MATRIX (pillars over sub-pillar columns) — only the card gets richer
+  and the Objectives row folds into it (no title strip; the column head
+  names the pillar). Card = 14.5px statement · headline metric block (22px value + target
   line + 96×40 sparkline — placeholders reading "No metric set" until
   P5) · owner initials chip + name · ✓ ! ✕ tallies + "n initiatives" ·
   lineage line · flags; same overlay/kebab as the matrix. PREFS
