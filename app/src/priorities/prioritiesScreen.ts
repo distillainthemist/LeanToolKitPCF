@@ -612,6 +612,14 @@ export function mountPriorities(parent: HTMLElement, opts: PrioritiesMountOpts =
         bar.appendChild(chip);
       }
       bar.appendChild(el("span", "app-cp-spacer"));
+      const present = el("button", "app-btn", "▶ Present") as HTMLButtonElement;
+      present.type = "button";
+      present.title = "Presentation mode — full-width, larger type, then ▶ Walk one pillar at a time";
+      present.addEventListener("click", () => {
+        state.tv = true;
+        render();
+      });
+      bar.appendChild(present);
       if (canManage()) {
         const add = el("button", "app-btn app-btn-primary", "＋ Priority") as HTMLButtonElement;
         add.type = "button";
@@ -648,12 +656,6 @@ export function mountPriorities(parent: HTMLElement, opts: PrioritiesMountOpts =
         state.rule = "ratio";
         render();
       });
-      menu.appendChild(el("div", "app-cp-menu-h", "Present"));
-      item("Presentation mode", null, () => {
-        state.tv = true;
-        render();
-      });
-      item("Walk objectives", null, () => openWalk(0));
       menu.appendChild(el("div", "app-cp-menu-h", "Show"));
       item("Other (unlinked initiatives)", state.showOther, () => {
         state.showOther = !state.showOther;
@@ -784,20 +786,9 @@ export function mountPriorities(parent: HTMLElement, opts: PrioritiesMountOpts =
         });
         const items = byColumn.get(col.id) ?? [];
         for (const p of items) cell.appendChild(cardFor(p, col));
-        if (items.length === 0) {
-          if (canManage()) {
-            const add = el("button", "app-cp-addcell", "＋ Add priority") as HTMLButtonElement;
-            add.type = "button";
-            add.addEventListener("click", (e) => {
-              e.stopPropagation();
-              state.lastColumn = col.id;
-              void addPriority();
-            });
-            cell.appendChild(add);
-          } else {
-            cell.appendChild(el("div", "app-cp-empty-cell", ""));
-          }
-        }
+        // empty cells stay blank — the toolbar's ＋ Priority is the one
+        // door (Ben, 2026-08-19); clicking a column still preselects it
+        if (items.length === 0) cell.appendChild(el("div", "app-cp-empty-cell", ""));
         grid.appendChild(cell);
       }
       if (columns.length === 0) grid.appendChild(el("div", "app-cp-cell"));

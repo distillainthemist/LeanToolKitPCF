@@ -2957,20 +2957,6 @@ button.app-doclist-hsort:hover { color: var(--app-accent, #2563eb); }
 .app-cp-cell-obj { min-height: 44px; }
 .app-cp-compact .app-cp-cell { min-height: 70px; }
 .app-cp-empty-cell { flex: 1; }
-.app-cp-addcell {
-  border: 1px dashed #d9d3c8;
-  background: none;
-  font: inherit;
-  font-size: 12.5px;
-  color: #6d675c;
-  border-radius: 6px;
-  padding: 10px;
-  cursor: pointer;
-  min-height: 44px;
-  opacity: 0.6;
-}
-.app-cp-cell:hover .app-cp-addcell { opacity: 1; }
-.app-cp-addcell:hover { color: var(--app-accent); border-color: var(--app-accent); }
 .app-cp-card {
   position: relative;
   background: #fff;
@@ -3146,11 +3132,9 @@ textarea.app-cp-statement { font-size: 14px; font-weight: 500; }
 .app-cp-tv .app-cp-dcard-initials { width: 36px; height: 36px; font-size: 14px; }
 .app-cp-tv .app-cp-dcard-num { font-size: 30px; }
 .app-cp-tv .app-cp-dcard-spark { width: 130px; height: 54px; }
-.app-cp-tv .app-cp-kebab, .app-cp-tv .app-cp-addcell { display: none; }
+.app-cp-tv .app-cp-kebab { display: none; }
 .app-cp-tv .app-cp-vision-edit { display: none; }
-.app-cp-tv .app-cp-grid { grid-template-columns: 160px repeat(auto-fit, minmax(0, 1fr)); }
-.app-cp-tv .app-cp-visionrow { grid-template-columns: 1fr; }
-.app-cp-tv .app-cp-visionrow .app-cp-label { display: none; }
+
 /* the walk */
 .app-cp-walk { display: flex; flex-direction: column; background: #fff; min-height: 100%; }
 .app-cp-walk-fixed { position: fixed; inset: 0; z-index: 8000; }
@@ -3210,6 +3194,6 @@ textarea.app-cp-statement { font-size: 14px; font-weight: 500; }
 .app-cp-card-tile .app-cp-l1span, .app-cp-card-tile .app-cp-colhead { font-size: 11px; min-height: 28px; padding: 4px 6px; }
 .app-cp-card-tile .app-cp-card { padding: 4px 6px; gap: 2px; }
 .app-cp-card-tile .app-cp-statement { font-size: 11px; }
-.app-cp-card-tile .app-cp-tallies, .app-cp-card-tile .app-cp-lineage, .app-cp-card-tile .app-cp-flag, .app-cp-card-tile .app-cp-cell-obj, .app-cp-card-tile .app-cp-other, .app-cp-card-tile .app-cp-kebab, .app-cp-card-tile .app-cp-addcell { display: none; }
+.app-cp-card-tile .app-cp-tallies, .app-cp-card-tile .app-cp-lineage, .app-cp-card-tile .app-cp-flag, .app-cp-card-tile .app-cp-cell-obj, .app-cp-card-tile .app-cp-other, .app-cp-card-tile .app-cp-kebab { display: none; }
 .app-cp-card-tile .app-cp-cell { min-height: 40px; }
 .app-cp-card-focused .app-cp-walk { min-height: 100%; }

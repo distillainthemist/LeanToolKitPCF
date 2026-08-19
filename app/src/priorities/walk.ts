@@ -39,7 +39,7 @@ export interface WalkOpts {
   byColumn: Map<string, Priority[]>;
   adoptedIds: Set<string>;
   startStep?: number;
-  /** ⊞ All objectives / Esc — leave the walk. */
+  /** ⊞ All pillars / Esc — leave the walk. */
   onExit: () => void;
   onOpen: (p: Priority) => void;
   /** Step changed (the screen remembers it across repaints). */
@@ -72,7 +72,7 @@ export function mountWalk(o: WalkOpts): () => void {
     const n = stepCount();
     if (n === 0) {
       root.appendChild(el("div", "app-cp-walk-empty", "Nothing to walk — no objectives are visible with the current filters."));
-      const back = btn("⊞ All objectives");
+      const back = btn("⊞ All pillars");
       back.addEventListener("click", o.onExit);
       root.appendChild(back);
       return;
@@ -124,7 +124,7 @@ export function mountWalk(o: WalkOpts): () => void {
     const prev = btn(step > 0 ? `‹ ${stepTitle(step - 1)}` : "‹", "app-btn app-cp-walk-nav");
     prev.disabled = step === 0;
     prev.addEventListener("click", () => go(step - 1));
-    const all = btn("⊞ All objectives", "app-btn app-cp-walk-all");
+    const all = btn("⊞ All pillars", "app-btn app-cp-walk-all");
     all.addEventListener("click", o.onExit);
     const next = btn(step < n - 1 ? `${stepTitle(step + 1)} ›` : "›", "app-btn app-cp-walk-nav");
     next.disabled = step >= n - 1;
