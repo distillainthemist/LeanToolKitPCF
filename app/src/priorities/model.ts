@@ -94,7 +94,10 @@ export interface Pillar {
   rowId?: string;
   id: string;
   name: string;
-  /** 1 = medium-term strategy (chips), 2 = strategic objective (columns). */
+  /** 1 = pillar (filter chips above the matrix), 2 = sub-pillar (the
+   *  matrix columns). The wall template calls these "medium-term
+   *  strategy" and "strategic objectives"; the app says pillar /
+   *  sub-pillar (Ben, 2026-08-19). */
   level: 1 | 2;
   parentId: string; // "" for level 1
   color: string;

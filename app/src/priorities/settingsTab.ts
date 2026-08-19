@@ -1,9 +1,9 @@
 // Settings → Priorities (cascade plan P0): the configuration the cascade
 // needs before any priority exists.
 //
-//   Pillars            superadmin — level-1 "medium-term strategy" and
-//                      level-2 "strategic objectives" (matrix columns):
-//                      name, colour, order, active, parent
+//   Pillars            superadmin — pillars (filter chips above the
+//                      matrix) and their sub-pillars (the matrix
+//                      columns): name, colour, active, ▲▼ order
 //   Period & roll-up   superadmin — the period definition (FY start /
 //                      calendar / custom label) and the ratio-rule X%
 //   Vision             superadmin, or a site admin for their site — the
@@ -34,7 +34,6 @@ import {
   periodFor,
   Pillar,
   serializePrioritySettings,
-  strategyChips,
 } from "./model";
 import { newId, todayIso } from "../../../shared/schema/id";
 
@@ -117,7 +116,7 @@ export async function renderPrioritiesSettings(
 async function renderPillars(body: HTMLElement, ctx: DirtyCtx, saves: (() => Promise<void>)[]) {
   const box = sectionTitle(
     "Strategic pillars",
-    "Two levels: medium-term strategies (chips above the matrix) and the strategic objectives beneath them (the matrix columns). Company-wide; typically change every few years."
+    "Pillars appear as filter chips above the priorities matrix; their sub-pillars are the matrix columns. Company-wide; typically change every few years. Order here is the order on screen."
   );
   body.appendChild(box);
   const companyList = await companies();
@@ -128,22 +127,40 @@ async function renderPillars(body: HTMLElement, ctx: DirtyCtx, saves: (() => Pro
   const list = el("div", "app-pr-pillars");
   box.appendChild(list);
 
+  const l1sOrdered = () =>
+    pillars.filter((p) => p.level === 1).sort((a, b) => a.order - b.order || a.name.localeCompare(b.name));
+  const childrenOf = (l1: Pillar) =>
+    pillars.filter((p) => p.level === 2 && p.parentId === l1.id).sort((a, b) => a.order - b.order);
+  /** Renumber a sibling set 1..n after a move/add/remove. */
+  const renumber = (siblings: Pillar[]) => siblings.forEach((p, i) => (p.order = i + 1));
+  const touch = () => {
+    dirtyPillars = true;
+    ctx.markDirty();
+  };
+
+  const move = (p: Pillar, siblings: Pillar[], delta: -1 | 1) => {
+    const i = siblings.indexOf(p);
+    const j = i + delta;
+    if (i < 0 || j < 0 || j >= siblings.length) return;
+    [siblings[i], siblings[j]] = [siblings[j], siblings[i]];
+    renumber(siblings);
+    touch();
+    paint();
+  };
+
   const paint = () => {
     clear(list);
-    const l1s = strategyChips(pillars.filter((p) => p.active)).concat(
-      pillars.filter((p) => p.level === 1 && !p.active)
-    );
+    const l1s = l1sOrdered();
     if (l1s.length === 0) {
-      list.appendChild(el("div", "app-settings-note", "No pillars yet — add a medium-term strategy first."));
+      list.appendChild(el("div", "app-settings-note", "No pillars yet — add one to start."));
     }
     for (const l1 of l1s) {
-      list.appendChild(pillarRow(l1, null));
-      const children = pillars
-        .filter((p) => p.level === 2 && p.parentId === l1.id)
-        .sort((a, b) => a.order - b.order);
-      for (const c of children) list.appendChild(pillarRow(c, l1));
-      const addObj = el("button", "app-link app-pr-addobj", "＋ Add objective under this strategy") as HTMLButtonElement;
-      addObj.addEventListener("click", () => {
+      list.appendChild(pillarRow(l1, null, l1s));
+      const children = childrenOf(l1);
+      for (const c of children) list.appendChild(pillarRow(c, l1, children));
+      const addSub = el("button", "app-pr-addlink", "＋ Add sub-pillar") as HTMLButtonElement;
+      addSub.type = "button";
+      addSub.addEventListener("click", () => {
         pillars.push({
           id: newId("pl"),
           name: "",
@@ -154,14 +171,15 @@ async function renderPillars(body: HTMLElement, ctx: DirtyCtx, saves: (() => Pro
           active: true,
           company: l1.company,
         });
-        dirtyPillars = true;
-        ctx.markDirty();
+        touch();
         paint();
-        list.querySelector<HTMLInputElement>(".app-pr-pillar:last-of-type input")?.focus();
+        const rows = list.querySelectorAll<HTMLInputElement>(".app-pr-pillar-l2 input[type=text]");
+        rows[rows.length - 1]?.focus();
       });
-      list.appendChild(addObj);
+      list.appendChild(addSub);
     }
-    const addL1 = el("button", "app-btn", "＋ Add medium-term strategy") as HTMLButtonElement;
+    const addL1 = el("button", "app-btn", "＋ Add pillar") as HTMLButtonElement;
+    addL1.type = "button";
     addL1.addEventListener("click", () => {
       pillars.push({
         id: newId("pl"),
@@ -169,44 +187,47 @@ async function renderPillars(body: HTMLElement, ctx: DirtyCtx, saves: (() => Pro
         level: 1,
         parentId: "",
         color: "#2563eb",
-        order: pillars.filter((p) => p.level === 1).length + 1,
+        order: l1s.length + 1,
         active: true,
         company: companyList[0] ?? "",
       });
-      dirtyPillars = true;
-      ctx.markDirty();
+      touch();
       paint();
+      const rows = list.querySelectorAll<HTMLInputElement>(".app-pr-pillar:not(.app-pr-pillar-l2) input[type=text]");
+      rows[rows.length - 1]?.focus();
     });
     list.appendChild(addL1);
   };
 
-  const pillarRow = (p: Pillar, parent: Pillar | null): HTMLElement => {
+  const pillarRow = (p: Pillar, parent: Pillar | null, siblings: Pillar[]): HTMLElement => {
     const row = el("div", "app-pr-pillar" + (parent ? " app-pr-pillar-l2" : ""));
+    const arrows = el("span", "app-pr-arrows");
+    const up = el("button", "app-pr-arrow", "▲") as HTMLButtonElement;
+    up.type = "button";
+    up.title = "Move up";
+    up.disabled = siblings.indexOf(p) === 0;
+    up.addEventListener("click", () => move(p, siblings, -1));
+    const down = el("button", "app-pr-arrow", "▼") as HTMLButtonElement;
+    down.type = "button";
+    down.title = "Move down";
+    down.disabled = siblings.indexOf(p) === siblings.length - 1;
+    down.addEventListener("click", () => move(p, siblings, 1));
+    arrows.append(up, down);
+
     const swatch = el("input", "app-palette-swatch") as HTMLInputElement;
     swatch.type = "color";
     swatch.value = /^#[0-9a-fA-F]{6}$/.test(p.color) ? p.color : "#2563eb";
     swatch.addEventListener("input", () => {
       p.color = swatch.value;
-      dirtyPillars = true;
-      ctx.markDirty();
+      touch();
     });
     const name = el("input", "app-input") as HTMLInputElement;
+    name.type = "text";
     name.value = p.name;
-    name.placeholder = parent ? "Strategic objective" : "Medium-term strategy";
+    name.placeholder = parent ? "Sub-pillar" : "Pillar";
     name.addEventListener("input", () => {
       p.name = name.value;
-      dirtyPillars = true;
-      ctx.markDirty();
-    });
-    const order = el("input", "app-input app-pr-order") as HTMLInputElement;
-    order.type = "number";
-    order.min = "1";
-    order.value = String(p.order || 1);
-    order.title = "Display order";
-    order.addEventListener("input", () => {
-      p.order = Number(order.value) || 1;
-      dirtyPillars = true;
-      ctx.markDirty();
+      touch();
     });
     const active = el("label", "app-check") as HTMLLabelElement;
     const box = el("input") as HTMLInputElement;
@@ -214,25 +235,25 @@ async function renderPillars(body: HTMLElement, ctx: DirtyCtx, saves: (() => Pro
     box.checked = p.active;
     box.addEventListener("change", () => {
       p.active = box.checked;
-      dirtyPillars = true;
-      ctx.markDirty();
+      touch();
     });
     active.append(box, document.createTextNode(" Active"));
     const x = el("button", "app-btn app-palette-x", "×") as HTMLButtonElement;
-    x.title = parent ? "Remove objective" : "Remove strategy (and its objectives)";
+    x.type = "button";
+    x.title = parent ? "Remove sub-pillar" : "Remove pillar (and its sub-pillars)";
     x.addEventListener("click", () => {
-      const doomed = parent ? [p] : [p, ...pillars.filter((c) => c.parentId === p.id)];
+      const doomed = parent ? [p] : [p, ...childrenOf(p)];
       for (const d of doomed) {
         const i = pillars.indexOf(d);
         if (i >= 0) pillars.splice(i, 1);
         if (d.rowId) removed.push(d);
       }
-      dirtyPillars = true;
-      ctx.markDirty();
+      renumber(parent ? childrenOf(parent) : l1sOrdered());
+      touch();
       paint();
     });
     if (companyList.length > 1 && !parent) {
-      const co = el("select", "app-input") as HTMLSelectElement;
+      const co = el("select", "app-input app-pr-co") as HTMLSelectElement;
       for (const c of companyList) {
         const o = el("option", "", c) as HTMLOptionElement;
         o.value = c;
@@ -242,12 +263,11 @@ async function renderPillars(body: HTMLElement, ctx: DirtyCtx, saves: (() => Pro
       co.addEventListener("change", () => {
         p.company = co.value;
         for (const c of pillars) if (c.parentId === p.id) c.company = co.value;
-        dirtyPillars = true;
-        ctx.markDirty();
+        touch();
       });
-      row.append(swatch, name, co, order, active, x);
+      row.append(arrows, swatch, name, co, active, x);
     } else {
-      row.append(swatch, name, order, active, x);
+      row.append(arrows, swatch, name, active, x);
     }
     return row;
   };
