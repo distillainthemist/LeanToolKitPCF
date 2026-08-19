@@ -553,3 +553,51 @@ export function lineageWords(l: LineageSummary, unit = "org"): string[] {
   }
   return out;
 }
+
+// ---- lifecycle (P2) ----------------------------------------------------------------
+
+/** "Why is this closing?" — the design's fixed picklist (§10). */
+export const CLOSE_REASONS = ["Achieved", "Superseded", "No longer relevant", "Carried to next period"] as const;
+export type CloseReason = (typeof CLOSE_REASONS)[number];
+
+/** A carry-forward copy: same statement, pillar, owner, org and order in
+ *  the next period, linked back by `carriedFromId` in the caller's event.
+ *  The copy has no parent — cascades are re-sent in the new period. */
+export function carryForwardCopy(p: Priority, nextPeriodName: string, newId: string): Priority {
+  return {
+    ...p,
+    rowId: undefined,
+    id: newId,
+    period: nextPeriodName,
+    status: "active",
+    statusReason: "",
+    parentId: "",
+    primaryInitiativeId: "",
+  };
+}
+
+/** Children still active under a parent that has closed — the ones the
+ *  "parent completed" prompt is for (§10). */
+export function parentClosed(p: Priority, all: Priority[]): Priority | null {
+  if (p.parentId === "" || p.status !== "active") return null;
+  const parent = all.find((x) => x.id === p.parentId);
+  return parent && parent.status !== "active" ? parent : null;
+}
+
+/** Sender's-view flags for a priority: who declined or parked it, with
+ *  their reason (§10 copy). */
+export function senderFlags(
+  p: Priority,
+  assignments: PriorityAssignment[]
+): { kind: "declined" | "parked"; org: OrgRef; reason: string }[] {
+  return assignments
+    .filter((a) => a.priorityId === p.id && (a.status === "rejected" || a.status === "onhold"))
+    .map((a) => ({ kind: a.status === "rejected" ? ("declined" as const) : ("parked" as const), org: a.org, reason: a.reason }));
+}
+
+/** Everything waiting on an org's decision: proposed first, then parked. */
+export function reviewQueue(org: OrgRef, assignments: PriorityAssignment[]): PriorityAssignment[] {
+  const key = orgKey(org);
+  const mine = assignments.filter((a) => orgKey(a.org) === key);
+  return [...mine.filter((a) => a.status === "proposed"), ...mine.filter((a) => a.status === "onhold")];
+}

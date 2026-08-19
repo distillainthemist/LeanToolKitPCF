@@ -254,3 +254,32 @@ describe("pillar order and spans", () => {
     expect(m.objectiveColumns(pillars, "s1").map((c) => c.id)).toEqual(["s1a", "s1b"]);
   });
 });
+
+describe("lifecycle (P2)", () => {
+  it("carry-forward copies into the next period without lineage", async () => {
+    const m = await import("../priorities/model");
+    const src = pr("A", dept, { parentId: "P", primaryInitiativeId: "i1", status: "active", order: 3 });
+    const copy = m.carryForwardCopy(src, "FY27", "B");
+    expect(copy).toMatchObject({ id: "B", period: "FY27", parentId: "", primaryInitiativeId: "", status: "active", order: 3, org: dept });
+    expect(copy.rowId).toBeUndefined();
+  });
+  it("parent-closed prompt only for active children of closed parents", async () => {
+    const m = await import("../priorities/model");
+    const parent = pr("P", site, { status: "completed" });
+    const child = pr("C", dept, { parentId: "P" });
+    expect(m.parentClosed(child, [parent, child])?.id).toBe("P");
+    expect(m.parentClosed({ ...child, status: "completed" }, [parent, child])).toBeNull();
+    expect(m.parentClosed(child, [{ ...parent, status: "active" }, child])).toBeNull();
+  });
+  it("sender flags and review queue", async () => {
+    const m = await import("../priorities/model");
+    const as = [
+      { ...asg("1", "P", dept, "rejected"), reason: "no capacity" },
+      { ...asg("2", "P", area, "onhold"), reason: "Q3" },
+      asg("3", "P", orgRef("Pechey", "Bendigo", "Warehouse"), "proposed"),
+    ];
+    expect(m.senderFlags(pr("P", site), as).map((f) => `${f.kind}:${f.reason}`)).toEqual(["declined:no capacity", "parked:Q3"]);
+    expect(m.reviewQueue(area, as).map((a) => a.status)).toEqual(["onhold"]);
+    expect(m.reviewQueue(dept, as).map((a) => a.status)).toEqual(["rejected"].filter(() => false));
+  });
+});

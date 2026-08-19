@@ -14,8 +14,9 @@
 //
 // P1 renders statuses from a stub resolver (no initiatives yet): every
 // priority is grey with "· 0 initiatives" and every objective cell reads
-// "No metric set". P2 adds the detail overlay + cascade review list;
-// P3 the Dynamic view; P4 TV walk mode + the embedded card.
+// "No metric set". The detail overlay, cascade review list, close /
+// carry-forward flows live in lifecycle.ts (P2); P3 adds the Dynamic
+// view; P4 TV walk mode + the embedded card.
 
 import { el, clear } from "../../../shared/ui/dom";
 import { paletteMap } from "../../../shared/palette";
@@ -49,6 +50,7 @@ import {
   priorityDialog,
   siblingOrgs,
 } from "./dialogs";
+import { carryForwardFlow, cascadeDialog, cascadeReview, closeDialog, closePriority, LifecycleCtx, openPriorityOverlay } from "./lifecycle";
 import {
   canManageOrg,
   densityFor,
@@ -65,6 +67,7 @@ import {
   orgParent,
   orgPath,
   orgRef,
+  parentClosed,
   parsePrioritySettings,
   pendingCascades,
   periodFor,
@@ -78,6 +81,7 @@ import {
   rollup,
   RollupRule,
   sameOrg,
+  senderFlags,
   strategyChips,
   tally,
   tallyLine,
@@ -211,12 +215,28 @@ export function mountPriorities(parent: HTMLElement, _opts: PrioritiesMountOpts 
     if (dead) return;
     stopLoading();
 
+    /** The nearest scrolling ancestor — closing the overlay / repainting
+     *  after a write must land where the user was (§13). */
+    const scroller = (): Element => {
+      let n: HTMLElement | null = wrap.parentElement;
+      while (n) {
+        const o = getComputedStyle(n).overflowY;
+        if ((o === "auto" || o === "scroll") && n.scrollHeight > n.clientHeight) return n;
+        n = n.parentElement;
+      }
+      return document.scrollingElement ?? document.documentElement;
+    };
     const reload = async () => {
+      const sc = scroller();
+      const top = sc.scrollTop;
       data = await loadCascade(state.org.company);
-      if (!dead) render();
+      if (dead) return;
+      render();
+      sc.scrollTop = top;
     };
 
     const canManage = () => canManageOrg(viewer, state.org, owners);
+    const reviewQueueLen = () => data.assignments.filter((a) => orgKey(a.org) === orgKey(state.org) && a.status === "onhold").length;
     const periodsOnOffer = () => {
       const cur = currentPeriod;
       const next = nextPeriod(settings.period, cur);
@@ -224,6 +244,32 @@ export function mountPriorities(parent: HTMLElement, _opts: PrioritiesMountOpts 
       if (next !== "") set.add(next);
       for (const p of data.priorities) if (p.period !== "") set.add(p.period);
       return [...set].sort();
+    };
+
+    const ownerNameFor = (o: OrgRef) => {
+      const govern = orgLevel(o) === "area" ? { ...o, area: "" } : o;
+      return owners[orgKey(govern)]?.[0]?.who ?? "";
+    };
+    const actorRef = () => ({ whoId: viewer.whoId, who: me?.who ?? who?.name ?? "" });
+    const ctx: LifecycleCtx = {
+      host: wrap,
+      data: () => data,
+      tree,
+      roster,
+      settings,
+      rule: () => state.rule,
+      palette,
+      actor: actorRef,
+      canManage: (o) => canManageOrg(viewer, o, owners),
+      ownerNameFor,
+      periodsOnOffer: () => periodsOnOffer(),
+      currentPeriod,
+      ragsFor,
+      changed: reload,
+      open: (p) => openOverlay(p),
+    };
+    const openOverlay = (p: Priority) => {
+      openPriorityOverlay(ctx, p, (live) => void editPriority(live));
     };
 
     // ---- the render -------------------------------------------------------
@@ -397,7 +443,14 @@ export function mountPriorities(parent: HTMLElement, _opts: PrioritiesMountOpts 
       if (pending > 0) {
         const chip = el("button", "app-cp-cascadechip", `⇩ ${pending} cascade${pending === 1 ? "" : "s"} to accept`) as HTMLButtonElement;
         chip.type = "button";
-        chip.title = "The review list arrives with the next update";
+        chip.title = "Review the cascades sent to this org";
+        chip.addEventListener("click", () => cascadeReview(ctx, state.org));
+        bar.appendChild(chip);
+      } else if (reviewQueueLen() > 0) {
+        const chip = el("button", "app-cp-cascadechip app-cp-cascadechip-quiet", `⏸ ${reviewQueueLen()} parked`) as HTMLButtonElement;
+        chip.type = "button";
+        chip.title = "Cascades this org put on hold";
+        chip.addEventListener("click", () => cascadeReview(ctx, state.org));
         bar.appendChild(chip);
       }
       bar.appendChild(el("span", "app-cp-spacer"));
@@ -446,6 +499,13 @@ export function mountPriorities(parent: HTMLElement, _opts: PrioritiesMountOpts 
         state.groupByPillar = !state.groupByPillar;
         render();
       });
+      if (canManage()) {
+        menu.appendChild(el("div", "app-cp-menu-h", "Period"));
+        item(`Carry forward ${state.period} to next period…`, null, () => {
+          const mine = data.priorities.filter((p) => orgKey(p.org) === orgKey(state.org) && p.period === state.period && p.status === "active");
+          carryForwardFlow(ctx, state.org, state.period, mine);
+        });
+      }
       const r = anchor.getBoundingClientRect();
       menu.style.top = `${r.bottom + 4}px`;
       menu.style.right = `${Math.max(8, window.innerWidth - r.right)}px`;
@@ -576,26 +636,21 @@ export function mountPriorities(parent: HTMLElement, _opts: PrioritiesMountOpts 
       }
       if (columns.length === 0) grid.appendChild(el("div", "app-cp-cell"));
 
-      // row 4: Objectives (headline metrics — P5 fills these)
-      if (density !== "compact") {
-        grid.appendChild(el("div", "app-cp-label", "Objectives"));
-        for (const col of columns) {
-          const cell = el("div", "app-cp-cell app-cp-cell-obj");
-          const items = byColumn.get(col.id) ?? [];
-          for (const p of items) {
-            const line = el("div", "app-cp-metric");
-            line.appendChild(el("span", "app-cp-metric-name", p.statement.slice(0, 40)));
-            line.appendChild(el("span", "app-cp-muted", "No metric set"));
-            cell.appendChild(line);
-          }
-          grid.appendChild(cell);
+      // row 4: Objectives (headline metrics — P5 fills these). Always shown
+      // at every density (Ben, 2026-08-19).
+      grid.appendChild(el("div", "app-cp-label", "Objectives"));
+      for (const col of columns) {
+        const cell = el("div", "app-cp-cell app-cp-cell-obj");
+        const items = byColumn.get(col.id) ?? [];
+        for (const p of items) {
+          const line = el("div", "app-cp-metric");
+          line.appendChild(el("span", "app-cp-metric-name", p.statement.slice(0, 40)));
+          line.appendChild(el("span", "app-cp-muted", "No metric set"));
+          cell.appendChild(line);
         }
-        if (columns.length === 0) grid.appendChild(el("div", "app-cp-cell"));
-      } else {
-        const strip = el("div", "app-cp-objstrip", "▸ Objectives row collapsed at 5–6 columns — filter to one pillar to see values inline");
-        strip.style.gridColumn = `1 / span ${columns.length + 1}`;
-        grid.appendChild(strip);
+        grid.appendChild(cell);
       }
+      if (columns.length === 0) grid.appendChild(el("div", "app-cp-cell"));
 
       // priorities whose sub-pillar is not a shown column
       if (unplaced.length > 0 && onlyL1 === null) {
@@ -645,11 +700,24 @@ export function mountPriorities(parent: HTMLElement, _opts: PrioritiesMountOpts 
       if (p.status !== "active") {
         card.appendChild(el("div", "app-cp-flag", p.status === "completed" ? "✓ Completed" : p.status === "archived" ? "▣ Archived" : "▣ Retired"));
       }
+      // sender's-view flags (§10) — worded, never colour alone
+      for (const f of senderFlags(p, data.assignments).slice(0, 2)) {
+        card.appendChild(
+          el(
+            "div",
+            "app-cp-flag" + (f.kind === "declined" ? " app-cp-flag-red" : ""),
+            f.kind === "declined"
+              ? `✕ ${orgName(f.org)} declined this priority${f.reason !== "" ? ` — “${f.reason}”` : ""}`
+              : `⏸ ${orgName(f.org)} parked${f.reason !== "" ? ` — “${f.reason}”` : ""}`
+          )
+        );
+      }
+      if (parentClosed(p, data.priorities)) card.appendChild(el("div", "app-cp-flag app-cp-flag-amber", "▲ Parent completed — decide"));
       // owner actions (⋮): P1 offers Edit + reorder; Cascade to… / Complete arrive with P2
       if (canManage() && !adopted) {
         const kebab = el("button", "app-cp-kebab", "⋮") as HTMLButtonElement;
         kebab.type = "button";
-        kebab.title = "Edit · reorder";
+        kebab.title = "Edit · cascade · reorder · complete";
         kebab.addEventListener("click", (e) => {
           e.stopPropagation();
           openCardMenu(kebab, p);
@@ -658,8 +726,7 @@ export function mountPriorities(parent: HTMLElement, _opts: PrioritiesMountOpts 
       }
       card.addEventListener("click", () => {
         state.lastColumn = p.pillarId;
-        // the detail overlay arrives with P2 — owners edit for now
-        if (canManage() && !adopted) void editPriority(p);
+        openOverlay(p);
       });
       return card;
     };
@@ -682,8 +749,9 @@ export function mountPriorities(parent: HTMLElement, _opts: PrioritiesMountOpts 
       const i = siblings.indexOf(p);
       item("Move up", () => void reorder(siblings, i, i - 1), i <= 0);
       item("Move down", () => void reorder(siblings, i, i + 1), i < 0 || i >= siblings.length - 1);
-      item("Cascade to… (next update)", () => undefined, true);
-      item("Complete / archive (next update)", () => undefined, true);
+      item("Cascade to…", () => cascadeDialog(ctx, p), p.status !== "active");
+      item("Complete…", () => void closeFromCard(p, "complete"), p.status !== "active");
+      item("Archive…", () => void closeFromCard(p, "archive"), p.status !== "active");
       const r = anchor.getBoundingClientRect();
       menu.style.top = `${r.bottom + 4}px`;
       menu.style.left = `${Math.min(r.left, window.innerWidth - 240)}px`;
@@ -696,6 +764,11 @@ export function mountPriorities(parent: HTMLElement, _opts: PrioritiesMountOpts 
       };
       setTimeout(() => document.addEventListener("pointerdown", close, true), 0);
       cleanups.push(() => menu.remove());
+    };
+
+    const closeFromCard = async (p: Priority, mode: "complete" | "archive") => {
+      const r = await closeDialog(wrap, p, mode, nextPeriod(settings.period, p.period));
+      if (r) await closePriority(ctx, p, mode, r);
     };
 
     const reorder = async (siblings: Priority[], from: number, to: number) => {

@@ -237,7 +237,25 @@ reschedule/cancel history with a reason picklist.
   Other strip, density rule (≤4 / 5–6 compact + collapsed Objectives
   strip / 7+ scroll + group-by-strategy), phone stacking, empty/vision
   copy. Statuses read from a stub resolver until initiatives exist.
-- **P2 Detail overlay + rail + cascade lifecycle** — overlay
+- **P2 Detail overlay + rail + cascade lifecycle — BUILT 2026-08-19 (dev,
+  app-only)** — `app/src/priorities/lifecycle.ts`: detail overlay (any
+  viewer; header pillar chip · statement · org · period · owner · ✕;
+  tabs Initiatives / Charter / Actions state their P5 dependency plainly,
+  History is live from ben_ltkpriorityevent + notes; rail Status (tallies
+  + rule words) · Lineage (↑ parent link; children ✓/⏳/⏸/✕ with reasons
+  and customised wording, links) · Actions stub · foot `Add initiative`
+  (disabled until P5, the one solid primary) · `Cascade to…` · `⋮ More`
+  Edit / Complete… / Archive…; scroll preserved across repaints; parent-
+  completed prompt with Complete… / Keep-with-note); the cascade review
+  list behind the ⇩ chip (Awaiting / Parked sections; Accept = adopt
+  as-is, Accept & customise = child priority via the dialog with own
+  cascade-on, Hold / Reject with reason dialogs; a quiet ⏸ chip when only
+  parked items remain); close dialog "Why is this closing?" with the four
+  reasons — Carried to next period creates the copy (`carryForwardCopy`,
+  no lineage, events on both); bulk carry-forward from ⋮ view options;
+  sender's-view flags on the card (✕ declined / ⏸ parked with reason,
+  ▲ Parent completed). Objectives row now shows at every density (Ben).
+  Design as specified — overlay
   (Initiatives / Charter / Actions / History tabs; Status / Lineage /
   Actions rail; one solid primary; restore org+filters+scroll on
   close); the cascade review list (Accept / Accept & customise / Hold /

@@ -72,7 +72,7 @@ export function siblingOrgs(tree: OrgTree, o: OrgRef): OrgRef[] {
 
 // ---- generic modal plumbing -----------------------------------------------
 
-interface ModalHandle {
+export interface ModalHandle {
   overlay: HTMLElement;
   box: HTMLElement;
   body: HTMLElement;
@@ -80,7 +80,7 @@ interface ModalHandle {
   close: () => void;
 }
 
-function modal(host: HTMLElement, title: string, note?: string, wide = false): ModalHandle {
+export function modal(host: HTMLElement, title: string, note?: string, wide = false): ModalHandle {
   const overlay = el("div", "app-modal-overlay");
   const box = el("div", "app-modal" + (wide ? " app-modal-wide" : ""));
   box.appendChild(el("div", "app-modal-title", title));
@@ -107,7 +107,7 @@ function modal(host: HTMLElement, title: string, note?: string, wide = false): M
   return { overlay, box, body, footer, close };
 }
 
-function field(label: string, control: HTMLElement, hint?: string): HTMLElement {
+export function field(label: string, control: HTMLElement, hint?: string): HTMLElement {
   const f = el("div", "app-field");
   f.append(el("span", "app-field-label", label), control);
   if (hint) f.appendChild(el("span", "app-field-hint", hint));
