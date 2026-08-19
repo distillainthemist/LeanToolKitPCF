@@ -81,8 +81,9 @@ model section) — the canvas/PCF sections there are historical.
   one list, default order My day · Cadence · Priorities · Actions ·
   Documents) and `ben_isarchived` (an archived site keeps its row and
   data but leaves `orgJson()` and so every picker; Organisation settings
-  lists it under "Archived sites" with Restore) — both 2026-08-19,
-  solution-carrying. **Cascaded priorities (P0, 2026-08-19):**
+  lists it under "Archived sites" with Restore) and `ben_siteorder` (drag
+  a site card onto another in the same company to reorder; `orgJson()`
+  sorts by it, unset last) — all 2026-08-19, solution-carrying. **Cascaded priorities (P0, 2026-08-19):**
   `ben_ltkpillar` (company pillars, two levels via a self lookup),
   `ben_ltkpriority` (one row per priority, owned by its originating org
   by NAME — company/site/department/area columns — with pillar and

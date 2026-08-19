@@ -288,8 +288,13 @@ export function toPeopleJson(people: RosterPerson[]): string {
 // ---- site settings → org tree + protected times ----
 
 export function orgTreeFromRows(rows: Ben_ltksitesettingses[]): unknown[] {
+  // ordered sites first (ben_siteorder ascending), unordered after in row order
+  const ord = (r: Ben_ltksitesettingses) =>
+    typeof r.ben_siteorder === "number" && Number.isFinite(r.ben_siteorder) ? r.ben_siteorder : Number.MAX_SAFE_INTEGER;
   return rows
-    .map((r) => ({
+    .map((r, i) => ({ r, i }))
+    .sort((a, b) => ord(a.r) - ord(b.r) || a.i - b.i)
+    .map(({ r }) => ({
       site: r.ben_site,
       departments: parseJsonOr<unknown[]>(r.ben_departments, []),
     }))

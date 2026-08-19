@@ -69,6 +69,7 @@ import {
   archivedSites,
   allSiteHubTabs,
   saveSiteHubTabs,
+  saveSiteOrder,
   setSiteArchived,
 } from "../store/config";
 import { parseMeetingInfo, parseOrgTree } from "../../../shared/schema/meeting";
@@ -2091,8 +2092,45 @@ async function renderOrg(
         card.classList.remove("app-dragging");
       });
       const handle = el("span", "app-drag-handle", "⠿");
-      handle.title = "Drag to another company";
+      handle.title = "Drag to reorder, or onto another company to move";
       head.appendChild(handle);
+      // reorder within the company: drop onto another site card of the
+      // same company (a different company's container handles the move)
+      const clearMarks = () => card.classList.remove("app-drop-before", "app-drop-after");
+      card.addEventListener("dragover", (e) => {
+        if (draggingSite === null || draggingSite === site) return;
+        if ((siteCompany[draggingSite] ?? "") !== (siteCompany[site] ?? "")) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const rect = card.getBoundingClientRect();
+        const after = e.clientY > rect.top + rect.height / 2;
+        card.classList.toggle("app-drop-after", after);
+        card.classList.toggle("app-drop-before", !after);
+      });
+      card.addEventListener("dragleave", clearMarks);
+      card.addEventListener("drop", (e) => {
+        clearMarks();
+        if (draggingSite === null || draggingSite === site) return;
+        if ((siteCompany[draggingSite] ?? "") !== (siteCompany[site] ?? "")) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const moving = draggingSite;
+        draggingSite = null;
+        const rect = card.getBoundingClientRect();
+        const after = e.clientY > rect.top + rect.height / 2;
+        const company = siteCompany[site] ?? "";
+        const list = sites.filter((x) => (siteCompany[x] ?? "") === company && x !== moving);
+        const at = list.indexOf(site) + (after ? 1 : 0);
+        list.splice(at, 0, moving);
+        // reflect in the page's site list (other companies keep their places)
+        const others = sites.filter((x) => (siteCompany[x] ?? "") !== company);
+        sites.splice(0, sites.length, ...others, ...list);
+        void (async () => {
+          if (!(await guardLeave())) return;
+          await saveSiteOrder(list);
+          await renderOrg(body, me, ctx);
+        })();
+      });
     }
     head.appendChild(el("span", "app-site-name", site));
     if (isSuper) head.appendChild(editBtn("Rename site", () => renameSite(site)));

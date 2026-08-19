@@ -161,6 +161,9 @@ export const TABLES = [
       // every org list / picker.
       ben_hubtabs: { ...memo(1000), display: "Hub tabs (JSON)" },
       ben_isarchived: { kind: "bool", display: "Archived", default: false },
+      // sites reorder by drag within their company (Ben, 2026-08-19);
+      // unset sorts after the ordered ones, then by row order
+      ben_siteorder: { kind: "int", display: "Site order" },
       // [{key, label, color}] — the site state palette cards select from
       ben_statepalette: { ...memo(10000), display: "State palette (JSON)" },
       // [{key, label, color}] — title-strip association colours (branding)

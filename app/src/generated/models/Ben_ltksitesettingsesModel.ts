@@ -32,6 +32,7 @@ export interface Ben_ltksitesettingsesBase {
   ben_protectedtimes?: string;
   ben_rosterpatterns?: string;
   ben_site: string;
+  ben_siteorder?: number;
   ben_statepalette?: string;
   ben_timezone?: string;
   ben_titlepalette?: string;

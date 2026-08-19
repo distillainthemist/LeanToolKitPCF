@@ -45,6 +45,19 @@ export async function setSiteArchived(site: string, archived: boolean): Promise<
   );
 }
 
+/** Persist a site order (1-based, in the given sequence) — one upsert per site. */
+export async function saveSiteOrder(sites: string[]): Promise<void> {
+  let i = 1;
+  for (const site of sites) {
+    await upsertWhere(
+      Ben_ltksitesettingsesService,
+      eq("ben_site", site),
+      (row) => row.ben_ltksitesettingsid,
+      { ben_site: site, ben_name: site, ben_siteorder: i++ }
+    );
+  }
+}
+
 /** Per-site hub tab enablement (shared/schema/hubTabs): null = all. */
 export async function siteHubTabs(site: string): Promise<string[] | null> {
   if (site === "") return null;
