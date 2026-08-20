@@ -3350,8 +3350,7 @@ textarea.app-cp-statement { font-size: 14px; font-weight: 500; }
 /* ---- Improvement tab (P5) ---- */
 .app-im-wrap { position: relative; display: flex; flex-direction: column; gap: 10px; padding: 10px 14px 24px; min-height: 240px; }
 /* the Documents-tab header standard: title block left, actions right */
-.app-im-search { display: flex; }
-.app-im-search-input { flex: 1; min-height: 42px; font-size: 14px; }
+.app-im-search-input { flex: 0 1 300px; min-width: 160px; min-height: 40px; font-size: 13px; }
 .app-im-head { display: flex; align-items: flex-start; gap: 8px; flex-wrap: wrap; }
 .app-im-head-left { display: flex; flex-direction: column; gap: 2px; }
 .app-im-head-title { font-size: 22px; font-weight: 800; line-height: 1.2; }

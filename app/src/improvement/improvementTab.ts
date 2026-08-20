@@ -142,7 +142,6 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
     let filtersOpen = false;
     const render = () => {
       clear(wrap);
-      wrap.appendChild(renderSearch());
       wrap.appendChild(renderHeader());
       if (filtersOpen) wrap.appendChild(renderFilterRow());
       const groups = groupInitiatives(list.filter(visible), viewer);
@@ -201,10 +200,12 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
         }
       }
       // 3 — everything I can see
-      table.appendChild(groupHead(`All initiatives I can see · ${groups.all.length}`));
-      if (groups.all.length === 0) table.appendChild(note(`No initiatives for ${f.period || "this period"} in this org.`));
+      const mineIds = new Set(groups.mine.map((x) => x.id));
+      const others = groups.all.filter((x) => !mineIds.has(x.id));
+      table.appendChild(groupHead(`Other initiatives · ${others.length}`));
+      if (others.length === 0) table.appendChild(note(`No other initiatives for ${f.period || "this period"}.`));
       else table.appendChild(columnHead());
-      for (const i of groups.all) table.appendChild(rowFor(i, ""));
+      for (const i of others) table.appendChild(rowFor(i, ""));
       if (groups.hiddenConfidential > 0) table.appendChild(note(`· ${groups.hiddenConfidential} confidential in this org`));
       wrap.appendChild(table);
     };
@@ -230,25 +231,6 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
     };
     const note = (text: string): HTMLElement => el("div", "app-settings-note app-im-note", text);
 
-    /** The register anatomy leads with search (ui-standard §3). */
-    const renderSearch = (): HTMLElement => {
-      const bar = el("div", "app-im-search");
-      const input = el("input", "app-input app-im-search-input") as HTMLInputElement;
-      input.type = "search";
-      input.placeholder = "Search initiatives…";
-      input.value = search;
-      input.addEventListener("input", () => {
-        search = input.value.trim();
-        const at = input.selectionStart;
-        render();
-        const fresh = wrap.querySelector<HTMLInputElement>(".app-im-search-input");
-        fresh?.focus();
-        if (fresh && at !== null) fresh.setSelectionRange(at, at);
-      });
-      bar.appendChild(input);
-      return bar;
-    };
-
     /** The Documents-tab header standard: title + scope subtitle + count
      *  on the left; ＋ primary · Filters · List|Tiles · on the right. The
      *  filter selects live behind the Filters button, not in a raw row. */
@@ -266,15 +248,30 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
       const add = btn("＋ Initiative", "app-btn app-btn-primary");
       add.addEventListener("click", () => openCreate());
       head.appendChild(add);
+      // search sits between ＋ Initiative and Filters (Ben, 2026-08-20)
+      const input = el("input", "app-input app-im-search-input") as HTMLInputElement;
+      input.type = "search";
+      input.placeholder = "Search initiatives…";
+      input.value = search;
+      input.addEventListener("input", () => {
+        search = input.value.trim();
+        const at = input.selectionStart;
+        render();
+        const fresh = wrap.querySelector<HTMLInputElement>(".app-im-search-input");
+        fresh?.focus();
+        if (fresh && at !== null) fresh.setSelectionRange(at, at);
+      });
+      head.appendChild(input);
       const filters = btn(activeFilterCount() > 0 ? `Filters · ${activeFilterCount()}` : "Filters", "app-btn" + (filtersOpen ? " app-im-filters-on" : ""));
       filters.addEventListener("click", () => {
         filtersOpen = !filtersOpen;
         render();
       });
       head.appendChild(filters);
-      const seg = el("div", "app-cp-seg");
-      const listBtn = btn("List", "app-cp-seg-btn" + (viewMode === "list" ? " app-cp-seg-on" : ""));
-      const tilesBtn = btn("Tiles", "app-cp-seg-btn" + (viewMode === "tiles" ? " app-cp-seg-on" : ""));
+      // the Documents-tab segmented control (accent fill on the active side)
+      const seg = el("div", "app-docs-seg");
+      const listBtn = btn("List", "app-docs-segbtn" + (viewMode === "list" ? " app-docs-segbtn-on" : ""));
+      const tilesBtn = btn("Tiles", "app-docs-segbtn" + (viewMode === "tiles" ? " app-docs-segbtn-on" : ""));
       listBtn.addEventListener("click", () => {
         viewMode = "list";
         render();
@@ -495,19 +492,29 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
     const actor = () => ({ whoId: viewer.whoId, who: me?.who ?? who?.name ?? "" });
 
     const setFlag = async (i: Initiative, flag: Initiative["flag"]) => {
-      let note = "";
       if (flag === "escalated") {
-        const ok = await promptConfirm({
-          title: "Escalate to the sponsor?",
-          note: "This marks the initiative escalated (red). Teams/email notification arrives with the initiative board update.",
-          confirmLabel: "Escalate",
-          danger: true,
+        const { openEscalateDialog } = await import("./escalate");
+        const sponsors = (i.roles.sponsor ?? [])
+          .map((p) => ({ name: p.who, email: roster.find((r) => r.whoId === p.whoId)?.email ?? "" }))
+          .filter((p) => p.email !== "");
+        openEscalateDialog({
+          host: wrap,
+          initiativeTitle: i.title,
+          orgLine: `${actor().who} escalated "${i.title}" (${i.org.site}${i.org.department ? " · " + i.org.department : ""})`,
+          recipients: sponsors,
+          link: `${window.location.origin}${window.location.pathname}${window.location.search}#/board/${i.boardId}`,
+          onEscalate: async (note) => {
+            i.flag = "escalated";
+            i.flagNote = note;
+            await saveInitiative(i);
+            await appendInitiativeEvent(i, "flag", { flag: "escalated", note }, actor());
+            render();
+          },
         });
-        if (!ok) return;
-        note = i.flagNote;
+        return;
       }
       i.flag = flag;
-      i.flagNote = note;
+      i.flagNote = "";
       await saveInitiative(i);
       await appendInitiativeEvent(i, "flag", { flag }, actor());
       render();

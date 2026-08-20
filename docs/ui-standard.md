@@ -46,7 +46,9 @@ the same commit.
   selected = dark fill `#26241f` white text. People = initials circles
   (`.app-ib-avatar` / owner chips). Status chips tinted bg + strong fg.
 - **Toggles**: `.app-tw-toggle` (self-updating). Segmented controls:
-  `.app-cp-seg` with `.app-cp-seg-on` dark fill.
+  `.app-docs-seg` / `.app-docs-segbtn(-on)` — rounded 8px frame, active
+  side ACCENT-filled (the Documents look). The dark-filled `.app-cp-seg`
+  in Priorities is legacy — migrate on touch.
 - **Kebab menus**: `.app-cp-menu` fixed popover, `.app-cp-menu-h` small
   caps section heads, ●/○ prefix for radio-ish items.
 

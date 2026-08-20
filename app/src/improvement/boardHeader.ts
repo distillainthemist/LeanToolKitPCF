@@ -574,27 +574,26 @@ export function mountInitiativeHeader(o: InitiativeHeaderOpts): () => void {
     };
 
     const escalate = async () => {
-      const need = prompt("This notifies the sponsor by Teams and email. Say what you need.\ne.g. two fitters for one shift");
-      if (need === null || need.trim() === "") return;
-      i.flag = "escalated";
-      i.flagNote = need.trim();
-      await persist();
-      await appendInitiativeEvent(i, "flag", { flag: "escalated", note: i.flagNote }, actor());
-      render();
-      // sponsor = header people + the site's standard fillers
+      // the document-control notify anatomy (Ben, 2026-08-20): recipient
+      // chips + message + send by Teams or email, outcome in place
+      const { openEscalateDialog } = await import("./escalate");
       const sponsors = actorsForRole("sponsor")
         .map((p) => ({ name: p.who, email: emailOf(p.whoId) }))
         .filter((p) => p.email !== "");
-      if (sponsors.length > 0) {
-        // the docs notify road (Teams first, email fallback) — dynamic import
-        void import("../docs/notify").then(async ({ sendNotifyTeams, sendNotifyEmail }) => {
-          const subject = `Escalated: ${i.title}`;
-          const msg = `${actor().who} escalated "${i.title}" (${i.org.site}${i.org.department ? " · " + i.org.department : ""}): ${i.flagNote}`;
-          const link = `${window.location.origin}${window.location.pathname}${window.location.search}#/board/${i.boardId}`;
-          const t = await sendNotifyTeams(sponsors, subject, msg, link);
-          if (t.error !== "") await sendNotifyEmail(sponsors, subject, msg, link);
-        }).catch(() => undefined);
-      }
+      openEscalateDialog({
+        host: band,
+        initiativeTitle: i.title,
+        orgLine: `${actor().who} escalated "${i.title}" (${i.org.site}${i.org.department ? " · " + i.org.department : ""})`,
+        recipients: sponsors,
+        link: `${window.location.origin}${window.location.pathname}${window.location.search}#/board/${i.boardId}`,
+        onEscalate: async (note) => {
+          i.flag = "escalated";
+          i.flagNote = note;
+          await persist();
+          await appendInitiativeEvent(i, "flag", { flag: "escalated", note }, actor());
+          render();
+        },
+      });
     };
 
     // ---- stage filter (§2.3) -----------------------------------------------------
