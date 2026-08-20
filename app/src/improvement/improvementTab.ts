@@ -117,9 +117,11 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
       (f.method === "" || i.method === f.method) &&
       (f.pdca === "" || i.snapshot.stages.find((s) => s.id === i.stageId)?.pdca === f.pdca);
 
+    let filtersOpen = false;
     const render = () => {
       clear(wrap);
-      wrap.appendChild(renderToolbar());
+      wrap.appendChild(renderHeader());
+      if (filtersOpen) wrap.appendChild(renderFilterRow());
       const groups = groupInitiatives(list.filter(visible), viewer);
       if (viewMode === "tiles") {
         // wall view (design 1.2): tiles for at-distance reading
@@ -135,6 +137,7 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
       // 1 — my initiatives
       table.appendChild(groupHead(`My initiatives · ${groups.mine.length}`));
       if (groups.mine.length === 0) table.appendChild(note("You don't hold a role on any initiative yet."));
+      else table.appendChild(columnHead());
       for (const i of groups.mine) table.appendChild(rowFor(i, myRoles(i, viewer.whoId).map((k) => roleLabel(i, k)).join(", ")));
       // 2 — owned by my team (org owners only)
       if (ownedOrgKeys.length > 0) {
@@ -163,6 +166,7 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
         head.appendChild(gantt);
         table.appendChild(head);
         if (scoped.length === 0) table.appendChild(note(`No initiatives in your orgs for ${f.period || "this period"}.`));
+        else table.appendChild(columnHead());
         for (const i of scoped.slice(0, 5)) table.appendChild(rowFor(i, `${(i.roles.owner ?? [])[0]?.who ?? "no owner"} · ${i.org.department || i.org.site}`));
         if (scoped.length > 5) {
           const more = btn(`Show all ${scoped.length} ›`, "app-link app-im-more");
@@ -176,6 +180,7 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
       // 3 — everything I can see
       table.appendChild(groupHead(`All initiatives I can see · ${groups.all.length}`));
       if (groups.all.length === 0) table.appendChild(note(`No initiatives for ${f.period || "this period"} in this org.`));
+      else table.appendChild(columnHead());
       for (const i of groups.all) table.appendChild(rowFor(i, ""));
       if (groups.hiddenConfidential > 0) table.appendChild(note(`· ${groups.hiddenConfidential} confidential in this org`));
       wrap.appendChild(table);
@@ -186,61 +191,45 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
       h.appendChild(el("span", "app-im-group-label", label));
       return h;
     };
+
+    /** The Documents-tab column header row — same labels as the spec. */
+    const columnHead = (): HTMLElement => {
+      const h = el("div", "app-im-row app-im-colhead");
+      h.append(
+        el("span", undefined, "Initiative"),
+        el("span", undefined, "Stage"),
+        el("span", undefined, "Primary metric"),
+        el("span", undefined, "Next gate"),
+        el("span", undefined, "Health"),
+        el("span", undefined, "")
+      );
+      return h;
+    };
     const note = (text: string): HTMLElement => el("div", "app-settings-note app-im-note", text);
 
-    const renderToolbar = (): HTMLElement => {
-      const bar = el("div", "app-im-toolbar");
-      const sel = (opts: [string, string][], cur: string, on: (v: string) => void): HTMLSelectElement => {
-        const s = el("select", "app-input app-im-select") as HTMLSelectElement;
-        for (const [v, l] of opts) {
-          const o = el("option", "", l) as HTMLOptionElement;
-          o.value = v;
-          if (v === cur) o.selected = true;
-          s.appendChild(o);
-        }
-        s.addEventListener("change", () => on(s.value));
-        return s;
-      };
-      bar.appendChild(sel([["", "All sites"], ...sites.map((s) => [s.site, s.site] as [string, string])], f.site, (v) => {
-        f.site = v;
-        render();
-      }));
-      bar.appendChild(
-        sel(
-          [["", "All stages"], ["plan", "Plan"], ["do", "Do"], ["check", "Check"], ["act", "Act"]],
-          f.pdca,
-          (v) => {
-            f.pdca = v;
-            render();
-          }
-        )
-      );
-      const periods = [...new Set([currentPeriod, ...list.map((i) => i.period)])].filter((p) => p !== "").sort();
-      bar.appendChild(sel([["", "All periods"], ...periods.map((p) => [p, p] as [string, string])], f.period, (v) => {
-        f.period = v;
-        render();
-      }));
-      bar.appendChild(
-        sel(
-          [["active", "Active"], ["completed", "Completed"], ["archived", "Archived"], ["all", "All"]],
-          f.status,
-          (v) => {
-            f.status = v;
-            render();
-          }
-        )
-      );
-      bar.appendChild(sel([["", "All methods"], ...imp.methods.map((m) => [m, m] as [string, string])], f.method, (v) => {
-        f.method = v;
-        render();
-      }));
-      const flag = btn(f.flagOnly ? "⚑ Flagged ✕" : "⚑ Flagged", "app-btn app-im-flagbtn" + (f.flagOnly ? " app-im-flagbtn-on" : ""));
-      flag.addEventListener("click", () => {
-        f.flagOnly = !f.flagOnly;
+    /** The Documents-tab header standard: title + scope subtitle + count
+     *  on the left; ＋ primary · Filters · List|Tiles · on the right. The
+     *  filter selects live behind the Filters button, not in a raw row. */
+    const activeFilterCount = (): number =>
+      [f.pdca !== "", f.status !== "active", f.method !== "", f.flagOnly, f.period !== currentPeriod].filter(Boolean).length;
+    const renderHeader = (): HTMLElement => {
+      const head = el("div", "app-im-head");
+      const left = el("div", "app-im-head-left");
+      left.appendChild(el("div", "app-im-head-title", `Improvement — ${f.site || "All sites"}`));
+      left.appendChild(el("div", "app-im-head-sub", f.period || "All periods"));
+      const matching = list.filter(visible).length;
+      left.appendChild(el("div", "app-im-head-count", `${matching} initiative${matching === 1 ? "" : "s"} matching`));
+      head.appendChild(left);
+      head.appendChild(el("span", "app-bar-gap"));
+      const add = btn("＋ Initiative", "app-btn app-btn-primary");
+      add.addEventListener("click", () => openCreate());
+      head.appendChild(add);
+      const filters = btn(activeFilterCount() > 0 ? `Filters · ${activeFilterCount()}` : "Filters", "app-btn" + (filtersOpen ? " app-im-filters-on" : ""));
+      filters.addEventListener("click", () => {
+        filtersOpen = !filtersOpen;
         render();
       });
-      bar.appendChild(flag);
-      bar.appendChild(el("span", "app-cp-spacer"));
+      head.appendChild(filters);
       const seg = el("div", "app-cp-seg");
       const listBtn = btn("List", "app-cp-seg-btn" + (viewMode === "list" ? " app-cp-seg-on" : ""));
       const tilesBtn = btn("Tiles", "app-cp-seg-btn" + (viewMode === "tiles" ? " app-cp-seg-on" : ""));
@@ -253,10 +242,57 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
         render();
       });
       seg.append(listBtn, tilesBtn);
-      bar.appendChild(seg);
-      const add = btn("＋ Initiative", "app-btn app-btn-primary");
-      add.addEventListener("click", () => openCreate());
-      bar.appendChild(add);
+      head.appendChild(seg);
+      return head;
+    };
+
+    const renderFilterRow = (): HTMLElement => {
+      const bar = el("div", "app-im-toolbar");
+      const sel = (label: string, opts: [string, string][], cur: string, on: (v: string) => void): HTMLElement => {
+        const wrapEl = el("label", "app-im-filter");
+        wrapEl.appendChild(el("span", "app-im-filter-label", label));
+        const s = el("select", "app-input app-im-select") as HTMLSelectElement;
+        for (const [v, l] of opts) {
+          const o = el("option", "", l) as HTMLOptionElement;
+          o.value = v;
+          if (v === cur) o.selected = true;
+          s.appendChild(o);
+        }
+        s.addEventListener("change", () => on(s.value));
+        wrapEl.appendChild(s);
+        return wrapEl;
+      };
+      bar.appendChild(sel("Site", [["", "All sites"], ...sites.map((s) => [s.site, s.site] as [string, string])], f.site, (v) => {
+        f.site = v;
+        render();
+      }));
+      bar.appendChild(
+        sel("Stage", [["", "All"], ["plan", "Plan"], ["do", "Do"], ["check", "Check"], ["act", "Act"]], f.pdca, (v) => {
+          f.pdca = v;
+          render();
+        })
+      );
+      const periods = [...new Set([currentPeriod, ...list.map((i) => i.period)])].filter((p) => p !== "").sort();
+      bar.appendChild(sel("Period", [["", "All"], ...periods.map((p) => [p, p] as [string, string])], f.period, (v) => {
+        f.period = v;
+        render();
+      }));
+      bar.appendChild(
+        sel("Status", [["active", "Active"], ["completed", "Completed"], ["archived", "Archived"], ["all", "All"]], f.status, (v) => {
+          f.status = v;
+          render();
+        })
+      );
+      bar.appendChild(sel("Method", [["", "All"], ...imp.methods.map((m) => [m, m] as [string, string])], f.method, (v) => {
+        f.method = v;
+        render();
+      }));
+      const flag = btn(f.flagOnly ? "⚑ Flagged ✕" : "⚑ Flagged", "app-btn app-im-flagbtn" + (f.flagOnly ? " app-im-flagbtn-on" : ""));
+      flag.addEventListener("click", () => {
+        f.flagOnly = !f.flagOnly;
+        render();
+      });
+      bar.appendChild(flag);
       return bar;
     };
 

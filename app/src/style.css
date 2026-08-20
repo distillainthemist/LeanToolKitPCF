@@ -3349,29 +3349,53 @@ textarea.app-cp-statement { font-size: 14px; font-weight: 500; }
 .app-tw-stdfield-opts { flex: 1 1 140px; min-width: 0; font-size: 12.5px; }
 /* ---- Improvement tab (P5) ---- */
 .app-im-wrap { position: relative; display: flex; flex-direction: column; gap: 10px; padding: 10px 14px 24px; min-height: 240px; }
-.app-im-toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.app-im-select { width: auto; min-width: 110px; }
+/* the Documents-tab header standard: title block left, actions right */
+.app-im-head { display: flex; align-items: flex-start; gap: 8px; flex-wrap: wrap; }
+.app-im-head-left { display: flex; flex-direction: column; gap: 2px; }
+.app-im-head-title { font-size: 22px; font-weight: 800; line-height: 1.2; }
+.app-im-head-sub { font-size: 13px; color: #6d675c; }
+.app-im-head-count { font-size: 13px; color: #6d675c; margin-top: 4px; }
+.app-im-head .app-btn { min-height: 40px; }
+.app-im-filters-on { border-color: var(--app-accent); color: var(--app-accent); }
+.app-im-toolbar { display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap; padding: 10px 12px; background: #faf9f7; border: 1px solid #f1efec; border-radius: 10px; }
+.app-im-filter { display: flex; flex-direction: column; gap: 3px; }
+.app-im-filter-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: #6d675c; font-weight: 700; }
+.app-im-select { width: auto; min-width: 120px; }
 .app-im-flagbtn-on { background: #fff7e0; border-color: #f0c36d; color: #7a4d00; }
-.app-im-table { display: flex; flex-direction: column; gap: 6px; }
-.app-im-group { display: flex; align-items: center; gap: 12px; margin-top: 14px; padding: 4px 2px; border-bottom: 2px solid #26241f; }
-.app-im-group-label { font-weight: 700; font-size: 14px; flex: 1; }
+.app-im-table { display: flex; flex-direction: column; }
+.app-im-group { display: flex; align-items: center; gap: 12px; margin-top: 18px; padding: 4px 2px 6px; }
+.app-im-group-label { font-weight: 700; font-size: 15px; flex: 1; }
+.app-im-colhead {
+  border: none !important;
+  border-bottom: 1px solid #ece8e0 !important;
+  border-radius: 0 !important;
+  background: none !important;
+  cursor: default !important;
+  padding-top: 2px !important;
+  padding-bottom: 6px !important;
+  min-height: 0;
+}
+.app-im-colhead span { font-size: 11.5px; text-transform: none; color: #6d675c; font-weight: 600; }
 .app-im-scope { width: auto; font-size: 12.5px; min-height: 32px; }
 .app-im-gantt:disabled { color: #a39c90; cursor: default; }
 .app-im-note { padding: 6px 2px; }
 .app-im-more { align-self: flex-start; cursor: pointer; border: none; background: none; padding: 6px 2px; }
+/* flat rows with hairline dividers (the Documents register look); the
+   4px status edge stays — it is the design's one full-strength colour */
 .app-im-row {
   display: grid;
   grid-template-columns: 1fr 130px 170px 170px 100px 36px;
   gap: 10px;
   align-items: center;
   background: #fff;
-  border: 1px solid #e4dfd6;
+  border: none;
+  border-bottom: 1px solid #f1efec;
   border-left: 4px solid #9a948a;
-  border-radius: 8px;
-  padding: 8px 4px 8px 12px;
+  border-radius: 0;
+  padding: 10px 4px 10px 12px;
   cursor: pointer;
 }
-.app-im-row:hover { border-color: #cfc8bc; border-left-width: 4px; }
+.app-im-row:hover { background: #faf9f7; }
 .app-im-main { min-width: 0; }
 .app-im-title { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .app-im-title-text { font-weight: 600; font-size: 13.5px; }
