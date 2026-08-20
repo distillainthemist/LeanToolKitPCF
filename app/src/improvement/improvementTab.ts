@@ -275,8 +275,15 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
         }
       }
       row.appendChild(gateCell);
-      // health — arrives with P6
-      row.appendChild(el("div", "app-im-cell app-cp-muted", "Not checked"));
+      // health — last check stored on the row (boardHeader writes it)
+      let healthText = "Not checked";
+      try {
+        const h = JSON.parse(i.fieldValues.__health ?? "null") as { score?: number; of?: number; at?: string } | null;
+        if (h && typeof h.score === "number") healthText = `${h.score} / ${h.of ?? 10} · ${(h.at ?? "").slice(5, 7)}/${(h.at ?? "").slice(2, 4)}`;
+      } catch {
+        /* not checked */
+      }
+      row.appendChild(el("div", "app-im-cell" + (healthText === "Not checked" ? " app-cp-muted" : ""), healthText));
       // kebab
       const kebab = btn("⋮", "app-cp-kebab app-im-kebab");
       kebab.addEventListener("click", (e) => {

@@ -114,6 +114,16 @@ export interface ImprovementSettings {
    *  2026-08-20) — the counterpart of standard roles. Templates add their
    *  own on top in the wizard's Fields step. */
   standardFields: TemplateField[];
+  /** The company health-check question set (decision 12) — periodic
+   *  evaluations against these from any initiative board. */
+  healthQuestions: HealthQuestion[];
+}
+
+export interface HealthQuestion {
+  key: string;
+  label: string;
+  scale: "yesno" | "scale5";
+  weight: number;
 }
 
 /** The people who may act for a role on a SITE's initiative: the role's
@@ -155,9 +165,20 @@ export function parseImprovementSettings(raw: string): ImprovementSettings {
     const fields = Array.isArray((o as { standardFields?: unknown }).standardFields)
       ? parseFields(JSON.stringify((o as { standardFields?: unknown }).standardFields))
       : [];
-    return { methods: methods.length > 0 ? methods : [...METHODS], standardRoles: roles, standardFields: fields };
+    const health = Array.isArray((o as { healthQuestions?: unknown }).healthQuestions)
+      ? ((o as { healthQuestions?: unknown }).healthQuestions as unknown[])
+          .map((x) => (x && typeof x === "object" ? (x as Record<string, unknown>) : {}))
+          .map((x) => ({
+            key: typeof x.key === "string" ? x.key : "",
+            label: typeof x.label === "string" ? x.label : "",
+            scale: (x.scale === "yesno" ? "yesno" : "scale5") as HealthQuestion["scale"],
+            weight: typeof x.weight === "number" && x.weight > 0 ? x.weight : 1,
+          }))
+          .filter((q) => q.key !== "" && q.label !== "")
+      : [];
+    return { methods: methods.length > 0 ? methods : [...METHODS], standardRoles: roles, standardFields: fields, healthQuestions: health };
   } catch {
-    return { methods: [...METHODS], standardRoles: [], standardFields: [] };
+    return { methods: [...METHODS], standardRoles: [], standardFields: [], healthQuestions: [] };
   }
 }
 
@@ -166,6 +187,7 @@ export function serializeImprovementSettings(s: ImprovementSettings): string {
     methods: s.methods,
     standardRoles: s.standardRoles.map((r) => ({ key: r.key, label: r.label, multi: r.multi, timeCommitment: r.timeCommitment, people: r.people })),
     standardFields: s.standardFields,
+    healthQuestions: s.healthQuestions,
   });
 }
 

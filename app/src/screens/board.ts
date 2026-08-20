@@ -138,6 +138,14 @@ async function renderBoard(
   let cardRows = await rowsForBoard(board.boardId);
   stopLoading(); // data is in — the layout below builds synchronously
   let current: InstanceSummary | null = null;
+  // A project board (initiative boards: "init-…") has no occurrences: it
+  // renders its LIVE rows (instanceId "") through a synthetic open
+  // instance, hides the scheduler pane, and — for initiative boards —
+  // wears the initiative header band (P6a).
+  const standalone = board.kind === "project";
+  if (standalone) {
+    current = { id: "", boardId: board.boardId, when: "", status: "open", isAdhoc: false, manifestRaw: "" };
+  }
 
   // an adjusted meeting renders its own override manifest instead
   const activeManifest = () =>
@@ -194,7 +202,7 @@ async function renderBoard(
   const gridView = new BoardGridView(rightHost, {
     onSelect: (e) => {
       if (e.action === "open" && current) {
-        window.location.hash = `#/edit/${board.boardId}/${current.id}/${e.cardId}`;
+        window.location.hash = `#/edit/${board.boardId}/${standalone ? "live" : current.id}/${e.cardId}`;
       }
     },
     onLayout: () => undefined, // edit mode arrives with the composer slice
@@ -365,10 +373,14 @@ async function renderBoard(
   // sit there showing none.
   await refreshBoardActions();
 
+  // initiative boards: the header's Current stage / All stages filter
+  // narrows which slots render (slot.settings.template.stage)
+  let slotFilter: ((settings: Record<string, unknown>) => boolean) | null = null;
   const renderTiles = () => {
     if (!current) return;
-    const m = activeManifest();
-    const adjusted = m !== boardManifest;
+    const raw = activeManifest();
+    const m = slotFilter === null ? raw : { ...raw, slots: raw.slots.filter((sl) => slotFilter!(sl.settings)) };
+    const adjusted = raw !== boardManifest;
     // card title bars carry their theme colour; cards without one fall
     // back to the meeting/app accent (same rule as the walk view's tabs)
     const fallbackBar =
@@ -389,7 +401,7 @@ async function renderBoard(
     // a friendly date + chips, never "2026-07-31T07:00 — closed"
     // (design review Phase 2.1)
     clear(status);
-    status.appendChild(document.createTextNode(friendlyWhen(current.when)));
+    if (!standalone) status.appendChild(document.createTextNode(friendlyWhen(current.when)));
     if (current.status === "closed") {
       status.appendChild(statusChip("🔒 Closed — archived snapshots", "neutral"));
     }
@@ -657,6 +669,38 @@ async function renderBoard(
     dot.style.background = catColor;
     catRow.append(dot, el("span", "app-pane-catname", board.category));
     rightHost.prepend(catRow);
+  }
+  if (standalone) {
+    // no occurrences: the board IS the record. Hide the schedule pane and
+    // its toggle; initiative boards mount the header band above the grid.
+    setScheduleHidden(true);
+    scheduleBtn.style.display = "none";
+    if (board.boardId.startsWith("init-")) {
+      const headerHost = el("div", "app-ib-host");
+      rightHost.prepend(headerHost);
+      void import("../improvement/boardHeader").then(({ mountInitiativeHeader }) => {
+        cleanups.push(
+          mountInitiativeHeader({
+            host: headerHost,
+            boardId: board.boardId,
+            onStageFilter: (mode, currentStageId) => {
+              slotFilter =
+                mode === "all"
+                  ? null
+                  : (settings) => {
+                      const tpl = (settings.template ?? {}) as Record<string, unknown>;
+                      const stage = typeof tpl.stage === "string" ? tpl.stage : "";
+                      return stage === "" || stage === currentStageId;
+                    };
+              renderTiles();
+            },
+          })
+        );
+      });
+    }
+    renderTiles();
+    applyLiveMode();
+    return;
   }
   // no selection yet: the pane menu offers the ritual's own link
   schedulerView.setMeetingLink(boardUrl(board.boardId));

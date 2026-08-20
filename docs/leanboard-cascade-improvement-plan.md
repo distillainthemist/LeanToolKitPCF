@@ -437,6 +437,33 @@ reschedule/cancel history with a reason picklist.
   links with ★ primary, roles PRE-FILLED from the site's standard-role
   fillers, standard + template fields, metric targets, confidential;
   lands on the new board).
+- **P6a Initiative board header — BUILT 2026-08-20 (dev, app-only)** —
+  board.ts gains a STANDALONE mode (kind=project: synthetic live
+  instance, live rows, scheduler pane + toggle hidden, cards edit via
+  the "live" editor without the standard-content suffix); `init-` boards
+  mount `improvement/boardHeader.ts` above the grid (lazy; board chunk
+  +1 kB). Tier 1: Improvement crumb · org · title · flag/confidential
+  chips · overlapped role avatars +n · Health button (score · date once
+  checked; stored in fieldValues.__health so the tab's Health column
+  reads it without an event query) · ▴/▾ (persisted) · ⋮ (flag,
+  escalate, endorsement toggle, archive). Tier 2: stage stepper (done ✓
+  tinted → gate history popup; current filled+outlined; next tappable →
+  move dialog, gated → request; future ⚑ dashed when gated), gate line
+  ("Next gate — Do → Check, date" red when overdue; per-role ✓/◐/✕
+  chips; Request gate / Approve / Decline — approvers = header people +
+  the site's standard-role fillers via actorsForRole; all-approved moves
+  the stage, a decline holds with the reason), commentary (latest
+  High/Low/Next + Add + History; events kind=comment). Escalate prompts
+  "say what you need", then notifies the sponsors via the docs notify
+  road (dynamic import; Teams chat + card, email fallback). Current
+  stage / All stages filter narrows the grid by slot.template.stage.
+  HEALTH QUESTIONS joined the improvement settings (label · yes-no or
+  1–5 · weight; score normalised to /10). Events reader
+  `listInitiativeEvents`.
+- **P6b (next)** — metric KPI cards with values, kanban Verify/evidence/
+  reschedule upgrades, bound charter fields (+ the wizard's ⛓ toggle),
+  ＋ Add card from template, stage chips + 2px ring on tiles, future-
+  stage placeholders, Tiles view on the tab, Teams notify hardening.
 - **P8 Gantt · P9 VDT + simulation · P10 Reporting** — designed
   (spec §2–§4); build after P5/P6.
 

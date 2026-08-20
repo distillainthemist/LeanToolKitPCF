@@ -253,7 +253,7 @@ export function mountCardEditor(
       const back = el("a", "app-btn", onClose ? "‹ Done" : "‹ Back") as HTMLAnchorElement;
       back.href = backHref;
       const heading =
-        (slot.title || cardLabel(slot.cardType)) + (isLive ? " — standard content" : "");
+        (slot.title || cardLabel(slot.cardType)) + (isLive && board.kind !== "project" ? " — standard content" : "");
       bar.append(back, el("span", "app-board-title", heading), saved);
       if (isLive) {
         bar.appendChild(

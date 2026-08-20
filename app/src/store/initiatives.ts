@@ -117,6 +117,29 @@ export async function appendInitiativeEvent(
   } as never);
 }
 
+export interface InitiativeEvent {
+  kind: string;
+  detail: Record<string, unknown>;
+  actorId: string;
+  actorName: string;
+  at: string;
+}
+
+export async function listInitiativeEvents(i: Initiative): Promise<InitiativeEvent[]> {
+  if (!i.rowId) return [];
+  const rows = await allWhere(Ben_ltkinitiativeeventsService.getAll, `_ben_initiative_value eq ${i.rowId}`, undefined, ["ben_at desc"]);
+  return rows.map((r) => {
+    let detail: Record<string, unknown> = {};
+    try {
+      const o = JSON.parse(r.ben_detailjson ?? "{}") as unknown;
+      if (o && typeof o === "object" && !Array.isArray(o)) detail = o as Record<string, unknown>;
+    } catch {
+      detail = {};
+    }
+    return { kind: r.ben_kind ?? "", detail, actorId: r.ben_actorid ?? "", actorName: r.ben_actorname ?? "", at: r.ben_at ?? "" };
+  });
+}
+
 /** Create an initiative from a template: snapshot, stage targets, and —
  *  unless single-action — a fresh project board holding the template's
  *  MANDATORY cards (stage tags kept for P6's current-stage filter). */
