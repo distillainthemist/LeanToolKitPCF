@@ -481,6 +481,16 @@ export function mountInitiativeHeader(o: InitiativeHeaderOpts): () => void {
         });
         menu.appendChild(b);
       };
+      item("Edit details…", () => {
+        void import("./editDetails").then(({ openEditDetails }) => {
+          openEditDetails({
+            host: band,
+            initiative: i,
+            actor: actor(),
+            onSaved: () => window.location.reload(),
+          });
+        });
+      }, !mine());
       item(i.flag === "" ? "⚐ Flag — needs support" : "Clear flag", () => {
         void (async () => {
           i.flag = i.flag === "" ? "flag" : "";

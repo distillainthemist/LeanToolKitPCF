@@ -470,6 +470,21 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
       };
       const mine = myRoles(i, viewer.whoId).length > 0 || viewer.isAdmin;
       item("Open", () => openInitiative(i), i.boardId === "");
+      item("Edit details…", () => {
+        void import("./editDetails").then(({ openEditDetails }) => {
+          openEditDetails({
+            host: wrap,
+            initiative: i,
+            actor: actor(),
+            onSaved: () => {
+              void listInitiatives().then((fresh) => {
+                list = fresh;
+                render();
+              });
+            },
+          });
+        });
+      }, !mine);
       item(i.flag === "" ? "⚐ Flag — needs support" : "Clear flag", () => void setFlag(i, i.flag === "" ? "flag" : ""), !mine);
       item("▲ Escalate to sponsor", () => void setFlag(i, "escalated"), !mine || i.flag === "escalated");
       item("Health check (next update)", () => undefined, true);
