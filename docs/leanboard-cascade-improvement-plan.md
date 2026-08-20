@@ -402,7 +402,12 @@ reschedule/cancel history with a reason picklist.
   approval step assigned to the role (`roleFillersAt`, the rule P6's
   gates implement). The board step is
   INLINE (mountDesigner in .ltk-mw-boardhost, the meeting wizard's exact
-  pattern) — no overlay.
+  pattern) — no overlay. FURTHER (Ben, 2026-08-20): step order is Basics ·
+  ROLES · Stages & gates · Fields · Metrics · Board · Review (roles
+  before the gates that name them); STANDARD FIELDS join the improvement
+  settings (header fields every initiative carries, template regardless
+  — shown read-only atop the wizard's Fields step); standard roles are
+  org-styled cards with per-site app-owner people chips.
 - **P8 Gantt · P9 VDT + simulation · P10 Reporting** — designed
   (spec §2–§4); build after P5/P6.
 
