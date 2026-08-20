@@ -1153,7 +1153,10 @@ const REGISTRY: Record<string, CardMounter> = {
       // status and the setting silently did nothing.
       groupBy: (groupBy === "issue" ? "issue" : "status") as never,
       columns: parseKanbanColumns(cfgRaw(opts, "kanbanColumns")),
+      verifyColumn: config(opts).verifyColumn === true,
+      rescheduleReasons: config(opts).rescheduleReasons === true,
     });
+    editor.setActor(opts.viewer);
     editor.setActions(opts.actions);
     return () => opts.host.replaceChildren();
   },

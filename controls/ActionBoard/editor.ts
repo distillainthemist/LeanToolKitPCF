@@ -91,6 +91,10 @@ export class ActionBoardEditor {
   private readOnly = false;
   private view: BoardView = "list";
   private groupBy: KanbanGroupBy = "status";
+  private verifyColumn = false;
+  private rescheduleReasons = false;
+  /** The signed-in viewer — stamps verifications ("" = unknown). */
+  private actor: { whoId: string; who: string } = { whoId: "", who: "" };
   /** Configured "by issue" columns; empty = discovered from the actions. */
   private fixedColumns: string[] = [];
   private readonly snapshots: SnapshotScheduler;
@@ -155,6 +159,10 @@ export class ActionBoardEditor {
     this.render();
   }
 
+  setActor(actor: { whoId: string; who: string }): void {
+    this.actor = actor;
+  }
+
   setReadOnly(ro: boolean): void {
     if (this.readOnly !== ro) {
       this.readOnly = ro;
@@ -167,15 +175,26 @@ export class ActionBoardEditor {
     groupBy: KanbanGroupBy;
     /** Fixed "by issue" columns; empty = whatever issues the actions have. */
     columns?: string[];
+    /** Initiative boards (design 2.4): a fourth kanban column, Verify —
+     *  done work awaiting the owner; moving Verify → Done stamps who
+     *  verified. */
+    verifyColumn?: boolean;
+    /** Initiative boards: a due-date change on an existing action prompts
+     *  "Why is this moving?" and records the answer in its history. */
+    rescheduleReasons?: boolean;
   }): void {
     const cols = opts.columns ?? [];
     if (
       this.view === opts.view &&
       this.groupBy === opts.groupBy &&
+      this.verifyColumn === (opts.verifyColumn === true) &&
+      this.rescheduleReasons === (opts.rescheduleReasons === true) &&
       JSON.stringify(cols) === JSON.stringify(this.fixedColumns)
     ) {
       return;
     }
+    this.verifyColumn = opts.verifyColumn === true;
+    this.rescheduleReasons = opts.rescheduleReasons === true;
     // re-fit the gantt whenever it is (re)entered
     if (opts.view === "gantt" && this.view !== "gantt") this.ganttAutoFit = true;
     this.view = opts.view;
@@ -304,13 +323,21 @@ export class ActionBoardEditor {
 
   private columns(visible: LtkAction[]): { key: string; label: string; items: LtkAction[] }[] {
     if (this.groupBy === "status") {
-      return STATUS_COLUMNS.map((c) => ({
+      // initiative boards get the fourth column (design 2.4); elsewhere
+      // "verify" keeps showing in Done with its marker
+      const defs = this.verifyColumn
+        ? ([
+            { status: "open", label: "To do" },
+            { status: "in-progress", label: "Doing" },
+            { status: "verify", label: "Verify" },
+            { status: "done", label: "Done" },
+          ] as { status: ActionStatus; label: string }[])
+        : STATUS_COLUMNS;
+      return defs.map((c) => ({
         key: c.status,
         label: c.label,
-        // "verify" (done, awaiting the initiative owner) shows in Done with
-        // its own marker until the initiative board's Verify column (P6)
         items: visible.filter(
-          (a) => a.status === c.status || (c.status === "done" && a.status === "verify")
+          (a) => a.status === c.status || (!this.verifyColumn && c.status === "done" && a.status === "verify")
         ),
       }));
     }
@@ -725,9 +752,16 @@ export class ActionBoardEditor {
 
   private dropInColumn(a: LtkAction, key: string): void {
     if (this.groupBy === "status") {
+      const wasVerify = a.status === "verify";
       a.status = key as ActionStatus;
-      const done = a.status === "done";
+      // verify = the work is done, awaiting the owner; done from verify
+      // stamps who verified (decision 6's endorsement)
+      const done = a.status === "done" || a.status === "verify";
       for (const x of a.assignees) x.done = done;
+      if (a.status === "done" && wasVerify && this.actor.whoId !== "") {
+        a.verified = { whoId: this.actor.whoId, who: this.actor.who, when: new Date().toISOString().slice(0, 10) };
+      }
+      if (a.status !== "done") a.verified = undefined;
     } else {
       a.issue = key;
     }
@@ -756,13 +790,65 @@ export class ActionBoardEditor {
     });
   }
 
+  /** "Why is this moving?" — the design's fixed picklist. */
+  private promptReschedule(from: string, to: string, done: (reason: string | null) => void): void {
+    const overlay = el("div", "ltk-ab-resched");
+    const box = el("div", "ltk-ab-resched-box");
+    box.appendChild(el("div", "ltk-ab-resched-title", "Why is this moving?"));
+    box.appendChild(el("div", "ltk-ab-resched-note", `${from || "no date"} → ${to || "no date"}`));
+    for (const r of ["Waiting on parts", "Resource unavailable", "Scope changed", "Blocked by another action"]) {
+      const b = el("button", "ltk-ab-resched-opt", r) as HTMLButtonElement;
+      b.type = "button";
+      b.addEventListener("click", () => {
+        overlay.remove();
+        done(r);
+      });
+      box.appendChild(b);
+    }
+    const skip = el("button", "ltk-ab-resched-skip", "Cancel the change") as HTMLButtonElement;
+    skip.type = "button";
+    skip.addEventListener("click", () => {
+      overlay.remove();
+      done(null);
+    });
+    box.appendChild(skip);
+    overlay.appendChild(box);
+    this.root.appendChild(overlay);
+  }
+
   private editAction(action: LtkAction): void {
+    const prevDue = action.due;
     openActionDialog({
       host: this.root,
       action,
       people: this.people,
       isNew: false,
-      onCommit: () => this.commit(),
+      onCommit: () => {
+        if (this.rescheduleReasons && action.due !== prevDue && prevDue !== "") {
+          // a due-date move on an initiative action is never silent
+          this.promptReschedule(prevDue, action.due, (reason) => {
+            if (reason === null) {
+              action.due = prevDue; // the change is cancelled with the prompt
+            } else {
+              action.history = [
+                ...(action.history ?? []),
+                {
+                  kind: "rescheduled",
+                  whoId: this.actor.whoId,
+                  who: this.actor.who,
+                  when: new Date().toISOString().slice(0, 10),
+                  from: prevDue,
+                  to: action.due,
+                  reason,
+                },
+              ];
+            }
+            this.commit();
+          });
+          return;
+        }
+        this.commit();
+      },
     });
   }
 

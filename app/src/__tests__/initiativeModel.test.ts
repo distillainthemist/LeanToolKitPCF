@@ -119,3 +119,18 @@ describe("cascade bridge (P6b)", () => {
     expect(map.get("p2")?.length).toBe(1);
   });
 });
+
+describe("metric-value RAG (P6c)", () => {
+  it("limits beat target; direction decides amber/green; empty = null", async () => {
+    const m = await import("../improvement/initiativeModel");
+    const base = { last: 61, target: 75, usl: null, lsl: null, goodDirection: "up" as const };
+    expect(m.metricRag(base)).toBe("amber");
+    expect(m.metricRag({ ...base, last: 80 })).toBe("green");
+    expect(m.metricRag({ ...base, goodDirection: "down", last: 61 })).toBe("green");
+    expect(m.metricRag({ ...base, lsl: 65, last: 61 })).toBe("red");
+    expect(m.metricRag({ ...base, last: null })).toBeNull();
+    expect(m.metricRag({ ...base, target: null })).toBeNull();
+    expect(m.worstMetricRag(["green", null, "amber"])).toBe("amber");
+    expect(m.worstMetricRag([null])).toBeNull();
+  });
+});

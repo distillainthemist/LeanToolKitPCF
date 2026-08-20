@@ -35,6 +35,13 @@ export async function rowsForBoard(boardId: string): Promise<CardRow[]> {
   return rows.map(fromRow);
 }
 
+/** Live rows across every initiative board (P6c metric rollup) —
+ *  one query; the caller joins them to manifests. */
+export async function rowsForInitiativeBoards(): Promise<(CardRow & { boardId: string })[]> {
+  const rows = await allWhere(Ben_ltkcarddatasService.getAll, "startswith(ben_boardid,'init-')");
+  return rows.map((r) => ({ ...fromRow(r), boardId: r.ben_boardid ?? "" })).filter((r) => r.instanceId === "");
+}
+
 export async function instanceRow(
   instanceGuid: string,
   cardId: string

@@ -329,3 +329,34 @@ export function initiativesByPriority(list: Initiative[]): Map<string, Initiativ
   }
   return map;
 }
+
+// ---- metric-value RAG (P6c) ---------------------------------------------------------
+
+export interface MetricReading {
+  /** The metric's last charted value, or null when nothing charted. */
+  last: number | null;
+  target: number | null;
+  usl: number | null;
+  lsl: number | null;
+  goodDirection: "up" | "down" | "range";
+}
+
+/** One metric's RAG from its last reading: outside spec limits → red;
+ *  short of target (in the good direction) → amber; meeting it → green;
+ *  nothing charted / no target → null (the flags decide alone). */
+export function metricRag(r: MetricReading): "green" | "amber" | "red" | null {
+  if (r.last === null) return null;
+  if ((r.usl !== null && r.last > r.usl) || (r.lsl !== null && r.last < r.lsl)) return "red";
+  if (r.target === null) return null;
+  if (r.goodDirection === "down") return r.last <= r.target ? "green" : "amber";
+  if (r.goodDirection === "range") return "green"; // inside limits (checked above)
+  return r.last >= r.target ? "green" : "amber";
+}
+
+/** The worst of an initiative's metric RAGs (red > amber > green > null). */
+export function worstMetricRag(rags: ("green" | "amber" | "red" | null)[]): "green" | "amber" | "red" | null {
+  if (rags.includes("red")) return "red";
+  if (rags.includes("amber")) return "amber";
+  if (rags.includes("green")) return "green";
+  return null;
+}

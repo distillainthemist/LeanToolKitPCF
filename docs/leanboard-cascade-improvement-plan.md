@@ -476,10 +476,26 @@ reschedule/cancel history with a reason picklist.
   from template** (the template's optional set not yet on the board,
   stage-named). Improvement rows wear their live RAG edge; the metric
   column reads "name → target".
-- **P6c (next)** — kanban Verify column + evidence attach + reschedule
-  reason prompt (ActionBoard control work), bound charter fields (+ the
-  wizard's ⛓ toggle), stage chips + 2px ring on tiles, future-stage
-  placeholders, Tiles view on the tab, metric-value rollup into RAG.
+- **P6c — BUILT 2026-08-20 (dev, app-only)** — KANBAN: the ActionBoard
+  gains a config-gated **Verify column** (To do · Doing · Verify · Done;
+  verify = work done awaiting the owner, assignees marked done; Verify →
+  Done stamps `verified` {who, when} via the new setActor) and
+  **reschedule reasons** (an existing action's due move prompts the
+  design's four-reason picklist — cancel restores the date — and records
+  an ActionHistoryEntry); both are registry fields any card can toggle
+  and are FORCED ON (with kanban view) for the action plan cloned into
+  every new initiative board. METRIC VALUES: seeded KPI slots carry
+  `settings.metric.key`; `rowsForInitiativeBoards` (one startswith query)
+  + `buildMetricState` (metricValues.ts) read each card's last charted
+  point vs in-card target/limits (definition target as fallback,
+  goodDirection from the metric def) → `metricRag`/`worstMetricRag`
+  (pure, tested) → the initiative's RAG now includes its METRIC STATE in
+  the Improvement rows, the priorities tallies and the overlay; the
+  tab's metric column reads "OEE 61% / 75%" with the value coloured only
+  when off-target.
+- **P6d (next)** — bound charter fields (+ the wizard's ⛓ toggle),
+  evidence attach on actions, stage chips + 2px ring on tiles,
+  future-stage placeholders, Tiles view on the tab.
 - **P8 Gantt · P9 VDT + simulation · P10 Reporting** — designed
   (spec §2–§4); build after P5/P6.
 

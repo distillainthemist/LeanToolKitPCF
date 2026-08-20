@@ -58,6 +58,7 @@ import { initialsFor } from "../../../shared/schema/people";
 import { carryForwardFlow, cascadeDialog, cascadeReview, closeDialog, closePriority, LifecycleCtx, openPriorityOverlay, reopenPriority, sendCascade } from "./lifecycle";
 import { initiativesByPriority, ragInputsFor } from "../improvement/initiativeModel";
 import { PDCA_TOKENS } from "../improvement/templateModel";
+import { buildMetricState } from "../improvement/metricValues";
 import {
   canCustomiseAt,
   canManageOrg,
@@ -234,7 +235,8 @@ interface ScreenState {
 function makeRagsFor(
   byPriority: Map<string, import("../improvement/initiativeModel").Initiative[]>,
   actions: import("../../../shared/schema/actions").LtkAction[],
-  allPriorities: () => Priority[]
+  allPriorities: () => Priority[],
+  metricStateRef: Map<string, { rag: "green" | "amber" | "red" | null }>
 ): (p: Priority) => Rag[] {
   const today = todayIso();
   return (p) => {
@@ -245,7 +247,9 @@ function makeRagsFor(
       for (const i of byPriority.get(id) ?? []) {
         if (seen.has(i.id)) continue;
         seen.add(i.id);
-        out.push(initiativeRag(ragInputsFor(i, actions, today)));
+        const inputs = ragInputsFor(i, actions, today);
+        inputs.metric = metricStateRef.get(i.id)?.rag ?? null;
+        out.push(initiativeRag(inputs));
       }
     }
     return out;
@@ -273,12 +277,15 @@ export function mountPriorities(parent: HTMLElement, opts: PrioritiesMountOpts =
       loadPriorityPrefs(who?.objectId ?? ""),
       memo("siteCascade", allSitePrioritySettings),
     ]);
-    // initiatives + their actions (P6b): the tallies' live inputs. A
-    // failure leaves the tallies grey rather than blocking the matrix.
-    const [initiativeList, initiativeActions] = await Promise.all([
+    // initiatives + their actions + metric values (P6b/c): the tallies'
+    // live inputs. A failure leaves the tallies grey, never blocks the matrix.
+    const [initiativeList, initiativeActions, initBoards, initRows] = await Promise.all([
       memo("initiatives", () => import("../store/initiatives").then((m) => m.listInitiatives())).catch(() => []),
       memo("initActions", () => import("../store/actions").then((m) => m.actionsForInitiatives())).catch(() => []),
+      memo("initBoards", () => import("../store/boards").then((m) => m.listBoards())).catch(() => []),
+      memo("initRows", () => import("../store/cards").then((m) => m.rowsForInitiativeBoards())).catch(() => []),
     ]);
+    const metricState = buildMetricState(initiativeList, initBoards, initRows);
     if (dead) return;
     const companyList = [...new Set(Object.values(siteCo).filter((c) => c !== ""))];
     const tree = buildTree(rawTree, siteCo, companyList);
@@ -331,7 +338,7 @@ export function mountPriorities(parent: HTMLElement, opts: PrioritiesMountOpts =
     };
 
     const byPriority = initiativesByPriority(initiativeList);
-    const ragsFor = makeRagsFor(byPriority, initiativeActions, () => data.priorities);
+    const ragsFor = makeRagsFor(byPriority, initiativeActions, () => data.priorities, metricState);
     let data: CascadeData = await memo(`cascade|${state.org.company}`, () => loadCascade(state.org.company));
     if (dead) return;
     stopLoading();
@@ -399,6 +406,7 @@ export function mountPriorities(parent: HTMLElement, opts: PrioritiesMountOpts =
             if (seen.has(i.id)) continue;
             seen.add(i.id);
             const inputs = ragInputsFor(i, initiativeActions, today);
+            inputs.metric = metricState.get(i.id)?.rag ?? null;
             const stage = i.snapshot.stages.find((st) => st.id === i.stageId) ?? null;
             const tokens = stage ? PDCA_TOKENS[stage.pdca] : null;
             const visible =

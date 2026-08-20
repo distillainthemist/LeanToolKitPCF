@@ -18,6 +18,9 @@ import { loadCascade } from "../store/priorities";
 import { listTemplates } from "../store/templates";
 import { appendInitiativeEvent, createInitiative, listInitiatives, saveInitiative } from "../store/initiatives";
 import { actionsForInitiatives, upsertActions } from "../store/actions";
+import { listBoards } from "../store/boards";
+import { rowsForInitiativeBoards } from "../store/cards";
+import { buildMetricState } from "./metricValues";
 import { newAction } from "../../../shared/schema/actions";
 import { promptConfirm } from "../prompts";
 import { parseOrgTree } from "../../../shared/schema/meeting";
@@ -64,7 +67,7 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
 
   void (async () => {
     const who = currentViewer();
-    const [initiatives, templates, roster, owners, treeRaw, siteCo, impRaw, prSettingsRaw, initActions] = await Promise.all([
+    const [initiatives, templates, roster, owners, treeRaw, siteCo, impRaw, prSettingsRaw, initActions, allBoards, initRows] = await Promise.all([
       listInitiatives(),
       listTemplates(),
       listPeople(),
@@ -74,6 +77,8 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
       improvementSettingsJson(),
       prioritySettingsJson(),
       actionsForInitiatives().catch(() => []),
+      listBoards().catch(() => []),
+      rowsForInitiativeBoards().catch(() => []),
     ]);
     if (dead) return;
     stopLoading();
@@ -90,6 +95,7 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
       isAdmin: me?.role === "superadmin" || me?.role === "siteadmin",
     };
     let list = initiatives;
+    const metricState = buildMetricState(initiatives, allBoards, initRows);
 
     interface Filters {
       site: string;
@@ -239,7 +245,9 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
       const row = el("div", "app-im-row");
       // status edge = the initiative's RAG (flags + action position; metric
       // values join the mix with reporting)
-      const rag = initiativeRag(ragInputsFor(i, initActions, todayIso()));
+      const inputs = ragInputsFor(i, initActions, todayIso());
+      inputs.metric = metricState.get(i.id)?.rag ?? null;
+      const rag = initiativeRag(inputs);
       row.style.borderLeftColor =
         rag === "red" ? "#b3261e" : rag === "amber" ? "#c77d0a" : rag === "green" ? "#1f7a3f" : "#9a948a";
       const main = el("div", "app-im-main");
@@ -265,12 +273,26 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
       }
       row.appendChild(stageCell);
       // primary metric — values arrive with P6's metric cards
-      const metricCell = el("div", "app-im-cell app-cp-muted");
-      metricCell.textContent =
-        i.metrics.length > 0
-          ? `${i.metrics[0].name}${i.metrics[0].target !== null ? ` → ${i.metrics[0].target}${i.metrics[0].unit}` : ""}`
-          : "No metric set";
-      metricCell.title = i.metrics.length > 0 ? "Values live on the initiative board's KPI cards" : "";
+      const metricCell = el("div", "app-im-cell");
+      const mv = (metricState.get(i.id)?.values ?? [])[0] ?? null;
+      if (mv && mv.last !== null) {
+        // value + / target — the value takes the state colour only when
+        // off-target (design 1.2)
+        const v = el("span", undefined, `${mv.last}${mv.unit}`);
+        if (mv.rag === "amber") v.style.color = "#c77d0a";
+        if (mv.rag === "red") v.style.color = "#b3261e";
+        if (mv.rag !== "green" && mv.rag !== null) v.style.fontWeight = "700";
+        metricCell.appendChild(el("span", "app-cp-muted", `${mv.name} `));
+        metricCell.appendChild(v);
+        if (mv.target !== null) metricCell.appendChild(el("span", "app-cp-muted", ` / ${mv.target}${mv.unit}`));
+      } else {
+        metricCell.classList.add("app-cp-muted");
+        metricCell.textContent =
+          i.metrics.length > 0
+            ? `${i.metrics[0].name}${i.metrics[0].target !== null ? ` → ${i.metrics[0].target}${i.metrics[0].unit}` : ""}`
+            : "No metric set";
+        metricCell.title = i.metrics.length > 0 ? "Chart values on the initiative board's KPI card" : "";
+      }
       row.appendChild(metricCell);
       // next gate
       const gateCell = el("div", "app-im-cell");

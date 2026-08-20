@@ -292,4 +292,12 @@ export const ACTIONBOARD_CSS = `
 }
 .ltk-ab-add:hover { border-color: var(--ltk-accent); color: var(--ltk-accent); }
 .ltk-ab-verify { color: var(--ltk-muted); font-style: italic; margin-left: 6px; }
+
+.ltk-ab-resched { position: absolute; inset: 0; z-index: 40; background: rgba(20,20,20,0.4); display: flex; align-items: center; justify-content: center; }
+.ltk-ab-resched-box { background: #fff; border-radius: 10px; padding: 16px 18px; display: flex; flex-direction: column; gap: 8px; min-width: 260px; box-shadow: 0 8px 32px rgba(0,0,0,0.3); }
+.ltk-ab-resched-title { font-weight: 700; font-size: 14px; }
+.ltk-ab-resched-note { font-size: 12px; color: #6d675c; }
+.ltk-ab-resched-opt { border: 1.5px solid #d9d3c8; background: #fff; border-radius: 999px; font: inherit; font-size: 13px; padding: 8px 14px; cursor: pointer; min-height: 40px; }
+.ltk-ab-resched-opt:hover { border-color: var(--ltk-accent); color: var(--ltk-accent); }
+.ltk-ab-resched-skip { border: none; background: none; font: inherit; font-size: 12.5px; color: #6d675c; cursor: pointer; padding: 6px; }
 `;

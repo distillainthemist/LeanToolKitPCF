@@ -183,7 +183,15 @@ export async function createInitiative(
         cardId: s.cardId,
         cardType: s.cardType,
         title: s.title,
-        settingsJSON: s.settings,
+        // the initiative's action plan gets the Verify column + reschedule
+        // reasons (design 2.4) whatever the template author set
+        settingsJSON:
+          s.cardType === "ActionBoard"
+            ? {
+                ...s.settings,
+                config: { ...((s.settings.config ?? {}) as Record<string, unknown>), view: "kanban", verifyColumn: true, rescheduleReasons: true },
+              }
+            : s.settings,
       }));
       // one KPI-trend card per mandatory metric (design 2.4) — titled with
       // the metric and its target; owners enter dated values in-card
@@ -197,7 +205,9 @@ export async function createInitiative(
           cardId: `kpi-${rand()}`,
           cardType: "KpiTrendCard",
           title: `${m.name}${m.unit !== "" ? ` (${m.unit})` : ""}${m.target !== null ? ` → ${m.target}` : ""}`,
-          settingsJSON: { template: { stage: "", mandatory: true } },
+          // metric.key ties the card to its definition — the RAG rollup and
+          // the tab's metric value read it back through the manifest
+          settingsJSON: { template: { stage: "", mandatory: true }, metric: { key: m.key } },
         });
       }
       await upsertWhere(
