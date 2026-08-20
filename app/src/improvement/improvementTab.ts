@@ -24,7 +24,9 @@ import { buildMetricState } from "./metricValues";
 import { newAction } from "../../../shared/schema/actions";
 import { promptConfirm } from "../prompts";
 import { parseOrgTree } from "../../../shared/schema/meeting";
-import { periodFor, parsePrioritySettings } from "../priorities/model";
+import { periodFor, parsePrioritySettings, ragPaletteKey } from "../priorities/model";
+import { paletteMap } from "../../../shared/palette";
+import { appPalettes } from "../store/config";
 import { todayIso } from "../../../shared/schema/id";
 import {
   groupInitiatives,
@@ -67,7 +69,7 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
 
   void (async () => {
     const who = currentViewer();
-    const [initiatives, templates, roster, owners, treeRaw, siteCo, impRaw, prSettingsRaw, initActions, allBoards, initRows] = await Promise.all([
+    const [initiatives, templates, roster, owners, treeRaw, siteCo, impRaw, prSettingsRaw, initActions, allBoards, initRows, palettes] = await Promise.all([
       listInitiatives(),
       listTemplates(),
       listPeople(),
@@ -79,6 +81,7 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
       actionsForInitiatives().catch(() => []),
       listBoards().catch(() => []),
       rowsForInitiativeBoards().catch(() => []),
+      appPalettes(),
     ]);
     if (dead) return;
     stopLoading();
@@ -96,6 +99,9 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
     };
     let list = initiatives;
     const metricState = buildMetricState(initiatives, allBoards, initRows);
+    // state colours resolve through the SITE STATE PALETTE (ui-standard §1)
+    const stateColors = paletteMap(palettes.states);
+    const ragColor = (rag: "green" | "amber" | "red" | "grey"): string => stateColors[ragPaletteKey(rag)] ?? "#9a948a";
 
     interface Filters {
       site: string;
@@ -303,8 +309,7 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
       const inputs = ragInputsFor(i, initActions, todayIso());
       inputs.metric = metricState.get(i.id)?.rag ?? null;
       const rag = initiativeRag(inputs);
-      row.style.borderLeftColor =
-        rag === "red" ? "#b3261e" : rag === "amber" ? "#c77d0a" : rag === "green" ? "#1f7a3f" : "#9a948a";
+      row.style.borderLeftColor = ragColor(rag);
       const main = el("div", "app-im-main");
       const titleLine = el("div", "app-im-title");
       titleLine.appendChild(el("span", "app-im-title-text", i.title));
@@ -334,8 +339,7 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
         // value + / target — the value takes the state colour only when
         // off-target (design 1.2)
         const v = el("span", undefined, `${mv.last}${mv.unit}`);
-        if (mv.rag === "amber") v.style.color = "#c77d0a";
-        if (mv.rag === "red") v.style.color = "#b3261e";
+        if (mv.rag === "amber" || mv.rag === "red") v.style.color = ragColor(mv.rag);
         if (mv.rag !== "green" && mv.rag !== null) v.style.fontWeight = "700";
         metricCell.appendChild(el("span", "app-cp-muted", `${mv.name} `));
         metricCell.appendChild(v);
@@ -388,7 +392,7 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
       inputs.metric = metricState.get(i.id)?.rag ?? null;
       const rag = initiativeRag(inputs);
       const tile = el("div", "app-im-tile");
-      tile.style.borderTopColor = rag === "red" ? "#b3261e" : rag === "amber" ? "#c77d0a" : rag === "green" ? "#1f7a3f" : "#9a948a";
+      tile.style.borderTopColor = ragColor(rag);
       tile.appendChild(el("div", "app-im-tile-title", i.title));
       const stage = i.snapshot.stages.find((s) => s.id === i.stageId) ?? null;
       const line = el("div", "app-im-tile-line");

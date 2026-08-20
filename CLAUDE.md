@@ -159,3 +159,6 @@ Version lives in the tag alone — nothing is stamped into files.
 - docs/deploy-to-new-org.md — full new-org/prod setup incl. permission
   levels and content-approval site steps.
 - docs/leanboard-phase5-plan.md — the DMS lifecycle + date model record.
+- docs/ui-standard.md — the visual UI standard (tokens, page anatomy,
+  overlays, wizards, settings lists). Read BEFORE styling any new
+  surface; state colours ALWAYS resolve through the site state palette.
