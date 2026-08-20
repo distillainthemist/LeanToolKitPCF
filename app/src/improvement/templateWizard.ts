@@ -484,6 +484,7 @@ export function mountTemplateWizard(parent: HTMLElement, templateId: string): ()
       }
       const KINDS: { value: FieldKind; label: string }[] = [
         { value: "text", label: "Text" },
+        { value: "longtext", label: "Long text" },
         { value: "number", label: "Number" },
         { value: "date", label: "Date" },
         { value: "picklist", label: "Picklist" },
@@ -993,6 +994,7 @@ export async function renderImprovementSettings(body: HTMLElement, isSuper: bool
     const fBox = section("Standard fields", "Header fields EVERY initiative carries, whichever template it uses — the counterpart of standard roles. Templates add their own fields on top.");
     const KIND_OPTS: { value: FieldKind; label: string }[] = [
       { value: "text", label: "Text" },
+      { value: "longtext", label: "Long text" },
       { value: "number", label: "Number" },
       { value: "date", label: "Date" },
       { value: "picklist", label: "Picklist" },

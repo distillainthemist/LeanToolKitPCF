@@ -44,7 +44,7 @@ export interface TemplateRole {
   timeCommitment: boolean;
 }
 
-export type FieldKind = "text" | "number" | "date" | "picklist" | "person";
+export type FieldKind = "text" | "longtext" | "number" | "date" | "picklist" | "person";
 
 export interface TemplateField {
   key: string;
@@ -319,7 +319,7 @@ export function parseFields(raw: string): TemplateField[] {
       .map((x) => ({
         key: str(x.key),
         label: str(x.label),
-        kind: (["text", "number", "date", "picklist", "person"].includes(str(x.kind)) ? str(x.kind) : "text") as FieldKind,
+        kind: (["text", "longtext", "number", "date", "picklist", "person"].includes(str(x.kind)) ? str(x.kind) : "text") as FieldKind,
         options: arr(x.options).map((o) => str(o)).filter((o) => o !== ""),
         required: bool(x.required),
       }))

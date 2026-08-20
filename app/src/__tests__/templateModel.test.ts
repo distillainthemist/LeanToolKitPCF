@@ -40,6 +40,7 @@ describe("initiative templates — model", () => {
     expect(parseFields('[{"key":"site_cost","label":"Cost centre","kind":"picklist","options":["A","B"],"required":true},{"label":"nokey"}]')).toEqual([
       { key: "site_cost", label: "Cost centre", kind: "picklist", options: ["A", "B"], required: true },
     ]);
+    expect(parseFields('[{"key":"notes","label":"Notes","kind":"longtext"}]')[0].kind).toBe("longtext");
     expect(parseMetrics('[{"key":"oee","name":"OEE","unit":"%","target":75,"goodDirection":"up","tracking":"value"}]')[0].target).toBe(75);
     expect(parseMetrics("nope")).toEqual([]);
   });

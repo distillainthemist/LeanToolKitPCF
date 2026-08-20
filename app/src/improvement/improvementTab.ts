@@ -587,6 +587,11 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
             }
             s.addEventListener("change", () => (fieldValues[cf.key] = s.value));
             field(cf.label + (cf.required ? " *" : ""), s);
+          } else if (cf.kind === "longtext") {
+            const ta = el("textarea", "app-input") as HTMLTextAreaElement;
+            ta.rows = 3;
+            ta.addEventListener("change", () => (fieldValues[cf.key] = ta.value.trim()));
+            field(cf.label + (cf.required ? " *" : ""), ta);
           } else {
             const inp = el("input", "app-input") as HTMLInputElement;
             inp.type = cf.kind === "number" ? "number" : cf.kind === "date" ? "date" : "text";
