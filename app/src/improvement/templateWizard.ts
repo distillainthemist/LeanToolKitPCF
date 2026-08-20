@@ -14,7 +14,7 @@ import { newId } from "../../../shared/schema/id";
 import { appTheme, editorHost } from "../cardHost";
 import { showLoading } from "../loading";
 import { currentViewer, detectHost } from "../runtime";
-import { promptConfirm } from "../prompts";
+import { promptConfirm, promptText } from "../prompts";
 import { listPeople, viewerPerson } from "../store/people";
 import { companies, improvementSettingsJson, orgJson, saveImprovementSettingsJson } from "../store/config";
 import { getBoard, saveManifest } from "../store/boards";
@@ -872,16 +872,25 @@ export async function renderImprovementSettings(body: HTMLElement, isSuper: bool
     const paintRoles = () => {
       clear(roleList);
       imp.standardRoles.forEach((r, i) => {
-        const card = el("div", "app-tw-role");
-        const head = el("div", "app-tw-role-head");
-        const label = el("input", "ltk-mw-input app-tw-role-label") as HTMLInputElement;
-        label.value = r.label;
-        label.addEventListener("change", () => {
-          r.label = label.value.trim() || r.label;
-          persist();
+        // the org editor's vocabulary: a dept-style card, pencil rename,
+        // owner-style person chips per site
+        const card = el("div", "app-dept-card");
+        const head = el("div", "app-dept-head");
+        head.appendChild(el("span", "app-dept-name", r.label));
+        const edit = el("button", "app-org-edit", "\u270e") as HTMLButtonElement;
+        edit.type = "button";
+        edit.title = "Rename role";
+        edit.addEventListener("click", () => {
+          void promptText({ title: "Rename role", initial: r.label, confirmLabel: "Rename" }).then((v) => {
+            const name = (v ?? "").trim();
+            if (name === "" || name === r.label) return;
+            r.label = name;
+            persist();
+            paintRoles();
+          });
         });
-        head.appendChild(label);
-        const tcSel = el("select", "ltk-mw-input app-tw-role-tc") as HTMLSelectElement;
+        head.appendChild(edit);
+        const tcSel = el("select", "app-input app-tw-role-tc") as HTMLSelectElement;
         for (const [v, l] of [["off", "Time commitment not asked"], ["on", "Time commitment asked"]] as const) {
           const o = el("option", undefined, l) as HTMLOptionElement;
           o.value = v;
@@ -905,22 +914,20 @@ export async function renderImprovementSettings(body: HTMLElement, isSuper: bool
         card.appendChild(head);
         // who fills the role at each site — the approval pool (any may act)
         for (const site of siteNames) {
-          const rowEl = el("div", "app-tw-role-site");
-          rowEl.appendChild(el("span", "app-tw-role-sitename", site));
-          const chips = el("span", "app-tw-role-people");
+          const rowEl = el("div", "app-area-row");
+          rowEl.appendChild(el("span", "app-area-name", site));
           const list = r.people[site] ?? [];
-          list.forEach((p, pi) => {
-            const chip = el("span", "ltk-mw-chip", p.who);
-            const px = el("button", "ltk-mw-chip-x", "×") as HTMLButtonElement;
-            px.type = "button";
-            px.addEventListener("click", () => {
+          list.forEach((pers, pi) => {
+            const chip = el("button", "app-owner", pers.who) as HTMLButtonElement;
+            chip.type = "button";
+            chip.title = `${pers.who} fills ${r.label} at ${site} — click to remove`;
+            chip.addEventListener("click", () => {
               list.splice(pi, 1);
               if (list.length === 0) delete r.people[site];
               persist();
               paintRoles();
             });
-            chip.appendChild(px);
-            chips.appendChild(chip);
+            rowEl.appendChild(chip);
           });
           const add = el("button", "app-owner app-owner-none", "\uFF0B Person") as HTMLButtonElement;
           add.type = "button";
@@ -935,8 +942,7 @@ export async function renderImprovementSettings(body: HTMLElement, isSuper: bool
               paintRoles();
             });
           });
-          chips.appendChild(add);
-          rowEl.appendChild(chips);
+          rowEl.appendChild(add);
           card.appendChild(rowEl);
         }
         if (siteNames.length === 0) card.appendChild(el("div", "app-settings-note", "No sites yet — add them under Organisation."));
