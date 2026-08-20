@@ -87,6 +87,14 @@ the same commit.
 
 ## 5. Cards & tiles
 
+**The canonical card recipe** (audited 2026-08-20 — every standalone
+card uses exactly this): white background · **1px `#e4dfd6` full
+border** · **10px radius** · a 4px status edge on the left where the
+design gives the card a state (6px on TV walk rows) · hover =
+border darkens to `#cfc8bc` when the card is clickable. No shadows.
+Flat hairline ROWS (§3.4) are for registers/tables; anything presented
+as a free-standing object is a card and gets the full recipe.
+
 - Board tiles: title chip strip (per-tile colour from the TITLE palette
   — a separate palette from states, never mixed), optional stage chip
   (PDCA tint) and 2px accent ring for current-stage. Tile snapshots must
@@ -110,3 +118,5 @@ the same commit.
 - Chip class reuse across modules (`app-cp-*` used by Improvement) is
   fine for identical patterns; fork the class the moment behaviour or
   look diverges.
+- ~~Card radii drifted 6/8/10px across priorities/walk/overlay~~ —
+  normalised to the 10px recipe 2026-08-20.
