@@ -3350,6 +3350,8 @@ textarea.app-cp-statement { font-size: 14px; font-weight: 500; }
 /* ---- Improvement tab (P5) ---- */
 .app-im-wrap { position: relative; display: flex; flex-direction: column; gap: 10px; padding: 10px 14px 24px; min-height: 240px; }
 /* the Documents-tab header standard: title block left, actions right */
+.app-im-search { display: flex; }
+.app-im-search-input { flex: 1; min-height: 42px; font-size: 14px; }
 .app-im-head { display: flex; align-items: flex-start; gap: 8px; flex-wrap: wrap; }
 .app-im-head-left { display: flex; flex-direction: column; gap: 2px; }
 .app-im-head-title { font-size: 22px; font-weight: 800; line-height: 1.2; }
@@ -3401,12 +3403,9 @@ textarea.app-cp-statement { font-size: 14px; font-weight: 500; }
 .app-im-title-text { font-weight: 600; font-size: 13.5px; }
 .app-im-meta { font-size: 12px; color: #6d675c; margin-top: 2px; }
 .app-im-chip { font-size: 11px; font-weight: 700; padding: 1px 8px; border-radius: 999px; }
-.app-im-chip-esc { background: #b3261e; color: #fff; }
-.app-im-chip-flag { border: 1px solid #f0c36d; color: #7a4d00; background: #fff7e0; }
 .app-im-chip-conf { border: 1px solid #d9d3c8; color: #6d675c; }
 .app-im-stagechip { font-size: 12px; font-weight: 700; padding: 3px 10px; border-radius: 6px; }
 .app-im-cell { font-size: 12.5px; min-width: 0; }
-.app-im-overdue { color: #b3261e; font-weight: 600; }
 .app-im-awaiting { font-size: 11.5px; font-weight: 700; color: var(--app-accent); }
 .app-im-kebab { position: static; }
 @media (max-width: 900px) {

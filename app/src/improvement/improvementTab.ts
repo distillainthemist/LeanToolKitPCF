@@ -102,6 +102,20 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
     // state colours resolve through the SITE STATE PALETTE (ui-standard §1)
     const stateColors = paletteMap(palettes.states);
     const ragColor = (rag: "green" | "amber" | "red" | "grey"): string => stateColors[ragPaletteKey(rag)] ?? "#9a948a";
+    /** Escalated IS the Issue state, needs-support the At-risk state —
+     *  chips resolve through the palette (ui-standard §1). */
+    const flagChip = (text: string, kind: "escalated" | "flag"): HTMLElement => {
+      const chip = el("span", "app-im-chip", text);
+      const c = kind === "escalated" ? ragColor("red") : ragColor("amber");
+      if (kind === "escalated") {
+        chip.style.background = c;
+        chip.style.color = "#fff";
+      } else {
+        chip.style.border = `1px solid ${c}`;
+        chip.style.color = c;
+      }
+      return chip;
+    };
 
     interface Filters {
       site: string;
@@ -114,8 +128,10 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
     }
     const f: Filters = { site: me?.site ?? "", pdca: "", period: currentPeriod, status: "active", flagOnly: false, method: "", teamScope: "" };
     let viewMode: "list" | "tiles" = "list";
+    let search = "";
 
     const visible = (i: Initiative): boolean =>
+      (search === "" || i.title.toLowerCase().includes(search.toLowerCase())) &&
       (f.site === "" || i.org.site === f.site) &&
       (f.period === "" || i.period === f.period) &&
       (f.status === "all" || i.status === f.status) &&
@@ -126,6 +142,7 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
     let filtersOpen = false;
     const render = () => {
       clear(wrap);
+      wrap.appendChild(renderSearch());
       wrap.appendChild(renderHeader());
       if (filtersOpen) wrap.appendChild(renderFilterRow());
       const groups = groupInitiatives(list.filter(visible), viewer);
@@ -212,6 +229,25 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
       return h;
     };
     const note = (text: string): HTMLElement => el("div", "app-settings-note app-im-note", text);
+
+    /** The register anatomy leads with search (ui-standard §3). */
+    const renderSearch = (): HTMLElement => {
+      const bar = el("div", "app-im-search");
+      const input = el("input", "app-input app-im-search-input") as HTMLInputElement;
+      input.type = "search";
+      input.placeholder = "Search initiatives…";
+      input.value = search;
+      input.addEventListener("input", () => {
+        search = input.value.trim();
+        const at = input.selectionStart;
+        render();
+        const fresh = wrap.querySelector<HTMLInputElement>(".app-im-search-input");
+        fresh?.focus();
+        if (fresh && at !== null) fresh.setSelectionRange(at, at);
+      });
+      bar.appendChild(input);
+      return bar;
+    };
 
     /** The Documents-tab header standard: title + scope subtitle + count
      *  on the left; ＋ primary · Filters · List|Tiles · on the right. The
@@ -313,8 +349,8 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
       const main = el("div", "app-im-main");
       const titleLine = el("div", "app-im-title");
       titleLine.appendChild(el("span", "app-im-title-text", i.title));
-      if (i.flag === "escalated") titleLine.appendChild(el("span", "app-im-chip app-im-chip-esc", "▲ Escalated"));
-      else if (i.flag === "flag") titleLine.appendChild(el("span", "app-im-chip app-im-chip-flag", "⚐ Needs support"));
+      if (i.flag === "escalated") titleLine.appendChild(flagChip("▲ Escalated", "escalated"));
+      else if (i.flag === "flag") titleLine.appendChild(flagChip("⚐ Needs support", "flag"));
       if (i.confidential) titleLine.appendChild(el("span", "app-im-chip app-im-chip-conf", "◈ Confidential"));
       main.appendChild(titleLine);
       const primary = i.priorities.find((p) => p.primary) ?? i.priorities[0] ?? null;
@@ -360,7 +396,11 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
       else {
         const when = ng.target !== "" ? `, ${ng.target.slice(5)}` : "";
         const overdue = ng.target !== "" && ng.target < todayIso();
-        const label = el("span", overdue ? "app-im-overdue" : "", `${ng.fromName} → ${ng.toName}${when}`);
+        const label = el("span", "", `${ng.fromName} → ${ng.toName}${when}`);
+        if (overdue) {
+          label.style.color = ragColor("red");
+          label.style.fontWeight = "600";
+        }
         gateCell.appendChild(label);
         if (ng.gated && ng.approverRoles.some((r) => (i.roles[r] ?? []).some((p) => p.whoId === viewer.whoId))) {
           gateCell.appendChild(el("div", "app-im-awaiting", "awaiting you"));
@@ -403,8 +443,8 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
         chip.style.background = PDCA_TOKENS[stage.pdca].bg;
         line.appendChild(chip);
       }
-      if (i.flag === "escalated") line.appendChild(el("span", "app-im-chip app-im-chip-esc", "▲"));
-      else if (i.flag === "flag") line.appendChild(el("span", "app-im-chip app-im-chip-flag", "⚐"));
+      if (i.flag === "escalated") line.appendChild(flagChip("▲", "escalated"));
+      else if (i.flag === "flag") line.appendChild(flagChip("⚐", "flag"));
       tile.appendChild(line);
       const mv = (metricState.get(i.id)?.values ?? [])[0] ?? null;
       tile.appendChild(

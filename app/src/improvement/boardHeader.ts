@@ -59,6 +59,9 @@ export function mountInitiativeHeader(o: InitiativeHeaderOpts): () => void {
     }
     let i = initiative;
     const imp = parseImprovementSettings(impRaw);
+    const palettes = await import("../store/config").then((m) => m.appPalettes()).catch(() => null);
+    const stateMap = palettes ? (await import("../../../shared/palette")).paletteMap(palettes.states) : {};
+    const stateColor = (key: string): string => (stateMap as Record<string, string>)[key] ?? "#9a948a";
     const me = roster.find((p) => p.whoId === (who?.objectId ?? "")) ?? null;
     const isAdmin = me?.role === "superadmin" || me?.role === "siteadmin";
     const mine = () => myRoles(i, who?.objectId ?? "").length > 0 || isAdmin;
@@ -106,8 +109,16 @@ export function mountInitiativeHeader(o: InitiativeHeaderOpts): () => void {
       t1.appendChild(el("span", "app-ib-title", i.title));
       if (i.flag === "escalated") {
         const sponsor = (i.roles.sponsor ?? [])[0]?.who ?? "sponsor";
-        t1.appendChild(el("span", "app-im-chip app-im-chip-esc", `▲ Escalated to ${sponsor}`));
-      } else if (i.flag === "flag") t1.appendChild(el("span", "app-im-chip app-im-chip-flag", "⚐ Needs support"));
+        const chip = el("span", "app-im-chip", `▲ Escalated to ${sponsor}`);
+        chip.style.background = stateColor("issue");
+        chip.style.color = "#fff";
+        t1.appendChild(chip);
+      } else if (i.flag === "flag") {
+        const chip = el("span", "app-im-chip", "⚐ Needs support");
+        chip.style.border = `1px solid ${stateColor("atrisk")}`;
+        chip.style.color = stateColor("atrisk");
+        t1.appendChild(chip);
+      }
       if (i.confidential) t1.appendChild(el("span", "app-im-chip app-im-chip-conf", "◈ Confidential"));
       if (i.status !== "active") t1.appendChild(el("span", "app-status-badge", i.status));
       t1.appendChild(el("span", "app-bar-gap"));
@@ -188,9 +199,9 @@ export function mountInitiativeHeader(o: InitiativeHeaderOpts): () => void {
         return line;
       }
       const overdue = ng.target !== "" && ng.target < todayIso();
-      line.appendChild(
-        el("span", "app-ib-gatelabel" + (overdue ? " app-im-overdue" : ""), `Next gate — ${ng.fromName} → ${ng.toName}${ng.target !== "" ? `, ${ng.target.slice(5)}` : ""}`)
-      );
+      const gateLabel = el("span", "app-ib-gatelabel", `Next gate — ${ng.fromName} → ${ng.toName}${ng.target !== "" ? `, ${ng.target.slice(5)}` : ""}`);
+      if (overdue) gateLabel.style.color = stateColor("issue");
+      line.appendChild(gateLabel);
       if (!ng.gated) {
         line.appendChild(el("span", "app-cp-muted", "no approval needed"));
         return line;

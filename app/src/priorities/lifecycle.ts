@@ -590,7 +590,10 @@ export function openPriorityOverlay(ctx: LifecycleCtx, p: Priority, onEdit: (p: 
       for (const r of rows2.sort((a, b) => b.overdue - a.overdue)) {
         const line = el("div", "app-cp-ov-init-meta app-cp-ov-actline");
         line.textContent = `${r.title} — ${r.open} open${r.overdue > 0 ? `, ${r.overdue} overdue` : ""}`;
-        if (r.overdue > 0) line.classList.add("app-im-overdue");
+        if (r.overdue > 0) {
+          line.style.color = ctx.palette[ragPaletteKey("red")] ?? "";
+          line.style.fontWeight = "600";
+        }
         body.appendChild(line);
       }
       body.appendChild(el("div", "ltk-mw-help", "The per-action Gantt arrives with the actions timeline update."));
@@ -704,7 +707,12 @@ export function openPriorityOverlay(ctx: LifecycleCtx, p: Priority, onEdit: (p: 
     const totOverdue = initRows.reduce((a, r) => a + r.overdue, 0);
     const acLine = el("div", "app-cp-ov-actions");
     acLine.appendChild(el("span", undefined, `${totOpen} open · `));
-    acLine.appendChild(el("span", totOverdue > 0 ? "app-im-overdue" : "app-cp-ov-overdue-zero", `${totOverdue} overdue`));
+    const overdueEl = el("span", totOverdue > 0 ? "" : "app-cp-ov-overdue-zero", `${totOverdue} overdue`);
+    if (totOverdue > 0) {
+      overdueEl.style.color = ctx.palette[ragPaletteKey("red")] ?? "";
+      overdueEl.style.fontWeight = "600";
+    }
+    acLine.appendChild(overdueEl);
     ac.appendChild(acLine);
     const gantt = btn("Gantt ›", "app-cp-ov-link app-cp-ov-gantt");
     gantt.disabled = true;
