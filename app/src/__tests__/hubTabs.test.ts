@@ -3,7 +3,7 @@ import { DEFAULT_TAB_ORDER, effectiveTabs, parseHubTabs, serializeHubTabs } from
 
 describe("hub tabs (per-site enablement)", () => {
   it("default order puts Priorities before Actions and Documents", () => {
-    expect(DEFAULT_TAB_ORDER).toEqual(["myday", "calendar", "priorities", "actions", "documents"]);
+    expect(DEFAULT_TAB_ORDER).toEqual(["myday", "calendar", "priorities", "improvement", "actions", "documents"]);
   });
   it("parses, drops unknown keys, never locks a site out", () => {
     expect(parseHubTabs("")).toBeNull();

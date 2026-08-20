@@ -258,13 +258,23 @@ export function mountHub(parent: HTMLElement): () => void {
         cleanups.push(mountPriorities(tabHost, { embedded: true }));
       });
     };
+    const mountImprovementTab = (tabHost: HTMLElement) => {
+      void import("../improvement/improvementTab").then(({ mountImprovement }) => {
+        cleanups.push(mountImprovement(tabHost, { embedded: true }));
+      });
+    };
     const extraTabs = (docsCount: number) => [
       { key: "documents", label: "Documents", count: docsCount },
       { key: "priorities", label: "Priorities" },
+      { key: "improvement", label: "Improvement" },
     ];
     const mountDocsTab = (key: string, tabHost: HTMLElement) => {
       if (key === "priorities") {
         mountPrioritiesTab(tabHost);
+        return;
+      }
+      if (key === "improvement") {
+        mountImprovementTab(tabHost);
         return;
       }
       void import("../docs/docsScreen").then(({ mountDocs }) => {
@@ -305,6 +315,8 @@ export function mountHub(parent: HTMLElement): () => void {
       view.selectTab("documents");
     } else if (window.location.hash.startsWith("#/priorities")) {
       view.selectTab("priorities");
+    } else if (window.location.hash.startsWith("#/improvement")) {
+      view.selectTab("improvement");
     }
     if (hosted) {
       // categories and boards came in with the boot round — no re-query

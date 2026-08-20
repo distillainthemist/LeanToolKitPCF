@@ -408,6 +408,35 @@ reschedule/cancel history with a reason picklist.
   settings (header fields every initiative carries, template regardless
   — shown read-only atop the wizard's Fields step); standard roles are
   org-styled cards with per-site app-owner people chips.
+- **P5 Improvement tab + create flow — BUILT 2026-08-20 (dev; next
+  release SOLUTION-CARRYING: ben_ltkinitiative + ben_ltkinitiativeevent)**
+  — schema: ONE initiative row + ONE event table (the priorities
+  pattern; the plan's provisional junction tables folded into JSON
+  columns: snapshot / roles {roleKey:[people]} / priority links /
+  field values / metrics / pending gate / stage target dates; gate
+  HISTORY = events, gate STATE = a JSON column). Model
+  `improvement/initiativeModel.ts` (snapshotOf per design 1.7's rule,
+  stageTargetsFrom cumulative target weeks — LOCAL date math,
+  nextGateFor, the three groups incl. confidentiality with honest
+  hidden-count, myRoles/canSee, validation; 5 tests). Store
+  `store/initiatives.ts` (createInitiative snapshots the template,
+  computes stage targets, clones the template board's MANDATORY slots
+  into a fresh `init-<id>` project board with stage tags kept; the
+  single-action variant writes one linked action instead). UI: hub tab
+  "Improvement" (after Priorities in HUB_TABS — the per-site tab
+  setting picks it up; `#/improvement`): toolbar (site · PDCA · period ·
+  status · method · ⚑ Flagged · Tiles DISABLED until P6 · ＋
+  Initiative), three-group table per design 1.1–1.2 (team group with
+  scope select, `Gantt ›` stub, first-5 + Show all; rows = grey status
+  edge until metric values exist · title + ▲/⚐/◈ chips · meta (role or
+  owner·org) · PDCA stage chip · metric "no value yet" · next gate
+  with overdue red + "awaiting you" · health "Not checked" · ⋮ Open /
+  Flag / Escalate (confirm; Teams notify arrives P6) / Archive, Health
+  check + Move stage stubbed); create flow per 1.3 (template picker
+  with single-action last, header form with org selects, priority
+  links with ★ primary, roles PRE-FILLED from the site's standard-role
+  fillers, standard + template fields, metric targets, confidential;
+  lands on the new board).
 - **P8 Gantt · P9 VDT + simulation · P10 Reporting** — designed
   (spec §2–§4); build after P5/P6.
 

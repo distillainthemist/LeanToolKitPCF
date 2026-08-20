@@ -76,7 +76,13 @@ model section) — the canvas/PCF sections there are historical.
   actions register; `ben_ltkpeoples` is the app's user record (role:
   user/siteadmin/superadmin, site, department — the site drives the
   DMS default filter); `ben_ltksitesettings` and `ben_ltkuserprefs`
-  hold settings — the site row also carries `ben_hubtabs` (per-site
+  hold settings — the APP_ROW also carries `ben_improvementsettings`
+  (methods · standard roles with per-site fillers · standard fields);
+  **Improvement (P5/P7, 2026-08-20):** `ben_ltkinitiativetemplate`
+  (stages/gates/roles/fields/metrics JSON + a template board),
+  `ben_ltkinitiative` (header + snapshot/roles/links/gate JSON columns)
+  and `ben_ltkinitiativeevent` (history, lookup) — all solution-carrying.
+  The site row also carries `ben_hubtabs` (per-site
   enablement of the hub's main tabs; `shared/schema/hubTabs.ts` is the
   one list, default order My day · Cadence · Priorities · Actions ·
   Documents) and `ben_isarchived` (an archived site keeps its row and

@@ -519,10 +519,75 @@ export const TABLES = [
     key: ["ben_templateid"],
     role: { delete: true },
   },
+  // ---- Improvement P5 (2026-08-20): initiatives. One row per initiative +
+  // one event table for its history — the priorities pattern (the plan's
+  // provisional junction tables folded into JSON columns, consistent with
+  // boards/people; gate STATE is a JSON column, gate HISTORY is events).
+  {
+    schema: "ben_LTKInitiative",
+    logical: "ben_ltkinitiative",
+    display: "LeanBoard Initiative",
+    plural: "LeanBoard Initiatives",
+    primaryNameMax: 300,
+    columns: {
+      ben_initiativeid: { ...text(40), display: "Initiative Id", required: true },
+      ben_templateid: { ...text(40), display: "Template Id" },
+      ben_method: { ...text(60), display: "Method" }, // denormalised — survives template versions
+      ben_description: { ...memo(4000), display: "Description" },
+      ben_singleaction: { kind: "bool", display: "Single action", default: false },
+      ben_company: { ...text(100), display: "Company" },
+      ben_site: { ...text(100), display: "Site" },
+      ben_department: { ...text(100), display: "Department" },
+      ben_area: { ...text(100), display: "Area" },
+      ben_stage: { ...text(60), display: "Current stage id" },
+      ben_status: { ...text(20), display: "Status" }, // active | completed | archived
+      ben_confidential: { kind: "bool", display: "Confidential", default: false },
+      ben_flag: { ...text(20), display: "Flag" }, // "" | flag | escalated
+      ben_flagnote: { ...text(400), display: "Flag note" },
+      ben_endorsement: { kind: "bool", display: "Owner endorses completions", default: false },
+      ben_period: { ...text(40), display: "Period" },
+      ben_boardid: { ...text(80), display: "Board Id" },
+      // the initiative's RESOLVED copy of stages/gates/mandatory/metrics at
+      // creation (design 1.7's model note) — only propagating fields read
+      // live from the template
+      ben_snapshotjson: { ...memo(30000), display: "Template snapshot (JSON)" },
+      ben_rolesjson: { ...memo(10000), display: "Roles (JSON)" }, // {roleKey:[{whoId,who}]}
+      ben_prioritiesjson: { ...memo(4000), display: "Linked priorities (JSON)" }, // [{priorityId, primary}]
+      ben_fieldsjson: { ...memo(8000), display: "Field values (JSON)" }, // {fieldKey: value}
+      ben_metricsjson: { ...memo(10000), display: "Metrics (JSON)" },
+      ben_gatejson: { ...memo(4000), display: "Pending gate (JSON)" },
+      ben_stagetargetsjson: { ...memo(2000), display: "Stage target dates (JSON)" },
+    },
+    key: ["ben_initiativeid"],
+    role: { delete: true },
+  },
+  {
+    schema: "ben_LTKInitiativeEvent",
+    logical: "ben_ltkinitiativeevent",
+    display: "LeanBoard Initiative Event",
+    plural: "LeanBoard Initiative Events",
+    primaryNameMax: 400,
+    columns: {
+      ben_kind: { ...text(30), display: "Kind" }, // created·stagemove·gate·flag·health·comment·archived·reopened
+      ben_detailjson: { ...memo(8000), display: "Detail (JSON)" },
+      ben_actorid: { ...text(120), display: "Actor (whoId)" },
+      ben_actorname: { ...text(200), display: "Actor name" },
+      ben_at: { ...text(30), display: "At (ISO)" },
+    },
+    role: { delete: true },
+  },
 ];
 
 /** 1:N relationships (lookup column lives on the referencing table). */
 export const LOOKUPS = [
+  // ---- Improvement P5 ---------------------------------------------------
+  {
+    schemaName: "ben_ltkinitiative_events",
+    referenced: "ben_ltkinitiative",
+    referencing: "ben_ltkinitiativeevent",
+    lookupSchema: "ben_Initiative",
+    display: "Initiative",
+  },
   // ---- Cascaded priorities (P0) ---------------------------------------
   {
     schemaName: "ben_ltkpillar_children",

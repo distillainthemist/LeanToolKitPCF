@@ -157,6 +157,14 @@
         "leanboardinitiativetemplates": {
           "entitySetName": "ben_ltkinitiativetemplates",
           "logicalName": "ben_ltkinitiativetemplate"
+        },
+        "leanboardinitiatives": {
+          "entitySetName": "ben_ltkinitiatives",
+          "logicalName": "ben_ltkinitiative"
+        },
+        "leanboardinitiativeevents": {
+          "entitySetName": "ben_ltkinitiativeevents",
+          "logicalName": "ben_ltkinitiativeevent"
         }
       },
       "environmentVariableName": ""
