@@ -390,4 +390,8 @@ export const CANVAS_CSS = `
 .ltk-cv-value textarea { height: 100%; resize: none; }
 .ltk-cv-rangeedit { display: flex; gap: 6px; }
 .ltk-cv-rangeedit input { flex: 1; min-width: 0; }
+
+.ltk-cv-boundfield { background: #f6f4ef; border: 1.5px dashed #cfc8bc; box-shadow: inset 0 1px 3px rgba(0,0,0,0.05); }
+.ltk-cv-boundglyph { margin-left: 5px; font-size: 11px; color: #a39c90; }
+.ltk-cv-boundglyph-live { color: var(--ltk-accent); }
 `;

@@ -187,12 +187,18 @@ export function mountCardEditor(
     // "live" = the card's standard content (template document), edited
     // from the board designer rather than a meeting record
     const isLive = instanceGuid === "live";
+    // initiative charters read/write the header through the binding (P6d)
+    let charterBinding: import("../../../controls/CanvasCard/types").CanvasBinding | undefined;
     const [board, instance] = await Promise.all([
       memo(`board|${boardId}`, () => getBoard(boardId)),
       isLive
         ? Promise.resolve(null)
         : memo(`inst|${instanceGuid}`, () => getInstance(instanceGuid)),
     ]);
+    if (board && board.boardId.startsWith("init-")) {
+      const { makeInitiativeBinding } = await import("../improvement/binding");
+      charterBinding = (await makeInitiativeBinding(board.boardId, () => window.location.reload())) ?? undefined;
+    }
     // an adjusted meeting's cards live in its override manifest, not
     // (necessarily) the board's own
     const manifest = board
@@ -582,6 +588,7 @@ export function mountCardEditor(
         instanceKey,
         instanceWhen: instance?.when ?? "",
         instanceTopic: instance ? topicForDate(board.occurrenceSettingsRaw, instance.when) : "",
+        binding: charterBinding,
         actions,
         sources: manifest.slots
           .filter((s) => !isActionSurface(s))

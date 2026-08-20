@@ -17,6 +17,7 @@ import { Person } from "../../shared/schema/people";
 import { buildCaptureField, optionChip, readFields } from "../CaptureCard/fields";
 import { CaptureRow } from "../CaptureCard/types";
 import { canvasFieldDialog } from "./fieldDialog";
+import type { CanvasBinding } from "./types";
 import { paintCanvasValue } from "./display";
 import { CAPTURE_CSS } from "../CaptureCard/styles";
 import {
@@ -82,6 +83,7 @@ export class CanvasEditor {
   /** Studio-only: the card is THE layout editor (canvas plan D0–D2). */
   private designMode = false;
   private selectedField: string | null = null;
+  private binding: CanvasBinding | null = null;
   /** Design mode: temporarily show the runtime look. */
   private previewing = false;
   /** Design mode: gridlines + empty cells. */
@@ -118,6 +120,13 @@ export class CanvasEditor {
     this.env = env;
     this.render();
     this.snapshots.schedule();
+  }
+
+  /** Bound-field data source (design 2.5) — initiative boards provide it;
+   *  null renders bound fields as free fields with a grey ⛓. */
+  setBinding(binding: CanvasBinding | null): void {
+    this.binding = binding;
+    this.render();
   }
 
   setConfig(config: CanvasConfig): void {
@@ -380,6 +389,7 @@ export class CanvasEditor {
       required: false,
       options: [],
       columns: [],
+      bound: "",
     };
     this.commitLayout({ ...this.config, fields: [...this.config.fields, field] });
     this.setSelected(id);
@@ -448,6 +458,14 @@ export class CanvasEditor {
     if (!designing && field.required && isEmptyValue(field.type, value)) {
       label.appendChild(el("span", "ltk-cv-needed", "· needed"));
     }
+    // ⛓ bound fields (design 2.5): a sunken dashed slot holding header
+    // data — the glyph rides the label, edit writes the header
+    if (field.bound !== "") {
+      box.classList.add("ltk-cv-boundfield");
+      const glyph = el("span", "ltk-cv-boundglyph" + (this.binding ? " ltk-cv-boundglyph-live" : ""), "⛓");
+      glyph.title = this.binding ? "Shown in the header — edit here or there, same data." : "Binds to the initiative header when this card runs on an initiative.";
+      label.appendChild(glyph);
+    }
     box.appendChild(label);
 
     const area = el("div", "ltk-cv-value");
@@ -456,6 +474,16 @@ export class CanvasEditor {
     if (designing) {
       // build mode: a field advertises its TYPE, not its emptiness
       this.paintSkeleton(area, field);
+      return box;
+    }
+
+    if (field.bound !== "" && this.binding) {
+      const v = this.binding.get(field.bound);
+      area.appendChild(el("span", v === "" ? "ltk-cv-empty" : "", v === "" ? (field.hint || "—") : v));
+      if (!this.readOnly && this.binding.canEdit(field.bound)) {
+        area.classList.add("ltk-cv-editable");
+        area.addEventListener("click", () => this.binding?.edit(field.bound));
+      }
       return box;
     }
 

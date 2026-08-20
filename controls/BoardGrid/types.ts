@@ -22,6 +22,10 @@ export interface BoardTile {
   barColor: string;
   /** Meeting navigation order (distinct from layout pos); 0 = unset. */
   nav: number;
+  /** Initiative boards (P6d): the stage chip on the title bar. */
+  badge?: { text: string; fg: string; bg: string };
+  /** Current-stage cards get a 2px accent ring (design 2.3). */
+  ring?: boolean;
   /**
    * Nothing was ever saved for this card in this meeting — the tile is the
    * card type's generic empty state, not a record of what was there. Shown

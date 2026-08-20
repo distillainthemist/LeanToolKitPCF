@@ -414,6 +414,46 @@ export function canvasFieldsEditor(
         push();
       });
       meta.appendChild(req.wrap);
+      // ⛓ binding (design 2.5): the field shows initiative-header data —
+      // rendered as a sunken dashed tile; edit in either place
+      if (f.type !== "minitable" && f.type !== "image") {
+        const bindWrap = el("span", "ltk-cs-bind");
+        bindWrap.appendChild(el("span", "ltk-cs-bind-glyph" + (f.bound !== "" ? " ltk-cs-bind-on" : ""), "⛓"));
+        const bind = el("select", "ltk-input ltk-cs-bind-sel") as HTMLSelectElement;
+        const opts: { value: string; label: string }[] = [
+          { value: "", label: "Not bound" },
+          { value: "title", label: "Initiative title" },
+          { value: "description", label: "Description" },
+          { value: "owner", label: "Owner" },
+          { value: "stage", label: "Stage" },
+          { value: "period", label: "Period" },
+          { value: "__custom", label: "Header field…" },
+        ];
+        if (f.bound.startsWith("field:") && !opts.some((o) => o.value === f.bound)) {
+          opts.splice(opts.length - 1, 0, { value: f.bound, label: `Field: ${f.bound.slice(6)}` });
+        }
+        for (const o of opts) {
+          const opt = el("option", undefined, o.label) as HTMLOptionElement;
+          opt.value = o.value;
+          bind.appendChild(opt);
+        }
+        bind.value = f.bound;
+        if (bind.value !== f.bound) bind.value = "";
+        bind.disabled = host.readOnly;
+        bind.title = "Bound fields show initiative-header data — edit here or there, same data.";
+        bind.addEventListener("change", () => {
+          if (bind.value === "__custom") {
+            const key = (prompt("Header field key (from the template's Fields step, e.g. cost_centre)") ?? "").trim();
+            f.bound = key !== "" ? `field:${key}` : f.bound;
+          } else {
+            f.bound = bind.value;
+          }
+          push();
+          host.onChanged();
+        });
+        bindWrap.appendChild(bind);
+        meta.appendChild(bindWrap);
+      }
     }
 
     const hintIn = el("input", "ltk-input ltk-cs-cell ltk-cs-canvas-hint") as HTMLInputElement;
@@ -499,6 +539,7 @@ export function canvasFieldsEditor(
           required: false,
           options: [],
           columns: [],
+          bound: "",
         };
         draft.fields.push(fresh);
         void n;

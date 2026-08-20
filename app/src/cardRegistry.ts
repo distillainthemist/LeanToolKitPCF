@@ -159,6 +159,8 @@ export interface CardMount {
   /** The occurrence's rotation topic ("" = none) — the PrioritiesCard's
    *  rotation focus reads it (cascade plan P4). */
   instanceTopic?: string;
+  /** Initiative boards (P6d): the charter's bound-field data source. */
+  binding?: import("../../controls/CanvasCard/types").CanvasBinding;
   /** The card's current actions from the central table. */
   actions: LtkAction[];
   /**
@@ -896,6 +898,7 @@ const REGISTRY: Record<string, CardMounter> = {
     editor.setPalette(pal(opts));
     editor.setPeople(opts.people);
     editor.setConfig(parseCanvasConfig(cfgRaw(opts, "canvasJSON")));
+    editor.setBinding(opts.binding ?? null);
     editor.setEnvelope(parseCanvas(opts.outputJson).envelope);
     // the studio's design mode: the canvas IS the layout editor; layout
     // edits go back up as canvasJSON patches (in the Layout builder's own
@@ -1375,7 +1378,7 @@ export type TileMount = Pick<
   | "instanceWhen"
   | "actions"
 > &
-  Pick<CardMount, "onEmbedFrame" | "embedPreload" | "palette" | "instanceTopic">;
+  Pick<CardMount, "onEmbedFrame" | "embedPreload" | "palette" | "instanceTopic" | "binding">;
 
 /**
  * Mount a card as a BOARD TILE: the same editor, rendering the same data,

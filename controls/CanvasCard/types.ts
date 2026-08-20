@@ -69,7 +69,29 @@ export interface CanvasField {
   options: ListOption[];
   /** minitable only: the embedded grid's capture columns. */
   columns: CaptureColumn[];
+  /** Bound to initiative-header data (design 2.5): "" = a free field.
+   *  Renders as a sunken dashed ⛓ tile; edit here or there, same data. */
+  bound: string;
 }
+
+/** What a bound field reads and writes — initiative boards provide one
+ *  (improvement/binding.ts); everything is by bound-target key. */
+export interface CanvasBinding {
+  get: (bound: string) => string;
+  canEdit: (bound: string) => boolean;
+  /** Opens the target's own edit affordance, then re-renders the host. */
+  edit: (bound: string) => void;
+}
+
+/** The header data a charter field can bind to (P6d). Custom header
+ *  fields bind by "field:<key>". */
+export const BOUND_TARGETS: { value: string; label: string }[] = [
+  { value: "title", label: "Initiative title" },
+  { value: "description", label: "Description" },
+  { value: "owner", label: "Owner" },
+  { value: "stage", label: "Stage (read-only here)" },
+  { value: "period", label: "Period" },
+];
 
 export interface CanvasConfig {
   cols: 1 | 2 | 3;
@@ -207,6 +229,7 @@ export function parseCanvasConfig(raw: string | null | undefined): CanvasConfig 
         hint: typeof o.hint === "string" ? o.hint : "",
         // a heading is display-only — required would be unanswerable
         required: type !== "heading" && o.required === true,
+        bound: type !== "heading" && typeof o.bound === "string" ? o.bound : "",
         options: parseListOptions(o.options),
         columns:
           type === "minitable"

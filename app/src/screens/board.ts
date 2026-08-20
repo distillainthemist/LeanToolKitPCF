@@ -234,6 +234,20 @@ async function renderBoard(
     // BoardGrid re-renders often; each render re-runs this, so the tile's own
     // teardown must drop its observer or they accumulate one per render
     let unwatch: (() => void) | null = null;
+    // future-stage cards render a placeholder, never an empty card (2.3)
+    if (isFutureStage(slot.settings) && stageInfo) {
+      const st = stageInfo.stages.find((x) => x.id === slotStage(slot.settings));
+      const ph = el("div", "app-fs-placeholder");
+      ph.appendChild(el("div", "app-fs-placeholder-text", `Opens at the ${st?.name ?? "later"} stage`));
+      const openAnyway = el("button", "app-link", "Open anyway") as HTMLButtonElement;
+      openAnyway.type = "button";
+      openAnyway.addEventListener("click", () => {
+        window.location.hash = `#/edit/${board.boardId}/live/${tile.cardId}`;
+      });
+      ph.appendChild(openAnyway);
+      host.replaceChildren(ph);
+      return () => host.replaceChildren();
+    }
     const teardown = mountTile(tile.cardType, {
       host,
       title: slot.title,
@@ -246,6 +260,7 @@ async function renderBoard(
       instanceKey,
       instanceWhen: current?.when ?? "",
       instanceTopic: current ? topicForDate(board.occurrenceSettingsRaw, current.when) : "",
+      binding: tile.cardType === "CanvasCard" ? charterBinding : undefined,
       actions: boardActions.filter((a) => a.instanceId === instanceKey),
       // an embed tile uses the persistent frame, so opening the card is
       // instant instead of a cold cross-origin load mid-meeting
@@ -374,8 +389,24 @@ async function renderBoard(
   await refreshBoardActions();
 
   // initiative boards: the header's Current stage / All stages filter
-  // narrows which slots render (slot.settings.template.stage)
+  // narrows which slots render (slot.settings.template.stage); stageInfo
+  // paints stage chips + the current ring on tiles and gates future cards
   let slotFilter: ((settings: Record<string, unknown>) => boolean) | null = null;
+  let stageInfo: { currentId: string; stages: { id: string; name: string; fg: string; bg: string }[] } | null = null;
+  let charterBinding: import("../../../controls/CanvasCard/types").CanvasBinding | undefined;
+  const slotStage = (settings: Record<string, unknown>): string => {
+    const tpl = (settings.template ?? {}) as Record<string, unknown>;
+    return typeof tpl.stage === "string" ? tpl.stage : "";
+  };
+  /** Future = its stage sits after the current one in the walk order. */
+  const isFutureStage = (settings: Record<string, unknown>): boolean => {
+    if (!stageInfo) return false;
+    const st = slotStage(settings);
+    if (st === "") return false;
+    const idx = stageInfo.stages.findIndex((x) => x.id === st);
+    const cur = stageInfo.stages.findIndex((x) => x.id === stageInfo!.currentId);
+    return idx > cur && cur >= 0;
+  };
   const renderTiles = () => {
     if (!current) return;
     const raw = activeManifest();
@@ -395,7 +426,22 @@ async function renderBoard(
       toLite(cardRows),
       catalogSvg,
       titleColors
-    ).map((t) => (t.barColor === "" ? { ...t, barColor: fallbackBar } : t));
+    ).map((t) => {
+      let out = t.barColor === "" ? { ...t, barColor: fallbackBar } : t;
+      // initiative boards: the tile wears its stage chip in the stage's
+      // PDCA colour; current-stage cards get the 2px ring (design 2.3)
+      if (stageInfo) {
+        const slot = m.slots.find((sl) => sl.cardId === t.cardId);
+        const st = slot ? slotStage(slot.settings) : "";
+        const stage = stageInfo.stages.find((x) => x.id === st);
+        out = {
+          ...out,
+          ...(stage ? { badge: { text: stage.name, fg: stage.fg, bg: stage.bg } } : {}),
+          ring: st !== "" && st === stageInfo.currentId,
+        };
+      }
+      return out;
+    });
     gridView.setColumnTitles(m.columnTitles);
     gridView.setTiles(tiles, parseColumns(m.grid, tiles));
     // a friendly date + chips, never "2026-07-31T07:00 — closed"
@@ -683,19 +729,24 @@ async function renderBoard(
           mountInitiativeHeader({
             host: headerHost,
             boardId: board.boardId,
-            onStageFilter: (mode, currentStageId) => {
+            onStageFilter: (mode, currentStageId, stages) => {
+              stageInfo = { currentId: currentStageId, stages };
               slotFilter =
                 mode === "all"
                   ? null
                   : (settings) => {
-                      const tpl = (settings.template ?? {}) as Record<string, unknown>;
-                      const stage = typeof tpl.stage === "string" ? tpl.stage : "";
+                      const stage = slotStage(settings);
                       return stage === "" || stage === currentStageId;
                     };
               renderTiles();
             },
           })
         );
+      // the charter's bound fields read/write the initiative header
+      void import("../improvement/binding").then(async ({ makeInitiativeBinding }) => {
+        charterBinding = (await makeInitiativeBinding(board.boardId, () => renderTiles())) ?? undefined;
+        renderTiles();
+      });
       });
     }
     renderTiles();

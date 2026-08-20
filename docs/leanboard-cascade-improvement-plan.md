@@ -493,9 +493,25 @@ reschedule/cancel history with a reason picklist.
   the Improvement rows, the priorities tallies and the overlay; the
   tab's metric column reads "OEE 61% / 75%" with the value coloured only
   when off-target.
-- **P6d (next)** — bound charter fields (+ the wizard's ⛓ toggle),
-  evidence attach on actions, stage chips + 2px ring on tiles,
-  future-stage placeholders, Tiles view on the tab.
+- **P6d — BUILT 2026-08-20 (dev, app-only)** — BOUND CHARTER FIELDS
+  (design 2.5): CanvasField gains `bound` ("" = free; title ·
+  description · owner · stage · period · field:<key>); the canvas
+  layout inspector grows the ⛓ select (custom keys via a prompt); at
+  runtime a bound field renders as the sunken dashed ⛓ tile — on an
+  `init-` board a CanvasBinding provider (improvement/binding.ts,
+  passed through CardMount.binding by board.ts tiles AND the focused
+  editor) reads the header and edits write it back (owner via the
+  people picker, stage read-only — the stepper edits it); off an
+  initiative the ⛓ renders grey and the field stays free. STAGE CHIPS
+  on tile title bars in PDCA colour + a 2px ring on current-stage
+  cards (BoardTile badge/ring); FUTURE-STAGE cards render "Opens at
+  the <stage> stage · Open anyway" instead of an empty card; the
+  header passes the stage list through onStageFilter. TILES VIEW on
+  the Improvement tab (List | Tiles segmented): summary tiles — RAG
+  top edge, title, stage chip, flag glyph, metric value/target, owner
+  · org. DEFERRED to backlog: evidence attach on actions (the
+  ben_ltkactionfile road exists; needs upload/list/download UI in the
+  action dialog).
 - **P8 Gantt · P9 VDT + simulation · P10 Reporting** — designed
   (spec §2–§4); build after P5/P6.
 

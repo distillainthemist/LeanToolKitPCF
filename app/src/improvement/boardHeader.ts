@@ -30,8 +30,14 @@ export interface InitiativeHeaderOpts {
   host: HTMLElement;
   boardId: string;
   /** The board repaints its tiles through this filter: slot stage id →
-   *  show? (the Current stage / All stages control lives here). */
-  onStageFilter: (mode: "current" | "all", currentStageId: string) => void;
+   *  show? (the Current stage / All stages control lives here). The stage
+   *  list rides along for tile chips, the current ring and future-stage
+   *  placeholders. */
+  onStageFilter: (
+    mode: "current" | "all",
+    currentStageId: string,
+    stages: { id: string; name: string; fg: string; bg: string }[]
+  ) => void;
 }
 
 const TIER2_KEY = "ltk-initiative-tier2";
@@ -84,7 +90,11 @@ export function mountInitiativeHeader(o: InitiativeHeaderOpts): () => void {
 
     const render = () => {
       clear(band);
-      o.onStageFilter(stageMode, i.stageId);
+      o.onStageFilter(
+        stageMode,
+        i.stageId,
+        i.snapshot.stages.map((st) => ({ id: st.id, name: st.name, fg: PDCA_TOKENS[st.pdca].fg, bg: PDCA_TOKENS[st.pdca].bg }))
+      );
 
       // ---- tier 1 -----------------------------------------------------------
       const t1 = el("div", "app-ib-t1");

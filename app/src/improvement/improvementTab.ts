@@ -107,6 +107,7 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
       teamScope: string; // "" = my orgs + children (all owned keys)
     }
     const f: Filters = { site: me?.site ?? "", pdca: "", period: currentPeriod, status: "active", flagOnly: false, method: "", teamScope: "" };
+    let viewMode: "list" | "tiles" = "list";
 
     const visible = (i: Initiative): boolean =>
       (f.site === "" || i.org.site === f.site) &&
@@ -120,6 +121,15 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
       clear(wrap);
       wrap.appendChild(renderToolbar());
       const groups = groupInitiatives(list.filter(visible), viewer);
+      if (viewMode === "tiles") {
+        // wall view (design 1.2): tiles for at-distance reading
+        const grid = el("div", "app-im-tiles");
+        for (const i of groups.all) grid.appendChild(tileFor(i));
+        if (groups.all.length === 0) grid.appendChild(note(`No initiatives for ${f.period || "this period"} in this org.`));
+        if (groups.hiddenConfidential > 0) grid.appendChild(note(`· ${groups.hiddenConfidential} confidential in this org`));
+        wrap.appendChild(grid);
+        return;
+      }
       const table = el("div", "app-im-table");
       const roleLabel = (i: Initiative, key: string) => i.snapshot.roleLabels[key] ?? key;
       // 1 — my initiatives
@@ -231,10 +241,19 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
       });
       bar.appendChild(flag);
       bar.appendChild(el("span", "app-cp-spacer"));
-      const tiles = btn("Tiles");
-      tiles.disabled = true;
-      tiles.title = "Tiles (wall view) arrives with the initiative board";
-      bar.appendChild(tiles);
+      const seg = el("div", "app-cp-seg");
+      const listBtn = btn("List", "app-cp-seg-btn" + (viewMode === "list" ? " app-cp-seg-on" : ""));
+      const tilesBtn = btn("Tiles", "app-cp-seg-btn" + (viewMode === "tiles" ? " app-cp-seg-on" : ""));
+      listBtn.addEventListener("click", () => {
+        viewMode = "list";
+        render();
+      });
+      tilesBtn.addEventListener("click", () => {
+        viewMode = "tiles";
+        render();
+      });
+      seg.append(listBtn, tilesBtn);
+      bar.appendChild(seg);
       const add = btn("＋ Initiative", "app-btn app-btn-primary");
       add.addEventListener("click", () => openCreate());
       bar.appendChild(add);
@@ -326,6 +345,34 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
       row.appendChild(kebab);
       row.addEventListener("click", () => openInitiative(i));
       return row;
+    };
+
+    const tileFor = (i: Initiative): HTMLElement => {
+      const inputs = ragInputsFor(i, initActions, todayIso());
+      inputs.metric = metricState.get(i.id)?.rag ?? null;
+      const rag = initiativeRag(inputs);
+      const tile = el("div", "app-im-tile");
+      tile.style.borderTopColor = rag === "red" ? "#b3261e" : rag === "amber" ? "#c77d0a" : rag === "green" ? "#1f7a3f" : "#9a948a";
+      tile.appendChild(el("div", "app-im-tile-title", i.title));
+      const stage = i.snapshot.stages.find((s) => s.id === i.stageId) ?? null;
+      const line = el("div", "app-im-tile-line");
+      if (i.singleAction) line.appendChild(el("span", "app-cp-muted", "single action"));
+      else if (stage) {
+        const chip = el("span", "app-im-stagechip", stage.name);
+        chip.style.color = PDCA_TOKENS[stage.pdca].fg;
+        chip.style.background = PDCA_TOKENS[stage.pdca].bg;
+        line.appendChild(chip);
+      }
+      if (i.flag === "escalated") line.appendChild(el("span", "app-im-chip app-im-chip-esc", "▲"));
+      else if (i.flag === "flag") line.appendChild(el("span", "app-im-chip app-im-chip-flag", "⚐"));
+      tile.appendChild(line);
+      const mv = (metricState.get(i.id)?.values ?? [])[0] ?? null;
+      tile.appendChild(
+        el("div", "app-im-tile-metric" + (mv && mv.last !== null ? "" : " app-cp-muted"), mv && mv.last !== null ? `${mv.name} ${mv.last}${mv.unit}${mv.target !== null ? ` / ${mv.target}${mv.unit}` : ""}` : "No metric value")
+      );
+      tile.appendChild(el("div", "app-im-tile-owner", [(i.roles.owner ?? [])[0]?.who ?? "no owner", i.org.department || i.org.site].filter((x) => x !== "").join(" · ")));
+      tile.addEventListener("click", () => openInitiative(i));
+      return tile;
     };
 
     const openInitiative = (i: Initiative) => {

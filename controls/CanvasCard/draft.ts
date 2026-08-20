@@ -29,6 +29,8 @@ export interface FieldDraft {
   options: OptDraft[];
   /** Raw capture-column array — the sub-editor round-trips it. */
   columns: unknown[];
+  /** Bound to initiative-header data ("" = free). */
+  bound: string;
 }
 
 export interface CanvasDraft {
@@ -105,6 +107,7 @@ export function loadCanvasDraft(v: unknown): CanvasDraft {
       required: o.required === true && type !== "heading",
       options,
       columns: Array.isArray(o.columns) ? o.columns : [],
+      bound: typeof o.bound === "string" && type !== "heading" ? o.bound : "",
     });
   }
   return out;
@@ -122,6 +125,7 @@ export function serializeCanvasDraft(draft: CanvasDraft): unknown | undefined {
     if (f.h !== DEFAULT_H[f.type]) o.h = f.h;
     if (f.hint.trim() !== "") o.hint = f.hint;
     if (f.required && f.type !== "heading") o.required = true;
+    if (f.bound !== "" && f.type !== "heading") o.bound = f.bound;
     if ((f.type === "choice" || f.type === "multichoice") && f.options.length > 0) {
       const opts: unknown[] = [];
       for (const op of f.options) {

@@ -239,4 +239,7 @@ export const BOARDGRID_CSS = `
   user-select: none;
   -webkit-user-select: none;
 }
+
+.ltk-bg-stagechip { font-size: 10px; font-weight: 700; padding: 1px 7px; border-radius: 999px; margin-left: 6px; white-space: nowrap; }
+.ltk-bg-tile-ring { outline: 2px solid var(--ltk-accent); outline-offset: -1px; }
 `;

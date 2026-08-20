@@ -417,4 +417,9 @@ export const CARDSETTINGS_CSS = `
   border: 1px solid var(--ltk-hairline, #d5d1c8);
 }
 .ltk-cs-palswatch-unset { background: transparent; opacity: 0.35; }
+
+.ltk-cs-bind { display: inline-flex; align-items: center; gap: 4px; }
+.ltk-cs-bind-glyph { font-size: 12px; color: #a39c90; }
+.ltk-cs-bind-on { color: var(--ltk-accent); }
+.ltk-cs-bind-sel { width: auto; font-size: 12px; padding: 3px 6px; }
 `;

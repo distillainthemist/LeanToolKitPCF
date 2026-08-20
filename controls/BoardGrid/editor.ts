@@ -410,7 +410,7 @@ export class BoardGridView {
     const slot = el("div", "ltk-bg-slot");
     this.placeSlot(slot, placed.col, placed.row, placed.w, placed.h);
     const anchorPos = cellPos(this.cols, placed.col, placed.row);
-    const card = el("div", "ltk-bg-tile");
+    const card = el("div", "ltk-bg-tile" + (tile.ring === true ? " ltk-bg-tile-ring" : ""));
     slot.appendChild(card);
 
     const snap = el("div", "ltk-bg-snap");
@@ -440,6 +440,12 @@ export class BoardGridView {
         chip.appendChild(el("span", "ltk-bg-navtag", String(tile.nav)));
       }
       chip.appendChild(el("span", "ltk-bg-chip-title", barText));
+      if (tile.badge) {
+        const b = el("span", "ltk-bg-stagechip", tile.badge.text);
+        b.style.color = tile.badge.fg;
+        b.style.background = tile.badge.bg;
+        chip.appendChild(b);
+      }
       if (canEdit) {
         // meeting navigation order — distinct from the layout pos
         const nav = el("input", "ltk-bg-nav") as HTMLInputElement;
