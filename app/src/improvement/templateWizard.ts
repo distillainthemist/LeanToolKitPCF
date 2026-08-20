@@ -629,15 +629,25 @@ export function mountTemplateWizard(parent: HTMLElement, templateId: string): ()
       const hostBox = el("div", "ltk-mw-boardhost");
       form.appendChild(hostBox);
       hostBox.appendChild(
-        el("div", "ltk-mw-help", "The cards every initiative on this template starts with. Lay them out below, then tag each with its stage and whether it is mandatory (the charter always is).")
+        el("div", "ltk-mw-help", "The cards every initiative on this template starts with. Lay them out on the left; tag each with its stage and whether it is mandatory in the pane on the right (the charter always is).")
       );
-      const slotsBox = el("div", "app-tw-table app-tw-slots");
+      // designer left · stage/mandatory pane right (Ben, 2026-08-20: a
+      // bottom table squeezed the board)
+      const split = el("div", "app-tw-boardsplit");
+      hostBox.appendChild(split);
+      const designerCol = el("div", "app-tw-boardsplit-main");
+      split.appendChild(designerCol);
+      const pane = el("div", "app-tw-boardsplit-pane");
+      pane.appendChild(el("div", "app-tw-preview-h", "Stage & mandatory"));
+      split.appendChild(pane);
+      const slotsBox = el("div", "app-tw-slots");
+      pane.appendChild(slotsBox);
       if (designerDiv) {
-        hostBox.appendChild(designerDiv);
+        designerCol.appendChild(designerDiv);
       } else {
         designerDiv = document.createElement("div");
         designerDiv.className = "app-wizard-designer";
-        hostBox.appendChild(designerDiv);
+        designerCol.appendChild(designerDiv);
         void (async () => {
           if (t.boardId === "") {
             if (t.name.trim() === "") {
@@ -662,7 +672,6 @@ export function mountTemplateWizard(parent: HTMLElement, templateId: string): ()
           paintSlotsInto(slotsBox);
         })();
       }
-      hostBox.appendChild(slotsBox);
       paintSlotsInto(slotsBox);
     };
 
@@ -677,15 +686,13 @@ export function mountTemplateWizard(parent: HTMLElement, templateId: string): ()
           slotsBox.appendChild(el("div", "ltk-mw-help", "The board is empty — add cards above."));
           return;
         }
-        const head = el("div", "app-tw-tr app-tw-th app-tw-tr-slots");
-        head.append(el("span", undefined, "Card"), el("span", undefined, "Stage"), el("span", undefined, "Mandatory"));
-        slotsBox.appendChild(head);
         const stageOpts = [{ value: "", label: "Every stage" }, ...t.stages.map((st) => ({ value: st.id, label: st.name || st.id }))];
         for (const slot of manifest.slots) {
           const f = slotFlags(slot.settings);
-          const tr = el("div", "app-tw-tr app-tw-tr-slots");
-          tr.appendChild(el("span", undefined, `${slot.title || cardLabel(slot.cardType)} · ${cardLabel(slot.cardType)}`));
-          tr.appendChild(
+          const cardBox = el("div", "app-tw-slotcard");
+          cardBox.appendChild(el("div", "app-tw-slotcard-title", slot.title || cardLabel(slot.cardType)));
+          cardBox.appendChild(el("div", "ltk-mw-help", cardLabel(slot.cardType)));
+          cardBox.appendChild(
             selectInput(f.stage, stageOpts, (v) => {
               slot.settings = withSlotFlags(slot.settings, { ...slotFlags(slot.settings), stage: v });
               void saveManifest(b.id, manifest).then(() => refreshSlotCounts());
@@ -703,8 +710,8 @@ export function mountTemplateWizard(parent: HTMLElement, templateId: string): ()
             mdLabel
           );
           if (isCharter) (md.firstChild as HTMLButtonElement).disabled = true;
-          tr.appendChild(md);
-          slotsBox.appendChild(tr);
+          cardBox.appendChild(md);
+          slotsBox.appendChild(cardBox);
         }
       })();
     }

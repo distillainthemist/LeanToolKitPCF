@@ -3299,7 +3299,28 @@ textarea.app-cp-statement { font-size: 14px; font-weight: 500; }
 .app-tw-card-method-single { background: #dbe7ff; color: #1d4ed8; }
 .app-tw-templates-h { margin: 16px 0 8px; }
 .app-tw-stdrole { min-height: 30px; font-size: 12.5px; cursor: pointer; }
-.app-tw-slots { margin-top: 8px; }
+.app-tw-boardsplit { display: flex; gap: 12px; flex: 1; min-height: 0; align-items: stretch; }
+.app-tw-boardsplit-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.app-tw-boardsplit-main .app-wizard-designer { flex: 1; min-height: 360px; }
+.app-tw-boardsplit-pane {
+  flex: 0 0 240px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: #faf8f4;
+  border: 1px solid #ece8e0;
+  border-radius: 8px;
+  padding: 10px 12px;
+  overflow-y: auto;
+}
+.app-tw-slots { display: flex; flex-direction: column; gap: 8px; }
+.app-tw-slotcard { display: flex; flex-direction: column; gap: 5px; background: #fff; border: 1px solid #e4dfd6; border-radius: 8px; padding: 8px 10px; }
+.app-tw-slotcard-title { font-weight: 600; font-size: 13px; }
+.app-tw-slotcard .ltk-mw-input { width: 100%; font-size: 12.5px; padding: 5px 8px; }
+@media (max-width: 900px) {
+  .app-tw-boardsplit { flex-direction: column; }
+  .app-tw-boardsplit-pane { flex: 0 0 auto; }
+}
 /* methods: the org editor's row look (area rows), full-width */
 .app-tw-methods { display: flex; flex-direction: column; gap: 6px; padding: 10px 0 12px; }
 .app-tw-method {
