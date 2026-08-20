@@ -96,3 +96,26 @@ describe("initiatives — model", () => {
     expect(validateNewInitiative(bad)).toEqual(["A title is needed.", "An owner is needed.", 'Metric "OEE" needs a target.']);
   });
 });
+
+describe("cascade bridge (P6b)", () => {
+  it("rag inputs from flags + linked actions; verify not overdue", async () => {
+    const m = await import("../improvement/initiativeModel");
+    const i = { id: "in-1", flag: "flag", status: "active", priorities: [{ priorityId: "p1", primary: true }] } as never;
+    const acts = [
+      { initiativeId: "in-1", status: "open", due: "2026-01-01", assignees: [] },
+      { initiativeId: "in-1", status: "verify", due: "2026-01-01", assignees: [] },
+      { initiativeId: "in-1", status: "done", due: "2026-01-01", assignees: [] },
+      { initiativeId: "other", status: "open", due: "2026-01-01", assignees: [] },
+    ];
+    const inp = m.ragInputsFor(i, acts, "2026-08-20");
+    expect(inp).toEqual({ metric: null, escalated: false, needsSupport: true, overdueActions: 1, openActions: 2 });
+  });
+  it("initiativesByPriority maps active initiatives only", async () => {
+    const m = await import("../improvement/initiativeModel");
+    const a = { id: "a", status: "active", priorities: [{ priorityId: "p1", primary: true }, { priorityId: "p2", primary: false }] } as never;
+    const b = { id: "b", status: "archived", priorities: [{ priorityId: "p1", primary: true }] } as never;
+    const map = m.initiativesByPriority([a, b]);
+    expect(map.get("p1")?.length).toBe(1);
+    expect(map.get("p2")?.length).toBe(1);
+  });
+});

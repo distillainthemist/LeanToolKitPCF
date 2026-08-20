@@ -17,7 +17,7 @@ import { improvementSettingsJson, orgJson, orgOwnersMap, prioritySettingsJson, s
 import { loadCascade } from "../store/priorities";
 import { listTemplates } from "../store/templates";
 import { appendInitiativeEvent, createInitiative, listInitiatives, saveInitiative } from "../store/initiatives";
-import { upsertActions } from "../store/actions";
+import { actionsForInitiatives, upsertActions } from "../store/actions";
 import { newAction } from "../../../shared/schema/actions";
 import { promptConfirm } from "../prompts";
 import { parseOrgTree } from "../../../shared/schema/meeting";
@@ -30,8 +30,10 @@ import {
   myRoles,
   nextGateFor,
   orgKeyOf,
+  ragInputsFor,
   validateNewInitiative,
 } from "./initiativeModel";
+import { initiativeRag } from "../priorities/model";
 import {
   ImprovementSettings,
   InitiativeTemplate,
@@ -62,7 +64,7 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
 
   void (async () => {
     const who = currentViewer();
-    const [initiatives, templates, roster, owners, treeRaw, siteCo, impRaw, prSettingsRaw] = await Promise.all([
+    const [initiatives, templates, roster, owners, treeRaw, siteCo, impRaw, prSettingsRaw, initActions] = await Promise.all([
       listInitiatives(),
       listTemplates(),
       listPeople(),
@@ -71,6 +73,7 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
       siteCompanies(),
       improvementSettingsJson(),
       prioritySettingsJson(),
+      actionsForInitiatives().catch(() => []),
     ]);
     if (dead) return;
     stopLoading();
@@ -234,7 +237,11 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
 
     const rowFor = (i: Initiative, meta: string): HTMLElement => {
       const row = el("div", "app-im-row");
-      row.style.borderLeftColor = "#9a948a"; // grey until metric values exist (P6)
+      // status edge = the initiative's RAG (flags + action position; metric
+      // values join the mix with reporting)
+      const rag = initiativeRag(ragInputsFor(i, initActions, todayIso()));
+      row.style.borderLeftColor =
+        rag === "red" ? "#b3261e" : rag === "amber" ? "#c77d0a" : rag === "green" ? "#1f7a3f" : "#9a948a";
       const main = el("div", "app-im-main");
       const titleLine = el("div", "app-im-title");
       titleLine.appendChild(el("span", "app-im-title-text", i.title));
@@ -259,7 +266,11 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
       row.appendChild(stageCell);
       // primary metric — values arrive with P6's metric cards
       const metricCell = el("div", "app-im-cell app-cp-muted");
-      metricCell.textContent = i.metrics.length > 0 ? `${i.metrics[0].name} — no value yet` : "No metric set";
+      metricCell.textContent =
+        i.metrics.length > 0
+          ? `${i.metrics[0].name}${i.metrics[0].target !== null ? ` → ${i.metrics[0].target}${i.metrics[0].unit}` : ""}`
+          : "No metric set";
+      metricCell.title = i.metrics.length > 0 ? "Values live on the initiative board's KPI cards" : "";
       row.appendChild(metricCell);
       // next gate
       const gateCell = el("div", "app-im-cell");
@@ -362,7 +373,7 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
 
     // ---- create flow (design 1.3): three steps in one modal ---------------------
 
-    const openCreate = () => {
+    const openCreate = (lockedPriority?: { priorityId: string; label: string }) => {
       const scrim = el("div", "app-modal-overlay");
       const box = el("div", "app-modal app-modal-wide app-im-create");
       scrim.appendChild(box);
@@ -474,8 +485,11 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
         const orgRow = el("div", "app-im-orgrow");
         orgRow.append(siteSel, deptSel, areaSel);
         field("Organisation", orgRow);
-        // linked priorities (multi, one primary)
-        const links: { priorityId: string; primary: boolean; label: string }[] = [];
+        // linked priorities (multi, one primary); a handoff from a priority
+        // arrives pre-linked and locked
+        const links: { priorityId: string; primary: boolean; label: string; locked?: boolean }[] = lockedPriority
+          ? [{ priorityId: lockedPriority.priorityId, primary: true, label: lockedPriority.label, locked: true }]
+          : [];
         const priBox = el("div", "app-im-links");
         const priAdd = btn("＋ Link a priority");
         const paintLinks = async () => {
@@ -494,13 +508,15 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
               });
               chip.appendChild(star);
             }
-            const x = btn("×", "ltk-mw-chip-x");
-            x.addEventListener("click", () => {
-              links.splice(li, 1);
-              if (l.primary && links.length > 0) links[0].primary = true;
-              void paintLinks();
-            });
-            chip.appendChild(x);
+            if (!l.locked) {
+              const x = btn("×", "ltk-mw-chip-x");
+              x.addEventListener("click", () => {
+                links.splice(li, 1);
+                if (l.primary && links.length > 0) links[0].primary = true;
+                void paintLinks();
+              });
+              chip.appendChild(x);
+            }
             priBox.appendChild(chip);
           });
           priBox.appendChild(priAdd);
@@ -695,6 +711,20 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
     };
 
     render();
+    // handed over from a priority's overlay (design 1.3: pre-filled and
+    // locked to the source priority)
+    try {
+      const pending = sessionStorage.getItem("ltk-pending-init-priority");
+      if (pending) {
+        sessionStorage.removeItem("ltk-pending-init-priority");
+        const o = JSON.parse(pending) as { priorityId?: string; label?: string };
+        if (typeof o.priorityId === "string" && o.priorityId !== "") {
+          openCreate({ priorityId: o.priorityId, label: o.label ?? "linked priority" });
+        }
+      }
+    } catch {
+      /* fine */
+    }
   })().catch((err) => {
     stopLoading();
     wrap.appendChild(el("div", "app-board-note", `Improvement could not load: ${err instanceof Error ? err.message : String(err)}`));

@@ -3443,3 +3443,8 @@ textarea.app-cp-statement { font-size: 14px; font-weight: 500; }
 .app-ib-comment-line { display: flex; gap: 8px; }
 .app-ib-comment-k { font-weight: 700; min-width: 36px; color: #6d675c; }
 @media (max-width: 900px) { .app-ib-t2 { grid-template-columns: 1fr; } }
+.app-cp-ov-init { display: flex; align-items: center; gap: 10px; border: 1px solid #e4dfd6; border-left: 4px solid #9a948a; border-radius: 8px; padding: 8px 12px; margin-bottom: 8px; }
+.app-cp-ov-init-main { flex: 1; min-width: 0; }
+.app-cp-ov-init-title { font-weight: 600; font-size: 13.5px; }
+.app-cp-ov-init-meta { font-size: 12px; color: #6d675c; }
+.app-cp-ov-actline { padding: 4px 0; }

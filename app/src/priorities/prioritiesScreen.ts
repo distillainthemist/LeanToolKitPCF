@@ -56,10 +56,14 @@ import { loadPriorityPrefs, savePriorityPrefs, ViewMode } from "./prefs";
 import { mountWalk } from "./walk";
 import { initialsFor } from "../../../shared/schema/people";
 import { carryForwardFlow, cascadeDialog, cascadeReview, closeDialog, closePriority, LifecycleCtx, openPriorityOverlay, reopenPriority, sendCascade } from "./lifecycle";
+import { initiativesByPriority, ragInputsFor } from "../improvement/initiativeModel";
+import { PDCA_TOKENS } from "../improvement/templateModel";
 import {
   canCustomiseAt,
   canManageOrg,
   densityFor,
+  descendantPriorities,
+  initiativeRag,
   groupByColumn,
   isDescendant,
   nextPeriod,
@@ -223,10 +227,29 @@ interface ScreenState {
   view: ViewMode; // Simple (default, TV) | Dynamic — persists per user per org
 }
 
-/** P1 stub: what a priority's initiatives look like. Initiatives arrive
- *  with P5; until then every priority is "no data". */
-function ragsFor(_p: Priority): Rag[] {
-  return [];
+/** A priority's initiative RAGs (P6b, live): direct links plus links
+ *  through child priorities down the cascade (decision 9's tallies).
+ *  Metric state stays null until metric values are read (P9); flags and
+ *  the action position already move the colour. */
+function makeRagsFor(
+  byPriority: Map<string, import("../improvement/initiativeModel").Initiative[]>,
+  actions: import("../../../shared/schema/actions").LtkAction[],
+  allPriorities: () => Priority[]
+): (p: Priority) => Rag[] {
+  const today = todayIso();
+  return (p) => {
+    const ids = [p, ...descendantPriorities(p, allPriorities())].map((x) => x.id);
+    const seen = new Set<string>();
+    const out: Rag[] = [];
+    for (const id of ids) {
+      for (const i of byPriority.get(id) ?? []) {
+        if (seen.has(i.id)) continue;
+        seen.add(i.id);
+        out.push(initiativeRag(ragInputsFor(i, actions, today)));
+      }
+    }
+    return out;
+  };
 }
 
 export function mountPriorities(parent: HTMLElement, opts: PrioritiesMountOpts = {}): () => void {
@@ -249,6 +272,12 @@ export function mountPriorities(parent: HTMLElement, opts: PrioritiesMountOpts =
       memo("palettes", appPalettes),
       loadPriorityPrefs(who?.objectId ?? ""),
       memo("siteCascade", allSitePrioritySettings),
+    ]);
+    // initiatives + their actions (P6b): the tallies' live inputs. A
+    // failure leaves the tallies grey rather than blocking the matrix.
+    const [initiativeList, initiativeActions] = await Promise.all([
+      memo("initiatives", () => import("../store/initiatives").then((m) => m.listInitiatives())).catch(() => []),
+      memo("initActions", () => import("../store/actions").then((m) => m.actionsForInitiatives())).catch(() => []),
     ]);
     if (dead) return;
     const companyList = [...new Set(Object.values(siteCo).filter((c) => c !== ""))];
@@ -301,6 +330,8 @@ export function mountPriorities(parent: HTMLElement, opts: PrioritiesMountOpts =
       savePriorityPrefs(viewer.whoId, prefs);
     };
 
+    const byPriority = initiativesByPriority(initiativeList);
+    const ragsFor = makeRagsFor(byPriority, initiativeActions, () => data.priorities);
     let data: CascadeData = await memo(`cascade|${state.org.company}`, () => loadCascade(state.org.company));
     if (dead) return;
     stopLoading();
@@ -358,6 +389,42 @@ export function mountPriorities(parent: HTMLElement, opts: PrioritiesMountOpts =
       periodsOnOffer: () => periodsOnOffer(),
       currentPeriod,
       ragsFor,
+      initiativesFor: (p) => {
+        const today = todayIso();
+        const ids = [p, ...descendantPriorities(p, data.priorities)];
+        const seen = new Set<string>();
+        const out: ReturnType<LifecycleCtx["initiativesFor"]> = [];
+        for (const pr of ids) {
+          for (const i of byPriority.get(pr.id) ?? []) {
+            if (seen.has(i.id)) continue;
+            seen.add(i.id);
+            const inputs = ragInputsFor(i, initiativeActions, today);
+            const stage = i.snapshot.stages.find((st) => st.id === i.stageId) ?? null;
+            const tokens = stage ? PDCA_TOKENS[stage.pdca] : null;
+            const visible =
+              !i.confidential ||
+              viewer.role !== "user" ||
+              Object.values(i.roles).some((people) => people.some((x) => x.whoId === viewer.whoId)) ||
+              canManageOrg(viewer, { company: i.org.company, site: i.org.site, department: i.org.department, area: i.org.area }, owners);
+            out.push({
+              id: i.id,
+              title: i.title,
+              stageName: i.singleAction ? "single action" : (stage?.name ?? ""),
+              pdcaFg: tokens?.fg ?? "#6d675c",
+              pdcaBg: tokens?.bg ?? "#ece8e0",
+              ownerName: (i.roles.owner ?? [])[0]?.who ?? "",
+              orgName: pr.id === p.id ? "This org" : [i.org.department, i.org.area].filter((x) => x !== "").join(" · ") || i.org.site,
+              open: inputs.openActions,
+              overdue: inputs.overdueActions,
+              rag: initiativeRag(inputs),
+              boardId: i.boardId,
+              inheritedFrom: pr.id === p.id ? "" : orgName(pr.org),
+              confidentialHidden: !visible,
+            });
+          }
+        }
+        return out;
+      },
       changed: reload,
       open: (p) => openOverlay(p),
     };

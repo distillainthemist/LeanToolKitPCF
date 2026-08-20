@@ -285,3 +285,47 @@ export function validateNewInitiative(i: Pick<Initiative, "title" | "org" | "met
   for (const m of i.metrics) if (m.tracking === "value" && m.target === null) errs.push(`Metric "${m.name}" needs a target.`);
   return errs;
 }
+
+// ---- the cascade bridge (P6b): initiative RAG per priority ---------------------
+
+export interface InitiativeRagInput {
+  metric: "green" | "amber" | "red" | null;
+  escalated: boolean;
+  needsSupport: boolean;
+  overdueActions: number;
+  openActions: number;
+}
+
+/** The RAG inputs for one initiative from its header + linked actions.
+ *  Metric state stays null until metric values are read (P9 reporting);
+ *  flags and the action position already move the colour. */
+export function ragInputsFor(
+  i: Initiative,
+  actions: { initiativeId?: string; status: string; due: string; assignees: { done: boolean }[] }[],
+  today: string
+): InitiativeRagInput {
+  const mine = actions.filter((a) => a.initiativeId === i.id);
+  const open = mine.filter((a) => a.status !== "done" && a.status !== "cancelled");
+  const overdue = open.filter((a) => a.due !== "" && a.due < today && a.status !== "verify");
+  return {
+    metric: null,
+    escalated: i.flag === "escalated",
+    needsSupport: i.flag === "flag",
+    overdueActions: overdue.length,
+    openActions: open.length,
+  };
+}
+
+/** priorityId → the initiatives linked to it (active ones only). */
+export function initiativesByPriority(list: Initiative[]): Map<string, Initiative[]> {
+  const map = new Map<string, Initiative[]>();
+  for (const i of list) {
+    if (i.status !== "active") continue;
+    for (const l of i.priorities) {
+      const arr = map.get(l.priorityId) ?? [];
+      arr.push(i);
+      map.set(l.priorityId, arr);
+    }
+  }
+  return map;
+}

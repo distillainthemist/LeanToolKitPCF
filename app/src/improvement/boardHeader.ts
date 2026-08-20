@@ -477,6 +477,7 @@ export function mountInitiativeHeader(o: InitiativeHeaderOpts): () => void {
           render();
         })();
       }, !mine());
+      item("＋ Add card from template", () => void addFromTemplate(), !mine() || i.status !== "active" || i.templateId === "");
       item(i.status === "archived" ? "Restore" : "Archive", () => {
         void (async () => {
           i.status = i.status === "archived" ? "active" : "archived";
@@ -497,6 +498,58 @@ export function mountInitiativeHeader(o: InitiativeHeaderOpts): () => void {
       };
       setTimeout(() => document.addEventListener("pointerdown", off, true), 0);
       cleanups.push(() => menu.remove());
+    };
+
+    /** The template's OPTIONAL cards not yet on this board (design 2.3). */
+    const addFromTemplate = async () => {
+      const [{ getTemplate }, { getBoard, saveManifest }, { parseManifest }] = await Promise.all([
+        import("../store/templates"),
+        import("../store/boards"),
+        import("../store/mappers"),
+      ]);
+      const t = await getTemplate(i.templateId);
+      if (!t || t.boardId === "") return;
+      const [tplBoard, myBoard] = await Promise.all([getBoard(t.boardId), getBoard(i.boardId)]);
+      if (!tplBoard || !myBoard) return;
+      const tplSlots = parseManifest(tplBoard.manifestRaw).slots;
+      const manifest = parseManifest(myBoard.manifestRaw);
+      const have = new Set(manifest.slots.map((sl) => sl.cardId));
+      const offer = tplSlots.filter((sl) => {
+        const tpl = (sl.settings.template ?? {}) as Record<string, unknown>;
+        return tpl.mandatory !== true && !have.has(sl.cardId);
+      });
+      if (offer.length === 0) {
+        void promptConfirm({ title: "Nothing to add", note: "Every optional card from the template is already on this board.", confirmLabel: "OK" });
+        return;
+      }
+      const menu = el("div", "app-cp-menu");
+      const stageName = (sl: (typeof offer)[number]) => {
+        const tpl = (sl.settings.template ?? {}) as Record<string, unknown>;
+        const st = i.snapshot.stages.find((x) => x.id === String(tpl.stage ?? ""));
+        return st ? ` · ${st.name}` : "";
+      };
+      for (const sl of offer) {
+        const b = btn(`＋ ${sl.title || sl.cardType}${stageName(sl)}`, "app-cp-menu-item");
+        b.addEventListener("click", () => {
+          menu.remove();
+          void (async () => {
+            manifest.slots.push({ ...sl, pos: manifest.slots.length + 1, nav: manifest.slots.length + 1 });
+            await saveManifest(myBoard.id, manifest);
+            window.location.reload();
+          })();
+        });
+        menu.appendChild(b);
+      }
+      menu.style.top = "120px";
+      menu.style.left = "50%";
+      document.body.appendChild(menu);
+      const off = (e: PointerEvent) => {
+        if (!menu.contains(e.target as Node)) {
+          menu.remove();
+          document.removeEventListener("pointerdown", off, true);
+        }
+      };
+      setTimeout(() => document.addEventListener("pointerdown", off, true), 0);
     };
 
     const escalate = async () => {

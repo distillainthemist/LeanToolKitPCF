@@ -460,10 +460,26 @@ reschedule/cancel history with a reason picklist.
   HEALTH QUESTIONS joined the improvement settings (label · yes-no or
   1–5 · weight; score normalised to /10). Events reader
   `listInitiativeEvents`.
-- **P6b (next)** — metric KPI cards with values, kanban Verify/evidence/
-  reschedule upgrades, bound charter fields (+ the wizard's ⛓ toggle),
-  ＋ Add card from template, stage chips + 2px ring on tiles, future-
-  stage placeholders, Tiles view on the tab, Teams notify hardening.
+- **P6b — BUILT 2026-08-20 (dev, app-only)** — THE CASCADE GOES LIVE:
+  the priorities screen's ragsFor now rolls up real initiatives (direct
+  links + through child priorities via descendantPriorities;
+  `initiativeRag` on flags + linked-action position — metric state joins
+  with reporting/P9; `actionsForInitiatives` one-query;
+  `ragInputsFor`/`initiativesByPriority` pure + tested). The overlay's
+  Initiatives tab lists the real rows (status edge, ↓ inherited-from
+  prefix, stage chip, org · owner · n open · overdue, click → board;
+  confidential collapse "+ n confidential"), Actions tab + rail count
+  open/overdue, and **Add initiative** is LIVE — a sessionStorage handoff
+  opens the Improvement create flow pre-linked and LOCKED to the source
+  priority. createInitiative seeds one KpiTrendCard per mandatory metric
+  (titled "OEE (%) → 75"; values in-card). Header ⋮ gains **＋ Add card
+  from template** (the template's optional set not yet on the board,
+  stage-named). Improvement rows wear their live RAG edge; the metric
+  column reads "name → target".
+- **P6c (next)** — kanban Verify column + evidence attach + reschedule
+  reason prompt (ActionBoard control work), bound charter fields (+ the
+  wizard's ⛓ toggle), stage chips + 2px ring on tiles, future-stage
+  placeholders, Tiles view on the tab, metric-value rollup into RAG.
 - **P8 Gantt · P9 VDT + simulation · P10 Reporting** — designed
   (spec §2–§4); build after P5/P6.
 

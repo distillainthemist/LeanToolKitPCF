@@ -17,6 +17,13 @@ export async function actionsForBoard(boardId: string): Promise<LtkAction[]> {
   return rows.map(actionFromRow);
 }
 
+/** Every action linked to ANY initiative — one query for the cascade's
+ *  R/A/G rollups and the Improvement rows (P6b). */
+export async function actionsForInitiatives(): Promise<LtkAction[]> {
+  const rows = await allWhere(Ben_ltkactionsService.getAll, "ben_initiativeid ne null and ben_initiativeid ne ''");
+  return rows.map(actionFromRow);
+}
+
 /** The viewer's rollup for LeanHub — their whoId appears in assignees. */
 export async function actionsForViewer(whoId: string): Promise<LtkAction[]> {
   const rows = await allWhere(

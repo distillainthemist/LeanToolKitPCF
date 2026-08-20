@@ -64,6 +64,23 @@ export interface LifecycleCtx {
   periodsOnOffer: () => string[];
   currentPeriod: string;
   ragsFor: (p: Priority) => Rag[];
+  /** The initiatives behind a priority (direct + through children), for
+   *  the overlay's Initiatives/Actions tabs (P6b). */
+  initiativesFor: (p: Priority) => {
+    id: string;
+    title: string;
+    stageName: string;
+    pdcaFg: string;
+    pdcaBg: string;
+    ownerName: string;
+    orgName: string;
+    open: number;
+    overdue: number;
+    rag: Rag;
+    boardId: string;
+    inheritedFrom: string;
+    confidentialHidden: boolean;
+  }[];
   /** After any write: reload the cascade and repaint (scroll preserved). */
   changed: () => Promise<void>;
   /** Open the detail overlay for a priority (used by the review list). */
@@ -531,11 +548,52 @@ export function openPriorityOverlay(ctx: LifecycleCtx, p: Priority, onEdit: (p: 
     const body = el("div", "app-cp-ov-body");
     left.appendChild(body);
     if (tab === "initiatives") {
-      body.appendChild(el("div", "app-cp-muted", "No initiatives yet. Initiatives — with PDCA stage, owner and open actions — arrive with the initiative board; this priority's R/A/G will roll up from them."));
+      const rows = ctx.initiativesFor(live);
+      const shown = rows.filter((r) => !r.confidentialHidden);
+      if (shown.length === 0 && rows.length === 0) {
+        body.appendChild(el("div", "app-cp-muted", "No initiatives linked yet — Add initiative, or link one from the Improvement tab."));
+      }
+      for (const r of shown) {
+        const rowEl = el("div", "app-cp-ov-init");
+        rowEl.style.borderLeftColor = ctx.palette[ragPaletteKey(r.rag)] ?? "#9a948a";
+        const main = el("div", "app-cp-ov-init-main");
+        const t = el("div", "app-cp-ov-init-title");
+        if (r.inheritedFrom !== "") t.appendChild(el("span", "app-cp-muted", `↓ ${r.inheritedFrom} `));
+        t.appendChild(el("span", undefined, r.title));
+        main.appendChild(t);
+        main.appendChild(
+          el("div", "app-cp-ov-init-meta", [r.orgName, r.ownerName, `${r.open} open action${r.open === 1 ? "" : "s"}`, r.overdue > 0 ? `${r.overdue} overdue` : ""].filter((x) => x !== "").join(" · "))
+        );
+        rowEl.appendChild(main);
+        if (r.stageName !== "") {
+          const chip = el("span", "app-im-stagechip", r.stageName);
+          chip.style.color = r.pdcaFg;
+          chip.style.background = r.pdcaBg;
+          rowEl.appendChild(chip);
+        }
+        if (r.boardId !== "") {
+          rowEl.classList.add("app-cp-ov-link");
+          rowEl.addEventListener("click", () => {
+            close();
+            window.location.hash = `#/board/${r.boardId}`;
+          });
+        }
+        body.appendChild(rowEl);
+      }
+      const hidden = rows.length - shown.length;
+      if (hidden > 0) body.appendChild(el("div", "app-cp-muted", `+ ${hidden} confidential initiative${hidden === 1 ? "" : "s"}`));
     } else if (tab === "charter") {
       body.appendChild(el("div", "app-cp-muted", live.primaryInitiativeId !== "" ? "The primary initiative's charter shows here." : "No primary initiative linked. Its Canvas charter shows here, read-only, once one is."));
     } else if (tab === "actions") {
-      body.appendChild(el("div", "app-cp-muted", "Open actions across this priority's initiatives show here, overdue first, once initiatives exist."));
+      const rows2 = ctx.initiativesFor(live).filter((r) => !r.confidentialHidden && r.open > 0);
+      if (rows2.length === 0) body.appendChild(el("div", "app-cp-muted", "No open actions across this priority's initiatives."));
+      for (const r of rows2.sort((a, b) => b.overdue - a.overdue)) {
+        const line = el("div", "app-cp-ov-init-meta app-cp-ov-actline");
+        line.textContent = `${r.title} — ${r.open} open${r.overdue > 0 ? `, ${r.overdue} overdue` : ""}`;
+        if (r.overdue > 0) line.classList.add("app-im-overdue");
+        body.appendChild(line);
+      }
+      body.appendChild(el("div", "ltk-mw-help", "The per-action Gantt arrives with the actions timeline update."));
     } else {
       if (events === null) {
         body.appendChild(el("div", "app-cp-muted", "Loading history…"));
@@ -641,9 +699,12 @@ export function openPriorityOverlay(ctx: LifecycleCtx, p: Priority, onEdit: (p: 
     }
 
     const ac = section("Actions");
+    const initRows = ctx.initiativesFor(live);
+    const totOpen = initRows.reduce((a, r) => a + r.open, 0);
+    const totOverdue = initRows.reduce((a, r) => a + r.overdue, 0);
     const acLine = el("div", "app-cp-ov-actions");
-    acLine.appendChild(el("span", undefined, "0 open · "));
-    acLine.appendChild(el("span", "app-cp-ov-overdue-zero", "0 overdue"));
+    acLine.appendChild(el("span", undefined, `${totOpen} open · `));
+    acLine.appendChild(el("span", totOverdue > 0 ? "app-im-overdue" : "app-cp-ov-overdue-zero", `${totOverdue} overdue`));
     ac.appendChild(acLine);
     const gantt = btn("Gantt ›", "app-cp-ov-link app-cp-ov-gantt");
     gantt.disabled = true;
@@ -653,8 +714,19 @@ export function openPriorityOverlay(ctx: LifecycleCtx, p: Priority, onEdit: (p: 
     // bottom-anchored buttons: one solid primary
     const foot = el("div", "app-cp-ov-foot");
     const add = btn("Add initiative", "app-btn app-btn-primary");
-    add.disabled = true;
-    add.title = "Initiatives arrive with the initiative board";
+    add.title = "Create an initiative linked to this priority";
+    add.disabled = live.status !== "active";
+    add.addEventListener("click", () => {
+      // hand the priority to the Improvement tab's create flow (design 1.3:
+      // pre-filled and locked to the source priority)
+      try {
+        sessionStorage.setItem("ltk-pending-init-priority", JSON.stringify({ priorityId: live.id, label: live.statement.slice(0, 60) }));
+      } catch {
+        /* fine */
+      }
+      close();
+      window.location.hash = "#/improvement";
+    });
     foot.appendChild(add);
     if (can && live.status !== "active") {
       const reopen = btn("Reopen");

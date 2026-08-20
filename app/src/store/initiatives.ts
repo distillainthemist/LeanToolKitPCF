@@ -175,6 +175,31 @@ export async function createInitiative(
         return f.mandatory || s.cardType === "CanvasCard" || s.cardType === "ActionBoard";
       });
       const boardId = `init-${i.id}`;
+      const slots = keep.map((s, idx) => ({
+        pos: idx + 1,
+        w: s.w,
+        h: s.h,
+        nav: idx + 1,
+        cardId: s.cardId,
+        cardType: s.cardType,
+        title: s.title,
+        settingsJSON: s.settings,
+      }));
+      // one KPI-trend card per mandatory metric (design 2.4) — titled with
+      // the metric and its target; owners enter dated values in-card
+      const rand = () => Math.random().toString(36).slice(2, 6);
+      for (const m of header.metrics) {
+        slots.push({
+          pos: slots.length + 1,
+          w: 1,
+          h: 1,
+          nav: slots.length + 1,
+          cardId: `kpi-${rand()}`,
+          cardType: "KpiTrendCard",
+          title: `${m.name}${m.unit !== "" ? ` (${m.unit})` : ""}${m.target !== null ? ` → ${m.target}` : ""}`,
+          settingsJSON: { template: { stage: "", mandatory: true } },
+        });
+      }
       await upsertWhere(
         Ben_ltkboardsService,
         eq("ben_boardid", boardId),
@@ -188,16 +213,7 @@ export async function createInitiative(
           ben_manifestjson: JSON.stringify({
             grid: String(manifest.grid ?? "2"),
             columnTitles: manifest.columnTitles,
-            slots: keep.map((s, idx) => ({
-              pos: idx + 1,
-              w: s.w,
-              h: s.h,
-              nav: idx + 1,
-              cardId: s.cardId,
-              cardType: s.cardType,
-              title: s.title,
-              settingsJSON: s.settings,
-            })),
+            slots,
           }),
         }
       );
