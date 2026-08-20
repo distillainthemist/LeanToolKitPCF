@@ -110,6 +110,10 @@ export interface StandardRole extends TemplateRole {
 export interface ImprovementSettings {
   methods: string[];
   standardRoles: StandardRole[];
+  /** Header fields EVERY initiative carries, template regardless (Ben,
+   *  2026-08-20) — the counterpart of standard roles. Templates add their
+   *  own on top in the wizard's Fields step. */
+  standardFields: TemplateField[];
 }
 
 /** The people who may act for a role on a SITE's initiative: the role's
@@ -148,9 +152,12 @@ export function parseImprovementSettings(raw: string): ImprovementSettings {
           })
           .filter((r) => r.key !== "" && r.label !== "")
       : [];
-    return { methods: methods.length > 0 ? methods : [...METHODS], standardRoles: roles };
+    const fields = Array.isArray((o as { standardFields?: unknown }).standardFields)
+      ? parseFields(JSON.stringify((o as { standardFields?: unknown }).standardFields))
+      : [];
+    return { methods: methods.length > 0 ? methods : [...METHODS], standardRoles: roles, standardFields: fields };
   } catch {
-    return { methods: [...METHODS], standardRoles: [] };
+    return { methods: [...METHODS], standardRoles: [], standardFields: [] };
   }
 }
 
@@ -158,6 +165,7 @@ export function serializeImprovementSettings(s: ImprovementSettings): string {
   return JSON.stringify({
     methods: s.methods,
     standardRoles: s.standardRoles.map((r) => ({ key: r.key, label: r.label, multi: r.multi, timeCommitment: r.timeCommitment, people: r.people })),
+    standardFields: s.standardFields,
   });
 }
 

@@ -3318,3 +3318,11 @@ textarea.app-cp-statement { font-size: 14px; font-weight: 500; }
 .app-tw-method-handle:active { cursor: grabbing; }
 .app-tw-role-tc { width: auto; font-size: 12px; flex: 0 0 auto; }
 .app-tw-methods .app-area-row { flex-wrap: wrap; }
+/* wizard styling pass (Ben, 2026-08-20): consistent adders, table inputs */
+.app-tw-inline .ltk-mw-input { flex: 1 1 160px; min-width: 0; }
+.app-tw-table .ltk-mw-input { width: 100%; font-size: 12.5px; padding: 6px 8px; }
+.app-tw-tr { min-height: 40px; }
+.app-tw-stdfields { background: #f4f1ea; border: 1px solid #ece8e0; border-radius: 8px; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; }
+.app-tw-stdfield { display: flex; align-items: baseline; gap: 10px; font-size: 13px; }
+.app-tw-stdfield-name { font-weight: 600; }
+.app-tw-stdfield-opts { flex: 1 1 140px; min-width: 0; font-size: 12.5px; }

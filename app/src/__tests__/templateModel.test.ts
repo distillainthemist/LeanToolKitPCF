@@ -102,3 +102,13 @@ describe("standard roles: people per site", () => {
     expect(back.standardRoles[0].people).toEqual(s.standardRoles[0].people);
   });
 });
+
+describe("standard fields", () => {
+  it("parse/serialize alongside methods and roles", async () => {
+    const m = await import("../improvement/templateModel");
+    const s = m.parseImprovementSettings('{"standardFields":[{"key":"cost_centre","label":"Cost centre","kind":"picklist","options":["A"],"required":true}]}');
+    expect(s.standardFields).toEqual([{ key: "cost_centre", label: "Cost centre", kind: "picklist", options: ["A"], required: true }]);
+    expect(m.parseImprovementSettings(m.serializeImprovementSettings(s)).standardFields).toEqual(s.standardFields);
+    expect(m.parseImprovementSettings("").standardFields).toEqual([]);
+  });
+});

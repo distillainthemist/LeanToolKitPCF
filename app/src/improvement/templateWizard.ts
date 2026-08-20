@@ -470,6 +470,18 @@ export function mountTemplateWizard(parent: HTMLElement, templateId: string): ()
 
     // ---- step 4: Fields -----------------------------------------------------------------
     const fields = (form: HTMLElement) => {
+      if (imp.standardFields.length > 0) {
+        const std = el("div", "app-tw-stdfields");
+        std.appendChild(el("div", "app-tw-preview-h", "Standard fields — every initiative"));
+        for (const f of imp.standardFields) {
+          const line = el("div", "app-tw-stdfield");
+          line.appendChild(el("span", "app-tw-stdfield-name", f.label));
+          line.appendChild(el("span", "ltk-mw-help", `${f.kind}${f.required ? " · required" : ""}`));
+          std.appendChild(line);
+        }
+        std.appendChild(el("div", "ltk-mw-help", "Set in Settings → Improvement; templates add their own below."));
+        form.appendChild(std);
+      }
       const KINDS: { value: FieldKind; label: string }[] = [
         { value: "text", label: "Text" },
         { value: "number", label: "Number" },
@@ -747,8 +759,8 @@ export function mountTemplateWizard(parent: HTMLElement, templateId: string): ()
       theme: appTheme(),
       steps: [
         { key: "basics", label: "Basics", description: "What this template is and when to use it.", render: basics },
+        { key: "roles", label: "Roles", description: "Who holds what on an initiative — the gates in the next step pick their approvers from here.", render: roles },
         { key: "stages", label: "Stages & gates", description: "The path an initiative walks, and who signs off at each boundary.", render: stages },
-        { key: "roles", label: "Roles", description: "Who holds what on an initiative; gates pick approvers from here.", render: roles },
         { key: "fields", label: "Fields", description: "Extra header fields the initiative carries.", render: fields },
         { key: "metrics", label: "Metrics", description: "Metrics every initiative on this template must track.", render: metrics },
         { key: "board", label: "Initiative board", description: "The cards an initiative starts with, tagged by stage.", render: boardStep },
@@ -970,6 +982,89 @@ export async function renderImprovementSettings(body: HTMLElement, isSuper: bool
     };
     paintRoles();
     rBox.appendChild(roleList);
+
+    const fBox = section("Standard fields", "Header fields EVERY initiative carries, whichever template it uses — the counterpart of standard roles. Templates add their own fields on top.");
+    const KIND_OPTS: { value: FieldKind; label: string }[] = [
+      { value: "text", label: "Text" },
+      { value: "number", label: "Number" },
+      { value: "date", label: "Date" },
+      { value: "picklist", label: "Picklist" },
+      { value: "person", label: "Person" },
+    ];
+    const fieldList = el("div", "app-tw-methods");
+    const paintFields = () => {
+      clear(fieldList);
+      imp.standardFields.forEach((f, i) => {
+        const rowEl = el("div", "app-tw-method");
+        rowEl.appendChild(el("span", "app-tw-method-name", f.label));
+        const kind = el("select", "app-input app-tw-role-tc") as HTMLSelectElement;
+        for (const k of KIND_OPTS) {
+          const o = el("option", undefined, k.label) as HTMLOptionElement;
+          o.value = k.value;
+          kind.appendChild(o);
+        }
+        kind.value = f.kind;
+        kind.addEventListener("change", () => {
+          f.kind = kind.value as FieldKind;
+          persist();
+          paintFields();
+        });
+        rowEl.appendChild(kind);
+        if (f.kind === "picklist") {
+          const opts = el("input", "app-input app-tw-stdfield-opts") as HTMLInputElement;
+          opts.value = f.options.join(", ");
+          opts.placeholder = "Option A, Option B";
+          opts.addEventListener("change", () => {
+            f.options = opts.value.split(",").map((x) => x.trim()).filter((x) => x !== "");
+            persist();
+          });
+          rowEl.appendChild(opts);
+        }
+        const req = el("select", "app-input app-tw-role-tc") as HTMLSelectElement;
+        for (const [v, l] of [["no", "Optional"], ["yes", "Required"]] as const) {
+          const o = el("option", undefined, l) as HTMLOptionElement;
+          o.value = v;
+          req.appendChild(o);
+        }
+        req.value = f.required ? "yes" : "no";
+        req.addEventListener("change", () => {
+          f.required = req.value === "yes";
+          persist();
+        });
+        rowEl.appendChild(req);
+        const x = el("button", "app-org-x", "\u00d7") as HTMLButtonElement;
+        x.type = "button";
+        x.title = "Remove (existing initiatives keep their values)";
+        x.addEventListener("click", () => {
+          imp.standardFields.splice(i, 1);
+          persist();
+          paintFields();
+        });
+        rowEl.appendChild(x);
+        fieldList.appendChild(rowEl);
+      });
+      const addRow = el("div", "app-org-row");
+      const input = el("input", "app-input") as HTMLInputElement;
+      input.placeholder = "Add standard field (e.g. Cost centre)";
+      const commit = () => {
+        const v = input.value.trim();
+        if (v === "") return;
+        imp.standardFields.push({ key: keyFor(v, imp.standardFields.map((x) => x.key)), label: v, kind: "text", options: [], required: false });
+        input.value = "";
+        persist();
+        paintFields();
+      };
+      input.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") commit();
+      });
+      const add = el("button", "app-btn", "\uFF0B") as HTMLButtonElement;
+      add.type = "button";
+      add.addEventListener("click", commit);
+      addRow.append(input, add);
+      fieldList.appendChild(addRow);
+    };
+    paintFields();
+    fBox.appendChild(fieldList);
     body.appendChild(el("h3", "app-pr-h3 app-tw-templates-h", "Initiative templates"));
   }
   const all = await listTemplates();
