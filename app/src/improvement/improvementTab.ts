@@ -139,11 +139,19 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
       (f.method === "" || i.method === f.method) &&
       (f.pdca === "" || i.snapshot.stages.find((s) => s.id === i.stageId)?.pdca === f.pdca);
 
-    let filtersOpen = false;
+    /** The Documents-register filters popover: anchored under the Filters
+     *  button, groups of pills, Clear all / Done. It lives on the body so
+     *  a pill click can repaint the list beneath without closing it. */
+    let filterPop: HTMLElement | null = null;
+    let paintFilterPop: () => void = () => {};
+    const closeFilterPop = () => {
+      filterPop?.remove();
+      filterPop = null;
+    };
     const render = () => {
       clear(wrap);
       wrap.appendChild(renderHeader());
-      if (filtersOpen) wrap.appendChild(renderFilterRow());
+      if (filterPop) paintFilterPop();
       const groups = groupInitiatives(list.filter(visible), viewer);
       if (viewMode === "tiles") {
         // wall view (design 1.2): tiles for at-distance reading
@@ -262,10 +270,17 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
         if (fresh && at !== null) fresh.setSelectionRange(at, at);
       });
       head.appendChild(input);
-      const filters = btn(activeFilterCount() > 0 ? `Filters · ${activeFilterCount()}` : "Filters", "app-btn" + (filtersOpen ? " app-im-filters-on" : ""));
+      const filters = btn(
+        activeFilterCount() > 0 ? `Filters · ${activeFilterCount()}` : "Filters",
+        "app-btn app-docs-filtersbtn" + (activeFilterCount() > 0 ? " app-docs-filtersbtn-on" : "")
+      );
+      filters.title = "Filter the register";
       filters.addEventListener("click", () => {
-        filtersOpen = !filtersOpen;
-        render();
+        if (filterPop) {
+          closeFilterPop();
+          return;
+        }
+        openFilters(filters);
       });
       head.appendChild(filters);
       // the Documents-tab segmented control (accent fill on the active side)
@@ -285,55 +300,109 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
       return head;
     };
 
-    const renderFilterRow = (): HTMLElement => {
-      const bar = el("div", "app-im-toolbar");
-      const sel = (label: string, opts: [string, string][], cur: string, on: (v: string) => void): HTMLElement => {
-        const wrapEl = el("label", "app-im-filter");
-        wrapEl.appendChild(el("span", "app-im-filter-label", label));
-        const s = el("select", "app-input app-im-select") as HTMLSelectElement;
-        for (const [v, l] of opts) {
-          const o = el("option", "", l) as HTMLOptionElement;
-          o.value = v;
-          if (v === cur) o.selected = true;
-          s.appendChild(o);
+    const openFilters = (anchor: HTMLElement) => {
+      closeFilterPop();
+      const menu = el("div", "app-docs-menu app-docs-filterpop");
+      const body = el("div", "app-docs-filterpop-body");
+      menu.appendChild(body);
+      filterPop = menu;
+      const paintPop = () => {
+        clear(body);
+        const group = (label: string): HTMLElement => {
+          const g = el("div", "app-docs-fgroup");
+          g.appendChild(el("div", "app-docs-fgroup-label", label));
+          const pills = el("div", "app-docs-fpills");
+          g.appendChild(pills);
+          body.appendChild(g);
+          return pills;
+        };
+        /** One pill; `on` repaints both the list and this popover. */
+        const pill = (into: HTMLElement, label: string, on: boolean, pick: () => void) => {
+          const pb = btn(label, "app-docs-fpill" + (on ? " app-docs-fpill-on" : ""));
+          pb.setAttribute("aria-pressed", String(on));
+          pb.addEventListener("click", () => {
+            pick();
+            render();
+          });
+          into.appendChild(pb);
+        };
+        /** A group whose pills are exclusive; clicking the lit pill
+         *  clears to `empty` (the "All" reading) like the Documents pills. */
+        const exclusive = (label: string, opts: [string, string][], cur: string, empty: string, set: (v: string) => void) => {
+          const pills = group(label);
+          for (const [v, l] of opts) pill(pills, l, cur === v, () => set(cur === v ? empty : v));
+        };
+        if (sites.length > 1) {
+          exclusive("Site", sites.map((s) => [s.site, s.site] as [string, string]), f.site, "", (v) => {
+            f.site = v;
+          });
         }
-        s.addEventListener("change", () => on(s.value));
-        wrapEl.appendChild(s);
-        return wrapEl;
-      };
-      bar.appendChild(sel("Site", [["", "All sites"], ...sites.map((s) => [s.site, s.site] as [string, string])], f.site, (v) => {
-        f.site = v;
-        render();
-      }));
-      bar.appendChild(
-        sel("Stage", [["", "All"], ["plan", "Plan"], ["do", "Do"], ["check", "Check"], ["act", "Act"]], f.pdca, (v) => {
+        exclusive("Stage", [["plan", "Plan"], ["do", "Do"], ["check", "Check"], ["act", "Act"]], f.pdca, "", (v) => {
           f.pdca = v;
+        });
+        const periods = [...new Set([currentPeriod, ...list.map((i) => i.period)])].filter((p) => p !== "").sort();
+        exclusive("Period", periods.map((p) => [p, p] as [string, string]), f.period, "", (v) => {
+          f.period = v;
+        });
+        // status always has one pill lit (like Documents' "Modified")
+        const statusPills = group("Status");
+        for (const [v, l] of [["active", "Active"], ["completed", "Completed"], ["archived", "Archived"], ["all", "All"]] as const) {
+          pill(statusPills, l, f.status === v, () => {
+            f.status = v;
+          });
+        }
+        if (imp.methods.length > 0) {
+          exclusive("Method", imp.methods.map((m) => [m, m] as [string, string]), f.method, "", (v) => {
+            f.method = v;
+          });
+        }
+        const flagPills = group("Flags");
+        pill(flagPills, "⚑ Flagged only", f.flagOnly, () => {
+          f.flagOnly = !f.flagOnly;
+        });
+        const foot = el("div", "app-docs-fpop-foot");
+        const clearAll = btn("Clear all", "app-btn");
+        clearAll.addEventListener("click", () => {
+          // the site is the page's scope (the title says it), so it stays
+          f.pdca = "";
+          f.period = currentPeriod;
+          f.status = "active";
+          f.method = "";
+          f.flagOnly = false;
           render();
-        })
-      );
-      const periods = [...new Set([currentPeriod, ...list.map((i) => i.period)])].filter((p) => p !== "").sort();
-      bar.appendChild(sel("Period", [["", "All"], ...periods.map((p) => [p, p] as [string, string])], f.period, (v) => {
-        f.period = v;
-        render();
-      }));
-      bar.appendChild(
-        sel("Status", [["active", "Active"], ["completed", "Completed"], ["archived", "Archived"], ["all", "All"]], f.status, (v) => {
-          f.status = v;
-          render();
-        })
-      );
-      bar.appendChild(sel("Method", [["", "All"], ...imp.methods.map((m) => [m, m] as [string, string])], f.method, (v) => {
-        f.method = v;
-        render();
-      }));
-      const flag = btn(f.flagOnly ? "⚑ Flagged ✕" : "⚑ Flagged", "app-btn app-im-flagbtn" + (f.flagOnly ? " app-im-flagbtn-on" : ""));
-      flag.addEventListener("click", () => {
-        f.flagOnly = !f.flagOnly;
-        render();
-      });
-      bar.appendChild(flag);
-      return bar;
+        });
+        const done = btn("Done", "app-btn app-btn-primary");
+        done.addEventListener("click", () => closeFilterPop());
+        foot.append(clearAll, done);
+        body.appendChild(foot);
+      };
+      paintFilterPop = paintPop;
+      paintPop();
+      const r = anchor.getBoundingClientRect();
+      menu.style.top = `${r.bottom + 4}px`;
+      menu.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - 420))}px`;
+      document.body.appendChild(menu);
     };
+    // outside click / Escape close the popover (the Documents behaviour)
+    const onFilterPointer = (e: PointerEvent) => {
+      if (filterPop && !filterPop.contains(e.target as Node)) {
+        // the Filters button itself toggles; let its click handler decide
+        const t = e.target as HTMLElement;
+        if (t.closest?.(".app-docs-filtersbtn")) return;
+        closeFilterPop();
+      }
+    };
+    document.addEventListener("pointerdown", onFilterPointer);
+    cleanups.push(() => document.removeEventListener("pointerdown", onFilterPointer));
+    const onFilterKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && filterPop) {
+        e.stopPropagation();
+        closeFilterPop();
+      }
+    };
+    document.addEventListener("keydown", onFilterKey, true);
+    cleanups.push(() => document.removeEventListener("keydown", onFilterKey, true));
+    cleanups.push(closeFilterPop);
 
     const rowFor = (i: Initiative, meta: string): HTMLElement => {
       const row = el("div", "app-im-row");

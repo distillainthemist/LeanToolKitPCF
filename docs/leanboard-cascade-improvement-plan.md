@@ -512,6 +512,16 @@ reschedule/cancel history with a reason picklist.
   · org. DEFERRED to backlog: evidence attach on actions (the
   ben_ltkactionfile road exists; needs upload/list/download UI in the
   action dialog).
+- **Improvement tab polish — BUILT 2026-08-21/22 (dev, app-only)** —
+  brought to the Documents-register standard (docs/ui-standard.md):
+  one 44px control rail (＋ Initiative · search · Filters · List|Tiles),
+  My initiatives → Owned by my team → Other initiatives, escalation as
+  the notify-panel dialog, Edit details dialog (improvement/editDetails.ts),
+  cards with the canonical 10px-radius full border, and the FILTERS
+  POPOVER (the Documents one: `.app-docs-filterpop` groups of pills —
+  Site · Stage · Period · Status · Method · Flags — Clear all / Done,
+  pill clicks repaint the list beneath) replacing the tinted row of
+  selects.
 - **P8 Gantt · P9 VDT + simulation · P10 Reporting** — designed
   (spec §2–§4); build after P5/P6.
 

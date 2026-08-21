@@ -3363,12 +3363,6 @@ textarea.app-cp-statement { font-size: 14px; font-weight: 500; }
 .app-im-head .app-btn { height: 44px; min-height: 44px; box-sizing: border-box; }
 .app-im-head .app-docs-seg { height: 44px; box-sizing: border-box; align-items: stretch; }
 .app-im-head .app-docs-segbtn { min-height: 0; }
-.app-im-filters-on { border-color: var(--app-accent); color: var(--app-accent); }
-.app-im-toolbar { display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap; padding: 10px 12px; background: #faf9f7; border: 1px solid #f1efec; border-radius: 10px; }
-.app-im-filter { display: flex; flex-direction: column; gap: 3px; }
-.app-im-filter-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: #6d675c; font-weight: 700; }
-.app-im-select { width: auto; min-width: 120px; }
-.app-im-flagbtn-on { background: #fff7e0; border-color: #f0c36d; color: #7a4d00; }
 .app-im-table { display: flex; flex-direction: column; }
 .app-im-group { display: flex; align-items: center; gap: 12px; margin-top: 18px; padding: 4px 2px 6px; }
 .app-im-group-label { font-weight: 700; font-size: 15px; flex: 1; }

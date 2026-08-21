@@ -40,8 +40,8 @@ the same commit.
   `.app-link` (accent, hover underline). **One solid primary per
   surface.** Secondary actions go behind a kebab `⋮`.
 - **Inputs/selects**: `.app-input` (app screens) / `.ltk-mw-input`
-  (wizard shells). Labelled filters use a small caps label above the
-  control (`.app-im-filter` pattern), not a bare select.
+  (wizard shells). Register filters are NOT selects: they are the
+  filters popover (below).
 - **Chips**: pill radius 999px. Filter/tag chips outline `#d9d3c8`,
   selected = dark fill `#26241f` white text. People = initials circles
   (`.app-ib-avatar` / owner chips). Status chips tinted bg + strong fg.
@@ -58,8 +58,15 @@ the same commit.
    muted "n matching" count.
 2. **Action cluster** right: solid primary (`＋ …`), outline `Filters`
    (badged `Filters · n` when active), `List | Tiles` segmented, `⋮`.
-3. **Filters behind the button**, opening a labelled panel row on
-   `#faf9f7`, never a bare strip of selects.
+3. **Filters behind the button**: a popover anchored under `Filters`
+   (`.app-docs-menu.app-docs-filterpop`, 400px, scrolling body) — one
+   `.app-docs-fgroup` per dimension with a small-caps `-label`, values
+   as `.app-docs-fpill` pills (`-on` = accent tint; clicking the lit
+   pill clears to "all"), footer `Clear all` / primary `Done`. Outside
+   click and Escape close it; a pill click repaints the list beneath
+   WITHOUT closing. The page's scope (site) is not a counted filter.
+   Never a tinted row of labelled selects in the page (the Improvement
+   tab's first cut — retired 2026-08-22).
 4. **Tables**: a muted column-header row (12px, `#6d675c`, hairline
    bottom border), then FLAT rows with hairline dividers (`#f1efec`)
    and a subtle hover wash `#faf9f7` — not bordered card rows. A 4px
