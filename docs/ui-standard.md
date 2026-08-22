@@ -127,3 +127,7 @@ as a free-standing object is a card and gets the full recipe.
   look diverges.
 - ~~Card radii drifted 6/8/10px across priorities/walk/overlay~~ —
   normalised to the 10px recipe 2026-08-20.
+- ~~Documents rows hovered to a cool grey (`#f7f7f9`, dividers
+  `#efefef`; docs board-card rows `#f5f5f7`)~~ — aligned to the warm
+  wash `#faf9f7` / `#f1efec` 2026-08-22. No cool greys remain; any new
+  `#f5f5f7`-style value is drift.

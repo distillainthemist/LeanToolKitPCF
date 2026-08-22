@@ -1806,8 +1806,8 @@ input[type="color"].app-color:disabled { opacity: 0.4; cursor: default; }
 .app-doclist-head, .app-doclist-row { display: grid; gap: 10px; align-items: center; padding: 6px 8px; }
 .app-doclist-head { border-bottom: 2px solid #e5e5e5; font-size: 11.5px; color: #6b6b6b; }
 .app-doclist-scroll { flex: 1; overflow-y: auto; min-height: 0; }
-.app-doclist-row { border-bottom: 1px solid #efefef; cursor: pointer; font-size: 13.5px; }
-.app-doclist-row:hover { background: #f7f7f9; }
+.app-doclist-row { border-bottom: 1px solid #f1efec; cursor: pointer; font-size: 13.5px; }
+.app-doclist-row:hover { background: #faf9f7; }
 .app-doclist-cell { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .app-doclist-empty { padding: 24px; color: #6b6b6b; }
 .app-doclist-tail { padding: 6px 8px; font-size: 12px; color: #6b6b6b; }
@@ -2534,7 +2534,7 @@ button.app-doclist-hsort:hover { color: var(--app-accent, #2563eb); }
    the scroll surface for it */
 .app-docscard-list { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .app-docscard-row { display: flex; gap: 8px; align-items: center; border: none; background: none; text-align: left; padding: 5px 4px; border-radius: 6px; font-size: 13.5px; cursor: pointer; }
-.app-docscard-row:hover { background: #f5f5f7; }
+.app-docscard-row:hover { background: #faf9f7; }
 .app-docscard-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .app-docscard-stats { display: flex; gap: 12px; padding: 8px 4px 10px; }
 .app-docscard-stat { display: flex; flex-direction: column; align-items: center; gap: 2px; border-radius: 8px; padding: 8px 14px; font-size: 12px; background: #f2f2f2; }
@@ -2588,7 +2588,7 @@ button.app-doclist-hsort:hover { color: var(--app-accent, #2563eb); }
 .app-docs-probelog {
   margin-top: 10px;
   padding: 12px;
-  background: #f5f5f7;
+  background: #faf9f7;
   border-radius: 8px;
   font-size: 12px;
   line-height: 1.6;
