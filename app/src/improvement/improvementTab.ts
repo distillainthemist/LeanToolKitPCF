@@ -11,6 +11,7 @@ import { el, clear } from "../../../shared/ui/dom";
 import { showLoading } from "../loading";
 import { currentViewer } from "../runtime";
 import { boardHash } from "../links";
+import { dayLabel } from "../linkTitle";
 import { listPeople } from "../store/people";
 import type { RosterPerson } from "../store/mappers";
 import { improvementSettingsJson, orgJson, orgOwnersMap, prioritySettingsJson, siteCompanies } from "../store/config";
@@ -69,7 +70,7 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
 
   void (async () => {
     const who = currentViewer();
-    const [initiatives, templates, roster, owners, treeRaw, siteCo, impRaw, prSettingsRaw, initActions, allBoards, initRows, palettes] = await Promise.all([
+    const [initiatives, templates, roster, owners, treeRaw, siteCo, impRaw, prSettingsRaw, initActions, allBoards, initRows, palettes, cascade] = await Promise.all([
       listInitiatives(),
       listTemplates(),
       listPeople(),
@@ -82,11 +83,22 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
       listBoards().catch(() => []),
       rowsForInitiativeBoards().catch(() => []),
       appPalettes(),
+      // the priorities' statements, for the row meta line (all companies;
+      // a rename shows on the next open — no label is stored on the link)
+      loadCascade("").catch(() => null),
     ]);
     if (dead) return;
     stopLoading();
     const me = roster.find((p) => p.whoId === (who?.objectId ?? "")) ?? null;
     const imp = parseImprovementSettings(impRaw);
+    const priorityStatement = new Map((cascade?.priorities ?? []).map((p) => [p.id, p.statement]));
+    /** Who may act for a role on this initiative: the people assigned on
+     *  the row PLUS the site's standard-role fillers (the approval pool
+     *  the board header honours). */
+    const actorsForRole = (i: Initiative, key: string): { whoId: string; who: string }[] => {
+      const std = imp.standardRoles.find((r) => r.key === key);
+      return [...(i.roles[key] ?? []), ...(std ? roleFillersAt(std, i.org.site) : [])];
+    };
     const sites = parseOrgTree(treeRaw);
     const currentPeriod = periodFor(parsePrioritySettings(prSettingsRaw).period, todayIso());
     const ownedOrgKeys = Object.entries(owners)
@@ -164,6 +176,7 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
       }
       const table = el("div", "app-im-table");
       const roleLabel = (i: Initiative, key: string) => i.snapshot.roleLabels[key] ?? key;
+      const ownerName = (i: Initiative): string => (i.roles.owner ?? [])[0]?.who ?? "no owner";
       // 1 — my initiatives
       table.appendChild(groupHead(`My initiatives · ${groups.mine.length}`));
       if (groups.mine.length === 0) table.appendChild(note("You don't hold a role on any initiative yet."));
@@ -197,11 +210,11 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
         table.appendChild(head);
         if (scoped.length === 0) table.appendChild(note(`No initiatives in your orgs for ${f.period || "this period"}.`));
         else table.appendChild(columnHead());
-        for (const i of scoped.slice(0, 5)) table.appendChild(rowFor(i, `${(i.roles.owner ?? [])[0]?.who ?? "no owner"} · ${i.org.department || i.org.site}`));
+        for (const i of scoped.slice(0, 5)) table.appendChild(rowFor(i, ownerName(i)));
         if (scoped.length > 5) {
           const more = btn(`Show all ${scoped.length} ›`, "app-link app-im-more");
           more.addEventListener("click", () => {
-            for (const i of scoped.slice(5)) table.insertBefore(rowFor(i, `${(i.roles.owner ?? [])[0]?.who ?? "no owner"} · ${i.org.department || i.org.site}`), more);
+            for (const i of scoped.slice(5)) table.insertBefore(rowFor(i, ownerName(i)), more);
             more.remove();
           });
           table.appendChild(more);
@@ -213,7 +226,7 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
       table.appendChild(groupHead(`Other initiatives · ${others.length}`));
       if (others.length === 0) table.appendChild(note(`No other initiatives for ${f.period || "this period"}.`));
       else table.appendChild(columnHead());
-      for (const i of others) table.appendChild(rowFor(i, ""));
+      for (const i of others) table.appendChild(rowFor(i, ownerName(i)));
       if (groups.hiddenConfidential > 0) table.appendChild(note(`· ${groups.hiddenConfidential} confidential in this org`));
       wrap.appendChild(table);
     };
@@ -250,7 +263,8 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
       left.appendChild(el("div", "app-im-head-title", `Improvement — ${f.site || "All sites"}`));
       left.appendChild(el("div", "app-im-head-sub", f.period || "All periods"));
       const matching = list.filter(visible).length;
-      left.appendChild(el("div", "app-im-head-count", `${matching} initiative${matching === 1 ? "" : "s"} matching`));
+      const narrowed = search !== "" || activeFilterCount() > 0;
+      left.appendChild(el("div", "app-im-head-count", `${matching} initiative${matching === 1 ? "" : "s"}${narrowed ? " matching" : ""}`));
       head.appendChild(left);
       head.appendChild(el("span", "app-bar-gap"));
       const add = btn("＋ Initiative", "app-btn app-btn-primary");
@@ -419,8 +433,11 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
       else if (i.flag === "flag") titleLine.appendChild(flagChip("⚐ Needs support", "flag"));
       if (i.confidential) titleLine.appendChild(el("span", "app-im-chip app-im-chip-conf", "◈ Confidential"));
       main.appendChild(titleLine);
+      // priority statement · my roles / owner · org (the method is a filter
+      // dimension and the stage names already say it)
       const primary = i.priorities.find((p) => p.primary) ?? i.priorities[0] ?? null;
-      const metaBits = [primary ? "linked priority" : "Other", meta, i.method].filter((s) => s !== "");
+      const priorityText = primary ? (priorityStatement.get(primary.priorityId) ?? "Linked priority") : "Other";
+      const metaBits = [priorityText, meta, i.org.department || i.org.site].filter((s) => s !== "");
       main.appendChild(el("div", "app-im-meta", metaBits.join(" · ")));
       row.appendChild(main);
       // stage chip
@@ -460,16 +477,27 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
       const ng = nextGateFor(i);
       if (ng === null) gateCell.appendChild(el("span", "app-cp-muted", i.status === "active" ? "—" : i.status));
       else {
-        const when = ng.target !== "" ? `, ${ng.target.slice(5)}` : "";
         const overdue = ng.target !== "" && ng.target < todayIso();
-        const label = el("span", "", `${ng.fromName} → ${ng.toName}${when}`);
-        if (overdue) {
-          label.style.color = ragColor("red");
-          label.style.fontWeight = "600";
+        gateCell.appendChild(el("div", "", `${ng.fromName} → ${ng.toName}`));
+        if (ng.target !== "") {
+          const when = el("div", "", dayLabel(ng.target));
+          if (overdue) {
+            when.style.color = ragColor("red");
+            when.style.fontWeight = "600";
+          } else when.classList.add("app-cp-muted");
+          gateCell.appendChild(when);
         }
-        gateCell.appendChild(label);
-        if (ng.gated && ng.approverRoles.some((r) => (i.roles[r] ?? []).some((p) => p.whoId === viewer.whoId))) {
-          gateCell.appendChild(el("div", "app-im-awaiting", "awaiting you"));
+        // a pending request: "awaiting you" when YOUR decision is still
+        // outstanding (assigned or a site standard-role filler), else
+        // who it waits on
+        const pending = i.gate;
+        if (pending) {
+          const open = pending.approverRoles.filter((r) => !pending.decisions[r]);
+          const mine = open.filter((r) => actorsForRole(i, r).some((p) => p.whoId === viewer.whoId));
+          if (mine.length > 0) gateCell.appendChild(el("div", "app-im-awaiting", "awaiting you"));
+          else if (open.length > 0) {
+            gateCell.appendChild(el("div", "app-cp-muted", `awaiting ${open.map((r) => i.snapshot.roleLabels[r] ?? r).join(", ")}`));
+          }
         }
       }
       row.appendChild(gateCell);

@@ -521,7 +521,15 @@ reschedule/cancel history with a reason picklist.
   POPOVER (the Documents one: `.app-docs-filterpop` groups of pills —
   Site · Stage · Period · Status · Method · Flags — Clear all / Done,
   pill clicks repaint the list beneath) replacing the tinted row of
-  selects.
+  selects. Row review (external findings, 2026-08-22): meta line =
+  priority STATEMENT · my roles / owner · org (method dropped — a filter
+  dimension); "matching" only while search/filters narrow (the Documents
+  rule); next-gate cell = "Define → Measure" / "28 Aug" (red when
+  overdue) / "awaiting you" ONLY on a pending request the viewer (assigned
+  OR site standard-role filler) has not decided, else "awaiting <roles>".
+  REJECTED: grey edge on escalation (the RAG rule folds escalation in so
+  edge = tally colour), "All initiatives I can see" wording and a dark
+  segmented (both reverse Ben's calls / ui-standard).
 - **P8 Gantt · P9 VDT + simulation · P10 Reporting** — designed
   (spec §2–§4); build after P5/P6.
 
