@@ -420,23 +420,36 @@ export function canvasFieldsEditor(
         const bindWrap = el("span", "ltk-cs-bind");
         bindWrap.appendChild(el("span", "ltk-cs-bind-glyph" + (f.bound !== "" ? " ltk-cs-bind-on" : ""), "⛓"));
         const bind = el("select", "ltk-input ltk-cs-bind-sel") as HTMLSelectElement;
-        const opts: { value: string; label: string }[] = [
-          { value: "", label: "Not bound" },
-          { value: "title", label: "Initiative title" },
-          { value: "description", label: "Description" },
-          { value: "owner", label: "Owner" },
-          { value: "stage", label: "Stage" },
-          { value: "period", label: "Period" },
-          { value: "__custom", label: "Header field…" },
-        ];
-        if (f.bound.startsWith("field:") && !opts.some((o) => o.value === f.bound)) {
-          opts.splice(opts.length - 1, 0, { value: f.bound, label: `Field: ${f.bound.slice(6)}` });
+        const addOpt = (into: HTMLElement, value: string, label: string) => {
+          const opt = el("option", undefined, label) as HTMLOptionElement;
+          opt.value = value;
+          into.appendChild(opt);
+        };
+        addOpt(bind, "", "Not bound");
+        const header = el("optgroup") as HTMLOptGroupElement;
+        header.label = "Initiative header";
+        for (const [v, l] of [["title", "Initiative title"], ["description", "Description"], ["owner", "Owner"], ["stage", "Stage"], ["period", "Period"]]) addOpt(header, v, l);
+        bind.appendChild(header);
+        // the header FIELDS: grouped by where they are defined (standard /
+        // this template) when the host knows them; a typed key otherwise
+        const ctxFields = host.bindings?.fields ?? [];
+        const groups = new Map<string, HTMLOptGroupElement>();
+        for (const cf of ctxFields) {
+          let g = groups.get(cf.group);
+          if (!g) {
+            g = el("optgroup") as HTMLOptGroupElement;
+            g.label = cf.group;
+            groups.set(cf.group, g);
+            bind.appendChild(g);
+          }
+          addOpt(g, `field:${cf.key}`, cf.label);
         }
-        for (const o of opts) {
-          const opt = el("option", undefined, o.label) as HTMLOptionElement;
-          opt.value = o.value;
-          bind.appendChild(opt);
+        if (f.bound.startsWith("field:") && !ctxFields.some((cf) => `field:${cf.key}` === f.bound)) {
+          // a key the template no longer defines (or no context): keep it
+          // selectable so the binding is visible, not silently dropped
+          addOpt(bind, f.bound, `Field: ${f.bound.slice(6)}${ctxFields.length > 0 ? " (not in template)" : ""}`);
         }
+        if (ctxFields.length === 0) addOpt(bind, "__custom", "Header field…");
         bind.value = f.bound;
         if (bind.value !== f.bound) bind.value = "";
         bind.disabled = host.readOnly;

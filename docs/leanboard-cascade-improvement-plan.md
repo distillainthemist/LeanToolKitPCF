@@ -496,7 +496,13 @@ reschedule/cancel history with a reason picklist.
 - **P6d — BUILT 2026-08-20 (dev, app-only)** — BOUND CHARTER FIELDS
   (design 2.5): CanvasField gains `bound` ("" = free; title ·
   description · owner · stage · period · field:<key>); the canvas
-  layout inspector grows the ⛓ select (custom keys via a prompt); at
+  layout inspector grows the ⛓ select — header targets + the HEADER
+  FIELDS as grouped options ("Standard fields" / "Template fields ·
+  <name>") when the studio sits on a `tpl-`/`init-` board (Ben,
+  2026-08-22: selectable, not typed — `headerFieldsForBoard` in
+  improvement/binding.ts feeds `setBindingContext`; a typed key remains
+  only the no-context fallback, and a key the template no longer defines
+  stays visible as "(not in template)"); at
   runtime a bound field renders as the sunken dashed ⛓ tile — on an
   `init-` board a CanvasBinding provider (improvement/binding.ts,
   passed through CardMount.binding by board.ts tiles AND the focused

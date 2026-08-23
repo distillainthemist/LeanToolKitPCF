@@ -25,6 +25,14 @@ export interface FieldHost {
   /** Rotation-focus builder (PrioritiesCard): the board's rotation topics
    *  and the org's pillars. Absent = the builder falls back to JSON. */
   rotation?: RotationContext;
+  /** Charter ⛓ binding (CanvasCard on a template / initiative board):
+   *  the header fields a canvas field may bind to — the app's standard
+   *  fields + the template's own. Absent = the select offers a typed key. */
+  bindings?: BindingContext;
+}
+
+export interface BindingContext {
+  fields: { key: string; label: string; group: string }[];
 }
 
 export interface RotationContext {

@@ -477,6 +477,21 @@ export function openCardStudio(opts: StudioOptions): Promise<StudioResult> {
         }
       })();
     }
+    if (opts.slot.cardType === "CanvasCard" && (opts.boardId.startsWith("tpl-") || opts.boardId.startsWith("init-"))) {
+      // charter ⛓ binding (design 2.5): the header fields this template
+      // defines — the app's standard fields + the template's own — feed
+      // the inspector's select, so nobody types a key by hand
+      void (async () => {
+        try {
+          const { headerFieldsForBoard } = await import("../improvement/binding");
+          const fields = await headerFieldsForBoard(opts.boardId);
+          if (!overlay.isConnected) return;
+          settingsEditor.setBindingContext({ fields });
+        } catch {
+          /* the select falls back to a typed key */
+        }
+      })();
+    }
     settingsEditor.setDraft(draft, true); // type is fixed: chosen at add time
     settings = settingsEditor;
     mountCard();
