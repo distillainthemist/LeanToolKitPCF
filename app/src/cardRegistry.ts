@@ -251,6 +251,22 @@ function docsCardMounter(kind: "docs" | "health"): CardMounter {
   };
 }
 
+/** The Actions Gantt ritual card (P8) — lazy for the same reason. */
+function ganttCardMounter(): CardMounter {
+  return (opts) => {
+    let dead = false;
+    let inner: (() => void) | null = null;
+    void import("./improvement/ganttCard").then((m) => {
+      if (!dead) inner = m.mountGanttCard(opts);
+    });
+    return () => {
+      dead = true;
+      inner?.();
+      opts.host.replaceChildren();
+    };
+  };
+}
+
 /** The Priorities ritual card (cascade plan P4) lives in src/priorities/
  *  (lazy chunk) — the board pays only for this wrapper. */
 function prioritiesCardMounter(): CardMounter {
@@ -1193,6 +1209,8 @@ const REGISTRY: Record<string, CardMounter> = {
   // Cascaded priorities in the ritual (cascade plan P4, design §8) —
   // dynamic import keeps the priorities screen out of the board chunk.
   PrioritiesCard: prioritiesCardMounter(),
+  // Actions Gantt in the ritual (P8) — same lazy pattern.
+  GanttCard: ganttCardMounter(),
 
   // A live, read-only window onto ANOTHER board's card: resolves the source
   // slot and mounts the source's real card type with the SOURCE's ids and

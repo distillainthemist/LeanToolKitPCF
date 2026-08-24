@@ -3050,7 +3050,7 @@ textarea.app-cp-statement { font-size: 14px; font-weight: 500; }
   color: #26241f;
   border-radius: 12px;
   box-shadow: 0 12px 48px rgba(0, 0, 0, 0.35);
-  width: min(860px, 100%); /* single column since the rail's removal (2026-08-24) */
+  width: min(1080px, 100%); /* sized for the Actions tab's Gantt (P8) */
   max-height: 100%;
   display: flex;
   flex-direction: column;
@@ -3469,3 +3469,70 @@ textarea.app-cp-statement { font-size: 14px; font-weight: 500; }
 .app-im-tile-line { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .app-im-tile-metric { font-size: 13px; }
 .app-im-tile-owner { font-size: 12px; color: #6d675c; }
+
+/* ---- Actions Gantt (P8, design §2) ---------------------------------------- */
+.app-gx { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.app-gx-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.app-gx-sel { width: auto; min-width: 130px; }
+.app-gx-more { min-width: 40px; padding: 0 10px; }
+.app-gx-stage { overflow-x: auto; border: 1px solid #e4dfd6; border-radius: 10px; background: #fff; }
+.app-gx-grid { display: flex; flex-direction: column; min-width: max-content; }
+.app-gx-row { display: flex; align-items: stretch; border-bottom: 1px solid #f1efec; min-height: 40px; }
+.app-gx-row:last-child { border-bottom: none; }
+.app-gx-headrow { min-height: 28px; border-bottom: 1px solid #ece8e0; position: sticky; top: 0; background: #fff; z-index: 3; }
+.app-gx-label {
+  flex: 0 0 300px; width: 300px; box-sizing: border-box; padding: 6px 10px;
+  position: sticky; left: 0; background: #fff; z-index: 2;
+  border-right: 1px solid #ece8e0; display: flex; flex-direction: column; justify-content: center; gap: 1px;
+}
+.app-gx-headlabel { min-height: 0; }
+.app-gx-label-quiet { color: #6d675c; font-size: 12px; }
+.app-gx-label-title { font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.app-gx-label-meta { font-size: 11.5px; color: #6d675c; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.app-gx-tl { position: relative; flex: none; }
+.app-gx-week { position: absolute; top: 4px; font-size: 11px; color: #6d675c; white-space: nowrap; border-left: 1px solid #ece8e0; padding-left: 4px; height: 100%; }
+.app-gx-weekend { position: absolute; top: 0; bottom: 0; background: #faf9f7; }
+.app-gx-today { position: absolute; top: 0; bottom: 0; width: 2px; background: rgba(192, 57, 43, 0.55); z-index: 1; }
+.app-gx-band { position: absolute; top: 0; bottom: 0; overflow: hidden; }
+.app-gx-band-label { font-size: 10.5px; font-weight: 700; white-space: nowrap; padding: 2px 4px; display: inline-block; }
+.app-gx-bandsrow { min-height: 26px; }
+.app-gx-actionbar {
+  position: absolute; top: 50%; transform: translateY(-50%); height: 16px;
+  border-radius: 5px; z-index: 1; touch-action: none;
+}
+.app-gx-bar-sel { outline: 2px solid #26241f; outline-offset: 1px; }
+.app-gx-diamond {
+  position: absolute; top: 50%; width: 12px; height: 12px;
+  transform: translate(-50%, -50%) rotate(45deg); border-radius: 2px; z-index: 1;
+}
+.app-gx-summary { position: absolute; top: 50%; transform: translateY(-50%); height: 8px; border-radius: 4px; opacity: 0.8; }
+.app-gx-grouprow { background: #faf9f7; }
+.app-gx-grouplabel { background: #faf9f7; flex-direction: row; align-items: center; gap: 6px; font-size: 13px; font-weight: 700; }
+.app-gx-caret { color: #6d675c; }
+.app-gx-group-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.app-gx-group-count { color: #6d675c; font-weight: 400; flex: none; }
+.app-gx-steppers { position: absolute; top: calc(50% + 12px); display: flex; gap: 4px; z-index: 4; }
+.app-gx-step { min-height: 30px; padding: 0 8px; font-size: 12px; background: #fff; }
+.app-gx-more-link { font-size: 12.5px; margin-right: 10px; }
+.app-gx-empty { padding: 22px 14px; color: #6d675c; font-size: 13.5px; }
+.app-gx-legend { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; font-size: 12px; color: #6d675c; }
+.app-gx-key { display: inline-flex; align-items: center; gap: 5px; }
+.app-gx-swatch { width: 18px; height: 10px; border-radius: 3px; display: inline-block; }
+.app-gx-swatch-diamond { width: 10px; height: 10px; border-radius: 2px; transform: rotate(45deg); }
+.app-gx-window { margin-left: auto; font-variant-numeric: tabular-nums; }
+.app-gx-dlgprev { font-size: 13px; color: #6d675c; margin-bottom: 8px; }
+/* list view */
+.app-gx-list { display: flex; flex-direction: column; border: 1px solid #e4dfd6; border-radius: 10px; background: #fff; overflow: hidden; }
+.app-gx-listgroup { font-size: 13px; font-weight: 700; padding: 10px 12px 4px; }
+.app-gx-listrow { display: flex; align-items: center; gap: 12px; padding: 8px 12px; border-bottom: 1px solid #f1efec; }
+.app-gx-listrow:last-child { border-bottom: none; }
+.app-gx-listrow-edit { cursor: pointer; }
+.app-gx-listrow-edit:hover { background: #faf9f7; }
+.app-gx-listmain { flex: 1; min-width: 0; }
+.app-gx-listdates { font-size: 12.5px; color: #6d675c; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.app-gx-statechip { font-size: 11.5px; font-weight: 700; padding: 2px 9px; border-radius: 999px; white-space: nowrap; }
+/* the Improvement tab's Gantt overlay (P8) */
+.app-im-ganttdlg { width: min(1180px, 94vw); max-height: 92vh; }
+.app-im-ganttdlg-head { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px 8px; }
+.app-im-ganttdlg-title { font-size: 17px; font-weight: 700; }
+.app-im-ganttdlg-body { padding: 0 18px 18px; overflow: auto; min-height: 300px; }

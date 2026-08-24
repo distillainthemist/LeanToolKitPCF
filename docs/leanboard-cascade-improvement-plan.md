@@ -552,8 +552,29 @@ reschedule/cancel history with a reason picklist.
   the Initiatives tab now groups rows by RAG: Issue · At risk · On
   track · No signal, dot + count heads, empty groups omitted); the rail
   itself removed — single-column desk, overlay narrowed 1100→860px.
-- **P8 Gantt · P9 VDT + simulation · P10 Reporting** — designed
-  (spec §2–§4); build after P5/P6.
+- **P8 Actions Gantt — BUILT 2026-08-25 (dev, app-only)** — ONE control
+  (`improvement/gantt.ts`, §2): List | Gantt switch (Ben's addition —
+  every surface flips to a plain action list), scope seg, window presets
+  2w/4w/8w/13w (per-preset day widths), assignee/status filters (org
+  scope), ⋮ show-completed + CSV export. Bars per §2.2 (accent / red
+  overdue / hatched-amber verify / grey done, diamond = no start date),
+  PDCA stage bands from stageTargets with target-date labels, weekend
+  tint, 55%-red today line, footer legend. Editing per §2.3: drag moves
+  both dates, edge-resize, ANY due move opens the reschedule dialog
+  (ActionBoard's four reasons + note → ActionHistoryEntry), Cancel/Esc
+  snaps back, left-edge start drag silent; touch taps select →
+  ±1d/±1w steppers + Set dates…. Org scope per §2.4: group row per
+  initiative (RAG edge, stage chip, count), collapsed summary bar,
+  3-row cap with "n more ›" + Open board. Entry points: the priority
+  overlay's ACTIONS TAB (ctx.ganttFor — raw initiatives+actions,
+  confidential excluded; overlay widened 860→1080px for it), the
+  Improvement tab team group's Gantt › (scrim overlay), and the
+  **GanttCard** ritual card (registry + lazy mounter; gxSite/gxDept/
+  gxWeeks config, centres on the meeting's week, readOnly follows the
+  card). Actions matched by initiativeId (instanceKey fallback). NOT
+  built: TV mode ⋮ toggle (present-mode sizing) — the card at tile size
+  is already the at-distance view; revisit if a wall needs it.
+- **P9 VDT + simulation · P10 Reporting** — designed (spec §3–§4).
 
 Each phase ships behind the usual gates + `pac code push`; the specs'
 acceptance checks are the PR checklist. Schema phases make the next

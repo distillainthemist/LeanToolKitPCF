@@ -140,6 +140,7 @@ export const LINK_SOURCE_EXCLUDED = new Set([
   "DocsCard",
   "DocHealth",
   "PrioritiesCard",
+  "GanttCard",
   // windows onto other boards' cards — no chains, same as LinkCard
   "CaptureRollup",
   "CanvasRollup",
@@ -1047,6 +1048,49 @@ export const CARDS: CardSpec[] = [
           { value: "dynamic", label: "Dynamic (rich cards)" },
         ],
         help: "How the matrix cards read when the card is focused.",
+      },
+    ],
+    appBound: [],
+    policies: [],
+  },
+  {
+    // Actions Gantt in the ritual (P8, design §2): the org's initiative
+    // actions on a timeline, centred on the meeting's week. List | Gantt
+    // switch, window presets and filters live inside the card.
+    type: "GanttCard",
+    standardContent: "preview",
+    standardContentNote:
+      "This card charts live initiative actions — there is no standard content to author.",
+    label: "Actions Gantt",
+    group: "Reference",
+    description:
+      "The org's initiative actions on a timeline — stage-aware bars, overdue and awaiting-verification states, switchable to a plain list.",
+    config: [
+      {
+        key: "gxSite",
+        label: "Site",
+        kind: "text",
+        help: "Blank = this board's own site.",
+        placeholder: "Bendigo Distillery",
+      },
+      {
+        key: "gxDepartment",
+        label: "Department",
+        kind: "text",
+        help: "Blank = this board's own department (or the whole site when the board has none).",
+        placeholder: "Packaging",
+      },
+      {
+        key: "gxWeeks",
+        label: "Window",
+        kind: "enum",
+        options: [
+          { value: "2", label: "2 weeks" },
+          { value: "4", label: "4 weeks" },
+          { value: "8", label: "8 weeks" },
+          { value: "13", label: "13 weeks" },
+        ],
+        help: "Weeks shown, centred on the meeting's week.",
       },
     ],
     appBound: [],

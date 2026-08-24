@@ -49,6 +49,7 @@ describe("policy matrix coverage", () => {
       "DocsCard",
       "EmbedCard",
       "EscalationViewer",
+      "GanttCard",
       "LinkCard",
       "MeetingScheduler",
       "PrioritiesCard",

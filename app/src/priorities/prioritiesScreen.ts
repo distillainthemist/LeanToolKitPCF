@@ -57,7 +57,7 @@ import { loadPriorityPrefs, savePriorityPrefs, ViewMode } from "./prefs";
 import { mountWalk } from "./walk";
 import { initialsFor } from "../../../shared/schema/people";
 import { carryForwardFlow, cascadeDialog, cascadeReview, closeDialog, closePriority, LifecycleCtx, openPriorityOverlay, reopenPriority, sendCascade } from "./lifecycle";
-import { initiativesByPriority, ragInputsFor } from "../improvement/initiativeModel";
+import { Initiative, initiativesByPriority, ragInputsFor } from "../improvement/initiativeModel";
 import { PDCA_TOKENS } from "../improvement/templateModel";
 import { buildMetricState } from "../improvement/metricValues";
 import {
@@ -364,6 +364,28 @@ export function mountPriorities(parent: HTMLElement, opts: PrioritiesMountOpts =
       periodsOnOffer: () => periodsOnOffer(),
       currentPeriod,
       ragsFor,
+      ganttFor: (p) => {
+        const ids = new Set([p.id, ...descendantPriorities(p, data.priorities).map((x) => x.id)]);
+        const seen = new Set<string>();
+        const inits: Initiative[] = [];
+        for (const id of ids) {
+          for (const i of byPriority.get(id) ?? []) {
+            if (seen.has(i.id) || i.confidential) continue;
+            seen.add(i.id);
+            inits.push(i);
+          }
+        }
+        const today = todayIso();
+        return {
+          initiatives: inits,
+          actions: initiativeActions,
+          ragFor: (i: Initiative) => {
+            const inputs = ragInputsFor(i, initiativeActions, today);
+            inputs.metric = metricState.get(i.id)?.rag ?? null;
+            return initiativeRag(inputs);
+          },
+        };
+      },
       initiativesFor: (p) => {
         const today = todayIso();
         const ids = [p, ...descendantPriorities(p, data.priorities)];

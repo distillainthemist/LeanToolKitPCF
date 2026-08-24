@@ -77,6 +77,13 @@ export interface LifecycleCtx {
     inheritedFrom: string;
     confidentialHidden: boolean;
   }[];
+  /** The raw initiatives + actions behind a priority — the Actions tab's
+   *  Gantt (P8). Confidential initiatives are excluded outright. */
+  ganttFor: (p: Priority) => {
+    initiatives: import("../improvement/initiativeModel").Initiative[];
+    actions: import("../../../shared/schema/actions").LtkAction[];
+    ragFor: (i: import("../improvement/initiativeModel").Initiative) => "green" | "amber" | "red" | "grey";
+  };
   /** After any write: reload the cascade and repaint (scroll preserved). */
   changed: () => Promise<void>;
   /** Open the detail overlay for a priority (used by the review list). */
@@ -657,18 +664,32 @@ export function openPriorityOverlay(ctx: LifecycleCtx, p: Priority, onEdit: (p: 
     } else if (tab === "charter") {
       body.appendChild(el("div", "app-cp-muted", live.primaryInitiativeId !== "" ? "The primary initiative's charter shows here." : "No primary initiative linked. Its Canvas charter shows here, read-only, once one is."));
     } else if (tab === "actions") {
-      const rows2 = ctx.initiativesFor(live).filter((r) => !r.confidentialHidden && r.open > 0);
-      if (rows2.length === 0) body.appendChild(el("div", "app-cp-muted", "No open actions across this priority's initiatives."));
-      for (const r of rows2.sort((a, b) => b.overdue - a.overdue)) {
-        const line = el("div", "app-cp-ov-init-meta app-cp-ov-actline");
-        line.textContent = `${r.title} — ${r.open} open${r.overdue > 0 ? `, ${r.overdue} overdue` : ""}`;
-        if (r.overdue > 0) {
-          line.style.color = ctx.palette[ragPaletteKey("red")] ?? "";
-          line.style.fontWeight = "600";
-        }
-        body.appendChild(line);
+      // the actions Gantt (P8) — the List | Gantt switch lives inside it
+      const g = ctx.ganttFor(live);
+      if (g.initiatives.length === 0) {
+        body.appendChild(el("div", "app-cp-muted", "No initiatives linked yet — their actions chart here."));
+      } else {
+        const host = el("div", "app-cp-ov-gantthost");
+        body.appendChild(host);
+        void import("../improvement/gantt").then((m) => {
+          if (!host.isConnected) return;
+          m.mountGantt({
+            host,
+            scopes: [{ key: "org", label: "All initiatives" }],
+            initiatives: g.initiatives,
+            actions: g.actions,
+            palette: ctx.palette,
+            ragFor: g.ragFor,
+            canEdit: ctx.canManage(live.org),
+            actor: ctx.actor(),
+            onChanged: () => void ctx.changed(),
+            onOpenBoard: (boardId) => {
+              close();
+              window.location.hash = `#/board/${boardId}`;
+            },
+          });
+        });
       }
-      body.appendChild(el("div", "ltk-mw-help", "The per-action Gantt arrives with the actions timeline update."));
     } else if (tab === "cascade") {
       const ln = el("div", "app-cp-ov-cascadebody");
       const parent = live.parentId !== "" ? data.priorities.find((x) => x.id === live.parentId) : undefined;

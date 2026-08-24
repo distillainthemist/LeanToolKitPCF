@@ -215,8 +215,8 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
         });
         head.appendChild(scope);
         const gantt = btn("Gantt ›", "app-cp-ov-link app-im-gantt");
-        gantt.disabled = true;
-        gantt.title = "The org-wide actions Gantt arrives with the initiative board";
+        gantt.title = "The team's actions on a timeline (P8)";
+        gantt.addEventListener("click", () => openGantt(scoped));
         head.appendChild(gantt);
         table.appendChild(head);
         if (scoped.length === 0) table.appendChild(note(`No initiatives in your orgs for ${f.period || "this period"}.`));
@@ -623,6 +623,56 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
 
     const openInitiative = (i: Initiative) => {
       if (i.boardId !== "") window.location.hash = boardHash(i.boardId);
+    };
+
+    /** The org-wide Gantt overlay (P8): the scoped initiatives' actions
+     *  on one timeline; the List | Gantt switch lives inside the control. */
+    const openGantt = (scoped: Initiative[]) => {
+      const scrim = el("div", "app-docs-scrim");
+      const dlg = el("div", "app-docs-dialog app-im-ganttdlg");
+      const head = el("div", "app-im-ganttdlg-head");
+      head.appendChild(el("div", "app-im-ganttdlg-title", "Actions Gantt"));
+      const x = btn("✕", "app-btn app-cp-ov-close");
+      x.style.position = "static";
+      x.title = "Close";
+      head.appendChild(x);
+      dlg.appendChild(head);
+      const host = el("div", "app-im-ganttdlg-body");
+      dlg.appendChild(host);
+      scrim.appendChild(dlg);
+      wrap.appendChild(scrim);
+      let unmount: (() => void) | null = null;
+      const closeDlg = () => {
+        unmount?.();
+        scrim.remove();
+      };
+      x.addEventListener("click", closeDlg);
+      scrim.addEventListener("pointerdown", (e) => {
+        if (e.target === scrim) closeDlg();
+      });
+      cleanups.push(closeDlg);
+      void import("./gantt").then((m) => {
+        if (!scrim.isConnected) return;
+        unmount = m.mountGantt({
+          host,
+          scopes: [{ key: "org", label: "My team" }],
+          initiatives: scoped,
+          actions: initActions,
+          palette: stateColors,
+          ragFor: (i) => {
+            const inputs = ragInputsFor(i, initActions, todayIso());
+            inputs.metric = metricState.get(i.id)?.rag ?? null;
+            return initiativeRag(inputs);
+          },
+          canEdit: true,
+          actor: actor(),
+          onChanged: () => render(),
+          onOpenBoard: (boardId) => {
+            closeDlg();
+            window.location.hash = boardHash(boardId);
+          },
+        });
+      });
     };
 
     const openRowMenu = (anchor: HTMLElement, i: Initiative) => {
