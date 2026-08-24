@@ -3532,8 +3532,5 @@ textarea.app-cp-statement { font-size: 14px; font-weight: 500; }
 .app-gx-listmain { flex: 1; min-width: 0; }
 .app-gx-listdates { font-size: 12.5px; color: #6d675c; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .app-gx-statechip { font-size: 11.5px; font-weight: 700; padding: 2px 9px; border-radius: 999px; white-space: nowrap; }
-/* the Improvement tab's Gantt overlay (P8) */
-.app-im-ganttdlg { width: min(1180px, 94vw); max-height: 92vh; }
-.app-im-ganttdlg-head { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px 8px; }
-.app-im-ganttdlg-title { font-size: 17px; font-weight: 700; }
-.app-im-ganttdlg-body { padding: 0 18px 18px; overflow: auto; min-height: 300px; }
+/* the Improvement tab's inline Gantt view (P8) */
+.app-im-gantthost { min-height: 300px; }

@@ -150,7 +150,8 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
       teamScope: string; // "" = my orgs + children (all owned keys)
     }
     const f: Filters = { pdca: "", period: currentPeriod, status: "active", flagOnly: false, method: "", teamScope: "" };
-    let viewMode: "list" | "tiles" = "list";
+    let viewMode: "list" | "tiles" | "gantt" = "list";
+    let ganttUnmount: (() => void) | null = null;
     let search = "";
 
     const visible = (i: Initiative): boolean =>
@@ -175,7 +176,39 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
       clear(wrap);
       wrap.appendChild(renderHeader());
       if (filterPop) paintFilterPop();
+      ganttUnmount?.();
+      ganttUnmount = null;
       const groups = groupInitiatives(list.filter(visible), viewer);
+      if (viewMode === "gantt") {
+        // the whole current scope (crumb + filters) on one timeline; the
+        // control's own List switch is hidden — the header seg is the switch
+        const host = el("div", "app-im-gantthost");
+        wrap.appendChild(host);
+        void import("./gantt").then((m) => {
+          if (!host.isConnected) return;
+          ganttUnmount = m.mountGantt({
+            host,
+            scopes: [{ key: "org", label: orgName(scope) }],
+            initiatives: groups.all,
+            actions: initActions,
+            palette: stateColors,
+            ragFor: (i) => {
+              const inputs = ragInputsFor(i, initActions, todayIso());
+              inputs.metric = metricState.get(i.id)?.rag ?? null;
+              return initiativeRag(inputs);
+            },
+            canEdit: true,
+            actor: actor(),
+            hideViewSwitch: true,
+            onChanged: () => {},
+            onOpenBoard: (boardId) => {
+              window.location.hash = boardHash(boardId);
+            },
+          });
+        });
+        if (groups.hiddenConfidential > 0) wrap.appendChild(note(`· ${groups.hiddenConfidential} confidential in this org`));
+        return;
+      }
       if (viewMode === "tiles") {
         // wall view (design 1.2): tiles for at-distance reading
         const grid = el("div", "app-im-tiles");
@@ -214,10 +247,6 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
           render();
         });
         head.appendChild(scope);
-        const gantt = btn("Gantt ›", "app-cp-ov-link app-im-gantt");
-        gantt.title = "The team's actions on a timeline (P8)";
-        gantt.addEventListener("click", () => openGantt(scoped));
-        head.appendChild(gantt);
         table.appendChild(head);
         if (scoped.length === 0) table.appendChild(note(`No initiatives in your orgs for ${f.period || "this period"}.`));
         else table.appendChild(columnHead());
@@ -376,17 +405,14 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
       head.appendChild(filters);
       // the Documents-tab segmented control (accent fill on the active side)
       const seg = el("div", "app-docs-seg");
-      const listBtn = btn("List", "app-docs-segbtn" + (viewMode === "list" ? " app-docs-segbtn-on" : ""));
-      const tilesBtn = btn("Tiles", "app-docs-segbtn" + (viewMode === "tiles" ? " app-docs-segbtn-on" : ""));
-      listBtn.addEventListener("click", () => {
-        viewMode = "list";
-        render();
-      });
-      tilesBtn.addEventListener("click", () => {
-        viewMode = "tiles";
-        render();
-      });
-      seg.append(listBtn, tilesBtn);
+      for (const [v, l] of [["list", "List"], ["tiles", "Tiles"], ["gantt", "Gantt"]] as const) {
+        const b = btn(l, "app-docs-segbtn" + (viewMode === v ? " app-docs-segbtn-on" : ""));
+        b.addEventListener("click", () => {
+          viewMode = v;
+          render();
+        });
+        seg.appendChild(b);
+      }
       head.appendChild(seg);
       return head;
     };
@@ -623,56 +649,6 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
 
     const openInitiative = (i: Initiative) => {
       if (i.boardId !== "") window.location.hash = boardHash(i.boardId);
-    };
-
-    /** The org-wide Gantt overlay (P8): the scoped initiatives' actions
-     *  on one timeline; the List | Gantt switch lives inside the control. */
-    const openGantt = (scoped: Initiative[]) => {
-      const scrim = el("div", "app-docs-scrim");
-      const dlg = el("div", "app-docs-dialog app-im-ganttdlg");
-      const head = el("div", "app-im-ganttdlg-head");
-      head.appendChild(el("div", "app-im-ganttdlg-title", "Actions Gantt"));
-      const x = btn("✕", "app-btn app-cp-ov-close");
-      x.style.position = "static";
-      x.title = "Close";
-      head.appendChild(x);
-      dlg.appendChild(head);
-      const host = el("div", "app-im-ganttdlg-body");
-      dlg.appendChild(host);
-      scrim.appendChild(dlg);
-      wrap.appendChild(scrim);
-      let unmount: (() => void) | null = null;
-      const closeDlg = () => {
-        unmount?.();
-        scrim.remove();
-      };
-      x.addEventListener("click", closeDlg);
-      scrim.addEventListener("pointerdown", (e) => {
-        if (e.target === scrim) closeDlg();
-      });
-      cleanups.push(closeDlg);
-      void import("./gantt").then((m) => {
-        if (!scrim.isConnected) return;
-        unmount = m.mountGantt({
-          host,
-          scopes: [{ key: "org", label: "My team" }],
-          initiatives: scoped,
-          actions: initActions,
-          palette: stateColors,
-          ragFor: (i) => {
-            const inputs = ragInputsFor(i, initActions, todayIso());
-            inputs.metric = metricState.get(i.id)?.rag ?? null;
-            return initiativeRag(inputs);
-          },
-          canEdit: true,
-          actor: actor(),
-          onChanged: () => render(),
-          onOpenBoard: (boardId) => {
-            closeDlg();
-            window.location.hash = boardHash(boardId);
-          },
-        });
-      });
     };
 
     const openRowMenu = (anchor: HTMLElement, i: Initiative) => {

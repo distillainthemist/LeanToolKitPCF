@@ -53,6 +53,8 @@ export interface GanttOpts {
   centerIso?: string;
   /** Initial window in weeks (2/4/8/13); default 4. */
   windowWeeks?: number;
+  /** The host already offers a List/Gantt switch — hide the internal one. */
+  hideViewSwitch?: boolean;
 }
 
 const PRESETS: { weeks: number; label: string; dayW: number }[] = [
@@ -242,17 +244,19 @@ export function mountGantt(opts: GanttOpts): () => void {
 
     // toolbar
     const bar = el("div", "app-gx-bar");
-    const viewSeg = el("div", "app-docs-seg");
-    for (const [v, l] of [["list", "List"], ["gantt", "Gantt"]] as const) {
-      const b = el("button", "app-docs-segbtn" + (view === v ? " app-docs-segbtn-on" : ""), l) as HTMLButtonElement;
-      b.type = "button";
-      b.addEventListener("click", () => {
-        view = v;
-        render();
-      });
-      viewSeg.appendChild(b);
+    if (!opts.hideViewSwitch) {
+      const viewSeg = el("div", "app-docs-seg");
+      for (const [v, l] of [["list", "List"], ["gantt", "Gantt"]] as const) {
+        const b = el("button", "app-docs-segbtn" + (view === v ? " app-docs-segbtn-on" : ""), l) as HTMLButtonElement;
+        b.type = "button";
+        b.addEventListener("click", () => {
+          view = v;
+          render();
+        });
+        viewSeg.appendChild(b);
+      }
+      bar.appendChild(viewSeg);
     }
-    bar.appendChild(viewSeg);
     if (opts.scopes.length > 1) {
       const seg = el("div", "app-docs-seg");
       for (const sc of opts.scopes) {

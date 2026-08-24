@@ -568,7 +568,10 @@ reschedule/cancel history with a reason picklist.
   3-row cap with "n more ›" + Open board. Entry points: the priority
   overlay's ACTIONS TAB (ctx.ganttFor — raw initiatives+actions,
   confidential excluded; overlay widened 860→1080px for it), the
-  Improvement tab team group's Gantt › (scrim overlay), and the
+  Improvement tab's header segmented **List | Tiles | Gantt** (inline,
+  whole crumb scope + filters; replaced the buried owner-only team-group
+  Gantt › link and its scrim overlay, Ben 2026-08-25; the control's
+  internal List switch hides when the host provides one), and the
   **GanttCard** ritual card (registry + lazy mounter; gxSite/gxDept/
   gxWeeks config, centres on the meeting's week, readOnly follows the
   card). Actions matched by initiativeId (instanceKey fallback). NOT
