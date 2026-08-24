@@ -22,6 +22,40 @@ export interface OrgTree {
   companies: { name: string; sites: { name: string; departments: { name: string; areas: string[] }[] }[] }[];
 }
 
+export interface OrgSiteRow {
+  site: string;
+  departments?: { department?: string; name?: string; areas?: string[] }[];
+}
+
+/** The org tree from the site-settings rows + site→company map. */
+export function buildTree(raw: string, siteCo: Record<string, string>, companyList: string[]): OrgTree {
+  let rows: OrgSiteRow[] = [];
+  try {
+    const arr = JSON.parse(raw) as unknown;
+    if (Array.isArray(arr)) rows = arr as OrgSiteRow[];
+  } catch {
+    rows = [];
+  }
+  const companies = new Map<string, OrgTree["companies"][number]>();
+  for (const c of companyList) companies.set(c, { name: c, sites: [] });
+  for (const r of rows) {
+    if (!r || typeof r.site !== "string" || r.site === "") continue;
+    const co = siteCo[r.site] ?? "";
+    if (!companies.has(co)) companies.set(co, { name: co, sites: [] });
+    companies.get(co)!.sites.push({
+      name: r.site,
+      departments: (r.departments ?? [])
+        .map((d) => ({
+          name: typeof d.department === "string" ? d.department : (d.name ?? ""),
+          areas: Array.isArray(d.areas) ? d.areas.filter((a) => typeof a === "string") : [],
+        }))
+        .filter((d) => d.name !== ""),
+    });
+  }
+  return { companies: [...companies.values()].filter((c) => c.name !== "" || c.sites.length > 0) };
+}
+
+
 export function orgTreeNodes(tree: OrgTree): OrgRef[] {
   const out: OrgRef[] = [];
   for (const c of tree.companies) {

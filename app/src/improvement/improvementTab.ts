@@ -25,7 +25,7 @@ import { buildMetricState } from "./metricValues";
 import { newAction } from "../../../shared/schema/actions";
 import { promptConfirm } from "../prompts";
 import { parseOrgTree } from "../../../shared/schema/meeting";
-import { periodFor, parsePrioritySettings, ragPaletteKey } from "../priorities/model";
+import { orgName, OrgRef, orgRef, orgLevel, orgPath, periodFor, parsePrioritySettings, ragPaletteKey, sameOrg } from "../priorities/model";
 import { paletteMap } from "../../../shared/palette";
 import { appPalettes } from "../store/config";
 import { todayIso } from "../../../shared/schema/id";
@@ -49,7 +49,7 @@ import {
   STANDARD_ROLES,
   stepperChips,
 } from "./templateModel";
-import { pickOwner } from "../priorities/dialogs";
+import { buildTree, childOrgs, pickOrg, pickOwner, siblingOrgs } from "../priorities/dialogs";
 
 const btn = (label: string, cls = "app-btn"): HTMLButtonElement => {
   const b = el("button", cls, label) as HTMLButtonElement;
@@ -100,6 +100,18 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
       return [...(i.roles[key] ?? []), ...(std ? roleFillersAt(std, i.org.site) : [])];
     };
     const sites = parseOrgTree(treeRaw);
+    // the org drill-down (the Priorities header pattern): crumbs + one ▾
+    const companyList = [...new Set(Object.values(siteCo).filter((c) => c !== ""))];
+    const tree = buildTree(treeRaw, siteCo, companyList);
+    const mySite = me?.site && siteCo[me.site] !== undefined ? orgRef(siteCo[me.site], me.site) : null;
+    const firstSite = tree.companies.flatMap((c) => c.sites.map((x) => orgRef(c.name, x.name)))[0] ?? orgRef(companyList[0] ?? "");
+    let scope: OrgRef = mySite ?? firstSite;
+    /** In scope = at the scoped org OR anywhere below it. */
+    const inScope = (o: Initiative["org"]): boolean =>
+      (scope.company === "" || o.company === scope.company) &&
+      (scope.site === "" || o.site === scope.site) &&
+      (scope.department === "" || o.department === scope.department) &&
+      (scope.area === "" || o.area === scope.area);
     const currentPeriod = periodFor(parsePrioritySettings(prSettingsRaw).period, todayIso());
     const ownedOrgKeys = Object.entries(owners)
       .filter(([, people]) => people.some((p) => p.whoId === (who?.objectId ?? "")))
@@ -130,7 +142,6 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
     };
 
     interface Filters {
-      site: string;
       pdca: string;
       period: string;
       status: string;
@@ -138,13 +149,13 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
       method: string;
       teamScope: string; // "" = my orgs + children (all owned keys)
     }
-    const f: Filters = { site: me?.site ?? "", pdca: "", period: currentPeriod, status: "active", flagOnly: false, method: "", teamScope: "" };
+    const f: Filters = { pdca: "", period: currentPeriod, status: "active", flagOnly: false, method: "", teamScope: "" };
     let viewMode: "list" | "tiles" = "list";
     let search = "";
 
     const visible = (i: Initiative): boolean =>
       (search === "" || i.title.toLowerCase().includes(search.toLowerCase())) &&
-      (f.site === "" || i.org.site === f.site) &&
+      inScope(i.org) &&
       (f.period === "" || i.period === f.period) &&
       (f.status === "all" || i.status === f.status) &&
       (!f.flagOnly || i.flag !== "") &&
@@ -257,16 +268,82 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
      *  filter selects live behind the Filters button, not in a raw row. */
     const activeFilterCount = (): number =>
       [f.pdca !== "", f.status !== "active", f.method !== "", f.flagOnly, f.period !== currentPeriod].filter(Boolean).length;
+    /** The Priorities-header pattern (Ben, 2026-08-23): "Improvement
+     *  Initiatives | Company › Site ▾" — lead in the accent, ancestors
+     *  click to go up, the current node's ▾ opens Switch · Descend ·
+     *  Browse all…. The crumb IS the org scope (at-or-below), so there
+     *  is no Site filter group and no subtitle/count lines. */
+    const openOrgMenu = (anchor: HTMLElement) => {
+      document.querySelectorAll(".app-cp-menu").forEach((m) => m.remove());
+      const menu = el("div", "app-cp-menu app-cp-orgmenu");
+      const row = (o: OrgRef, here: boolean) => {
+        const b = btn((here ? "✓ " : "") + orgName(o), "app-cp-menu-item app-cp-orgmenu-item" + (here ? " app-cp-orgmenu-here" : ""));
+        b.addEventListener("click", () => {
+          menu.remove();
+          if (!here) {
+            scope = o;
+            render();
+          }
+        });
+        menu.appendChild(b);
+      };
+      const sibs = siblingOrgs(tree, scope);
+      if (sibs.length > 1) {
+        menu.appendChild(el("div", "app-cp-menu-h", `Switch ${orgLevel(scope)}`));
+        for (const o of sibs) row(o, sameOrg(o, scope));
+      }
+      const kids = childOrgs(tree, scope);
+      if (kids.length > 0) {
+        menu.appendChild(el("div", "app-cp-menu-h", "Descend"));
+        for (const o of kids) row(o, false);
+      }
+      const browse = btn("Browse all…", "app-cp-menu-item app-cp-orgmenu-browse");
+      browse.addEventListener("click", () => {
+        menu.remove();
+        void pickOrg(wrap, tree, scope).then((o) => {
+          if (o) {
+            scope = o;
+            render();
+          }
+        });
+      });
+      menu.appendChild(browse);
+      const r = anchor.getBoundingClientRect();
+      menu.style.top = `${r.bottom + 4}px`;
+      menu.style.left = `${Math.min(r.left, window.innerWidth - 300)}px`;
+      document.body.appendChild(menu);
+      const close = (e: PointerEvent) => {
+        if (!menu.contains(e.target as Node)) {
+          menu.remove();
+          document.removeEventListener("pointerdown", close, true);
+        }
+      };
+      setTimeout(() => document.addEventListener("pointerdown", close, true), 0);
+      cleanups.push(() => menu.remove());
+    };
     const renderHeader = (): HTMLElement => {
       const head = el("div", "app-im-head");
-      const left = el("div", "app-im-head-left");
-      left.appendChild(el("div", "app-im-head-title", `Improvement — ${f.site || "All sites"}`));
-      left.appendChild(el("div", "app-im-head-sub", f.period || "All periods"));
-      const matching = list.filter(visible).length;
-      const narrowed = search !== "" || activeFilterCount() > 0;
-      left.appendChild(el("div", "app-im-head-count", `${matching} initiative${matching === 1 ? "" : "s"}${narrowed ? " matching" : ""}`));
-      head.appendChild(left);
-      head.appendChild(el("span", "app-bar-gap"));
+      const title = el("div", "app-cp-tvorg");
+      title.appendChild(el("span", "app-cp-tvorg-lead", "Improvement Initiatives"));
+      title.appendChild(el("span", "app-cp-tvorg-sep", " | "));
+      const crumbs = el("span", "app-cp-crumbs app-cp-tvorg-chain");
+      const path = orgPath(scope);
+      path.forEach((node, idx) => {
+        if (idx > 0) crumbs.appendChild(el("span", "app-cp-crumb-sep", "›"));
+        const last = idx === path.length - 1;
+        const b = btn(orgName(node) + (last ? " ▾" : ""), "app-cp-crumb" + (last ? " app-cp-crumb-here" : ""));
+        b.title = last ? "Switch, descend or browse" : `Go up to ${orgName(node)}`;
+        b.addEventListener("click", () => {
+          if (last) openOrgMenu(b);
+          else {
+            scope = node;
+            render();
+          }
+        });
+        crumbs.appendChild(b);
+      });
+      title.appendChild(crumbs);
+      head.appendChild(title);
       const add = btn("＋ Initiative", "app-btn app-btn-primary");
       add.addEventListener("click", () => openCreate());
       head.appendChild(add);
@@ -346,11 +423,6 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
           const pills = group(label);
           for (const [v, l] of opts) pill(pills, l, cur === v, () => set(cur === v ? empty : v));
         };
-        if (sites.length > 1) {
-          exclusive("Site", sites.map((s) => [s.site, s.site] as [string, string]), f.site, "", (v) => {
-            f.site = v;
-          });
-        }
         exclusive("Stage", [["plan", "Plan"], ["do", "Do"], ["check", "Check"], ["act", "Act"]], f.pdca, "", (v) => {
           f.pdca = v;
         });
@@ -656,7 +728,7 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
         clear(box);
         box.appendChild(el("div", "app-modal-title", "Pick how you'll run this"));
         const grid = el("div", "app-im-tplgrid");
-        const usable = templates.filter((t) => t.active && (t.company === "" || t.company === siteCo[f.site || (me?.site ?? "")]));
+        const usable = templates.filter((t) => t.active && (t.company === "" || t.company === (scope.company || siteCo[me?.site ?? ""] || "")));
         const ordered = [...usable.filter((t) => !t.singleAction), ...usable.filter((t) => t.singleAction)];
         for (const t of ordered) {
           const used = list.filter((x) => x.templateId === t.id).length;
@@ -716,7 +788,7 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
         for (const s of sites) {
           const o = el("option", "", s.site) as HTMLOptionElement;
           o.value = s.site;
-          if (s.site === (me?.site ?? "")) o.selected = true;
+          if (s.site === (scope.site || (me?.site ?? ""))) o.selected = true;
           siteSel.appendChild(o);
         }
         const deptSel = el("select", "app-input") as HTMLSelectElement;

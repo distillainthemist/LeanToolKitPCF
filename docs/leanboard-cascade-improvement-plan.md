@@ -533,6 +533,12 @@ reschedule/cancel history with a reason picklist.
   rule); next-gate cell = "Define → Measure" / "28 Aug" (red when
   overdue) / "awaiting you" ONLY on a pending request the viewer (assigned
   OR site standard-role filler) has not decided, else "awaiting <roles>".
+  Header remade on the Priorities pattern (Ben, 2026-08-23):
+  "Improvement Initiatives | Company › Site ▾" — accent lead, clickable
+  crumbs, ▾ popover (Switch · Descend · Browse all…); the crumb IS the
+  org scope (at-or-below, all four levels), so the Site filter group,
+  the period subtitle and the count line are gone — one title + controls
+  row. buildTree/OrgSiteRow moved to priorities/dialogs.ts for reuse.
   REJECTED: grey edge on escalation (the RAG rule folds escalation in so
   edge = tally colour), "All initiatives I can see" wording and a dark
   segmented (both reverse Ben's calls / ui-standard).
