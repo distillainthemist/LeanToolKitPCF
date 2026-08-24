@@ -373,7 +373,7 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
       });
       title.appendChild(crumbs);
       head.appendChild(title);
-      const add = btn("＋ Initiative", "app-btn app-btn-primary");
+      const add = btn("＋ Initiative", "app-btn app-btn-primary app-cp-tvbtn");
       add.addEventListener("click", () => openCreate());
       head.appendChild(add);
       // search sits between ＋ Initiative and Filters (Ben, 2026-08-20)
@@ -392,7 +392,7 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
       head.appendChild(input);
       const filters = btn(
         activeFilterCount() > 0 ? `Filters · ${activeFilterCount()}` : "Filters",
-        "app-btn app-docs-filtersbtn" + (activeFilterCount() > 0 ? " app-docs-filtersbtn-on" : "")
+        "app-btn app-docs-filtersbtn app-cp-tvbtn" + (activeFilterCount() > 0 ? " app-docs-filtersbtn-on" : "")
       );
       filters.title = "Filter the register";
       filters.addEventListener("click", () => {

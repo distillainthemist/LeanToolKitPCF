@@ -58,6 +58,9 @@ the same commit.
    muted "n matching" count.
 2. **Action cluster** right: solid primary (`＋ …`), outline `Filters`
    (badged `Filters · n` when active), `List | Tiles` segmented, `⋮`.
+   Crumb-headed tabs (Priorities, Improvement) share ONE bar metric:
+   `.app-cp-tvbtn` controls — 44px tall, 15px text, 12px gaps
+   (2026-08-25 alignment).
 3. **Filters behind the button**: a popover anchored under `Filters`
    (`.app-docs-menu.app-docs-filterpop`, 400px, scrolling body) — one
    `.app-docs-fgroup` per dimension with a small-caps `-label`, values

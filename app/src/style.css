@@ -3344,13 +3344,15 @@ textarea.app-cp-statement { font-size: 14px; font-weight: 500; }
 .app-im-wrap:has(> .app-loading) { min-height: calc(100vh - 180px); justify-content: center; }
 /* the Documents-tab header standard: title block left, actions right */
 .app-im-search-input { flex: 0 1 300px; min-width: 160px; height: 44px; box-sizing: border-box; font-size: 13px; }
-.app-im-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+/* metrics match the Priorities bar (.app-cp-tvbar): 12px gaps, 44px
+   controls, 15px button text */
+.app-im-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .app-im-head .app-cp-tvorg { flex: 1; min-width: 0; }
 /* one 44px rail: primary, search, Filters and the segmented frame all
    share the height (the seg's 42px buttons + 1px frame = 44) */
 .app-im-head .app-btn { height: 44px; min-height: 44px; box-sizing: border-box; }
 .app-im-head .app-docs-seg { height: 44px; box-sizing: border-box; align-items: stretch; }
-.app-im-head .app-docs-segbtn { min-height: 0; }
+.app-im-head .app-docs-segbtn { min-height: 0; font-size: 15px; padding: 0 16px; }
 .app-im-table { display: flex; flex-direction: column; }
 .app-im-group { display: flex; align-items: center; gap: 12px; margin-top: 18px; padding: 4px 2px 6px; }
 .app-im-group-label { font-weight: 700; font-size: 15px; flex: 1; }
