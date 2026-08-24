@@ -542,6 +542,16 @@ reschedule/cancel history with a reason picklist.
   REJECTED: grey edge on escalation (the RAG rule folds escalation in so
   edge = tally colour), "All initiatives I can see" wording and a dark
   segmented (both reverse Ben's calls / ui-standard).
+- **Priority overlay remake — BUILT 2026-08-24 (dev, app-only)** — per
+  Ben's markup: pillar chip is a CHIP (pill, tinted with the pillar
+  colour) sitting ABOVE the statement; the rail's foot actions promoted
+  to the header (Add initiative primary · Cascade to… · ⋮
+  Edit/Complete/Archive, Reopen when closed); lineage became the
+  **Cascade** tab (before History, Re-send kept); the rail's Status
+  tallies/roll-up sentence and Actions section DELETED (Ben's call —
+  the Initiatives tab now groups rows by RAG: Issue · At risk · On
+  track · No signal, dot + count heads, empty groups omitted); the rail
+  itself removed — single-column desk, overlay narrowed 1100→860px.
 - **P8 Gantt · P9 VDT + simulation · P10 Reporting** — designed
   (spec §2–§4); build after P5/P6.
 

@@ -38,13 +38,9 @@ import {
   Rag,
   ragPaletteKey,
   reviewQueue,
-  rollup,
   RollupRule,
-  rollupWords,
   sameOrg,
   senderFlags,
-  tally,
-  tallyLine,
 } from "./model";
 
 /** What the screen hands the lifecycle UI — its live state and callbacks. */
@@ -467,7 +463,7 @@ export function openPriorityOverlay(ctx: LifecycleCtx, p: Priority, onEdit: (p: 
     if (e.target === scrim) close();
   });
 
-  let tab: "initiatives" | "charter" | "actions" | "history" = "initiatives";
+  let tab: "initiatives" | "charter" | "actions" | "cascade" | "history" = "initiatives";
   let events: PriorityEvent[] | null = null;
 
   const paint = () => {
@@ -478,21 +474,87 @@ export function openPriorityOverlay(ctx: LifecycleCtx, p: Priority, onEdit: (p: 
     const parentL1 = pillar ? data.pillars.find((x) => x.id === pillar.parentId) : undefined;
     const can = ctx.canManage(live.org);
 
-    // header
+    // header (Ben, 2026-08-24): chip ABOVE the title (a chip, not a
+    // button — pill, tinted with the pillar's colour), the old rail-foot
+    // actions promoted to the header's right
     const head = el("div", "app-cp-ov-head");
+    const headText = el("div", "app-cp-ov-headtext");
     const chip = el("span", "app-cp-ov-pillar", pillar ? `${parentL1 ? parentL1.name + " › " : ""}${pillar.name}` : "No sub-pillar");
     const colour = pillar?.color || parentL1?.color || "";
     if (colour !== "") {
-      chip.style.background = colour;
-      chip.style.color = "#fff";
+      chip.style.background = `color-mix(in srgb, ${colour} 14%, white)`;
+      chip.style.color = `color-mix(in srgb, ${colour} 82%, black)`;
     }
-    head.appendChild(chip);
-    const headText = el("div", "app-cp-ov-headtext");
+    headText.appendChild(chip);
     headText.appendChild(el("h2", "app-cp-ov-statement", live.statement));
     headText.appendChild(
       el("div", "app-cp-ov-meta", [orgName(live.org), live.period, live.ownerName !== "" ? `owner ${live.ownerName}` : "no owner", live.status !== "active" ? live.status : ""].filter((s) => s !== "").join(" · "))
     );
     head.appendChild(headText);
+    const headBtns = el("div", "app-cp-ov-headbtns");
+    const add = btn("Add initiative", "app-btn app-btn-primary");
+    add.title = "Create an initiative linked to this priority";
+    add.disabled = live.status !== "active";
+    add.addEventListener("click", () => {
+      // hand the priority to the Improvement tab's create flow (design 1.3:
+      // pre-filled and locked to the source priority)
+      try {
+        sessionStorage.setItem("ltk-pending-init-priority", JSON.stringify({ priorityId: live.id, label: live.statement.slice(0, 60) }));
+      } catch {
+        /* fine */
+      }
+      close();
+      window.location.hash = "#/improvement";
+    });
+    headBtns.appendChild(add);
+    if (can && live.status !== "active") {
+      const reopen = btn("Reopen", "app-btn");
+      reopen.title = "Set back to active";
+      reopen.addEventListener("click", () => {
+        void reopenPriority(ctx, live).then(() => {
+          events = null;
+          if (scrim.isConnected) paint();
+        });
+      });
+      headBtns.appendChild(reopen);
+    }
+    if (can && live.status === "active") {
+      const casc = btn("Cascade to…", "app-btn");
+      casc.addEventListener("click", () => cascadeDialog(ctx, live));
+      headBtns.appendChild(casc);
+      const more = btn("⋮", "app-btn app-cp-ov-morebtn");
+      more.title = "Edit · Complete · Archive";
+      more.addEventListener("click", () => {
+        const menu = el("div", "app-cp-menu");
+        const item = (label: string, run: () => void) => {
+          const b = btn(label, "app-cp-menu-item");
+          b.addEventListener("click", () => {
+            menu.remove();
+            run();
+          });
+          menu.appendChild(b);
+        };
+        item("Edit…", () => {
+          close();
+          onEdit(live);
+        });
+        item("Complete…", () => void doClose(live, "complete"));
+        item("Archive…", () => void doClose(live, "archive"));
+        const r = more.getBoundingClientRect();
+        menu.style.top = `${r.bottom + 4}px`;
+        menu.style.left = `${Math.min(r.left, window.innerWidth - 240)}px`;
+        document.body.appendChild(menu);
+        const off = (e: PointerEvent) => {
+          if (!menu.contains(e.target as Node)) {
+            menu.remove();
+            document.removeEventListener("pointerdown", off, true);
+          }
+        };
+        setTimeout(() => document.addEventListener("pointerdown", off, true), 0);
+      });
+      headBtns.appendChild(more);
+    }
+    head.appendChild(headBtns);
     const x = btn("✕", "app-btn app-cp-ov-close");
     x.title = "Close";
     x.addEventListener("click", close);
@@ -534,6 +596,7 @@ export function openPriorityOverlay(ctx: LifecycleCtx, p: Priority, onEdit: (p: 
       ["initiatives", `Initiatives ${rags.length}`],
       ["charter", "Charter"],
       ["actions", "Actions"],
+      ["cascade", "Cascade"],
       ["history", "History"],
     ];
     for (const [key, label] of tabDefs) {
@@ -553,7 +616,17 @@ export function openPriorityOverlay(ctx: LifecycleCtx, p: Priority, onEdit: (p: 
       if (shown.length === 0 && rows.length === 0) {
         body.appendChild(el("div", "app-cp-muted", "No initiatives linked yet — Add initiative, or link one from the Improvement tab."));
       }
-      for (const r of shown) {
+      // grouped by RAG (Ben, 2026-08-24: the groups replace the rail's
+      // tally chips; empty groups are omitted)
+      const GROUPS: [string, string][] = [["red", "Issue"], ["amber", "At risk"], ["green", "On track"], ["grey", "No signal"]];
+      const grouped = GROUPS.map(([rag, label]) => ({ rag, label, rows: shown.filter((r) => r.rag === rag) })).filter((g) => g.rows.length > 0);
+      for (const g of grouped) {
+        const h = el("div", "app-cp-ov-group");
+        const dot = el("span", "app-cp-ov-group-dot");
+        dot.style.background = ctx.palette[ragPaletteKey(g.rag as "red")] ?? "#9a948a";
+        h.append(dot, el("span", undefined, `${g.label} · ${g.rows.length}`));
+        body.appendChild(h);
+        for (const r of g.rows) {
         const rowEl = el("div", "app-cp-ov-init");
         rowEl.style.borderLeftColor = ctx.palette[ragPaletteKey(r.rag)] ?? "#9a948a";
         const main = el("div", "app-cp-ov-init-main");
@@ -578,7 +651,8 @@ export function openPriorityOverlay(ctx: LifecycleCtx, p: Priority, onEdit: (p: 
             window.location.hash = `#/board/${r.boardId}`;
           });
         }
-        body.appendChild(rowEl);
+          body.appendChild(rowEl);
+        }
       }
       const hidden = rows.length - shown.length;
       if (hidden > 0) body.appendChild(el("div", "app-cp-muted", `+ ${hidden} confidential initiative${hidden === 1 ? "" : "s"}`));
@@ -597,6 +671,61 @@ export function openPriorityOverlay(ctx: LifecycleCtx, p: Priority, onEdit: (p: 
         body.appendChild(line);
       }
       body.appendChild(el("div", "ltk-mw-help", "The per-action Gantt arrives with the actions timeline update."));
+    } else if (tab === "cascade") {
+      const ln = el("div", "app-cp-ov-cascadebody");
+      const parent = live.parentId !== "" ? data.priorities.find((x) => x.id === live.parentId) : undefined;
+      if (parent) {
+        const prow = btn(`↑ ${orgName(parent.org)} (customised from)`, "app-cp-ov-link");
+        prow.title = parent.statement;
+        prow.addEventListener("click", () => {
+          close();
+          ctx.open(parent);
+        });
+        ln.appendChild(prow);
+      } else {
+        ln.appendChild(el("div", "app-cp-muted", "Set here — not cascaded from above."));
+      }
+      const mine = data.assignments.filter((a) => a.priorityId === live.id);
+      if (mine.length > 0) {
+        const ul = el("div", "app-cp-ov-children");
+        for (const a of mine) {
+          const glyph = a.status === "accepted" || a.status === "completed" ? "✓" : a.status === "proposed" ? "⏳" : a.status === "onhold" ? "⏸" : "✕";
+          const child = a.childPriorityId !== "" ? data.priorities.find((x) => x.id === a.childPriorityId) : undefined;
+          const row = el("div", "app-cp-ov-child" + (a.status === "rejected" ? " app-cp-lineage-declined" : ""));
+          // the design's grammar: "↓ Org ✓" · "↓ Org ⏳ pending" · "↓ Org ✕ declined — “…”"
+          let text = `↓ ${orgName(a.org)} ${glyph}`;
+          if (a.status === "rejected") text = `↓ ${orgName(a.org)} ✕ declined${a.reason !== "" ? ` — “${a.reason}”` : ""}`;
+          else if (a.status === "onhold") text = `↓ ${orgName(a.org)} ⏸ parked${a.reason !== "" ? ` — “${a.reason}”` : ""}`;
+          else if (child) text = `↓ ${orgName(a.org)} ✓ customised`;
+          else if (a.status === "proposed") text = `↓ ${orgName(a.org)} ⏳ pending`;
+          row.textContent = text;
+          if (child) row.title = child.statement;
+          if (child) {
+            row.classList.add("app-cp-ov-link");
+            row.addEventListener("click", () => {
+              close();
+              ctx.open(child);
+            });
+          }
+          if (can && live.status === "active" && (a.status === "rejected" || a.status === "onhold")) {
+            const resend = btn("Re-send", "app-cp-ov-link app-cp-ov-resend");
+            resend.title = `Send this priority to ${orgName(a.org)} again for acceptance`;
+            resend.addEventListener("click", (e) => {
+              e.stopPropagation();
+              void sendCascade(ctx, live, [a.org]).then(async () => {
+                await ctx.changed();
+                events = null;
+                if (scrim.isConnected) paint();
+              });
+            });
+            row.appendChild(resend);
+          }
+          ul.appendChild(row);
+        }
+        ln.appendChild(ul);
+      }
+
+      body.appendChild(ln);
     } else {
       if (events === null) {
         body.appendChild(el("div", "app-cp-muted", "Loading history…"));
@@ -622,169 +751,6 @@ export function openPriorityOverlay(ctx: LifecycleCtx, p: Priority, onEdit: (p: 
     }
     desk.appendChild(left);
 
-    // rail
-    const rail = el("div", "app-cp-ov-rail");
-    const section = (title: string) => {
-      const s = el("div", "app-cp-ov-section");
-      s.appendChild(el("div", "app-cp-ov-section-h", title));
-      rail.appendChild(s);
-      return s;
-    };
-    const st = section("Status");
-    const t = tally(rags);
-    const rag = rollup(t, ctx.rule(), ctx.settings.ragRatioPct);
-    const tl = el("div", "app-cp-ov-tallies");
-    for (const part of tallyLine(t)) {
-      const chipEl = el("span", "app-cp-ov-tally" + (part.count === 0 ? " app-cp-ov-tally-zero" : ""), `${part.glyph}${part.count}`);
-      if (part.count > 0) {
-        const c = ctx.palette[ragPaletteKey(part.rag)] ?? "";
-        chipEl.style.color = c;
-        chipEl.style.background = `color-mix(in srgb, ${c || "#9a948a"} 14%, white)`;
-      }
-      tl.appendChild(chipEl);
-    }
-    tl.appendChild(el("span", "app-cp-total", `· ${t.total} total`));
-    st.appendChild(tl);
-    st.appendChild(el("div", "app-cp-ov-rollup", rollupWords(rag, ctx.rule(), ctx.settings.ragRatioPct)));
-    if (live.status !== "active") st.appendChild(el("div", "app-cp-muted", `${live.status[0].toUpperCase()}${live.status.slice(1)}${live.statusReason !== "" ? " — " + live.statusReason : ""}`));
-
-    const ln = section("Lineage");
-    const parent = live.parentId !== "" ? data.priorities.find((x) => x.id === live.parentId) : undefined;
-    if (parent) {
-      const prow = btn(`↑ ${orgName(parent.org)} (customised from)`, "app-cp-ov-link");
-      prow.title = parent.statement;
-      prow.addEventListener("click", () => {
-        close();
-        ctx.open(parent);
-      });
-      ln.appendChild(prow);
-    } else {
-      ln.appendChild(el("div", "app-cp-muted", "Set here — not cascaded from above."));
-    }
-    const mine = data.assignments.filter((a) => a.priorityId === live.id);
-    if (mine.length > 0) {
-      const ul = el("div", "app-cp-ov-children");
-      for (const a of mine) {
-        const glyph = a.status === "accepted" || a.status === "completed" ? "✓" : a.status === "proposed" ? "⏳" : a.status === "onhold" ? "⏸" : "✕";
-        const child = a.childPriorityId !== "" ? data.priorities.find((x) => x.id === a.childPriorityId) : undefined;
-        const row = el("div", "app-cp-ov-child" + (a.status === "rejected" ? " app-cp-lineage-declined" : ""));
-        // the design's grammar: "↓ Org ✓" · "↓ Org ⏳ pending" · "↓ Org ✕ declined — “…”"
-        let text = `↓ ${orgName(a.org)} ${glyph}`;
-        if (a.status === "rejected") text = `↓ ${orgName(a.org)} ✕ declined${a.reason !== "" ? ` — “${a.reason}”` : ""}`;
-        else if (a.status === "onhold") text = `↓ ${orgName(a.org)} ⏸ parked${a.reason !== "" ? ` — “${a.reason}”` : ""}`;
-        else if (child) text = `↓ ${orgName(a.org)} ✓ customised`;
-        else if (a.status === "proposed") text = `↓ ${orgName(a.org)} ⏳ pending`;
-        row.textContent = text;
-        if (child) row.title = child.statement;
-        if (child) {
-          row.classList.add("app-cp-ov-link");
-          row.addEventListener("click", () => {
-            close();
-            ctx.open(child);
-          });
-        }
-        if (can && live.status === "active" && (a.status === "rejected" || a.status === "onhold")) {
-          const resend = btn("Re-send", "app-cp-ov-link app-cp-ov-resend");
-          resend.title = `Send this priority to ${orgName(a.org)} again for acceptance`;
-          resend.addEventListener("click", (e) => {
-            e.stopPropagation();
-            void sendCascade(ctx, live, [a.org]).then(async () => {
-              await ctx.changed();
-              events = null;
-              if (scrim.isConnected) paint();
-            });
-          });
-          row.appendChild(resend);
-        }
-        ul.appendChild(row);
-      }
-      ln.appendChild(ul);
-    }
-
-    const ac = section("Actions");
-    const initRows = ctx.initiativesFor(live);
-    const totOpen = initRows.reduce((a, r) => a + r.open, 0);
-    const totOverdue = initRows.reduce((a, r) => a + r.overdue, 0);
-    const acLine = el("div", "app-cp-ov-actions");
-    acLine.appendChild(el("span", undefined, `${totOpen} open · `));
-    const overdueEl = el("span", totOverdue > 0 ? "" : "app-cp-ov-overdue-zero", `${totOverdue} overdue`);
-    if (totOverdue > 0) {
-      overdueEl.style.color = ctx.palette[ragPaletteKey("red")] ?? "";
-      overdueEl.style.fontWeight = "600";
-    }
-    acLine.appendChild(overdueEl);
-    ac.appendChild(acLine);
-    const gantt = btn("Gantt ›", "app-cp-ov-link app-cp-ov-gantt");
-    gantt.disabled = true;
-    gantt.title = "The actions Gantt arrives with the initiative board";
-    ac.appendChild(gantt);
-
-    // bottom-anchored buttons: one solid primary
-    const foot = el("div", "app-cp-ov-foot");
-    const add = btn("Add initiative", "app-btn app-btn-primary");
-    add.title = "Create an initiative linked to this priority";
-    add.disabled = live.status !== "active";
-    add.addEventListener("click", () => {
-      // hand the priority to the Improvement tab's create flow (design 1.3:
-      // pre-filled and locked to the source priority)
-      try {
-        sessionStorage.setItem("ltk-pending-init-priority", JSON.stringify({ priorityId: live.id, label: live.statement.slice(0, 60) }));
-      } catch {
-        /* fine */
-      }
-      close();
-      window.location.hash = "#/improvement";
-    });
-    foot.appendChild(add);
-    if (can && live.status !== "active") {
-      const reopen = btn("Reopen");
-      reopen.title = "Set back to active";
-      reopen.addEventListener("click", () => {
-        void reopenPriority(ctx, live).then(() => {
-          events = null;
-          if (scrim.isConnected) paint();
-        });
-      });
-      foot.appendChild(reopen);
-    }
-    if (can && live.status === "active") {
-      const casc = btn("Cascade to…");
-      casc.addEventListener("click", () => cascadeDialog(ctx, live));
-      foot.appendChild(casc);
-      const more = btn("⋮ More", "app-cp-ov-more");
-      more.addEventListener("click", () => {
-        const menu = el("div", "app-cp-menu");
-        const item = (label: string, run: () => void) => {
-          const b = btn(label, "app-cp-menu-item");
-          b.addEventListener("click", () => {
-            menu.remove();
-            run();
-          });
-          menu.appendChild(b);
-        };
-        item("Edit…", () => {
-          close();
-          onEdit(live);
-        });
-        item("Complete…", () => void doClose(live, "complete"));
-        item("Archive…", () => void doClose(live, "archive"));
-        const r = more.getBoundingClientRect();
-        menu.style.top = `${r.top - 4}px`;
-        menu.style.transform = "translateY(-100%)";
-        menu.style.left = `${Math.min(r.left, window.innerWidth - 240)}px`;
-        document.body.appendChild(menu);
-        const off = (e: PointerEvent) => {
-          if (!menu.contains(e.target as Node)) {
-            menu.remove();
-            document.removeEventListener("pointerdown", off, true);
-          }
-        };
-        setTimeout(() => document.addEventListener("pointerdown", off, true), 0);
-      });
-      foot.appendChild(more);
-    }
-    rail.appendChild(foot);
-    desk.appendChild(rail);
   };
 
   const doClose = async (live: Priority, mode: "complete" | "archive") => {
