@@ -513,9 +513,9 @@ export function mountPriorities(parent: HTMLElement, opts: PrioritiesMountOpts =
         chip.addEventListener("click", () => cascadeReview(ctx, state.org));
         bar.appendChild(chip);
       }
-      const walk = el("button", "app-btn app-cp-tvbtn", "▶ Walk through") as HTMLButtonElement;
+      const walk = el("button", "app-btn app-cp-tvbtn", "▶ Present") as HTMLButtonElement;
       walk.type = "button";
-      walk.title = "One pillar at a time, with a final step for cascades to accept";
+      walk.title = "Full screen, one pillar at a time, with a final step for cascades to accept";
       walk.addEventListener("click", () => openWalk(0));
       bar.appendChild(walk);
       // the site's customisation floor gates authoring too (Ben, 2026-08-19):
@@ -542,6 +542,12 @@ export function mountPriorities(parent: HTMLElement, opts: PrioritiesMountOpts =
     const openWalk = (startStep: number) => {
       walkOpen = true;
       walkStep = startStep;
+      // presenting: take the browser full screen where the host allows it
+      // (the hosted player's iframe may refuse — presenting works either
+      // way, so the promise rejection is deliberately swallowed)
+      if (!card && document.fullscreenElement === null) {
+        void document.documentElement.requestFullscreen?.().catch(() => {});
+      }
       render();
     };
     const renderWalk = () => {
@@ -566,6 +572,7 @@ export function mountPriorities(parent: HTMLElement, opts: PrioritiesMountOpts =
         },
         onExit: () => {
           walkOpen = false;
+          if (document.fullscreenElement !== null) void document.exitFullscreen().catch(() => {});
           closeWalk?.();
           closeWalk = null;
           render();
