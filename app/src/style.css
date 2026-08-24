@@ -3076,11 +3076,11 @@ textarea.app-cp-statement { font-size: 14px; font-weight: 500; }
 .app-cp-ov-event-when { color: #6d675c; font-variant-numeric: tabular-nums; }
 .app-cp-ov-event-kind { font-weight: 600; }
 .app-cp-ov-notes { margin-top: 14px; padding-top: 10px; border-top: 1px dashed #e4dfd6; white-space: pre-wrap; font-size: 13px; }
-.app-cp-ov-group { display: flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 700; margin: 10px 0 2px; }
+.app-cp-ov-group { display: flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 700; margin: 14px 0 8px; }
 .app-cp-ov-group:first-child { margin-top: 0; }
 .app-cp-ov-group-dot { width: 9px; height: 9px; border-radius: 999px; flex: none; }
-.app-cp-ov-children { display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; }
-.app-cp-ov-child { line-height: 1.4; }
+.app-cp-ov-children { display: flex; flex-direction: column; gap: 7px; font-size: 13px; }
+.app-cp-ov-child { line-height: 1.5; }
 .app-cp-ov-link { border: none; background: none; font: inherit; font-size: 12.5px; text-align: left; color: var(--app-accent); cursor: pointer; padding: 0; }
 .app-cp-ov-link:hover { text-decoration: underline; }
 @media (max-width: 719px) {
@@ -3457,7 +3457,9 @@ textarea.app-cp-statement { font-size: 14px; font-weight: 500; }
 .app-cp-ov-init-main { flex: 1; min-width: 0; }
 .app-cp-ov-init-title { font-weight: 600; font-size: 13.5px; }
 .app-cp-ov-init-meta { font-size: 12px; color: #6d675c; }
-.app-cp-ov-actline { padding: 4px 0; }
+.app-cp-ov-actline { padding: 5px 0; }
+.app-cp-ov-body .ltk-mw-help { margin-top: 12px; }
+.app-cp-ov-cascadebody { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
 .app-fs-placeholder { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; height: 100%; min-height: 120px; color: #6d675c; font-size: 13px; }
 .app-fs-placeholder .app-link { cursor: pointer; border: none; background: none; }
 .app-im-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px; }

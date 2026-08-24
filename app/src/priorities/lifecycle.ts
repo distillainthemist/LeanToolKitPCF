@@ -519,11 +519,8 @@ export function openPriorityOverlay(ctx: LifecycleCtx, p: Priority, onEdit: (p: 
       headBtns.appendChild(reopen);
     }
     if (can && live.status === "active") {
-      const casc = btn("Cascade to…", "app-btn");
-      casc.addEventListener("click", () => cascadeDialog(ctx, live));
-      headBtns.appendChild(casc);
       const more = btn("⋮", "app-btn app-cp-ov-morebtn");
-      more.title = "Edit · Complete · Archive";
+      more.title = "Cascade · Edit · Complete · Archive";
       more.addEventListener("click", () => {
         const menu = el("div", "app-cp-menu");
         const item = (label: string, run: () => void) => {
@@ -534,6 +531,7 @@ export function openPriorityOverlay(ctx: LifecycleCtx, p: Priority, onEdit: (p: 
           });
           menu.appendChild(b);
         };
+        item("Cascade to…", () => cascadeDialog(ctx, live));
         item("Edit…", () => {
           close();
           onEdit(live);
