@@ -4,6 +4,7 @@
 // dev server.
 
 import { el, clear } from "../../shared/ui/dom";
+import { boardOrigin, REOPEN_PRIORITY_KEY } from "./improvement/boardOrigin";
 import { getLeaveGuard, setLeaveGuard } from "./navGuard";
 import "./style.css";
 import { releaseFramesExcept } from "./embedFrames";
@@ -157,11 +158,32 @@ function route(): void {
   // drop them so a Power BI report is not left running forever.
   if (parts[0] !== "board" && parts[0] !== "edit") releaseFramesExcept(new Set());
 
-  // Settings hides on the operational surfaces too — Home leads back
+  // Settings hides on the operational surfaces too — Home leads back.
+  // On an INITIATIVE board the link is "‹ Back" to wherever the board
+  // was opened from (Ben, 2026-08-27): the Improvement tab, or the
+  // Priorities tab with its overlay reopened (boardOrigin handoff).
   const showHome = ["settings", "board", "edit", "adjust", "docs"].includes(parts[0] ?? "");
-  modeIcon.textContent = showHome ? "⌂" : "⚙";
-  modeText.textContent = showHome ? "Home" : "Settings";
-  modeLink.href = showHome ? "#/" : "#/settings";
+  const initBoard = parts[0] === "board" && (parts[1] ?? "").startsWith("init-");
+  const origin = initBoard ? boardOrigin() : null;
+  modeLink.onclick = null;
+  if (initBoard) {
+    modeIcon.textContent = "‹";
+    modeText.textContent = "Back";
+    modeLink.href = origin?.hash ?? "#/improvement";
+    if (origin?.priorityId) {
+      modeLink.onclick = () => {
+        try {
+          sessionStorage.setItem(REOPEN_PRIORITY_KEY, origin.priorityId ?? "");
+        } catch {
+          /* lands on the tab without the overlay */
+        }
+      };
+    }
+  } else {
+    modeIcon.textContent = showHome ? "⌂" : "⚙";
+    modeText.textContent = showHome ? "Home" : "Settings";
+    modeLink.href = showHome ? "#/" : "#/settings";
+  }
   // the focused meeting view runs full-bleed — its own title row carries
   // the meeting name and Back; the document KIOSK (5I) is chrome-free by
   // design (a scanned code reads a procedure, nothing else)
