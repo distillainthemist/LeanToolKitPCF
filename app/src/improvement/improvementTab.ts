@@ -11,6 +11,7 @@ import { el, clear } from "../../../shared/ui/dom";
 import { showLoading } from "../loading";
 import { currentViewer } from "../runtime";
 import { boardHash } from "../links";
+import { rememberBoardOrigin } from "./boardOrigin";
 import { dayLabel } from "../linkTitle";
 import { listPeople } from "../store/people";
 import type { RosterPerson } from "../store/mappers";
@@ -202,6 +203,7 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
             hideViewSwitch: true,
             onChanged: () => {},
             onOpenBoard: (boardId) => {
+              rememberBoardOrigin("#/improvement");
               window.location.hash = boardHash(boardId);
             },
           });
@@ -665,7 +667,10 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
     };
 
     const openInitiative = (i: Initiative) => {
-      if (i.boardId !== "") window.location.hash = boardHash(i.boardId);
+      if (i.boardId !== "") {
+        rememberBoardOrigin("#/improvement");
+        window.location.hash = boardHash(i.boardId);
+      }
     };
 
     const openRowMenu = (anchor: HTMLElement, i: Initiative) => {
@@ -1077,7 +1082,10 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
             }
             list = await listInitiatives();
             close();
-            if (made.boardId !== "") window.location.hash = boardHash(made.boardId);
+            if (made.boardId !== "") {
+              rememberBoardOrigin("#/improvement");
+              window.location.hash = boardHash(made.boardId);
+            }
             else render();
           })().catch((e) => {
             err.textContent = e instanceof Error ? e.message : String(e);

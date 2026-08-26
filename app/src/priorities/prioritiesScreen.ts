@@ -58,6 +58,7 @@ import { mountWalk } from "./walk";
 import { initialsFor } from "../../../shared/schema/people";
 import { carryForwardFlow, cascadeDialog, cascadeReview, closeDialog, closePriority, LifecycleCtx, openPriorityOverlay, reopenPriority, sendCascade } from "./lifecycle";
 import { Initiative, initiativesByPriority, ragInputsFor } from "../improvement/initiativeModel";
+import { REOPEN_PRIORITY_KEY } from "../improvement/boardOrigin";
 import { PDCA_TOKENS } from "../improvement/templateModel";
 import { buildMetricState } from "../improvement/metricValues";
 import {
@@ -1156,6 +1157,20 @@ export function mountPriorities(parent: HTMLElement, opts: PrioritiesMountOpts =
     };
 
     render();
+    // returned from an initiative board's crumb: reopen the overlay it
+    // was opened from (boardOrigin handoff; tab mode only)
+    if (!card) {
+      try {
+        const reopenId = sessionStorage.getItem(REOPEN_PRIORITY_KEY);
+        if (reopenId !== null) {
+          sessionStorage.removeItem(REOPEN_PRIORITY_KEY);
+          const p = data.priorities.find((x) => x.id === reopenId);
+          if (p) openOverlay(p);
+        }
+      } catch {
+        /* the tab itself is the landing */
+      }
+    }
   })().catch((err) => {
     stopLoading();
     wrap.appendChild(

@@ -20,6 +20,7 @@ import {
   newPriority,
 } from "../store/priorities";
 import { modal, field, OrgTree, childOrgs, priorityDialog, cascadeTargetList, CascadeTarget } from "./dialogs";
+import { rememberBoardOrigin } from "../improvement/boardOrigin";
 import {
   carryForwardCopy,
   CLOSE_REASONS,
@@ -652,6 +653,7 @@ export function openPriorityOverlay(ctx: LifecycleCtx, p: Priority, onEdit: (p: 
         if (r.boardId !== "") {
           rowEl.classList.add("app-cp-ov-link");
           rowEl.addEventListener("click", () => {
+            rememberBoardOrigin("#/priorities", live.id);
             close();
             window.location.hash = `#/board/${r.boardId}`;
           });
@@ -684,6 +686,7 @@ export function openPriorityOverlay(ctx: LifecycleCtx, p: Priority, onEdit: (p: 
             actor: ctx.actor(),
             onChanged: () => void ctx.changed(),
             onOpenBoard: (boardId) => {
+              rememberBoardOrigin("#/priorities", live.id);
               close();
               window.location.hash = `#/board/${boardId}`;
             },

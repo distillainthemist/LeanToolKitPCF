@@ -18,6 +18,7 @@ import { listPeople } from "../store/people";
 import { improvementSettingsJson } from "../store/config";
 import { appendInitiativeEvent, listInitiativeEvents, listInitiatives, saveInitiative } from "../store/initiatives";
 import { Initiative, myRoles, nextGateFor, PendingGate } from "./initiativeModel";
+import { boardOrigin, REOPEN_PRIORITY_KEY } from "./boardOrigin";
 import { HealthQuestion, parseImprovementSettings, PDCA_TOKENS, roleFillersAt } from "./templateModel";
 
 const btn = (label: string, cls = "app-btn"): HTMLButtonElement => {
@@ -101,8 +102,22 @@ export function mountInitiativeHeader(o: InitiativeHeaderOpts): () => void {
 
       // ---- tier 1 -----------------------------------------------------------
       const t1 = el("div", "app-ib-t1");
-      const crumb = el("a", "app-ib-crumb", "Improvement") as HTMLAnchorElement;
-      crumb.href = "#/improvement";
+      // crumb returns WHERE THE BOARD WAS OPENED FROM (Ben, 2026-08-27):
+      // the Improvement tab, or the Priorities tab with the overlay it
+      // came from reopened (REOPEN_PRIORITY_KEY, consumed on mount)
+      const origin = boardOrigin();
+      const fromPriorities = origin !== null && origin.hash.startsWith("#/priorities");
+      const crumb = el("a", "app-ib-crumb", fromPriorities ? "Priorities" : "Improvement") as HTMLAnchorElement;
+      crumb.href = origin?.hash ?? "#/improvement";
+      if (fromPriorities && origin?.priorityId) {
+        crumb.addEventListener("click", () => {
+          try {
+            sessionStorage.setItem(REOPEN_PRIORITY_KEY, origin.priorityId ?? "");
+          } catch {
+            /* lands on the tab without the overlay */
+          }
+        });
+      }
       t1.appendChild(crumb);
       t1.appendChild(el("span", "app-cp-crumb-sep", "›"));
       t1.appendChild(el("span", "app-ib-org", [i.org.site, i.org.department, i.org.area].filter((s) => s !== "").join(" · ") || i.org.company));
