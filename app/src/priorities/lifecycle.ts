@@ -560,11 +560,12 @@ export function openPriorityOverlay(ctx: LifecycleCtx, p: Priority, onEdit: (p: 
       });
       headBtns.appendChild(more);
     }
-    head.appendChild(headBtns);
+    // ✕ rides the same cluster as the actions — one row, one baseline
     const x = btn("✕", "app-btn app-cp-ov-close");
     x.title = "Close";
     x.addEventListener("click", close);
-    head.appendChild(x);
+    headBtns.appendChild(x);
+    head.appendChild(headBtns);
     box.appendChild(head);
 
     // parent completed prompt (§10)
