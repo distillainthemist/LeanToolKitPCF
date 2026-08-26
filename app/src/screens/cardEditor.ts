@@ -497,7 +497,28 @@ export function mountCardEditor(
       if (seqIdx >= 0 && sequence.length > 1) {
         titleRow.appendChild(statusChip(`Card ${seqIdx + 1} of ${sequence.length}`, "neutral"));
       }
-      titleRow.append(el("span", "app-bar-gap"), saved, backBtn);
+      // ▶ Present (Ben, 2026-08-26): browser fullscreen for the meeting
+      // walk, same as the Priorities tab — a card hop remounts this
+      // chrome, so the label reads the live fullscreen state each time.
+      // The hosted player's iframe may refuse; the rejection is swallowed
+      // and the walk carries on windowed.
+      const present = el(
+        "button",
+        "app-btn app-card-present",
+        document.fullscreenElement !== null ? "✕ Exit present" : "▶ Present"
+      ) as HTMLButtonElement;
+      present.type = "button";
+      present.title = "Full screen for the meeting";
+      const paintPresent = () => {
+        present.textContent = document.fullscreenElement !== null ? "✕ Exit present" : "▶ Present";
+      };
+      present.addEventListener("click", () => {
+        if (document.fullscreenElement !== null) void document.exitFullscreen().catch(() => {});
+        else void document.documentElement.requestFullscreen?.().catch(() => {});
+      });
+      document.addEventListener("fullscreenchange", paintPresent);
+      cleanups.push(() => document.removeEventListener("fullscreenchange", paintPresent));
+      titleRow.append(el("span", "app-bar-gap"), present, saved, backBtn);
       wrap.insertBefore(titleRow, walkRow);
 
       head.appendChild(strip);
