@@ -561,9 +561,11 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
         if (pending) {
           const openRoles = pending.approverRoles.filter((r) => !pending.decisions[r]);
           const mine = openRoles.filter((r) => actorsForRole(i, r).some((p) => p.whoId === viewer.whoId));
-          if (mine.length > 0) stageCell.appendChild(el("div", "app-im-awaiting", "gate · awaiting you"));
+          if (mine.length > 0) stageCell.appendChild(el("div", "app-im-awaiting", "awaiting you"));
           else if (openRoles.length > 0) {
-            stageCell.appendChild(el("div", "app-cp-muted", `gate · awaiting ${openRoles.map((r) => i.snapshot.roleLabels[r] ?? r).join(", ")}`));
+            const who = el("div", "app-cp-muted app-im-stagesub", `awaiting ${openRoles.map((r) => i.snapshot.roleLabels[r] ?? r).join(", ")}`);
+            who.title = "A gate approval has been requested";
+            stageCell.appendChild(who);
           }
         } else {
           const ng = nextGateFor(i);
