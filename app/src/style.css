@@ -3375,7 +3375,7 @@ textarea.app-cp-statement { font-size: 14px; font-weight: 500; }
    4px status edge stays — it is the design's one full-strength colour */
 .app-im-row {
   display: grid;
-  grid-template-columns: 1fr 130px 170px 170px 100px 36px;
+  grid-template-columns: 1fr 110px 120px 150px 150px 105px 95px 36px;
   gap: 10px;
   align-items: center;
   background: #fff;
@@ -3398,8 +3398,8 @@ textarea.app-cp-statement { font-size: 14px; font-weight: 500; }
 .app-im-awaiting { font-size: 11.5px; font-weight: 700; color: var(--app-accent); }
 .app-im-kebab { position: static; }
 @media (max-width: 900px) {
-  .app-im-row { grid-template-columns: 1fr 110px 36px; }
-  .app-im-row .app-im-cell:nth-child(3), .app-im-row .app-im-cell:nth-child(4), .app-im-row .app-im-cell:nth-child(5) { display: none; }
+  .app-im-row { grid-template-columns: 1fr 150px 36px; }
+  .app-im-row > :nth-child(2), .app-im-row > :nth-child(3), .app-im-row > :nth-child(5), .app-im-row > :nth-child(6), .app-im-row > :nth-child(7) { display: none; }
 }
 /* create flow */
 .app-im-create { max-height: calc(100% - 32px); overflow: auto; }

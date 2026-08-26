@@ -219,13 +219,11 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
         return;
       }
       const table = el("div", "app-im-table");
-      const roleLabel = (i: Initiative, key: string) => i.snapshot.roleLabels[key] ?? key;
-      const ownerName = (i: Initiative): string => (i.roles.owner ?? [])[0]?.who ?? "no owner";
       // 1 — my initiatives
       table.appendChild(groupHead(`My initiatives · ${groups.mine.length}`));
       if (groups.mine.length === 0) table.appendChild(note("You don't hold a role on any initiative yet."));
       else table.appendChild(columnHead());
-      for (const i of groups.mine) table.appendChild(rowFor(i, myRoles(i, viewer.whoId).map((k) => roleLabel(i, k)).join(", ")));
+      for (const i of groups.mine) table.appendChild(rowFor(i));
       // 2 — owned by my team (org owners only)
       if (ownedOrgKeys.length > 0) {
         const scoped = f.teamScope === "" ? groups.team : groups.team.filter((i) => orgKeyOf(i.org).startsWith(f.teamScope.replace(/\|+$/, "")));
@@ -250,11 +248,11 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
         table.appendChild(head);
         if (scoped.length === 0) table.appendChild(note(`No initiatives in your orgs for ${f.period || "this period"}.`));
         else table.appendChild(columnHead());
-        for (const i of scoped.slice(0, 5)) table.appendChild(rowFor(i, ownerName(i)));
+        for (const i of scoped.slice(0, 5)) table.appendChild(rowFor(i));
         if (scoped.length > 5) {
           const more = btn(`Show all ${scoped.length} ›`, "app-link app-im-more");
           more.addEventListener("click", () => {
-            for (const i of scoped.slice(5)) table.insertBefore(rowFor(i, ownerName(i)), more);
+            for (const i of scoped.slice(5)) table.insertBefore(rowFor(i), more);
             more.remove();
           });
           table.appendChild(more);
@@ -266,7 +264,7 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
       table.appendChild(groupHead(`Other initiatives · ${others.length}`));
       if (others.length === 0) table.appendChild(note(`No other initiatives for ${f.period || "this period"}.`));
       else table.appendChild(columnHead());
-      for (const i of others) table.appendChild(rowFor(i, ownerName(i)));
+      for (const i of others) table.appendChild(rowFor(i));
       if (groups.hiddenConfidential > 0) table.appendChild(note(`· ${groups.hiddenConfidential} confidential in this org`));
       wrap.appendChild(table);
     };
@@ -282,9 +280,11 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
       const h = el("div", "app-im-row app-im-colhead");
       h.append(
         el("span", undefined, "Initiative"),
+        el("span", undefined, "Org"),
+        el("span", undefined, "Your role(s)"),
         el("span", undefined, "Stage"),
         el("span", undefined, "Primary metric"),
-        el("span", undefined, "Next gate"),
+        el("span", undefined, "Actions"),
         el("span", undefined, "Health"),
         el("span", undefined, "")
       );
@@ -516,7 +516,7 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
     cleanups.push(() => document.removeEventListener("keydown", onFilterKey, true));
     cleanups.push(closeFilterPop);
 
-    const rowFor = (i: Initiative, meta: string): HTMLElement => {
+    const rowFor = (i: Initiative): HTMLElement => {
       const row = el("div", "app-im-row");
       // status edge = the initiative's RAG (flags + action position; metric
       // values join the mix with reporting)
@@ -531,22 +531,51 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
       else if (i.flag === "flag") titleLine.appendChild(flagChip("⚐ Needs support", "flag"));
       if (i.confidential) titleLine.appendChild(el("span", "app-im-chip app-im-chip-conf", "◈ Confidential"));
       main.appendChild(titleLine);
-      // priority statement · my roles / owner · org (the method is a filter
-      // dimension and the stage names already say it)
+      // meta = priority statement · owner (org and roles are columns now)
       const primary = i.priorities.find((p) => p.primary) ?? i.priorities[0] ?? null;
       const priorityText = primary ? (priorityStatement.get(primary.priorityId) ?? "Linked priority") : "Other";
-      const metaBits = [priorityText, meta, i.org.department || i.org.site].filter((s) => s !== "");
-      main.appendChild(el("div", "app-im-meta", metaBits.join(" · ")));
+      const owner = (i.roles.owner ?? [])[0]?.who ?? "";
+      main.appendChild(el("div", "app-im-meta", [priorityText, owner].filter((x) => x !== "").join(" · ")));
       row.appendChild(main);
-      // stage chip
+      // org column: department (or site), full chain on hover
+      const orgCell = el("div", "app-im-cell", i.org.department || i.org.site);
+      orgCell.title = [i.org.company, i.org.site, i.org.department, i.org.area].filter((x) => x !== "").join(" › ");
+      row.appendChild(orgCell);
+      // your role(s) on this initiative
+      const roleKeys = myRoles(i, viewer.whoId);
+      const rolesCell = el("div", "app-im-cell" + (roleKeys.length === 0 ? " app-cp-muted" : ""));
+      rolesCell.textContent = roleKeys.length > 0 ? roleKeys.map((k) => i.snapshot.roleLabels[k] ?? k).join(", ") : "—";
+      row.appendChild(rolesCell);
+      // stage column: the current stage — or, when a gate request is open,
+      // who the approval waits on (Ben, 2026-08-26: replaces "Next gate")
       const stage = i.snapshot.stages.find((s) => s.id === i.stageId) ?? null;
-      const stageCell = el("div", "app-im-cell");
-      if (i.singleAction) stageCell.appendChild(el("span", "app-cp-muted", "single action"));
+      const stageCell = el("div", "app-im-cell app-im-stagecell");
+      if (i.status !== "active") stageCell.appendChild(el("span", "app-cp-muted", i.status));
+      else if (i.singleAction) stageCell.appendChild(el("span", "app-cp-muted", "single action"));
       else if (stage) {
         const chip = el("span", "app-im-stagechip", stage.name);
         chip.style.color = PDCA_TOKENS[stage.pdca].fg;
         chip.style.background = PDCA_TOKENS[stage.pdca].bg;
         stageCell.appendChild(chip);
+        const pending = i.gate;
+        if (pending) {
+          const openRoles = pending.approverRoles.filter((r) => !pending.decisions[r]);
+          const mine = openRoles.filter((r) => actorsForRole(i, r).some((p) => p.whoId === viewer.whoId));
+          if (mine.length > 0) stageCell.appendChild(el("div", "app-im-awaiting", "gate · awaiting you"));
+          else if (openRoles.length > 0) {
+            stageCell.appendChild(el("div", "app-cp-muted", `gate · awaiting ${openRoles.map((r) => i.snapshot.roleLabels[r] ?? r).join(", ")}`));
+          }
+        } else {
+          const ng = nextGateFor(i);
+          if (ng !== null && ng.target !== "") {
+            const when = el("div", "", dayLabel(ng.target));
+            if (ng.target < todayIso()) {
+              when.style.color = ragColor("red");
+              when.style.fontWeight = "600";
+            } else when.classList.add("app-cp-muted");
+            stageCell.appendChild(when);
+          }
+        }
       }
       row.appendChild(stageCell);
       // primary metric — values arrive with P6's metric cards
@@ -570,35 +599,21 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
         metricCell.title = i.metrics.length > 0 ? "Chart values on the initiative board's KPI card" : "";
       }
       row.appendChild(metricCell);
-      // next gate
-      const gateCell = el("div", "app-im-cell");
-      const ng = nextGateFor(i);
-      if (ng === null) gateCell.appendChild(el("span", "app-cp-muted", i.status === "active" ? "—" : i.status));
-      else {
-        const overdue = ng.target !== "" && ng.target < todayIso();
-        gateCell.appendChild(el("div", "", `${ng.fromName} → ${ng.toName}`));
-        if (ng.target !== "") {
-          const when = el("div", "", dayLabel(ng.target));
-          if (overdue) {
-            when.style.color = ragColor("red");
-            when.style.fontWeight = "600";
-          } else when.classList.add("app-cp-muted");
-          gateCell.appendChild(when);
-        }
-        // a pending request: "awaiting you" when YOUR decision is still
-        // outstanding (assigned or a site standard-role filler), else
-        // who it waits on
-        const pending = i.gate;
-        if (pending) {
-          const open = pending.approverRoles.filter((r) => !pending.decisions[r]);
-          const mine = open.filter((r) => actorsForRole(i, r).some((p) => p.whoId === viewer.whoId));
-          if (mine.length > 0) gateCell.appendChild(el("div", "app-im-awaiting", "awaiting you"));
-          else if (open.length > 0) {
-            gateCell.appendChild(el("div", "app-cp-muted", `awaiting ${open.map((r) => i.snapshot.roleLabels[r] ?? r).join(", ")}`));
-          }
+      // actions column: the underlying position (Ben, 2026-08-26)
+      const actCell = el("div", "app-im-cell");
+      if (inputs.openActions === 0) {
+        actCell.classList.add("app-cp-muted");
+        actCell.textContent = "none open";
+      } else {
+        actCell.appendChild(el("span", undefined, `${inputs.openActions} open`));
+        if (inputs.overdueActions > 0) {
+          const od = el("span", undefined, ` · ${inputs.overdueActions} overdue`);
+          od.style.color = ragColor("red");
+          od.style.fontWeight = "600";
+          actCell.appendChild(od);
         }
       }
-      row.appendChild(gateCell);
+      row.appendChild(actCell);
       // health — last check stored on the row (boardHeader writes it)
       let healthText = "Not checked";
       try {

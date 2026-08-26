@@ -533,6 +533,11 @@ reschedule/cancel history with a reason picklist.
   rule); next-gate cell = "Define → Measure" / "28 Aug" (red when
   overdue) / "awaiting you" ONLY on a pending request the viewer (assigned
   OR site standard-role filler) has not decided, else "awaiting <roles>".
+  Register columns remade (Ben, 2026-08-26): Initiative (meta = priority
+  statement · owner) · Org (dept/site, chain on hover) · Your role(s) ·
+  Stage (current chip; "gate · awaiting you/<roles>" when a request is
+  open, else the stage target date red-when-past — replaces Next gate) ·
+  Primary metric · Actions (n open · n overdue) · Health · ⋮.
   Header remade on the Priorities pattern (Ben, 2026-08-23):
   "Improvement Initiatives | Company › Site ▾" — accent lead, clickable
   crumbs, ▾ popover (Switch · Descend · Browse all…); the crumb IS the
