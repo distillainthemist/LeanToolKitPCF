@@ -29,6 +29,7 @@ import { Person } from "../../shared/schema/people";
 import {
   AgendaEnvelope,
   AgendaItem,
+  AgendaPerson,
   AgendaLink,
   newAgendaItem,
   newOutput,
@@ -48,10 +49,10 @@ export interface AgendaEditorCallbacks {
 
 type SectionKey = "prework" | "agenda" | "outputs";
 
-/** The who selector: people chips as a radio group, or/and a free-text name. */
+/** The who selector: people chips (multi-select) plus free-text names. */
 interface WhoPicker {
   el: HTMLElement;
-  apply: (target: { whoId: string; who: string }) => void;
+  apply: (target: { whoId?: string; who?: string; people: AgendaPerson[] }) => void;
 }
 
 export class AgendaEditor {
@@ -350,9 +351,9 @@ export class AgendaEditor {
     }
     row.appendChild(main);
 
-    if (item.who !== "") {
+    if (item.people.length > 0) {
       const right = el("div", "ltk-ag-right");
-      right.appendChild(el("div", "ltk-ag-who", item.who));
+      right.appendChild(el("div", "ltk-ag-who", item.people.map((p) => p.who).join(", ")));
       row.appendChild(right);
     }
 
@@ -372,7 +373,7 @@ export class AgendaEditor {
     const linkUrl = textInput(item.link?.url ?? "", {
       placeholder: "https://",
     });
-    const who = this.buildWhoPicker({ whoId: item.whoId, who: item.who });
+    const who = this.buildWhoPicker(item.people);
 
     const save = () => {
       const t = title.value.trim();
@@ -452,7 +453,7 @@ export class AgendaEditor {
     row.appendChild(main);
 
     const right = el("div", "ltk-ag-right");
-    if (item.who !== "") right.appendChild(el("div", "ltk-ag-who", item.who));
+    if (item.people.length > 0) right.appendChild(el("div", "ltk-ag-who", item.people.map((p) => p.who).join(", ")));
     if (item.minutes > 0) {
       right.appendChild(el("div", "ltk-ag-mins", `${item.minutes} min`));
     }
@@ -569,7 +570,7 @@ export class AgendaEditor {
       placeholder: "Coaching prompt shown under the item",
       rows: 2,
     });
-    const who = this.buildWhoPicker({ whoId: item.whoId, who: item.who });
+    const who = this.buildWhoPicker(item.people);
     const minutes = textInput(item.minutes > 0 ? String(item.minutes) : "", {
       type: "number",
       placeholder: "e.g. 10",
@@ -700,6 +701,9 @@ export class AgendaEditor {
     if (this.disableActions) return;
     const action = newAction({ source: "agenda", sourceId: item.id });
     action.issue = item.title;
+    if (item.people.length > 0) {
+      action.assignees = item.people.map((p) => ({ whoId: p.whoId, who: p.who, done: false }));
+    }
     openActionDialog({
       host: this.root,
       action,
@@ -802,6 +806,12 @@ export class AgendaEditor {
     main.appendChild(title);
     row.appendChild(main);
 
+    if (item.people.length > 0) {
+      const right = el("div", "ltk-ag-right");
+      right.appendChild(el("div", "ltk-ag-who", item.people.map((p) => p.who).join(", ")));
+      row.appendChild(right);
+    }
+
     if (!this.readOnly) {
       row.addEventListener("click", () => this.openOutputDialog(item, false));
     }
@@ -812,11 +822,13 @@ export class AgendaEditor {
     const text = textInput(item.text, {
       placeholder: hintFor(this.prompts, "outputs", "What must this meeting produce?"),
     });
+    const who = this.buildWhoPicker(item.people);
 
     const save = () => {
       const t = text.value.trim();
       if (t === "") return;
       item.text = t;
+      who.apply(item);
       if (isNew) this.env.data.outputs.push(item);
       dlg.close();
       this.commit();
@@ -845,6 +857,8 @@ export class AgendaEditor {
       buttons,
     });
     dlg.body.appendChild(fieldRow("Output", text));
+    dlg.body.appendChild(sectionLabel("Who"));
+    dlg.body.appendChild(who.el);
     text.focus();
   }
 
@@ -855,64 +869,50 @@ export class AgendaEditor {
    * free-text name. A typed name wins over a ticked chip; everything clear
    * means unassigned.
    */
-  private buildWhoPicker(current: { whoId: string; who: string }): WhoPicker {
+  private buildWhoPicker(current: AgendaPerson[]): WhoPicker {
     const wrap = el("div");
     wrap.style.display = "flex";
     wrap.style.flexDirection = "column";
     wrap.style.gap = "8px";
 
     const checks: { box: HTMLInputElement; wrap: HTMLElement; person: Person }[] = [];
-    const inList = this.people.some(
-      (p) => p.whoId === current.whoId || p.who === current.who
-    );
+    const isCurrent = (p: Person) =>
+      current.some((c) => (c.whoId !== "" && c.whoId === p.whoId) || c.who === p.who);
     if (this.people.length > 0) {
       const chips = checklist();
       for (const person of this.people) {
         const chip = checkItem(person.who);
-        if (
-          current.who !== "" &&
-          (current.whoId === person.whoId || current.who === person.who)
-        ) {
+        if (isCurrent(person)) {
           chip.box.checked = true;
           chip.wrap.classList.add("ltk-check-on");
         }
-        chip.box.addEventListener("change", () => {
-          if (!chip.box.checked) return;
-          for (const other of checks) {
-            if (other.box !== chip.box && other.box.checked) {
-              other.box.checked = false;
-              other.wrap.classList.remove("ltk-check-on");
-            }
-          }
-        });
         chips.appendChild(chip.wrap);
         checks.push({ box: chip.box, wrap: chip.wrap, person });
       }
       wrap.appendChild(chips);
     }
-    const free = textInput(
-      !inList && current.who !== "" ? current.who : "",
-      { placeholder: this.people.length > 0 ? "Or type a name" : "Who" }
-    );
+    // names outside the roster ride the text input, comma-separated
+    const outside = current
+      .filter((c) => !this.people.some((p) => (c.whoId !== "" && c.whoId === p.whoId) || c.who === p.who))
+      .map((c) => c.who);
+    const free = textInput(outside.join(", "), {
+      placeholder: this.people.length > 0 ? "Or type names (comma-separated)" : "Who (comma-separated)",
+    });
     wrap.appendChild(free);
 
     return {
       el: wrap,
       apply: (target) => {
-        const typed = free.value.trim();
-        if (typed !== "") {
-          target.whoId = "";
-          target.who = typed;
-          return;
+        const people: AgendaPerson[] = checks
+          .filter((c) => c.box.checked)
+          .map((c) => ({ whoId: c.person.whoId, who: c.person.who }));
+        for (const name of free.value.split(",").map((x) => x.trim()).filter((x) => x !== "")) {
+          if (!people.some((p) => p.who === name)) people.push({ whoId: "", who: name });
         }
-        const picked = checks.find((c) => c.box.checked);
-        if (picked) {
-          target.whoId = picked.person.whoId;
-          target.who = picked.person.who;
-        } else {
-          target.whoId = "";
-          target.who = "";
-        }
+        target.people = people;
+        // first person mirrors into the legacy single fields
+        target.whoId = people[0]?.whoId ?? "";
+        target.who = people[0]?.who ?? "";
       },
     };
   }

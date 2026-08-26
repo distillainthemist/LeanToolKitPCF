@@ -25,13 +25,21 @@ export interface AgendaLink {
   url: string;
 }
 
+/** An assignee — roster people carry their whoId, typed names go without. */
+export interface AgendaPerson {
+  whoId: string;
+  who: string;
+}
+
 /** A pre-work item: do this before the meeting. */
 export interface PreworkItem {
   id: string;
   title: string;
   link?: AgendaLink;
+  /** Mirrors people[0] — kept for older documents/readers. */
   whoId: string;
   who: string;
+  people: AgendaPerson[];
   done: boolean;
 }
 
@@ -40,8 +48,10 @@ export interface AgendaItem {
   id: string;
   title: string;
   prompt: string;
+  /** Mirrors people[0] — kept for older documents/readers. */
   whoId: string;
   who: string;
+  people: AgendaPerson[];
   minutes: number; // 0 = untimed
   links: AgendaLink[];
 }
@@ -50,6 +60,7 @@ export interface AgendaItem {
 export interface OutputItem {
   id: string;
   text: string;
+  people: AgendaPerson[];
   done: boolean;
 }
 
@@ -62,7 +73,7 @@ export interface AgendaData {
 export type AgendaEnvelope = Envelope<AgendaData>;
 
 export function newPrework(): PreworkItem {
-  return { id: newId("p"), title: "", whoId: "", who: "", done: false };
+  return { id: newId("p"), title: "", whoId: "", who: "", people: [], done: false };
 }
 
 export function newAgendaItem(): AgendaItem {
@@ -72,13 +83,14 @@ export function newAgendaItem(): AgendaItem {
     prompt: "",
     whoId: "",
     who: "",
+    people: [],
     minutes: 0,
     links: [],
   };
 }
 
 export function newOutput(): OutputItem {
-  return { id: newId("o"), text: "", done: false };
+  return { id: newId("o"), text: "", people: [], done: false };
 }
 
 // ---- defensive parsing ------------------------------------------------------
@@ -94,6 +106,23 @@ function parseLink(v: unknown): AgendaLink | undefined {
   if (url === "") return undefined;
   const title = asStr(o.title).trim();
   return { title: title !== "" ? title : url, url };
+}
+
+/** people[] with a legacy single whoId/who as the fallback. */
+function parsePeople(o: Record<string, unknown>): AgendaPerson[] {
+  if (Array.isArray(o.people)) {
+    const out: AgendaPerson[] = [];
+    for (const item of o.people) {
+      if (!item || typeof item !== "object") continue;
+      const q = item as Record<string, unknown>;
+      const who = asStr(q.who).trim();
+      if (who === "") continue;
+      out.push({ whoId: asStr(q.whoId), who });
+    }
+    return out;
+  }
+  const who = asStr(o.who).trim();
+  return who !== "" ? [{ whoId: asStr(o.whoId), who }] : [];
 }
 
 function parseLinks(v: unknown): AgendaLink[] {
@@ -118,12 +147,14 @@ function parseData(data: unknown): AgendaData {
       const o = item as Record<string, unknown>;
       const title = asStr(o.title).trim();
       if (title === "") continue;
+      const people = parsePeople(o);
       prework.push({
         id: asStr(o.id) !== "" ? asStr(o.id) : newId("p"),
         title,
         link: parseLink(o.link),
-        whoId: asStr(o.whoId),
-        who: asStr(o.who).trim(),
+        whoId: people[0]?.whoId ?? "",
+        who: people[0]?.who ?? "",
+        people,
         done: o.done === true,
       });
     }
@@ -137,12 +168,14 @@ function parseData(data: unknown): AgendaData {
       const title = asStr(o.title).trim();
       if (title === "") continue;
       const mins = typeof o.minutes === "number" ? o.minutes : Number(o.minutes);
+      const people = parsePeople(o);
       items.push({
         id: asStr(o.id) !== "" ? asStr(o.id) : newId("g"),
         title,
         prompt: asStr(o.prompt).trim(),
-        whoId: asStr(o.whoId),
-        who: asStr(o.who).trim(),
+        whoId: people[0]?.whoId ?? "",
+        who: people[0]?.who ?? "",
+        people,
         minutes: Number.isFinite(mins) && mins > 0 ? Math.round(mins) : 0,
         links: parseLinks(o.links),
       });
@@ -159,6 +192,7 @@ function parseData(data: unknown): AgendaData {
       outputs.push({
         id: asStr(o.id) !== "" ? asStr(o.id) : newId("o"),
         text,
+        people: parsePeople(o),
         done: o.done === true,
       });
     }
