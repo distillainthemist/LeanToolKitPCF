@@ -215,6 +215,17 @@ export function mountHub(parent: HTMLElement): () => void {
     stopLoading();
 
     view = new LeanHubView(host, {
+      // the URL mirrors the fronted tab (replaceState fires no
+      // hashchange, so the router never remounts the hub) — refresh
+      // keeps the tab, and the Report dialog's area prefill reads it
+      onTabChange: (key) => {
+        const hash = key === "myday" ? "#/" : `#/${key}`;
+        try {
+          window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}${hash}`);
+        } catch {
+          /* the tab still fronts */
+        }
+      },
       onSelectMeeting: (inst) => {
         window.location.hash = `#/board/${inst.boardId}/${encodeURIComponent(inst.iso)}`;
       },
@@ -313,10 +324,11 @@ export function mountHub(parent: HTMLElement): () => void {
       window.location.hash.startsWith("#/docs")
     ) {
       view.selectTab("documents");
-    } else if (window.location.hash.startsWith("#/priorities")) {
-      view.selectTab("priorities");
-    } else if (window.location.hash.startsWith("#/improvement")) {
-      view.selectTab("improvement");
+    } else {
+      // any "#/<tab>" fronts its tab (priorities, improvement,
+      // calendar, actions) — selectTab ignores unknown keys
+      const head = window.location.hash.replace(/^#\//, "").split("/")[0] ?? "";
+      if (head !== "") view.selectTab(head);
     }
     if (hosted) {
       // categories and boards came in with the boot round — no re-query

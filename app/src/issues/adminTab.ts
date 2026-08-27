@@ -32,6 +32,8 @@ const STATUS_WORDS: Record<string, string> = {
 const AREA_WORDS: Record<string, string> = {
   boards: "Boards",
   cards: "Cards",
+  priorities: "Priorities",
+  improvement: "Improvement",
   documents: "Documents",
   settings: "Settings",
   other: "Other",

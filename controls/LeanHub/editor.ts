@@ -40,6 +40,9 @@ import { dueTone, relativeDue, statusChip } from "../../shared/ui/format";
 import { LEANHUB_CSS } from "./styles";
 
 export interface LeanHubCallbacks {
+  /** A tab was fronted (click or selectTab) — the app mirrors it into
+   *  the URL so context (e.g. the Report dialog) knows where you are. */
+  onTabChange?: (key: string) => void;
   onSelectMeeting: (inst: HubInstance) => void;
   onActions: (actions: LtkAction[]) => void;
   onPrefs: (prefs: HubPrefs) => void;
@@ -258,6 +261,7 @@ export class LeanHubView {
     const known = this.visibleTabs().some((t) => t.key === key);
     if (!known || this.tab === key) return;
     this.tab = key;
+    this.cb.onTabChange?.(key);
     this.render();
   }
 
@@ -337,6 +341,7 @@ export class LeanHubView {
       if (t.key === this.tab) btn.classList.add("ltk-lh-tab-on");
       btn.addEventListener("click", () => {
         this.tab = t.key;
+        this.cb.onTabChange?.(t.key);
         this.render();
       });
       tabs.appendChild(btn);

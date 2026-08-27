@@ -24,11 +24,13 @@ import { Ben_ltkissuewatchsService } from "../generated/services/Ben_ltkissuewat
 import type { Ben_ltkissues } from "../generated/models/Ben_ltkissuesModel";
 import { shrinkImage } from "../../../shared/ui/imageIngest";
 
-export type IssueArea = "boards" | "cards" | "documents" | "settings" | "other";
+export type IssueArea = "boards" | "cards" | "priorities" | "improvement" | "documents" | "settings" | "other";
 
 const AREAS: { key: IssueArea; label: string }[] = [
   { key: "boards", label: "Boards & meetings" },
   { key: "cards", label: "Cards" },
+  { key: "priorities", label: "Cascaded priorities" },
+  { key: "improvement", label: "Improvement" },
   { key: "documents", label: "Documents" },
   { key: "settings", label: "Settings & admin" },
   { key: "other", label: "Something else" },
@@ -36,9 +38,15 @@ const AREAS: { key: IssueArea; label: string }[] = [
 
 /** Which part of the app a route belongs to — the prefill, never a cage. */
 export function areaForRoute(hash: string): IssueArea {
-  const head = hash.replace(/^#\//, "").split("/")[0] ?? "";
+  const parts = hash.replace(/^#\//, "").split("/");
+  const head = parts[0] ?? "";
   if (head === "docs" || head === "doc") return "documents";
+  if (head === "priorities") return "priorities";
+  if (head === "improvement" || head === "template") return "improvement";
   if (head === "settings") return "settings";
+  // an initiative/template board (and its cards) is Improvement work
+  const boardId = head === "board" ? (parts[1] ?? "") : head === "edit" ? (parts[1] ?? "") : "";
+  if (boardId.startsWith("init-") || boardId.startsWith("tpl-")) return "improvement";
   if (head === "edit") return "cards";
   if (head === "board" || head === "setup" || head === "adjust" || head === "") return "boards";
   return "other";
