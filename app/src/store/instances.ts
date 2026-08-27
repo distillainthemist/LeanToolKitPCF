@@ -232,3 +232,58 @@ export async function rescheduleInstance(
     ben_name: `${board?.name ?? instance.boardId} — ${whenIso.slice(0, 16).replace("T", " ")}`,
   });
 }
+
+// ---- gate snapshots (initiative boards, P6e) --------------------------------
+// Approving a gate stamps a CLOSED instance carrying a copy of the live
+// rows (output + tile svg) and a gate marker in its manifest JSON — the
+// board can then be viewed as it stood at each gate. Forward-only.
+
+export interface GateSnapshot {
+  id: string;
+  stage: string;
+  at: string; // yyyy-mm-dd
+}
+
+export async function createGateSnapshot(
+  boardId: string,
+  stageName: string,
+  manifestRaw: string,
+  rows: { cardId: string; cardType: string; outputJson: string; tileSvg: string }[]
+): Promise<void> {
+  const board = await getBoard(boardId);
+  if (!board) return;
+  let manifest: Record<string, unknown> = {};
+  try {
+    manifest = JSON.parse(manifestRaw || "{}") as Record<string, unknown>;
+  } catch {
+    /* the marker still rides an otherwise empty manifest */
+  }
+  const at = new Date().toISOString();
+  const created = await Ben_ltkboardinstancesService.create({
+    ben_name: `Gate — ${stageName} · ${at.slice(0, 10)}`,
+    ben_boardid: boardId,
+    ben_when: at,
+    ben_status: "closed",
+    ben_isadhoc: true,
+    ben_manifestjson: JSON.stringify({ ...manifest, gate: { stage: stageName, at: at.slice(0, 10) } }),
+    "ben_Board@odata.bind": `/ben_ltkboards(${board.id})`,
+  } as never);
+  const instance = created.data ? fromRow(created.data) : null;
+  if (!instance) return;
+  for (const r of rows) {
+    await createInstanceRow(instance.id, boardId, r.cardId, r.cardType, r.outputJson, r.tileSvg);
+  }
+}
+
+/** The gate marker, when an instance is a snapshot ("" stage = not one). */
+export function gateMarkerOf(inst: InstanceSummary): GateSnapshot | null {
+  try {
+    const m = JSON.parse(inst.manifestRaw || "{}") as { gate?: { stage?: unknown; at?: unknown } };
+    if (m.gate && typeof m.gate.stage === "string" && m.gate.stage !== "") {
+      return { id: inst.id, stage: m.gate.stage, at: typeof m.gate.at === "string" ? m.gate.at : inst.when.slice(0, 10) };
+    }
+  } catch {
+    /* not a snapshot */
+  }
+  return null;
+}

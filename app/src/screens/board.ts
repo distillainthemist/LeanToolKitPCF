@@ -143,9 +143,13 @@ async function renderBoard(
   // instance, hides the scheduler pane, and — for initiative boards —
   // wears the initiative header band (P6a).
   const standalone = board.kind === "project";
+  const initBoard = standalone && board.boardId.startsWith("init-");
   if (standalone) {
     current = { id: "", boardId: board.boardId, when: "", status: "open", isAdhoc: false, manifestRaw: "" };
   }
+  // gate snapshots (P6e): the closed instances stamped at gate approvals
+  let gateSnaps: { inst: InstanceSummary; stage: string; at: string }[] = [];
+  let viewingSnap: { stage: string; at: string } | null = null;
 
   // an adjusted meeting renders its own override manifest instead
   const activeManifest = () =>
@@ -168,7 +172,9 @@ async function renderBoard(
   const liveDot = el("span", "app-mode-dot");
   const liveLabel = el("span", "app-mode-label");
   liveBtn.append(liveDot, liveLabel);
-  bar.append(title, status, el("span", "app-bar-gap"), liveBtn, scheduleBtn);
+  const titleBits = el("span", "app-ib-titlebits");
+  const paneControls = el("span", "app-ib-controls");
+  bar.append(title, titleBits, status, el("span", "app-bar-gap"), paneControls, liveBtn, scheduleBtn);
   parent.appendChild(bar);
 
   const split = el("div", "app-board-split");
@@ -189,9 +195,13 @@ async function renderBoard(
   const setScheduleHidden = (on: boolean) => {
     scheduleHidden = on;
     split.classList.toggle("app-board-solo", on);
-    scheduleBtn.textContent = on
-      ? "Show details & schedule"
-      : "Hide details & schedule";
+    scheduleBtn.textContent = initBoard
+      ? on
+        ? "Show details"
+        : "Hide details"
+      : on
+        ? "Show details & schedule"
+        : "Hide details & schedule";
   };
   setScheduleHidden(scheduleHidden);
   scheduleBtn.addEventListener("click", () => {
@@ -201,6 +211,7 @@ async function renderBoard(
 
   const gridView = new BoardGridView(rightHost, {
     onSelect: (e) => {
+      if (standalone && current && current.id !== "") return; // gate snapshot — view only
       if (e.action === "open" && current) {
         window.location.hash = `#/edit/${board.boardId}/${standalone ? "live" : current.id}/${e.cardId}`;
       }
@@ -351,6 +362,18 @@ async function renderBoard(
     pendingPreloads.clear();
   });
 
+  const loadGateSnaps = async () => {
+    if (!initBoard) return;
+    const { listInstances, gateMarkerOf } = await import("../store/instances");
+    const insts = await listInstances(board.boardId).catch(() => []);
+    gateSnaps = insts
+      .map((inst) => ({ inst, marker: gateMarkerOf(inst) }))
+      .filter((x): x is { inst: InstanceSummary; marker: { id: string; stage: string; at: string } } => x.marker !== null)
+      .map((x) => ({ inst: x.inst, stage: x.marker.stage, at: x.marker.at }));
+    // a snapshot's rows load with the board query only if stamped before
+    // mount — refresh so a just-stamped gate is viewable immediately
+    cardRows = await rowsForBoard(board.boardId);
+  };
   const liveOn = () => localStorage.getItem(LIVE_TILES_KEY) !== "0";
   const applyLiveMode = () => {
     const wanted = liveOn();
@@ -358,7 +381,16 @@ async function renderBoard(
     // a closed meeting always renders its stamped archive, flag or not —
     // saying so on the button, rather than silently ignoring the toggle
     const archived = wanted && current?.status === "closed";
-    liveLabel.textContent = on ? "Live board" : archived ? "Archived board" : "Stored board";
+    liveLabel.textContent =
+      initBoard && viewingSnap !== null
+        ? `Gate — ${viewingSnap.stage}`
+        : initBoard
+          ? "Live board"
+          : on
+            ? "Live board"
+            : archived
+              ? "Archived board"
+              : "Stored board";
     liveBtn.classList.toggle("app-mode-on", on);
     liveBtn.title = archived
       ? "This meeting is closed — the board shows the snapshots stamped when it closed"
@@ -367,9 +399,53 @@ async function renderBoard(
         : "Showing stored snapshots. Click to render cards live.";
     gridView.setLiveRenderer(on ? liveRenderer : null);
   };
+  /** Snapshot picking (init boards): Live restores the living board; a
+   *  gate renders its stamped rows read-only. */
+  const showSnapshot = (pick: { inst: InstanceSummary; stage: string; at: string } | null) => {
+    if (pick === null) {
+      current = { id: "", boardId: board.boardId, when: "", status: "open", isAdhoc: false, manifestRaw: "" };
+      viewingSnap = null;
+    } else {
+      current = pick.inst;
+      viewingSnap = { stage: pick.stage, at: pick.at };
+    }
+    renderTiles();
+    applyLiveMode();
+  };
   liveBtn.addEventListener("click", () => {
-    localStorage.setItem(LIVE_TILES_KEY, liveOn() ? "0" : "1");
-    void refreshBoardActions().then(applyLiveMode);
+    if (!initBoard) {
+      localStorage.setItem(LIVE_TILES_KEY, liveOn() ? "0" : "1");
+      void refreshBoardActions().then(applyLiveMode);
+      return;
+    }
+    document.querySelectorAll(".app-cp-menu").forEach((m) => m.remove());
+    const menu = el("div", "app-cp-menu");
+    const item = (label: string, run: () => void, on: boolean) => {
+      const b = el("button", "app-cp-menu-item", `${on ? "● " : "○ "}${label}`) as HTMLButtonElement;
+      b.type = "button";
+      b.addEventListener("click", () => {
+        menu.remove();
+        run();
+      });
+      menu.appendChild(b);
+    };
+    item("Live board", () => showSnapshot(null), viewingSnap === null);
+    if (gateSnaps.length === 0) menu.appendChild(el("div", "app-cp-menu-h", "No gate snapshots yet — one is stamped at each gate approval"));
+    else menu.appendChild(el("div", "app-cp-menu-h", "Gate snapshots"));
+    for (const g of gateSnaps) {
+      item(`Gate — ${g.stage} · ${g.at}`, () => showSnapshot(g), viewingSnap !== null && current?.id === g.inst.id);
+    }
+    const r = liveBtn.getBoundingClientRect();
+    menu.style.top = `${r.bottom + 4}px`;
+    menu.style.left = `${Math.min(r.left, window.innerWidth - 300)}px`;
+    document.body.appendChild(menu);
+    const off = (e: PointerEvent) => {
+      if (!menu.contains(e.target as Node)) {
+        menu.remove();
+        document.removeEventListener("pointerdown", off, true);
+      }
+    };
+    setTimeout(() => document.addEventListener("pointerdown", off, true), 0);
   });
 
   async function refreshBoardActions(): Promise<void> {
@@ -407,8 +483,21 @@ async function renderBoard(
     const cur = stageInfo.stages.findIndex((x) => x.id === stageInfo!.currentId);
     return idx > cur && cur >= 0;
   };
+  const snapBanner = el("div", "app-ib-snapbanner");
   const renderTiles = () => {
     if (!current) return;
+    snapBanner.remove();
+    if (initBoard && viewingSnap !== null) {
+      snapBanner.replaceChildren();
+      snapBanner.append(
+        el("span", undefined, `Viewing the ${viewingSnap.stage} gate snapshot · stamped ${viewingSnap.at} — read-only`)
+      );
+      const back = el("button", "app-link", "Back to live") as HTMLButtonElement;
+      back.type = "button";
+      back.addEventListener("click", () => showSnapshot(null));
+      snapBanner.appendChild(back);
+      rightHost.prepend(snapBanner);
+    }
     const raw = activeManifest();
     const m = slotFilter === null ? raw : { ...raw, slots: raw.slots.filter((sl) => slotFilter!(sl.settings)) };
     const adjusted = raw !== boardManifest;
@@ -721,33 +810,61 @@ async function renderBoard(
     // its toggle; initiative boards mount the header band above the grid.
     setScheduleHidden(true);
     scheduleBtn.style.display = "none";
-    if (board.boardId.startsWith("init-")) {
-      const headerHost = el("div", "app-ib-host");
-      rightHost.prepend(headerHost);
-      void import("../improvement/boardHeader").then(({ mountInitiativeHeader }) => {
-        cleanups.push(
-          mountInitiativeHeader({
-            host: headerHost,
-            boardId: board.boardId,
-            onStageFilter: (mode, currentStageId, stages) => {
-              stageInfo = { currentId: currentStageId, stages };
-              slotFilter =
-                mode === "all"
-                  ? null
-                  : (settings) => {
-                      const stage = slotStage(settings);
-                      return stage === "" || stage === currentStageId;
-                    };
-              renderTiles();
-            },
-          })
-        );
+    if (initBoard) {
+      // the details pane takes the schedule pane's column; the title zone
+      // hosts the stage pill + Current|All + ⋮ (P6e remake)
+      leftHost.replaceChildren();
+      const paneHost = el("div", "app-ib-panehost");
+      leftHost.appendChild(paneHost);
+      scheduleBtn.style.display = "";
+      setScheduleHidden(true); // always collapsed on open (Ben)
+      void import("../improvement/boardHeader").then(({ mountInitiativePane }) => {
+        const handle = mountInitiativePane({
+          paneHost,
+          titleHost: titleBits,
+          controlsHost: paneControls,
+          boardId: board.boardId,
+          onStageFilter: (mode, currentStageId, stages) => {
+            stageInfo = { currentId: currentStageId, stages };
+            slotFilter =
+              mode === "all"
+                ? null
+                : (settings) => {
+                    const stage = slotStage(settings);
+                    return stage === "" || stage === currentStageId;
+                  };
+            renderTiles();
+          },
+          // gate approved: stamp the board as it stands (P6e) — live rows
+          // + tile svgs, typed from the manifest slots
+          onGateApproved: async (stageName) => {
+            const { createGateSnapshot } = await import("../store/instances");
+            const slots = activeManifest().slots;
+            const rows = cardRows
+              .filter((r) => r.instanceId === "")
+              .map((r) => ({
+                cardId: r.cardId,
+                cardType: slots.find((sl) => sl.cardId === r.cardId)?.cardType ?? "",
+                outputJson: r.outputJson,
+                tileSvg: r.tileSvg,
+              }))
+              .filter((r) => r.cardType !== "");
+            await createGateSnapshot(board.boardId, stageName, board.manifestRaw, rows);
+            await loadGateSnaps();
+          },
+        });
+        cleanups.push(handle.teardown);
+        // opening the pane lands on the active stage
+        scheduleBtn.addEventListener("click", () => {
+          if (!scheduleHidden) setTimeout(() => handle.revealActive(), 60);
+        });
+      });
       // the charter's bound fields read/write the initiative header
       void import("../improvement/binding").then(async ({ makeInitiativeBinding }) => {
         charterBinding = (await makeInitiativeBinding(board.boardId, () => renderTiles())) ?? undefined;
         renderTiles();
       });
-      });
+      void loadGateSnaps();
     }
     renderTiles();
     applyLiveMode();

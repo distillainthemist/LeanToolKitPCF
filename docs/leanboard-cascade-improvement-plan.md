@@ -582,6 +582,27 @@ reschedule/cancel history with a reason picklist.
   card). Actions matched by initiativeId (instanceKey fallback). NOT
   built: TV mode ⋮ toggle (present-mode sizing) — the card at tile size
   is already the at-distance view; revisit if a wall needs it.
+- **P6e — initiative board remake — BUILT 2026-08-28 (dev, app-only;
+  Ben's markup review)** — ONE title (board toolbar): stage pill +
+  flag/confidential chips beside the name, `Current | All` accent seg
+  (default ALL — flipped), ⋮ (Edit details / flag / escalate /
+  endorsement / add-card / archive), Show details; the two-tier header
+  band DELETED (crumb covered by ‹ Back). DETAILS PANE in the schedule
+  pane's column, always collapsed on open, Show details reveals and
+  scrolls to the ACTIVE stage: key details (org · period · method ·
+  role chips · health) → STAGE RAIL replacing the chevron stepper
+  (per-stage PDCA edge, target date red-when-past, gate block with
+  per-role approval detail — decisions with who/date/comment, pool
+  names, Request/Approve/Decline in place, done-stage history from
+  events) → COMMENTARY now High/Low/Next/**Support needed** with
+  ‹ older / newer › stepping (latest first) and a raise-⚐ tick when
+  support text is entered (pre-armed, author's call). GATE SNAPSHOTS:
+  final gate approval stamps a CLOSED instance (gate marker in its
+  manifest JSON; live rows + tile svgs copied — store/instances
+  createGateSnapshot/gateMarkerOf, no schema change); the Live chip
+  becomes the picker (● Live board / Gate — Stage · date), snapshots
+  render stored tiles read-only under an amber banner with Back to
+  live. Forward-only.
 - **P9 VDT + simulation · P10 Reporting** — designed (spec §3–§4).
 
 Each phase ships behind the usual gates + `pac code push`; the specs'

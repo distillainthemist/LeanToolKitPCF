@@ -1,9 +1,13 @@
-// Improvement — the initiative board's header band (P6a; design spec
-// `leanboard-cascade-initiative-board-design.md` §2.1–2.2). Two tiers:
-// tier 1 always (breadcrumb · title · flag chip · role avatars · health ·
-// ▴/▾ · ⋮), tier 2 collapsible (stage stepper doubling as the gate
-// control + gate line, commentary block). Board.ts mounts this above the
-// grid for `init-` project boards and gets back the current-stage filter.
+// Improvement — the initiative board's DETAILS PANE + title-zone bits
+// (P6e remake, Ben's markup 2026-08-28; supersedes the two-tier header
+// band). Three hosts, one mount:
+//   • titleHost (board toolbar): stage pill · flag/confidential chips
+//   • controlsHost (board toolbar): Current | All seg (default All) · ⋮
+//   • paneHost (the right side column, the meeting schedule pane's spot):
+//     key details (org · period · priority · roles · health) → the STAGE
+//     RAIL (every stage with target date + gate approvals, the chevron
+//     stepper's replacement — richer and vertical) → commentary
+//     (High / Low / Next / Support needed; latest with ‹ older stepping).
 //
 // Escalation notifies the sponsor by Teams/email through the docs notify
 // road (dynamic import — the connectors stay docs-only per the import
@@ -17,8 +21,9 @@ import { promptConfirm } from "../prompts";
 import { listPeople } from "../store/people";
 import { improvementSettingsJson } from "../store/config";
 import { appendInitiativeEvent, listInitiativeEvents, listInitiatives, saveInitiative } from "../store/initiatives";
+import { InitiativeEvent } from "../store/initiatives";
+import { dayLabel } from "../linkTitle";
 import { Initiative, myRoles, nextGateFor, PendingGate } from "./initiativeModel";
-import { boardOrigin, REOPEN_PRIORITY_KEY } from "./boardOrigin";
 import { HealthQuestion, parseImprovementSettings, PDCA_TOKENS, roleFillersAt } from "./templateModel";
 
 const btn = (label: string, cls = "app-btn"): HTMLButtonElement => {
@@ -27,27 +32,36 @@ const btn = (label: string, cls = "app-btn"): HTMLButtonElement => {
   return b;
 };
 
-export interface InitiativeHeaderOpts {
-  host: HTMLElement;
+export interface InitiativePaneOpts {
+  paneHost: HTMLElement;
+  titleHost: HTMLElement;
+  controlsHost: HTMLElement;
   boardId: string;
   /** The board repaints its tiles through this filter: slot stage id →
-   *  show? (the Current stage / All stages control lives here). The stage
-   *  list rides along for tile chips, the current ring and future-stage
-   *  placeholders. */
+   *  show? The stage list rides along for tile chips, the current ring
+   *  and future-stage placeholders. */
   onStageFilter: (
     mode: "current" | "all",
     currentStageId: string,
     stages: { id: string; name: string; fg: string; bg: string }[]
   ) => void;
+  /** Called when a gate's final approval lands, BEFORE the stage moves —
+   *  the board stamps its snapshot here (P6e). */
+  onGateApproved?: (stageName: string) => Promise<void>;
 }
 
-const TIER2_KEY = "ltk-initiative-tier2";
+export interface InitiativePaneHandle {
+  teardown: () => void;
+  /** Scroll the pane's stage rail to the active stage (Show details). */
+  revealActive: () => void;
+}
 
-export function mountInitiativeHeader(o: InitiativeHeaderOpts): () => void {
-  const band = el("div", "app-ib-band");
-  o.host.appendChild(band);
+export function mountInitiativePane(o: InitiativePaneOpts): InitiativePaneHandle {
+  const pane = el("div", "app-ib-pane");
+  o.paneHost.appendChild(pane);
   let dead = false;
   const cleanups: (() => void)[] = [];
+  let activeStageEl: HTMLElement | null = null;
 
   void (async () => {
     const who = currentViewer();
@@ -55,7 +69,7 @@ export function mountInitiativeHeader(o: InitiativeHeaderOpts): () => void {
     if (dead) return;
     const initiative = all.find((x) => x.boardId === o.boardId) ?? null;
     if (!initiative) {
-      band.remove();
+      pane.remove();
       return;
     }
     let i = initiative;
@@ -67,8 +81,7 @@ export function mountInitiativeHeader(o: InitiativeHeaderOpts): () => void {
     const isAdmin = me?.role === "superadmin" || me?.role === "siteadmin";
     const mine = () => myRoles(i, who?.objectId ?? "").length > 0 || isAdmin;
     const actor = () => ({ whoId: who?.objectId ?? "", who: me?.who ?? who?.name ?? "" });
-    let tier2Open = localStorage.getItem(TIER2_KEY) !== "0";
-    let stageMode: "current" | "all" = "current";
+    let stageMode: "current" | "all" = "all"; // default All (Ben, 2026-08-28)
 
     const roleLabel = (key: string) => i.snapshot.roleLabels[key] ?? key;
     const emailOf = (whoId: string) => roster.find((p) => p.whoId === whoId)?.email ?? "";
@@ -92,180 +105,241 @@ export function mountInitiativeHeader(o: InitiativeHeaderOpts): () => void {
       await saveInitiative(i);
     };
 
+    // one event read serves the rail's history AND the commentary trail
+    let events: InitiativeEvent[] = [];
+    const loadEvents = async () => {
+      events = await listInitiativeEvents(i).catch(() => []);
+    };
+
     const render = () => {
-      clear(band);
+      clear(o.titleHost);
+      clear(o.controlsHost);
+      clear(pane);
       o.onStageFilter(
         stageMode,
         i.stageId,
         i.snapshot.stages.map((st) => ({ id: st.id, name: st.name, fg: PDCA_TOKENS[st.pdca].fg, bg: PDCA_TOKENS[st.pdca].bg }))
       );
 
-      // ---- tier 1 -----------------------------------------------------------
-      const t1 = el("div", "app-ib-t1");
-      // crumb returns WHERE THE BOARD WAS OPENED FROM (Ben, 2026-08-27):
-      // the Improvement tab, or the Priorities tab with the overlay it
-      // came from reopened (REOPEN_PRIORITY_KEY, consumed on mount)
-      const origin = boardOrigin();
-      const fromPriorities = origin !== null && origin.hash.startsWith("#/priorities");
-      const crumb = el("a", "app-ib-crumb", fromPriorities ? "Priorities" : "Improvement") as HTMLAnchorElement;
-      crumb.href = origin?.hash ?? "#/improvement";
-      if (fromPriorities && origin?.priorityId) {
-        crumb.addEventListener("click", () => {
-          try {
-            sessionStorage.setItem(REOPEN_PRIORITY_KEY, origin.priorityId ?? "");
-          } catch {
-            /* lands on the tab without the overlay */
-          }
-        });
+      // ---- title zone: stage pill + state chips -----------------------------
+      const stage = i.snapshot.stages.find((s) => s.id === i.stageId) ?? null;
+      if (i.status === "completed") {
+        o.titleHost.appendChild(el("span", "app-im-stagechip app-ib-titlepill", "✓ Complete"));
+      } else if (stage && !i.singleAction) {
+        const pill = el("span", "app-im-stagechip app-ib-titlepill", stage.name);
+        pill.style.color = PDCA_TOKENS[stage.pdca].fg;
+        pill.style.background = PDCA_TOKENS[stage.pdca].bg;
+        o.titleHost.appendChild(pill);
       }
-      t1.appendChild(crumb);
-      t1.appendChild(el("span", "app-cp-crumb-sep", "›"));
-      t1.appendChild(el("span", "app-ib-org", [i.org.site, i.org.department, i.org.area].filter((s) => s !== "").join(" · ") || i.org.company));
-      t1.appendChild(el("span", "app-ib-title", i.title));
       if (i.flag === "escalated") {
         const sponsor = (i.roles.sponsor ?? [])[0]?.who ?? "sponsor";
         const chip = el("span", "app-im-chip", `▲ Escalated to ${sponsor}`);
         chip.style.background = stateColor("issue");
         chip.style.color = "#fff";
-        t1.appendChild(chip);
+        o.titleHost.appendChild(chip);
       } else if (i.flag === "flag") {
         const chip = el("span", "app-im-chip", "⚐ Needs support");
         chip.style.border = `1px solid ${stateColor("atrisk")}`;
         chip.style.color = stateColor("atrisk");
-        t1.appendChild(chip);
+        o.titleHost.appendChild(chip);
       }
-      if (i.confidential) t1.appendChild(el("span", "app-im-chip app-im-chip-conf", "◈ Confidential"));
-      if (i.status !== "active") t1.appendChild(el("span", "app-status-badge", i.status));
-      t1.appendChild(el("span", "app-bar-gap"));
-      // role avatars, overlapped, +n overflow
-      const avatars = el("span", "app-ib-avatars");
-      const people = Object.values(i.roles).flat();
+      if (i.confidential) o.titleHost.appendChild(el("span", "app-im-chip app-im-chip-conf", "◈ Confidential"));
+      if (i.status !== "active" && i.status !== "completed") o.titleHost.appendChild(el("span", "app-status-badge", i.status));
+
+      // ---- controls: Current | All (accent seg, ui-standard) + ⋮ ------------
+      const seg = el("div", "app-docs-seg");
+      for (const [v, l] of [["current", "Current stage"], ["all", "All stages"]] as const) {
+        const b = btn(l, "app-docs-segbtn" + (stageMode === v ? " app-docs-segbtn-on" : ""));
+        b.addEventListener("click", () => {
+          stageMode = v;
+          render();
+        });
+        seg.appendChild(b);
+      }
+      o.controlsHost.appendChild(seg);
+      const more = btn("⋮", "app-btn app-cp-more");
+      more.addEventListener("click", () => openMenu(more));
+      o.controlsHost.appendChild(more);
+
+      // ---- pane -------------------------------------------------------------
+      pane.appendChild(renderKeyDetails());
+      pane.appendChild(renderStageRail());
+      pane.appendChild(renderCommentary());
+    };
+
+    // ---- key details (pane top) --------------------------------------------------
+    const renderKeyDetails = (): HTMLElement => {
+      const box = el("div", "app-ib-keys");
+      const line = (label: string, node: HTMLElement | string) => {
+        const row = el("div", "app-ib-keyrow");
+        row.appendChild(el("span", "app-ib-keyk", label));
+        if (typeof node === "string") row.appendChild(el("span", "app-ib-keyv", node));
+        else row.appendChild(node);
+        box.appendChild(row);
+      };
+      line("Org", [i.org.site, i.org.department, i.org.area].filter((s) => s !== "").join(" · ") || i.org.company);
+      line("Period", i.period || "—");
+      line("Method", i.method || "—");
+      // roles: avatars + names
+      const rolesBox = el("span", "app-ib-keyv");
       const seen = new Set<string>();
-      const uniq = people.filter((p) => (seen.has(p.whoId) ? false : (seen.add(p.whoId), true)));
-      uniq.slice(0, 5).forEach((p) => {
-        const a = el("span", "app-ib-avatar", initialsFor(p.who));
-        a.title = p.who;
-        avatars.appendChild(a);
-      });
-      if (uniq.length > 5) avatars.appendChild(el("span", "app-ib-avatar app-ib-avatar-more", `+${uniq.length - 5}`));
-      t1.appendChild(avatars);
+      for (const [key, people] of Object.entries(i.roles)) {
+        for (const p of people) {
+          if (seen.has(`${key}|${p.whoId}`)) continue;
+          seen.add(`${key}|${p.whoId}`);
+          const chip = el("span", "app-ib-rolechip");
+          const a = el("span", "app-ib-avatar", initialsFor(p.who));
+          a.title = p.who;
+          chip.append(a, el("span", "app-ib-rolechip-t", `${p.who} · ${roleLabel(key)}`));
+          rolesBox.appendChild(chip);
+        }
+      }
+      if (seen.size === 0) rolesBox.textContent = "—";
+      line("Roles", rolesBox);
       // health
       const health = parseHealth(i.fieldValues.__health ?? "");
       const healthBtn = btn(health ? `Health ${health.score} / ${health.of} · ${health.at.slice(5, 7)}/${health.at.slice(2, 4)}` : "Health check", "app-btn app-ib-health");
       healthBtn.title = imp.healthQuestions.length === 0 ? "No health questions set — Settings → Improvement" : "Run a health check";
       healthBtn.disabled = imp.healthQuestions.length === 0 || !mine() || i.status !== "active";
       healthBtn.addEventListener("click", () => openHealth());
-      t1.appendChild(healthBtn);
-      const tier2Btn = btn(tier2Open ? "▴ Less" : "▾ More", "app-btn");
-      tier2Btn.addEventListener("click", () => {
-        tier2Open = !tier2Open;
-        localStorage.setItem(TIER2_KEY, tier2Open ? "1" : "0");
-        render();
-      });
-      t1.appendChild(tier2Btn);
-      const more = btn("⋮", "app-btn app-cp-more");
-      more.addEventListener("click", () => openMenu(more));
-      t1.appendChild(more);
-      band.appendChild(t1);
-
-      // ---- tier 2 -----------------------------------------------------------
-      if (!tier2Open) {
-        band.appendChild(renderStageFilter());
-        return;
-      }
-      const t2 = el("div", "app-ib-t2");
-      const left = el("div", "app-ib-t2-left");
-      left.appendChild(renderStepper());
-      left.appendChild(renderGateLine());
-      left.appendChild(renderStageFilter());
-      t2.appendChild(left);
-      t2.appendChild(renderCommentary());
-      band.appendChild(t2);
+      const hrow = el("div", "app-ib-keyrow");
+      hrow.appendChild(el("span", "app-ib-keyk", "Health"));
+      hrow.appendChild(healthBtn);
+      box.appendChild(hrow);
+      return box;
     };
 
-    // ---- stepper (§2.2) --------------------------------------------------------
-    const renderStepper = (): HTMLElement => {
-      const strip = el("div", "app-tw-stepper app-ib-stepper");
+    // ---- the stage rail (the stepper's replacement) ------------------------------
+    const renderStageRail = (): HTMLElement => {
+      const rail = el("div", "app-ib-rail");
+      rail.appendChild(el("div", "app-tw-preview-h", "Stages & gates"));
       const stages = i.snapshot.stages;
       const curIdx = Math.max(0, stages.findIndex((s) => s.id === i.stageId));
+      activeStageEl = null;
+
+      /** Past gate/move history for a stage, from the one event read. */
+      const historyFor = (stageName: string): string[] =>
+        events
+          .filter((e) => (e.kind === "stagemove" || e.kind === "gate") && (String(e.detail.from ?? "") === stageName || String(e.detail.to ?? "") === stageName))
+          .map((e) => `${e.at.slice(0, 10)} · ${e.actorName} · ${e.kind === "gate" ? `gate ${String(e.detail.what ?? "")}` : `${String(e.detail.from ?? "")} → ${String(e.detail.to ?? "")}`}${String(e.detail.comment ?? "") !== "" ? ` — “${String(e.detail.comment)}”` : ""}`)
+          .reverse();
+
+      const gateBlock = (stageIdx: number): HTMLElement | null => {
+        // the gate AFTER stages[stageIdx] (or the Complete gate)
+        const isLast = stageIdx === stages.length - 1;
+        const gate = isLast ? i.snapshot.completeGate : stages[stageIdx].gate;
+        const toName = isLast ? "Complete" : (stages[stageIdx + 1]?.name ?? "");
+        const isCurrent = stageIdx === curIdx && i.status === "active";
+        if (!gate.enabled && !isCurrent) return null;
+        const box = el("div", "app-ib-gateblock");
+        if (!gate.enabled) {
+          box.appendChild(el("div", "app-cp-muted", `→ ${toName} · no approval needed`));
+          if (isCurrent && mine()) {
+            const move = btn(`Move to ${toName}`, "app-btn app-ib-gatebtn");
+            move.addEventListener("click", () => openMoveDialog(isLast ? "" : stages[stageIdx + 1].id));
+            box.appendChild(move);
+          }
+          return box;
+        }
+        box.appendChild(el("div", "app-ib-gatehead", `⚑ Gate → ${toName}`));
+        const pending = isCurrent ? i.gate : null;
+        for (const role of gate.approverRoles) {
+          const d = pending?.decisions[role];
+          const glyph = d ? (d.approved ? "✓" : "✕") : "◐";
+          const cls = d ? (d.approved ? "app-ib-appr-ok" : "app-ib-appr-no") : "app-ib-appr-wait";
+          const row = el("div", "app-ib-apprrow");
+          row.appendChild(el("span", "app-ib-appr " + cls, `${glyph} ${roleLabel(role)}`));
+          const pool = actorsForRole(role);
+          row.appendChild(
+            el(
+              "span",
+              "app-ib-apprwho",
+              d ? `${d.byName} · ${d.at.slice(0, 10)}${d.comment !== "" ? ` — “${d.comment}”` : ""}` : pool.length > 0 ? pool.map((p) => p.who).join(", ") : "nobody fills this role"
+            )
+          );
+          box.appendChild(row);
+        }
+        if (isCurrent) {
+          if (pending === null) {
+            if (mine()) {
+              const req = btn("Request gate", "app-btn app-btn-primary app-ib-gatebtn");
+              req.addEventListener("click", () => requestGate(isLast ? "" : stages[stageIdx + 1].id, toName, gate.approverRoles));
+              box.appendChild(req);
+            }
+          } else if (iAmApprover(gate.approverRoles.filter((r) => !pending.decisions[r]))) {
+            const line = el("div", "app-ib-gatebtns");
+            const approve = btn("Approve", "app-btn app-btn-primary app-ib-gatebtn");
+            const decline = btn("Decline", "app-btn app-btn-danger app-ib-gatebtn");
+            approve.addEventListener("click", () => void decide(pending, true));
+            decline.addEventListener("click", () => void decide(pending, false));
+            line.append(approve, decline);
+            box.appendChild(line);
+          } else {
+            box.appendChild(el("div", "app-cp-muted", `requested by ${pending.requestedByName} · ${pending.requestedAt.slice(0, 10)}`));
+          }
+        }
+        return box;
+      };
+
       stages.forEach((s, idx) => {
-        const state = idx < curIdx ? "done" : idx === curIdx ? "current" : "future";
-        const gatedInto = idx > 0 && stages[idx - 1].gate.enabled;
-        const chip = btn(`${state === "done" ? "✓ " : gatedInto && state === "future" ? "⚑ " : ""}${s.name}${state === "current" ? " · current" : ""}`, "app-tw-step app-ib-step app-ib-step-" + state + (gatedInto && state === "future" ? " app-ib-step-gated" : ""));
-        chip.style.color = PDCA_TOKENS[s.pdca].fg;
-        chip.style.background = PDCA_TOKENS[s.pdca].bg;
-        if (state === "current") chip.classList.add("app-ib-step-on");
-        if (state === "done") chip.addEventListener("click", () => openGateHistory(s.name));
-        else if (idx === curIdx + 1 && mine() && i.status === "active") chip.addEventListener("click", () => openMoveDialog(s.id));
-        strip.appendChild(chip);
+        const state = i.status === "completed" || idx < curIdx ? "done" : idx === curIdx ? "current" : "future";
+        const row = el("div", `app-ib-railstage app-ib-railstage-${state}`);
+        row.style.borderLeftColor = PDCA_TOKENS[s.pdca].fg;
+        const head = el("div", "app-ib-railhead");
+        head.appendChild(el("span", "app-ib-railname", `${state === "done" ? "✓ " : ""}${s.name}`));
+        const target = i.stageTargets[s.id] ?? "";
+        if (target !== "") {
+          const t = el("span", "app-ib-railtarget", dayLabel(target));
+          if (state === "current" && target < todayIso()) {
+            t.style.color = stateColor("issue");
+            t.style.fontWeight = "700";
+          }
+          head.appendChild(t);
+        }
+        row.appendChild(head);
+        if (state === "current") {
+          row.classList.add("app-ib-rail-on");
+          activeStageEl = row;
+        }
+        if (state === "done") {
+          const hist = historyFor(s.name);
+          if (hist.length > 0) {
+            const h = el("div", "app-ib-railhist");
+            for (const lineTxt of hist.slice(0, 3)) h.appendChild(el("div", undefined, lineTxt));
+            row.appendChild(h);
+          }
+        }
+        const gb = gateBlock(idx);
+        if (gb) row.appendChild(gb);
+        rail.appendChild(row);
       });
-      const completeChip = btn(`${i.status === "completed" ? "✓ " : i.snapshot.completeGate.enabled ? "⚑ " : ""}Complete`, "app-tw-step app-tw-step-complete app-ib-step");
-      if (curIdx === stages.length - 1 && mine() && i.status === "active") completeChip.addEventListener("click", () => openMoveDialog(""));
-      strip.appendChild(completeChip);
-      return strip;
+      // the Complete row
+      const doneRow = el("div", "app-ib-railstage app-ib-railstage-" + (i.status === "completed" ? "done" : "future"));
+      doneRow.appendChild(el("div", "app-ib-railhead")).appendChild(el("span", "app-ib-railname", `${i.status === "completed" ? "✓ " : ""}Complete`));
+      rail.appendChild(doneRow);
+      return rail;
     };
 
-    // ---- gate line ---------------------------------------------------------------
-    const renderGateLine = (): HTMLElement => {
-      const line = el("div", "app-ib-gateline");
-      const ng = nextGateFor(i);
-      if (ng === null) {
-        line.appendChild(el("span", "app-cp-muted", i.status === "completed" ? "Complete." : "—"));
-        return line;
-      }
-      const overdue = ng.target !== "" && ng.target < todayIso();
-      const gateLabel = el("span", "app-ib-gatelabel", `Next gate — ${ng.fromName} → ${ng.toName}${ng.target !== "" ? `, ${ng.target.slice(5)}` : ""}`);
-      if (overdue) gateLabel.style.color = stateColor("issue");
-      line.appendChild(gateLabel);
-      if (!ng.gated) {
-        line.appendChild(el("span", "app-cp-muted", "no approval needed"));
-        return line;
-      }
-      const pending = i.gate;
-      for (const role of ng.approverRoles) {
-        const d = pending?.decisions[role];
-        const glyph = d ? (d.approved ? "✓" : "✕") : "◐";
-        const cls = d ? (d.approved ? "app-ib-appr-ok" : "app-ib-appr-no") : "app-ib-appr-wait";
-        const chip = el("span", "app-ib-appr " + cls, `${glyph} ${roleLabel(role)}`);
-        if (d) chip.title = `${d.byName} · ${d.at.slice(0, 10)}${d.comment !== "" ? ` — “${d.comment}”` : ""}`;
-        line.appendChild(chip);
-      }
-      if (i.status !== "active") return line;
-      if (pending === null) {
-        if (mine()) {
-          const req = btn("Request gate", "app-btn app-btn-primary app-ib-gatebtn");
-          req.addEventListener("click", () => {
-            void promptConfirm({
-              title: `Ask ${ng.approverRoles.map(roleLabel).join(" and ")} to approve ${ng.fromName} → ${ng.toName}?`,
-              confirmLabel: "Request gate",
-            }).then(async (yes) => {
-              if (!yes) return;
-              i.gate = {
-                from: i.stageId,
-                to: ng.toName === "Complete" ? "" : (i.snapshot.stages[i.snapshot.stages.findIndex((s) => s.id === i.stageId) + 1]?.id ?? ""),
-                requestedById: actor().whoId,
-                requestedByName: actor().who,
-                requestedAt: nowIso(),
-                decisions: {},
-                approverRoles: ng.approverRoles,
-              };
-              await persist();
-              await appendInitiativeEvent(i, "gate", { what: "requested", from: ng.fromName, to: ng.toName }, actor());
-              render();
-            });
-          });
-          line.appendChild(req);
-        }
-      } else if (iAmApprover(pending.approverRoles.filter((r) => !pending.decisions[r]))) {
-        const approve = btn("Approve", "app-btn app-btn-primary app-ib-gatebtn");
-        const decline = btn("Decline", "app-btn app-btn-danger app-ib-gatebtn");
-        approve.addEventListener("click", () => void decide(pending, true));
-        decline.addEventListener("click", () => void decide(pending, false));
-        line.append(approve, decline);
-      } else {
-        line.appendChild(el("span", "app-cp-muted", `requested by ${pending.requestedByName} · ${pending.requestedAt.slice(0, 10)}`));
-      }
-      return line;
+    const requestGate = (toStageId: string, toName: string, approverRoles: string[]) => {
+      void promptConfirm({
+        title: `Ask ${approverRoles.map(roleLabel).join(" and ")} to approve the move to ${toName}?`,
+        confirmLabel: "Request gate",
+      }).then(async (yes) => {
+        if (!yes) return;
+        i.gate = {
+          from: i.stageId,
+          to: toStageId,
+          requestedById: actor().whoId,
+          requestedByName: actor().who,
+          requestedAt: nowIso(),
+          decisions: {},
+          approverRoles,
+        };
+        await persist();
+        await appendInitiativeEvent(i, "gate", { what: "requested", from: i.snapshot.stages.find((s) => s.id === i.stageId)?.name ?? "", to: toName }, actor());
+        await loadEvents();
+        render();
+      });
     };
 
     const decide = async (pending: PendingGate, approved: boolean) => {
@@ -284,11 +358,15 @@ export function mountInitiativeHeader(o: InitiativeHeaderOpts): () => void {
       const allDone = pending.approverRoles.every((r) => pending.decisions[r]?.approved);
       const anyDeclined = pending.approverRoles.some((r) => pending.decisions[r] && !pending.decisions[r].approved);
       if (allDone) {
+        // stamp the gate snapshot BEFORE the stage moves (P6e)
+        const stageName = i.snapshot.stages.find((s) => s.id === i.stageId)?.name ?? i.stageId;
+        await o.onGateApproved?.(stageName).catch(() => undefined);
         await moveStage(pending.to, "gate approved");
         return;
       }
       if (anyDeclined) i.gate = pending; // stays visible with the ✕ until re-requested
       await persist();
+      await loadEvents();
       render();
     };
 
@@ -305,6 +383,7 @@ export function mountInitiativeHeader(o: InitiativeHeaderOpts): () => void {
       }
       i.gate = null;
       await persist();
+      await loadEvents();
       render();
     };
 
@@ -312,76 +391,87 @@ export function mountInitiativeHeader(o: InitiativeHeaderOpts): () => void {
       const ng = nextGateFor(i);
       const toName = toStageId === "" ? "Complete" : (i.snapshot.stages.find((s) => s.id === toStageId)?.name ?? "");
       if (ng?.gated && !(i.gate && ng.approverRoles.every((r) => i.gate?.decisions[r]?.approved))) {
-        // gated and not approved: the dialog explains, offers Request
-        const roles = (ng.approverRoles ?? []).map(roleLabel).join(", ");
         void promptConfirm({
           title: `${ng.fromName} → ${toName} needs approval`,
-          note: `Approvers: ${roles}. Request the gate — the move happens when everyone approves.`,
+          note: `Approvers: ${(ng.approverRoles ?? []).map(roleLabel).join(", ")}. Request the gate — the move happens when everyone approves.`,
           confirmLabel: "Request gate",
-        }).then(async (yes) => {
+        }).then((yes) => {
           if (!yes) return;
-          i.gate = {
-            from: i.stageId,
-            to: toStageId,
-            requestedById: actor().whoId,
-            requestedByName: actor().who,
-            requestedAt: nowIso(),
-            decisions: {},
-            approverRoles: ng.approverRoles,
-          };
-          await persist();
-          await appendInitiativeEvent(i, "gate", { what: "requested", from: ng.fromName, to: toName }, actor());
-          render();
+          requestGate(toStageId, toName, ng.approverRoles);
         });
         return;
       }
-      const c = prompt(`Move to ${toName}? A comment for the log (optional):`) ;
+      const c = prompt(`Move to ${toName}? A comment for the log (optional):`);
       if (c === null) return;
       void moveStage(toStageId, c.trim());
     };
 
-    const openGateHistory = (stageName: string) => {
-      void (async () => {
-        const events = await listInitiativeEvents(i);
-        const hits = events.filter((e) => (e.kind === "stagemove" || e.kind === "gate") && (String(e.detail.from ?? "") === stageName || String(e.detail.to ?? "") === stageName));
-        const lines = hits.map((e) => `${e.at.slice(0, 10)} · ${e.actorName} · ${e.kind === "gate" ? `gate ${String(e.detail.what ?? "")}` : `moved ${String(e.detail.from ?? "")} → ${String(e.detail.to ?? "")}`}${String(e.detail.comment ?? "") !== "" ? ` — “${String(e.detail.comment)}”` : ""}`);
-        void promptConfirm({ title: `${stageName} — what happened`, note: lines.length > 0 ? lines.join("\n") : "No recorded gate or move events for this stage.", confirmLabel: "OK" });
-      })();
-    };
+    // ---- commentary (High / Low / Next / Support needed) -------------------------
+    interface Comment {
+      high: string;
+      low: string;
+      next: string;
+      support: string;
+      who: string;
+      at: string;
+    }
+    let commentIdx = 0; // 0 = latest
+    const commentList = (): Comment[] =>
+      events
+        .filter((e) => e.kind === "comment")
+        .map((c) => ({
+          high: String(c.detail.high ?? ""),
+          low: String(c.detail.low ?? ""),
+          next: String(c.detail.next ?? ""),
+          support: String(c.detail.support ?? ""),
+          who: c.actorName,
+          at: c.at,
+        }));
 
-    // ---- commentary (High / Low / Next) ---------------------------------------
-    let latestComment: { high: string; low: string; next: string; who: string; at: string } | null = null;
     const renderCommentary = (): HTMLElement => {
       const box = el("div", "app-ib-comment");
       const head = el("div", "app-ib-comment-head");
       head.appendChild(el("span", "app-tw-preview-h", "Commentary"));
       head.appendChild(el("span", "app-bar-gap"));
-      const hist = btn("History", "app-cp-ov-link");
-      hist.addEventListener("click", () => void openCommentHistory());
-      head.appendChild(hist);
       if (mine() && i.status === "active") {
         const add = btn("Add", "app-cp-ov-link");
         add.addEventListener("click", () => openAddComment());
         head.appendChild(add);
       }
       box.appendChild(head);
-      if (latestComment === null) box.appendChild(el("div", "app-cp-muted", "No commentary yet."));
+      const list = commentList();
+      if (commentIdx >= list.length) commentIdx = Math.max(0, list.length - 1);
+      const c = list[commentIdx] ?? null;
+      if (c === null) box.appendChild(el("div", "app-cp-muted", "No commentary yet."));
       else {
-        for (const [label, text] of [["High", latestComment.high], ["Low", latestComment.low], ["Next", latestComment.next]] as const) {
+        for (const [label, text] of [["High", c.high], ["Low", c.low], ["Next", c.next], ["Support needed", c.support]] as const) {
           if (text === "") continue;
           const line = el("div", "app-ib-comment-line");
           line.append(el("span", "app-ib-comment-k", label), el("span", undefined, text));
           box.appendChild(line);
         }
-        box.appendChild(el("div", "ltk-mw-help", `${latestComment.who} · ${latestComment.at.slice(0, 10)}`));
+        const meta = el("div", "app-ib-comment-meta");
+        meta.appendChild(el("span", "ltk-mw-help", `${c.who} · ${c.at.slice(0, 10)}${commentIdx > 0 ? ` · ${commentIdx} newer` : ""}`));
+        meta.appendChild(el("span", "app-bar-gap"));
+        if (commentIdx < list.length - 1) {
+          const older = btn("‹ older", "app-cp-ov-link");
+          older.addEventListener("click", () => {
+            commentIdx++;
+            render();
+          });
+          meta.appendChild(older);
+        }
+        if (commentIdx > 0) {
+          const newer = btn("newer ›", "app-cp-ov-link");
+          newer.addEventListener("click", () => {
+            commentIdx--;
+            render();
+          });
+          meta.appendChild(newer);
+        }
+        box.appendChild(meta);
       }
       return box;
-    };
-
-    const loadLatestComment = async () => {
-      const events = await listInitiativeEvents(i);
-      const c = events.find((e) => e.kind === "comment");
-      latestComment = c ? { high: String(c.detail.high ?? ""), low: String(c.detail.low ?? ""), next: String(c.detail.next ?? ""), who: c.actorName, at: c.at } : null;
     };
 
     const openAddComment = () => {
@@ -400,29 +490,54 @@ export function mountInitiativeHeader(o: InitiativeHeaderOpts): () => void {
       const high = mk("High", "What went well");
       const low = mk("Low", "What hurt");
       const next = mk("Next", "What happens next");
+      const support = mk("Support needed", "What would unblock this");
+      // support text and the ⚐ flag must not silently disagree — the tick
+      // pre-arms when support text exists, stays the author's call
+      let flagWrap: HTMLElement | null = null;
+      let flagBox: HTMLInputElement | null = null;
+      if (i.flag === "") {
+        flagWrap = el("label", "app-check app-ib-supportflag");
+        flagBox = el("input") as HTMLInputElement;
+        flagBox.type = "checkbox";
+        flagWrap.append(flagBox, el("span", undefined, "Raise the ⚐ Needs support flag"));
+        flagWrap.style.display = "none";
+        box.appendChild(flagWrap);
+        support.addEventListener("input", () => {
+          const has = support.value.trim() !== "";
+          flagWrap!.style.display = has ? "" : "none";
+          if (has && !flagBox!.dataset.touched) flagBox!.checked = true;
+        });
+        flagBox.addEventListener("change", () => {
+          flagBox!.dataset.touched = "1";
+        });
+      }
       const foot = el("div", "app-modal-footer");
       const cancel = btn("Cancel", "app-link");
       cancel.addEventListener("click", () => scrim.remove());
       const save = btn("Save", "app-btn app-btn-primary");
       save.addEventListener("click", () => {
         void (async () => {
-          await appendInitiativeEvent(i, "comment", { high: high.value.trim(), low: low.value.trim(), next: next.value.trim() }, actor());
+          await appendInitiativeEvent(
+            i,
+            "comment",
+            { high: high.value.trim(), low: low.value.trim(), next: next.value.trim(), support: support.value.trim() },
+            actor()
+          );
+          if (flagBox?.checked && support.value.trim() !== "" && i.flag === "") {
+            i.flag = "flag";
+            await persist();
+            await appendInitiativeEvent(i, "flag", { flag: "flag" }, actor());
+          }
           scrim.remove();
-          await loadLatestComment();
+          commentIdx = 0;
+          await loadEvents();
           render();
         })();
       });
       foot.append(cancel, save);
       box.appendChild(foot);
       scrim.appendChild(box);
-      band.appendChild(scrim);
-    };
-
-    const openCommentHistory = async () => {
-      const events = await listInitiativeEvents(i);
-      const cs = events.filter((e) => e.kind === "comment").slice(0, 12);
-      const lines = cs.map((c) => `${c.at.slice(0, 10)} · ${c.actorName}\nHigh: ${String(c.detail.high ?? "—")}\nLow: ${String(c.detail.low ?? "—")}\nNext: ${String(c.detail.next ?? "—")}`);
-      void promptConfirm({ title: "Commentary history", note: lines.length > 0 ? lines.join("\n\n") : "No commentary yet.", confirmLabel: "OK" });
+      pane.appendChild(scrim);
     };
 
     // ---- health check (§2.4; questions from Settings → Improvement) --------------
@@ -480,7 +595,7 @@ export function mountInitiativeHeader(o: InitiativeHeaderOpts): () => void {
       foot.append(cancel, save);
       box.appendChild(foot);
       scrim.appendChild(box);
-      band.appendChild(scrim);
+      pane.appendChild(scrim);
     };
 
     // ---- ⋮ + escalation (notify via the docs road) -------------------------------
@@ -499,7 +614,7 @@ export function mountInitiativeHeader(o: InitiativeHeaderOpts): () => void {
       item("Edit details…", () => {
         void import("./editDetails").then(({ openEditDetails }) => {
           openEditDetails({
-            host: band,
+            host: pane,
             initiative: i,
             actor: actor(),
             onSaved: () => window.location.reload(),
@@ -606,7 +721,7 @@ export function mountInitiativeHeader(o: InitiativeHeaderOpts): () => void {
         .map((p) => ({ name: p.who, email: emailOf(p.whoId) }))
         .filter((p) => p.email !== "");
       openEscalateDialog({
-        host: band,
+        host: pane,
         initiativeTitle: i.title,
         orgLine: `${actor().who} escalated "${i.title}" (${i.org.site}${i.org.department ? " · " + i.org.department : ""})`,
         recipients: sponsors,
@@ -621,34 +736,20 @@ export function mountInitiativeHeader(o: InitiativeHeaderOpts): () => void {
       });
     };
 
-    // ---- stage filter (§2.3) -----------------------------------------------------
-    const renderStageFilter = (): HTMLElement => {
-      const rowEl = el("div", "app-ib-filter");
-      const cur = btn(`Current stage`, "app-cp-seg-btn" + (stageMode === "current" ? " app-cp-seg-on" : ""));
-      const allB = btn("All stages", "app-cp-seg-btn" + (stageMode === "all" ? " app-cp-seg-on" : ""));
-      const seg = el("div", "app-cp-seg");
-      seg.append(cur, allB);
-      cur.addEventListener("click", () => {
-        stageMode = "current";
-        render();
-      });
-      allB.addEventListener("click", () => {
-        stageMode = "all";
-        render();
-      });
-      rowEl.appendChild(seg);
-      return rowEl;
-    };
-
-    await loadLatestComment();
+    await loadEvents();
     if (dead) return;
     render();
-  })().catch(() => band.remove());
+  })().catch(() => pane.remove());
 
-  return () => {
-    dead = true;
-    for (const fn of cleanups) fn();
-    band.remove();
+  return {
+    teardown: () => {
+      dead = true;
+      for (const fn of cleanups) fn();
+      pane.remove();
+    },
+    revealActive: () => {
+      activeStageEl?.scrollIntoView({ block: "center", behavior: "smooth" });
+    },
   };
 }
 
