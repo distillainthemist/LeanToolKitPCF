@@ -370,6 +370,11 @@ the app can never do what its user cannot.
    controller/pool Entra groups) — these only *hide affordances* and
    route workflows; they are UX, not security. Elevation checks fail
    closed; convenience checks fail open (documented per gate).
+   **Documents domain (2026-08-28):** admin standing there is the
+   Document Controllers group ALONE — app site/super admins are not in
+   the documents circle. The circle for a standard is: named owners /
+   approvers, a Document Controllers member, or a granted revision
+   editor.
 
 **Data-loss prevention.** The app uses **five standard Microsoft
 connectors only** (SharePoint, Teams, Outlook, O365 Groups, O365

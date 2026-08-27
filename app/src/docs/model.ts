@@ -647,7 +647,8 @@ export interface LifecycleGates {
   hasReviewers: boolean;
   /** The acting user is the owner. */
   isOwner: boolean;
-  /** Site or super admin — the fallback that prevents deadlock. */
+  /** A Document Controllers member — the documents domain's admin
+   *  standing (NOT the app's site/super admins — Ben, 2026-08-28). */
   isAdmin: boolean;
   /** Named in the Revision editors column (5G3): a granted outsider
    *  who may DRIVE one revision — start it, check out, edit, submit —

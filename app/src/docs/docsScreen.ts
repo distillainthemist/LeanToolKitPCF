@@ -431,10 +431,11 @@ export function mountDocs(
     // row the register already holds. Stage: status label → term id →
     // mapped stage. Gates: person-column EMAILS (names collide), admin
     // standing fetched once.
-    let meIsAdmin = false;
-    /** Controllers-group membership (5G1) — merged into every admin
-     *  gate BESIDE the Dataverse role. viewerIsController fails CLOSED,
-     *  so an unreadable group never elevates anyone. */
+    /** Controllers-group membership (5G1) — the ONE admin standing in
+     *  the Documents domain (Ben, 2026-08-28: app site/super admins are
+     *  NOT in the documents circle; Document Controllers is a distinct
+     *  security group). viewerIsController fails CLOSED, so an
+     *  unreadable group never elevates anyone. */
     let meIsController = false;
     /** Pool membership (5G1): null = unknown (unlinked group or a
      *  failed lookup) — gates that hide affordances stay OPEN on
@@ -445,20 +446,12 @@ export function mountDocs(
      *  this rather than guessing at paint time. */
     let adminReady: Promise<unknown> = Promise.resolve();
     if (whoId !== "") {
-      adminReady = Promise.allSettled([
-        viewerPerson(whoId).then(
-          (p) => {
-            meIsAdmin = p?.role === "superadmin" || p?.role === "siteadmin";
-          },
-          () => {}
-        ),
-        viewerIsController(whoId).then(
-          (v) => {
-            meIsController = v;
-          },
-          () => {}
-        ),
-      ]);
+      adminReady = viewerIsController(whoId).then(
+        (v) => {
+          meIsController = v;
+        },
+        () => {}
+      );
       void viewerInPool(whoId).then(
         (v) => {
           meInPool = v;
@@ -466,7 +459,7 @@ export function mountDocs(
         () => {}
       );
     }
-    const docAdmin = () => meIsAdmin || meIsController;
+    const docAdmin = () => meIsController;
     /** The status set's terms, id + real-cased label — filled by
      *  readStatusTerms; what termForStage resolves a write against. */
     const statusTermList: { id: string; label: string }[] = [];
