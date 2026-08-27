@@ -195,9 +195,13 @@ export function mountCardEditor(
         ? Promise.resolve(null)
         : memo(`inst|${instanceGuid}`, () => getInstance(instanceGuid)),
     ]);
+    // initiative boards: the role-holders front the assignee picker,
+    // like a meeting's participants (the roster stays behind the search)
+    let initiativePeople: { whoId: string; who: string }[] = [];
     if (board && board.boardId.startsWith("init-")) {
-      const { makeInitiativeBinding } = await import("../improvement/binding");
+      const { makeInitiativeBinding, initiativeAssignees } = await import("../improvement/binding");
       charterBinding = (await makeInitiativeBinding(board.boardId, () => window.location.reload())) ?? undefined;
+      initiativePeople = await initiativeAssignees(board.boardId).catch(() => []);
     }
     // an adjusted meeting's cards live in its override manifest, not
     // (necessarily) the board's own
@@ -561,7 +565,7 @@ export function mountCardEditor(
             people: assigneePeople(
               (() => {
                 const info = parseMeetingInfo(board.occurrenceSettingsRaw);
-                return [...(info?.owner ? [info.owner] : []), ...(info?.participants ?? [])];
+                return [...(info?.owner ? [info.owner] : []), ...(info?.participants ?? []), ...initiativePeople];
               })(),
               roster
             ),
@@ -586,15 +590,17 @@ export function mountCardEditor(
         boardId,
         cardId,
         outputJson: row?.outputJson ?? "",
-        // assignee chips: the meeting's own people (owner + participants)
-        // up front, the rest of the roster behind the search box. A board
-        // with no meeting section keeps the full roster as chips.
+        // assignee chips: the meeting's own people (owner + participants),
+        // or an initiative board's role-holders, up front — the rest of
+        // the roster behind the search box. A board with neither keeps
+        // the full roster as chips.
         people: assigneePeople(
           (() => {
             const info = parseMeetingInfo(board.occurrenceSettingsRaw);
             return [
               ...(info?.owner ? [info.owner] : []),
               ...(info?.participants ?? []),
+              ...initiativePeople,
             ];
           })(),
           roster

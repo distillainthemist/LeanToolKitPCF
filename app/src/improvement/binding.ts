@@ -12,7 +12,7 @@ import { listInitiatives, saveInitiative } from "../store/initiatives";
 import { pickOwner } from "../priorities/dialogs";
 import { getTemplate, listTemplates } from "../store/templates";
 import { improvementSettingsJson } from "../store/config";
-import { parseImprovementSettings } from "./templateModel";
+import { parseImprovementSettings, roleFillersAt } from "./templateModel";
 import type { TemplateField } from "./templateModel";
 
 /** The header fields a charter field on this board may bind to: the
@@ -41,6 +41,32 @@ export async function headerFieldsForBoard(boardId: string): Promise<{ key: stri
   };
   add(imp.standardFields, "Standard fields");
   add(tpl?.fields ?? [], tpl ? `Template fields · ${tpl.name}` : "Template fields");
+  return out;
+}
+
+/** Everyone holding a role on this board's initiative: the people
+ *  assigned on the row plus the site's standard-role fillers for roles
+ *  the template defines. Fronts the action-assignee picker on `init-`
+ *  boards (Ben, 2026-08-27) — the rest of the roster stays behind the
+ *  search box, as on meetings. */
+export async function initiativeAssignees(boardId: string): Promise<{ whoId: string; who: string }[]> {
+  const i = (await listInitiatives()).find((x) => x.boardId === boardId) ?? null;
+  if (!i) return [];
+  const imp = parseImprovementSettings(await improvementSettingsJson().catch(() => ""));
+  const seen = new Set<string>();
+  const out: { whoId: string; who: string }[] = [];
+  const add = (p: { whoId: string; who: string }) => {
+    const key = p.whoId !== "" ? p.whoId : p.who;
+    if (p.who === "" || seen.has(key)) return;
+    seen.add(key);
+    out.push({ whoId: p.whoId, who: p.who });
+  };
+  for (const people of Object.values(i.roles)) for (const p of people) add(p);
+  const roleKeys = new Set([...Object.keys(i.roles), ...Object.keys(i.snapshot.roleLabels)]);
+  for (const std of imp.standardRoles) {
+    if (!roleKeys.has(std.key)) continue;
+    for (const p of roleFillersAt(std, i.org.site)) add(p);
+  }
   return out;
 }
 
