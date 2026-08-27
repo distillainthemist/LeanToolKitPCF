@@ -143,7 +143,7 @@ export class SkillsMatrixEditor {
   // ---- helpers ----
 
   private personIds(): string[] {
-    return this.people.map((p) => p.whoId);
+    return this.people.filter((p) => p.secondary !== true).map((p) => p.whoId);
   }
   private fillColor(): string {
     return this.theme.legend[1] ?? this.theme.accent;
@@ -245,7 +245,7 @@ export class SkillsMatrixEditor {
         : ["No skills yet", "Add a category and skills to build the matrix."];
       const ghost = renderGhost(body, this.readOnly ? lines.slice(0, 1) : lines);
       if (!this.readOnly) ghost.addEventListener("click", () => this.editCategory(null));
-      if (this.people.length === 0 && !this.readOnly) {
+      if (this.people.filter((p) => p.secondary !== true).length === 0 && !this.readOnly) {
         body.appendChild(
           el("div", "ltk-sk-hint", "Tip: feed the columns from the People (JSON) input.")
         );
@@ -253,7 +253,9 @@ export class SkillsMatrixEditor {
       return;
     }
 
-    const people = this.people;
+    // columns = the board's own people; `secondary` (the wider roster
+    // behind the action form's search) never becomes a column
+    const people = this.people.filter((p) => p.secondary !== true);
     const grid = el("div", "ltk-sk-grid");
     grid.style.gridTemplateColumns = `${LABEL_COL}px repeat(${people.length}, minmax(60px, 1fr))`;
 

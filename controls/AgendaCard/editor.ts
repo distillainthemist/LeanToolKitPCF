@@ -875,22 +875,57 @@ export class AgendaEditor {
     wrap.style.flexDirection = "column";
     wrap.style.gap = "8px";
 
+    // the board's own people as chips; `secondary` (the wider roster)
+    // stays behind the search below — the action form's convention
+    const primary = this.people.filter((p) => p.secondary !== true);
+    const secondary = this.people.filter((p) => p.secondary === true);
     const checks: { box: HTMLInputElement; wrap: HTMLElement; person: Person }[] = [];
     const isCurrent = (p: Person) =>
       current.some((c) => (c.whoId !== "" && c.whoId === p.whoId) || c.who === p.who);
-    if (this.people.length > 0) {
-      const chips = checklist();
-      for (const person of this.people) {
-        const chip = checkItem(person.who);
-        if (isCurrent(person)) {
-          chip.box.checked = true;
-          chip.wrap.classList.add("ltk-check-on");
-        }
-        chips.appendChild(chip.wrap);
-        checks.push({ box: chip.box, wrap: chip.wrap, person });
+    const chips = checklist();
+    const addChip = (person: Person, checked: boolean) => {
+      const chip = checkItem(person.who);
+      if (checked) {
+        chip.box.checked = true;
+        chip.wrap.classList.add("ltk-check-on");
       }
-      wrap.appendChild(chips);
+      chips.appendChild(chip.wrap);
+      checks.push({ box: chip.box, wrap: chip.wrap, person });
+    };
+    for (const person of primary) addChip(person, isCurrent(person));
+    // wider-roster people already on the item stay visible, pre-ticked
+    for (const person of secondary) if (isCurrent(person)) addChip(person, true);
+    if (this.people.length > 0) wrap.appendChild(chips);
+
+    // search everyone: a match pins as a ticked chip (multi — nothing unticks)
+    if (secondary.length > 0) {
+      const searchWrap = el("div", "ltk-who-search");
+      const query = textInput("", { placeholder: "Search everyone…" });
+      const results = el("div", "ltk-who-results");
+      const renderResults = () => {
+        while (results.firstChild) results.removeChild(results.firstChild);
+        const q = query.value.trim().toLowerCase();
+        if (q === "") return;
+        const pinned = new Set(checks.map((c) => c.person.whoId));
+        const matches = secondary
+          .filter((p) => !pinned.has(p.whoId) && p.who.toLowerCase().includes(q))
+          .slice(0, 8);
+        for (const person of matches) {
+          const hit = el("button", "ltk-check ltk-who-hit", person.who);
+          (hit as HTMLButtonElement).type = "button";
+          hit.addEventListener("click", () => {
+            addChip(person, true);
+            query.value = "";
+            renderResults();
+          });
+          results.appendChild(hit);
+        }
+      };
+      query.addEventListener("input", renderResults);
+      searchWrap.append(query, results);
+      wrap.appendChild(searchWrap);
     }
+
     // names outside the roster ride the text input, comma-separated
     const outside = current
       .filter((c) => !this.people.some((p) => (c.whoId !== "" && c.whoId === p.whoId) || c.who === p.who))
