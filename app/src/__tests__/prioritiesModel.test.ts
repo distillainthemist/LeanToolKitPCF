@@ -28,7 +28,7 @@ import {
   rollupWords,
   strategyChips,
   tally,
-} from "../priorities/model";
+ groupPrioritiesForPicker } from "../priorities/model";
 
 const co = orgRef("Pechey");
 const site = orgRef("Pechey", "Bendigo");
@@ -328,5 +328,27 @@ describe("site cascade customisation floor", () => {
     expect(m.canCustomiseAt(area, "department")).toBe(false);
     expect(m.canCustomiseAt(area, "area")).toBe(true);
     expect(m.canCustomiseAt(co, "site")).toBe(true);
+  });
+});
+
+describe("groupPrioritiesForPicker (link picker shape)", () => {
+  const P = (statement: string, company = "Co", site = "", department = "", area = "") => ({
+    org: { company, site, department, area },
+    statement,
+  });
+  it("groups top-down along the chain and sorts statements", () => {
+    const at = { company: "Co", site: "Mine", department: "Ops", area: "" };
+    const groups = groupPrioritiesForPicker(
+      [P("b site", "Co", "Mine"), P("z company"), P("a company"), P("dept one", "Co", "Mine", "Ops")],
+      at
+    );
+    expect(groups.map((g) => g.label)).toEqual(["Co (company)", "Mine", "Ops"]);
+    expect(groups[0].items.map((x) => x.statement)).toEqual(["a company", "z company"]);
+    expect(groups[2].items.map((x) => x.statement)).toEqual(["dept one"]);
+  });
+  it("omits empty levels; sibling orgs never appear", () => {
+    const at = { company: "Co", site: "Mine", department: "", area: "" };
+    const groups = groupPrioritiesForPicker([P("other site", "Co", "Refinery")], at);
+    expect(groups).toEqual([]);
   });
 });

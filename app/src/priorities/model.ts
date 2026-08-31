@@ -87,6 +87,26 @@ export function orgPath(o: OrgRef): OrgRef[] {
   return path;
 }
 
+/** The link picker's shape (Ben, 2026-08-29): priorities grouped by the
+ *  org level they belong to, ordered top-down (company → the
+ *  initiative's own org), statements sorted within each group. */
+export function groupPrioritiesForPicker<T extends { org: OrgRef; statement: string }>(
+  priorities: T[],
+  at: OrgRef
+): { label: string; items: T[] }[] {
+  const chain = orgPath(at);
+  const out: { label: string; items: T[] }[] = [];
+  for (const node of chain) {
+    const items = priorities
+      .filter((p) => sameOrg(p.org, node))
+      .sort((a, b) => a.statement.localeCompare(b.statement));
+    if (items.length > 0) {
+      out.push({ label: orgName(node) + (orgLevel(node) === "company" ? " (company)" : ""), items });
+    }
+  }
+  return out;
+}
+
 // ---- pillars -----------------------------------------------------------------
 
 export interface Pillar {

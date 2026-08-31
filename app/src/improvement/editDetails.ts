@@ -11,7 +11,7 @@ import { parseOrgTree } from "../../../shared/schema/meeting";
 import { improvementSettingsJson, orgJson, siteCompanies } from "../store/config";
 import { listPeople } from "../store/people";
 import { loadCascade } from "../store/priorities";
-import { isDescendant, orgRef, sameOrg } from "../priorities/model";
+import { groupPrioritiesForPicker, isDescendant, orgRef, sameOrg } from "../priorities/model";
 import { getTemplate } from "../store/templates";
 import { appendInitiativeEvent, saveInitiative } from "../store/initiatives";
 import { Ben_ltkboardsService } from "../generated/services/Ben_ltkboardsService";
@@ -164,15 +164,18 @@ export function openEditDetails(o: EditDetailsOpts): void {
           (p) => p.status === "active" && !links.some((l) => l.priorityId === p.id) && (sameOrg(p.org, at) || isDescendant(at, p.org))
         );
         if (open.length === 0) return;
-        const menu = el("div", "app-cp-menu");
-        for (const p of open.slice(0, 30)) {
-          const item = btn(p.statement.slice(0, 70), "app-cp-menu-item");
-          item.addEventListener("click", () => {
-            menu.remove();
-            links.push({ priorityId: p.id, primary: links.length === 0, label: p.statement.slice(0, 40) });
-            paintLinks();
-          });
-          menu.appendChild(item);
+        const menu = el("div", "app-cp-menu app-im-primenu");
+        for (const g of groupPrioritiesForPicker(open, at)) {
+          menu.appendChild(el("div", "app-cp-menu-h", g.label));
+          for (const p of g.items) {
+            const item = btn(p.statement.slice(0, 70), "app-cp-menu-item");
+            item.addEventListener("click", () => {
+              menu.remove();
+              links.push({ priorityId: p.id, primary: links.length === 0, label: p.statement.slice(0, 40) });
+              paintLinks();
+            });
+            menu.appendChild(item);
+          }
         }
         const r = priAdd.getBoundingClientRect();
         menu.style.top = `${r.bottom + 4}px`;

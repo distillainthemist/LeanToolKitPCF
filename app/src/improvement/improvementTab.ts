@@ -26,7 +26,7 @@ import { buildMetricState } from "./metricValues";
 import { newAction } from "../../../shared/schema/actions";
 import { promptConfirm } from "../prompts";
 import { parseOrgTree } from "../../../shared/schema/meeting";
-import { isDescendant, orgName, OrgRef, orgRef, orgLevel, orgPath, periodFor, parsePrioritySettings, ragPaletteKey, sameOrg } from "../priorities/model";
+import { groupPrioritiesForPicker, isDescendant, orgName, OrgRef, orgRef, orgLevel, orgPath, periodFor, parsePrioritySettings, ragPaletteKey, sameOrg } from "../priorities/model";
 import { paletteMap } from "../../../shared/palette";
 import { appPalettes } from "../store/config";
 import { todayIso } from "../../../shared/schema/id";
@@ -921,15 +921,18 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
               (p) => p.status === "active" && !links.some((l) => l.priorityId === p.id) && (sameOrg(p.org, at) || isDescendant(at, p.org))
             );
             if (open.length === 0) return;
-            const menu = el("div", "app-cp-menu");
-            for (const p of open.slice(0, 30)) {
-              const item = btn(p.statement.slice(0, 70), "app-cp-menu-item");
-              item.addEventListener("click", () => {
-                menu.remove();
-                links.push({ priorityId: p.id, primary: links.length === 0, label: p.statement.slice(0, 40) });
-                void paintLinks();
-              });
-              menu.appendChild(item);
+            const menu = el("div", "app-cp-menu app-im-primenu");
+            for (const g of groupPrioritiesForPicker(open, at)) {
+              menu.appendChild(el("div", "app-cp-menu-h", g.label));
+              for (const p of g.items) {
+                const item = btn(p.statement.slice(0, 70), "app-cp-menu-item");
+                item.addEventListener("click", () => {
+                  menu.remove();
+                  links.push({ priorityId: p.id, primary: links.length === 0, label: p.statement.slice(0, 40) });
+                  void paintLinks();
+                });
+                menu.appendChild(item);
+              }
             }
             const r = priAdd.getBoundingClientRect();
             menu.style.top = `${r.bottom + 4}px`;
