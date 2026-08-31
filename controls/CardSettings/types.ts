@@ -34,6 +34,8 @@ export interface SettingsDraft {
   /** Which card this blob configures (stamped into the JSON). "" = not chosen. */
   cardType: string;
   title: string;
+  /** Optional line under the title in the card's title zone. */
+  subtitle: string;
   /** string | string[] | {field,hint}[] | undefined — edited by the editor. */
   prompts: unknown;
   readOnly: boolean;
@@ -50,6 +52,7 @@ export function emptyDraft(): SettingsDraft {
   return {
     cardType: "",
     title: "",
+    subtitle: "",
     prompts: undefined,
     readOnly: false,
     theme: { background: "", foreground: "", accent: "", titlebar: "", legend: "", font: "" },
@@ -61,7 +64,7 @@ export function emptyDraft(): SettingsDraft {
 }
 
 const THEME_KEYS = ["background", "foreground", "accent", "titlebar", "legend", "font"] as const;
-const TOP_KEYS = ["cardType", "title", "prompts", "readOnly", "theme", "config", "board"];
+const TOP_KEYS = ["cardType", "title", "subtitle", "prompts", "readOnly", "theme", "config", "board"];
 
 function s(v: unknown): string {
   return typeof v === "string" ? v : "";
@@ -83,6 +86,7 @@ export function parseDraft(raw: string | null | undefined): SettingsDraft {
 
   draft.cardType = s(o.cardType).trim();
   draft.title = s(o.title);
+  draft.subtitle = s(o.subtitle);
   draft.prompts = o.prompts;
   draft.readOnly = o.readOnly === true;
 
@@ -133,6 +137,7 @@ export function serializeDraft(draft: SettingsDraft): string {
 
   if (draft.cardType !== "") out.cardType = draft.cardType;
   if (draft.title.trim() !== "") out.title = draft.title.trim();
+  if (draft.subtitle.trim() !== "") out.subtitle = draft.subtitle.trim();
   if (isSet(draft.prompts)) out.prompts = draft.prompts;
   if (draft.readOnly) out.readOnly = true;
 

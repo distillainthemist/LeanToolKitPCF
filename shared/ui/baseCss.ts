@@ -40,6 +40,8 @@ export const LTK_BASE_CSS = `
   color: var(--ltk-titlebar-fg, inherit);
 }
 .ltk-titlebar-text { font-size: 20px; font-weight: 600; line-height: 1.2; min-width: 0; }
+.ltk-titlebar-textwrap { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.ltk-titlebar-sub { font-size: 12.5px; font-weight: 400; opacity: 0.75; line-height: 1.25; }
 /* the right-hand slot: app extras (＋ Action) then the kebab, flowed */
 .ltk-titlebar-actions {
   margin-left: auto;

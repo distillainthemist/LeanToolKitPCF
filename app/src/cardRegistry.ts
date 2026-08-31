@@ -1385,8 +1385,18 @@ const REGISTRY: Record<string, CardMounter> = {
   },
 };
 
+/** "Title\nSubtitle" — the settings' optional subtitle rides the title
+ *  string; renderTitleBar splits it, so all 24 editors stay ignorant. */
+function titleWithSubtitle<T extends { title: string; settings: Record<string, unknown> }>(opts: T): T {
+  const sub = typeof opts.settings.subtitle === "string" ? opts.settings.subtitle.trim() : "";
+  if (sub === "" || opts.title.trim() === "") return opts;
+  return { ...opts, title: `${opts.title}\n${sub}` };
+}
+
 export function cardMounter(cardType: string): CardMounter | null {
-  return REGISTRY[cardType] ?? null;
+  const mounter = REGISTRY[cardType];
+  if (!mounter) return null;
+  return (opts) => mounter(titleWithSubtitle(opts));
 }
 
 /** What a tile mount needs; the rest of CardMount is filled in below. */
@@ -1427,7 +1437,7 @@ export function mountTile(cardType: string, opts: TileMount): (() => void) | nul
   if (!mounter) return null;
   opts.host.classList.add("ltk-tile");
   const teardown = mounter({
-    ...opts,
+    ...titleWithSubtitle(opts),
     people: [],
     readOnly: true,
     sources: [],

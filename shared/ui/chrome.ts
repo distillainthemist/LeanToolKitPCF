@@ -76,10 +76,17 @@ export function renderTitleBar(
   title: string,
   prompts: Prompts
 ): HTMLElement | null {
-  const t = title.trim();
+  // "Title\nSubtitle" — the app composes the settings' optional subtitle
+  // onto the title string so every editor stays ignorant of it
+  const [first, ...rest] = title.split("\n");
+  const t = (first ?? "").trim();
+  const sub = rest.join(" ").trim();
   if (t === "") return null;
   const bar = el("div", "ltk-titlebar");
-  bar.appendChild(el("div", "ltk-titlebar-text", t));
+  const text = el("div", "ltk-titlebar-textwrap");
+  text.appendChild(el("div", "ltk-titlebar-text", t));
+  if (sub !== "") text.appendChild(el("div", "ltk-titlebar-sub", sub));
+  bar.appendChild(text);
   // the right-hand slot: app extras, then the kebab (renderKebab appends
   // itself here when the bar exists — so nothing overlays the body)
   const slot = el("div", "ltk-titlebar-actions");

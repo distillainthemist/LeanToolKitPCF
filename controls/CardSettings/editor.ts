@@ -321,7 +321,7 @@ export class CardSettingsEditor {
     /** Common: identity and presentation, plus what each new meeting starts
      *  from (the data policy) — the settings every card shares. */
     const fillCommon = (sec: HTMLElement): void => {
-      const [titleSpec, promptsSpec, roSpec] = COMMON_FIELDS;
+      const [titleSpec, subtitleSpec, promptsSpec, roSpec] = COMMON_FIELDS;
       const grid = el("div", "ltk-cs-grid");
       grid.appendChild(
         renderField(
@@ -329,6 +329,16 @@ export class CardSettingsEditor {
           () => this.draft.title,
           (v) => {
             this.draft.title = typeof v === "string" ? v : "";
+          },
+          host
+        )
+      );
+      grid.appendChild(
+        renderField(
+          subtitleSpec,
+          () => this.draft.subtitle,
+          (v) => {
+            this.draft.subtitle = typeof v === "string" ? v : "";
           },
           host
         )

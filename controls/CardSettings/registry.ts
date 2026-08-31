@@ -163,6 +163,13 @@ export const COMMON_FIELDS: FieldSpec[] = [
     placeholder: "e.g. Daily SQDPC board",
   },
   {
+    key: "subtitle",
+    label: "Subtitle",
+    kind: "text",
+    help: "Optional line under the card title — context the title shouldn't carry (a scope, a cadence, a source).",
+    placeholder: "e.g. Night shift · updated weekly",
+  },
+  {
     key: "prompts",
     label: "Prompts",
     kind: "multiline",
