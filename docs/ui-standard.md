@@ -48,7 +48,10 @@ the same commit.
 - **Toggles**: `.app-tw-toggle` (self-updating). Segmented controls:
   `.app-docs-seg` / `.app-docs-segbtn(-on)` — rounded 8px frame, active
   side ACCENT-filled (the Documents look). The dark-filled `.app-cp-seg`
-  in Priorities is legacy — migrate on touch.
+  in Priorities is legacy — migrate on touch. Inside ltk-prefixed
+  surfaces (settings dialogs, wizard shells) the same look is
+  `.ltk-cs-seg` / `.ltk-cs-segbtn(-on)` — never a row of grey
+  `ltk-check` chips for mutually exclusive modes (Ben, 2026-08-30).
 - **Kebab menus**: `.app-cp-menu` fixed popover, `.app-cp-menu-h` small
   caps section heads, ●/○ prefix for radio-ish items.
 

@@ -302,7 +302,15 @@ export const CARDSETTINGS_CSS = `
 .ltk-cs-col-width { flex: 0 0 62px; width: 62px; }
 /* rows builder (CaptureCard) */
 .ltk-cs-rows { display: flex; flex-direction: column; gap: 8px; }
-.ltk-cs-rows-modes { display: flex; gap: 6px; flex-wrap: wrap; }
+/* the accent segmented control (the app's Documents-tab look, ltk vars) */
+.ltk-cs-seg { display: inline-flex; border: 1px solid #ddd; border-radius: 8px; overflow: hidden; width: fit-content; }
+.ltk-cs-segbtn {
+  border: none; background: none; font: inherit; font-size: 12.5px;
+  padding: 7px 14px; cursor: pointer; color: #444;
+}
+.ltk-cs-segbtn + .ltk-cs-segbtn { border-left: 1px solid #ddd; }
+.ltk-cs-segbtn-on { background: var(--ltk-accent); color: #fff; font-weight: 600; }
+.ltk-cs-segbtn:disabled { cursor: default; opacity: 0.6; }
 .ltk-cs-rows-count { width: 90px; }
 .ltk-cs-rowlabel { display: flex; gap: 6px; align-items: center; }
 .ltk-cs-td-icon { flex: 0 0 30%; }

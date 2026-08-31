@@ -509,9 +509,9 @@ export function captureRowsEditor(
 
   const paint = () => {
     while (wrap.firstChild) wrap.removeChild(wrap.firstChild);
-    const modes = el("div", "ltk-cs-rows-modes");
+    const modes = el("div", "ltk-cs-seg");
     const chip = (key: typeof mode, label: string, help: string) => {
-      const b = el("button", "ltk-check" + (mode === key ? " ltk-check-on" : ""), label) as HTMLButtonElement;
+      const b = el("button", "ltk-cs-segbtn" + (mode === key ? " ltk-cs-segbtn-on" : ""), label) as HTMLButtonElement;
       b.type = "button";
       b.title = help;
       b.disabled = host.readOnly;
