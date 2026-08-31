@@ -15,6 +15,7 @@ import {
 } from "../../shared/palette";
 import { textOn, Theme } from "../../shared/tokens";
 import { el } from "../../shared/ui/dom";
+import { frameKey, setFrameContentWidth } from "./embedFrames";
 import { cardLabel } from "../../controls/CardSettings/registry";
 import { boardHash } from "./links";
 import { dayLabel, linkTitle, whenLabel } from "./linkTitle";
@@ -124,6 +125,7 @@ import { parseSources } from "../../controls/EscalationViewer/types";
 import { EmbedView } from "../../controls/EmbedCard/editor";
 import {
   buildEmbedUrl,
+  embedContentWidth,
   parseEmbedNotes,
   parseHeadings,
   serializeEmbedNotes,
@@ -1351,6 +1353,11 @@ const REGISTRY: Record<string, CardMounter> = {
       hidePageNav: config(opts).hidePageNav === true,
       pageName: cfgStr(opts, "pageName"),
     });
+    // fit-to-width (Ben, 2026-08-30): render wide content at its own width
+    // and scale down — automatic 1280 for Power BI, configurable for the rest
+    const cw = embedContentWidth(cfgStr(opts, "embedUrl"), Number(config(opts).contentWidth) || 0);
+    setFrameContentWidth(frameKey(opts.boardId, opts.cardId), cw);
+    view.setContentWidth(cw);
     // the presentation window is keyed per card so the ⧉ chip and the
     // present-mode panel reuse one window across screens
     const presentKey = `${opts.boardId}|${opts.cardId}`;

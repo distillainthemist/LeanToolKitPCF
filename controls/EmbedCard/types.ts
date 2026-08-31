@@ -144,6 +144,17 @@ export function buildEmbedUrl(opts: EmbedOptions): string {
   }
 }
 
+/** The width the embedded CONTENT is rendered at before scaling down to
+ *  fit the card (Ben, 2026-08-30). Explicit config wins; blank defaults
+ *  to 1280 for Power BI (the standard report canvas — reports are a
+ *  fixed-size canvas, so fitting the width means scaling, not reflow);
+ *  0 for everything else (responsive pages reflow better than they
+ *  scale). 0 = natural / no scaling. */
+export function embedContentWidth(url: string, configured: number): number {
+  if (Number.isFinite(configured) && configured > 0) return Math.round(configured);
+  return isPowerBiUrl(safeEmbedUrl(url)) ? 1280 : 0;
+}
+
 // ---- the commentary document ----
 
 export const NOTES_SCHEMA_ID = "ltk/embednotes@1";

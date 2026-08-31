@@ -22,7 +22,21 @@ interface Entry {
 }
 
 const frames = new Map<string, Entry>();
+/** Per-frame content width (px; 0/absent = natural). Kept beside the
+ *  frames so a width set before the frame exists still applies. */
+const widths = new Map<string, number>();
 let syncing = false;
+
+/** Render this frame's content at `px` wide, scaled down to fit its host
+ *  (0 = natural). Wide fixed-canvas content (Power BI) fits the card
+ *  instead of cropping. */
+export function setFrameContentWidth(key: string, px: number): void {
+  const w = Number.isFinite(px) && px > 0 ? Math.round(px) : 0;
+  if (widths.get(key) === w) return;
+  widths.set(key, w);
+  const entry = frames.get(key);
+  if (entry) syncOne(entry);
+}
 
 /** A frame belongs to a card, not a screen — both screens use this key. */
 export function frameKey(boardId: string, cardId: string): string {
@@ -123,6 +137,21 @@ function syncOne(entry: Entry): void {
   entry.host.style.height = `${layoutH}px`;
   entry.host.style.transformOrigin = "top left";
   entry.host.style.transform = `translate(${r.left}px, ${r.top}px) scale(${k})`;
+  // content width: render the DOCUMENT wider than the host and scale the
+  // iframe down, so fixed-canvas content (Power BI's 1280) fits the card's
+  // width instead of cropping or reflowing to a phone layout
+  const cw = widths.get(entry.host.dataset.frameKey ?? "") ?? 0;
+  if (cw > 0 && layoutW < cw) {
+    const k2 = layoutW / cw;
+    entry.frame.style.width = `${cw}px`;
+    entry.frame.style.height = `${Math.round(layoutH / k2)}px`;
+    entry.frame.style.transformOrigin = "top left";
+    entry.frame.style.transform = `scale(${k2})`;
+  } else if (entry.frame.style.transform !== "") {
+    entry.frame.style.width = "";
+    entry.frame.style.height = "";
+    entry.frame.style.transform = "";
+  }
 }
 
 /**

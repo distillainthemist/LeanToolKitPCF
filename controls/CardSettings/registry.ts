@@ -613,8 +613,15 @@ export const CARDS: CardSpec[] = [
         label: "Page name",
         kind: "text",
         help:
-          "Power BI links only: open on this page (the ReportSection id from the page url).",
-        placeholder: "ReportSection1a2b3c",
+          "Power BI links only: the report PAGE's id, not its display name — the GUID-like token after /ReportSection in the address bar with that page open (e.g. …/ReportSection1a2b3c4d5e). Copy everything from \"ReportSection\" to the next / or ?. Blank = the report's default page.",
+        placeholder: "ReportSection1a2b3c4d5e",
+      },
+      {
+        key: "contentWidth",
+        label: "Content width (px)",
+        kind: "number",
+        help:
+          "The width the embedded page is rendered at before being scaled down to fit the card — so wide content fits instead of cropping. Blank = automatic: Power BI reports render at 1280 (the standard canvas) and scale to fit; other pages stay responsive at the card's own width.",
       },
       {
         key: "deferLoad",

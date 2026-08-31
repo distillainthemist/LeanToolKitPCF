@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  embedContentWidth,
   buildEmbedUrl,
   extractIframeSrc,
   isPowerBiUrl,
@@ -125,5 +126,16 @@ describe("buildEmbedUrl", () => {
 
   it("is empty for an unusable url", () => {
     expect(buildEmbedUrl({ url: "", hideFilterPane: false, hidePageNav: false, pageName: "" })).toBe("");
+  });
+});
+
+describe("embedContentWidth (fit-to-width default)", () => {
+  it("Power BI defaults to the 1280 canvas; others stay natural", () => {
+    expect(embedContentWidth("https://app.powerbi.com/reportEmbed?reportId=x", 0)).toBe(1280);
+    expect(embedContentWidth("https://example.com/dashboard", 0)).toBe(0);
+  });
+  it("an explicit width wins everywhere", () => {
+    expect(embedContentWidth("https://example.com/x", 1600)).toBe(1600);
+    expect(embedContentWidth("https://app.powerbi.com/reportEmbed", 1024)).toBe(1024);
   });
 });

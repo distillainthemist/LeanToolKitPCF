@@ -56,6 +56,8 @@ export class EmbedView {
   private cardTitle = "";
   private lastPromptsRaw: string | null = null;
   private currentUrl = "";
+  private contentWidth = 0;
+  private fitObserver: ResizeObserver | null = null;
   /** The host owns the iframe (see useExternalFrame). */
   private externalFrame = false;
   /** "Present in a window": no frame at all — the body is a launch panel
@@ -97,6 +99,11 @@ export class EmbedView {
     this.frame.addEventListener("load", () => this.veil.classList.remove("ltk-em-on"));
     this.veil = el("div", "ltk-em-loading", "Loading…");
     this.body.append(this.ghost, this.frame, this.veil);
+    // fit-to-width: re-apply the inner scale whenever the body resizes
+    if (typeof ResizeObserver !== "undefined") {
+      this.fitObserver = new ResizeObserver(() => this.applyContentWidth());
+      this.fitObserver.observe(this.body);
+    }
 
     // commentary pane: notes sections above, the actions list pinned below
     this.aside = el("aside", "ltk-em-aside");
@@ -231,6 +238,33 @@ export class EmbedView {
    * this is what makes resizes and unrelated updateView churn free. An empty
    * url swaps the frame for the ghost.
    */
+  /** Render the document at `px` wide and scale the iframe down to fit
+   *  (0 = natural). The persistent-frame path scales in embedFrames; this
+   *  covers the card's OWN iframe. */
+  setContentWidth(px: number): void {
+    const w = Number.isFinite(px) && px > 0 ? Math.round(px) : 0;
+    if (w === this.contentWidth) return;
+    this.contentWidth = w;
+    this.applyContentWidth();
+  }
+
+  private applyContentWidth(): void {
+    const cw = this.contentWidth;
+    const bodyW = this.body.clientWidth;
+    const bodyH = this.body.clientHeight;
+    if (cw > 0 && bodyW > 0 && bodyW < cw) {
+      const k = bodyW / cw;
+      this.frame.style.width = `${cw}px`;
+      this.frame.style.height = `${Math.round(bodyH / k)}px`;
+      this.frame.style.transformOrigin = "top left";
+      this.frame.style.transform = `scale(${k})`;
+    } else if (this.frame.style.transform !== "") {
+      this.frame.style.width = "";
+      this.frame.style.height = "";
+      this.frame.style.transform = "";
+    }
+  }
+
   setUrl(url: string): void {
     if (url === this.currentUrl) return;
     this.currentUrl = url;
@@ -476,6 +510,7 @@ export class EmbedView {
   }
 
   destroy(): void {
+    this.fitObserver?.disconnect();
     this.cancelHint();
     if (this.presentTicker !== null) {
       clearInterval(this.presentTicker);
