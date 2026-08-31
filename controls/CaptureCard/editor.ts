@@ -49,6 +49,8 @@ export class CaptureEditor {
   private prompts: Prompts = { general: [], fields: {} };
   private lastPromptsRaw: string | null = null;
   private readOnly = false;
+  /** Header-click sort — presentation only, never part of the document. */
+  private sort: { key: string; dir: 1 | -1 } | null = null;
   private readonly snapshots: SnapshotScheduler;
   private resizeObserver: ResizeObserver | null = null;
 
@@ -130,6 +132,36 @@ export class CaptureEditor {
     this.root.remove();
   }
 
+  /** The rows as displayed: the header-click sort applied to a COPY —
+   *  the document keeps its own order (and fixed rows their sync). */
+  private sortedRows(): CaptureRow[] {
+    const s = this.sort;
+    if (s === null) return this.env.data.rows;
+    const col = this.columns.find((c) => c.key === s.key) ?? null;
+    const keyOf = (r: CaptureRow): string | number => {
+      if (s.key === "__rowhead") {
+        return (this.rowHeaders.find((h) => h.key === r.rowKey)?.label ?? r.rowKey).toLowerCase();
+      }
+      const v = r.cells[s.key];
+      if (v === undefined || v === "") return col && (col.type === "number" || col.type === "decimal") ? Number.NEGATIVE_INFINITY : "";
+      if (col && (col.type === "number" || col.type === "decimal")) return typeof v === "number" ? v : Number(v) || 0;
+      if (col && (col.type === "yesno" || col.type === "flag")) return v === true || v === "true" ? 1 : 0;
+      if (col && col.type === "list") {
+        const first = Array.isArray(v) ? (v[0] ?? "") : String(v);
+        return (col.options.find((o) => o.value === first)?.label ?? first).toLowerCase();
+      }
+      // text / date / datetime: ISO strings sort correctly as strings
+      return String(v).toLowerCase();
+    };
+    return [...this.env.data.rows].sort((a, b) => {
+      const ka = keyOf(a);
+      const kb = keyOf(b);
+      if (ka < kb) return -1 * s.dir;
+      if (ka > kb) return 1 * s.dir;
+      return 0;
+    });
+  }
+
   /** With fixed row headers, ensure exactly one row per header, in order. */
   private syncFixedRows(): void {
     if (this.rowHeaders.length === 0) return;
@@ -178,17 +210,31 @@ export class CaptureEditor {
 
     const showHead = fixed && this.titledRows;
     const table = el("table", "ltk-cc-table");
+    if (this.columns.some((c) => c.width !== undefined)) table.style.tableLayout = "fixed";
     const thead = el("thead");
     const headRow = el("tr");
-    if (showHead) headRow.appendChild(el("th"));
+    const sortTh = (label: string, key: string): HTMLElement => {
+      const th = el("th", "ltk-cc-th-sort", label);
+      if (this.sort?.key === key) th.appendChild(el("span", "ltk-cc-sortglyph", this.sort.dir === 1 ? " ▲" : " ▼"));
+      th.title = "Sort by this column";
+      th.addEventListener("click", () => {
+        this.sort =
+          this.sort?.key !== key ? { key, dir: 1 } : this.sort.dir === 1 ? { key, dir: -1 } : null;
+        this.render();
+      });
+      return th;
+    };
+    if (showHead) headRow.appendChild(sortTh("", "__rowhead"));
     for (const col of this.columns) {
-      headRow.appendChild(el("th", undefined, col.label));
+      const th = sortTh(col.label, col.key);
+      if (col.width !== undefined) th.style.width = `${col.width}px`;
+      headRow.appendChild(th);
     }
     thead.appendChild(headRow);
     table.appendChild(thead);
 
     const tbody = el("tbody");
-    for (const row of this.env.data.rows) {
+    for (const row of this.sortedRows()) {
       const tr = el("tr", "ltk-cc-row");
       if (this.readOnly) tr.classList.add("ltk-readonly");
       if (showHead) {

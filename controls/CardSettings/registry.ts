@@ -25,6 +25,7 @@ export type FieldKind =
   | "objectList" // array of flat objects, edited as a small table (`fields`)
   | "kvList" // key→value map, edited as pairs, emitted as an object
   | "captureColumns" // CaptureCard's typed columns (dedicated builder)
+  | "captureRows" // CaptureCard's rows: free / fixed count / titled (dedicated builder)
   | "canvasFields" // CanvasCard's layout (dedicated builder)
   | "topicPillars" // PrioritiesCard's rotation focus: meeting topic → pillars (dedicated builder)
   | "json"; // raw JSON fallback (validated before emit)
@@ -642,7 +643,7 @@ export const CARDS: CardSpec[] = [
     type: "CaptureCard",
     label: "Capture card",
     group: "Rituals",
-    description: "Typed capture grid — text/number/yes-no/list columns, free or fixed rows.",
+    description: "Typed capture grid — text / number / date / yes-no / list columns, free or fixed rows, sortable headers.",
     config: [
       {
         key: "columnsJSON",
@@ -654,10 +655,8 @@ export const CARDS: CardSpec[] = [
       {
         key: "rowsJSON",
         label: "Rows",
-        kind: "text",
-        help:
-          "Empty = free rows (add/delete). A number (e.g. 5) = that many fixed untitled rows. A JSON array of labels or {key,label} = fixed titled rows.",
-        placeholder: '5   or   ["Line 1","Line 2"]',
+        kind: "captureRows",
+        help: "Free rows (people add as they capture), a fixed count of untitled rows, or one fixed row per title.",
       },
     ],
     appBound: [],

@@ -299,6 +299,12 @@ export const CARDSETTINGS_CSS = `
   color: var(--ltk-muted);
 }
 .ltk-cs-col-type { flex: 0 0 118px; width: 118px; font-size: 12px; padding: 4px 6px; }
+.ltk-cs-col-width { flex: 0 0 62px; width: 62px; }
+/* rows builder (CaptureCard) */
+.ltk-cs-rows { display: flex; flex-direction: column; gap: 8px; }
+.ltk-cs-rows-modes { display: flex; gap: 6px; flex-wrap: wrap; }
+.ltk-cs-rows-count { width: 90px; }
+.ltk-cs-rowlabel { display: flex; gap: 6px; align-items: center; }
 .ltk-cs-td-icon { flex: 0 0 30%; }
 .ltk-cs-td-prev, .ltk-cs-iconprev {
   flex: 0 0 24px;

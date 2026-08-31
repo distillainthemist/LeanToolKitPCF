@@ -8,7 +8,7 @@ import { el } from "../../shared/ui/dom";
 import { checkItem } from "../../shared/ui/dialog";
 import { PaletteEntry, paletteMap, resolvePaletteColor } from "../../shared/palette";
 import { FieldSpec, ObjectField } from "./registry";
-import { captureColumnsEditor } from "./captureColumns";
+import { captureColumnsEditor, captureRowsEditor } from "./captureColumns";
 import { canvasFieldsEditor } from "./canvasFields";
 
 export interface FieldHost {
@@ -847,6 +847,8 @@ export function renderField(
       return kvListEditor(spec, get, set, host);
     case "captureColumns":
       return captureColumnsEditor(spec, get, set, host);
+    case "captureRows":
+      return captureRowsEditor(spec, get, set, host);
     case "canvasFields":
       return canvasFieldsEditor(spec, get, set, host);
     case "topicPillars":

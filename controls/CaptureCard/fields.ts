@@ -29,6 +29,16 @@ export function optionChip(option: ListOption | undefined, value: string): HTMLE
   return chip;
 }
 
+/** "26 Aug 2026" / "26 Aug 2026, 14:30" — a stored ISO day/datetime as a
+ *  person reads it; anything unparseable shows as typed. */
+export function formatCaptureDate(raw: string, withTime: boolean): string {
+  const t = Date.parse(withTime ? raw : `${raw}T00:00:00`);
+  if (!Number.isFinite(t)) return raw;
+  const d = new Date(t);
+  const day = d.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+  return withTime ? `${day}, ${d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}` : day;
+}
+
 /** Render one cell's content into `td`, by the column's type. */
 export function renderCaptureCellInto(
   td: HTMLElement,
@@ -49,6 +59,10 @@ export function renderCaptureCellInto(
     } else {
       td.appendChild(el("span", "ltk-cc-empty", "—"));
     }
+    return;
+  }
+  if (col.type === "date" || col.type === "datetime") {
+    td.textContent = formatCaptureDate(String(value), col.type === "datetime");
     return;
   }
   if (col.type === "list") {
@@ -85,6 +99,19 @@ export function buildCaptureField(
     chk.box.checked = value === true || value === "true";
     chk.wrap.classList.toggle("ltk-check-on", chk.box.checked);
     return { column: col, el: chk.wrap, read: () => chk.box.checked };
+  }
+
+  if (col.type === "date" || col.type === "datetime") {
+    const input = textInput(value === undefined ? "" : String(value), {
+      type: col.type === "datetime" ? "datetime-local" : "date",
+    });
+    const wrap = fieldRow(col.label, input);
+    wrap.classList.add("ltk-field-half");
+    return {
+      column: col,
+      el: wrap,
+      read: () => (input.value.trim() === "" ? undefined : input.value),
+    };
   }
 
   if (col.type === "number" || col.type === "decimal") {

@@ -18,6 +18,8 @@ const COLUMN_TYPES = [
   { value: "text", label: "Text" },
   { value: "number", label: "Whole number" },
   { value: "decimal", label: "Decimal" },
+  { value: "date", label: "Date" },
+  { value: "datetime", label: "Date & time" },
   { value: "yesno", label: "Yes / no" },
   { value: "flag", label: "Flag" },
   { value: "list", label: "Picklist" },
@@ -41,6 +43,7 @@ interface ColDraft {
   multi: boolean;
   parent: string;
   options: OptDraft[];
+  width: string; // px as typed; "" = auto
 }
 
 function slug(label: string): string {
@@ -101,6 +104,8 @@ function loadDrafts(v: unknown): ColDraft[] {
       type:
         o.type === "number" ||
         o.type === "decimal" ||
+        o.type === "date" ||
+        o.type === "datetime" ||
         o.type === "yesno" ||
         o.type === "flag" ||
         o.type === "list"
@@ -109,6 +114,7 @@ function loadDrafts(v: unknown): ColDraft[] {
       multi: o.multi === true,
       parent: typeof o.parent === "string" ? o.parent : "",
       options,
+      width: typeof (o as { width?: unknown }).width === "number" ? String((o as { width?: number }).width) : "",
     });
   }
   return out;
@@ -122,6 +128,8 @@ function serializeDrafts(cols: ColDraft[]): unknown[] | undefined {
     if (key === "") continue; // an entirely empty block
     const o: Record<string, unknown> = { key, label: c.label.trim() !== "" ? c.label : key };
     if (c.type !== "text") o.type = c.type;
+    const w = Number(c.width);
+    if (c.width.trim() !== "" && Number.isFinite(w) && w > 0) o.width = Math.round(w);
     if (c.type === "list") {
       if (c.multi) o.multi = true;
       if (c.parent !== "") o.parent = c.parent;
@@ -356,7 +364,18 @@ export function captureColumnsEditor(
       push();
     });
 
-    headRow.append(lIn, kIn, tSel);
+    const wIn = el("input", "ltk-input ltk-cs-cell ltk-cs-col-width") as HTMLInputElement;
+    wIn.type = "number";
+    wIn.min = "20";
+    wIn.value = col.width;
+    wIn.placeholder = "auto";
+    wIn.title = "Column width in px — blank sizes to content";
+    wIn.disabled = host.readOnly;
+    wIn.addEventListener("input", () => {
+      col.width = wIn.value;
+      push();
+    });
+    headRow.append(lIn, kIn, tSel, wIn);
     if (!host.readOnly) {
       const x = el("button", "ltk-cs-chip-x", "×");
       x.type = "button";
@@ -433,6 +452,7 @@ export function captureColumnsEditor(
           multi: false,
           parent: "",
           options: [],
+          width: "",
         });
         sync();
         push();
@@ -447,4 +467,123 @@ export function captureColumnsEditor(
   field.appendChild(labelRow(spec.label, spec.help));
   field.appendChild(box);
   return field;
+}
+
+// ---- rows builder (Ben, 2026-08-30): the rowsJSON field's friendly face --
+// Emits the exact formats parseRows reads: "" (free), "N" (fixed untitled),
+// ["Label", …] (fixed titled) — nothing stored changes shape.
+
+export function captureRowsEditor(
+  spec: { label: string; help?: string },
+  get: Get,
+  set: Set,
+  host: { readOnly: boolean; onChanged: () => void }
+): HTMLElement {
+  const wrap = el("div", "ltk-cs-rows");
+  const raw = String(get() ?? "").trim();
+  let mode: "free" | "count" | "titled" = "free";
+  let count = 5;
+  let labels: string[] = [];
+  if (/^\d+$/.test(raw)) {
+    mode = "count";
+    count = Math.max(1, Math.min(200, parseInt(raw, 10)));
+  } else if (raw !== "") {
+    try {
+      const data = JSON.parse(raw) as unknown;
+      if (Array.isArray(data)) {
+        mode = "titled";
+        labels = data.map((x) => (typeof x === "string" ? x : String((x as { label?: unknown; key?: unknown }).label ?? (x as { key?: unknown }).key ?? ""))).filter((x) => x !== "");
+      }
+    } catch {
+      /* free */
+    }
+  }
+  if (mode === "titled" && labels.length === 0) labels = [""];
+
+  const push = () => {
+    if (mode === "free") set("");
+    else if (mode === "count") set(String(Math.max(1, Math.min(200, count))));
+    else set(JSON.stringify(labels.map((l) => l.trim()).filter((l) => l !== "")));
+    host.onChanged();
+  };
+
+  const paint = () => {
+    while (wrap.firstChild) wrap.removeChild(wrap.firstChild);
+    const modes = el("div", "ltk-cs-rows-modes");
+    const chip = (key: typeof mode, label: string, help: string) => {
+      const b = el("button", "ltk-check" + (mode === key ? " ltk-check-on" : ""), label) as HTMLButtonElement;
+      b.type = "button";
+      b.title = help;
+      b.disabled = host.readOnly;
+      b.addEventListener("click", () => {
+        mode = key;
+        if (mode === "titled" && labels.length === 0) labels = [""];
+        paint();
+        push();
+      });
+      modes.appendChild(b);
+    };
+    chip("free", "Free rows", "People add and delete rows as they capture");
+    chip("count", "Fixed count", "A set number of untitled rows");
+    chip("titled", "Titled rows", "One fixed row per title, with a row-head column");
+    wrap.appendChild(modes);
+    if (mode === "count") {
+      const n = el("input", "ltk-input ltk-cs-rows-count") as HTMLInputElement;
+      n.type = "number";
+      n.min = "1";
+      n.max = "200";
+      n.value = String(count);
+      n.disabled = host.readOnly;
+      n.addEventListener("input", () => {
+        count = Math.max(1, Math.min(200, Number(n.value) || 1));
+        push();
+      });
+      wrap.appendChild(fieldRowLike("Rows", n));
+    } else if (mode === "titled") {
+      labels.forEach((label, idx) => {
+        const row = el("div", "ltk-cs-rowlabel");
+        const input = el("input", "ltk-input ltk-cs-cell") as HTMLInputElement;
+        input.type = "text";
+        input.value = label;
+        input.placeholder = `Row ${idx + 1} title`;
+        input.disabled = host.readOnly;
+        input.addEventListener("input", () => {
+          labels[idx] = input.value;
+          push();
+        });
+        row.appendChild(input);
+        if (!host.readOnly) {
+          const x = el("button", "ltk-cs-chip-x", "×") as HTMLButtonElement;
+          x.type = "button";
+          x.title = "Remove row";
+          x.addEventListener("click", () => {
+            labels.splice(idx, 1);
+            if (labels.length === 0) labels = [""];
+            paint();
+            push();
+          });
+          row.appendChild(x);
+        }
+        wrap.appendChild(row);
+      });
+      if (!host.readOnly) {
+        const add = el("button", "ltk-btn ltk-btn-secondary", "＋ Add row title") as HTMLButtonElement;
+        add.type = "button";
+        add.addEventListener("click", () => {
+          labels.push("");
+          paint();
+          wrap.querySelector<HTMLInputElement>(".ltk-cs-rowlabel:last-of-type input")?.focus();
+        });
+        wrap.appendChild(add);
+      }
+    }
+  };
+  paint();
+  return wrap;
+}
+
+function fieldRowLike(label: string, control: HTMLElement): HTMLElement {
+  const f = el("div", "ltk-cs-rowlabel");
+  f.append(el("span", "ltk-field-label", label), control);
+  return f;
 }

@@ -1,6 +1,10 @@
 // CaptureCard stylesheet — a flat table over the shared kit.
 
 export const CAPTURE_CSS = `
+.ltk-cc-th-sort { cursor: pointer; user-select: none; }
+.ltk-cc-th-sort:hover { text-decoration: underline; }
+.ltk-cc-sortglyph { font-size: 10px; }
+
 .ltk-cc-body {
   flex: 1;
   min-height: 0;

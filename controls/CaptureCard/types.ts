@@ -16,7 +16,7 @@ import {
 
 export const SCHEMA_ID = "ltk/capture@1";
 
-export type ColumnType = "text" | "number" | "decimal" | "yesno" | "flag" | "list";
+export type ColumnType = "text" | "number" | "decimal" | "date" | "datetime" | "yesno" | "flag" | "list";
 
 export interface ListOption {
   value: string;
@@ -32,6 +32,8 @@ export interface CaptureColumn {
   multi: boolean; // list columns: allow multiple selections
   parent: string; // key of the parent column for dependent lists ("" = none)
   options: ListOption[];
+  /** Fixed column width in px (0 / absent = auto). */
+  width?: number;
 }
 
 export interface RowHeader {
@@ -103,12 +105,15 @@ export function parseColumns(raw: string | null | undefined): CaptureColumn[] {
       const type: ColumnType =
         o.type === "number" ||
         o.type === "decimal" ||
+        o.type === "date" ||
+        o.type === "datetime" ||
         o.type === "yesno" ||
         o.type === "flag" ||
         o.type === "list"
           ? o.type
           : "text";
       const options = parseListOptions(o.options);
+      const width = typeof o.width === "number" && Number.isFinite(o.width) && o.width > 0 ? Math.round(o.width) : undefined;
       out.push({
         key,
         label: typeof o.label === "string" && o.label !== "" ? o.label : key,
@@ -116,6 +121,7 @@ export function parseColumns(raw: string | null | undefined): CaptureColumn[] {
         multi: o.multi === true,
         parent: typeof o.parent === "string" ? o.parent : "",
         options,
+        ...(width !== undefined ? { width } : {}),
       });
     }
     return out.length > 0 ? out : DEFAULT_COLUMNS;
