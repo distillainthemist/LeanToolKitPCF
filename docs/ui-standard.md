@@ -55,6 +55,11 @@ the same commit.
 - **Kebab menus**: `.app-cp-menu` fixed popover, `.app-cp-menu-h` small
   caps section heads, ●/○ prefix for radio-ish items.
 
+- **Screen-mount cards** (Priorities, Documents, Actions Gantt): they
+  render app screens, but still wear the SAME ltk title strip as every
+  other card when a title is set (Ben's option 3, 2026-08-31) — empty
+  title = no chrome, the shared rule.
+
 ## 3. Page anatomy (the Documents register is the reference)
 
 1. **Title block** left: bold 20–22px scope title, muted subtitle,

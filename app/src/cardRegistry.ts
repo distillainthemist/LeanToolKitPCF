@@ -13,8 +13,10 @@ import {
   paletteMap,
   resolvePaletteColor,
 } from "../../shared/palette";
-import { textOn, Theme } from "../../shared/tokens";
-import { el } from "../../shared/ui/dom";
+import { applyThemeVars, textOn, Theme } from "../../shared/tokens";
+import { el, ensureStylesheet } from "../../shared/ui/dom";
+import { LTK_BASE_CSS } from "../../shared/ui/baseCss";
+import { parsePrompts, renderTitleBar } from "../../shared/ui/chrome";
 import { frameKey, setFrameContentWidth } from "./embedFrames";
 import { cardLabel } from "../../controls/CardSettings/registry";
 import { boardHash } from "./links";
@@ -240,11 +242,29 @@ export type CardMounter = (opts: CardMount) => () => void;
 
 /** The Standard Documents cards live in src/docs/ (lazy chunk); this
  *  wrapper is the only thing the board pays for them. */
+/** Screen-mount cards (Priorities, Documents, Gantt) render an app
+ *  screen instead of an ltk editor — Ben's option 3 (2026-08-31): they
+ *  still wear the SAME title strip as every other card. Returns the
+ *  inner host the screen mounts into; with an empty title there is no
+ *  strip (the shared rule) and the host passes through untouched. */
+function screenCardChrome(opts: CardMount): HTMLElement {
+  if (opts.title.trim() === "") return opts.host;
+  ensureStylesheet("ltk-base-css", LTK_BASE_CSS);
+  const root = el("div", "ltk-root app-screencard");
+  applyThemeVars(root, opts.theme);
+  opts.host.appendChild(root);
+  renderTitleBar(root, opts.title, parsePrompts(promptsRaw(opts)));
+  const inner = el("div", "app-screencard-body");
+  root.appendChild(inner);
+  return inner;
+}
+
 function docsCardMounter(kind: "docs" | "health"): CardMounter {
   return (opts) => {
     let dead = false;
+    const inner = screenCardChrome(opts);
     void import("./docs/docsCards").then((m) => {
-      if (!dead) m.mountDocsCard(kind, opts);
+      if (!dead) m.mountDocsCard(kind, { ...opts, host: inner });
     });
     return () => {
       dead = true;
@@ -258,8 +278,9 @@ function ganttCardMounter(): CardMounter {
   return (opts) => {
     let dead = false;
     let inner: (() => void) | null = null;
+    const chromed = screenCardChrome(opts);
     void import("./improvement/ganttCard").then((m) => {
-      if (!dead) inner = m.mountGanttCard(opts);
+      if (!dead) inner = m.mountGanttCard({ ...opts, host: chromed });
     });
     return () => {
       dead = true;
@@ -275,8 +296,9 @@ function prioritiesCardMounter(): CardMounter {
   return (opts) => {
     let dead = false;
     let inner: (() => void) | null = null;
+    const chromed = screenCardChrome(opts);
     void import("./priorities/prioritiesCard").then((m) => {
-      if (!dead) inner = m.mountPrioritiesCard(opts);
+      if (!dead) inner = m.mountPrioritiesCard({ ...opts, host: chromed });
     });
     return () => {
       dead = true;
