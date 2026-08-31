@@ -227,7 +227,9 @@ function makeRagsFor(
 
 export function mountPriorities(parent: HTMLElement, opts: PrioritiesMountOpts = {}): () => void {
   const card = opts.card ?? null;
-  const wrap = el("div", "app-cp-wrap app-cp-tv" + (card ? ` app-cp-card app-cp-card-${card.mode}` : ""));
+  // NB: "app-cp-cardmount", NOT "app-cp-card" — that class is the matrix's
+  // priority card and gave the whole mount a bordered-card look (Ben, 2026-08-31)
+  const wrap = el("div", "app-cp-wrap app-cp-tv" + (card ? ` app-cp-cardmount app-cp-cardmount-${card.mode}` : ""));
   parent.appendChild(wrap);
   const stopLoading = showLoading(wrap, false, card !== null);
   let dead = false;

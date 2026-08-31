@@ -2815,7 +2815,7 @@ button.app-doclist-hsort:hover { color: var(--app-accent, #2563eb); }
 .app-cp-wrap { position: relative; display: flex; flex-direction: column; gap: 10px; padding: 10px 14px 24px; min-height: 240px; }
 /* while loading, the spinner sits mid-page, not at the top (Ben, 2026-08-19) */
 .app-cp-wrap:has(> .app-loading) { min-height: calc(100vh - 180px); justify-content: center; }
-.app-cp-card:has(> .app-loading) { min-height: 100%; }
+.app-cp-cardmount:has(> .app-loading) { min-height: 100%; }
 .app-cp-muted { color: #6d675c; }
 /* org bar */
 .app-cp-orgbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
@@ -3126,7 +3126,7 @@ textarea.app-cp-statement { font-size: 14px; font-weight: 500; }
 .app-cp-tvorg .app-cp-crumb-here { font-weight: 700; }
 .app-cp-tvorg .app-cp-crumb-sep { font-size: 18px; }
 .app-cp-tvorg-topic { color: #6d675c; font-weight: 500; }
-.app-cp-card-tile .app-cp-tvorg-lead { font-size: 12px; }
+.app-cp-cardmount-tile .app-cp-tvorg-lead { font-size: 12px; }
 .app-cp-tvbtn { min-height: 44px; padding: 0 18px; font-size: 15px; }
 .app-cp-tv { font-size: 1.4em; padding: 16px 22px 30px; }
 .app-cp-tv .app-cp-vision { font-size: 21px; padding: 16px 22px; }
@@ -3191,19 +3191,19 @@ textarea.app-cp-statement { font-size: 14px; font-weight: 500; }
   .app-cp-walk-nav { max-width: 30%; }
 }
 /* embedded card: tile is compact and non-interactive; focused fills the host */
-.app-cp-card { height: 100%; box-sizing: border-box; }
-.app-cp-card-tile { padding: 8px 10px; gap: 6px; font-size: 12px; pointer-events: none; overflow: hidden; }
-.app-cp-card-tile .app-cp-tvorg { font-size: 14px; }
-.app-cp-card-tile .app-cp-vision { font-size: 12px; padding: 6px 10px; }
-.app-cp-card-tile .app-cp-visionrow, .app-cp-card-tile .app-cp-grid { grid-template-columns: 70px repeat(auto-fit, minmax(0, 1fr)); gap: 4px; }
-.app-cp-card-tile .app-cp-visionrow { grid-template-columns: 70px 1fr; }
-.app-cp-card-tile .app-cp-label { font-size: 9px; padding-top: 4px; }
-.app-cp-card-tile .app-cp-l1span, .app-cp-card-tile .app-cp-colhead { font-size: 11px; min-height: 28px; padding: 4px 6px; }
-.app-cp-card-tile .app-cp-card { padding: 4px 6px; gap: 2px; }
-.app-cp-card-tile .app-cp-statement { font-size: 11px; }
-.app-cp-card-tile .app-cp-tallies, .app-cp-card-tile .app-cp-lineage, .app-cp-card-tile .app-cp-flag, .app-cp-card-tile .app-cp-cell-obj, .app-cp-card-tile .app-cp-other, .app-cp-card-tile .app-cp-kebab { display: none; }
-.app-cp-card-tile .app-cp-cell { min-height: 40px; }
-.app-cp-card-focused .app-cp-walk { min-height: 100%; }
+.app-cp-cardmount { height: 100%; box-sizing: border-box; }
+.app-cp-cardmount-tile { padding: 8px 10px; gap: 6px; font-size: 12px; pointer-events: none; overflow: hidden; }
+.app-cp-cardmount-tile .app-cp-tvorg { font-size: 14px; }
+.app-cp-cardmount-tile .app-cp-vision { font-size: 12px; padding: 6px 10px; }
+.app-cp-cardmount-tile .app-cp-visionrow, .app-cp-cardmount-tile .app-cp-grid { grid-template-columns: 70px repeat(auto-fit, minmax(0, 1fr)); gap: 4px; }
+.app-cp-cardmount-tile .app-cp-visionrow { grid-template-columns: 70px 1fr; }
+.app-cp-cardmount-tile .app-cp-label { font-size: 9px; padding-top: 4px; }
+.app-cp-cardmount-tile .app-cp-l1span, .app-cp-cardmount-tile .app-cp-colhead { font-size: 11px; min-height: 28px; padding: 4px 6px; }
+.app-cp-cardmount-tile .app-cp-card { padding: 4px 6px; gap: 2px; }
+.app-cp-cardmount-tile .app-cp-statement { font-size: 11px; }
+.app-cp-cardmount-tile .app-cp-tallies, .app-cp-cardmount-tile .app-cp-lineage, .app-cp-cardmount-tile .app-cp-flag, .app-cp-cardmount-tile .app-cp-cell-obj, .app-cp-cardmount-tile .app-cp-other, .app-cp-cardmount-tile .app-cp-kebab { display: none; }
+.app-cp-cardmount-tile .app-cp-cell { min-height: 40px; }
+.app-cp-cardmount-focused .app-cp-walk { min-height: 100%; }
 /* organisation: per-site hub tabs + archive */
 .app-site-tabs { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding: 4px 0 8px; }
 .app-site-tabs-label { font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.05em; color: #6d675c; font-weight: 700; margin-right: 4px; }
