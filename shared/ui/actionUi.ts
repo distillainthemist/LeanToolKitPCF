@@ -19,6 +19,7 @@ import {
   sectionLabel,
   textArea,
   textInput,
+  selectInput,
 } from "./dialog";
 
 export interface ActionForm {
@@ -311,6 +312,12 @@ export interface ActionDialogOptions {
   people: Person[];
   isNew: boolean;
   onCommit: () => void;
+  /** Board cards the action may link to instead (Ben, 2026-08-31: the
+   *  discussion often reveals an action belongs to another card). Keys
+   *  are instance keys ("board:card"); shown as a "Linked card" select. */
+  linkTargets?: { key: string; label: string }[];
+  /** The origin card's instance key — the select's initial value. */
+  linkTarget?: string;
 }
 
 /** The raise/edit action dialog (with escalation, completion and cancel). */
@@ -328,6 +335,17 @@ export function openActionDialog(o: ActionDialogOptions): void {
   doneChk.box.checked = wasDone;
   doneChk.wrap.classList.toggle("ltk-check-on", wasDone);
 
+  // linked card: which card this action hangs off — re-linkable when the
+  // host offers targets (the board's ＋ Action road)
+  let linkSel: HTMLSelectElement | null = null;
+  const origin = o.linkTarget ?? "";
+  if (o.linkTargets !== undefined && o.linkTargets.length > 1) {
+    linkSel = selectInput(
+      origin !== "" && o.linkTargets.some((t) => t.key === origin) ? origin : o.linkTargets[0].key,
+      o.linkTargets.map((t) => ({ value: t.key, label: t.label }))
+    );
+  }
+
   const save = () => {
     if (o.isNew && !form.hasContent() && issue.value.trim() === "") return;
     action.issue = issue.value.trim();
@@ -338,6 +356,12 @@ export function openActionDialog(o: ActionDialogOptions): void {
     }
     action.escalated = escChk.box.checked;
     form.apply(action); // after status, so assignee done flags match
+    if (linkSel !== null) {
+      action.instanceId = linkSel.value;
+      // moved to another card: drop the origin's element context so it
+      // reads as a card-level action of its new home
+      if (linkSel.value !== origin) action.context = { source: "card", sourceId: "" };
+    }
     dlg.close();
     o.onCommit();
   };
@@ -371,6 +395,7 @@ export function openActionDialog(o: ActionDialogOptions): void {
     buttons,
   });
   dlg.body.appendChild(fieldRow("Issue", issue));
+  if (linkSel !== null) dlg.body.appendChild(fieldRow("Linked card", linkSel));
   dlg.body.appendChild(form.el);
   if (!o.isNew) dlg.body.appendChild(doneChk.wrap);
   dlg.body.appendChild(escChk.wrap);
@@ -379,6 +404,9 @@ export function openActionDialog(o: ActionDialogOptions): void {
 
 export interface ActionManagerOptions {
   host: HTMLElement;
+  /** Optional re-link targets, handed to the raise/edit dialogs. */
+  linkTargets?: { key: string; label: string }[];
+  linkTarget?: string;
   /** The card's action set — mutated in place (new pushed, edits applied). */
   actions: LtkAction[];
   /** Component kind stamped on new actions ("fishbone", "kpitrend"…). */
@@ -419,6 +447,8 @@ export function openActionManager(o: ActionManagerOptions): void {
       action,
       people: o.people,
       isNew: true,
+      linkTargets: o.linkTargets,
+      linkTarget: o.linkTarget,
       onCommit: () => {
         o.actions.push(action);
         o.onChanged();
@@ -459,6 +489,8 @@ export function openActionManager(o: ActionManagerOptions): void {
             action: act,
             people: o.people,
             isNew: false,
+            linkTargets: o.linkTargets,
+            linkTarget: act.instanceId !== "" ? act.instanceId : o.linkTarget,
             onCommit: () => o.onChanged(),
           }),
       })

@@ -561,6 +561,12 @@ export function mountCardEditor(
             actions,
             source: "card",
             sourceId: cardId,
+            // the discussion often reveals the action belongs to another
+            // card — every non-action-surface slot is offered (Ben, 2026-08-31)
+            linkTargets: manifest.slots
+              .filter((sl) => !isActionSurface(sl))
+              .map((sl) => ({ key: `${boardId}:${sl.cardId}`, label: sl.title || cardLabel(sl.cardType) })),
+            linkTarget: instanceKey,
             seedIssue: slot.title || cardLabel(slot.cardType),
             people: assigneePeople(
               (() => {
