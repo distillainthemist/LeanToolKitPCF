@@ -11,6 +11,7 @@ import { parseOrgTree } from "../../../shared/schema/meeting";
 import { improvementSettingsJson, orgJson, siteCompanies } from "../store/config";
 import { listPeople } from "../store/people";
 import { loadCascade } from "../store/priorities";
+import { isDescendant, orgRef, sameOrg } from "../priorities/model";
 import { getTemplate } from "../store/templates";
 import { appendInitiativeEvent, saveInitiative } from "../store/initiatives";
 import { Ben_ltkboardsService } from "../generated/services/Ben_ltkboardsService";
@@ -157,7 +158,11 @@ export function openEditDetails(o: EditDetailsOpts): void {
       void (async () => {
         const company = siteCo[siteSel.value] ?? "";
         const data = await loadCascade(company);
-        const open = data.priorities.filter((p) => p.status === "active" && !links.some((l) => l.priorityId === p.id));
+        // the initiative's org or above only (Ben, 2026-08-29)
+        const at = orgRef(company, siteSel.value, deptSel.value, areaSel.value);
+        const open = data.priorities.filter(
+          (p) => p.status === "active" && !links.some((l) => l.priorityId === p.id) && (sameOrg(p.org, at) || isDescendant(at, p.org))
+        );
         if (open.length === 0) return;
         const menu = el("div", "app-cp-menu");
         for (const p of open.slice(0, 30)) {

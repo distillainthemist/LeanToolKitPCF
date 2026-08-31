@@ -603,6 +603,17 @@ reschedule/cancel history with a reason picklist.
   becomes the picker (● Live board / Gate — Stage · date), snapshots
   render stored tiles read-only under an amber banner with Back to
   live. Forward-only.
+- **Priority delete + org-scoped linking — BUILT 2026-08-29 (dev,
+  app-only; role delete grants already existed on priority/assignment
+  tables)** — overlay ⋮ gains Delete… (danger confirm counting children
+  + linked initiatives): cascade records removed BOTH directions,
+  customised children stand alone (parentId cleared), linked initiatives
+  unlinked (removed primary promotes the first remaining —
+  store/initiatives unlinkPriorityEverywhere; store/priorities
+  deletePriority), events kept as history. LINK PICKERS (create form +
+  Edit details) now offer only priorities at the initiative's org or
+  ABOVE it (sameOrg/isDescendant against the form's site/dept/area) —
+  never a sibling org's.
 - **P9 VDT + simulation · P10 Reporting** — designed (spec §3–§4).
 
 Each phase ships behind the usual gates + `pac code push`; the specs'

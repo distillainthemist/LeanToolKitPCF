@@ -64,6 +64,22 @@ export async function listInitiatives(): Promise<Initiative[]> {
   return rows.map(fromRow).filter((i) => i.id !== "");
 }
 
+/** Remove a deleted priority's links from every initiative carrying it;
+ *  a removed primary promotes the first remaining link. */
+export async function unlinkPriorityEverywhere(priorityId: string): Promise<number> {
+  const all = await listInitiatives();
+  let n = 0;
+  for (const i of all) {
+    if (!i.priorities.some((l) => l.priorityId === priorityId)) continue;
+    const wasPrimary = i.priorities.find((l) => l.priorityId === priorityId)?.primary === true;
+    i.priorities = i.priorities.filter((l) => l.priorityId !== priorityId);
+    if (wasPrimary && i.priorities.length > 0) i.priorities[0].primary = true;
+    await saveInitiative(i);
+    n++;
+  }
+  return n;
+}
+
 export async function saveInitiative(i: Initiative): Promise<string> {
   return upsertWhere(
     Ben_ltkinitiativesService,

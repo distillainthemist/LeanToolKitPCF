@@ -270,6 +270,23 @@ export async function deleteAssignment(rowId: string): Promise<void> {
   await Ben_ltkpriorityassignmentsService.delete(rowId);
 }
 
+/** Delete a priority outright (Ben, 2026-08-29): its cascade records go
+ *  in BOTH directions (sent by it, and the one that created it as a
+ *  child), customised children stand alone (parentId cleared), and the
+ *  row is removed. Linked initiatives are unlinked by the CALLER (the
+ *  improvement store owns that shape). Events stay — history is
+ *  history. */
+export async function deletePriority(p: Priority, data: CascadeData): Promise<void> {
+  for (const a of data.assignments.filter((x) => x.priorityId === p.id || x.childPriorityId === p.id)) {
+    if (a.id !== "") await deleteAssignment(a.id);
+  }
+  for (const child of data.priorities.filter((x) => x.parentId === p.id && x.id !== p.id)) {
+    child.parentId = "";
+    await savePriority(child, data);
+  }
+  if (p.rowId) await Ben_ltkprioritiesService.delete(p.rowId);
+}
+
 // ---- events -----------------------------------------------------------------
 
 function eventFromRow(row: Ben_ltkpriorityevents, priorityId: string): PriorityEvent {

@@ -21,6 +21,7 @@ import {
 } from "../store/priorities";
 import { modal, field, OrgTree, childOrgs, priorityDialog, cascadeTargetList, CascadeTarget } from "./dialogs";
 import { rememberBoardOrigin } from "../improvement/boardOrigin";
+import { promptConfirm } from "../prompts";
 import {
   carryForwardCopy,
   CLOSE_REASONS,
@@ -546,6 +547,32 @@ export function openPriorityOverlay(ctx: LifecycleCtx, p: Priority, onEdit: (p: 
         });
         item("Complete…", () => void doClose(live, "complete"));
         item("Archive…", () => void doClose(live, "archive"));
+        item("Delete…", () => {
+          void (async () => {
+            const kids = data.priorities.filter((x) => x.parentId === live.id).length;
+            const linked = ctx.ganttFor(live).initiatives.filter((x) => x.priorities.some((l) => l.priorityId === live.id)).length;
+            const bits = [
+              "This removes the priority and its cascade records for good — history events remain.",
+              kids > 0 ? `${kids} customised child priorit${kids === 1 ? "y" : "ies"} will stand alone.` : "",
+              linked > 0 ? `${linked} linked initiative${linked === 1 ? "" : "s"} will be unlinked (they keep running).` : "",
+            ].filter((x) => x !== "");
+            const yes = await promptConfirm({
+              title: `Delete “${live.statement.slice(0, 60)}”?`,
+              note: bits.join(" "),
+              confirmLabel: "Delete priority",
+              danger: true,
+            });
+            if (!yes) return;
+            const [{ deletePriority }, { unlinkPriorityEverywhere }] = await Promise.all([
+              import("../store/priorities"),
+              import("../store/initiatives"),
+            ]);
+            await unlinkPriorityEverywhere(live.id).catch(() => 0);
+            await deletePriority(live, data);
+            close();
+            await ctx.changed();
+          })();
+        });
         const r = more.getBoundingClientRect();
         menu.style.top = `${r.bottom + 4}px`;
         menu.style.left = `${Math.min(r.left, window.innerWidth - 240)}px`;

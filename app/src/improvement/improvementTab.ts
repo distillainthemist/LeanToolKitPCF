@@ -26,7 +26,7 @@ import { buildMetricState } from "./metricValues";
 import { newAction } from "../../../shared/schema/actions";
 import { promptConfirm } from "../prompts";
 import { parseOrgTree } from "../../../shared/schema/meeting";
-import { orgName, OrgRef, orgRef, orgLevel, orgPath, periodFor, parsePrioritySettings, ragPaletteKey, sameOrg } from "../priorities/model";
+import { isDescendant, orgName, OrgRef, orgRef, orgLevel, orgPath, periodFor, parsePrioritySettings, ragPaletteKey, sameOrg } from "../priorities/model";
 import { paletteMap } from "../../../shared/palette";
 import { appPalettes } from "../store/config";
 import { todayIso } from "../../../shared/schema/id";
@@ -913,7 +913,13 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
           void (async () => {
             const company = siteCo[siteSel.value] ?? "";
             const data = await loadCascade(company);
-            const open = data.priorities.filter((p) => p.status === "active" && !links.some((l) => l.priorityId === p.id));
+            // only priorities at the initiative's org or ABOVE it link
+            // (Ben, 2026-08-29): a dept initiative sees its dept, site
+            // and company priorities — never a sibling org's
+            const at = orgRef(company, siteSel.value, deptSel.value, areaSel.value);
+            const open = data.priorities.filter(
+              (p) => p.status === "active" && !links.some((l) => l.priorityId === p.id) && (sameOrg(p.org, at) || isDescendant(at, p.org))
+            );
             if (open.length === 0) return;
             const menu = el("div", "app-cp-menu");
             for (const p of open.slice(0, 30)) {
