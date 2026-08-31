@@ -340,9 +340,16 @@ export function openActionDialog(o: ActionDialogOptions): void {
   let linkSel: HTMLSelectElement | null = null;
   const origin = o.linkTarget ?? "";
   if (o.linkTargets !== undefined && o.linkTargets.length > 1) {
+    // an origin the list doesn't know (a removed card, another board's
+    // channel) stays selectable — otherwise an untouched save would
+    // silently re-link to the first option
+    const targets =
+      origin !== "" && !o.linkTargets.some((t) => t.key === origin)
+        ? [{ key: origin, label: "(current link)" }, ...o.linkTargets]
+        : o.linkTargets;
     linkSel = selectInput(
-      origin !== "" && o.linkTargets.some((t) => t.key === origin) ? origin : o.linkTargets[0].key,
-      o.linkTargets.map((t) => ({ value: t.key, label: t.label }))
+      origin !== "" ? origin : targets[0].key,
+      targets.map((t) => ({ value: t.key, label: t.label }))
     );
   }
 

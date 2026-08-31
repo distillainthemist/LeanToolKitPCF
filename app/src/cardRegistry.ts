@@ -1200,6 +1200,7 @@ const REGISTRY: Record<string, CardMounter> = {
       rescheduleReasons: config(opts).rescheduleReasons === true,
     });
     editor.setActor(opts.viewer);
+    editor.setLinkTargets(opts.sources.map((s) => ({ key: s.instanceId, label: s.label })));
     editor.setActions(opts.actions);
     return () => opts.host.replaceChildren();
   },

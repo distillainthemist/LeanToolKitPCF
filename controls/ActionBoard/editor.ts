@@ -85,6 +85,7 @@ export class ActionBoardEditor {
   private actions: LtkAction[] = [];
   private theme: Theme = defaultTheme();
   private people: Person[] = [];
+  private linkTargets: { key: string; label: string }[] = [];
   private cardTitle = "";
   private prompts: Prompts = { general: [], fields: {} };
   private lastPromptsRaw: string | null = null;
@@ -157,6 +158,12 @@ export class ActionBoardEditor {
     this.lastPromptsRaw = promptsRaw;
     this.prompts = parsePrompts(promptsRaw);
     this.render();
+  }
+
+  /** Board cards an action may be (re)linked to (Ben, 2026-08-31) —
+   *  handed to the raise/edit dialogs as the "Linked card" select. */
+  setLinkTargets(targets: { key: string; label: string }[]): void {
+    this.linkTargets = targets;
   }
 
   setActor(actor: { whoId: string; who: string }): void {
@@ -783,6 +790,7 @@ export class ActionBoardEditor {
       action,
       people: this.people,
       isNew: true,
+      linkTargets: this.linkTargets,
       onCommit: () => {
         this.actions.push(action);
         this.commit();
@@ -823,6 +831,8 @@ export class ActionBoardEditor {
       action,
       people: this.people,
       isNew: false,
+      linkTargets: this.linkTargets,
+      linkTarget: action.instanceId,
       onCommit: () => {
         if (this.rescheduleReasons && action.due !== prevDue && prevDue !== "") {
           // a due-date move on an initiative action is never silent
