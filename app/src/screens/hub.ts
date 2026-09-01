@@ -129,7 +129,18 @@ async function fetchHubData(viewer: {
         .map((b) => ({ boardId: b.boardId, settingsJSON: b.occurrenceSettingsRaw }))
     ),
     peopleRaw: JSON.stringify(
-      roster.map((p) => ({ whoId: p.whoId, who: p.who, crew: p.crew }))
+      // the viewer's SITE is the working circle (Ben, 2026-09-01): its
+      // people are the assignee chips, the rest of the org rides behind
+      // the dialog's "Search everyone…" (secondary). No site on the
+      // viewer = no scoping (everyone stays a chip).
+      roster.map((p) => ({
+        whoId: p.whoId,
+        who: p.who,
+        crew: p.crew,
+        ...((me?.site ?? "") !== "" && p.site !== me?.site && p.whoId !== viewerId
+          ? { secondary: true }
+          : {}),
+      }))
     ),
     orgRaw: org,
     // the one read that depends on another (the viewer's site)

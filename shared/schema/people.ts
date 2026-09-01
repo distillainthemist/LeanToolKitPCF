@@ -58,6 +58,7 @@ export function parsePeople(raw: string | null | undefined): Person[] {
             ? p.initials
             : initialsFor(who),
         colour: typeof p.colour === "string" ? p.colour : undefined,
+        ...(p.secondary === true ? { secondary: true } : {}),
         crew,
         secondary: p.secondary === true ? true : undefined,
       });
