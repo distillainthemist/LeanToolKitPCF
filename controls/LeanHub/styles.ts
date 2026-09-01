@@ -302,6 +302,8 @@ export const LEANHUB_CSS = `
   color: var(--ltk-muted);
   padding: 10px 2px 2px;
 }
+.ltk-lh-action-edit { cursor: pointer; }
+.ltk-lh-action-edit:hover { background: #f7f6f3; }
 .ltk-lh-action {
   display: flex;
   align-items: center;

@@ -16,8 +16,9 @@ import { LTK_BASE_CSS } from "../../shared/ui/baseCss";
 import { copyText } from "../../shared/ui/clipboard";
 import { clear, el, ensureStylesheet } from "../../shared/ui/dom";
 import { parsePrompts, Prompts, renderGhost, renderTitleBar } from "../../shared/ui/chrome";
-import { isOverdue, LtkAction, newAction } from "../../shared/schema/actions";
+import { pdcaOf, isOverdue, LtkAction, newAction } from "../../shared/schema/actions";
 import { Person } from "../../shared/schema/people";
+import { openActionDialog, pdcaDisc } from "../../shared/ui/actionUi";
 import { DAY_LABELS, MONTH_LABELS, isoLocal, startOfDay } from "../../shared/schema/recurrence";
 import { OrgSite } from "../../shared/schema/meeting";
 import {
@@ -929,12 +930,32 @@ export class LeanHubView {
       tick.checked = my.done;
       tick.title = "My part is done";
       tick.disabled = this.readOnly;
+      tick.addEventListener("click", (e) => e.stopPropagation());
       tick.addEventListener("change", () => {
         action.assignees[my.idx].done = tick.checked;
         this.cb.onActions(this.actions);
         this.render();
       });
       row.appendChild(tick);
+    }
+    // PDCA progression at a glance (Ben, 2026-09-01)
+    row.appendChild(pdcaDisc(pdcaOf(action), 15));
+    // the row edits in place — same dialog as the boards
+    if (!this.readOnly) {
+      row.classList.add("ltk-lh-action-edit");
+      row.title = "Edit action";
+      row.addEventListener("click", () => {
+        openActionDialog({
+          host: this.root,
+          action,
+          people: this.people,
+          isNew: false,
+          onCommit: () => {
+            this.cb.onActions(this.actions);
+            this.render();
+          },
+        });
+      });
     }
     const main = el("div", "ltk-lh-action-main");
     const title = el("div", "ltk-lh-action-issue", action.issue || action.description);
