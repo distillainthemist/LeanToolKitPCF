@@ -50,9 +50,15 @@ export function buildActionForm(
   // single assignee: chips act as a radio group when a people list is
   // supplied, one free-text name otherwise. People flagged `secondary`
   // (the wider roster behind a meeting's own participants) stay off the
-  // chip grid until found through the search box below it.
-  const primary = people.filter((p) => p.secondary !== true);
-  const secondary = people.filter((p) => p.secondary === true);
+  // chip grid until found through the search box below it. A large
+  // primary set is CAPPED (Ben, 2026-09-01: a 500-person site must not
+  // become a wall of chips) — the overflow joins the search, which
+  // covers everyone not already a chip. Hosts order `people` by
+  // closeness (self · crew · site …), so the cap keeps the near circle.
+  const CHIP_CAP = 20;
+  const allPrimary = people.filter((p) => p.secondary !== true);
+  const primary = allPrimary.slice(0, CHIP_CAP);
+  const secondary = [...allPrimary.slice(CHIP_CAP), ...people.filter((p) => p.secondary === true)];
   const whoWrap = people.length > 0 ? checklist() : el("div");
   const checks: { box: HTMLInputElement; wrap: HTMLElement; person: Person }[] = [];
   let freeWho: HTMLInputElement | null = null;

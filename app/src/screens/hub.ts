@@ -131,16 +131,26 @@ async function fetchHubData(viewer: {
     peopleRaw: JSON.stringify(
       // the viewer's SITE is the working circle (Ben, 2026-09-01): its
       // people are the assignee chips, the rest of the org rides behind
-      // the dialog's "Search everyone…" (secondary). No site on the
-      // viewer = no scoping (everyone stays a chip).
-      roster.map((p) => ({
-        whoId: p.whoId,
-        who: p.who,
-        crew: p.crew,
-        ...((me?.site ?? "") !== "" && p.site !== me?.site && p.whoId !== viewerId
-          ? { secondary: true }
-          : {}),
-      }))
+      // the dialog's "Search everyone…" (secondary). Ordered by
+      // closeness — self · my crew · my site (alpha) · everyone else —
+      // because the chip grid caps at 20 and keeps the FRONT of the
+      // list. No site on the viewer = no scoping.
+      [...roster]
+        .sort((a, b) => {
+          const rank = (p: typeof a) =>
+            p.whoId === viewerId ? 0 : p.site === me?.site && p.crew !== "" && p.crew === me?.crew ? 1 : p.site === me?.site ? 2 : 3;
+          const ra = rank(a);
+          const rb = rank(b);
+          return ra !== rb ? ra - rb : a.who.localeCompare(b.who);
+        })
+        .map((p) => ({
+          whoId: p.whoId,
+          who: p.who,
+          crew: p.crew,
+          ...((me?.site ?? "") !== "" && p.site !== me?.site && p.whoId !== viewerId
+            ? { secondary: true }
+            : {}),
+        }))
     ),
     orgRaw: org,
     // the one read that depends on another (the viewer's site)
