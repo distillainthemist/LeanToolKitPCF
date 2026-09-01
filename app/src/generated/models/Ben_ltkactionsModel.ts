@@ -29,6 +29,7 @@ export interface Ben_ltkactionsBase {
   ben_issue?: string;
   ben_ltkactionid: string;
   ben_name?: string;
+  ben_pdca?: string;
   ben_source?: string;
   ben_sourceid?: string;
   ben_start?: string;

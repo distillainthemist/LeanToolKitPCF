@@ -7,10 +7,11 @@ import { LTK_BASE_CSS } from "../../shared/ui/baseCss";
 import { clear, el, ensureStylesheet } from "../../shared/ui/dom";
 import { parsePrompts, Prompts, renderGhost, renderTitleBar } from "../../shared/ui/chrome";
 import { renderKebab } from "../../shared/ui/menu";
-import { actionRow, completeCircle, openActionDialog } from "../../shared/ui/actionUi";
+import {
+  pdcaDisc, actionRow, completeCircle, openActionDialog } from "../../shared/ui/actionUi";
 import { makeInteractive } from "../../shared/interact/drag";
 import { htmlToPng, htmlToSvg, saveSvg, SnapshotScheduler } from "../../shared/export/png";
-import { ActionStatus, isOverdue, LtkAction, newAction } from "../../shared/schema/actions";
+import { pdcaOf, ActionStatus, isOverdue, LtkAction, newAction } from "../../shared/schema/actions";
 import { Person } from "../../shared/schema/people";
 import { ACTIONBOARD_CSS } from "./styles";
 
@@ -316,6 +317,7 @@ export class ActionBoardEditor {
       list.appendChild(
         actionRow(a, {
           doneColor: this.doneColor(),
+          showPdca: true,
           showIssue: true,
           readOnly: this.readOnly,
           onChanged: () => this.commit(),
@@ -418,6 +420,7 @@ export class ActionBoardEditor {
     const head = el("div", "ltk-ab-card-head");
     const circle = completeCircle(a, this.doneColor(), () => this.commit(), this.readOnly);
     head.appendChild(circle);
+    head.appendChild(pdcaDisc(pdcaOf(a), 16));
     if (this.groupBy !== "issue" && a.issue.trim() !== "") {
       head.appendChild(el("div", "ltk-ab-card-issue", a.issue));
     }

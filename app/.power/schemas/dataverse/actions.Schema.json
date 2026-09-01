@@ -156,6 +156,14 @@
           "x-ms-dataverse-primary-name": true,
           "maxLength": 300
         },
+        "ben_pdca": {
+          "type": "string",
+          "title": "PDCA",
+          "x-ms-dataverse-attribute": "ben_pdca",
+          "x-ms-dataverse-type": "StringType",
+          "x-ms-schema-name": "ben_pdca",
+          "maxLength": 10
+        },
         "ben_source": {
           "type": "string",
           "title": "Source",

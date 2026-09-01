@@ -11,6 +11,39 @@ import { newId, todayIso } from "./id";
 // overdue purposes and as open work for the assignee's rollups.
 export type ActionStatus = "open" | "in-progress" | "verify" | "done" | "cancelled";
 
+/** The PDCA progression (Ben, 2026-08-31): a parallel axis to status —
+ *  where the work IS in the improvement cycle. Closed mirrors status
+ *  done/cancelled; new actions start at Do. */
+export type ActionPdca = "plan" | "do" | "check" | "act" | "closed";
+
+export const ACTION_PDCA: ActionPdca[] = ["plan", "do", "check", "act", "closed"];
+
+export const PDCA_LABELS: Record<ActionPdca, string> = {
+  plan: "Plan",
+  do: "Do",
+  check: "Check",
+  act: "Act",
+  closed: "Closed",
+};
+
+/** Quadrants filled for a state's four-quadrant disc (0–4, filling
+ *  top-left → bottom-left → bottom-right → top-right). */
+export const PDCA_QUARTERS: Record<ActionPdca, number> = {
+  plan: 0,
+  do: 1,
+  check: 2,
+  act: 3,
+  closed: 4,
+};
+
+/** The state to DISPLAY: a done/cancelled action is closed regardless of
+ *  what was stored; a stored "closed" on a live action falls back to Do
+ *  (the two are kept in step by the dialog, this covers older writes). */
+export function pdcaOf(a: { status: ActionStatus; pdca?: ActionPdca }): ActionPdca {
+  if (a.status === "done" || a.status === "cancelled") return "closed";
+  return a.pdca !== undefined && a.pdca !== "closed" ? a.pdca : "do";
+}
+
 export const ACTION_STATUSES: ActionStatus[] = [
   "open",
   "in-progress",
@@ -75,6 +108,8 @@ export interface LtkAction {
   start: string; // yyyy-mm-dd, "" = no start date (optional; used by Gantt)
   due: string; // yyyy-mm-dd, "" = no due date
   status: ActionStatus;
+  /** PDCA progression; absent on older rows (pdcaOf derives the display). */
+  pdca?: ActionPdca;
   comments: ActionComment[];
   escalated: boolean;
   /** Set when the receiving board acknowledges the escalation. */
@@ -98,6 +133,7 @@ export function newAction(context: ActionContext): LtkAction {
     start: "",
     due: "",
     status: "open",
+    pdca: "do",
     comments: [],
     escalated: false,
     context,
@@ -190,6 +226,7 @@ export function sanitizeAction(a: Partial<LtkAction>): LtkAction {
     start: typeof a.start === "string" ? a.start : "",
     due: typeof a.due === "string" ? a.due : "",
     status: isStatus(a.status) ? a.status : "open",
+    ...(ACTION_PDCA.includes(a.pdca as ActionPdca) ? { pdca: a.pdca as ActionPdca } : {}),
     comments,
     escalated: a.escalated === true,
     acknowledged,

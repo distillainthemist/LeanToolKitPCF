@@ -42,6 +42,17 @@ export const LTK_BASE_CSS = `
 .ltk-titlebar-text { font-size: 20px; font-weight: 600; line-height: 1.2; min-width: 0; }
 .ltk-titlebar-textwrap { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
 .ltk-titlebar-sub { font-size: 12.5px; font-weight: 400; opacity: 0.75; line-height: 1.25; }
+.ltk-pdca-disc { display: inline-block; flex: none; }
+.ltk-action-descline { display: flex; align-items: baseline; gap: 7px; }
+.ltk-action-descline .ltk-pdca-disc { align-self: center; }
+.ltk-pdca-seg { display: inline-flex; border: 1px solid #ddd; border-radius: 8px; overflow: hidden; width: fit-content; }
+.ltk-pdca-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  border: none; background: none; font: inherit; font-size: 12.5px;
+  padding: 8px 12px; cursor: pointer; color: #444;
+}
+.ltk-pdca-btn + .ltk-pdca-btn { border-left: 1px solid #ddd; }
+.ltk-pdca-on { background: var(--ltk-accent, #2563eb); color: #fff; font-weight: 600; }
 /* the right-hand slot: app extras (＋ Action) then the kebab, flowed */
 .ltk-titlebar-actions {
   margin-left: auto;

@@ -130,6 +130,9 @@ export const TABLES = [
       ben_verifiedat: { kind: "datetime", display: "Verified at" },
       ben_historyjson: { ...memo(20000), display: "History (JSON)" },
       ben_initiativeid: { ...text(40), display: "Initiative Id" },
+      // PDCA progression (Ben, 2026-08-31): plan|do|check|act|closed —
+      // closed mirrors status done; display = the four-quadrant disc
+      ben_pdca: { ...text(10), display: "PDCA" },
     },
     key: ["ben_actionid"],
   },

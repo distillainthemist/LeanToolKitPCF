@@ -73,7 +73,8 @@ model section) — the canvas/PCF sections there are historical.
   `ben_ltkcarddata` (per card per instance: output JSON + tile SVG).
   `ben_ltkcardcatalog` holds the card-type catalog and default tiles;
   `ben_ltkcardseries` supports series data; `ben_ltkaction` is the
-  actions register; `ben_ltkpeoples` is the app's user record (role:
+  actions register (ben_pdca carries the Plan/Do/Check/Act/Closed
+  progression, 2026-09-01 — closed mirrors status done); `ben_ltkpeoples` is the app's user record (role:
   user/siteadmin/superadmin, site, department — the site drives the
   DMS default filter); `ben_ltksitesettings` and `ben_ltkuserprefs`
   hold settings — the APP_ROW also carries `ben_improvementsettings`

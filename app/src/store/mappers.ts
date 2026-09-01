@@ -202,6 +202,7 @@ export function actionFromRow(row: Ben_ltkactions): LtkAction {
     start: (row.ben_start ?? "").slice(0, 10),
     due: (row.ben_due ?? "").slice(0, 10),
     status: (row.ben_status as LtkAction["status"]) ?? "open",
+    pdca: (row.ben_pdca as LtkAction["pdca"]) || undefined,
     comments: parseJsonOr(row.ben_commentsjson, []),
     escalated: row.ben_escalated === true,
     acknowledged: parseJsonOr(row.ben_acknowledgedjson, undefined),
@@ -246,6 +247,7 @@ export function actionToRow(
     ben_verifiedby: action.verified?.whoId ?? "",
     ben_verifiedat: action.verified?.when ?? undefined,
     ben_initiativeid: action.initiativeId ?? "",
+    ben_pdca: action.pdca ?? "",
   };
 }
 

@@ -7,7 +7,7 @@
 // actions are never hard-deleted (the danger button cancels); Done/Due/
 // Overdue are capitalised; circle colours are set inline (Safari rule).
 
-import { isOverdue, LtkAction, newAction } from "../schema/actions";
+import { ActionPdca, ACTION_PDCA, isOverdue, LtkAction, newAction, PDCA_LABELS, PDCA_QUARTERS, pdcaOf } from "../schema/actions";
 import { Person } from "../schema/people";
 import { textOn } from "../tokens";
 import { el } from "./dom";
@@ -199,6 +199,8 @@ export interface ActionRowOptions {
   doneColor: string;
   /** Show the issue as a small tag above the description (board views). */
   showIssue?: boolean;
+  /** Show the PDCA quadrant disc beside the description (action cards). */
+  showPdca?: boolean;
   readOnly?: boolean;
   /** Fired after the complete circle toggles (commit actions here). */
   onChanged: () => void;
@@ -212,6 +214,41 @@ export interface ActionRowOptions {
  * by the kanban / gantt board views so completing an action looks identical
  * everywhere.
  */
+/** The four-quadrant PDCA disc: quarters fill top-left → bottom-left →
+ *  bottom-right → top-right (plan 0 … closed 4). */
+export function pdcaDisc(state: ActionPdca, size = 16, fill = "#26241f"): SVGSVGElement {
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("width", String(size));
+  svg.setAttribute("height", String(size));
+  svg.setAttribute("viewBox", "-10 -10 20 20");
+  svg.classList.add("ltk-pdca-disc");
+  const r = 8.6;
+  const ring = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+  ring.setAttribute("r", String(r));
+  ring.style.fill = "none";
+  ring.style.stroke = fill;
+  ring.style.strokeWidth = "1.6";
+  svg.appendChild(ring);
+  // quadrant wedges, counter-clockwise from top-left
+  const QUADS: [number, number, number, number][] = [
+    [0, -r, -r, 0], // top-left
+    [-r, 0, 0, r], // bottom-left
+    [0, r, r, 0], // bottom-right
+    [r, 0, 0, -r], // top-right
+  ];
+  for (let i = 0; i < PDCA_QUARTERS[state]; i++) {
+    const [x1, y1, x2, y2] = QUADS[i];
+    const wedge = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    wedge.setAttribute("d", `M 0 0 L ${x1} ${y1} A ${r} ${r} 0 0 0 ${x2} ${y2} Z`);
+    wedge.style.fill = fill;
+    svg.appendChild(wedge);
+  }
+  const title = document.createElementNS("http://www.w3.org/2000/svg", "title");
+  title.textContent = PDCA_LABELS[state];
+  svg.appendChild(title);
+  return svg;
+}
+
 export function completeCircle(
   a: LtkAction,
   doneColor: string,
@@ -234,6 +271,7 @@ export function completeCircle(
       e.stopPropagation();
       const nowDone = a.status !== "done";
       a.status = nowDone ? "done" : "open";
+      a.pdca = nowDone ? "closed" : "do"; // the PDCA disc follows completion
       for (const x of a.assignees) x.done = nowDone;
       paint();
       onToggled();
@@ -269,7 +307,11 @@ export function actionRow(a: LtkAction, opts: ActionRowOptions): HTMLElement {
   if (opts.showIssue && a.issue.trim() !== "") {
     main.appendChild(el("div", "ltk-action-issue", a.issue));
   }
-  main.appendChild(descEl);
+  if (opts.showPdca) {
+    const line = el("div", "ltk-action-descline");
+    line.append(pdcaDisc(pdcaOf(a), 15), descEl);
+    main.appendChild(line);
+  } else main.appendChild(descEl);
 
   // right: who + date, prominent and right-aligned; the escalation flag
   // trails the date line
@@ -331,9 +373,26 @@ export function openActionDialog(o: ActionDialogOptions): void {
   escChk.wrap.classList.toggle("ltk-check-on", action.escalated);
 
   const wasDone = action.status === "done";
-  const doneChk = checkItem("Completed");
-  doneChk.box.checked = wasDone;
-  doneChk.wrap.classList.toggle("ltk-check-on", wasDone);
+  // PDCA toggle (Ben, 2026-08-31): five states, disc + label each —
+  // replaces the old Completed checkbox (Closed IS completion)
+  let pdca: ActionPdca = o.isNew ? (action.pdca ?? "do") : pdcaOf(action);
+  const pdcaWrap = el("div", "ltk-pdca-seg");
+  const pdcaBtns = new Map<ActionPdca, HTMLButtonElement>();
+  const paintPdca = () => {
+    for (const [k, b] of pdcaBtns) b.classList.toggle("ltk-pdca-on", k === pdca);
+  };
+  for (const state of ACTION_PDCA) {
+    const b = el("button", "ltk-pdca-btn") as HTMLButtonElement;
+    b.type = "button";
+    b.append(pdcaDisc(state, 18, "currentColor"), el("span", undefined, PDCA_LABELS[state]));
+    b.addEventListener("click", () => {
+      pdca = state;
+      paintPdca();
+    });
+    pdcaBtns.set(state, b);
+    pdcaWrap.appendChild(b);
+  }
+  paintPdca();
 
   // linked card: which card this action hangs off — re-linkable when the
   // host offers targets (the board's ＋ Action road)
@@ -356,11 +415,11 @@ export function openActionDialog(o: ActionDialogOptions): void {
   const save = () => {
     if (o.isNew && !form.hasContent() && issue.value.trim() === "") return;
     action.issue = issue.value.trim();
-    if (!o.isNew && doneChk.box.checked !== wasDone) {
-      // only flatten the status when the user actually toggled Completed —
-      // an untouched in-progress action keeps its status
-      action.status = doneChk.box.checked ? "done" : "open";
-    }
+    action.pdca = pdca;
+    // Closed IS completion; leaving Closed reopens. An untouched state
+    // keeps the status (verify / in-progress survive).
+    if (pdca === "closed" && !wasDone && action.status !== "cancelled") action.status = "done";
+    else if (pdca !== "closed" && wasDone) action.status = "open";
     action.escalated = escChk.box.checked;
     form.apply(action); // after status, so assignee done flags match
     if (linkSel !== null) {
@@ -404,7 +463,8 @@ export function openActionDialog(o: ActionDialogOptions): void {
   dlg.body.appendChild(fieldRow("Issue", issue));
   if (linkSel !== null) dlg.body.appendChild(fieldRow("Linked card", linkSel));
   dlg.body.appendChild(form.el);
-  if (!o.isNew) dlg.body.appendChild(doneChk.wrap);
+  dlg.body.appendChild(sectionLabel("PDCA state"));
+  dlg.body.appendChild(pdcaWrap);
   dlg.body.appendChild(escChk.wrap);
   form.focus();
 }
