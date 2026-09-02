@@ -537,7 +537,7 @@ export function mountInitiativePane(o: InitiativePaneOpts): InitiativePaneHandle
       foot.append(cancel, save);
       box.appendChild(foot);
       scrim.appendChild(box);
-      pane.appendChild(scrim);
+      document.body.appendChild(scrim);
     };
 
     // ---- health check (§2.4; questions from Settings → Improvement) --------------
@@ -595,7 +595,7 @@ export function mountInitiativePane(o: InitiativePaneOpts): InitiativePaneHandle
       foot.append(cancel, save);
       box.appendChild(foot);
       scrim.appendChild(box);
-      pane.appendChild(scrim);
+      document.body.appendChild(scrim);
     };
 
     // ---- ⋮ + escalation (notify via the docs road) -------------------------------
@@ -614,7 +614,7 @@ export function mountInitiativePane(o: InitiativePaneOpts): InitiativePaneHandle
       item("Edit details…", () => {
         void import("./editDetails").then(({ openEditDetails }) => {
           openEditDetails({
-            host: pane,
+            host: document.body,
             initiative: i,
             actor: actor(),
             onSaved: () => window.location.reload(),
@@ -721,7 +721,7 @@ export function mountInitiativePane(o: InitiativePaneOpts): InitiativePaneHandle
         .map((p) => ({ name: p.who, email: emailOf(p.whoId) }))
         .filter((p) => p.email !== "");
       openEscalateDialog({
-        host: pane,
+        host: document.body,
         initiativeTitle: i.title,
         orgLine: `${actor().who} escalated "${i.title}" (${i.org.site}${i.org.department ? " · " + i.org.department : ""})`,
         recipients: sponsors,
