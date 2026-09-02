@@ -665,13 +665,16 @@ reschedule/cancel history with a reason picklist.
   driverLink (drives|leads, JSON — no schema); "⛓ Link to a value
   driver" on the create form + Edit details metric rows opens the picker
   (`vdt/linkPicker.ts`: full-path search; Drives only for a LEAF with a
-  matching unit, else Leads). NEXT: P9e — linked KPI cards read/write the
-  driver's series at its cadence; template Metrics step "requires a
-  driver link"; `· VDT` on the board's metric card.
-  hub tab Read/Edit values → P9d Simulate/scenarios/Adopt (adopt writes
-  LEAF forecasts; assumed effects last, dashed) → P9e metric link road
-  (unit match required for "drives"; templates only REQUIRE a link, the
-  initiative chooses; linked KPI cards inherit the driver's cadence).
+  matching unit, else Leads). **P9e BUILT 2026-09-02**: a KPI card on an init- board whose metric
+  DRIVES a driver reads/writes the driver's ONE series (cardRegistry
+  KpiTrendCard: series location swaps to vdt/<driverId>, points keyed
+  by date via the model's adapters, window follows the driver's cadence,
+  chrome "Title · VDT" + "Monthly · from value driver X"); template
+  Metrics step gains a VDT "require link" tick (TemplateMetric.
+  requireDriver → validateNewInitiative blocks an unlinked initiative);
+  `· VDT` on the Improvement register's metric cell. **P9 COMPLETE** —
+  next release SOLUTION-CARRYING (ben_ltkvaluedriver incl.
+  ben_sourceurl, ben_ltkvdtscenario, ben_pdca).
 - **P10 Reporting** — designed (spec §4).
 
 Each phase ships behind the usual gates + `pac code push`; the specs'
