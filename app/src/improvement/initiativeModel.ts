@@ -6,7 +6,7 @@
 // primary, field values, metrics, the pending gate, stage target dates.
 // History lives in ben_ltkinitiativeevent. Everything here is pure.
 
-import type { InitiativeTemplate, RolePerson, TemplateMetric, TemplateStage, Gate } from "./templateModel";
+import type { MetricRule, InitiativeTemplate, RolePerson, TemplateMetric, TemplateStage, Gate } from "./templateModel";
 
 export type InitiativeStatus = "active" | "completed" | "archived";
 export type FlagLevel = "" | "flag" | "escalated";
@@ -277,13 +277,23 @@ export function parsePendingGate(raw: string): PendingGate | null {
 }
 
 /** What blocks creating an initiative from a header form. */
-export function validateNewInitiative(i: Pick<Initiative, "title" | "org" | "metrics" | "singleAction" | "roles">): string[] {
+export function validateNewInitiative(
+  i: Pick<Initiative, "title" | "org" | "metrics" | "singleAction" | "roles">,
+  metricRule: MetricRule = "none"
+): string[] {
   const errs: string[] = [];
   if (i.title.trim() === "") errs.push("A title is needed.");
   if (i.org.site === "" && i.org.company === "") errs.push("Pick the org this initiative belongs to.");
   if (!(i.roles.owner ?? []).length) errs.push("An owner is needed.");
   for (const m of i.metrics) if (m.tracking === "value" && m.target === null) errs.push(`Metric "${m.name}" needs a target.`);
-  for (const m of i.metrics) if (m.requireDriver === true && !m.driverId) errs.push(`Metric "${m.name}" must be linked to a value driver.`);
+  for (const m of i.metrics) if (m.name.trim() === "") errs.push("A metric needs a name.");
+  if (!i.singleAction) {
+    if (metricRule !== "none" && i.metrics.length === 0) errs.push("This template asks for at least one metric.");
+    if (metricRule === "fromTree") {
+      for (const m of i.metrics) if (!m.driverId) errs.push(`Metric "${m.name}" must come from the value driver tree (this template's rule).`);
+    }
+  }
+  if (i.metrics.length > 1 && i.metrics.filter((m) => m.primary === true).length !== 1) errs.push("Star one metric as the primary.");
   return errs;
 }
 

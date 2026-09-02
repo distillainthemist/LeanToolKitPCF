@@ -24,7 +24,7 @@ import { cardLabel } from "../../../controls/CardSettings/registry";
 import { createWizardShell } from "./wizardShell";
 import { pickOwner } from "../priorities/dialogs";
 import { parseOrgTree } from "../../../shared/schema/meeting";
-import {
+import { METRIC_RULE_LABELS, MetricRule,
   FieldKind,
   HealthQuestion,
   Gate,
@@ -548,87 +548,36 @@ export function mountTemplateWizard(parent: HTMLElement, templateId: string): ()
       form.appendChild(row("Custom header field", adder, "Extra fields on the initiative header beyond title, org, priorities, roles and period. The charter can bind them."));
     };
 
-    // ---- step 5: Metrics --------------------------------------------------------------
+    // ---- step 5: Metrics — the RULE only (rework 2026-09-03: metrics live on
+    // the initiative — picked from the value driver tree or proposed there)
     const metrics = (form: HTMLElement) => {
       if (t.singleAction) {
         form.appendChild(el("div", "app-board-note", "Single-action templates carry no metrics."));
         return;
       }
-      const DIRS: { value: GoodDirection; label: string }[] = [
-        { value: "up", label: "Higher is better" },
-        { value: "down", label: "Lower is better" },
-        { value: "range", label: "Within limits" },
-      ];
-      const TRACK: { value: Tracking; label: string }[] = [
-        { value: "value", label: "Value vs target" },
-        { value: "goodbad", label: "Good / bad" },
-        { value: "picklist", label: "Status picklist" },
-      ];
-      const list = el("div", "app-tw-table");
-      const head = el("div", "app-tw-tr app-tw-th app-tw-tr-metrics");
-      head.append(el("span", undefined, "Metric"), el("span", undefined, "Unit"), el("span", undefined, "Target"), el("span", undefined, "Good"), el("span", undefined, "Tracking"), el("span", undefined, "Link"), el("span", undefined, ""));
-      list.appendChild(head);
-      t.metrics.forEach((m, i) => {
-        const tr = el("div", "app-tw-tr app-tw-tr-metrics");
-        tr.appendChild(textInput(m.name, (v) => {
-          m.name = v || m.name;
-          mark();
-        }));
-        tr.appendChild(textInput(m.unit, (v) => {
-          m.unit = v;
-          mark();
-        }, "%, $, mins"));
-        tr.appendChild(textInput(m.target === null ? "" : String(m.target), (v) => {
-          const n = Number(v);
-          m.target = v === "" || !Number.isFinite(n) ? null : n;
-          mark();
-        }, "—", "number"));
-        tr.appendChild(selectInput(m.goodDirection, DIRS, (v) => {
-          m.goodDirection = v as GoodDirection;
-          mark();
-        }));
-        tr.appendChild(selectInput(m.tracking, TRACK, (v) => {
-          m.tracking = v as Tracking;
-          mark();
-        }));
-        // P9e: the template can REQUIRE a value-driver link; the link itself
-        // is chosen per initiative (trees are per site)
-        const req = el("label", "app-tw-req") as HTMLLabelElement;
-        const reqCb = el("input") as HTMLInputElement;
-        reqCb.type = "checkbox";
-        reqCb.checked = m.requireDriver === true;
-        reqCb.title = "Initiatives must link this metric to a value driver";
-        reqCb.addEventListener("change", () => {
-          if (reqCb.checked) m.requireDriver = true;
-          else delete m.requireDriver;
-          mark();
-        });
-        req.append(reqCb, el("span", undefined, "VDT"));
-        tr.appendChild(req);
-        const x = btn("×", "ltk-mw-chip-x");
-        x.addEventListener("click", () => {
-          t.metrics.splice(i, 1);
+      form.appendChild(
+        el("div", "app-settings-note", "Metrics are chosen per initiative — from the site's value driver tree, or proposed as initiative-specific and linked into the tree later. The template only sets the rule.")
+      );
+      const rules: MetricRule[] = ["none", "atLeastOne", "fromTree"];
+      const wrapR = el("div", "app-tw-rules");
+      for (const r of rules) {
+        const lab = el("label", "app-tw-rule" + (t.metricRule === r ? " app-tw-rule-on" : "")) as HTMLLabelElement;
+        const rb = el("input") as HTMLInputElement;
+        rb.type = "radio";
+        rb.name = "metricRule";
+        rb.checked = t.metricRule === r;
+        rb.addEventListener("change", () => {
+          t.metricRule = r;
           mark();
           shell.refresh();
         });
-        tr.appendChild(x);
-        list.appendChild(tr);
-      });
-      form.appendChild(list);
-      const adder = el("div", "app-tw-inline");
-      const input = textInput("", () => undefined, "e.g. OEE");
-      const add = btn("＋ Add metric", "ltk-mw-btn");
-      add.addEventListener("click", () => {
-        const v = input.value.trim();
-        if (v === "") return;
-        t.metrics.push({ key: keyFor(v, t.metrics.map((x) => x.key)), name: v, unit: "", target: null, goodDirection: "up", tracking: "value" });
-        input.value = "";
-        mark();
-        shell.refresh();
-      });
-      adder.append(input, add);
-      form.appendChild(row("Mandatory metric", adder, "Every initiative on this template carries these; owners add their own on top. Each needs a target before save. VDT links come with the value driver tree."));
-      form.appendChild(amberNote());
+        lab.append(rb, el("span", undefined, METRIC_RULE_LABELS[r]));
+        wrapR.appendChild(lab);
+      }
+      form.appendChild(wrapR);
+      if (t.metrics.length > 0) {
+        form.appendChild(el("div", "ltk-mw-help", `This template's older metric list (${t.metrics.map((m) => m.name).join(", ")}) no longer seeds initiatives.`));
+      }
     };
 
     // ---- step 6: Initiative board — INLINE designer, the meeting wizard's
@@ -764,7 +713,7 @@ export function mountTemplateWizard(parent: HTMLElement, templateId: string): ()
       if (!t.singleAction) {
         const gatedCount = t.stages.filter((s) => s.gate.enabled).length + (t.completeGate.enabled ? 1 : 0);
         add("Stages", `${t.stages.length} · ${gatedCount} gated — ` + stepperChips(t).map((c) => `${c.gated ? "⚑ " : ""}${c.label}`).join(" › "), "stages");
-        add("Mandatory metrics", t.metrics.length === 0 ? "none" : t.metrics.map((m) => `${m.name}${m.unit ? ` (${m.unit})` : ""}${m.target !== null ? ` → ${m.target}` : ""}`).join(" · "), "metrics");
+        add("Metrics rule", METRIC_RULE_LABELS[t.metricRule], "metrics");
       }
       add("Roles", t.roles.map((r) => r.label + (r.multi ? " (several)" : "")).join(" · "), "roles");
       add("Fields", t.fields.length === 0 ? "none" : t.fields.map((f) => `${f.label} (${f.kind}${f.required ? ", required" : ""})`).join(" · "), "fields");
@@ -785,7 +734,7 @@ export function mountTemplateWizard(parent: HTMLElement, templateId: string): ()
         { key: "roles", label: "Roles", description: "Who holds what on an initiative — the gates in the next step pick their approvers from here.", render: roles },
         { key: "stages", label: "Stages & gates", description: "The path an initiative walks, and who signs off at each boundary.", render: stages },
         { key: "fields", label: "Fields", description: "Extra header fields the initiative carries.", render: fields },
-        { key: "metrics", label: "Metrics", description: "Metrics every initiative on this template must track.", render: metrics },
+        { key: "metrics", label: "Metrics", description: "What the template asks of an initiative's metrics.", render: metrics },
         { key: "board", label: "Initiative board", description: "The cards an initiative starts with, tagged by stage.", render: boardStep },
         { key: "review", label: "Review", description: "Check, then save.", render: review },
       ],
@@ -1238,7 +1187,7 @@ export async function renderImprovementSettings(body: HTMLElement, isSuper: bool
       el(
         "div",
         "app-settings-note",
-        [t.singleAction ? "no stages" : `${t.stages.length} stages`, `${t.roles.length} roles`, `${t.metrics.length} mandatory metrics`, t.boardId !== "" ? "board laid out" : "no board yet", t.company ? t.company : "all companies", "0 initiatives use this"].join(" · ")
+        [t.singleAction ? "no stages" : `${t.stages.length} stages`, `${t.roles.length} roles`, METRIC_RULE_LABELS[t.metricRule].split(" — ")[0].toLowerCase(), t.boardId !== "" ? "board laid out" : "no board yet", t.company ? t.company : "all companies", "0 initiatives use this"].join(" · ")
       )
     );
     list.appendChild(card);

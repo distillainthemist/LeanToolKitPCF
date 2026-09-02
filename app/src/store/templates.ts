@@ -7,7 +7,7 @@ import type { Ben_ltkinitiativetemplates } from "../generated/models/Ben_ltkinit
 import { Ben_ltkboardsService } from "../generated/services/Ben_ltkboardsService";
 import { allWhere, eq, upsertWhere } from "./dv";
 import { getBoard } from "./boards";
-import {
+import { parseTemplateMetricsBlob,
   InitiativeTemplate,
   parseFields,
   parseMetrics,
@@ -32,7 +32,8 @@ function fromRow(r: Ben_ltkinitiativetemplates): InitiativeTemplate {
     completeGate: st.completeGate,
     roles: parseRoles(r.ben_rolesjson ?? ""),
     fields: parseFields(r.ben_fieldsjson ?? ""),
-    metrics: parseMetrics(r.ben_metricsjson ?? ""),
+    metrics: parseTemplateMetricsBlob(r.ben_metricsjson ?? "").metrics,
+    metricRule: parseTemplateMetricsBlob(r.ben_metricsjson ?? "").rule,
     boardId: r.ben_boardid ?? "",
   };
 }
@@ -64,7 +65,7 @@ export async function saveTemplate(t: InitiativeTemplate): Promise<string> {
       ben_stagesjson: serializeStages(t.stages, t.completeGate),
       ben_rolesjson: JSON.stringify(t.roles),
       ben_fieldsjson: JSON.stringify(t.fields),
-      ben_metricsjson: JSON.stringify(t.metrics),
+      ben_metricsjson: JSON.stringify({ rule: t.metricRule, metrics: [] }),
       ben_boardid: t.boardId,
     }
   );

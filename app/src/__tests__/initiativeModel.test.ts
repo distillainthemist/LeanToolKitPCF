@@ -1,3 +1,4 @@
+import { normalizeMetrics, primaryMetric } from "../improvement/templateModel";
 import { describe, expect, it } from "vitest";
 import {
   canSee,
@@ -132,5 +133,16 @@ describe("metric-value RAG (P6c)", () => {
     expect(m.metricRag({ ...base, target: null })).toBeNull();
     expect(m.worstMetricRag(["green", null, "amber"])).toBe("amber");
     expect(m.worstMetricRag([null])).toBeNull();
+  });
+});
+
+describe("metric rework (2026-09-03): ★ primary + template rule", () => {
+  const m = (name: string, over: Record<string, unknown> = {}) => ({ key: name, name, unit: "", target: 1, goodDirection: "up" as const, tracking: "value" as const, ...over });
+  it("normalizeMetrics keeps one ★ and infers kinds", () => {
+    const out = normalizeMetrics([m("a"), m("b", { primary: true, driverId: "d1" })]);
+    expect(out.map((x) => x.primary === true)).toEqual([false, true]);
+    expect(out.map((x) => x.kind)).toEqual(["own", "driver"]);
+    expect(primaryMetric(out)?.name).toBe("b");
+    expect(normalizeMetrics([m("a"), m("b")])[0].primary).toBe(true);
   });
 });

@@ -3697,3 +3697,6 @@ textarea.app-cp-statement { font-size: 14px; font-weight: 500; }
 .app-vd-simline { font-weight: 700; font-size: 13px; }
 .app-vd-simacts { display: flex; gap: 8px; flex-wrap: wrap; }
 @media (max-width: 900px) { .app-vd-simsplit { grid-template-columns: 1fr; } .app-vd-simpanel { position: static; } }
+.app-tw-rules { display: flex; flex-direction: column; gap: 8px; }
+.app-tw-rule { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid #e4dfd6; border-radius: 10px; background: #fff; cursor: pointer; font-size: 13.5px; }
+.app-tw-rule-on { border-color: var(--app-accent); }

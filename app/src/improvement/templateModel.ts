@@ -57,6 +57,18 @@ export interface TemplateField {
 export type GoodDirection = "up" | "down" | "range";
 export type Tracking = "value" | "goodbad" | "picklist";
 
+/** Metrics live on the INITIATIVE (rework 2026-09-03): a "driver" metric
+ *  IS a value driver (name/unit/cadence inherited, KPI card on the
+ *  driver's series); an "own" metric is initiative-specific (private
+ *  series) until linked or promoted into the tree. One is ★ primary. */
+export type MetricKind = "driver" | "own";
+export type MetricRule = "none" | "atLeastOne" | "fromTree";
+export const METRIC_RULE_LABELS: Record<MetricRule, string> = {
+  none: "No rule — an initiative may have no metric",
+  atLeastOne: "At least one metric",
+  fromTree: "Metrics must come from the value driver tree",
+};
+
 export interface TemplateMetric {
   key: string;
   name: string;
@@ -64,6 +76,8 @@ export interface TemplateMetric {
   target: number | null;
   goodDirection: GoodDirection;
   tracking: Tracking;
+  kind?: MetricKind;
+  primary?: boolean;
   /** Value driver link (P9d): the driver id and whether the metric DRIVES
    *  the leaf (formula, units match) or LEADS it (judgement, dashed). */
   driverId?: string;
@@ -89,7 +103,11 @@ export interface InitiativeTemplate {
   completeGate: Gate;
   roles: TemplateRole[];
   fields: TemplateField[];
+  /** Legacy — templates no longer define metrics (rework 2026-09-03);
+   *  kept parsed so old rows still read, never seeded. */
   metrics: TemplateMetric[];
+  /** What the template asks of an initiative's metrics. */
+  metricRule: MetricRule;
   /** The template board's boardId ("" until the Cards step creates it). */
   boardId: string;
 }
@@ -282,6 +300,7 @@ export function newTemplate(id: string): InitiativeTemplate {
     roles: STANDARD_ROLES.map((r) => ({ ...r })),
     fields: [],
     metrics: [],
+    metricRule: "none",
     boardId: "",
   };
 }
@@ -377,6 +396,8 @@ export function parseMetrics(raw: string): TemplateMetric[] {
         tracking: (["value", "goodbad", "picklist"].includes(str(x.tracking)) ? str(x.tracking) : "value") as Tracking,
         ...(str(x.driverId) !== "" ? { driverId: str(x.driverId), driverLink: (x.driverLink === "leads" ? "leads" : "drives") as "drives" | "leads" } : {}),
         ...(x.requireDriver === true ? { requireDriver: true } : {}),
+        ...(x.kind === "driver" || x.kind === "own" ? { kind: x.kind as MetricKind } : {}),
+        ...(x.primary === true ? { primary: true } : {}),
       }))
       .filter((m) => m.key !== "" && m.name !== "");
   } catch {
@@ -465,4 +486,34 @@ export function withSlotFlags(settings: Record<string, unknown>, flags: SlotTemp
   if (flags.stage === "" && !flags.mandatory) delete next.template;
   else next.template = { stage: flags.stage, mandatory: flags.mandatory };
   return next;
+}
+
+/** The template's metrics column holds EITHER the legacy array OR
+ *  {rule, metrics}; read both, write the object. */
+export function parseTemplateMetricsBlob(raw: string): { rule: MetricRule; metrics: TemplateMetric[] } {
+  try {
+    const o = JSON.parse(raw || "[]") as unknown;
+    if (Array.isArray(o)) return { rule: "none", metrics: parseMetrics(raw) };
+    const r = (o ?? {}) as { rule?: unknown; metrics?: unknown };
+    const rule: MetricRule = r.rule === "atLeastOne" || r.rule === "fromTree" ? r.rule : "none";
+    return { rule, metrics: parseMetrics(JSON.stringify(Array.isArray(r.metrics) ? r.metrics : [])) };
+  } catch {
+    return { rule: "none", metrics: [] };
+  }
+}
+
+/** Exactly one ★ primary: keep the flagged one, else the first; kinds
+ *  default from the link (linked = driver, else own). Pure. */
+export function normalizeMetrics(metrics: TemplateMetric[]): TemplateMetric[] {
+  const out = metrics.map((m) => ({ ...m, kind: m.kind ?? (m.driverId ? "driver" : "own") }));
+  const star = out.findIndex((m) => m.primary === true);
+  out.forEach((m, i) => {
+    if (i === (star >= 0 ? star : 0)) m.primary = true;
+    else delete m.primary;
+  });
+  return out;
+}
+
+export function primaryMetric(metrics: TemplateMetric[]): TemplateMetric | null {
+  return metrics.find((m) => m.primary === true) ?? metrics[0] ?? null;
 }
