@@ -389,6 +389,60 @@ export const TABLES = [
     // un-+1 is a delete of your own watch row
     role: { delete: true },
   },
+  // ---- Value driver tree (P9a, 2026-09-01; design spec §3 + review) ----
+  {
+    // One row per node. Structure is period-free; VALUES are dated —
+    // valuesjson = {period: {baseline, plan, forecast, actual}}; the
+    // value-change log rides historyjson (capped, newest first). Leading
+    // nodes (kind=leading) hang off a driver with a dashed edge and
+    // never enter a formula. Formulas reference children as {id}.
+    schema: "ben_LTKValueDriver",
+    logical: "ben_ltkvaluedriver",
+    display: "LTK Value Driver",
+    plural: "LTK Value Drivers",
+    primaryNameMax: 200,
+    columns: {
+      ben_driverid: { ...text(40), display: "Driver Id", required: true },
+      ben_site: { ...text(100), display: "Site" },
+      ben_parentid: { ...text(40), display: "Parent Id" }, // "" = root
+      ben_definition: { ...memo(2000), display: "Definition" },
+      ben_unit: { ...text(40), display: "Unit" },
+      ben_source: { ...text(200), display: "Source (in words)" },
+      ben_kind: { ...text(10), display: "Kind (driver|leading)" },
+      ben_formula: { ...memo(2000), display: "Formula" },
+      ben_cadence: { ...text(10), display: "Cadence" },
+      ben_aggregate: { ...text(10), display: "Aggregate" },
+      ben_valuesource: { ...text(10), display: "Value source (manual|metric)" },
+      ben_formatjson: { ...text(200), display: "Format (JSON)" },
+      ben_order: { kind: "int", min: 0, max: 100000, display: "Order" },
+      ben_valuesjson: { ...memo(100000), display: "Values (JSON)" },
+      ben_historyjson: { ...memo(50000), display: "Value history (JSON)" },
+    },
+    key: ["ben_driverid"],
+    role: { delete: true },
+  },
+  {
+    // A saved what-if: toggles + deltas per driven initiative, assumed
+    // effects (judgement, drawn dashed) per driver. Adopt-as-forecast
+    // writes LEAF forecasts on the driver rows, never here.
+    schema: "ben_LTKVdtScenario",
+    logical: "ben_ltkvdtscenario",
+    display: "LTK VDT Scenario",
+    plural: "LTK VDT Scenarios",
+    primaryNameMax: 200,
+    columns: {
+      ben_scenarioid: { ...text(40), display: "Scenario Id", required: true },
+      ben_site: { ...text(100), display: "Site" },
+      ben_period: { ...text(40), display: "Period" },
+      ben_authorid: { ...text(80), display: "Author (whoId)" },
+      ben_author: { ...text(120), display: "Author" },
+      ben_at: { kind: "datetime", display: "Saved at" },
+      ben_togglesjson: { ...memo(20000), display: "Toggles (JSON)" },
+      ben_assumedjson: { ...memo(10000), display: "Assumed effects (JSON)" },
+    },
+    key: ["ben_scenarioid"],
+    role: { delete: true },
+  },
   // ---- Cascaded priorities (P0, 2026-08-19; plan:
   //      docs/leanboard-cascade-improvement-plan.md) --------------------
   {
