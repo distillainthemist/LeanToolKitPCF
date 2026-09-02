@@ -125,6 +125,14 @@
           "x-ms-schema-name": "ben_source",
           "maxLength": 200
         },
+        "ben_sourceurl": {
+          "type": "string",
+          "title": "Source link",
+          "x-ms-dataverse-attribute": "ben_sourceurl",
+          "x-ms-dataverse-type": "StringType",
+          "x-ms-schema-name": "ben_sourceurl",
+          "maxLength": 1000
+        },
         "ben_unit": {
           "type": "string",
           "title": "Unit",
