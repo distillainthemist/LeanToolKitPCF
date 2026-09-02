@@ -34,7 +34,7 @@ function nodeFromRow(r: Ben_ltkvaluedrivers): DriverNode {
     formula: r.ben_formula ?? "",
     cadence,
     aggregate,
-    valueSource: r.ben_valuesource === "metric" ? "metric" : "manual",
+    sourceUrl: "", // wired after the column regen (below)
     format: parseFormat(r.ben_formatjson ?? ""),
     order: typeof r.ben_order === "number" ? r.ben_order : 0,
     values: parseValues(r.ben_valuesjson ?? ""),
@@ -64,7 +64,6 @@ export async function saveDriver(n: DriverNode): Promise<string> {
       ben_formula: n.formula,
       ben_cadence: n.cadence,
       ben_aggregate: n.aggregate,
-      ben_valuesource: n.valueSource,
       ben_formatjson: JSON.stringify(n.format),
       ben_order: n.order,
       ben_valuesjson: JSON.stringify(n.values),

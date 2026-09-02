@@ -76,7 +76,17 @@ export function renderTree(nodes0: DriverNode[], opts0: TreeOpts): TreeHandle {
       c.appendChild(el("div", "app-vd-meta", bits.join(" · ")));
     }
     if (!root && !leaf && n.formula.trim() !== "") c.appendChild(el("div", "app-vd-formula", formulaInWords(n.formula, nodes)));
-    if (leaf && n.kind !== "leading" && n.source !== "") c.appendChild(el("div", "app-vd-source", n.source));
+    if (n.source !== "" || n.sourceUrl !== "") {
+      if (n.sourceUrl !== "") {
+        const a = el("a", "app-vd-source app-vd-sourcelink", n.source || "source ↗") as HTMLAnchorElement;
+        a.href = n.sourceUrl;
+        a.target = "_blank";
+        a.rel = "noopener";
+        a.title = n.sourceUrl;
+        a.addEventListener("click", (e) => e.stopPropagation());
+        c.appendChild(a);
+      } else c.appendChild(el("div", "app-vd-source", n.source));
+    }
     const count = opts.initiativeCounts?.get(n.id) ?? 0;
     if (count > 0) c.appendChild(el("span", "app-vd-count", `${count} initiative${count === 1 ? "" : "s"}`));
     if (kids.length > 0) {

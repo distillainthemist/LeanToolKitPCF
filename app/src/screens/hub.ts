@@ -295,10 +295,17 @@ export function mountHub(parent: HTMLElement): () => void {
         cleanups.push(mountImprovement(tabHost, { embedded: true }));
       });
     };
+    // the value driver tree's values / simulation (P9c) — same lazy road
+    const mountDriversTab = (tabHost: HTMLElement) => {
+      void import("../improvement/vdt/valuesTab").then(({ mountValueDrivers }) => {
+        cleanups.push(mountValueDrivers(tabHost));
+      });
+    };
     const extraTabs = (docsCount: number) => [
       { key: "documents", label: "Documents", count: docsCount },
       { key: "priorities", label: "Priorities" },
       { key: "improvement", label: "Improvement" },
+      { key: "drivers", label: "Value drivers" },
     ];
     const mountDocsTab = (key: string, tabHost: HTMLElement) => {
       if (key === "priorities") {
@@ -307,6 +314,10 @@ export function mountHub(parent: HTMLElement): () => void {
       }
       if (key === "improvement") {
         mountImprovementTab(tabHost);
+        return;
+      }
+      if (key === "drivers") {
+        mountDriversTab(tabHost);
         return;
       }
       void import("../docs/docsScreen").then(({ mountDocs }) => {

@@ -28,7 +28,7 @@ import {
   rollupWords,
   strategyChips,
   tally,
- groupPrioritiesForPicker } from "../priorities/model";
+ groupPrioritiesForPicker , prevPeriod , periodWindow } from "../priorities/model";
 
 const co = orgRef("Pechey");
 const site = orgRef("Pechey", "Bendigo");
@@ -350,5 +350,21 @@ describe("groupPrioritiesForPicker (link picker shape)", () => {
     const at = { company: "Co", site: "Mine", department: "", area: "" };
     const groups = groupPrioritiesForPicker([P("other site", "Co", "Refinery")], at);
     expect(groups).toEqual([]);
+  });
+});
+
+describe("period pager helpers (value drivers)", () => {
+  const fy = { mode: "fy" as const, startMonth: 7, prefix: "FY", currentPeriod: "" };
+  const cal = { mode: "calendar" as const, startMonth: 1, prefix: "", currentPeriod: "" };
+  it("prevPeriod steps back and stops at zero", () => {
+    expect(prevPeriod(fy, "FY26")).toBe("FY25");
+    expect(prevPeriod(cal, "2026")).toBe("2025");
+    expect(prevPeriod({ ...fy, mode: "custom" as const }, "H1")).toBe("");
+  });
+  it("periodWindow spans the FY (Jul→Jun) and the calendar year", () => {
+    expect(periodWindow(fy, "FY26")).toEqual({ from: "2025-07-01", to: "2026-06-30" });
+    expect(periodWindow(cal, "2026")).toEqual({ from: "2026-01-01", to: "2026-12-31" });
+    expect(periodWindow({ ...fy, startMonth: 4 }, "FY26")).toEqual({ from: "2025-04-01", to: "2026-03-31" });
+    expect(periodWindow({ ...fy, mode: "custom" as const }, "H1")).toBeNull();
   });
 });

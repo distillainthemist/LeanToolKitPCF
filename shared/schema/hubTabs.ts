@@ -15,6 +15,7 @@ export const HUB_TABS: HubTabDef[] = [
   { key: "calendar", label: "Cadence" },
   { key: "priorities", label: "Priorities" },
   { key: "improvement", label: "Improvement" },
+  { key: "drivers", label: "Value drivers" },
   { key: "actions", label: "Actions" },
   { key: "documents", label: "Documents" },
 ];

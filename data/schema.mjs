@@ -408,6 +408,7 @@ export const TABLES = [
       ben_definition: { ...memo(2000), display: "Definition" },
       ben_unit: { ...text(40), display: "Unit" },
       ben_source: { ...text(200), display: "Source (in words)" },
+      ben_sourceurl: { ...text(1000), display: "Source link" },
       ben_kind: { ...text(10), display: "Kind (driver|leading)" },
       ben_formula: { ...memo(2000), display: "Formula" },
       ben_cadence: { ...text(10), display: "Cadence" },

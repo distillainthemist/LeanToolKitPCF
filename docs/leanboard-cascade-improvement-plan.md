@@ -635,6 +635,22 @@ reschedule/cancel history with a reason picklist.
   NAMES with an autocomplete popover, stored as {id}, chip line +
   "= value ✓ resolves · children n of m used · unit" + error/warn
   sentences; Save blocks on errors; add beneath / ▲▼ / Remove subtree).
+  **Actuals model amended 2026-09-02 (Ben)**: no "actuals come from"
+  switch — a driver's actuals are ONE dated series (card-series table,
+  virtual board "vdt" · cardId = driver id · key "actual";
+  store/driverSeries.ts) folded to the period at the node's
+  cadence/aggregate, written from the values tab (dated points) or any
+  linked KPI card (P9e); plus a source HYPERLINK (ben_sourceurl) on the
+  card's source line. **P9c BUILT 2026-09-02**: hub tab "Value drivers"
+  (HUB_TABS key `drivers`, site-enabled): header on the Priorities bar
+  metric (site select · ‹ period › pager from the Priorities period
+  settings via prevPeriod/periodWindow · Read | Edit values | Simulate
+  (P9d)), Read = the tree in values mode with Show series + comparison
+  delta chips, Edit values (superadmin or the vdtEditorRole's site
+  fillers) = flat rows table with exactly baseline/plan/forecast inputs
+  on leaves (setValue → history → saveDriver), computed rows grey ⨍,
+  Actual DERIVED with ＋ to record a dated point (recent points shown),
+  "Import from finance pack…" paste (name, baseline, plan, forecast).
   NEXT: P9c
   hub tab Read/Edit values → P9d Simulate/scenarios/Adopt (adopt writes
   LEAF forecasts; assumed effects last, dashed) → P9e metric link road

@@ -3627,3 +3627,32 @@ textarea.app-cp-statement { font-size: 14px; font-weight: 500; }
 .app-vd-err { color: #b3261e; }
 .app-vd-warn { color: #7a4d00; }
 @media (max-width: 900px) { .app-vd-split { grid-template-columns: 1fr; } .app-vd-rail { position: static; } }
+/* hub → Value drivers (P9c) */
+.app-vd-wrap { position: relative; display: flex; flex-direction: column; gap: 10px; padding: 16px 22px 30px; min-height: 240px; }
+.app-vd-wrap:has(> .app-loading) { min-height: calc(100vh - 180px); justify-content: center; }
+.app-vd-pager { display: inline-flex; align-items: center; gap: 6px; }
+.app-vd-pager .app-cp-tvbtn { min-width: 44px; padding: 0 12px; }
+.app-vd-period { font-size: 15px; font-weight: 700; min-width: 56px; text-align: center; }
+.app-vd-readbar { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.app-vd-sel { width: auto; min-width: 130px; }
+.app-vd-sourcelink { color: var(--app-accent); text-decoration: none; }
+.app-vd-sourcelink:hover { text-decoration: underline; }
+.app-vd-root .app-vd-sourcelink { color: #cfd8ff; }
+/* the values table — flat hairline rows, four fixed series */
+.app-vd-table { display: flex; flex-direction: column; background: #fff; border: 1px solid #e4dfd6; border-radius: 10px; overflow: hidden; }
+.app-vd-row { display: grid; grid-template-columns: 1fr 130px 130px 130px 170px; gap: 8px; align-items: center; padding: 6px 12px; border-bottom: 1px solid #f1efec; font-size: 13px; }
+.app-vd-row:last-child { border-bottom: none; }
+.app-vd-rowhead { font-size: 12px; color: #6d675c; border-bottom: 1px solid #ece8e0; background: #faf9f7; }
+.app-vd-rowname { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.app-vd-rowtitle { font-weight: 600; }
+.app-vd-row-computed .app-vd-rowtitle { color: #6d675c; }
+.app-vd-row-leading .app-vd-rowtitle::after { content: " · leading"; font-weight: 400; color: #6d675c; font-size: 11px; }
+.app-vd-rowmeta { font-size: 11px; color: #a39c90; }
+.app-vd-cell { width: 100%; box-sizing: border-box; text-align: right; font-variant-numeric: tabular-nums; }
+.app-vd-cellro { text-align: right; color: #6d675c; font-variant-numeric: tabular-nums; }
+.app-vd-cellact { display: flex; align-items: center; justify-content: flex-end; gap: 8px; color: #26241f; }
+.app-vd-addpt { font-size: 14px; }
+.app-vd-tablefoot { display: flex; align-items: center; gap: 12px; margin-top: 8px; font-size: 12.5px; }
+.app-vd-tablenote { padding: 18px 12px; }
+.app-vd-recent { display: flex; flex-direction: column; gap: 2px; font-size: 12.5px; margin-top: 4px; }
+@media (max-width: 900px) { .app-vd-row { grid-template-columns: 1fr 100px 100px 100px 130px; } }

@@ -42,7 +42,7 @@ export function areaForRoute(hash: string): IssueArea {
   const head = parts[0] ?? "";
   if (head === "docs" || head === "doc") return "documents";
   if (head === "priorities") return "priorities";
-  if (head === "improvement" || head === "template") return "improvement";
+  if (head === "improvement" || head === "template" || head === "drivers") return "improvement";
   if (head === "settings") return "settings";
   // an initiative/template board (and its cards) is Improvement work
   const boardId = head === "board" ? (parts[1] ?? "") : head === "edit" ? (parts[1] ?? "") : "";

@@ -464,6 +464,35 @@ export function nextPeriod(settings: PeriodSettings, period: string): string {
   return `${settings.prefix}${String(n + 1).padStart(width, "0").slice(-width)}`;
 }
 
+/** The label before `period`. Custom → "" (admin sets). */
+export function prevPeriod(settings: PeriodSettings, period: string): string {
+  if (settings.mode === "custom") return "";
+  const digits = period.replace(/\D/g, "");
+  if (digits === "") return "";
+  const n = Number(digits);
+  const width = digits.length;
+  if (n <= 0) return "";
+  return `${settings.prefix}${String(n - 1).padStart(width, "0").slice(-width)}`;
+}
+
+/** The inclusive yyyy-mm-dd window a period spans (FY: startMonth of the
+ *  prior calendar year → the month before, in the named year; calendar:
+ *  Jan–Dec). Custom periods have no dates → null (all points count). */
+export function periodWindow(settings: PeriodSettings, period: string): { from: string; to: string } | null {
+  if (settings.mode === "custom") return null;
+  const digits = period.replace(/\D/g, "");
+  if (digits === "") return null;
+  const n = Number(digits);
+  const year = digits.length <= 2 ? 2000 + n : n;
+  const p = (x: number) => String(x).padStart(2, "0");
+  if (settings.mode === "calendar" || settings.startMonth === 1) return { from: `${year}-01-01`, to: `${year}-12-31` };
+  const sm = settings.startMonth;
+  const from = `${year - 1}-${p(sm)}-01`;
+  const endMonth = sm - 1;
+  const lastDay = new Date(year, endMonth, 0).getDate(); // day 0 of the next month = last day of endMonth
+  return { from, to: `${year}-${p(endMonth)}-${p(lastDay)}` };
+}
+
 // ---- permissions (decision 7) ---------------------------------------------
 
 export interface OwnerRef {

@@ -28,11 +28,17 @@ export const AGGREGATE_LABELS: Record<Aggregate, string> = {
   max: "Maximum",
 };
 
+/** The four fixed series. baseline/plan/forecast are PLANNED numbers per
+ *  period on the node; "actual" is never stored on the node — it is the
+ *  driver's dated series (store/driverSeries.ts) folded to the period at
+ *  the node's cadence/aggregate (one store, written from the values tab
+ *  or any linked KPI card — Ben, 2026-09-02). computeTree still takes
+ *  "actual" as a series: the caller supplies folded actuals as overrides. */
 export type Series = "baseline" | "plan" | "forecast" | "actual";
 export const SERIES: Series[] = ["baseline", "plan", "forecast", "actual"];
+export const PLANNED_SERIES: Exclude<Series, "actual">[] = ["baseline", "plan", "forecast"];
 
 export type NodeKind = "driver" | "leading";
-export type ValueSource = "manual" | "metric";
 
 export interface NodeFormat {
   decimals: number;
@@ -62,13 +68,13 @@ export interface DriverNode {
   unit: string;
   /** Where the number comes from, in words ("payroll", "OEE model"). */
   source: string;
+  /** …and the report it comes from (Ben, 2026-09-02) — the source line links. */
+  sourceUrl: string;
   kind: NodeKind;
   /** "" = a leaf (values entered / fed). Leading nodes never have one. */
   formula: string;
   cadence: Cadence;
   aggregate: Aggregate;
-  /** Actuals: typed in, or fed by the linked initiative metric. */
-  valueSource: ValueSource;
   format: NodeFormat;
   order: number;
   /** period → series → value. */
@@ -87,11 +93,11 @@ export function newNode(site: string, parentId: string, name: string): DriverNod
     definition: "",
     unit: "",
     source: "",
+    sourceUrl: "",
     kind: "driver",
     formula: "",
     cadence: "monthly",
     aggregate: "sum",
-    valueSource: "manual",
     format: { decimals: 0, scale: "", percent: false },
     order: 0,
     values: {},

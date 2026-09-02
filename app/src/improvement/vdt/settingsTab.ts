@@ -201,6 +201,9 @@ export async function renderValueDriversSettings(body: HTMLElement): Promise<voi
     field("Unit", unit);
     const source = text(draft.source, "e.g. payroll, OEE model");
     field("Source", source, "Named under the card so nobody argues about where the number came from.");
+    const sourceUrl = text(draft.sourceUrl, "https://… the report it comes from");
+    sourceUrl.type = "url";
+    field("Source link", sourceUrl, "Optional — the source line on the card opens it.");
     const cadSel = el("select", "app-input") as HTMLSelectElement;
     for (const c of CADENCES) {
       const o = el("option", "", CADENCE_LABELS[c]) as HTMLOptionElement;
@@ -217,15 +220,7 @@ export async function renderValueDriversSettings(body: HTMLElement): Promise<voi
     }
     const twin = el("div", "app-vd-twin");
     twin.append(cadSel, aggSel);
-    field("Measured", twin, "How often, and how a finer series rolls up (volume sums, OEE averages). A linked KPI card inherits this.");
-    const srcSel = el("select", "app-input") as HTMLSelectElement;
-    for (const [v, l] of [["manual", "Typed in on the values tab"], ["metric", "Fed by a linked initiative metric"]] as const) {
-      const o = el("option", "", l) as HTMLOptionElement;
-      o.value = v;
-      if (v === draft.valueSource) o.selected = true;
-      srcSel.appendChild(o);
-    }
-    field("Actuals come from", srcSel);
+    field("Measured", twin, "How often, and how a finer series rolls up (volume sums, OEE averages). Actuals are one dated series — entered on the values tab or by any linked KPI card — folded at this cadence.");
     // format
     const fmtRow = el("div", "app-vd-twin");
     const dec = el("select", "app-input") as HTMLSelectElement;
@@ -293,9 +288,9 @@ export async function renderValueDriversSettings(body: HTMLElement): Promise<voi
       if (kindSel) d.kind = kindSel.value === "leading" ? "leading" : "driver";
       d.unit = unit.value.trim();
       d.source = source.value.trim();
+      d.sourceUrl = sourceUrl.value.trim();
       d.cadence = cadSel.value as DriverNode["cadence"];
       d.aggregate = aggSel.value as DriverNode["aggregate"];
-      d.valueSource = srcSel.value === "metric" ? "metric" : "manual";
       d.format = { decimals: Number(dec.value) || 0, scale: scale.value === "k" || scale.value === "m" ? scale.value : "", percent: scale.value === "%" };
       d.formula = d.kind === "leading" ? "" : formulaIn ? formulaFromNames(formulaIn.value.trim(), kids) : draft.formula;
       return d;
