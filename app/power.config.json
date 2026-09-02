@@ -165,6 +165,14 @@
         "leanboardinitiativeevents": {
           "entitySetName": "ben_ltkinitiativeevents",
           "logicalName": "ben_ltkinitiativeevent"
+        },
+        "ltkvaluedrivers": {
+          "entitySetName": "ben_ltkvaluedrivers",
+          "logicalName": "ben_ltkvaluedriver"
+        },
+        "ltkvdtscenarios": {
+          "entitySetName": "ben_ltkvdtscenarios",
+          "logicalName": "ben_ltkvdtscenario"
         }
       },
       "environmentVariableName": ""

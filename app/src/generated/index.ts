@@ -28,6 +28,8 @@ export * as Ben_ltksitesettingsesModel from './models/Ben_ltksitesettingsesModel
 export * as Ben_ltktagproposalsModel from './models/Ben_ltktagproposalsModel';
 export * as Ben_ltkuploadsModel from './models/Ben_ltkuploadsModel';
 export * as Ben_ltkuserprefsesModel from './models/Ben_ltkuserprefsesModel';
+export * as Ben_ltkvaluedriversModel from './models/Ben_ltkvaluedriversModel';
+export * as Ben_ltkvdtscenariosModel from './models/Ben_ltkvdtscenariosModel';
 export * as CommonModels from './models/CommonModels';
 export * as DocumentsModel from './models/DocumentsModel';
 export * as MicrosoftTeamsModel from './models/MicrosoftTeamsModel';
@@ -60,6 +62,8 @@ export * from './services/Ben_ltksitesettingsesService';
 export * from './services/Ben_ltktagproposalsService';
 export * from './services/Ben_ltkuploadsService';
 export * from './services/Ben_ltkuserprefsesService';
+export * from './services/Ben_ltkvaluedriversService';
+export * from './services/Ben_ltkvdtscenariosService';
 export * from './services/DocumentsService';
 export * from './services/MicrosoftTeamsService';
 export * from './services/Office365GroupsService';

@@ -173,6 +173,20 @@ export const dataSourcesInfo = {
     "dataSourceType": "Dataverse",
     "apis": {}
   },
+  "ben_ltkvaluedrivers": {
+    "tableId": "",
+    "version": "",
+    "primaryKey": "ben_ltkvaluedriverid",
+    "dataSourceType": "Dataverse",
+    "apis": {}
+  },
+  "ben_ltkvdtscenarios": {
+    "tableId": "",
+    "version": "",
+    "primaryKey": "ben_ltkvdtscenarioid",
+    "dataSourceType": "Dataverse",
+    "apis": {}
+  },
   "office365": {
     "tableId": "",
     "version": "",

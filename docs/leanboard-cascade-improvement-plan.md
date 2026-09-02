@@ -614,7 +614,23 @@ reschedule/cancel history with a reason picklist.
   Edit details) now offer only priorities at the initiative's org or
   ABOVE it (sameOrg/isDescendant against the form's site/dept/area) —
   never a sibling org's.
-- **P9 VDT + simulation · P10 Reporting** — designed (spec §3–§4).
+- **P9a — value driver tree model + engine — BUILT 2026-09-01 (dev;
+  SCHEMA-CARRYING: ben_ltkvaluedriver, ben_ltkvdtscenario)** — per the
+  critical review amendments: period-free structure, dated values
+  (baseline/plan/forecast/actual per period) with a capped change log,
+  driver vs LEADING nodes (dashed edge, never in a formula), cadence
+  (shiftly…annually) + aggregate (sum/avg/last/min/max) per node with
+  the "can't be finer than its drivers" rule, value source manual|metric,
+  display format. Engine `improvement/vdt/formula.ts`: parser → AST
+  (+ − × ÷ ^ %, SUM/AVG/MIN/MAX/ABS/ROUND, CHILDREN; conditionals HELD
+  by decision), unit algebra (warn-only), the spec's sentences,
+  computeTree with leaf overrides for simulation, cycle-safe. 20 tests.
+  Store `store/valueDrivers.ts`. NEXT: P9b Settings tree builder → P9c
+  hub tab Read/Edit values → P9d Simulate/scenarios/Adopt (adopt writes
+  LEAF forecasts; assumed effects last, dashed) → P9e metric link road
+  (unit match required for "drives"; templates only REQUIRE a link, the
+  initiative chooses; linked KPI cards inherit the driver's cadence).
+- **P10 Reporting** — designed (spec §4).
 
 Each phase ships behind the usual gates + `pac code push`; the specs'
 acceptance checks are the PR checklist. Schema phases make the next
