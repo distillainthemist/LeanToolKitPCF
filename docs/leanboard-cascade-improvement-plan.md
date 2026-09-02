@@ -651,7 +651,23 @@ reschedule/cancel history with a reason picklist.
   on leaves (setValue → history → saveDriver), computed rows grey ⨍,
   Actual DERIVED with ＋ to record a dated point (recent points shown),
   "Import from finance pack…" paste (name, baseline, plan, forecast).
-  NEXT: P9c
+  **P9d BUILT 2026-09-02**: Simulate mode (`vdt/simulate.ts`) — the
+  panel lists initiatives whose metric links into the tree: DRIVES rows
+  (toggle + delta in the leaf's unit; default = target − baseline only
+  when units agree, else typed), LEADS rows grouped under the driver
+  they lead (toggle only, optional ASSUMED EFFECT on the driver — dashed
+  card/edge, "incl. assumed effects" in the foot); live recompute, only
+  what moved marked (green border/chips/path); foot sentence "n of m on ·
+  ROOT ± x vs plan" + causal path; Reset to plan · Save scenario…
+  (ben_ltkvdtscenario, per period) · load saved · **Adopt as forecast**
+  (canEdit-gated; writes LEAF forecasts = plan + toggled deltas, assumed
+  effects never written). Metric link road: TemplateMetric.driverId +
+  driverLink (drives|leads, JSON — no schema); "⛓ Link to a value
+  driver" on the create form + Edit details metric rows opens the picker
+  (`vdt/linkPicker.ts`: full-path search; Drives only for a LEAF with a
+  matching unit, else Leads). NEXT: P9e — linked KPI cards read/write the
+  driver's series at its cadence; template Metrics step "requires a
+  driver link"; `· VDT` on the board's metric card.
   hub tab Read/Edit values → P9d Simulate/scenarios/Adopt (adopt writes
   LEAF forecasts; assumed effects last, dashed) → P9e metric link road
   (unit match required for "drives"; templates only REQUIRE a link, the

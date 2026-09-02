@@ -21,6 +21,9 @@ import { parseImprovementSettings, roleFillersAt } from "../templateModel";
 import { CADENCE_LABELS, DriverNode, childrenOf, formatValue, isLeaf, PLANNED_SERIES, Series, setValue, valueOf } from "./model";
 import { computeTree } from "./formula";
 import { renderTree, SERIES_LABELS, TreeHandle } from "./tree";
+import { renderSimulate } from "./simulate";
+import { listInitiatives } from "../../store/initiatives";
+import { Initiative } from "../initiativeModel";
 
 const btn = (label: string, cls = "app-btn"): HTMLButtonElement => {
   const b = el("button", cls, label) as HTMLButtonElement;
@@ -28,7 +31,7 @@ const btn = (label: string, cls = "app-btn"): HTMLButtonElement => {
   return b;
 };
 
-type Mode = "read" | "edit";
+type Mode = "read" | "edit" | "simulate";
 
 export function mountValueDrivers(parent: HTMLElement): () => void {
   const wrap = el("div", "app-vd-wrap");
@@ -66,6 +69,7 @@ export function mountValueDrivers(parent: HTMLElement): () => void {
     };
 
     let nodes: DriverNode[] = [];
+    let initiatives: Initiative[] = [];
     /** Leaf actuals for the period, folded from each driver's series. */
     let actuals = new Map<string, number | null>();
     let tree: TreeHandle | null = null;
@@ -80,7 +84,7 @@ export function mountValueDrivers(parent: HTMLElement): () => void {
     };
 
     const load = async () => {
-      nodes = await listDrivers(site);
+      [nodes, initiatives] = await Promise.all([listDrivers(site), listInitiatives().catch(() => [])]);
       await loadActuals();
       if (dead) return;
       render();
@@ -145,9 +149,11 @@ export function mountValueDrivers(parent: HTMLElement): () => void {
         });
         seg.appendChild(b);
       }
-      const sim = btn("Simulate", "app-docs-segbtn");
-      sim.disabled = true;
-      sim.title = "What-ifs arrive with the next update";
+      const sim = btn("Simulate", "app-docs-segbtn" + (mode === "simulate" ? " app-docs-segbtn-on" : ""));
+      sim.addEventListener("click", () => {
+        mode = "simulate";
+        render();
+      });
       seg.appendChild(sim);
       head.appendChild(seg);
       return head;
@@ -378,11 +384,32 @@ export function mountValueDrivers(parent: HTMLElement): () => void {
       wrap.appendChild(scrim);
     };
 
+    let simTeardown: (() => void) | null = null;
+    const renderSimulateMode = (): HTMLElement => {
+      const host = el("div", "app-vd-simhost");
+      const inTree = initiatives.filter((i) => i.status === "active" && i.metrics.some((m) => m.driverId && nodes.some((n) => n.id === m.driverId)));
+      simTeardown?.();
+      simTeardown = renderSimulate({
+        host,
+        nodes,
+        period,
+        site,
+        initiatives: inTree,
+        actor,
+        canAdopt: canEdit(),
+        onAdopted: async () => {
+          await load();
+        },
+      });
+      return host;
+    };
     const render = () => {
+      simTeardown?.();
+      simTeardown = null;
       clear(wrap);
       wrap.appendChild(renderHeader());
       if (mode === "edit" && !canEdit()) mode = "read";
-      wrap.appendChild(mode === "read" ? renderRead() : renderEdit());
+      wrap.appendChild(mode === "read" ? renderRead() : mode === "edit" ? renderEdit() : renderSimulateMode());
     };
 
     await load();

@@ -309,9 +309,26 @@ export function openEditDetails(o: EditDetailsOpts): void {
           m.target = tgt.value === "" || !Number.isFinite(n) ? null : n;
         });
         line.appendChild(tgt);
+            const linkB = el("button", "app-link app-im-metriclink", m.driverId ? `⛓ linked · ${m.driverLink ?? "drives"}` : "⛓ Link to a value driver") as HTMLButtonElement;
+            linkB.type = "button";
+            linkB.addEventListener("click", () => {
+              void import("./vdt/linkPicker").then(async ({ openDriverLinkPicker }) => {
+                const r = await openDriverLinkPicker(document.body, siteSel.value, { name: m.name, unit: m.unit }, m.driverId ? { driverId: m.driverId, mode: m.driverLink ?? "drives" } : null);
+                if (r === null) return;
+                if (r === "clear") {
+                  delete m.driverId;
+                  delete m.driverLink;
+                } else {
+                  m.driverId = r.driverId;
+                  m.driverLink = r.mode;
+                }
+                linkB.textContent = m.driverId ? `⛓ linked · ${m.driverLink ?? "drives"}` : "⛓ Link to a value driver";
+              });
+            });
+            line.appendChild(linkB);
         mBox.appendChild(line);
       }
-      field("Metric targets", mBox, "The definitions come from the template; the seeded KPI card's in-card target wins for colour when set.");
+      field("Metric targets", mBox, "The definitions come from the template; the seeded KPI card's in-card target wins for colour when set. ⛓ links a metric to the site's value driver tree.");
     }
 
     // confidential
