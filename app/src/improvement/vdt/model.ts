@@ -369,3 +369,54 @@ export function parseAssumed(raw: string): AssumedEffect[] {
     return [];
   }
 }
+
+// ---- a linked KPI card's points ↔ the driver's cells (P9e, pure) ------------------
+// The KPI editor keys points by a stable id (actions hang off it); the
+// driver series is keyed by DATE. A linked card therefore uses the date as
+// the id ("actual@2026-08-26"), so a point's identity survives reloads and
+// two cards on the same driver agree on it.
+
+export interface KpiLikePoint {
+  id: string;
+  date: string;
+  value: number;
+}
+
+export function driverPointsFromCells(cells: { key: string; date: string; shift: string; value: string }[]): KpiLikePoint[] {
+  const out: KpiLikePoint[] = [];
+  for (const c of cells) {
+    if (c.key !== "actual") continue;
+    const v = Number(c.value);
+    if (!Number.isFinite(v)) continue;
+    out.push({ id: `actual@${c.date}${c.shift && c.shift !== "-" ? "|" + c.shift : ""}`, date: c.date, value: v });
+  }
+  out.sort((a, b) => (a.date < b.date ? -1 : 1));
+  return out;
+}
+
+/** The write set after a points edit on a linked card: moved dates delete
+ *  the old cell; new/changed values upsert on their date. */
+export function driverDiffPoints(
+  prev: KpiLikePoint[],
+  next: KpiLikePoint[]
+): { put: { key: string; date: string; shift: string; value: string }[]; del: { key: string; date: string; shift: string; value: string }[] } {
+  const shiftOf = (id: string) => (id.includes("|") ? id.slice(id.indexOf("|") + 1) : "-");
+  const before = new Map(prev.map((p) => [p.id, p]));
+  const put: { key: string; date: string; shift: string; value: string }[] = [];
+  const del: { key: string; date: string; shift: string; value: string }[] = [];
+  for (const p of next) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(p.date) || !Number.isFinite(p.value)) continue;
+    const old = before.get(p.id);
+    before.delete(p.id);
+    if (old && old.date === p.date && old.value === p.value) continue;
+    if (old && old.date !== p.date) del.push({ key: "actual", date: old.date, shift: shiftOf(old.id), value: "" });
+    put.push({ key: "actual", date: p.date, shift: shiftOf(p.id), value: String(p.value) });
+  }
+  for (const gone of before.values()) del.push({ key: "actual", date: gone.date, shift: shiftOf(gone.id), value: "" });
+  return { put, del };
+}
+
+/** Window days a linked card shows, by the driver's cadence. */
+export function windowDaysForCadence(c: Cadence): number {
+  return c === "shiftly" || c === "daily" ? 28 : c === "weekly" ? 91 : c === "monthly" ? 365 : 1000;
+}

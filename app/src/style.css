@@ -3264,7 +3264,8 @@ textarea.app-cp-statement { font-size: 14px; font-weight: 500; }
 .app-tw-propagation { background: #fff7e0; border: 1px solid #f0c36d; border-radius: 8px; padding: 10px 12px; font-size: 12.5px; color: #7a4d00; line-height: 1.45; }
 .app-tw-table { display: flex; flex-direction: column; gap: 4px; }
 .app-tw-tr { display: grid; grid-template-columns: 1fr 140px 130px 24px; gap: 8px; align-items: center; }
-.app-tw-tr-metrics { grid-template-columns: 1fr 58px 68px 128px 128px 24px; }
+.app-tw-tr-metrics { grid-template-columns: 1fr 58px 68px 128px 128px 56px 24px; }
+.app-tw-req { display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; color: #6d675c; }
 .app-tw-tr-slots { grid-template-columns: 1fr 170px 160px; }
 .app-tw-th { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: #6d675c; font-weight: 700; padding: 0 2px; }
 .app-tw-sub { padding-left: 12px; }

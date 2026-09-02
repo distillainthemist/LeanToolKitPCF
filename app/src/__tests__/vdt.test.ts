@@ -9,6 +9,8 @@ import {
   newNode,
   pathOf,
   setValue,
+  driverPointsFromCells,
+  driverDiffPoints,
 } from "../improvement/vdt/model";
 import {
   checkFormula,
@@ -204,5 +206,24 @@ describe("cadence bucketing", () => {
     expect(foldSeries(pts, "weekly", "sum")).toBe(42);
     expect(foldSeries(pts, "weekly", "avg")).toBeCloseTo((35 / 3 + 7) / 2); // bucket averages, then averaged
     expect(foldSeries([], "weekly", "sum")).toBeNull();
+  });
+});
+
+describe("linked KPI card ↔ driver series adapters (P9e)", () => {
+  it("cells become date-keyed points (only the actual key, numeric)", () => {
+    const pts = driverPointsFromCells([
+      { key: "actual", date: "2026-08-26", shift: "-", value: "12" },
+      { key: "actual", date: "2026-08-25", shift: "A", value: "9" },
+      { key: "other", date: "2026-08-24", shift: "-", value: "1" },
+      { key: "actual", date: "2026-08-23", shift: "-", value: "x" },
+    ]);
+    expect(pts.map((p) => p.id)).toEqual(["actual@2026-08-25|A", "actual@2026-08-26"]);
+  });
+  it("diff upserts changed values, deletes moved dates and removed points", () => {
+    const prev = [{ id: "actual@2026-08-25", date: "2026-08-25", value: 9 }, { id: "actual@2026-08-26", date: "2026-08-26", value: 12 }];
+    const next = [{ id: "actual@2026-08-25", date: "2026-08-27", value: 9 }, { id: "n1", date: "2026-08-28", value: 3 }];
+    const { put, del } = driverDiffPoints(prev, next);
+    expect(put.map((c) => `${c.date}=${c.value}`)).toEqual(["2026-08-27=9", "2026-08-28=3"]);
+    expect(del.map((c) => c.date).sort()).toEqual(["2026-08-25", "2026-08-26"]);
   });
 });

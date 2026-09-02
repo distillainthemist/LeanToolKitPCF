@@ -1,0 +1,25 @@
+// A KPI card's value-driver link (P9e): on an `init-` board, the slot's
+// metric key → the initiative's metric → a DRIVES link → the driver. The
+// card then reads/writes the driver's ONE series at the driver's cadence.
+
+import { listInitiatives } from "../../store/initiatives";
+import { listDrivers } from "../../store/valueDrivers";
+import { Cadence, CADENCE_LABELS } from "./model";
+
+export interface CardDriverLink {
+  driverId: string;
+  name: string;
+  unit: string;
+  cadence: Cadence;
+  cadenceLabel: string;
+}
+
+export async function driverLinkForCard(boardId: string, metricKey: string): Promise<CardDriverLink | null> {
+  if (!boardId.startsWith("init-") || metricKey === "") return null;
+  const i = (await listInitiatives()).find((x) => x.boardId === boardId) ?? null;
+  const m = i?.metrics.find((x) => x.key === metricKey) ?? null;
+  if (!i || !m || !m.driverId || m.driverLink === "leads") return null;
+  const n = (await listDrivers(i.org.site)).find((x) => x.id === m.driverId) ?? null;
+  if (!n) return null;
+  return { driverId: n.id, name: n.name, unit: n.unit, cadence: n.cadence, cadenceLabel: CADENCE_LABELS[n.cadence] };
+}

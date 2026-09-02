@@ -68,6 +68,10 @@ export interface TemplateMetric {
    *  the leaf (formula, units match) or LEADS it (judgement, dashed). */
   driverId?: string;
   driverLink?: "drives" | "leads";
+  /** Template rule: an initiative from this template must link this
+   *  metric to a value driver (the link itself is chosen per initiative —
+   *  templates are company-level, trees are per site). */
+  requireDriver?: boolean;
 }
 
 export interface InitiativeTemplate {
@@ -372,6 +376,7 @@ export function parseMetrics(raw: string): TemplateMetric[] {
         goodDirection: (["up", "down", "range"].includes(str(x.goodDirection)) ? str(x.goodDirection) : "up") as GoodDirection,
         tracking: (["value", "goodbad", "picklist"].includes(str(x.tracking)) ? str(x.tracking) : "value") as Tracking,
         ...(str(x.driverId) !== "" ? { driverId: str(x.driverId), driverLink: (x.driverLink === "leads" ? "leads" : "drives") as "drives" | "leads" } : {}),
+        ...(x.requireDriver === true ? { requireDriver: true } : {}),
       }))
       .filter((m) => m.key !== "" && m.name !== "");
   } catch {

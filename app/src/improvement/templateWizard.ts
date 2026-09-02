@@ -566,7 +566,7 @@ export function mountTemplateWizard(parent: HTMLElement, templateId: string): ()
       ];
       const list = el("div", "app-tw-table");
       const head = el("div", "app-tw-tr app-tw-th app-tw-tr-metrics");
-      head.append(el("span", undefined, "Metric"), el("span", undefined, "Unit"), el("span", undefined, "Target"), el("span", undefined, "Good"), el("span", undefined, "Tracking"), el("span", undefined, ""));
+      head.append(el("span", undefined, "Metric"), el("span", undefined, "Unit"), el("span", undefined, "Target"), el("span", undefined, "Good"), el("span", undefined, "Tracking"), el("span", undefined, "Link"), el("span", undefined, ""));
       list.appendChild(head);
       t.metrics.forEach((m, i) => {
         const tr = el("div", "app-tw-tr app-tw-tr-metrics");
@@ -591,6 +591,20 @@ export function mountTemplateWizard(parent: HTMLElement, templateId: string): ()
           m.tracking = v as Tracking;
           mark();
         }));
+        // P9e: the template can REQUIRE a value-driver link; the link itself
+        // is chosen per initiative (trees are per site)
+        const req = el("label", "app-tw-req") as HTMLLabelElement;
+        const reqCb = el("input") as HTMLInputElement;
+        reqCb.type = "checkbox";
+        reqCb.checked = m.requireDriver === true;
+        reqCb.title = "Initiatives must link this metric to a value driver";
+        reqCb.addEventListener("change", () => {
+          if (reqCb.checked) m.requireDriver = true;
+          else delete m.requireDriver;
+          mark();
+        });
+        req.append(reqCb, el("span", undefined, "VDT"));
+        tr.appendChild(req);
         const x = btn("×", "ltk-mw-chip-x");
         x.addEventListener("click", () => {
           t.metrics.splice(i, 1);

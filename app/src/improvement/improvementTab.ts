@@ -591,14 +591,14 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
         const v = el("span", undefined, `${mv.last}${mv.unit}`);
         if (mv.rag === "amber" || mv.rag === "red") v.style.color = ragColor(mv.rag);
         if (mv.rag !== "green" && mv.rag !== null) v.style.fontWeight = "700";
-        metricCell.appendChild(el("span", "app-cp-muted", `${mv.name} `));
+        metricCell.appendChild(el("span", "app-cp-muted", `${mv.name}${i.metrics[0]?.driverId ? " · VDT" : ""} `));
         metricCell.appendChild(v);
         if (mv.target !== null) metricCell.appendChild(el("span", "app-cp-muted", ` / ${mv.target}${mv.unit}`));
       } else {
         metricCell.classList.add("app-cp-muted");
         metricCell.textContent =
           i.metrics.length > 0
-            ? `${i.metrics[0].name}${i.metrics[0].target !== null ? ` → ${i.metrics[0].target}${i.metrics[0].unit}` : ""}`
+            ? `${i.metrics[0].name}${i.metrics[0].driverId ? " · VDT" : ""}${i.metrics[0].target !== null ? ` → ${i.metrics[0].target}${i.metrics[0].unit}` : ""}`
             : "No metric set";
         metricCell.title = i.metrics.length > 0 ? "Chart values on the initiative board's KPI card" : "";
       }
@@ -1035,7 +1035,7 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
               m.target = tgt.value === "" || !Number.isFinite(n) ? null : n;
             });
             line.appendChild(tgt);
-            line.appendChild(el("span", "ltk-mw-help", m.goodDirection === "down" ? "lower is better" : m.goodDirection === "range" ? "within limits" : "higher is better"));
+            line.appendChild(el("span", "ltk-mw-help", `${m.goodDirection === "down" ? "lower is better" : m.goodDirection === "range" ? "within limits" : "higher is better"}${m.requireDriver ? " · driver link required" : ""}`));
             const linkB = el("button", "app-link app-im-metriclink", m.driverId ? `⛓ linked · ${m.driverLink ?? "drives"}` : "⛓ Link to a value driver") as HTMLButtonElement;
             linkB.type = "button";
             linkB.addEventListener("click", () => {

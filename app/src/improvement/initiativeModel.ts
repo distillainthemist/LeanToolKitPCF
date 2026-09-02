@@ -283,6 +283,7 @@ export function validateNewInitiative(i: Pick<Initiative, "title" | "org" | "met
   if (i.org.site === "" && i.org.company === "") errs.push("Pick the org this initiative belongs to.");
   if (!(i.roles.owner ?? []).length) errs.push("An owner is needed.");
   for (const m of i.metrics) if (m.tracking === "value" && m.target === null) errs.push(`Metric "${m.name}" needs a target.`);
+  for (const m of i.metrics) if (m.requireDriver === true && !m.driverId) errs.push(`Metric "${m.name}" must be linked to a value driver.`);
   return errs;
 }
 

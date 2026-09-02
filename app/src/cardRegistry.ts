@@ -58,6 +58,7 @@ import {
   sumsByKey,
   trailingWindow,
 } from "./store/seriesMap";
+import { driverDiffPoints, driverPointsFromCells } from "./store/driverSeries";
 import { FiveWhysEditor } from "../../controls/FiveWhys/editor";
 import { parseFiveWhys, serializeFiveWhys } from "../../controls/FiveWhys/types";
 import { FaultTreeEditor } from "../../controls/FaultTree/editor";
@@ -707,7 +708,7 @@ const REGISTRY: Record<string, CardMounter> = {
     const s = saver(opts);
     const day = instanceDay(opts.instanceWhen);
     const cfgDays = Math.round(Number(cfgStr(opts, "kpiWindowDays")));
-    const window = trailingWindow(
+    let window = trailingWindow(
       day,
       Number.isFinite(cfgDays) && cfgDays >= 7 && cfgDays <= 1000 ? cfgDays : 91
     );
@@ -716,12 +717,18 @@ const REGISTRY: Record<string, CardMounter> = {
     // which is itself the migration; the load guard below won't clobber it
     let lastPoints: typeof env.data.points = [];
     let edited = false;
+    // P9e: on an initiative board a metric linked (drives) to a value
+    // driver reads/writes the DRIVER's one series at the driver's cadence —
+    // series location + point identity swap, the editor never knows
+    let link: { driverId: string; name: string; cadenceLabel: string; days: number } | null = null;
+    const seriesLoc = () => (link ? { boardId: "vdt", cardId: link.driverId } : { boardId: opts.boardId, cardId: opts.cardId });
     const editor = new KpiTrendEditor(opts.host, {
       onChange: (env2) => {
         edited = true;
-        const { put, del } = diffPoints(lastPoints, env2.data.points);
+        const { put, del } = link ? driverDiffPoints(lastPoints, env2.data.points) : diffPoints(lastPoints, env2.data.points);
         lastPoints = env2.data.points.map((p) => ({ ...p }));
-        void applySeries(opts.boardId, opts.cardId, put, del).catch((err) =>
+        const loc = seriesLoc();
+        void applySeries(loc.boardId, loc.cardId, put, del).catch((err) =>
           console.warn("kpi series save failed", err)
         );
         // the doc keeps target/spec/unit + tile svg; points live in rows
@@ -748,16 +755,34 @@ const REGISTRY: Record<string, CardMounter> = {
     editor.setEnvelope(env);
     void (async () => {
       try {
-        let cells = await listSeries(opts.boardId, opts.cardId, window.from, window.to);
-        if (cells.length === 0 && !(await hasAnySeries(opts.boardId, opts.cardId))) {
+        // resolve the driver link first (lazy — the improvement chunk)
+        const metricKey = String(((opts.settings.metric ?? {}) as Record<string, unknown>).key ?? "");
+        if (opts.boardId.startsWith("init-") && metricKey !== "") {
+          try {
+            const { driverLinkForCard } = await import("./improvement/vdt/cardLink");
+            const { windowDaysForCadence } = await import("./store/driverSeries");
+            const l = await driverLinkForCard(opts.boardId, metricKey);
+            if (l) {
+              link = { driverId: l.driverId, name: l.name, cadenceLabel: l.cadenceLabel, days: windowDaysForCadence(l.cadence) };
+              window = trailingWindow(day, link.days);
+              // the chrome says so: "· VDT" on the title, cadence beneath
+              editor.setChrome(`${opts.title.split("\n")[0]} · VDT\n${link.cadenceLabel} · from value driver ${link.name}`, promptsRaw(opts));
+            }
+          } catch {
+            /* unlinked behaviour */
+          }
+        }
+        const loc = seriesLoc();
+        let cells = await listSeries(loc.boardId, loc.cardId, window.from, window.to);
+        if (!link && cells.length === 0 && !(await hasAnySeries(loc.boardId, loc.cardId))) {
           const seed = cellsFromPoints(env.data.points);
           if (seed.length > 0) {
-            await applySeries(opts.boardId, opts.cardId, seed);
-            cells = await listSeries(opts.boardId, opts.cardId, window.from, window.to);
+            await applySeries(loc.boardId, loc.cardId, seed);
+            cells = await listSeries(loc.boardId, loc.cardId, window.from, window.to);
           }
         }
         if (edited) return; // never overwrite an edit that beat the load
-        const points = pointsFromCells(cells);
+        const points = link ? driverPointsFromCells(cells) : pointsFromCells(cells);
         lastPoints = points.map((p) => ({ ...p }));
         env.data.points = points;
         editor.setEnvelope(env);

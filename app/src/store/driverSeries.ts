@@ -31,3 +31,8 @@ export async function driverActual(driverId: string, from: string, to: string, c
   const pts = await listDriverPoints(driverId, from, to);
   return foldSeries(pts, cadence, aggregate);
 }
+
+// the date-keyed adapters (a linked KPI card's points ↔ the driver's
+// cells) are pure and live in the model; re-exported here for callers
+export { driverPointsFromCells, driverDiffPoints, windowDaysForCadence } from "../improvement/vdt/model";
+export type { KpiLikePoint } from "../improvement/vdt/model";
