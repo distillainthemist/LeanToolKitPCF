@@ -66,7 +66,7 @@ export async function renderValueDriversSettings(body: HTMLElement): Promise<voi
 
   body.appendChild(el("h3", "app-pr-h3", "Value drivers"));
   body.appendChild(
-    el("div", "app-settings-note", "The site's value driver tree — root at the left, the drivers that move it to the right. Structure changes rarely; values live on the hub's Value drivers tab.")
+    el("div", "app-settings-note", "The site's value driver tree — top-level measures at the left, the drivers that move them to the right. Structure changes rarely; values live on the hub's Value drivers tab.")
   );
 
   // ---- site + permission row ----
@@ -152,19 +152,20 @@ export async function renderValueDriversSettings(body: HTMLElement): Promise<voi
         el(
           "div",
           "app-settings-note",
-          nodes.length === 0 ? "The root is the measure the site is judged on — EBITDA, cost per tonne, OEE." : "Click a card to edit it, add a driver beneath it, or remove it."
+          nodes.length === 0
+            ? "A top-level measure is one the site is judged on — EBITDA, cost per tonne, OEE. A site can have several."
+            : "Click a card to edit it, add a driver beneath it, or remove it. A site can carry several top-level measures."
         )
       );
-      if (nodes.length === 0) {
-        const add = btn("＋ Add the root measure", "app-btn app-btn-primary");
-        add.addEventListener("click", () => void addChild(""));
-        rail.appendChild(add);
-      }
+      // a site may need several top-level measures (Ben, 2026-09-02)
+      const add = btn(nodes.length === 0 ? "＋ Add the first top-level measure" : "＋ Add a top-level measure", "app-btn" + (nodes.length === 0 ? " app-btn-primary" : ""));
+      add.addEventListener("click", () => void addChild(""));
+      rail.appendChild(add);
       return;
     }
     const draft: DriverNode = { ...n, format: { ...n.format }, values: n.values, history: n.history };
     const kids = formulaChildren(nodes, n.id);
-    rail.appendChild(el("div", "app-tw-preview-h", n.parentId === "" ? "Root measure" : n.kind === "leading" ? "Leading indicator" : "Driver"));
+    rail.appendChild(el("div", "app-tw-preview-h", n.parentId === "" ? "Top-level measure" : n.kind === "leading" ? "Leading indicator" : "Driver"));
     const field = (label: string, control: HTMLElement, hint?: string) => {
       const f = el("div", "app-field");
       f.append(el("span", "app-field-label", label), control);
