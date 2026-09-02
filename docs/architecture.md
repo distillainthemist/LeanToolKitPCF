@@ -77,7 +77,10 @@ model section) — the canvas/PCF sections there are historical.
   progression, 2026-09-01 — closed mirrors status done); `ben_ltkpeoples` is the app's user record (role:
   user/siteadmin/superadmin, site, department — the site drives the
   DMS default filter); `ben_ltksitesettings` and `ben_ltkuserprefs`
-  hold settings — the APP_ROW also carries `ben_improvementsettings`
+  hold settings — the APP_ROW also carries `ben_improvementsettings`;
+  `ben_ltkvaluedriver` + `ben_ltkvdtscenario` are the per-site value
+  driver tree (P9a, 2026-09-01: period-free nodes, dated values in JSON
+  with a capped change log; scenarios = toggles / deltas / assumed effects)
   (methods · standard roles with per-site fillers · standard fields);
   **Improvement (P5/P7, 2026-08-20):** `ben_ltkinitiativetemplate`
   (stages/gates/roles/fields/metrics JSON + a template board),
