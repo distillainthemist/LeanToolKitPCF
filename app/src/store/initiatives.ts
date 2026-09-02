@@ -23,7 +23,7 @@ import {
   snapshotOf,
   stageTargetsFrom,
 } from "../improvement/initiativeModel";
-import { InitiativeTemplate, parseMetrics, slotFlags } from "../improvement/templateModel";
+import { TemplateMetric, InitiativeTemplate, parseMetrics, slotFlags } from "../improvement/templateModel";
 
 function fromRow(r: Ben_ltkinitiatives): Initiative {
   const snapshot = parseSnapshot(r.ben_snapshotjson ?? "");
@@ -211,21 +211,7 @@ export async function createInitiative(
       }));
       // one KPI-trend card per mandatory metric (design 2.4) — titled with
       // the metric and its target; owners enter dated values in-card
-      const rand = () => Math.random().toString(36).slice(2, 6);
-      for (const m of header.metrics) {
-        slots.push({
-          pos: slots.length + 1,
-          w: 1,
-          h: 1,
-          nav: slots.length + 1,
-          cardId: `kpi-${rand()}`,
-          cardType: "KpiTrendCard",
-          title: `${m.name}${m.unit !== "" ? ` (${m.unit})` : ""}${m.target !== null ? ` → ${m.target}` : ""}`,
-          // metric.key ties the card to its definition — the RAG rollup and
-          // the tab's metric value read it back through the manifest
-          settingsJSON: { template: { stage: "", mandatory: true }, metric: { key: m.key } },
-        });
-      }
+      for (const m of header.metrics) slots.push(metricCardSlot(m, slots.length));
       await upsertWhere(
         Ben_ltkboardsService,
         eq("ben_boardid", boardId),
@@ -249,4 +235,64 @@ export async function createInitiative(
   i.rowId = await saveInitiative(i);
   await appendInitiativeEvent(i, "created", { template: t.name, method: t.method }, actor);
   return i;
+}
+
+/** The KPI-trend slot a metric gets on the initiative board — titled with
+ *  the metric and its target; `metric.key` ties the card to its
+ *  definition (the RAG roll-up and the register read it back). */
+export function metricCardSlot(m: TemplateMetric, index: number): { pos: number; w: number; h: number; nav: number; cardId: string; cardType: string; title: string; settingsJSON: Record<string, unknown> } {
+  const rand = Math.random().toString(36).slice(2, 6);
+  return {
+    pos: index + 1,
+    w: 1,
+    h: 1,
+    nav: index + 1,
+    cardId: `kpi-${rand}`,
+    cardType: "KpiTrendCard",
+    title: `${m.name}${m.unit !== "" ? ` (${m.unit})` : ""}${m.target !== null ? ` → ${m.target}` : ""}`,
+    settingsJSON: { template: { stage: "", mandatory: true }, metric: { key: m.key } },
+  };
+}
+
+/** After editing an initiative's metrics (rework 2026-09-03): a card for
+ *  every metric that lacks one; a removed metric's card goes only when
+ *  it has no series points. Returns what was kept for the dialog. */
+export async function ensureMetricCards(i: Initiative): Promise<{ added: number; removed: number; kept: string[] }> {
+  if (i.boardId === "") return { added: 0, removed: 0, kept: [] };
+  const [{ getBoard, saveManifest }, { parseManifest }, { hasAnySeries }] = await Promise.all([
+    import("./boards"),
+    import("./mappers"),
+    import("./series"),
+  ]);
+  const board = await getBoard(i.boardId);
+  if (!board) return { added: 0, removed: 0, kept: [] };
+  const manifest = parseManifest(board.manifestRaw);
+  const keyOfSlot = (sl: { cardType: string; settings: Record<string, unknown> }) =>
+    sl.cardType === "KpiTrendCard" ? String(((sl.settings.metric ?? {}) as Record<string, unknown>).key ?? "") : "";
+  const have = new Set(manifest.slots.map(keyOfSlot).filter((k) => k !== ""));
+  let added = 0;
+  for (const m of i.metrics) {
+    if (have.has(m.key)) continue;
+    const slot = metricCardSlot(m, manifest.slots.length);
+    manifest.slots.push({ pos: slot.pos, w: slot.w, h: slot.h, nav: slot.nav, cardId: slot.cardId, cardType: slot.cardType, title: slot.title, settings: slot.settingsJSON } as (typeof manifest.slots)[number]);
+    added++;
+  }
+  const keys = new Set(i.metrics.map((m) => m.key));
+  const kept: string[] = [];
+  let removed = 0;
+  const keepSlots: typeof manifest.slots = [];
+  for (const sl of manifest.slots) {
+    const k = keyOfSlot(sl);
+    if (k === "" || keys.has(k)) {
+      keepSlots.push(sl);
+      continue;
+    }
+    if (await hasAnySeries(i.boardId, sl.cardId)) {
+      keepSlots.push(sl);
+      kept.push(sl.title);
+    } else removed++;
+  }
+  manifest.slots = keepSlots;
+  if (added > 0 || removed > 0) await saveManifest(board.id, manifest);
+  return { added, removed, kept };
 }

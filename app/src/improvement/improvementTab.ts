@@ -12,6 +12,7 @@ import { showLoading } from "../loading";
 import { currentViewer } from "../runtime";
 import { boardHash } from "../links";
 import { rememberBoardOrigin } from "./boardOrigin";
+import { renderMetricsList } from "./metricsList";
 import { dayLabel } from "../linkTitle";
 import { listPeople } from "../store/people";
 import type { RosterPerson } from "../store/mappers";
@@ -42,6 +43,8 @@ import {
 } from "./initiativeModel";
 import { initiativeRag } from "../priorities/model";
 import {
+  normalizeMetrics,
+  TemplateMetric,
   ImprovementSettings,
   InitiativeTemplate,
   parseImprovementSettings,
@@ -722,6 +725,12 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
     };
 
     const actor = () => ({ whoId: viewer.whoId, who: me?.who ?? who?.name ?? "" });
+    /** Promote-to-tree (metric rework): superadmin or the Value-drivers editor role's site fillers. */
+    const canPromoteDrivers = (): boolean => {
+      if (me?.role === "superadmin") return true;
+      const role = imp.standardRoles.find((r) => r.key === imp.vdtEditorRole);
+      return role !== undefined && roleFillersAt(role, scope.site || (me?.site ?? "")).some((p) => p.whoId === viewer.whoId);
+    };
 
     const setFlag = async (i: Initiative, flag: Initiative["flag"]) => {
       if (flag === "escalated") {
@@ -1019,43 +1028,26 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
             field(cf.label + (cf.required ? " *" : ""), inp);
           }
         }
-        // mandatory metrics: targets editable
-        const metrics = t.metrics.map((m) => ({ ...m }));
-        if (metrics.length > 0) {
-          const mBox = el("div", "app-im-metrics");
-          for (const m of metrics) {
-            const line = el("div", "app-im-rolerow");
-            line.appendChild(el("span", "app-im-rolename", `${m.name}${m.unit ? ` (${m.unit})` : ""}`));
-            const tgt = el("input", "app-input app-im-target") as HTMLInputElement;
-            tgt.type = "number";
-            tgt.placeholder = "target";
-            tgt.value = m.target === null ? "" : String(m.target);
-            tgt.addEventListener("change", () => {
-              const n = Number(tgt.value);
-              m.target = tgt.value === "" || !Number.isFinite(n) ? null : n;
-            });
-            line.appendChild(tgt);
-            line.appendChild(el("span", "ltk-mw-help", `${m.goodDirection === "down" ? "lower is better" : m.goodDirection === "range" ? "within limits" : "higher is better"}${m.requireDriver ? " · driver link required" : ""}`));
-            const linkB = el("button", "app-link app-im-metriclink", m.driverId ? `⛓ linked · ${m.driverLink ?? "drives"}` : "⛓ Link to a value driver") as HTMLButtonElement;
-            linkB.type = "button";
-            linkB.addEventListener("click", () => {
-              void import("./vdt/linkPicker").then(async ({ openDriverLinkPicker }) => {
-                const r = await openDriverLinkPicker(document.body, siteSel.value, { name: m.name, unit: m.unit }, m.driverId ? { driverId: m.driverId, mode: m.driverLink ?? "drives" } : null);
-                if (r === null) return;
-                if (r === "clear") {
-                  delete m.driverId;
-                  delete m.driverLink;
-                } else {
-                  m.driverId = r.driverId;
-                  m.driverLink = r.mode;
-                }
-                linkB.textContent = m.driverId ? `⛓ linked · ${m.driverLink ?? "drives"}` : "⛓ Link to a value driver";
-              });
-            });
-            line.appendChild(linkB);
-            mBox.appendChild(line);
-          }
-          field("Mandatory for this template", mBox);
+        // metrics belong to the INITIATIVE (rework 2026-09-03): from the value
+        // driver tree, or proposed here; the template only sets the rule
+        const metrics: TemplateMetric[] = [];
+        if (!t.singleAction) {
+          const mBox = el("div");
+          renderMetricsList({
+            host: mBox,
+            metrics,
+            site: () => siteSel.value,
+            canPromote: canPromoteDrivers(),
+          });
+          field(
+            "Metrics",
+            mBox,
+            t.metricRule === "fromTree"
+              ? "This template requires metrics from the value driver tree."
+              : t.metricRule === "atLeastOne"
+                ? "This template asks for at least one metric."
+                : "Optional — pick a driver the initiative moves, or propose an initiative-specific measure."
+          );
         }
         // confidential + period
         const conf = el("label", "app-cp-cascade-row") as HTMLLabelElement;
@@ -1085,9 +1077,9 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
               roles: rolePeople,
               priorities: links.map((l) => ({ priorityId: l.priorityId, primary: l.primary })),
               fieldValues,
-              metrics,
+              metrics: normalizeMetrics(metrics),
             };
-            const errs = validateNewInitiative({ title: draft.title, org: draft.org, metrics, singleAction: t.singleAction, roles: rolePeople });
+            const errs = validateNewInitiative({ title: draft.title, org: draft.org, metrics: normalizeMetrics(metrics), singleAction: t.singleAction, roles: rolePeople }, t.metricRule);
             const missingReq = allFields.filter((cf) => cf.required && !(fieldValues[cf.key] ?? "").trim()).map((cf) => `"${cf.label}" is needed.`);
             const allErrs = [...errs, ...missingReq];
             if (allErrs.length > 0) {

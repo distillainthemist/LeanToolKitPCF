@@ -3700,3 +3700,16 @@ textarea.app-cp-statement { font-size: 14px; font-weight: 500; }
 .app-tw-rules { display: flex; flex-direction: column; gap: 8px; }
 .app-tw-rule { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid #e4dfd6; border-radius: 10px; background: #fff; cursor: pointer; font-size: 13.5px; }
 .app-tw-rule-on { border-color: var(--app-accent); }
+/* the initiative's metrics list (rework 2026-09-03) */
+.app-im-metricslist { display: flex; flex-direction: column; gap: 6px; }
+.app-im-metricrow { display: flex; align-items: center; gap: 10px; border: 1px solid #e4dfd6; border-radius: 10px; padding: 6px 10px; background: #fff; }
+.app-im-metricstar { border: none; background: none; cursor: pointer; font-size: 16px; color: #b8b1a5; padding: 0 2px; }
+.app-im-metricstar-on { color: var(--app-accent); }
+.app-im-metricmain { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.app-im-metricname { font-weight: 600; font-size: 13px; display: flex; gap: 6px; align-items: baseline; min-width: 0; }
+.app-im-metrickind { font-size: 11px; font-weight: 400; color: #6d675c; white-space: nowrap; }
+.app-im-metrickind-vdt { color: var(--app-accent); font-weight: 600; }
+.app-im-metricmeta { font-size: 11.5px; color: #6d675c; }
+.app-im-metricrow .app-im-target { width: 96px; flex: none; }
+.app-im-metricacts { display: flex; align-items: center; gap: 8px; flex: none; }
+.app-im-metricadders { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }

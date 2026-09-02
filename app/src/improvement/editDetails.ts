@@ -13,12 +13,14 @@ import { listPeople } from "../store/people";
 import { loadCascade } from "../store/priorities";
 import { groupPrioritiesForPicker, isDescendant, orgRef, sameOrg } from "../priorities/model";
 import { getTemplate } from "../store/templates";
-import { appendInitiativeEvent, saveInitiative } from "../store/initiatives";
+import { appendInitiativeEvent, ensureMetricCards, saveInitiative } from "../store/initiatives";
 import { Ben_ltkboardsService } from "../generated/services/Ben_ltkboardsService";
 import { eq, upsertWhere } from "../store/dv";
 import { pickOwner } from "../priorities/dialogs";
+import { promptConfirm } from "../prompts";
 import { Initiative, validateNewInitiative } from "./initiativeModel";
-import { FieldKind, parseImprovementSettings, roleFillersAt, TemplateField, TemplateRole } from "./templateModel";
+import { FieldKind, normalizeMetrics, parseImprovementSettings, roleFillersAt, TemplateField, TemplateRole } from "./templateModel";
+import { renderMetricsList } from "./metricsList";
 
 const btn = (label: string, cls = "app-btn"): HTMLButtonElement => {
   const b = el("button", cls, label) as HTMLButtonElement;
@@ -294,42 +296,47 @@ export function openEditDetails(o: EditDetailsOpts): void {
       }
     }
 
-    // metric targets (definitions read-only)
+    // metrics belong to the initiative (rework 2026-09-03): the shared list —
+    // from the tree, or proposed; Link… / Promote… migrate an own metric's
+    // card series into the driver's
     const metrics = i.metrics.map((m) => ({ ...m }));
-    if (metrics.length > 0) {
-      const mBox = el("div", "app-im-metrics");
-      for (const m of metrics) {
-        const line = el("div", "app-im-rolerow");
-        line.appendChild(el("span", "app-im-rolename", `${m.name}${m.unit ? ` (${m.unit})` : ""}`));
-        const tgt = el("input", "app-input app-im-target") as HTMLInputElement;
-        tgt.type = "number";
-        tgt.value = m.target === null ? "" : String(m.target);
-        tgt.addEventListener("change", () => {
-          const n = Number(tgt.value);
-          m.target = tgt.value === "" || !Number.isFinite(n) ? null : n;
-        });
-        line.appendChild(tgt);
-            const linkB = el("button", "app-link app-im-metriclink", m.driverId ? `⛓ linked · ${m.driverLink ?? "drives"}` : "⛓ Link to a value driver") as HTMLButtonElement;
-            linkB.type = "button";
-            linkB.addEventListener("click", () => {
-              void import("./vdt/linkPicker").then(async ({ openDriverLinkPicker }) => {
-                const r = await openDriverLinkPicker(document.body, siteSel.value, { name: m.name, unit: m.unit }, m.driverId ? { driverId: m.driverId, mode: m.driverLink ?? "drives" } : null);
-                if (r === null) return;
-                if (r === "clear") {
-                  delete m.driverId;
-                  delete m.driverLink;
-                } else {
-                  m.driverId = r.driverId;
-                  m.driverLink = r.mode;
-                }
-                linkB.textContent = m.driverId ? `⛓ linked · ${m.driverLink ?? "drives"}` : "⛓ Link to a value driver";
-              });
-            });
-            line.appendChild(linkB);
-        mBox.appendChild(line);
-      }
-      field("Metric targets", mBox, "The definitions come from the template; the seeded KPI card's in-card target wins for colour when set. ⛓ links a metric to the site's value driver tree.");
-    }
+    const meRow = roster.find((p) => p.whoId === o.actor.whoId) ?? null;
+    const canPromote = (() => {
+      if (meRow?.role === "superadmin") return true;
+      const role = imp.standardRoles.find((r) => r.key === imp.vdtEditorRole);
+      return role !== undefined && roleFillersAt(role, siteSel.value || i.org.site).some((p) => p.whoId === o.actor.whoId);
+    })();
+    const mBox = el("div");
+    renderMetricsList({
+      host: mBox,
+      metrics,
+      site: () => siteSel.value,
+      canPromote,
+      onLinked: async (m) => {
+        if (i.boardId === "" || !m.driverId) return;
+        // the metric's card: its private points join the driver's series
+        const [{ getBoard }, { parseManifest }, { mergeCardSeriesIntoDriver }] = await Promise.all([
+          import("../store/boards"),
+          import("../store/mappers"),
+          import("../store/driverSeries"),
+        ]);
+        const board = await getBoard(i.boardId);
+        if (!board) return;
+        const slot = parseManifest(board.manifestRaw).slots.find(
+          (sl) => sl.cardType === "KpiTrendCard" && String(((sl.settings.metric ?? {}) as Record<string, unknown>).key ?? "") === m.key
+        );
+        if (!slot) return;
+        const r = await mergeCardSeriesIntoDriver(i.boardId, slot.cardId, m.driverId);
+        if (r.moved > 0 || r.kept > 0) {
+          await promptConfirm({
+            title: "Series merged",
+            note: `${r.moved} point${r.moved === 1 ? "" : "s"} moved into the driver's series${r.kept > 0 ? `; ${r.kept} kept the driver's existing value` : ""}. The card records into the driver from now on.`,
+            confirmLabel: "OK",
+          });
+        }
+      },
+    });
+    if (!i.singleAction) field("Metrics", mBox, "★ = the primary — headlines the register and the roll-up. Own metrics can be linked or promoted into the value driver tree.");
 
     // confidential
     const conf = el("label", "app-cp-cascade-row") as HTMLLabelElement;
@@ -357,9 +364,9 @@ export function openEditDetails(o: EditDetailsOpts): void {
           roles: rolePeople,
           priorities: links.map((l) => ({ priorityId: l.priorityId, primary: l.primary })),
           fieldValues,
-          metrics,
+          metrics: normalizeMetrics(metrics),
         };
-        const errs = validateNewInitiative({ title: next.title, org: next.org, metrics, singleAction: i.singleAction, roles: rolePeople });
+        const errs = validateNewInitiative({ title: next.title, org: next.org, metrics: next.metrics, singleAction: i.singleAction, roles: rolePeople }, template?.metricRule ?? "none");
         const missingReq = allFields.filter((cf) => cf.required && !(fieldValues[cf.key] ?? "").trim()).map((cf) => `"${cf.label}" is needed.`);
         const allErrs = [...errs, ...missingReq];
         if (allErrs.length > 0) {
@@ -369,6 +376,16 @@ export function openEditDetails(o: EditDetailsOpts): void {
         save.disabled = true;
         Object.assign(i, next);
         await saveInitiative(i);
+        // a KPI card per metric on the board — added for new metrics, dropped
+        // for removed ones only when empty
+        try {
+          const r = await ensureMetricCards(i);
+          if (r.kept.length > 0) {
+            await promptConfirm({ title: "Cards kept", note: `${r.kept.join(", ")} still hold recorded points, so their cards stay on the board.`, confirmLabel: "OK" });
+          }
+        } catch {
+          /* the board catches up on its next open */
+        }
         // the board carries the title as its name — keep them together
         if (i.boardId !== "" && i.title !== "") {
           await upsertWhere(
