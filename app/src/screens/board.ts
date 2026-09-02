@@ -174,7 +174,8 @@ async function renderBoard(
   liveBtn.append(liveDot, liveLabel);
   const titleBits = el("span", "app-ib-titlebits");
   const paneControls = el("span", "app-ib-controls");
-  bar.append(title, titleBits, status, el("span", "app-bar-gap"), paneControls, liveBtn, scheduleBtn);
+  const paneKebab = el("span", "app-ib-controls"); // ⋮ is the right-most control (Ben, 2026-09-03)
+  bar.append(title, titleBits, status, el("span", "app-bar-gap"), paneControls, liveBtn, scheduleBtn, paneKebab);
   parent.appendChild(bar);
 
   const split = el("div", "app-board-split");
@@ -823,6 +824,7 @@ async function renderBoard(
           paneHost,
           titleHost: titleBits,
           controlsHost: paneControls,
+          kebabHost: paneKebab,
           boardId: board.boardId,
           onStageFilter: (mode, currentStageId, stages) => {
             stageInfo = { currentId: currentStageId, stages };

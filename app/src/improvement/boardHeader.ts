@@ -36,6 +36,8 @@ export interface InitiativePaneOpts {
   paneHost: HTMLElement;
   titleHost: HTMLElement;
   controlsHost: HTMLElement;
+  /** Where ⋮ goes (the toolbar's far right); defaults to controlsHost. */
+  kebabHost?: HTMLElement;
   boardId: string;
   /** The board repaints its tiles through this filter: slot stage id →
    *  show? The stage list rides along for tile chips, the current ring
@@ -114,6 +116,7 @@ export function mountInitiativePane(o: InitiativePaneOpts): InitiativePaneHandle
     const render = () => {
       clear(o.titleHost);
       clear(o.controlsHost);
+      if (o.kebabHost) clear(o.kebabHost);
       clear(pane);
       o.onStageFilter(
         stageMode,
@@ -159,7 +162,7 @@ export function mountInitiativePane(o: InitiativePaneOpts): InitiativePaneHandle
       o.controlsHost.appendChild(seg);
       const more = btn("⋮", "app-btn app-cp-more");
       more.addEventListener("click", () => openMenu(more));
-      o.controlsHost.appendChild(more);
+      (o.kebabHost ?? o.controlsHost).appendChild(more);
 
       // ---- pane -------------------------------------------------------------
       pane.appendChild(renderKeyDetails());

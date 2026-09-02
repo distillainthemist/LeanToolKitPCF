@@ -2169,7 +2169,7 @@ button.app-docs-navterm.app-docs-navterm-on {
   color: color-mix(in srgb, var(--app-accent, #2563eb) 82%, #000);
   font-weight: 600;
 }
-.app-docs-seg { display: inline-flex; border: 1px solid #ddd; border-radius: 8px; overflow: hidden; }
+.app-docs-seg { display: inline-flex; border: 1px solid #ddd; border-radius: 8px; overflow: hidden; background: #fff; }
 .app-docs-segbtn {
   border: none;
   background: none;
