@@ -135,7 +135,9 @@ as a free-standing object is a card and gets the full recipe.
   acceptable as the neutral fallback but prefer `palette.neutral`.
 - Chip class reuse across modules (`app-cp-*` used by Improvement) is
   fine for identical patterns; fork the class the moment behaviour or
-  look diverges.
+  look diverges. ~~`ltk-mw-chip` borrowed by app dialogs~~ — forked to
+  `.app-im-link(-x)` 2026-09-03: the wizard stylesheet is only injected
+  when a wizard mounts, so the borrow rendered bare in Edit details.
 - ~~Card radii drifted 6/8/10px across priorities/walk/overlay~~ —
   normalised to the 10px recipe 2026-08-20.
 - ~~Documents rows hovered to a cool grey (`#f7f7f9`, dividers

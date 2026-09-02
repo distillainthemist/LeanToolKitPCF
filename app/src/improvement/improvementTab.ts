@@ -883,11 +883,11 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
         const paintLinks = async () => {
           clear(priBox);
           links.forEach((l, li) => {
-            const chip = el("span", "ltk-mw-chip" + (l.primary ? " app-im-link-primary" : ""));
+            const chip = el("span", "app-im-link" + (l.primary ? " app-im-link-primary" : ""));
             chip.appendChild(el("span", undefined, (l.primary ? "★ " : "") + l.label));
             chip.title = l.primary ? "Primary" : "Click ★ to make primary";
             if (!l.primary) {
-              const star = btn("★", "ltk-mw-chip-x");
+              const star = btn("★", "app-im-link-x");
               star.title = "Make primary";
               star.addEventListener("click", () => {
                 links.forEach((x) => (x.primary = false));
@@ -897,7 +897,7 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
               chip.appendChild(star);
             }
             if (!l.locked) {
-              const x = btn("×", "ltk-mw-chip-x");
+              const x = btn("×", "app-im-link-x");
               x.addEventListener("click", () => {
                 links.splice(li, 1);
                 if (l.primary && links.length > 0) links[0].primary = true;

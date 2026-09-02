@@ -3418,7 +3418,21 @@ textarea.app-cp-statement { font-size: 14px; font-weight: 500; }
 .app-im-orgrow { display: flex; gap: 6px; flex-wrap: wrap; }
 .app-im-orgrow .app-input { width: auto; flex: 1 1 140px; }
 .app-im-links { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+/* the linked-priority chip — app-side fork of the wizard's ltk-mw-chip
+   (that stylesheet is not loaded in app dialogs, 2026-09-03) */
+.app-im-link {
+  display: inline-flex; align-items: center; gap: 6px; max-width: 100%;
+  border: 1px solid #d9d3c8; border-radius: 999px; background: #fff;
+  padding: 4px 6px 4px 12px; font-size: 12.5px; line-height: 1.3;
+}
+.app-im-link > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 420px; }
 .app-im-link-primary { border-color: var(--app-accent); font-weight: 700; }
+.app-im-link-x {
+  border: none; background: #f4f1ea; color: #6d675c; cursor: pointer;
+  width: 22px; height: 22px; border-radius: 999px; font: inherit; font-size: 13px; line-height: 22px; padding: 0; text-align: center;
+}
+.app-im-link-x:hover { background: #e4dfd6; color: #26241f; }
+.app-im-links .app-btn { min-height: 34px; }
 .app-im-roles, .app-im-metrics { display: flex; flex-direction: column; gap: 6px; }
 .app-im-rolerow { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .app-im-rolename { font-size: 13px; font-weight: 600; min-width: 140px; }
