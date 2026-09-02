@@ -307,7 +307,7 @@ export async function renderValueDriversSettings(body: HTMLElement): Promise<voi
       const parts = d.formula.split(/(\{[^}]+\})/g);
       for (const p of parts) {
         const m = /^\{([^}]+)\}$/.exec(p);
-        if (m) chipLine.appendChild(el("span", "ltk-mw-chip app-vd-chip", nodes.find((x) => x.id === m[1].trim())?.name ?? "?"));
+        if (m) chipLine.appendChild(el("span", "app-vd-chip", nodes.find((x) => x.id === m[1].trim())?.name ?? "?"));
         else if (p.trim() !== "") chipLine.appendChild(el("span", "app-vd-op", p.replace(/\*/g, "×").replace(/\//g, "÷")));
       }
       // live result: the most recent period holding plan values
