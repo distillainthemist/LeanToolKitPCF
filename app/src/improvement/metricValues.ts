@@ -65,6 +65,9 @@ export function buildMetricState(
         rag: metricRag(reading),
       });
     }
+    // ★ primary first — the register, tiles and roll-up read values[0]
+    const primaryKey = i.metrics.find((m) => m.primary === true)?.key ?? i.metrics[0]?.key ?? "";
+    values.sort((a, b) => (a.key === primaryKey ? -1 : b.key === primaryKey ? 1 : 0));
     out.set(i.id, { values, rag: worstMetricRag(values.map((v) => v.rag)) });
   }
   return out;

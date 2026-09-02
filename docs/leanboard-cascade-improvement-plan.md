@@ -675,6 +675,25 @@ reschedule/cancel history with a reason picklist.
   `· VDT` on the Improvement register's metric cell. **P9 COMPLETE** —
   next release SOLUTION-CARRYING (ben_ltkvaluedriver incl.
   ben_sourceurl, ben_ltkvdtscenario, ben_pdca).
+- **Metric rework — BUILT 2026-09-03 (dev, app-only)** — metrics belong
+  to the INITIATIVE, not the template: `TemplateMetric.kind` driver|own +
+  `primary` (★, exactly one — normalizeMetrics/primaryMetric); the
+  template's Metrics step is now a RULE (none / at least one / from the
+  tree) riding the metrics column as {rule, metrics: []}; the shared
+  `improvement/metricsList.ts` on the create form + Edit details — ＋ From
+  the value driver tree (leaves + leading only; computed refused with
+  "comes from its formula"; name/unit inherited, link drives|leads
+  automatic), ＋ Initiative-specific (name/unit/target/direction/
+  tracking), ★, target per row, ×; own metrics: Link… (merge the card's
+  points into the driver's series — driver's dates win, tally shown) or
+  Promote… (new node under a chosen parent, leaf or leading; editor-role
+  gated); `ensureMetricCards` adds KPI cards for new metrics and drops
+  removed ones only when their series is empty (kept ones named);
+  register/tiles/roll-up read the ★ primary (metricValues sorts it
+  first). KNOWN GAP: the register's metric VALUE for a driver-linked
+  metric reads the card's doc points (now empty — the points live on the
+  driver's series) → shows the target only; fix = buildMetricState
+  reading the driver series for linked keys.
 - **P10 Reporting** — designed (spec §4).
 
 Each phase ships behind the usual gates + `pac code push`; the specs'

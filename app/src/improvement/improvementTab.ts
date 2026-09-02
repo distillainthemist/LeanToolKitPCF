@@ -43,6 +43,7 @@ import {
 } from "./initiativeModel";
 import { initiativeRag } from "../priorities/model";
 import {
+  primaryMetric,
   normalizeMetrics,
   TemplateMetric,
   ImprovementSettings,
@@ -594,14 +595,14 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
         const v = el("span", undefined, `${mv.last}${mv.unit}`);
         if (mv.rag === "amber" || mv.rag === "red") v.style.color = ragColor(mv.rag);
         if (mv.rag !== "green" && mv.rag !== null) v.style.fontWeight = "700";
-        metricCell.appendChild(el("span", "app-cp-muted", `${mv.name}${i.metrics[0]?.driverId ? " · VDT" : ""} `));
+        metricCell.appendChild(el("span", "app-cp-muted", `${mv.name}${primaryMetric(i.metrics)?.driverId ? " · VDT" : ""} `));
         metricCell.appendChild(v);
         if (mv.target !== null) metricCell.appendChild(el("span", "app-cp-muted", ` / ${mv.target}${mv.unit}`));
       } else {
         metricCell.classList.add("app-cp-muted");
         metricCell.textContent =
-          i.metrics.length > 0
-            ? `${i.metrics[0].name}${i.metrics[0].driverId ? " · VDT" : ""}${i.metrics[0].target !== null ? ` → ${i.metrics[0].target}${i.metrics[0].unit}` : ""}`
+          primaryMetric(i.metrics)
+            ? `${primaryMetric(i.metrics)!.name}${primaryMetric(i.metrics)!.driverId ? " · VDT" : ""}${primaryMetric(i.metrics)!.target !== null ? ` → ${primaryMetric(i.metrics)!.target}${primaryMetric(i.metrics)!.unit}` : ""}`
             : "No metric set";
         metricCell.title = i.metrics.length > 0 ? "Chart values on the initiative board's KPI card" : "";
       }
