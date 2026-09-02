@@ -694,6 +694,15 @@ reschedule/cancel history with a reason picklist.
   (metricValues.loadDriverLasts feeds buildMetricState on the Improvement
   tab and the Priorities screen), so the register/tiles/roll-up show the
   same last point the card and the values tab do.
+- **Metric limits — BUILT 2026-09-03** (Ben: target + upper/lower,
+  aligned with the KPI card's spec): `TemplateMetric.usl/lsl`; direction
+  is DERIVED (`directionOf`: lower only → higher is better, upper only →
+  lower is better, both → within range; legacy goodDirection when none);
+  `limitsInWords`; the metrics list's rows carry lower · target · upper
+  inputs and the own-metric form drops the direction select; the seeded
+  KPI card's config starts as the metric's target/limits/unit; metric
+  readings fall back to the definition's limits; metricRag unchanged
+  (outside a limit = red, target decides green/amber by direction).
 - **P10 Reporting** — designed (spec §4).
 
 Each phase ships behind the usual gates + `pac code push`; the specs'

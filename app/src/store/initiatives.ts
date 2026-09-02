@@ -250,7 +250,17 @@ export function metricCardSlot(m: TemplateMetric, index: number): { pos: number;
     cardId: `kpi-${rand}`,
     cardType: "KpiTrendCard",
     title: `${m.name}${m.unit !== "" ? ` (${m.unit})` : ""}${m.target !== null ? ` → ${m.target}` : ""}`,
-    settingsJSON: { template: { stage: "", mandatory: true }, metric: { key: m.key } },
+    settingsJSON: {
+      template: { stage: "", mandatory: true },
+      metric: { key: m.key },
+      // the card's own spec starts as the metric's (owners may tune it there)
+      config: {
+        ...(m.target !== null ? { target: m.target } : {}),
+        ...(typeof m.usl === "number" ? { usl: m.usl } : {}),
+        ...(typeof m.lsl === "number" ? { lsl: m.lsl } : {}),
+        ...(m.unit !== "" ? { unit: m.unit } : {}),
+      },
+    },
   };
 }
 

@@ -1,4 +1,5 @@
-import { normalizeMetrics, primaryMetric } from "../improvement/templateModel";
+import { metricRag } from "../improvement/initiativeModel";
+import { directionOf, limitsInWords, normalizeMetrics, primaryMetric } from "../improvement/templateModel";
 import { describe, expect, it } from "vitest";
 import {
   canSee,
@@ -144,5 +145,26 @@ describe("metric rework (2026-09-03): ★ primary + template rule", () => {
     expect(out.map((x) => x.kind)).toEqual(["own", "driver"]);
     expect(primaryMetric(out)?.name).toBe("b");
     expect(normalizeMetrics([m("a"), m("b")])[0].primary).toBe(true);
+  });
+});
+
+describe("metric limits (2026-09-03)", () => {
+  it("direction derives from the limits; legacy direction when none", () => {
+    expect(directionOf({ lsl: 60, usl: null, goodDirection: "down" })).toBe("up");
+    expect(directionOf({ lsl: null, usl: 4, goodDirection: "up" })).toBe("down");
+    expect(directionOf({ lsl: 12, usl: 18, goodDirection: "up" })).toBe("range");
+    expect(directionOf({ usl: null, lsl: null, goodDirection: "down" })).toBe("down");
+  });
+  it("reads the limits in words", () => {
+    expect(limitsInWords({ lsl: 12, usl: 18, target: 15, unit: "min" })).toBe("12–18 min · target 15 min");
+    expect(limitsInWords({ lsl: 60, usl: null, target: null, unit: "%" })).toBe("≥ 60 %");
+    expect(limitsInWords({ lsl: null, usl: 4, target: 3, unit: "" })).toBe("≤ 4 · target 3");
+  });
+  it("metricRag: outside a limit is red, target decides green/amber by the derived direction", () => {
+    expect(metricRag({ last: 70, target: 66, usl: null, lsl: 60, goodDirection: "up" })).toBe("green");
+    expect(metricRag({ last: 62, target: 66, usl: null, lsl: 60, goodDirection: "up" })).toBe("amber");
+    expect(metricRag({ last: 55, target: 66, usl: null, lsl: 60, goodDirection: "up" })).toBe("red");
+    expect(metricRag({ last: 15, target: 15, usl: 18, lsl: 12, goodDirection: "range" })).toBe("green");
+    expect(metricRag({ last: 19, target: 15, usl: 18, lsl: 12, goodDirection: "range" })).toBe("red");
   });
 });

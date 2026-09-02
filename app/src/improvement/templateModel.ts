@@ -78,6 +78,11 @@ export interface TemplateMetric {
   tracking: Tracking;
   kind?: MetricKind;
   primary?: boolean;
+  /** Limits (Ben, 2026-09-03: target + upper/lower, aligned with the KPI
+   *  card's spec). Direction is DERIVED: lower only → higher is better,
+   *  upper only → lower is better, both → within range. */
+  usl?: number | null;
+  lsl?: number | null;
   /** Value driver link (P9d): the driver id and whether the metric DRIVES
    *  the leaf (formula, units match) or LEADS it (judgement, dashed). */
   driverId?: string;
@@ -398,6 +403,8 @@ export function parseMetrics(raw: string): TemplateMetric[] {
         ...(x.requireDriver === true ? { requireDriver: true } : {}),
         ...(x.kind === "driver" || x.kind === "own" ? { kind: x.kind as MetricKind } : {}),
         ...(x.primary === true ? { primary: true } : {}),
+        ...(num(x.usl) !== null ? { usl: num(x.usl) } : {}),
+        ...(num(x.lsl) !== null ? { lsl: num(x.lsl) } : {}),
       }))
       .filter((m) => m.key !== "" && m.name !== "");
   } catch {
@@ -516,4 +523,25 @@ export function normalizeMetrics(metrics: TemplateMetric[]): TemplateMetric[] {
 
 export function primaryMetric(metrics: TemplateMetric[]): TemplateMetric | null {
   return metrics.find((m) => m.primary === true) ?? metrics[0] ?? null;
+}
+
+/** The direction the limits imply (legacy goodDirection when none set). */
+export function directionOf(m: Pick<TemplateMetric, "usl" | "lsl" | "goodDirection">): GoodDirection {
+  const hasU = typeof m.usl === "number";
+  const hasL = typeof m.lsl === "number";
+  if (hasU && hasL) return "range";
+  if (hasL) return "up";
+  if (hasU) return "down";
+  return m.goodDirection;
+}
+
+/** "≥ 60% · target 66%" / "12–18 min" / "≤ 4 h" — the limits in words. */
+export function limitsInWords(m: Pick<TemplateMetric, "usl" | "lsl" | "target" | "unit">): string {
+  const u = m.unit ? ` ${m.unit}` : "";
+  const bits: string[] = [];
+  if (typeof m.lsl === "number" && typeof m.usl === "number") bits.push(`${m.lsl}–${m.usl}${u}`);
+  else if (typeof m.lsl === "number") bits.push(`≥ ${m.lsl}${u}`);
+  else if (typeof m.usl === "number") bits.push(`≤ ${m.usl}${u}`);
+  if (m.target !== null) bits.push(`target ${m.target}${u}`);
+  return bits.join(" · ");
 }

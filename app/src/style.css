@@ -3713,3 +3713,7 @@ textarea.app-cp-statement { font-size: 14px; font-weight: 500; }
 .app-im-metricrow .app-im-target { width: 96px; flex: none; }
 .app-im-metricacts { display: flex; align-items: center; gap: 8px; flex: none; }
 .app-im-metricadders { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+
+.app-im-metricspec { display: flex; gap: 4px; flex: none; }
+.app-im-metricspec .app-input { width: 78px; font-size: 12px; padding: 4px 6px; }
+.app-im-metricspec .app-im-target { width: 86px; }

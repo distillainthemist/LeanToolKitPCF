@@ -4,6 +4,7 @@
 // read + one rows read cover every initiative; the result is a map the
 // RAG rollups and the tab's metric column both use.
 
+import { directionOf } from "./templateModel";
 import { parseKpiTrend } from "../../../controls/KpiTrendCard/types";
 import { parseManifest } from "../store/mappers";
 import type { BoardSummary } from "../store/mappers";
@@ -60,9 +61,9 @@ export function buildMetricState(
         // the in-card target wins (owners tune it there); the definition's
         // target is the fallback
         target: doc?.target ?? def?.target ?? null,
-        usl: doc?.usl ?? null,
-        lsl: doc?.lsl ?? null,
-        goodDirection: def?.goodDirection ?? "up",
+        usl: doc?.usl ?? def?.usl ?? null,
+        lsl: doc?.lsl ?? def?.lsl ?? null,
+        goodDirection: def ? directionOf(def) : "up",
       };
       values.push({
         key,

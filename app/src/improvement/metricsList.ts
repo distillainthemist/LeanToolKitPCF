@@ -7,7 +7,7 @@
 import { el, clear } from "../../../shared/ui/dom";
 import { promptConfirm } from "../prompts";
 import { listDrivers, saveDriver } from "../store/valueDrivers";
-import { GoodDirection, keyFor, MetricKind, normalizeMetrics, TemplateMetric, Tracking } from "./templateModel";
+import { directionOf, keyFor, MetricKind, normalizeMetrics, TemplateMetric, Tracking } from "./templateModel";
 import { DriverNode, isLeaf, newNode, pathOf } from "./vdt/model";
 import { openDriverLinkPicker } from "./vdt/linkPicker";
 
@@ -76,21 +76,30 @@ export function renderMetricsList(o: MetricsListOpts): { refresh: () => void } {
         if (p.length > 0) name.title = p.join(" › ");
       } else name.appendChild(el("span", "app-im-metrickind", "· initiative-specific"));
       main.appendChild(name);
-      main.appendChild(el("div", "app-im-metricmeta", [m.unit || "no unit", m.goodDirection === "down" ? "lower is better" : m.goodDirection === "range" ? "within limits" : "higher is better", m.tracking === "value" ? "value vs target" : m.tracking === "goodbad" ? "good / bad" : "status"].join(" · ")));
+      const dir = directionOf(m);
+      main.appendChild(el("div", "app-im-metricmeta", [m.unit || "no unit", dir === "down" ? "lower is better" : dir === "range" ? "within limits" : "higher is better", m.tracking === "value" ? "value vs target" : m.tracking === "goodbad" ? "good / bad" : "status"].join(" · ")));
       row.appendChild(main);
-      // target
-      const tgt = el("input", "app-input app-im-target") as HTMLInputElement;
-      tgt.type = "number";
-      tgt.step = "any";
-      tgt.placeholder = "target";
-      tgt.value = m.target === null ? "" : String(m.target);
-      tgt.title = `Target${m.unit ? ` (${m.unit})` : ""}`;
-      tgt.addEventListener("change", () => {
-        const n = Number(tgt.value);
-        m.target = tgt.value === "" || !Number.isFinite(n) ? null : n;
-        o.onChanged?.();
-      });
-      row.appendChild(tgt);
+      // target + limits (the KPI card's spec)
+      const numIn = (label: string, cur: number | null | undefined, set: (v: number | null) => void, cls: string) => {
+        const inp = el("input", "app-input " + cls) as HTMLInputElement;
+        inp.type = "number";
+        inp.step = "any";
+        inp.placeholder = label;
+        inp.value = typeof cur === "number" ? String(cur) : "";
+        inp.title = `${label}${m.unit ? ` (${m.unit})` : ""}`;
+        inp.addEventListener("change", () => {
+          const n = Number(inp.value);
+          set(inp.value.trim() === "" || !Number.isFinite(n) ? null : n);
+          o.onChanged?.();
+          paint();
+        });
+        return inp;
+      };
+      const spec = el("div", "app-im-metricspec");
+      spec.appendChild(numIn("lower", m.lsl, (v) => (m.lsl = v), "app-im-limit"));
+      spec.appendChild(numIn("target", m.target, (v) => (m.target = v), "app-im-target"));
+      spec.appendChild(numIn("upper", m.usl, (v) => (m.usl = v), "app-im-limit"));
+      row.appendChild(spec);
       // own metrics: into the tree
       const acts = el("div", "app-im-metricacts");
       if (kindOf(m) === "own") {
@@ -166,17 +175,18 @@ export function renderMetricsList(o: MetricsListOpts): { refresh: () => void } {
     const unitIn = el("input", "app-input") as HTMLInputElement;
     unitIn.placeholder = "min, %, $, kL";
     field("Unit", unitIn);
-    const tgtIn = el("input", "app-input") as HTMLInputElement;
-    tgtIn.type = "number";
-    tgtIn.step = "any";
-    field("Target", tgtIn);
-    const dir = el("select", "app-input") as HTMLSelectElement;
-    for (const [v, l] of [["up", "Higher is better"], ["down", "Lower is better"], ["range", "Within limits"]] as const) {
-      const op = el("option", "", l) as HTMLOptionElement;
-      op.value = v;
-      dir.appendChild(op);
-    }
-    field("Good direction", dir);
+    const numField = (label: string, hint: string) => {
+      const inp = el("input", "app-input") as HTMLInputElement;
+      inp.type = "number";
+      inp.step = "any";
+      inp.placeholder = hint;
+      field(label, inp);
+      return inp;
+    };
+    const tgtIn = numField("Target", "the number to reach");
+    const lslIn = numField("Lower limit", "below this = red (blank = none)");
+    const uslIn = numField("Upper limit", "above this = red (blank = none)");
+    dlg.appendChild(el("div", "app-field-hint", "Direction follows the limits: a lower limit only means higher is better; an upper only, lower is better; both, within range."));
     const trk = el("select", "app-input") as HTMLSelectElement;
     for (const [v, l] of [["value", "Value vs target"], ["goodbad", "Good / bad"], ["picklist", "Status picklist"]] as const) {
       const op = el("option", "", l) as HTMLOptionElement;
@@ -196,15 +206,22 @@ export function renderMetricsList(o: MetricsListOpts): { refresh: () => void } {
         err.textContent = "A name is needed.";
         return;
       }
-      const t = Number(tgtIn.value);
+      const numOf = (inp: HTMLInputElement): number | null => {
+        const n = Number(inp.value);
+        return inp.value.trim() === "" || !Number.isFinite(n) ? null : n;
+      };
+      const lsl = numOf(lslIn);
+      const usl = numOf(uslIn);
       o.metrics.push({
         key: keyFor(nm, o.metrics.map((x) => x.key)),
         name: nm,
         unit: unitIn.value.trim(),
-        target: tgtIn.value.trim() === "" || !Number.isFinite(t) ? null : t,
-        goodDirection: dir.value as GoodDirection,
+        target: numOf(tgtIn),
+        goodDirection: directionOf({ usl, lsl, goodDirection: "up" }),
         tracking: trk.value as Tracking,
         kind: "own",
+        ...(lsl !== null ? { lsl } : {}),
+        ...(usl !== null ? { usl } : {}),
       });
       scrim.remove();
       changed();
