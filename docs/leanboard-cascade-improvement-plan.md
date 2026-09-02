@@ -625,7 +625,17 @@ reschedule/cancel history with a reason picklist.
   (+ − × ÷ ^ %, SUM/AVG/MIN/MAX/ABS/ROUND, CHILDREN; conditionals HELD
   by decision), unit algebra (warn-only), the spec's sentences,
   computeTree with leaf overrides for simulation, cycle-safe. 20 tests.
-  Store `store/valueDrivers.ts`. NEXT: P9b Settings tree builder → P9c
+  Store `store/valueDrivers.ts`. **P9b BUILT 2026-09-02**: Settings →
+  Value drivers (superadmin) — site select, the Edit-values/Adopt role
+  select (imp.vdtEditorRole), ONE tree component (`vdt/tree.ts`,
+  left→right, SVG elbow links, dashed for leading, per-branch collapse
+  with "n drivers" pill, modes structure/values/simulate) + the node
+  rail (`vdt/settingsTab.ts`: name/definition/kind/unit/source/
+  cadence+aggregate/actuals source/display; formula input takes child
+  NAMES with an autocomplete popover, stored as {id}, chip line +
+  "= value ✓ resolves · children n of m used · unit" + error/warn
+  sentences; Save blocks on errors; add beneath / ▲▼ / Remove subtree).
+  NEXT: P9c
   hub tab Read/Edit values → P9d Simulate/scenarios/Adopt (adopt writes
   LEAF forecasts; assumed effects last, dashed) → P9e metric link road
   (unit match required for "drives"; templates only REQUIRE a link, the

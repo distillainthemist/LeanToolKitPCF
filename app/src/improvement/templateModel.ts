@@ -117,6 +117,9 @@ export interface ImprovementSettings {
   /** The company health-check question set (decision 12) — periodic
    *  evaluations against these from any initiative board. */
   healthQuestions: HealthQuestion[];
+  /** Value driver tree (P9): the standard role whose site fillers may
+   *  Edit values / Adopt as forecast alongside superadmins ("" = superadmins only). */
+  vdtEditorRole: string;
 }
 
 export interface HealthQuestion {
@@ -176,9 +179,10 @@ export function parseImprovementSettings(raw: string): ImprovementSettings {
           }))
           .filter((q) => q.key !== "" && q.label !== "")
       : [];
-    return { methods: methods.length > 0 ? methods : [...METHODS], standardRoles: roles, standardFields: fields, healthQuestions: health };
+    const vdtEditorRole = typeof (o as { vdtEditorRole?: unknown }).vdtEditorRole === "string" ? ((o as { vdtEditorRole: string }).vdtEditorRole) : "";
+    return { methods: methods.length > 0 ? methods : [...METHODS], standardRoles: roles, standardFields: fields, healthQuestions: health, vdtEditorRole };
   } catch {
-    return { methods: [...METHODS], standardRoles: [], standardFields: [], healthQuestions: [] };
+    return { methods: [...METHODS], standardRoles: [], standardFields: [], healthQuestions: [], vdtEditorRole: "" };
   }
 }
 
@@ -188,6 +192,7 @@ export function serializeImprovementSettings(s: ImprovementSettings): string {
     standardRoles: s.standardRoles.map((r) => ({ key: r.key, label: r.label, multi: r.multi, timeCommitment: r.timeCommitment, people: r.people })),
     standardFields: s.standardFields,
     healthQuestions: s.healthQuestions,
+    vdtEditorRole: s.vdtEditorRole,
   });
 }
 

@@ -286,6 +286,15 @@ export function mountSettings(parent: HTMLElement, initialTab = ""): () => void 
         },
       });
       tabs.push({
+        key: "valuedrivers",
+        label: "Value drivers",
+        // the site's driver tree (P9b) — lazy like Improvement
+        render: async () => {
+          const { renderValueDriversSettings } = await import("../improvement/vdt/settingsTab");
+          await renderValueDriversSettings(body);
+        },
+      });
+      tabs.push({
         key: "access",
         label: "Access control",
         render: () => renderAccessControl(body, me),
