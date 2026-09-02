@@ -690,10 +690,10 @@ reschedule/cancel history with a reason picklist.
   gated); `ensureMetricCards` adds KPI cards for new metrics and drops
   removed ones only when their series is empty (kept ones named);
   register/tiles/roll-up read the ★ primary (metricValues sorts it
-  first). KNOWN GAP: the register's metric VALUE for a driver-linked
-  metric reads the card's doc points (now empty — the points live on the
-  driver's series) → shows the target only; fix = buildMetricState
-  reading the driver series for linked keys.
+  first). Driver-linked metrics' VALUES read the driver's series
+  (metricValues.loadDriverLasts feeds buildMetricState on the Improvement
+  tab and the Priorities screen), so the register/tiles/roll-up show the
+  same last point the card and the values tab do.
 - **P10 Reporting** — designed (spec §4).
 
 Each phase ships behind the usual gates + `pac code push`; the specs'

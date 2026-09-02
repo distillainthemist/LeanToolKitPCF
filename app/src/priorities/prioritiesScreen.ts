@@ -60,7 +60,7 @@ import { carryForwardFlow, cascadeDialog, cascadeReview, closeDialog, closePrior
 import { Initiative, initiativesByPriority, ragInputsFor } from "../improvement/initiativeModel";
 import { REOPEN_PRIORITY_KEY } from "../improvement/boardOrigin";
 import { PDCA_TOKENS } from "../improvement/templateModel";
-import { buildMetricState } from "../improvement/metricValues";
+import { buildMetricState, loadDriverLasts } from "../improvement/metricValues";
 import {
   canCustomiseAt,
   canManageOrg,
@@ -256,7 +256,7 @@ export function mountPriorities(parent: HTMLElement, opts: PrioritiesMountOpts =
       memo("initBoards", () => import("../store/boards").then((m) => m.listBoards())).catch(() => []),
       memo("initRows", () => import("../store/cards").then((m) => m.rowsForInitiativeBoards())).catch(() => []),
     ]);
-    const metricState = buildMetricState(initiativeList, initBoards, initRows);
+    const metricState = buildMetricState(initiativeList, initBoards, initRows, await loadDriverLasts(initiativeList).catch(() => new Map()));
     if (dead) return;
     const companyList = [...new Set(Object.values(siteCo).filter((c) => c !== ""))];
     const tree = buildTree(rawTree, siteCo, companyList);

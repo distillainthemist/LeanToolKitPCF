@@ -23,7 +23,7 @@ import { appendInitiativeEvent, createInitiative, listInitiatives, saveInitiativ
 import { actionsForInitiatives, upsertActions } from "../store/actions";
 import { listBoards } from "../store/boards";
 import { rowsForInitiativeBoards } from "../store/cards";
-import { buildMetricState } from "./metricValues";
+import { buildMetricState, loadDriverLasts } from "./metricValues";
 import { newAction } from "../../../shared/schema/actions";
 import { promptConfirm } from "../prompts";
 import { parseOrgTree } from "../../../shared/schema/meeting";
@@ -127,7 +127,7 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
       isAdmin: me?.role === "superadmin" || me?.role === "siteadmin",
     };
     let list = initiatives;
-    const metricState = buildMetricState(initiatives, allBoards, initRows);
+    const metricState = buildMetricState(initiatives, allBoards, initRows, await loadDriverLasts(initiatives).catch(() => new Map()));
     // state colours resolve through the SITE STATE PALETTE (ui-standard §1)
     const stateColors = paletteMap(palettes.states);
     const ragColor = (rag: "green" | "amber" | "red" | "grey"): string => stateColors[ragPaletteKey(rag)] ?? "#9a948a";

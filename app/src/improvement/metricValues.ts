@@ -27,7 +27,10 @@ export interface InitiativeMetricState {
 export function buildMetricState(
   initiatives: Initiative[],
   boards: Pick<BoardSummary, "boardId" | "manifestRaw">[],
-  rows: (CardRow & { boardId: string })[]
+  rows: (CardRow & { boardId: string })[],
+  /** Last recorded value per DRIVER — a driver-linked metric's points live
+   *  on the driver's series, not the card's doc (metric rework). */
+  driverLast: Map<string, number | null> = new Map()
 ): Map<string, InitiativeMetricState> {
   const byBoard = new Map(boards.map((b) => [b.boardId, b]));
   const rowByCard = new Map(rows.map((r) => [`${r.boardId}|${r.cardId}`, r]));
@@ -46,7 +49,12 @@ export function buildMetricState(
       const row = rowByCard.get(`${i.boardId}|${slot.cardId}`);
       const doc = row ? parseKpiTrend(row.outputJson).envelope.data : null;
       const points = doc?.points ?? [];
-      const last = points.length > 0 ? points[points.length - 1].value : null;
+      const last =
+        def?.driverId && def.driverLink !== "leads" && driverLast.has(def.driverId)
+          ? (driverLast.get(def.driverId) ?? null)
+          : points.length > 0
+            ? points[points.length - 1].value
+            : null;
       const reading: MetricReading = {
         last,
         // the in-card target wins (owners tune it there); the definition's
@@ -71,4 +79,17 @@ export function buildMetricState(
     out.set(i.id, { values, rag: worstMetricRag(values.map((v) => v.rag)) });
   }
   return out;
+}
+
+/** The last recorded point per driver the initiatives' metrics DRIVE —
+ *  one wide read per driver (few, small). */
+export async function loadDriverLasts(initiatives: Initiative[]): Promise<Map<string, number | null>> {
+  const ids = [...new Set(initiatives.flatMap((i) => i.metrics.filter((m) => m.driverId && m.driverLink !== "leads").map((m) => m.driverId as string)))];
+  if (ids.length === 0) return new Map();
+  const { listDriverPoints } = await import("../store/driverSeries");
+  const got = await Promise.all(ids.map((id) => listDriverPoints(id, "1900-01-01", "2999-12-31").catch(() => [])));
+  return new Map(ids.map((id, k) => {
+    const pts = got[k];
+    return [id, pts.length > 0 ? pts[pts.length - 1].value : null];
+  }));
 }
