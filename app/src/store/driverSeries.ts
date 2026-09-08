@@ -5,7 +5,7 @@
 
 import { applySeries, listSeries, listSeriesByPrefix } from "./series";
 import { Cadence, Aggregate, foldSeries, SeriesPoint } from "../improvement/vdt/model";
-import { isSpecSeriesKey, SPEC_SERIES_PREFIX, SpecSeries, specSeriesFromCells } from "../../../shared/schema/specSeries";
+import { isSpecSeriesKey, SPEC_SERIES_KEYS, SPEC_SERIES_PREFIX, SpecSeries, specSeriesFromCells } from "../../../shared/schema/specSeries";
 
 export const DRIVER_SERIES_BOARD = "vdt";
 export const DRIVER_SERIES_KEY = "actual";
@@ -30,6 +30,33 @@ export async function putDriverPoint(driverId: string, date: string, shift: stri
  *  virtual location or an own card's). */
 export async function listSpecSeries(boardId: string, cardId: string, to: string): Promise<SpecSeries> {
   return specSeriesFromCells(await listSeriesByPrefix(boardId, cardId, SPEC_SERIES_PREFIX, to));
+}
+
+/** Option C (Ben, 2026-09-08): a driver's target/limits live on the
+ *  driver. Linking a surface whose level values are set to a driver
+ *  that has NO spec yet seeds the driver's spec from them, dated at the
+ *  current bucket. Returns true when it seeded. */
+export async function seedDriverSpecIfEmpty(
+  driverId: string,
+  anchor: string,
+  level: { target: number | null; lsl: number | null; usl: number | null }
+): Promise<boolean> {
+  if (level.target === null && level.lsl === null && level.usl === null) return false;
+  const have = await listSpecSeries(DRIVER_SERIES_BOARD, driverId, "2999-12-31");
+  if (have.target.length + have.lsl.length + have.usl.length > 0) return false;
+  const put = (Object.keys(SPEC_SERIES_KEYS) as (keyof typeof SPEC_SERIES_KEYS)[])
+    .filter((k) => level[k] !== null)
+    .map((k) => ({ key: SPEC_SERIES_KEYS[k], date: anchor, shift: "-", value: String(level[k]) }));
+  await applySeries(DRIVER_SERIES_BOARD, driverId, put);
+  return true;
+}
+
+/** Write-through (Option C): set one spec value on the driver for the
+ *  bucket holding `anchor`; null deletes that bucket's point. */
+export async function putDriverSpec(driverId: string, kind: keyof typeof SPEC_SERIES_KEYS, anchor: string, value: number | null): Promise<void> {
+  const cell = { key: SPEC_SERIES_KEYS[kind], date: anchor, shift: "-", value: value === null ? "" : String(value) };
+  if (value === null) await applySeries(DRIVER_SERIES_BOARD, driverId, [], [cell]);
+  else await applySeries(DRIVER_SERIES_BOARD, driverId, [cell]);
 }
 
 /** The period's actual: the points in the window folded at the driver's

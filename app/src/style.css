@@ -3761,3 +3761,34 @@ textarea.app-cp-statement { font-size: 14px; font-weight: 500; }
 .app-vd-drawerhead .app-vd-rowtitle { font-weight: 600; }
 .app-vd-gridbtn { font-size: 14px; }
 .app-vd-gridbtn-on { color: var(--app-accent, #b8521c); }
+
+/* ---- Metrics card (initiative boards, 2026-09-08) ---- */
+.app-mc { display: flex; flex-direction: column; min-height: 0; overflow: auto; font-size: 13px; }
+.app-mc-note { padding: 14px 16px; }
+.app-mc-row { border-bottom: 1px solid #f1efec; }
+.app-mc-row:last-child { border-bottom: none; }
+.app-mc-head { display: grid; grid-template-columns: minmax(0, 1fr) 120px auto; gap: 12px; align-items: center; padding: 8px 14px; min-height: 44px; }
+.app-mc-head-click { cursor: pointer; }
+.app-mc-head-click:hover { background: #faf9f7; }
+.app-mc-row-open > .app-mc-head { background: #faf9f7; }
+.app-mc-name { display: flex; align-items: center; gap: 6px; font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.app-mc-star { color: var(--app-accent, #b8521c); }
+.app-mc-kind { font-weight: 400; color: #6d675c; font-size: 11px; }
+.app-mc-spark { width: 120px; height: 28px; display: block; }
+.app-mc-val { display: inline-flex; align-items: center; gap: 8px; font-variant-numeric: tabular-nums; justify-self: end; }
+.app-mc-num { font-weight: 700; font-size: 15px; }
+.app-mc-tgt { color: #6d675c; font-size: 12px; }
+.app-mc-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; flex: none; }
+.app-mc-dot-none { background: none; border: 1px solid #d9d3c8; }
+.app-mc-strip { display: flex; gap: 3px; align-items: center; justify-self: stretch; }
+.app-mc-cell { width: 18px; height: 18px; border-radius: 4px; border: 1px solid #d9d3c8; background: #fff; padding: 0; font-size: 11px; line-height: 1; color: #fff; cursor: pointer; flex: none; }
+.app-mc-cell-on { border-color: transparent; }
+.app-mc-cell-today { box-shadow: 0 0 0 2px #fbf4ea; }
+.app-mc-cell:disabled { cursor: default; }
+.app-mc-pick { width: auto; padding: 2px 6px; font-size: 12px; }
+.app-mc-expand { padding: 4px 8px 8px; border-top: 1px dashed #e4dfd6; min-height: 320px; display: flex; flex-direction: column; }
+.app-mc-expand .ltk-root { flex: 1; min-height: 300px; }
+.app-mc-expandfoot { display: flex; justify-content: flex-end; }
+.app-im-optlist { display: flex; flex-direction: column; gap: 6px; }
+.app-im-optrow { display: grid; grid-template-columns: 1fr 130px 32px; gap: 6px; align-items: center; }
+.app-im-optstate { width: 100%; }

@@ -14,3 +14,12 @@ const mk = (host: HTMLElement, stepped: boolean) => {
 };
 mk(document.getElementById("stepped")!, true);
 mk(document.getElementById("flat")!, false);
+// a Metrics-card row: no chrome, shiftly reading mode (shift select on Add reading)
+const rowHost = document.createElement("div");
+rowHost.style.cssText = "height:360px;background:#fff;border:1px solid #e4dfd6;border-radius:10px;overflow:hidden";
+document.querySelector("div[style*='grid']")!.appendChild(rowHost);
+const row = new KpiTrendEditor(rowHost, { onChange: () => undefined, onGrid: () => undefined });
+row.setChrome("", "");
+row.setSpec({ target: 62, usl: null, lsl: 58, unit: "%" });
+row.setReadingMode({ cadence: "shiftly", shifts: ["D", "N"] });
+row.setEnvelope({ schema: SCHEMA_ID, meta: { title: "", updated: "" }, data: { points: points.slice(0, 6).map((p, i) => ({ ...p, shift: i % 2 ? "N" : "D" })), target: null, usl: null, lsl: null, unit: "" } });

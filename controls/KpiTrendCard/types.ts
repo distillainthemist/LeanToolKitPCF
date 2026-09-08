@@ -16,6 +16,8 @@ export interface KpiPoint {
   id: string; // stable across value/date edits — actions hang off it
   date: string; // yyyy-mm-dd
   value: number;
+  /** A shiftly driver's reading ("D", "N"…); absent = the whole day. */
+  shift?: string;
 }
 
 export interface KpiTrendData {
@@ -45,13 +47,14 @@ function parseData(data: unknown): KpiTrendData {
   if (Array.isArray(d.points)) {
     for (const raw of d.points) {
       if (!raw || typeof raw !== "object") continue;
-      const o = raw as { id?: unknown; date?: unknown; value?: unknown };
+      const o = raw as { id?: unknown; date?: unknown; value?: unknown; shift?: unknown };
       const value = Number(o.value);
       if (typeof o.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(o.date) && Number.isFinite(value)) {
         points.push({
           id: typeof o.id === "string" && o.id !== "" ? o.id : newId("k"),
           date: o.date,
           value,
+          ...(typeof o.shift === "string" && o.shift !== "" && o.shift !== "-" ? { shift: o.shift } : {}),
         });
       }
     }

@@ -165,3 +165,25 @@ describe("gridCsv / specCell / splitGridCells", () => {
     expect(r.actuals).toEqual([{ key: "actual", date: "2026-09-08", shift: "D", value: 2 }]);
   });
 });
+
+describe("reading defaults / metric locations", () => {
+  it("defaultReadingDate offers this bucket, or the next when taken", async () => {
+    const { defaultReadingDate } = await import("../../../shared/schema/buckets");
+    expect(defaultReadingDate("2026-09-10", "weekly", () => false)).toBe("2026-09-07");
+    expect(defaultReadingDate("2026-09-10", "weekly", (d) => d === "2026-09-07")).toBe("2026-09-14");
+    expect(defaultReadingDate("2026-09-10", "daily", () => false)).toBe("2026-09-10");
+    expect(defaultReadingDate("2026-09-10", "monthly", (d) => d === "2026-09-01")).toBe("2026-10-01");
+  });
+  it("metricLocation: driver → vdt; own → the seeded card, else a sub-location", async () => {
+    const { metricLocation, trackingDisplay } = await import("../improvement/metricLocation");
+    const base = { key: "oee", name: "OEE", unit: "%", target: 60, goodDirection: "up" as const, tracking: "value" as const };
+    const slots = [{ cardType: "KpiTrendCard", cardId: "kpi-1", settings: { metric: { key: "oee" } } }];
+    const d = { id: "vd1", cadence: "weekly" as const, aggregate: "avg" as const };
+    expect(metricLocation({ ...base, driverId: "vd1", driverLink: "drives" }, "init-1", "metrics-9", slots, d)).toMatchObject({ boardId: "vdt", cardId: "vd1", actualKey: "actual", cadence: "weekly", driverId: "vd1" });
+    expect(metricLocation({ ...base, driverId: "vd1", driverLink: "leads" }, "init-1", "metrics-9", slots, d)).toMatchObject({ boardId: "init-1", cardId: "kpi-1", driverId: "" });
+    expect(metricLocation({ ...base, key: "cost", cadence: "monthly" }, "init-1", "metrics-9", slots, null)).toMatchObject({ boardId: "init-1", cardId: "metrics-9/cost", cadence: "monthly", aggregate: "last" });
+    expect(trackingDisplay({ tracking: "goodbad" }, "1")).toEqual({ label: "Good", rag: "green" });
+    expect(trackingDisplay({ tracking: "picklist", options: [{ label: "Late", state: "red" }] }, "Late")).toEqual({ label: "Late", rag: "red" });
+    expect(trackingDisplay({ tracking: "picklist", options: [] }, "")).toEqual({ label: "", rag: null });
+  });
+});

@@ -23,7 +23,7 @@ import { appendInitiativeEvent, createInitiative, listInitiatives, saveInitiativ
 import { actionsForInitiatives, upsertActions } from "../store/actions";
 import { listBoards } from "../store/boards";
 import { rowsForInitiativeBoards } from "../store/cards";
-import { buildMetricState, loadDriverLasts } from "./metricValues";
+import { buildMetricState, loadMetricLasts } from "./metricValues";
 import { newAction } from "../../../shared/schema/actions";
 import { promptConfirm } from "../prompts";
 import { parseOrgTree } from "../../../shared/schema/meeting";
@@ -127,7 +127,7 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
       isAdmin: me?.role === "superadmin" || me?.role === "siteadmin",
     };
     let list = initiatives;
-    const metricState = buildMetricState(initiatives, allBoards, initRows, await loadDriverLasts(initiatives).catch(() => new Map()));
+    const metricState = buildMetricState(initiatives, allBoards, initRows, await loadMetricLasts(initiatives, allBoards).catch(() => new Map()));
     // state colours resolve through the SITE STATE PALETTE (ui-standard §1)
     const stateColors = paletteMap(palettes.states);
     const ragColor = (rag: "green" | "amber" | "red" | "grey"): string => stateColors[ragPaletteKey(rag)] ?? "#9a948a";
@@ -589,10 +589,10 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
       // primary metric — values arrive with P6's metric cards
       const metricCell = el("div", "app-im-cell");
       const mv = (metricState.get(i.id)?.values ?? [])[0] ?? null;
-      if (mv && mv.last !== null) {
+      if (mv && mv.display !== "") {
         // value + / target — the value takes the state colour only when
         // off-target (design 1.2)
-        const v = el("span", undefined, `${mv.last}${mv.unit}`);
+        const v = el("span", undefined, mv.display);
         if (mv.rag === "amber" || mv.rag === "red") v.style.color = ragColor(mv.rag);
         if (mv.rag !== "green" && mv.rag !== null) v.style.fontWeight = "700";
         metricCell.appendChild(el("span", "app-cp-muted", `${mv.name}${primaryMetric(i.metrics)?.driverId ? " · VDT" : ""} `));
@@ -663,7 +663,7 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
       tile.appendChild(line);
       const mv = (metricState.get(i.id)?.values ?? [])[0] ?? null;
       tile.appendChild(
-        el("div", "app-im-tile-metric" + (mv && mv.last !== null ? "" : " app-cp-muted"), mv && mv.last !== null ? `${mv.name} ${mv.last}${mv.unit}${mv.target !== null ? ` / ${mv.target}${mv.unit}` : ""}` : "No metric value")
+        el("div", "app-im-tile-metric" + (mv && mv.display !== "" ? "" : " app-cp-muted"), mv && mv.display !== "" ? `${mv.name} ${mv.display}${mv.target !== null ? ` / ${mv.target}${mv.unit}` : ""}` : "No metric value")
       );
       tile.appendChild(el("div", "app-im-tile-owner", [(i.roles.owner ?? [])[0]?.who ?? "no owner", i.org.department || i.org.site].filter((x) => x !== "").join(" · ")));
       tile.addEventListener("click", () => openInitiative(i));

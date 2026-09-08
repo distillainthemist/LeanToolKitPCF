@@ -65,6 +65,12 @@ export type MetricKind = "driver" | "own";
 /** An own metric's cadence — shiftly needs shift-keyed points the KPI
  *  card doesn't record, so it is a driver-only cadence. */
 export type OwnCadence = "daily" | "weekly" | "monthly" | "annually";
+/** A picklist metric's options (Ben, 2026-09-08: configured per metric),
+ *  each with the state it means. */
+export interface MetricOption {
+  label: string;
+  state: "green" | "amber" | "red";
+}
 export const OWN_CADENCES: OwnCadence[] = ["daily", "weekly", "monthly", "annually"];
 export type MetricRule = "none" | "atLeastOne" | "fromTree";
 export const METRIC_RULE_LABELS: Record<MetricRule, string> = {
@@ -90,6 +96,8 @@ export interface TemplateMetric {
   /** Own metrics only: the grid's period (a driver-linked metric takes the
    *  driver's). Default weekly. */
   cadence?: OwnCadence;
+  /** Picklist tracking: the options and their states. */
+  options?: MetricOption[];
   /** Value driver link (P9d): the driver id and whether the metric DRIVES
    *  the leaf (formula, units match) or LEADS it (judgement, dashed). */
   driverId?: string;
@@ -395,6 +403,13 @@ export function parseFields(raw: string): TemplateField[] {
   }
 }
 
+export function parseMetricOptions(raw: unknown): MetricOption[] {
+  return arr(raw)
+    .map((o) => obj(o))
+    .map((o) => ({ label: str(o.label), state: (["green", "amber", "red"].includes(str(o.state)) ? str(o.state) : "green") as MetricOption["state"] }))
+    .filter((o) => o.label !== "");
+}
+
 export function parseMetrics(raw: string): TemplateMetric[] {
   try {
     return arr(JSON.parse(raw || "[]"))
@@ -413,6 +428,7 @@ export function parseMetrics(raw: string): TemplateMetric[] {
         ...(num(x.usl) !== null ? { usl: num(x.usl) } : {}),
         ...(num(x.lsl) !== null ? { lsl: num(x.lsl) } : {}),
         ...(OWN_CADENCES.includes(str(x.cadence) as OwnCadence) ? { cadence: str(x.cadence) as OwnCadence } : {}),
+        ...(Array.isArray(x.options) ? { options: parseMetricOptions(x.options) } : {}),
       }))
       .filter((m) => m.key !== "" && m.name !== "");
   } catch {

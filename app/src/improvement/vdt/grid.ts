@@ -122,6 +122,22 @@ export interface GridHandle {
   foldTargets: (from: string, to: string) => Promise<number | null>;
 }
 
+/** Resolve a range of columns for a source: one windowed read for
+ *  readings + one sparse read for the spec history up to its end. Shared
+ *  with the Metrics card's rows. */
+export async function loadGridCells(src: GridSource, from: string, to: string, shiftsOf?: (actuals: { shift: string }[]) => string[]): Promise<GridCell[]> {
+  const probe = gridColumns(src.cadence, from, to, src.shifts);
+  const w = columnsWindow(probe);
+  const [cells, specCells] = await Promise.all([
+    listSeries(src.boardId, src.cardId, w.from, w.to),
+    listSeriesByPrefix(src.boardId, src.cardId, SPEC_SERIES_PREFIX, w.to),
+  ]);
+  const { actuals } = splitGridCells(cells, src.isActual);
+  const { spec } = splitGridCells(specCells, () => false);
+  const cols = src.cadence === "shiftly" && shiftsOf ? gridColumns(src.cadence, from, to, shiftsOf(actuals)) : probe;
+  return resolveGrid(cols, actuals, spec, src.level, src.cadence, src.aggregate);
+}
+
 export function renderValueGrid(o: GridOpts): GridHandle {
   const src = o.source;
   const scale = src.format?.percent ? 100 : 1;
@@ -151,20 +167,7 @@ export function renderValueGrid(o: GridOpts): GridHandle {
     return [...set];
   };
 
-  /** Resolve a range of columns: one windowed read for readings + one
-   *  sparse read for the spec history up to its end. */
-  const resolveRange = async (from: string, to: string): Promise<GridCell[]> => {
-    const probe = gridColumns(src.cadence, from, to, src.shifts);
-    const w = columnsWindow(probe);
-    const [cells, specCells] = await Promise.all([
-      listSeries(src.boardId, src.cardId, w.from, w.to),
-      listSeriesByPrefix(src.boardId, src.cardId, SPEC_SERIES_PREFIX, w.to),
-    ]);
-    const { actuals } = splitGridCells(cells, src.isActual);
-    const { spec } = splitGridCells(specCells, () => false);
-    const cols = src.cadence === "shiftly" ? gridColumns(src.cadence, from, to, shiftsOf(actuals)) : probe;
-    return resolveGrid(cols, actuals, spec, src.level, src.cadence, src.aggregate);
-  };
+  const resolveRange = (from: string, to: string): Promise<GridCell[]> => loadGridCells(src, from, to, shiftsOf);
 
   const load = async () => {
     const cols = pageColumns(src.cadence, origin);

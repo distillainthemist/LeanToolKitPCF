@@ -3,7 +3,7 @@
 
 import { Ben_ltkboardsService } from "../generated/services/Ben_ltkboardsService";
 import { allWhere, eq, firstWhere, upsertWhere } from "./dv";
-import { BoardManifest, BoardSummary, boardFromRow, serializeManifest } from "./mappers";
+import { BoardManifest, BoardSummary, boardFromRow, parseManifest, serializeManifest } from "./mappers";
 
 export async function listBoards(includeArchived = false): Promise<BoardSummary[]> {
   const rows = await allWhere(
@@ -122,6 +122,23 @@ export async function saveManifest(
   await Ben_ltkboardsService.update(boardGuid, {
     ben_manifestjson: serializeManifest(manifest),
   });
+}
+
+/** Merge `patch` into one slot's settings (a card writing its own link,
+ *  e.g. a KPI card's value driver). Keys set to undefined are removed. */
+export async function patchSlotSettings(boardId: string, cardId: string, patch: Record<string, unknown>): Promise<void> {
+  const board = await getBoard(boardId);
+  if (!board) throw new Error("Board not found");
+  const manifest = parseManifest(board.manifestRaw);
+  const slot = manifest.slots.find((s) => s.cardId === cardId);
+  if (!slot) throw new Error("Card not found on the board");
+  const next: Record<string, unknown> = { ...slot.settings };
+  for (const [k, v] of Object.entries(patch)) {
+    if (v === undefined) delete next[k];
+    else next[k] = v;
+  }
+  slot.settings = next;
+  await saveManifest(board.id, manifest);
 }
 
 export async function saveOccurrenceSettings(

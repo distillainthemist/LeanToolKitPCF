@@ -198,6 +198,11 @@ model section) — the canvas/PCF sections there are historical.
   the source document (mini-tables edit on their source card). Both
   rollups share the store road's source-resolution skeleton
   (`store/rollup.ts`).
+  A KPI card on ANY board may link itself to a value driver
+  (`settings.driver` on the slot, 2026-09-08) and then reads/writes the
+  driver's series; initiative boards carry one Metrics card
+  (`MetricsCard`) whose rows read the initiative's metric definitions
+  and each metric's own location (driver / seeded card / sub-location).
   Grid entry (2026-09-08) adds per-bucket target / lower / upper as
   dated `spec:*` keys on the same series location (a driver's virtual
   `vdt`/driver-id location or an own KPI card's), carried forward by

@@ -14,6 +14,7 @@
 
 import { Aggregate, aggregateSeries, bucketKey, Cadence, SeriesPoint } from "./model";
 import { isSpecSeriesKey, SPEC_SERIES_KEYS, specAtDate } from "../../../../shared/schema/specSeries";
+import { addBuckets as addBucketsShared, bucketSpan as bucketSpanShared, isoDate, parseDay } from "../../../../shared/schema/buckets";
 
 /** Series keys of the per-bucket spec (shared with the KPI card). */
 export const SPEC_KEYS = SPEC_SERIES_KEYS;
@@ -39,9 +40,8 @@ export interface GridColumn {
 }
 
 const DAY = 86_400_000;
-const pad = (n: number) => String(n).padStart(2, "0");
-const iso = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-const parse = (s: string) => new Date(`${s.slice(0, 10)}T00:00:00`);
+const iso = isoDate;
+const parse = parseDay;
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 /** "7 Sep 26" */
@@ -51,22 +51,8 @@ export function shortDate(isoDate: string): string {
   return `${d.getDate()} ${MONTHS[d.getMonth()]} ${String(d.getFullYear()).slice(2)}`;
 }
 
-/** The bucket a date falls in at a cadence: its span. */
-export function bucketSpan(date: string, cadence: Cadence): { from: string; to: string } {
-  const d = parse(date);
-  if (cadence === "shiftly" || cadence === "daily") return { from: iso(d), to: iso(d) };
-  if (cadence === "weekly") {
-    const day = (d.getDay() + 6) % 7; // Mon=0
-    const from = new Date(d.getTime() - day * DAY);
-    return { from: iso(from), to: iso(new Date(from.getTime() + 6 * DAY)) };
-  }
-  if (cadence === "monthly") {
-    const from = new Date(d.getFullYear(), d.getMonth(), 1);
-    const to = new Date(d.getFullYear(), d.getMonth() + 1, 0);
-    return { from: iso(from), to: iso(to) };
-  }
-  return { from: `${d.getFullYear()}-01-01`, to: `${d.getFullYear()}-12-31` };
-}
+/** The bucket a date falls in at a cadence: its span (shared helper). */
+export const bucketSpan = (date: string, cadence: Cadence): { from: string; to: string } => bucketSpanShared(date, cadence);
 
 function labelFor(span: { from: string; to: string }, cadence: Cadence, shift: string): string {
   const d = parse(span.from);
@@ -108,14 +94,8 @@ export function gridColumns(cadence: Cadence, from: string, to: string, shifts: 
  *  days (× the shifts). */
 export const PAGE_BUCKETS: Record<Cadence, number> = { shiftly: 7, daily: 7, weekly: 13, monthly: 12, annually: 10 };
 
-/** The anchor `n` buckets on from a bucket anchor (negative = back). */
-export function addBuckets(anchor: string, cadence: Cadence, n: number): string {
-  const d = parse(bucketSpan(anchor, cadence).from);
-  if (cadence === "shiftly" || cadence === "daily") return iso(new Date(d.getTime() + n * DAY));
-  if (cadence === "weekly") return iso(new Date(d.getTime() + n * 7 * DAY));
-  if (cadence === "monthly") return iso(new Date(d.getFullYear(), d.getMonth() + n, 1));
-  return `${d.getFullYear() + n}-01-01`;
-}
+/** The anchor `n` buckets on from a bucket anchor (shared helper). */
+export const addBuckets = (anchor: string, cadence: Cadence, n: number): string => addBucketsShared(anchor, cadence, n);
 
 /** The page's columns from its first anchor. */
 export function pageColumns(cadence: Cadence, origin: string, shifts?: string[]): GridColumn[] {

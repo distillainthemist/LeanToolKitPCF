@@ -752,6 +752,55 @@ reschedule/cancel history with a reason picklist.
   change (the card-series table carries the new keys). Harness pages
   `app/harness/grid.html` (in-memory series stub via `vite.config.ts`
   alias) and `kpi.html` for screenshots.
+- **Metrics card + meeting-board driver link — BUILT 2026-09-08** (Ben's
+  two cases: a KPI card on a meeting board is either standalone or a
+  window onto a value driver an initiative also works; updating it
+  anywhere updates everywhere; decisions: any board editor may link;
+  site chooser when the board has none; picklist configured per metric;
+  no migration; Metrics card 1×1 second after the charter; shiftly on
+  cards; add-reading defaults to the current period or the next when
+  taken; OPTION C for targets).
+  · **Driver link on any KPI card**: kebab "Link to value driver…" /
+    "Unlink from …" (`vdt/cardDriverLink.ts`, lazy) → site (board's, or a
+    chooser) → the full-path picker (leaves + leading only) → the card's
+    private readings merge onto the driver (driver's dates win, tally
+    shown) → Option C seed → the link saved in the slot's settings
+    (`settings.driver = {site, driverId}` via `patchSlotSettings`); the
+    mounter resolves a link from the slot first, else the initiative
+    metric (`driverLinkForCard(boardId, metricKey, settings)`), chrome
+    "· VDT", window by cadence.
+  · **Option C (driver-owned targets with write-through)**: a driver's
+    target/limits ARE its `spec:*` series; linking a metric or card whose
+    level values are set to a driver with no spec seeds the driver's
+    first spec point at the current bucket (`seedDriverSpecIfEmpty`, also
+    on mount); a DRIVES-linked metric's lower·target·upper inputs in the
+    metrics list read and write the driver's CURRENT-period spec
+    (`putDriverSpec`), mirroring into the metric's fields; card settings'
+    level values on a linked card only seed — the grid is where targets
+    are edited afterwards.
+  · **Reading entry**: `KpiPoint.shift`; `ReadingMode {cadence, shifts}`
+    — the default date is the current bucket's start or the next
+    bucket's when that already holds a reading (`defaultReadingDate`,
+    `shared/schema/buckets.ts` — bucketSpan/addBuckets moved there);
+    shiftly drivers add a shift select; one reading per date+shift.
+  · **Metrics card** (`MetricsCard`, `improvement/metricsCard.ts`, lazy,
+    Performance group): rows from the initiative DEFINITION, ★ first —
+    name (· VDT), sparkline of the last page of buckets (target as a
+    faint step, dots in state colour), latest value / this period's
+    target, state dot; a value row expands into the KPI editor (no chrome)
+    bound to the row's location: readings, per-reading actions (driver
+    point ids prefixed by metric key so two driver rows never collide),
+    ⊞ Grid. Good/bad rows: a strip of bucket cells cycling none → ✓ → ✗;
+    picklist rows: a select per cell over the metric's options (each
+    option carries a state; editor on the own-metric form). Locations via
+    `improvement/metricLocation.ts`: driver (drives) → `vdt`/driver;
+    own → the seeded single card when one exists on the board, else
+    `<metricsCardId>/<metricKey>`. Seeding: ONE Metrics card, 1×1, second
+    after the charter, in place of per-metric KPI cards;
+    `ensureMetricCards` now ensures that one card. Register/tiles/roll-up
+    read every metric's last reading from its location
+    (`loadMetricLasts(initiatives, boards)`), good/bad and picklist show a
+    label and colour by state (`MetricValue.display`).
 - **P10 Reporting** — designed (spec §4).
 
 Each phase ships behind the usual gates + `pac code push`; the specs'

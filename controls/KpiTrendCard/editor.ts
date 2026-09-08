@@ -17,6 +17,8 @@ import { htmlToPng, htmlToSvg, saveSvg, SnapshotScheduler } from "../../shared/e
 import { newId, nowIso, todayIso } from "../../shared/schema/id";
 import { KpiPoint, KpiTrendEnvelope, SCHEMA_ID } from "./types";
 import { EMPTY_SPEC_SERIES, specFor, SpecSeries } from "../../shared/schema/specSeries";
+import { BucketCadence, defaultReadingDate } from "../../shared/schema/buckets";
+import { selectInput } from "../../shared/ui/dialog";
 import { KPITREND_CSS } from "./styles";
 
 const VB_W = 640;
@@ -49,6 +51,18 @@ export interface KpiTrendEditorCallbacks {
   /** Grid entry (a column per period) — the host opens it; the button
    *  shows only when set. */
   onGrid?: () => void;
+  /** Link / unlink a value driver (any board) — kebab items show only
+   *  when set. */
+  onLinkDriver?: () => void;
+  onUnlinkDriver?: () => void;
+}
+
+/** How readings are entered: the cadence sets the default date (this
+ *  period, or next when this one holds a reading); shifts, when given,
+ *  add a shift select (a shiftly driver). */
+export interface ReadingMode {
+  cadence: BucketCadence;
+  shifts: string[] | null;
 }
 
 export class KpiTrendEditor {
@@ -68,6 +82,9 @@ export class KpiTrendEditor {
   /** Per-period spec (grid entry): dated target/limit points that carry
    *  forward; the level spec above is the fallback. */
   private specSeries: SpecSeries = EMPTY_SPEC_SERIES;
+  private reading: ReadingMode = { cadence: "daily", shifts: null };
+  /** Linked-driver name for the kebab ("Unlink from …"); "" = none. */
+  private linkedTo = "";
   private readonly snapshots: SnapshotScheduler;
 
   constructor(
@@ -133,6 +150,18 @@ export class KpiTrendEditor {
     this.spec = spec;
     this.render();
     this.snapshots.schedule();
+  }
+
+  /** Reading entry: cadence for the default date, shifts when shiftly. */
+  setReadingMode(mode: ReadingMode): void {
+    this.reading = mode;
+  }
+
+  /** The linked driver's name (kebab shows Unlink); "" clears. */
+  setLinkedDriver(name: string): void {
+    if (this.linkedTo === name) return;
+    this.linkedTo = name;
+    this.render();
   }
 
   /** The dated per-period spec (target / limits that change over time). */
@@ -250,6 +279,13 @@ export class KpiTrendEditor {
           label: n > 0 ? `Actions (${n})…` : "Raise action…",
           onClick: () => this.manage("", this.cardTitle),
         });
+      }
+      if (this.cb.onLinkDriver) {
+        items.push(
+          this.linkedTo !== ""
+            ? { label: `Unlink from ${this.linkedTo}`, onClick: () => this.cb.onUnlinkDriver?.() }
+            : { label: "Link to value driver…", onClick: () => this.cb.onLinkDriver?.() }
+        );
       }
       items.push(
         { label: "Download PNG", onClick: () => this.downloadPng() },
@@ -495,7 +531,7 @@ export class KpiTrendEditor {
       const nAct = this.openFor(pt.id);
       const tip = svgEl("title", {});
       tip.textContent =
-        `${pt.date}: ${pt.value}` +
+        `${pt.date}${pt.shift ? " · " + pt.shift : ""}: ${pt.value}` +
         (oos ? " — out of spec" : "") +
         (nAct > 0 ? ` — ${nAct} open action${nAct === 1 ? "" : "s"}` : "");
       dot.appendChild(tip);
@@ -529,7 +565,13 @@ export class KpiTrendEditor {
   }
 
   private editPoint(point: KpiPoint | null): void {
-    const date = textInput(point?.date ?? todayIso(), { type: "date" });
+    const shifts = this.reading.shifts;
+    const firstShift = shifts && shifts.length > 0 ? shifts[0] : "";
+    // default: this period's start, or next period's when it already holds
+    // a reading (on the first shift when shifts apply)
+    const taken = (d: string) => this.env.data.points.some((p) => p.date === d && (!shifts || (p.shift ?? "") === firstShift));
+    const date = textInput(point?.date ?? defaultReadingDate(todayIso(), this.reading.cadence, taken), { type: "date" });
+    const shiftSel = shifts && shifts.length > 0 ? selectInput(point?.shift ?? firstShift, shifts.map((s) => ({ value: s, label: s }))) : null;
     const value = textInput(point !== null ? String(point.value) : "", {
       type: "number",
     });
@@ -556,17 +598,19 @@ export class KpiTrendEditor {
       onClick: () => {
         const v = Number(value.value);
         if (date.value === "" || !Number.isFinite(v)) return;
+        const shift = shiftSel ? shiftSel.value : "";
         if (point) {
           point.date = date.value;
           point.value = v;
+          if (shiftSel) point.shift = shift;
         } else {
-          // one reading per date — a re-entry updates in place (keeping its
-          // id, so any actions on it survive) rather than replacing
-          const existing = this.env.data.points.find((p) => p.date === date.value);
+          // one reading per date (and shift) — a re-entry updates in place
+          // (keeping its id, so any actions on it survive) rather than replacing
+          const existing = this.env.data.points.find((p) => p.date === date.value && (p.shift ?? "") === shift);
           if (existing) {
             existing.value = v;
           } else {
-            this.env.data.points.push({ id: newId("k"), date: date.value, value: v });
+            this.env.data.points.push({ id: newId("k"), date: date.value, value: v, ...(shift !== "" ? { shift } : {}) });
           }
         }
         dlg.close();
@@ -581,6 +625,11 @@ export class KpiTrendEditor {
     const dateRow = fieldRow("Date", date);
     dateRow.classList.add("ltk-field-half");
     dlg.body.appendChild(dateRow);
+    if (shiftSel) {
+      const shiftRow = fieldRow("Shift", shiftSel);
+      shiftRow.classList.add("ltk-field-half");
+      dlg.body.appendChild(shiftRow);
+    }
     const valueRow = fieldRow("Value", value);
     valueRow.classList.add("ltk-field-half");
     dlg.body.appendChild(valueRow);

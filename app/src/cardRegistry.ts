@@ -293,6 +293,24 @@ function ganttCardMounter(): CardMounter {
   };
 }
 
+/** The initiative Metrics card (2026-09-08) lives in src/improvement/
+ *  (lazy chunk) — the board pays only for this wrapper. */
+function metricsCardMounter(): CardMounter {
+  return (opts) => {
+    let dead = false;
+    let inner: (() => void) | null = null;
+    const chromed = screenCardChrome(opts);
+    void import("./improvement/metricsCard").then((m) => {
+      if (!dead) inner = m.mountMetricsCard({ ...opts, host: chromed });
+    });
+    return () => {
+      dead = true;
+      inner?.();
+      opts.host.replaceChildren();
+    };
+  };
+}
+
 /** The Priorities ritual card (cascade plan P4) lives in src/priorities/
  *  (lazy chunk) — the board pays only for this wrapper. */
 function prioritiesCardMounter(): CardMounter {
@@ -731,6 +749,10 @@ const REGISTRY: Record<string, CardMounter> = {
       return c === "daily" || c === "monthly" || c === "annually" ? c : "weekly";
     };
     const level = () => ({ target: cfgNum(opts, "target") ?? env.data.target, usl: cfgNum(opts, "usl") ?? env.data.usl, lsl: cfgNum(opts, "lsl") ?? env.data.lsl });
+    /** The slot's own driver link, overridable after an in-card link /
+     *  unlink (the mounted settings blob is a snapshot). */
+    let slotLink: Record<string, unknown> | null | undefined = undefined;
+    const settingsForLink = (): Record<string, unknown> => (slotLink === undefined ? opts.settings : { ...opts.settings, driver: slotLink ?? undefined });
     const editor = new KpiTrendEditor(opts.host, {
       onChange: (env2) => {
         edited = true;
@@ -763,6 +785,33 @@ const REGISTRY: Record<string, CardMounter> = {
           });
         })();
       },
+      ...(opts.designTime || opts.readOnly
+        ? {}
+        : {
+            onLinkDriver: () => {
+              void (async () => {
+                const { linkCardToDriver } = await import("./improvement/vdt/cardDriverLink");
+                const ok = await linkCardToDriver({ boardId: opts.boardId, cardId: opts.cardId, title: opts.title.split("\n")[0], unit: cfgStr(opts, "unit") || env.data.unit, level: level() });
+                if (!ok) return;
+                const b = await import("./store/boards").then((m) => m.getBoard(opts.boardId)).catch(() => null);
+                const sl = b ? (await import("./store/mappers")).parseManifest(b.manifestRaw).slots.find((x) => x.cardId === opts.cardId) : null;
+                slotLink = (sl?.settings.driver as Record<string, unknown> | undefined) ?? null;
+                await resolveLink();
+                await reload();
+              })();
+            },
+            onUnlinkDriver: () => {
+              void (async () => {
+                if (!link) return;
+                const { unlinkCardFromDriver } = await import("./improvement/vdt/cardDriverLink");
+                const ok = await unlinkCardFromDriver(opts.boardId, opts.cardId, link.name);
+                if (!ok) return;
+                slotLink = null;
+                await resolveLink();
+                await reload();
+              })();
+            },
+          }),
     });
     editor.setTheme(opts.theme);
     editor.setChrome(opts.title, promptsRaw(opts));
@@ -801,27 +850,47 @@ const REGISTRY: Record<string, CardMounter> = {
       const points = link ? driverPointsFromCells(cells) : pointsFromCells(cells);
       lastPoints = points.map((p) => ({ ...p }));
       env.data.points = points;
+      // reading entry: the cadence sets the default date; a shiftly driver
+      // adds the shift select (its shifts = D/N plus any already recorded)
+      const shifts = link && link.node.cadence === "shiftly" ? [...new Set(["D", "N", ...points.map((p) => (p as { shift?: string }).shift ?? "").filter((x) => x !== "")])] : null;
+      editor.setReadingMode({ cadence: link ? link.node.cadence : ownCadence(), shifts });
       editor.setEnvelope(env);
+    };
+    /** The driver this card shows: the slot's own link (any board) or, on
+     *  an initiative board, the metric's DRIVES link. Lazy — the
+     *  improvement chunk. */
+    const resolveLink = async () => {
+      link = null;
+      const metricKey = String(((opts.settings.metric ?? {}) as Record<string, unknown>).key ?? "");
+      const settings = settingsForLink();
+      const mayLink = settings.driver !== undefined || (opts.boardId.startsWith("init-") && metricKey !== "");
+      if (mayLink) {
+        try {
+          const { driverLinkForCard } = await import("./improvement/vdt/cardLink");
+          const { windowDaysForCadence, seedDriverSpecIfEmpty } = await import("./store/driverSeries");
+          const l = await driverLinkForCard(opts.boardId, metricKey, settings);
+          if (l) {
+            link = { driverId: l.driverId, name: l.name, cadenceLabel: l.cadenceLabel, days: windowDaysForCadence(l.cadence), node: l.node };
+            window = trailingWindow(day, link.days);
+            // Option C: the driver owns targets — a bare driver takes this
+            // card's level values as its first spec point
+            if (!opts.designTime) {
+              const { bucketSpan } = await import("../../shared/schema/buckets");
+              await seedDriverSpecIfEmpty(l.driverId, bucketSpan(day, l.cadence).from, level()).catch(() => false);
+            }
+          }
+        } catch {
+          /* unlinked behaviour */
+        }
+      }
+      if (!link) window = trailingWindow(day, Number.isFinite(cfgDays) && cfgDays >= 7 && cfgDays <= 1000 ? cfgDays : 91);
+      // the chrome says so: "· VDT" on the title, cadence beneath
+      editor.setChrome(link ? `${opts.title.split("\n")[0]} · VDT\n${link.cadenceLabel} · from value driver ${link.name}` : opts.title, promptsRaw(opts));
+      editor.setLinkedDriver(link ? link.name : "");
     };
     void (async () => {
       try {
-        // resolve the driver link first (lazy — the improvement chunk)
-        const metricKey = String(((opts.settings.metric ?? {}) as Record<string, unknown>).key ?? "");
-        if (opts.boardId.startsWith("init-") && metricKey !== "") {
-          try {
-            const { driverLinkForCard } = await import("./improvement/vdt/cardLink");
-            const { windowDaysForCadence } = await import("./store/driverSeries");
-            const l = await driverLinkForCard(opts.boardId, metricKey);
-            if (l) {
-              link = { driverId: l.driverId, name: l.name, cadenceLabel: l.cadenceLabel, days: windowDaysForCadence(l.cadence), node: l.node };
-              window = trailingWindow(day, link.days);
-              // the chrome says so: "· VDT" on the title, cadence beneath
-              editor.setChrome(`${opts.title.split("\n")[0]} · VDT\n${link.cadenceLabel} · from value driver ${link.name}`, promptsRaw(opts));
-            }
-          } catch {
-            /* unlinked behaviour */
-          }
-        }
+        await resolveLink();
         await reload(true);
       } catch (err) {
         console.warn("kpi series load failed", err);
@@ -1298,6 +1367,7 @@ const REGISTRY: Record<string, CardMounter> = {
   PrioritiesCard: prioritiesCardMounter(),
   // Actions Gantt in the ritual (P8) — same lazy pattern.
   GanttCard: ganttCardMounter(),
+  MetricsCard: metricsCardMounter(),
 
   // A live, read-only window onto ANOTHER board's card: resolves the source
   // slot and mounts the source's real card type with the SOURCE's ids and

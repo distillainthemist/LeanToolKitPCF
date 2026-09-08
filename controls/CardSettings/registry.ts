@@ -368,6 +368,19 @@ export const CARDS: CardSpec[] = [
     seriesBacked: true,
   },
   {
+    type: "MetricsCard",
+    standardContent: "preview",
+    standardContentNote:
+      "This card lists the initiative's metrics from its definition — there is nothing to pre-fill.",
+    label: "Initiative metrics",
+    group: "Performance",
+    description:
+      "Every metric on the initiative, ★ first: latest value, this period's target, state and a sparkline; a row expands into the chart, readings and the grid.",
+    config: [],
+    appBound: ["instanceId"],
+    seriesBacked: true,
+  },
+  {
     type: "KpiTrendCard",
     standardContent: "preview",
     standardContentNote:

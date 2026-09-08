@@ -380,6 +380,7 @@ export interface KpiLikePoint {
   id: string;
   date: string;
   value: number;
+  shift?: string;
 }
 
 export function driverPointsFromCells(cells: { key: string; date: string; shift: string; value: string }[]): KpiLikePoint[] {
@@ -388,7 +389,7 @@ export function driverPointsFromCells(cells: { key: string; date: string; shift:
     if (c.key !== "actual") continue;
     const v = Number(c.value);
     if (!Number.isFinite(v)) continue;
-    out.push({ id: `actual@${c.date}${c.shift && c.shift !== "-" ? "|" + c.shift : ""}`, date: c.date, value: v });
+    out.push({ id: `actual@${c.date}${c.shift && c.shift !== "-" ? "|" + c.shift : ""}`, date: c.date, value: v, ...(c.shift && c.shift !== "-" ? { shift: c.shift } : {}) });
   }
   out.sort((a, b) => (a.date < b.date ? -1 : 1));
   return out;
@@ -400,7 +401,7 @@ export function driverDiffPoints(
   prev: KpiLikePoint[],
   next: KpiLikePoint[]
 ): { put: { key: string; date: string; shift: string; value: string }[]; del: { key: string; date: string; shift: string; value: string }[] } {
-  const shiftOf = (id: string) => (id.includes("|") ? id.slice(id.indexOf("|") + 1) : "-");
+  const shiftOf = (p: KpiLikePoint) => (p.shift && p.shift !== "" ? p.shift : p.id.includes("|") ? p.id.slice(p.id.indexOf("|") + 1) : "-");
   const before = new Map(prev.map((p) => [p.id, p]));
   const put: { key: string; date: string; shift: string; value: string }[] = [];
   const del: { key: string; date: string; shift: string; value: string }[] = [];
@@ -408,11 +409,11 @@ export function driverDiffPoints(
     if (!/^\d{4}-\d{2}-\d{2}$/.test(p.date) || !Number.isFinite(p.value)) continue;
     const old = before.get(p.id);
     before.delete(p.id);
-    if (old && old.date === p.date && old.value === p.value) continue;
-    if (old && old.date !== p.date) del.push({ key: "actual", date: old.date, shift: shiftOf(old.id), value: "" });
-    put.push({ key: "actual", date: p.date, shift: shiftOf(p.id), value: String(p.value) });
+    if (old && old.date === p.date && old.value === p.value && shiftOf(old) === shiftOf(p)) continue;
+    if (old && (old.date !== p.date || shiftOf(old) !== shiftOf(p))) del.push({ key: "actual", date: old.date, shift: shiftOf(old), value: "" });
+    put.push({ key: "actual", date: p.date, shift: shiftOf(p), value: String(p.value) });
   }
-  for (const gone of before.values()) del.push({ key: "actual", date: gone.date, shift: shiftOf(gone.id), value: "" });
+  for (const gone of before.values()) del.push({ key: "actual", date: gone.date, shift: shiftOf(gone), value: "" });
   return { put, del };
 }
 

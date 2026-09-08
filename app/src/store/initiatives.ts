@@ -209,9 +209,14 @@ export async function createInitiative(
               }
             : s.settings,
       }));
-      // one KPI-trend card per mandatory metric (design 2.4) — titled with
-      // the metric and its target; owners enter dated values in-card
-      for (const m of header.metrics) slots.push(metricCardSlot(m, slots.length));
+      // ONE Metrics card for the initiative (Ben, 2026-09-08), one by one,
+      // second after the charter; it lists the metrics from the definition
+      // so a metric added later appears without touching the board
+      slots.splice(Math.min(1, slots.length), 0, metricsCardSlot());
+      slots.forEach((s, k) => {
+        s.pos = k + 1;
+        s.nav = k + 1;
+      });
       await upsertWhere(
         Ben_ltkboardsService,
         eq("ben_boardid", boardId),
@@ -235,6 +240,21 @@ export async function createInitiative(
   i.rowId = await saveInitiative(i);
   await appendInitiativeEvent(i, "created", { template: t.name, method: t.method }, actor);
   return i;
+}
+
+/** The initiative's Metrics card slot (1×1). */
+export function metricsCardSlot(): { pos: number; w: number; h: number; nav: number; cardId: string; cardType: string; title: string; settingsJSON: Record<string, unknown> } {
+  const rand = Math.random().toString(36).slice(2, 6);
+  return {
+    pos: 2,
+    w: 1,
+    h: 1,
+    nav: 2,
+    cardId: `metrics-${rand}`,
+    cardType: "MetricsCard",
+    title: "Metrics",
+    settingsJSON: { template: { stage: "", mandatory: true }, config: {} },
+  };
 }
 
 /** The KPI-trend slot a metric gets on the initiative board — titled with
@@ -278,32 +298,19 @@ export async function ensureMetricCards(i: Initiative): Promise<{ added: number;
   const board = await getBoard(i.boardId);
   if (!board) return { added: 0, removed: 0, kept: [] };
   const manifest = parseManifest(board.manifestRaw);
-  const keyOfSlot = (sl: { cardType: string; settings: Record<string, unknown> }) =>
-    sl.cardType === "KpiTrendCard" ? String(((sl.settings.metric ?? {}) as Record<string, unknown>).key ?? "") : "";
-  const have = new Set(manifest.slots.map(keyOfSlot).filter((k) => k !== ""));
-  let added = 0;
-  for (const m of i.metrics) {
-    if (have.has(m.key)) continue;
-    const slot = metricCardSlot(m, manifest.slots.length);
-    manifest.slots.push({ pos: slot.pos, w: slot.w, h: slot.h, nav: slot.nav, cardId: slot.cardId, cardType: slot.cardType, title: slot.title, settings: slot.settingsJSON } as (typeof manifest.slots)[number]);
-    added++;
+  // the Metrics card reads the definition, so the board needs exactly one
+  // of it and no per-metric cards (2026-09-08); single KPI cards that
+  // already exist stay (the Metrics card adopts their series)
+  if (!manifest.slots.some((sl) => sl.cardType === "MetricsCard")) {
+    const slot = metricsCardSlot();
+    manifest.slots.splice(Math.min(1, manifest.slots.length), 0, { pos: slot.pos, w: slot.w, h: slot.h, nav: slot.nav, cardId: slot.cardId, cardType: slot.cardType, title: slot.title, settings: slot.settingsJSON } as (typeof manifest.slots)[number]);
+    manifest.slots.forEach((s, k) => {
+      s.pos = k + 1;
+      s.nav = k + 1;
+    });
+    await saveManifest(board.id, manifest);
+    return { added: 1, removed: 0, kept: [] };
   }
-  const keys = new Set(i.metrics.map((m) => m.key));
-  const kept: string[] = [];
-  let removed = 0;
-  const keepSlots: typeof manifest.slots = [];
-  for (const sl of manifest.slots) {
-    const k = keyOfSlot(sl);
-    if (k === "" || keys.has(k)) {
-      keepSlots.push(sl);
-      continue;
-    }
-    if (await hasAnySeries(i.boardId, sl.cardId)) {
-      keepSlots.push(sl);
-      kept.push(sl.title);
-    } else removed++;
-  }
-  manifest.slots = keepSlots;
-  if (added > 0 || removed > 0) await saveManifest(board.id, manifest);
-  return { added, removed, kept };
+  void hasAnySeries;
+  return { added: 0, removed: 0, kept: [] };
 }

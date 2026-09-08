@@ -7,7 +7,11 @@
 import { el, clear } from "../../../shared/ui/dom";
 import { promptConfirm } from "../prompts";
 import { listDrivers, saveDriver } from "../store/valueDrivers";
-import { directionOf, keyFor, MetricKind, normalizeMetrics, OWN_CADENCES, OwnCadence, TemplateMetric, Tracking } from "./templateModel";
+import { listSpecSeries, putDriverSpec, seedDriverSpecIfEmpty } from "../store/driverSeries";
+import { specFor, SpecSeries } from "../../../shared/schema/specSeries";
+import { bucketSpan } from "../../../shared/schema/buckets";
+import { todayIso } from "../../../shared/schema/id";
+import { directionOf, keyFor, MetricKind, MetricOption, normalizeMetrics, OWN_CADENCES, OwnCadence, TemplateMetric, Tracking } from "./templateModel";
 import { DriverNode, isLeaf, newNode, pathOf } from "./vdt/model";
 import { openDriverLinkPicker } from "./vdt/linkPicker";
 
@@ -52,6 +56,19 @@ export function renderMetricsList(o: MetricsListOpts): { refresh: () => void } {
   };
 
   const kindOf = (m: TemplateMetric): MetricKind => m.kind ?? (m.driverId ? "driver" : "own");
+  /** Option C (Ben, 2026-09-08): a DRIVES-linked metric's target/limits
+   *  live on the driver — the row's inputs read and write the driver's
+   *  spec for the current period; the metric's own fields mirror it. */
+  const drives = (m: TemplateMetric): boolean => kindOf(m) === "driver" && !!m.driverId && m.driverLink !== "leads";
+  const driverSpec = new Map<string, SpecSeries>();
+  const anchorFor = (m: TemplateMetric): string => {
+    const n = drivers.find((d) => d.id === m.driverId);
+    return bucketSpan(todayIso(), n?.cadence ?? "weekly").from;
+  };
+  const loadSpecFor = async (m: TemplateMetric) => {
+    if (!m.driverId || driverSpec.has(m.driverId)) return;
+    driverSpec.set(m.driverId, await listSpecSeries("vdt", m.driverId, "2999-12-31").catch(() => ({ target: [], lsl: [], usl: [] })));
+  };
 
   const paint = () => {
     clear(box);
@@ -77,7 +94,7 @@ export function renderMetricsList(o: MetricsListOpts): { refresh: () => void } {
       } else name.appendChild(el("span", "app-im-metrickind", "· initiative-specific"));
       main.appendChild(name);
       const dir = directionOf(m);
-      main.appendChild(el("div", "app-im-metricmeta", [m.unit || "no unit", dir === "down" ? "lower is better" : dir === "range" ? "within limits" : "higher is better", m.tracking === "value" ? "value vs target" : m.tracking === "goodbad" ? "good / bad" : "status", ...(kindOf(m) === "own" ? [m.cadence ?? "weekly"] : [])].join(" · ")));
+      main.appendChild(el("div", "app-im-metricmeta", [m.unit || "no unit", ...(m.tracking === "value" ? [dir === "down" ? "lower is better" : dir === "range" ? "within limits" : "higher is better", "value vs target"] : m.tracking === "goodbad" ? ["good / bad"] : [`picklist: ${(m.options ?? []).map((x) => x.label).join(" / ") || "no options"}`]), ...(kindOf(m) === "own" ? [m.cadence ?? "weekly"] : [])].join(" · ")));
       row.appendChild(main);
       // target + limits (the KPI card's spec)
       const numIn = (label: string, cur: number | null | undefined, set: (v: number | null) => void, cls: string) => {
@@ -96,9 +113,32 @@ export function renderMetricsList(o: MetricsListOpts): { refresh: () => void } {
         return inp;
       };
       const spec = el("div", "app-im-metricspec");
-      spec.appendChild(numIn("lower", m.lsl, (v) => (m.lsl = v), "app-im-limit"));
-      spec.appendChild(numIn("target", m.target, (v) => (m.target = v), "app-im-target"));
-      spec.appendChild(numIn("upper", m.usl, (v) => (m.usl = v), "app-im-limit"));
+      if (m.tracking !== "value") {
+        spec.appendChild(el("span", "app-cp-muted", m.tracking === "goodbad" ? "good = ✓" : "state per option"));
+      } else if (drives(m)) {
+        // the driver's current-period spec, written through on change
+        const ds = driverSpec.get(m.driverId as string);
+        const cur = ds ? specFor(ds, anchorFor(m), { target: m.target, lsl: m.lsl ?? null, usl: m.usl ?? null }) : { target: m.target, lsl: m.lsl ?? null, usl: m.usl ?? null };
+        const through = (kind: "target" | "lsl" | "usl") => (v: number | null) => {
+          if (kind === "target") m.target = v;
+          else m[kind] = v;
+          void putDriverSpec(m.driverId as string, kind, anchorFor(m), v)
+            .then(() => {
+              driverSpec.delete(m.driverId as string);
+              return loadSpecFor(m);
+            })
+            .then(paint);
+        };
+        spec.appendChild(numIn("lower", cur.lsl, through("lsl"), "app-im-limit"));
+        spec.appendChild(numIn("target", cur.target, through("target"), "app-im-target"));
+        spec.appendChild(numIn("upper", cur.usl, through("usl"), "app-im-limit"));
+        spec.title = "Held on the value driver for the current period — every board showing this driver sees the same target.";
+        if (!ds) void loadSpecFor(m).then(paint);
+      } else {
+        spec.appendChild(numIn("lower", m.lsl, (v) => (m.lsl = v), "app-im-limit"));
+        spec.appendChild(numIn("target", m.target, (v) => (m.target = v), "app-im-target"));
+        spec.appendChild(numIn("upper", m.usl, (v) => (m.usl = v), "app-im-limit"));
+      }
       row.appendChild(spec);
       // own metrics: into the tree
       const acts = el("div", "app-im-metricacts");
@@ -194,6 +234,53 @@ export function renderMetricsList(o: MetricsListOpts): { refresh: () => void } {
       trk.appendChild(op);
     }
     field("Tracking", trk);
+    // picklist: the options and the state each means
+    const optBox = el("div", "app-im-optlist");
+    const optField = el("div", "app-field");
+    optField.append(el("span", "app-field-label", "Options"), optBox);
+    optField.hidden = true;
+    dlg.appendChild(optField);
+    const options: MetricOption[] = [];
+    const paintOptions = () => {
+      clear(optBox);
+      options.forEach((op, k) => {
+        const row = el("div", "app-im-optrow");
+        const lbl = el("input", "app-input") as HTMLInputElement;
+        lbl.value = op.label;
+        lbl.placeholder = "Option";
+        lbl.addEventListener("input", () => (op.label = lbl.value));
+        const st = el("select", "app-input app-im-optstate") as HTMLSelectElement;
+        for (const [v, l] of [["green", "On track"], ["amber", "At risk"], ["red", "Issue"]] as const) {
+          const o2 = el("option", "", l) as HTMLOptionElement;
+          o2.value = v;
+          if (v === op.state) o2.selected = true;
+          st.appendChild(o2);
+        }
+        st.addEventListener("change", () => (op.state = st.value as MetricOption["state"]));
+        const x = btn("×", "app-im-link-x");
+        x.addEventListener("click", () => {
+          options.splice(k, 1);
+          paintOptions();
+        });
+        row.append(lbl, st, x);
+        optBox.appendChild(row);
+      });
+      const add = btn("＋ Option", "app-link");
+      add.addEventListener("click", () => {
+        options.push({ label: "", state: options.length === 0 ? "green" : "red" });
+        paintOptions();
+        (optBox.querySelector(".app-im-optrow:last-of-type input") as HTMLInputElement | null)?.focus();
+      });
+      optBox.appendChild(add);
+    };
+    paintOptions();
+    trk.addEventListener("change", () => {
+      optField.hidden = trk.value !== "picklist";
+      if (trk.value === "picklist" && options.length === 0) {
+        options.push({ label: "On track", state: "green" }, { label: "At risk", state: "amber" }, { label: "Off track", state: "red" });
+        paintOptions();
+      }
+    });
     const cad = el("select", "app-input") as HTMLSelectElement;
     for (const c of OWN_CADENCES) {
       const op = el("option", "", c[0].toUpperCase() + c.slice(1)) as HTMLOptionElement;
@@ -232,6 +319,7 @@ export function renderMetricsList(o: MetricsListOpts): { refresh: () => void } {
         cadence: cad.value as OwnCadence,
         ...(lsl !== null ? { lsl } : {}),
         ...(usl !== null ? { usl } : {}),
+        ...(trk.value === "picklist" ? { options: options.filter((x) => x.label.trim() !== "").map((x) => ({ label: x.label.trim(), state: x.state })) } : {}),
       });
       scrim.remove();
       changed();
@@ -256,6 +344,9 @@ export function renderMetricsList(o: MetricsListOpts): { refresh: () => void } {
     if (r.mode === "drives") {
       m.name = n.name;
       m.unit = n.unit;
+      // Option C: a bare driver takes this metric's level as its first spec
+      await seedDriverSpecIfEmpty(n.id, bucketSpan(todayIso(), n.cadence).from, { target: m.target, lsl: m.lsl ?? null, usl: m.usl ?? null }).catch(() => false);
+      driverSpec.delete(n.id);
     }
     if (o.onLinked) await o.onLinked(m);
     changed();
