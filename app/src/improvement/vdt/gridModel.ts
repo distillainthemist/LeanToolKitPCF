@@ -103,6 +103,30 @@ export function gridColumns(cadence: Cadence, from: string, to: string, shifts: 
   return out;
 }
 
+/** Buckets per page — the grid pages through time without bound (Ben,
+ *  2026-09-08: a KPI is never bounded by a period). Shiftly pages by
+ *  days (× the shifts). */
+export const PAGE_BUCKETS: Record<Cadence, number> = { shiftly: 7, daily: 7, weekly: 13, monthly: 12, annually: 10 };
+
+/** The anchor `n` buckets on from a bucket anchor (negative = back). */
+export function addBuckets(anchor: string, cadence: Cadence, n: number): string {
+  const d = parse(bucketSpan(anchor, cadence).from);
+  if (cadence === "shiftly" || cadence === "daily") return iso(new Date(d.getTime() + n * DAY));
+  if (cadence === "weekly") return iso(new Date(d.getTime() + n * 7 * DAY));
+  if (cadence === "monthly") return iso(new Date(d.getFullYear(), d.getMonth() + n, 1));
+  return `${d.getFullYear() + n}-01-01`;
+}
+
+/** The page's columns from its first anchor. */
+export function pageColumns(cadence: Cadence, origin: string, shifts?: string[]): GridColumn[] {
+  return gridColumns(cadence, origin, addBuckets(origin, cadence, PAGE_BUCKETS[cadence] - 1), shifts);
+}
+
+/** The page origin that puts `date`'s bucket third from the right. */
+export function pageOriginAround(date: string, cadence: Cadence): string {
+  return addBuckets(bucketSpan(date, cadence).from, cadence, -(PAGE_BUCKETS[cadence] - 3));
+}
+
 /** The read window covering every column (full buckets). */
 export function columnsWindow(cols: GridColumn[]): { from: string; to: string } {
   if (cols.length === 0) return { from: "2999-12-31", to: "1900-01-01" };

@@ -22,7 +22,7 @@ const ragColor = (r: "green" | "amber" | "red") => (r === "green" ? "#2e7d32" : 
 renderValueGrid({
   host: document.getElementById("weekly")!,
   source: driverGridSource({ id: "oee", cadence: "weekly", aggregate: "avg", unit: "%", format: { decimals: 1, scale: "", percent: true } }, { target: null, lsl: null, usl: null }, false),
-  window: { from: "2026-07-01", to: "2026-09-30" },
+  home: { from: "2026-07-01", to: "2026-09-30" },
   ragColor,
   footer: () => {
     const b = document.createElement("button");
@@ -39,6 +39,6 @@ seed("b1", "kpi-1", [
 renderValueGrid({
   host: document.getElementById("daily")!,
   source: cardGridSource("b1", "kpi-1", "daily", "min", { target: 40, lsl: null, usl: 48 }, false),
-  window: { from: "2026-08-25", to: "2026-09-14" },
+  home: { from: "2026-08-25", to: "2026-09-14" },
   ragColor,
 });

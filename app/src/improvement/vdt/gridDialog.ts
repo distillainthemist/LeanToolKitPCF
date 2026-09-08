@@ -18,6 +18,7 @@ export interface GridDialogOpts {
   cadence: Cadence;
   unit: string;
   level: GridLevel;
+  /** The card's window — the first page opens around today anyway. */
   window: { from: string; to: string };
   readOnly: boolean;
   /** Called when the dialog closes after at least one write. */
@@ -50,7 +51,7 @@ export async function openValueGridDialog(o: GridDialogOpts): Promise<void> {
   const grid = renderValueGrid({
     host,
     source,
-    window: o.window,
+    home: o.window,
     ragColor,
     onSaved: () => {
       changed = true;

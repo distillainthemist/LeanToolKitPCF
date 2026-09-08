@@ -308,7 +308,7 @@ export function mountValueDrivers(parent: HTMLElement): () => void {
       gridHandle = renderValueGrid({
         host,
         source: driverGridSource(n, { target: null, lsl: null, usl: null }, !canEdit()),
-        window: w,
+        home: w,
         ragColor,
         csvName: `${n.name}-${period}`.replace(/[^a-z0-9]+/gi, "-").toLowerCase(),
         onSaved: () => {
@@ -324,16 +324,17 @@ export function mountValueDrivers(parent: HTMLElement): () => void {
           const fill = btn("Fill plan from targets", "app-link");
           fill.title = `Fold the columns' targets by ${n.aggregate} into this period's Plan`;
           fill.addEventListener("click", () => {
-            const v = api.foldTargets();
-            if (v === null) return;
-            void promptConfirm({
+            void api.foldTargets(w.from, w.to).then((v) => {
+              if (v === null) return;
+              return promptConfirm({
               title: `Set ${period} plan to ${formatValue(v, n.unit, n.format)}?`,
               note: `The ${n.aggregate} of the grid's targets for ${n.name}. Plan stays a number finance owns — this only fills it, it doesn't link it.`,
               confirmLabel: "Set plan",
-            }).then((ok) => {
-              if (!ok) return;
-              setValue(n, period, "plan", v, actor, nowIso());
-              void saveDriver(n).then(() => render());
+              }).then((ok) => {
+                if (!ok) return;
+                setValue(n, period, "plan", v, actor, nowIso());
+                void saveDriver(n).then(() => render());
+              });
             });
           });
           return [fill];

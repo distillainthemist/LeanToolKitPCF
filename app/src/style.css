@@ -3742,9 +3742,10 @@ textarea.app-cp-statement { font-size: 14px; font-weight: 500; }
 .app-vg-row-state td { height: 22px; text-align: center; }
 .app-vg-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; }
 .app-vg-foot { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; font-size: 12.5px; }
-.app-vg-pager { display: inline-flex; align-items: center; gap: 6px; }
-.app-vg-pgbtn { min-width: 32px; padding: 4px 8px; }
-.app-vg-pagelbl { font-weight: 600; min-width: 110px; text-align: center; }
+.app-vg-strip { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.app-vg-stripmid { display: inline-flex; align-items: center; gap: 12px; font-size: 13px; }
+.app-vg-pgbtn { min-width: 36px; padding: 4px 10px; font-size: 16px; line-height: 1; }
+.app-vg-pagelbl { font-weight: 600; text-align: center; }
 .app-vg-hint { flex: 1; min-width: 200px; }
 .app-vg-note:empty { display: none; }
 /* the drawer under a leaf row in Edit values */

@@ -16,6 +16,8 @@ import { SPEC_SERIES_PREFIX } from "../../../../shared/schema/specSeries";
 import { applySeries, listSeries, listSeriesByPrefix } from "../../store/series";
 import { Aggregate, Cadence, CADENCE_LABELS, NodeFormat } from "./model";
 import {
+  addBuckets,
+  bucketSpan,
   columnsWindow,
   foldValues,
   GridCell,
@@ -24,6 +26,9 @@ import {
   gridCsv,
   GridLevel,
   GridRowKind,
+  PAGE_BUCKETS,
+  pageColumns,
+  pageOriginAround,
   parsePasteBlock,
   resolveGrid,
   ROW_ORDER,
@@ -91,8 +96,10 @@ export function cardGridSource(boardId: string, cardId: string, cadence: Cadence
 export interface GridOpts {
   host: HTMLElement;
   source: GridSource;
-  /** The window the columns cover (full buckets intersecting it). */
-  window: { from: string; to: string };
+  /** The home range (a period): the first page opens on today when today
+   *  is inside it, else on its start; "Fill plan from targets" folds it.
+   *  Paging itself is unbounded either way. */
+  home?: { from: string; to: string };
   /** State colours — ALWAYS the site palette (the host resolves). */
   ragColor: (rag: "green" | "amber" | "red") => string;
   /** After a write lands. */
@@ -107,13 +114,12 @@ export interface GridHandle {
   refresh: () => Promise<void>;
   /** Flushes any pending writes first. */
   destroy: () => Promise<void>;
-  /** Every column of the window (not just the page), resolved. */
+  /** The page's columns, resolved. */
   cells: () => GridCell[];
-  /** The columns' targets folded at the aggregate (Plan from targets). */
-  foldTargets: () => number | null;
+  /** The targets of every bucket in [from, to] folded at the aggregate
+   *  (Plan from targets) — loads that range. */
+  foldTargets: (from: string, to: string) => Promise<number | null>;
 }
-
-const PAGE: Record<Cadence, number> = { shiftly: 14, daily: 7, weekly: 13, monthly: 12, annually: 10 };
 
 export function renderValueGrid(o: GridOpts): GridHandle {
   const src = o.source;
@@ -122,8 +128,11 @@ export function renderValueGrid(o: GridOpts): GridHandle {
   const wrap = el("div", "app-vg");
   o.host.appendChild(wrap);
   let dead = false;
+  /** The page's cells. */
   let all: GridCell[] = [];
-  let page = 0;
+  /** The page's first bucket anchor — moves without bound. */
+  const today = todayIso();
+  let origin = o.home && !(today >= o.home.from && today <= o.home.to) ? bucketSpan(o.home.from, src.cadence).from : pageOriginAround(today, src.cadence);
   let pending: { put: Map<string, { key: string; date: string; shift: string; value: string }>; del: Map<string, { key: string; date: string; shift: string; value: string }> } = { put: new Map(), del: new Map() };
   let flushTimer: number | null = null;
   let flushing: Promise<void> = Promise.resolve();
@@ -141,19 +150,26 @@ export function renderValueGrid(o: GridOpts): GridHandle {
     return [...set];
   };
 
-  const load = async () => {
-    // one windowed read for readings + one sparse read for the spec history
-    const probe = gridColumns(src.cadence, o.window.from, o.window.to, src.shifts);
+  /** Resolve a range of columns: one windowed read for readings + one
+   *  sparse read for the spec history up to its end. */
+  const resolveRange = async (from: string, to: string): Promise<GridCell[]> => {
+    const probe = gridColumns(src.cadence, from, to, src.shifts);
     const w = columnsWindow(probe);
     const [cells, specCells] = await Promise.all([
       listSeries(src.boardId, src.cardId, w.from, w.to),
       listSeriesByPrefix(src.boardId, src.cardId, SPEC_SERIES_PREFIX, w.to),
     ]);
-    if (dead) return;
     const { actuals } = splitGridCells(cells, src.isActual);
     const { spec } = splitGridCells(specCells, () => false);
-    const cols = src.cadence === "shiftly" ? gridColumns(src.cadence, o.window.from, o.window.to, shiftsOf(actuals)) : probe;
-    all = resolveGrid(cols, actuals, spec, src.level, src.cadence, src.aggregate);
+    const cols = src.cadence === "shiftly" ? gridColumns(src.cadence, from, to, shiftsOf(actuals)) : probe;
+    return resolveGrid(cols, actuals, spec, src.level, src.cadence, src.aggregate);
+  };
+
+  const load = async () => {
+    const cols = pageColumns(src.cadence, origin);
+    const got = await resolveRange(cols[0].from, cols[cols.length - 1].to);
+    if (dead) return;
+    all = got;
   };
 
   const queue = (cell: { key: string; date: string; shift: string; value: string }, del: boolean) => {
@@ -215,16 +231,49 @@ export function renderValueGrid(o: GridOpts): GridHandle {
     } else queue(specCell(kind, cell.column, v), false);
   };
 
-  const pageCount = () => Math.max(1, Math.ceil(all.length / PAGE[src.cadence]));
-  const pageCells = () => all.slice(page * PAGE[src.cadence], (page + 1) * PAGE[src.cadence]);
-
   const note = el("div", "app-vg-note app-cp-muted", "");
+
+  /** Move the page by whole pages (after committing the focused cell). */
+  const turn = (dir: -1 | 1) => {
+    const active = document.activeElement as HTMLInputElement | null;
+    if (active && wrap.contains(active) && active.dataset.row) active.dispatchEvent(new Event("change"));
+    origin = addBuckets(origin, src.cadence, dir * PAGE_BUCKETS[src.cadence]);
+    void flushing.then(load).then(() => {
+      if (!dead) paint();
+    });
+  };
 
   const paint = () => {
     clear(wrap);
-    const today = todayIso();
-    // land on today's page first
-    const cells = pageCells();
+    const cells = all;
+    // the pager: top, either side of the grid — unbounded through time
+    const strip = el("div", "app-vg-strip");
+    const prev = btn("‹", "app-btn app-vg-pgbtn");
+    prev.title = "Earlier";
+    prev.addEventListener("click", () => turn(-1));
+    const next = btn("›", "app-btn app-vg-pgbtn");
+    next.title = "Later";
+    next.addEventListener("click", () => turn(1));
+    const first = cells[0]?.column.label ?? "";
+    const last = cells[cells.length - 1]?.column.label ?? "";
+    const y0 = cells[0]?.column.anchor.slice(0, 4) ?? "";
+    const y1 = cells[cells.length - 1]?.column.anchor.slice(0, 4) ?? "";
+    const lbl = el("span", "app-vg-pagelbl", src.cadence === "annually" ? `${first} – ${last}` : y0 === y1 ? `${first} – ${last} · ${y0}` : `${first} ${y0} – ${last} ${y1}`);
+    const onPage = cells.some((c) => today >= c.column.from && today <= c.column.to);
+    const mid = el("span", "app-vg-stripmid");
+    mid.appendChild(lbl);
+    if (!onPage) {
+      const home = btn("Today", "app-link");
+      home.addEventListener("click", () => {
+        origin = pageOriginAround(today, src.cadence);
+        void flushing.then(load).then(() => {
+          if (!dead) paint();
+        });
+      });
+      mid.appendChild(home);
+    }
+    strip.append(prev, mid, next);
+    wrap.appendChild(strip);
     const scroll = el("div", "app-vg-scroll");
     const table = el("table", "app-vg-table") as HTMLTableElement;
     const inputs = new Map<string, HTMLInputElement>();
@@ -323,7 +372,7 @@ export function renderValueGrid(o: GridOpts): GridHandle {
             const multi = block.length > 1 || (block[0]?.values.length ?? 0) > 1;
             if (!multi) return;
             e.preventDefault();
-            const startCol = page * PAGE[src.cadence] + ci;
+            const startCol = ci;
             let n = 0;
             for (const r of block) {
               r.values.forEach((v, k) => {
@@ -358,27 +407,8 @@ export function renderValueGrid(o: GridOpts): GridHandle {
     table.appendChild(body);
     scroll.appendChild(table);
     wrap.appendChild(scroll);
-    // footer: pager · paste hint · csv · host extras
+    // footer: paste hint · csv · host extras
     const foot = el("div", "app-vg-foot");
-    if (pageCount() > 1) {
-      const pager = el("div", "app-vg-pager");
-      const prev = btn("‹", "app-btn app-vg-pgbtn");
-      prev.disabled = page === 0;
-      prev.addEventListener("click", () => {
-        page--;
-        paint();
-      });
-      const next = btn("›", "app-btn app-vg-pgbtn");
-      next.disabled = page >= pageCount() - 1;
-      next.addEventListener("click", () => {
-        page++;
-        paint();
-      });
-      const first = cells[0]?.column.label ?? "";
-      const last = cells[cells.length - 1]?.column.label ?? "";
-      pager.append(prev, el("span", "app-vg-pagelbl", `${first} – ${last}`), next);
-      foot.appendChild(pager);
-    }
     foot.appendChild(el("span", "app-cp-muted app-vg-hint", src.readOnly ? "Read-only." : "Grey = carried forward from the previous period (or the level target). Paste a block from Excel into any cell."));
     const csv = btn("CSV", "app-link");
     csv.addEventListener("click", () => {
@@ -433,17 +463,13 @@ export function renderValueGrid(o: GridOpts): GridHandle {
       wrap.remove();
     },
     cells: () => all,
-    foldTargets: () => foldValues(all.map((c) => c.target.value), src.aggregate),
+    foldTargets: async (from, to) => foldValues((await resolveRange(from, to)).map((c) => c.target.value), src.aggregate),
   };
 
   wrap.appendChild(el("div", "app-cp-muted", "Loading…"));
   void load()
     .then(() => {
       if (dead) return;
-      // open on today's page
-      const today = todayIso();
-      const i = all.findIndex((c) => today >= c.column.from && today <= c.column.to);
-      page = i >= 0 ? Math.floor(i / PAGE[src.cadence]) : 0;
       paint();
     })
     .catch((err) => {

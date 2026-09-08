@@ -1,7 +1,10 @@
 // Grid entry for KPI values — the pure column/spec/paste model.
 import { describe, expect, it } from "vitest";
 import {
+  addBuckets,
   bucketSpan,
+  pageColumns,
+  pageOriginAround,
   columnsWindow,
   foldValues,
   gridColumns,
@@ -36,6 +39,25 @@ describe("bucketSpan / gridColumns", () => {
   });
   it("empty for an inverted window", () => {
     expect(gridColumns("weekly", "2026-09-10", "2026-09-01")).toEqual([]);
+  });
+});
+
+describe("paging (unbounded)", () => {
+  it("steps whole buckets in either direction", () => {
+    expect(addBuckets("2026-09-10", "weekly", 1)).toBe("2026-09-14");
+    expect(addBuckets("2026-09-07", "weekly", -13)).toBe("2026-06-08");
+    expect(addBuckets("2026-01-31", "monthly", 1)).toBe("2026-02-01");
+    expect(addBuckets("2026-03-15", "monthly", -3)).toBe("2025-12-01");
+    expect(addBuckets("2026-06-01", "annually", 2)).toBe("2028-01-01");
+    expect(addBuckets("2026-09-08", "daily", -8)).toBe("2026-08-31");
+  });
+  it("a page is PAGE_BUCKETS wide and opens with today third from the right", () => {
+    const origin = pageOriginAround("2026-09-08", "weekly");
+    expect(origin).toBe("2026-06-29");
+    const cols = pageColumns("weekly", origin);
+    expect(cols).toHaveLength(13);
+    expect(cols[10].label).toBe("Wk 37");
+    expect(pageColumns("shiftly", "2026-09-07", ["D", "N"])).toHaveLength(14);
   });
 });
 
