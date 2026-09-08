@@ -801,6 +801,18 @@ reschedule/cancel history with a reason picklist.
     read every metric's last reading from its location
     (`loadMetricLasts(initiatives, boards)`), good/bad and picklist show a
     label and colour by state (`MetricValue.display`).
+- **Rituals in several organisations' cadence — BUILT 2026-09-08** (Ben:
+  optionally link a ritual to multiple organisations so it is visible in
+  their cadence; a primary organisation owner remains). `MeetingInfo`
+  gains `alsoOrgs: MeetingOrg[]` (sparse in the blob, never the primary,
+  de-duplicated; `orgKey` / `orgLabel` / `meetingInOrg` in
+  shared/schema/meeting.ts); the wizard's organisation step gains "Also
+  shown in" — chips + a site / department / area add row (same picklists
+  as the primary), reviewed on the summary; the hub's Cadence tab scope
+  (`meetingMatchesOrg`) and its derived org tree honour also-orgs. The
+  PRIMARY org alone drives the board's site/department columns, protected
+  times, admin scope in Settings → Rituals, and every org-scoped card —
+  ownership stays with one organisation. No schema change.
 - **P10 Reporting** — designed (spec §4).
 
 Each phase ships behind the usual gates + `pac code push`; the specs'

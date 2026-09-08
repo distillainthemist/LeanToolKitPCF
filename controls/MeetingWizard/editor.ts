@@ -717,6 +717,76 @@ export class MeetingWizardView {
       d.org.area = "";
       this.commit();
     }
+    this.renderAlsoOrgs(body);
+  }
+
+  /** "Also shown in": further organisations whose Cadence lists this
+   *  ritual (Ben, 2026-09-08). The primary org above stays the owner. */
+  private alsoDraft: { site: string; department: string; area: string } = { site: "", department: "", area: "" };
+  private renderAlsoOrgs(body: HTMLElement): void {
+    const d = this.draft;
+    const label = (o: { site: string; department: string; area: string }) => [o.site, o.department, o.area].filter((v) => v !== "").join(" / ");
+    const key = (o: { site: string; department: string; area: string }) => `${o.site}|${o.department}|${o.area}`;
+    const box = el("div", "ltk-mw-also");
+    const chips = el("div", "ltk-mw-chips");
+    if (d.alsoOrgs.length === 0) chips.appendChild(el("span", "ltk-mw-help", "None — the ritual shows only in its own organisation's cadence."));
+    d.alsoOrgs.forEach((o, i) => {
+      const chip = el("span", "ltk-mw-chip", label(o));
+      const x = el("button", "ltk-mw-chip-x", "×");
+      x.type = "button";
+      x.title = "Remove";
+      x.addEventListener("click", () => {
+        d.alsoOrgs.splice(i, 1);
+        this.commit();
+        this.render();
+      });
+      chip.appendChild(x);
+      chips.appendChild(chip);
+    });
+    box.appendChild(chips);
+    // the add row: the same site / department / area choice as above
+    const a = this.alsoDraft;
+    const addRow = el("div", "ltk-mw-alsoadd");
+    const site = this.orgTree.find((s) => s.site === a.site);
+    const departments = site?.departments ?? [];
+    const dept = departments.find((x) => x.department === a.department);
+    addRow.appendChild(
+      this.selectInput(a.site, [{ value: "", label: "Site…" }, ...this.orgTree.map((s) => ({ value: s.site, label: s.site }))], (v) => {
+        a.site = v;
+        a.department = "";
+        a.area = "";
+        this.render();
+      })
+    );
+    addRow.appendChild(
+      this.selectInput(a.department, [{ value: "", label: site ? "Whole site" : "Department" }, ...departments.map((x) => ({ value: x.department, label: x.department }))], (v) => {
+        a.department = v;
+        a.area = "";
+        this.render();
+      })
+    );
+    if (dept && dept.areas.length > 0) {
+      addRow.appendChild(this.selectInput(a.area, [{ value: "", label: "Whole department" }, ...dept.areas.map((x) => ({ value: x, label: x }))], (v) => (a.area = v)));
+    }
+    const add = el("button", "ltk-btn ltk-btn-secondary", "＋ Add");
+    add.type = "button";
+    add.disabled = a.site === "";
+    add.addEventListener("click", () => {
+      if (a.site === "") return;
+      const o = { ...a };
+      if (key(o) === key(d.org) || d.alsoOrgs.some((x) => key(x) === key(o))) {
+        this.alsoDraft = { site: "", department: "", area: "" };
+        this.render();
+        return;
+      }
+      d.alsoOrgs.push(o);
+      this.alsoDraft = { site: "", department: "", area: "" };
+      this.commit();
+      this.render();
+    });
+    addRow.appendChild(add);
+    box.appendChild(addRow);
+    body.appendChild(this.row("Also shown in", box, "Other organisations whose cadence lists this ritual. The organisation above stays its owner."));
   }
 
   private renderCadence(body: HTMLElement): void {
@@ -1193,6 +1263,7 @@ export class MeetingWizardView {
       "Organisation",
       [d.org.site, d.org.department, d.org.area].filter((v) => v !== "").join(" / ")
     );
+    if (d.alsoOrgs.length > 0) add("Also shown in", d.alsoOrgs.map((o) => [o.site, o.department, o.area].filter((v) => v !== "").join(" / ")).join(" · "));
     add("Cadence", CADENCES.find((c) => c.value === d.category)?.label ?? d.category);
     if (hasWeekdays(d.category)) {
       add(

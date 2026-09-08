@@ -174,6 +174,9 @@ export const WIZARD_CSS = `
   border-radius: 999px;
 }
 .ltk-mw-chip-x:hover { color: var(--ltk-accent); }
+.ltk-mw-also { display: flex; flex-direction: column; gap: 8px; }
+.ltk-mw-alsoadd { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.ltk-mw-alsoadd select { flex: 1; min-width: 140px; }
 .ltk-mw-chip-add {
   flex: 1;
   min-width: 120px;

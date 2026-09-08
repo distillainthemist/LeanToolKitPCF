@@ -15,7 +15,7 @@ import {
   SchedulerConfig,
   startOfDay,
 } from "../../shared/schema/recurrence";
-import { MeetingInfo, OrgSite, parseMeetingInfo } from "../../shared/schema/meeting";
+import { MeetingInfo, OrgSite, parseMeetingInfo, meetingInOrg } from "../../shared/schema/meeting";
 
 /** One meeting definition on the calendar: a board + its scheduler blob. */
 export interface HubMeeting {
@@ -199,11 +199,8 @@ export function meetingForPerson(meeting: HubMeeting, whoId: string): boolean {
  * narrows to that department; area narrows further. All empty = everything.
  */
 export function meetingMatchesOrg(meeting: HubMeeting, scope: OrgScope): boolean {
-  const org = meeting.info?.org;
-  if (scope.site !== "" && org?.site !== scope.site) return false;
-  if (scope.department !== "" && org?.department !== scope.department) return false;
-  if (scope.area !== "" && org?.area !== scope.area) return false;
-  return true;
+  // the primary org, or any org the ritual is ALSO shown in (2026-09-08)
+  return meetingInOrg(meeting.info, scope);
 }
 
 /**
@@ -214,15 +211,16 @@ export function meetingMatchesOrg(meeting: HubMeeting, scope: OrgScope): boolean
 export function deriveOrgTree(meetings: HubMeeting[]): OrgSite[] {
   const sites = new Map<string, Map<string, Set<string>>>();
   for (const m of meetings) {
-    const org = m.info?.org;
-    if (!org || org.site === "") continue;
-    const depts = sites.get(org.site) ?? new Map<string, Set<string>>();
-    if (org.department !== "") {
-      const areas = depts.get(org.department) ?? new Set<string>();
-      if (org.area !== "") areas.add(org.area);
-      depts.set(org.department, areas);
+    for (const org of [m.info?.org, ...(m.info?.alsoOrgs ?? [])]) {
+      if (!org || org.site === "") continue;
+      const depts = sites.get(org.site) ?? new Map<string, Set<string>>();
+      if (org.department !== "") {
+        const areas = depts.get(org.department) ?? new Set<string>();
+        if (org.area !== "") areas.add(org.area);
+        depts.set(org.department, areas);
+      }
+      sites.set(org.site, depts);
     }
-    sites.set(org.site, depts);
   }
   return [...sites.entries()]
     .sort(([a], [b]) => a.localeCompare(b))

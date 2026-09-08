@@ -72,6 +72,8 @@ export interface WizardDraft {
   purpose: string;
   owner: MeetingPerson | null;
   org: { site: string; department: string; area: string };
+  /** Further orgs the ritual is also shown in (Cadence); primary stays `org`. */
+  alsoOrgs: { site: string; department: string; area: string }[];
   category: string;
   daysOfWeek: string; // CSV
   timeOfDay: string; // HH:MM
@@ -108,6 +110,7 @@ export function emptyDraft(): WizardDraft {
     purpose: "",
     owner: null,
     org: { site: "", department: "", area: "" },
+    alsoOrgs: [],
     category: "weekly",
     daysOfWeek: "",
     timeOfDay: "07:00",
@@ -212,6 +215,7 @@ export function parseWizardDraft(raw: string | null | undefined): WizardDraft {
     draft.purpose = info.purpose;
     draft.owner = info.owner;
     draft.org = { ...info.org };
+    draft.alsoOrgs = info.alsoOrgs.map((o) => ({ ...o }));
     draft.participants = info.participants;
   }
   for (const key of Object.keys(o)) {
@@ -283,6 +287,7 @@ export function serializeWizardDraft(draft: WizardDraft): string {
     purpose: draft.purpose,
     owner: draft.owner,
     org: draft.org,
+    alsoOrgs: draft.alsoOrgs,
     participants: draft.participants,
   });
   if (meeting) out.meeting = meeting;
