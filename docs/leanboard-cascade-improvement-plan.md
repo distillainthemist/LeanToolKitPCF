@@ -716,7 +716,8 @@ reschedule/cancel history with a reason picklist.
   `shared/schema/specSeries.ts`) that CARRY FORWARD — a column's spec is
   the latest point at or before its anchor, else the single level value
   on the metric/card (kept as the fallback; grey italic = inherited);
-  RAG per column from the column's own limits. Component
+  RAG per column from the column's own limits, shown as a dot inside the
+  Actual cell once a value is in (no separate state row — Ben, same day). Component
   (`vdt/grid.ts`, one for both surfaces): sticky first column, scroll
   inside the grid, PAGED WITHOUT BOUND through time (Ben, same day: a KPI
   is never bounded by a period) — ‹ › at the top on either side of the

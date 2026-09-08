@@ -321,7 +321,7 @@ export function mountValueDrivers(parent: HTMLElement): () => void {
         },
         footer: (api) => {
           if (!canEdit()) return [];
-          const fill = btn("Fill plan from targets", "app-link");
+          const fill = btn("Fill plan from targets", "app-btn");
           fill.title = `Fold the columns' targets by ${n.aggregate} into this period's Plan`;
           fill.addEventListener("click", () => {
             void api.foldTargets(w.from, w.to).then((v) => {

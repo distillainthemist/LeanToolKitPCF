@@ -52,6 +52,11 @@ body {
   border-radius: 6px;
 }
 .app-link:hover { color: #26241f; }
+/* a <button class="app-link"> is a TEXT LINK everywhere — never the browser's
+   default grey bordered button (the "plain grey button" recurrence, Ben
+   2026-08-29 capture card, 2026-09-08 values grid) */
+button.app-link { border: none; background: none; cursor: pointer; font: inherit; font-size: 13px; }
+button.app-link:disabled { cursor: default; opacity: 0.5; }
 .app-link-on { background: var(--app-accent); color: #fff; }
 
 /* per-route mount root (main.ts route()) — transparent to layout so the
@@ -3721,7 +3726,7 @@ textarea.app-cp-statement { font-size: 14px; font-weight: 500; }
 /* ---- KPI values grid (grid entry, 2026-09-08): a column per cadence bucket ---- */
 .app-vg { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 .app-vg-scroll { overflow-x: auto; overflow-y: hidden; background: #fff; border: 1px solid #e4dfd6; border-radius: 10px; }
-.app-vg-table { border-collapse: separate; border-spacing: 0; font-size: 13px; min-width: 100%; margin-bottom: 10px; /* room under the state row for an overlay scrollbar */ }
+.app-vg-table { border-collapse: separate; border-spacing: 0; font-size: 13px; min-width: 100%; margin-bottom: 10px; /* room under the last row for an overlay scrollbar */ }
 .app-vg-table th, .app-vg-table td { border-bottom: 1px solid #f1efec; border-right: 1px solid #f1efec; padding: 0; height: 36px; white-space: nowrap; }
 .app-vg-table tr:last-child td, .app-vg-table tr:last-child th { border-bottom: none; }
 .app-vg-rowhead { position: sticky; left: 0; z-index: 2; background: #faf9f7; text-align: left; font-weight: 600; padding: 0 12px !important; min-width: 130px; color: #26241f; box-shadow: 1px 0 0 #e4dfd6; }
@@ -3739,8 +3744,10 @@ textarea.app-cp-statement { font-size: 14px; font-weight: 500; }
 .app-vg-today { background: #fbf4ea; }
 .app-vg-future .app-vg-in, .app-vg-future .app-vg-ro { opacity: 0.6; }
 .app-vg-row-actual .app-vg-in { font-weight: 600; }
-.app-vg-row-state td { height: 22px; text-align: center; }
-.app-vg-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; }
+.app-vg-actcell { position: relative; }
+.app-vg-actcell .app-vg-in, .app-vg-actcell .app-vg-ro { padding-left: 22px; }
+.app-vg-dot { position: absolute; left: 8px; top: 50%; margin-top: -5px; width: 10px; height: 10px; border-radius: 50%; pointer-events: none; }
+.app-vg-in:focus ~ .app-vg-dot { display: none; }
 .app-vg-foot { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; font-size: 12.5px; }
 .app-vg-strip { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .app-vg-stripmid { display: inline-flex; align-items: center; gap: 12px; font-size: 13px; }

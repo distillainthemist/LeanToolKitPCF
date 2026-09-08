@@ -1,6 +1,7 @@
 // The KPI values GRID (Ben, 2026-09-08) — ONE component for the value
 // driver tab (a drawer under a leaf) and the KPI card (a dialog): a column
-// per cadence bucket, rows Date · Target · Lower · Upper · Actual · state.
+// per cadence bucket, rows Date · Target · Lower · Upper · Actual (with
+// its state dot).
 // Sticky first column, horizontal scroll inside the grid (never the page),
 // paged when the window holds more columns than fit. Excel-style paste,
 // CSV out, Tab/Enter/arrow movement, blur saves; writes batch into one
@@ -302,6 +303,13 @@ export function renderValueGrid(o: GridOpts): GridHandle {
       ["usl", "Upper limit", ""],
       ["actual", "Actual", CADENCE_LABELS[src.cadence].toLowerCase()],
     ];
+    const ragDot = (c: GridCell): HTMLElement | null => {
+      if (!c.rag) return null;
+      const dot = el("span", "app-vg-dot");
+      dot.style.background = o.ragColor(c.rag);
+      dot.title = c.rag === "red" ? "Outside the limits" : c.rag === "amber" ? "Short of target" : "On target";
+      return dot;
+    };
     for (const [kind, label, sub] of rows) {
       const tr = el("tr", `app-vg-row app-vg-row-${kind}`);
       tr.appendChild(rowLabel(label, sub));
@@ -309,6 +317,12 @@ export function renderValueGrid(o: GridOpts): GridHandle {
         const td = el("td", "app-vg-cell" + colClass(c));
         const spec = kind === "actual" ? null : c[kind];
         const editable = !src.readOnly && (kind === "actual" ? c.actual.editable : true);
+        // the state indicator rides in the Actual cell once a value is in
+        if (kind === "actual") {
+          td.classList.add("app-vg-actcell");
+          const dot = ragDot(c);
+          if (dot) td.appendChild(dot);
+        }
         if (!editable) {
           const ro = el("span", "app-vg-ro", kind === "actual" ? fmt(c.actual.value) : fmt(spec?.value ?? null));
           if (kind === "actual" && c.actual.count > 1) {
@@ -390,20 +404,6 @@ export function renderValueGrid(o: GridOpts): GridHandle {
       });
       body.appendChild(tr);
     }
-    // state row
-    const sr = el("tr", "app-vg-row app-vg-row-state");
-    sr.appendChild(rowLabel("State"));
-    for (const c of cells) {
-      const td = el("td", "app-vg-cell" + colClass(c));
-      if (c.rag) {
-        const dot = el("span", "app-vg-dot");
-        dot.style.background = o.ragColor(c.rag);
-        dot.title = c.rag === "red" ? "Outside the limits" : c.rag === "amber" ? "Short of target" : "On target";
-        td.appendChild(dot);
-      }
-      sr.appendChild(td);
-    }
-    body.appendChild(sr);
     table.appendChild(body);
     scroll.appendChild(table);
     wrap.appendChild(scroll);

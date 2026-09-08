@@ -38,7 +38,11 @@ the same commit.
   `.app-btn-primary` (accent fill; the dark `#26241f` fill is reserved
   for overlay-rail primaries), danger = `.app-btn-danger`. Text-links =
   `.app-link` (accent, hover underline). **One solid primary per
-  surface.** Secondary actions go behind a kebab `⋮`.
+  surface.** Secondary actions go behind a kebab `⋮`. **Never a plain
+  grey button**: every `<button>` carries one of these classes;
+  `button.app-link` is reset globally so the browser's default bordered
+  grey button can't leak through (it did twice — capture card, values
+  grid).
 - **Inputs/selects**: `.app-input` (app screens) / `.ltk-mw-input`
   (wizard shells). Register filters are NOT selects: they are the
   filters popover (below).
@@ -126,7 +130,8 @@ as a free-standing object is a card and gets the full recipe.
 (`#faf9f7`) first column and header rows; 36px cells, right-aligned
 tabular numerals; inherited (carried-forward) values grey italic;
 today's column `#fbf4ea`; future columns at 0.6 opacity; a focused cell
-`#fff8e6` with a 2px accent inset; the state row is site-palette dots.
+`#fff8e6` with a 2px accent inset; the state is a site-palette dot at the
+left of the Actual cell once a value is in (no separate row).
 Horizontal scroll is INSIDE the grid, never the page; the table keeps
 10px under its last row so an overlay scrollbar never hides it. One
 component for the Value drivers drawer and the KPI card dialog.

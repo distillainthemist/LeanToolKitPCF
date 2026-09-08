@@ -26,7 +26,7 @@ renderValueGrid({
   ragColor,
   footer: () => {
     const b = document.createElement("button");
-    b.className = "app-link";
+    b.className = "app-btn";
     b.textContent = "Fill plan from targets";
     return [b];
   },
