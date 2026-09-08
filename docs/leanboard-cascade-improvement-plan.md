@@ -718,8 +718,13 @@ reschedule/cancel history with a reason picklist.
   on the metric/card (kept as the fallback; grey italic = inherited);
   RAG per column from the column's own limits. Component
   (`vdt/grid.ts`, one for both surfaces): sticky first column, scroll
-  inside the grid, paged (13 weeks / 7 days / 14 shifts / 12 months),
-  today's column tinted and scrolled into view, future columns faint,
+  inside the grid, PAGED WITHOUT BOUND through time (Ben, same day: a KPI
+  is never bounded by a period) — ‹ › at the top on either side of the
+  grid, a page = 13 weeks / 7 days (× shifts) / 12 months / 10 years
+  from a movable origin, each page loads on arrival, the first page puts
+  today third from the right (a period-home outside today opens on the
+  period's start), a "Today" link returns; today's column tinted and
+  scrolled into view, future columns faint,
   Tab/Enter/arrow movement, blur commits, writes DEBOUNCED into one
   `applySeries` per grid then re-read (the typist's cell survives the
   repaint), Excel-style paste (labelled rows map by label — Period/Date
