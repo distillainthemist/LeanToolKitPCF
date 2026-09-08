@@ -16,6 +16,7 @@ import { Person } from "../../shared/schema/people";
 import { htmlToPng, htmlToSvg, saveSvg, SnapshotScheduler } from "../../shared/export/png";
 import { newId, nowIso, todayIso } from "../../shared/schema/id";
 import { KpiPoint, KpiTrendEnvelope, SCHEMA_ID } from "./types";
+import { EMPTY_SPEC_SERIES, specFor, SpecSeries } from "../../shared/schema/specSeries";
 import { KPITREND_CSS } from "./styles";
 
 const VB_W = 640;
@@ -45,6 +46,9 @@ export interface KpiTrendEditorCallbacks {
   onSnapshot?: (svgMarkup: string) => void;
   /** The full card-level action set on every change (already scoped). */
   onActions?: (actions: LtkAction[]) => void;
+  /** Grid entry (a column per period) — the host opens it; the button
+   *  shows only when set. */
+  onGrid?: () => void;
 }
 
 export class KpiTrendEditor {
@@ -61,6 +65,9 @@ export class KpiTrendEditor {
   /** Host-supplied spec (see KpiSpec) — card settings are the only place
    *  these are set; blank fields fall back to the document. */
   private spec: KpiSpec = { target: null, usl: null, lsl: null, unit: "" };
+  /** Per-period spec (grid entry): dated target/limit points that carry
+   *  forward; the level spec above is the fallback. */
+  private specSeries: SpecSeries = EMPTY_SPEC_SERIES;
   private readonly snapshots: SnapshotScheduler;
 
   constructor(
@@ -126,6 +133,25 @@ export class KpiTrendEditor {
     this.spec = spec;
     this.render();
     this.snapshots.schedule();
+  }
+
+  /** The dated per-period spec (target / limits that change over time). */
+  setSpecSeries(series: SpecSeries): void {
+    if (JSON.stringify(series) === JSON.stringify(this.specSeries)) return;
+    this.specSeries = series;
+    this.render();
+    this.snapshots.schedule();
+  }
+
+  /** The spec in force on a date: the latest dated point at or before it,
+   *  else the level spec. */
+  private specAt(date: string): KpiSpec {
+    const level = this.effectiveSpec();
+    return { ...specFor(this.specSeries, date, level), unit: level.unit };
+  }
+
+  private hasSpecSeries(): boolean {
+    return this.specSeries.target.length + this.specSeries.usl.length + this.specSeries.lsl.length > 0;
   }
 
   /**
@@ -195,9 +221,10 @@ export class KpiTrendEditor {
     return this.theme.legend[2] ?? "#d13438";
   }
 
-  /** Does `value` fall outside a set specification limit (> USL or < LSL)? */
-  private outOfSpec(value: number): boolean {
-    const { usl, lsl } = this.effectiveSpec();
+  /** Does a reading fall outside the specification limits in force on
+   *  its date (> USL or < LSL)? */
+  private outOfSpec(value: number, date: string): boolean {
+    const { usl, lsl } = this.specAt(date);
     return (usl !== null && value > usl) || (lsl !== null && value < lsl);
   }
 
@@ -235,7 +262,14 @@ export class KpiTrendEditor {
     this.root.appendChild(body);
 
     const { points } = this.env.data;
-    const { target, unit } = this.effectiveSpec();
+    const gridBtn = (): HTMLElement | null => {
+      if (this.readOnly || !this.cb.onGrid) return null;
+      const g = el("button", "ltk-kt-add ltk-kt-grid", "⊞ Grid…");
+      g.type = "button";
+      g.title = "Enter targets, limits and actuals period by period";
+      g.addEventListener("click", () => this.cb.onGrid?.());
+      return g;
+    };
     if (points.length === 0) {
       const lines = this.prompts.general.length
         ? this.prompts.general
@@ -247,18 +281,22 @@ export class KpiTrendEditor {
       if (!this.readOnly) {
         ghost.addEventListener("click", () => this.editPoint(null));
       }
+      const g = gridBtn();
+      if (g) body.appendChild(g);
       return;
     }
 
-    // readout: latest value, red only when it is out of spec
+    // readout: latest value, red only when it is out of the spec in force
+    // on its date; the target shown is that date's too
     const latest = points[points.length - 1];
+    const { target, unit } = this.specAt(latest.date);
     const readout = el("div", "ltk-kt-readout");
     const current = el(
       "div",
       "ltk-kt-current",
       `${latest.value}${unit ? " " + unit : ""}`
     );
-    if (this.outOfSpec(latest.value)) current.style.color = this.badColor();
+    if (this.outOfSpec(latest.value, latest.date)) current.style.color = this.badColor();
     readout.appendChild(current);
     if (target !== null) {
       readout.appendChild(
@@ -274,10 +312,14 @@ export class KpiTrendEditor {
     body.appendChild(this.renderChart());
 
     if (!this.readOnly) {
+      const acts = el("div", "ltk-kt-acts");
       const add = el("button", "ltk-kt-add", "＋ Add reading");
       add.type = "button";
       add.addEventListener("click", () => this.editPoint(null));
-      body.appendChild(add);
+      acts.appendChild(add);
+      const g = gridBtn();
+      if (g) acts.appendChild(g);
+      body.appendChild(acts);
     }
   }
 
@@ -288,14 +330,20 @@ export class KpiTrendEditor {
       preserveAspectRatio: "xMidYMid meet",
     });
     const { points } = this.env.data;
-    const { target, usl, lsl } = this.effectiveSpec();
+    // the spec in force at each reading (a step function when the grid
+    // has set per-period targets; flat otherwise)
+    const specs = points.map((pt) => this.specAt(pt.date));
+    const latestSpec = specs[specs.length - 1] ?? this.effectiveSpec();
+    const { target, usl, lsl } = latestSpec;
     const plotW = VB_W - M.left - M.right;
     const plotH = VB_H - M.top - M.bottom;
 
     const values = points.map((pt) => pt.value);
-    if (target !== null) values.push(target);
-    if (usl !== null) values.push(usl);
-    if (lsl !== null) values.push(lsl);
+    for (const sp of specs) {
+      if (sp.target !== null) values.push(sp.target);
+      if (sp.usl !== null) values.push(sp.usl);
+      if (sp.lsl !== null) values.push(sp.lsl);
+    }
     let lo = Math.min(...values);
     let hi = Math.max(...values);
     if (lo === hi) {
@@ -362,10 +410,36 @@ export class KpiTrendEditor {
       svg.appendChild(last);
     }
 
+    // a spec line: flat across the plot when constant, a step through the
+    // readings' dates when the grid has set per-period values
+    const stepPath = (valueAt: (i: number) => number | null): string => {
+      const vals = points.map((_, i) => valueAt(i));
+      const first = vals.find((v) => v !== null);
+      if (first === undefined || first === null) return "";
+      const constant = vals.every((v) => v === null || v === first);
+      if (constant || points.length === 1) {
+        const ly = clampY(y(first));
+        return `M ${M.left} ${ly} H ${M.left + plotW}`;
+      }
+      let d = "";
+      let cur: number | null = null;
+      vals.forEach((v, i) => {
+        const val = v ?? cur;
+        if (val === null) return;
+        const ly = clampY(y(val));
+        const px = x(i);
+        if (d === "") d = `M ${M.left} ${ly} H ${px}`;
+        else if (cur !== null && val !== cur) d += ` H ${px} V ${ly}`;
+        cur = val;
+      });
+      if (cur !== null) d += ` H ${M.left + plotW}`;
+      return d;
+    };
     // target line
-    if (target !== null) {
-      const tl = svgEl("line", {
-        x1: M.left, y1: y(target), x2: M.left + plotW, y2: y(target),
+    const targetD = stepPath((i) => specs[i].target);
+    if (targetD !== "") {
+      const tl = svgEl("path", {
+        d: targetD, fill: "none",
         "stroke-dasharray": "6 4", "stroke-width": 2,
       });
       (tl as SVGElement & { style: CSSStyleDeclaration }).style.stroke =
@@ -374,11 +448,12 @@ export class KpiTrendEditor {
       svg.appendChild(tl);
     }
 
-    // spec-limit lines + small right-hand labels
-    const limitLine = (value: number, label: string) => {
-      const ly = clampY(y(value));
-      const ln = svgEl("line", {
-        x1: M.left, y1: ly, x2: M.left + plotW, y2: ly,
+    // spec-limit lines + small right-hand labels (the latest value)
+    const limitLine = (valueAt: (i: number) => number | null, latest: number, label: string) => {
+      const d = stepPath(valueAt);
+      if (d === "") return;
+      const ln = svgEl("path", {
+        d, fill: "none",
         "stroke-dasharray": "2 3", "stroke-width": 1.5,
       });
       const s = (ln as SVGElement & { style: CSSStyleDeclaration }).style;
@@ -386,13 +461,13 @@ export class KpiTrendEditor {
       s.opacity = "0.8";
       svg.appendChild(ln);
       const t = svgEl("text", {
-        x: M.left + plotW, y: ly - 3, class: "ltk-kt-limit", "text-anchor": "end",
+        x: M.left + plotW, y: clampY(y(latest)) - 3, class: "ltk-kt-limit", "text-anchor": "end",
       });
-      t.textContent = `${label} ${value}`;
+      t.textContent = `${label} ${latest}`;
       svg.appendChild(t);
     };
-    if (usl !== null) limitLine(usl, "USL");
-    if (lsl !== null) limitLine(lsl, "LSL");
+    if (usl !== null) limitLine((i) => specs[i].usl, usl, "USL");
+    if (lsl !== null) limitLine((i) => specs[i].lsl, lsl, "LSL");
 
     // the line + dots
     const line = svgEl("polyline", {
@@ -409,7 +484,7 @@ export class KpiTrendEditor {
     points.forEach((pt, i) => {
       // a reading is flagged red (and larger) only when it is out of spec;
       // otherwise it stays neutral
-      const oos = this.outOfSpec(pt.value);
+      const oos = this.outOfSpec(pt.value, pt.date);
       const dot = svgEl("circle", {
         cx: x(i), cy: y(pt.value), r: oos ? 7 : 5,
         class: "ltk-kt-dot" + (this.readOnly ? " ltk-readonly" : ""),

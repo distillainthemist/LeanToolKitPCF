@@ -409,6 +409,18 @@ export const CARDS: CardSpec[] = [
           "How many trailing days of readings the chart shows, ending on the meeting's date. Default 91 (13 weeks). Older readings stay stored and reportable.",
         placeholder: "91",
       },
+      {
+        key: "cadence",
+        label: "Cadence",
+        kind: "enum",
+        options: [
+          { value: "daily", label: "Daily" },
+          { value: "weekly", label: "Weekly" },
+          { value: "monthly", label: "Monthly" },
+          { value: "annually", label: "Annually" },
+        ],
+        help: "The period the grid's columns are — one column per day, week, month or year. A card linked to a value driver takes the driver's cadence instead. Default weekly.",
+      },
     ],
     appBound: ["instanceId"],
     seriesBacked: true,

@@ -259,6 +259,7 @@ export function metricCardSlot(m: TemplateMetric, index: number): { pos: number;
         ...(typeof m.usl === "number" ? { usl: m.usl } : {}),
         ...(typeof m.lsl === "number" ? { lsl: m.lsl } : {}),
         ...(m.unit !== "" ? { unit: m.unit } : {}),
+        ...(m.cadence ? { cadence: m.cadence } : {}),
       },
     },
   };

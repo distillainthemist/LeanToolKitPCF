@@ -50,4 +50,6 @@ export const KPITREND_CSS = `
   transition: border-color 150ms ease, color 150ms ease;
 }
 .ltk-kt-add:hover { border-color: var(--ltk-accent); color: var(--ltk-accent); }
+.ltk-kt-acts { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.ltk-kt-grid { border-style: solid; border-width: 1px; }
 `;

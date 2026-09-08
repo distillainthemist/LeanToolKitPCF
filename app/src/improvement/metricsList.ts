@@ -7,7 +7,7 @@
 import { el, clear } from "../../../shared/ui/dom";
 import { promptConfirm } from "../prompts";
 import { listDrivers, saveDriver } from "../store/valueDrivers";
-import { directionOf, keyFor, MetricKind, normalizeMetrics, TemplateMetric, Tracking } from "./templateModel";
+import { directionOf, keyFor, MetricKind, normalizeMetrics, OWN_CADENCES, OwnCadence, TemplateMetric, Tracking } from "./templateModel";
 import { DriverNode, isLeaf, newNode, pathOf } from "./vdt/model";
 import { openDriverLinkPicker } from "./vdt/linkPicker";
 
@@ -77,7 +77,7 @@ export function renderMetricsList(o: MetricsListOpts): { refresh: () => void } {
       } else name.appendChild(el("span", "app-im-metrickind", "· initiative-specific"));
       main.appendChild(name);
       const dir = directionOf(m);
-      main.appendChild(el("div", "app-im-metricmeta", [m.unit || "no unit", dir === "down" ? "lower is better" : dir === "range" ? "within limits" : "higher is better", m.tracking === "value" ? "value vs target" : m.tracking === "goodbad" ? "good / bad" : "status"].join(" · ")));
+      main.appendChild(el("div", "app-im-metricmeta", [m.unit || "no unit", dir === "down" ? "lower is better" : dir === "range" ? "within limits" : "higher is better", m.tracking === "value" ? "value vs target" : m.tracking === "goodbad" ? "good / bad" : "status", ...(kindOf(m) === "own" ? [m.cadence ?? "weekly"] : [])].join(" · ")));
       row.appendChild(main);
       // target + limits (the KPI card's spec)
       const numIn = (label: string, cur: number | null | undefined, set: (v: number | null) => void, cls: string) => {
@@ -194,6 +194,15 @@ export function renderMetricsList(o: MetricsListOpts): { refresh: () => void } {
       trk.appendChild(op);
     }
     field("Tracking", trk);
+    const cad = el("select", "app-input") as HTMLSelectElement;
+    for (const c of OWN_CADENCES) {
+      const op = el("option", "", c[0].toUpperCase() + c.slice(1)) as HTMLOptionElement;
+      op.value = c;
+      if (c === "weekly") op.selected = true;
+      cad.appendChild(op);
+    }
+    field("Cadence", cad);
+    dlg.appendChild(el("div", "app-field-hint", "The period the KPI card's grid enters values by — a column per day, week, month or year."));
     const err = el("div", "app-cp-err", "");
     dlg.appendChild(err);
     const foot = el("div", "app-modal-footer");
@@ -220,6 +229,7 @@ export function renderMetricsList(o: MetricsListOpts): { refresh: () => void } {
         goodDirection: directionOf({ usl, lsl, goodDirection: "up" }),
         tracking: trk.value as Tracking,
         kind: "own",
+        cadence: cad.value as OwnCadence,
         ...(lsl !== null ? { lsl } : {}),
         ...(usl !== null ? { usl } : {}),
       });

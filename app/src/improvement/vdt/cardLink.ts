@@ -4,7 +4,7 @@
 
 import { listInitiatives } from "../../store/initiatives";
 import { listDrivers } from "../../store/valueDrivers";
-import { Cadence, CADENCE_LABELS } from "./model";
+import { Aggregate, Cadence, CADENCE_LABELS, NodeFormat } from "./model";
 
 export interface CardDriverLink {
   driverId: string;
@@ -12,6 +12,8 @@ export interface CardDriverLink {
   unit: string;
   cadence: Cadence;
   cadenceLabel: string;
+  /** What the grid needs of the driver (grid entry, 2026-09-08). */
+  node: { id: string; cadence: Cadence; aggregate: Aggregate; unit: string; format: NodeFormat };
 }
 
 export async function driverLinkForCard(boardId: string, metricKey: string): Promise<CardDriverLink | null> {
@@ -21,5 +23,5 @@ export async function driverLinkForCard(boardId: string, metricKey: string): Pro
   if (!i || !m || !m.driverId || m.driverLink === "leads") return null;
   const n = (await listDrivers(i.org.site)).find((x) => x.id === m.driverId) ?? null;
   if (!n) return null;
-  return { driverId: n.id, name: n.name, unit: n.unit, cadence: n.cadence, cadenceLabel: CADENCE_LABELS[n.cadence] };
+  return { driverId: n.id, name: n.name, unit: n.unit, cadence: n.cadence, cadenceLabel: CADENCE_LABELS[n.cadence], node: { id: n.id, cadence: n.cadence, aggregate: n.aggregate, unit: n.unit, format: n.format } };
 }

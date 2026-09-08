@@ -703,6 +703,49 @@ reschedule/cancel history with a reason picklist.
   KPI card's config starts as the metric's target/limits/unit; metric
   readings fall back to the definition's limits; metricRag unchanged
   (outside a limit = red, target decides green/amber by direction).
+- **Grid entry for KPI values — BUILT 2026-09-08** (Ben's mock: a column
+  per period at the KPI's cadence, rows Date · Target · Lower · Upper ·
+  Actual; all five recommendations taken). Model (`vdt/gridModel.ts`,
+  pure, 12 tests): columns are the cadence BUCKETS intersecting a window
+  — full buckets (a weekly column is Mon→Sun even at a period boundary),
+  anchor = bucket start = the date an entered value is written on;
+  Actual per column sits on the EXISTING dated series (one point at the
+  anchor; a bucket already holding several finer points is folded and
+  read-only, "·n"); Target/Lower/Upper are three more dated series on
+  the same location (`spec:target` / `spec:lsl` / `spec:usl`,
+  `shared/schema/specSeries.ts`) that CARRY FORWARD — a column's spec is
+  the latest point at or before its anchor, else the single level value
+  on the metric/card (kept as the fallback; grey italic = inherited);
+  RAG per column from the column's own limits. Component
+  (`vdt/grid.ts`, one for both surfaces): sticky first column, scroll
+  inside the grid, paged (13 weeks / 7 days / 14 shifts / 12 months),
+  today's column tinted and scrolled into view, future columns faint,
+  Tab/Enter/arrow movement, blur commits, writes DEBOUNCED into one
+  `applySeries` per grid then re-read (the typist's cell survives the
+  repaint), Excel-style paste (labelled rows map by label — Period/Date
+  rows dropped — unlabelled by position from the pasted row; blanks =
+  no change), CSV out. Locations: `driverGridSource` (vdt · driver id ·
+  "actual") and `cardGridSource` (the card · point ids; `pointsFromCells`
+  now skips `spec:` keys; `mergeCardSeriesIntoDriver` carries spec cells
+  under their own keys). Value drivers tab: ⊞ on each leaf row opens a
+  DRAWER under it (window = the period; "Fill plan from targets" folds
+  the columns' targets at the driver's aggregate into the period's Plan
+  on request, confirmed, never automatic; the period's Actual re-folds
+  on save). KPI card: "⊞ Grid…" beside Add reading opens the grid in a
+  wide dialog (`vdt/gridDialog.ts`, lazy) on the card's own location or
+  the linked driver's; the card loads the spec history
+  (`listSpecSeries`, a `startswith(spec:)` read) and draws the target /
+  limit lines as STEPS through the readings' dates, colours each
+  reading by the spec in force on ITS date, and reads out the latest
+  date's target; own cards gain a `cadence` setting (daily / weekly /
+  monthly / annually, default weekly — shiftly stays driver-only since
+  card points carry no shift), seeded from the own metric's new
+  `cadence` (own-metric form select). Register/tiles RAG: driver-linked
+  metrics resolve the spec at the last reading's date
+  (`loadDriverLasts` now returns last + date + spec history). No schema
+  change (the card-series table carries the new keys). Harness pages
+  `app/harness/grid.html` (in-memory series stub via `vite.config.ts`
+  alias) and `kpi.html` for screenshots.
 - **P10 Reporting** — designed (spec §4).
 
 Each phase ships behind the usual gates + `pac code push`; the specs'

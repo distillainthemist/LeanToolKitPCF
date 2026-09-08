@@ -45,6 +45,8 @@ import {
   serializeConditions,
 } from "../../controls/ConditionsCard/types";
 import { applySeries, hasAnySeries, listSeries } from "./store/series";
+import { EMPTY_SPEC_SERIES } from "../../shared/schema/specSeries";
+import type { Cadence } from "./improvement/vdt/model";
 import {
   cellsFromPoints,
   cellsFromRatings,
@@ -58,7 +60,7 @@ import {
   sumsByKey,
   trailingWindow,
 } from "./store/seriesMap";
-import { driverDiffPoints, driverPointsFromCells } from "./store/driverSeries";
+import { driverDiffPoints, driverPointsFromCells, listSpecSeries } from "./store/driverSeries";
 import { FiveWhysEditor } from "../../controls/FiveWhys/editor";
 import { parseFiveWhys, serializeFiveWhys } from "../../controls/FiveWhys/types";
 import { FaultTreeEditor } from "../../controls/FaultTree/editor";
@@ -720,8 +722,15 @@ const REGISTRY: Record<string, CardMounter> = {
     // P9e: on an initiative board a metric linked (drives) to a value
     // driver reads/writes the DRIVER's one series at the driver's cadence —
     // series location + point identity swap, the editor never knows
-    let link: { driverId: string; name: string; cadenceLabel: string; days: number } | null = null;
+    let link: { driverId: string; name: string; cadenceLabel: string; days: number; node: { id: string; cadence: Cadence; aggregate: "sum" | "avg" | "last" | "min" | "max"; unit: string; format: { decimals: number; scale: "" | "k" | "m"; percent: boolean } } } | null = null;
     const seriesLoc = () => (link ? { boardId: "vdt", cardId: link.driverId } : { boardId: opts.boardId, cardId: opts.cardId });
+    // grid entry (2026-09-08): an own card's cadence from settings (default
+    // weekly); a linked card takes the driver's
+    const ownCadence = (): Cadence => {
+      const c = cfgStr(opts, "cadence");
+      return c === "daily" || c === "monthly" || c === "annually" ? c : "weekly";
+    };
+    const level = () => ({ target: cfgNum(opts, "target") ?? env.data.target, usl: cfgNum(opts, "usl") ?? env.data.usl, lsl: cfgNum(opts, "lsl") ?? env.data.lsl });
     const editor = new KpiTrendEditor(opts.host, {
       onChange: (env2) => {
         edited = true;
@@ -736,6 +745,24 @@ const REGISTRY: Record<string, CardMounter> = {
       },
       onSnapshot: s.onSnapshot,
       onActions: (actions) => opts.onActions(stamped(opts, actions)),
+      onGrid: () => {
+        void (async () => {
+          const { openValueGridDialog } = await import("./improvement/vdt/gridDialog");
+          await openValueGridDialog({
+            title: opts.title.split("\n")[0],
+            location: seriesLoc(),
+            driver: link ? link.node : null,
+            cadence: link ? link.node.cadence : ownCadence(),
+            unit: link ? link.node.unit : cfgStr(opts, "unit") || env.data.unit,
+            level: level(),
+            window,
+            readOnly: opts.readOnly,
+            onClosed: (changed) => {
+              if (changed) void reload();
+            },
+          });
+        })();
+      },
     });
     editor.setTheme(opts.theme);
     editor.setChrome(opts.title, promptsRaw(opts));
@@ -753,6 +780,29 @@ const REGISTRY: Record<string, CardMounter> = {
       unit: cfgStr(opts, "unit"),
     });
     editor.setEnvelope(env);
+    /** The readings + the per-period spec history for the window (also
+     *  re-run after the grid dialog writes). */
+    const reload = async (first = false) => {
+      const loc = seriesLoc();
+      const [cellsRaw, spec] = await Promise.all([
+        listSeries(loc.boardId, loc.cardId, window.from, window.to),
+        listSpecSeries(loc.boardId, loc.cardId, window.to).catch(() => EMPTY_SPEC_SERIES),
+      ]);
+      let cells = cellsRaw;
+      if (first && !link && cells.length === 0 && !(await hasAnySeries(loc.boardId, loc.cardId))) {
+        const seed = cellsFromPoints(env.data.points);
+        if (seed.length > 0) {
+          await applySeries(loc.boardId, loc.cardId, seed);
+          cells = await listSeries(loc.boardId, loc.cardId, window.from, window.to);
+        }
+      }
+      editor.setSpecSeries(spec);
+      if (first && edited) return; // never overwrite an edit that beat the load
+      const points = link ? driverPointsFromCells(cells) : pointsFromCells(cells);
+      lastPoints = points.map((p) => ({ ...p }));
+      env.data.points = points;
+      editor.setEnvelope(env);
+    };
     void (async () => {
       try {
         // resolve the driver link first (lazy — the improvement chunk)
@@ -763,7 +813,7 @@ const REGISTRY: Record<string, CardMounter> = {
             const { windowDaysForCadence } = await import("./store/driverSeries");
             const l = await driverLinkForCard(opts.boardId, metricKey);
             if (l) {
-              link = { driverId: l.driverId, name: l.name, cadenceLabel: l.cadenceLabel, days: windowDaysForCadence(l.cadence) };
+              link = { driverId: l.driverId, name: l.name, cadenceLabel: l.cadenceLabel, days: windowDaysForCadence(l.cadence), node: l.node };
               window = trailingWindow(day, link.days);
               // the chrome says so: "· VDT" on the title, cadence beneath
               editor.setChrome(`${opts.title.split("\n")[0]} · VDT\n${link.cadenceLabel} · from value driver ${link.name}`, promptsRaw(opts));
@@ -772,20 +822,7 @@ const REGISTRY: Record<string, CardMounter> = {
             /* unlinked behaviour */
           }
         }
-        const loc = seriesLoc();
-        let cells = await listSeries(loc.boardId, loc.cardId, window.from, window.to);
-        if (!link && cells.length === 0 && !(await hasAnySeries(loc.boardId, loc.cardId))) {
-          const seed = cellsFromPoints(env.data.points);
-          if (seed.length > 0) {
-            await applySeries(loc.boardId, loc.cardId, seed);
-            cells = await listSeries(loc.boardId, loc.cardId, window.from, window.to);
-          }
-        }
-        if (edited) return; // never overwrite an edit that beat the load
-        const points = link ? driverPointsFromCells(cells) : pointsFromCells(cells);
-        lastPoints = points.map((p) => ({ ...p }));
-        env.data.points = points;
-        editor.setEnvelope(env);
+        await reload(true);
       } catch (err) {
         console.warn("kpi series load failed", err);
       }

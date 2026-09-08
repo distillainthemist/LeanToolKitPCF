@@ -198,6 +198,10 @@ model section) — the canvas/PCF sections there are historical.
   the source document (mini-tables edit on their source card). Both
   rollups share the store road's source-resolution skeleton
   (`store/rollup.ts`).
+  Grid entry (2026-09-08) adds per-bucket target / lower / upper as
+  dated `spec:*` keys on the same series location (a driver's virtual
+  `vdt`/driver-id location or an own KPI card's), carried forward by
+  date; readings never use that prefix.
 
 ## 4. The document management system
 

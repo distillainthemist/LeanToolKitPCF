@@ -10,6 +10,16 @@ import { parseManifest } from "../store/mappers";
 import type { BoardSummary } from "../store/mappers";
 import type { CardRow } from "../store/cards";
 import { Initiative, MetricReading, metricRag, worstMetricRag } from "./initiativeModel";
+import { EMPTY_SPEC_SERIES, specFor, SpecSeries } from "../../../shared/schema/specSeries";
+
+/** A driver's last reading + its spec history (grid entry: per-period
+ *  targets carry forward, so the RAG reads the spec in force on the
+ *  reading's date). */
+export interface DriverLast {
+  last: number | null;
+  date: string;
+  spec: SpecSeries;
+}
 
 export interface MetricValue {
   key: string;
@@ -31,7 +41,7 @@ export function buildMetricState(
   rows: (CardRow & { boardId: string })[],
   /** Last recorded value per DRIVER — a driver-linked metric's points live
    *  on the driver's series, not the card's doc (metric rework). */
-  driverLast: Map<string, number | null> = new Map()
+  driverLast: Map<string, DriverLast> = new Map()
 ): Map<string, InitiativeMetricState> {
   const byBoard = new Map(boards.map((b) => [b.boardId, b]));
   const rowByCard = new Map(rows.map((r) => [`${r.boardId}|${r.cardId}`, r]));
@@ -50,19 +60,20 @@ export function buildMetricState(
       const row = rowByCard.get(`${i.boardId}|${slot.cardId}`);
       const doc = row ? parseKpiTrend(row.outputJson).envelope.data : null;
       const points = doc?.points ?? [];
-      const last =
-        def?.driverId && def.driverLink !== "leads" && driverLast.has(def.driverId)
-          ? (driverLast.get(def.driverId) ?? null)
-          : points.length > 0
-            ? points[points.length - 1].value
-            : null;
-      const reading: MetricReading = {
-        last,
-        // the in-card target wins (owners tune it there); the definition's
-        // target is the fallback
+      const dl = def?.driverId && def.driverLink !== "leads" ? (driverLast.get(def.driverId) ?? null) : null;
+      const last = dl ? dl.last : points.length > 0 ? points[points.length - 1].value : null;
+      // the in-card target wins (owners tune it there); the definition's
+      // target is the fallback — and a per-period spec point in force on
+      // the reading's date beats both
+      const level = {
         target: doc?.target ?? def?.target ?? null,
         usl: doc?.usl ?? def?.usl ?? null,
         lsl: doc?.lsl ?? def?.lsl ?? null,
+      };
+      const spec = dl && dl.date !== "" ? specFor(dl.spec, dl.date, level) : specFor(EMPTY_SPEC_SERIES, "", level);
+      const reading: MetricReading = {
+        last,
+        ...spec,
         goodDirection: def ? directionOf(def) : "up",
       };
       values.push({
@@ -84,13 +95,19 @@ export function buildMetricState(
 
 /** The last recorded point per driver the initiatives' metrics DRIVE —
  *  one wide read per driver (few, small). */
-export async function loadDriverLasts(initiatives: Initiative[]): Promise<Map<string, number | null>> {
+export async function loadDriverLasts(initiatives: Initiative[]): Promise<Map<string, DriverLast>> {
   const ids = [...new Set(initiatives.flatMap((i) => i.metrics.filter((m) => m.driverId && m.driverLink !== "leads").map((m) => m.driverId as string)))];
   if (ids.length === 0) return new Map();
-  const { listDriverPoints } = await import("../store/driverSeries");
-  const got = await Promise.all(ids.map((id) => listDriverPoints(id, "1900-01-01", "2999-12-31").catch(() => [])));
-  return new Map(ids.map((id, k) => {
-    const pts = got[k];
-    return [id, pts.length > 0 ? pts[pts.length - 1].value : null];
-  }));
+  const { listDriverPoints, listSpecSeries } = await import("../store/driverSeries");
+  const got = await Promise.all(
+    ids.map(async (id) => {
+      const [pts, spec] = await Promise.all([
+        listDriverPoints(id, "1900-01-01", "2999-12-31").catch(() => []),
+        listSpecSeries("vdt", id, "2999-12-31").catch(() => EMPTY_SPEC_SERIES),
+      ]);
+      const lastPt = pts.length > 0 ? pts[pts.length - 1] : null;
+      return { last: lastPt ? lastPt.value : null, date: lastPt ? lastPt.date : "", spec };
+    })
+  );
+  return new Map(ids.map((id, k) => [id, got[k]]));
 }

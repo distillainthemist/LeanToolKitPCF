@@ -3,8 +3,9 @@
 // tab and every linked KPI card read and write the same points:
 //   boardId "vdt" · cardId = driver id · seriesKey "actual" · date + shift.
 
-import { applySeries, listSeries } from "./series";
+import { applySeries, listSeries, listSeriesByPrefix } from "./series";
 import { Cadence, Aggregate, foldSeries, SeriesPoint } from "../improvement/vdt/model";
+import { isSpecSeriesKey, SPEC_SERIES_PREFIX, SpecSeries, specSeriesFromCells } from "../../../shared/schema/specSeries";
 
 export const DRIVER_SERIES_BOARD = "vdt";
 export const DRIVER_SERIES_KEY = "actual";
@@ -23,6 +24,12 @@ export async function putDriverPoint(driverId: string, date: string, shift: stri
   const cell = { key: DRIVER_SERIES_KEY, date, shift: shift || "-", value: value === null ? "" : String(value) };
   if (value === null) await applySeries(DRIVER_SERIES_BOARD, driverId, [], [cell]);
   else await applySeries(DRIVER_SERIES_BOARD, driverId, [cell]);
+}
+
+/** A location's spec history up to `to` (any board/card — the driver's
+ *  virtual location or an own card's). */
+export async function listSpecSeries(boardId: string, cardId: string, to: string): Promise<SpecSeries> {
+  return specSeriesFromCells(await listSeriesByPrefix(boardId, cardId, SPEC_SERIES_PREFIX, to));
 }
 
 /** The period's actual: the points in the window folded at the driver's
@@ -45,18 +52,22 @@ export async function mergeCardSeriesIntoDriver(boardId: string, cardId: string,
     listSeries(boardId, cardId, "1900-01-01", "2999-12-31"),
     listSeries(DRIVER_SERIES_BOARD, driverId, "1900-01-01", "2999-12-31"),
   ]);
-  const held = new Set(theirs.filter((c) => c.key === DRIVER_SERIES_KEY).map((c) => `${c.date}|${c.shift || "-"}`));
+  // spec cells (per-bucket target/limits, grid entry) travel under their
+  // own keys; readings become the driver's actuals
+  const keyOf = (c: { key: string }) => (isSpecSeriesKey(c.key) ? c.key : DRIVER_SERIES_KEY);
+  const held = new Set(theirs.filter((c) => c.key === DRIVER_SERIES_KEY || isSpecSeriesKey(c.key)).map((c) => `${keyOf(c)}|${c.date}|${c.shift || "-"}`));
   const put: { key: string; date: string; shift: string; value: string }[] = [];
   let kept = 0;
   for (const c of mine) {
-    if (!Number.isFinite(Number(c.value))) continue;
-    const k = `${c.date}|${c.shift || "-"}`;
+    if (c.value === "" || !Number.isFinite(Number(c.value))) continue;
+    const key = keyOf(c);
+    const k = `${key}|${c.date}|${c.shift || "-"}`;
     if (held.has(k)) {
       kept++;
       continue;
     }
     held.add(k);
-    put.push({ key: DRIVER_SERIES_KEY, date: c.date, shift: c.shift || "-", value: c.value });
+    put.push({ key, date: c.date, shift: c.shift || "-", value: c.value });
   }
   if (put.length > 0) await applySeries(DRIVER_SERIES_BOARD, driverId, put);
   return { moved: put.length, kept };

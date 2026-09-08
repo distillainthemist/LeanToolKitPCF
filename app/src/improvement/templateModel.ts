@@ -62,6 +62,10 @@ export type Tracking = "value" | "goodbad" | "picklist";
  *  driver's series); an "own" metric is initiative-specific (private
  *  series) until linked or promoted into the tree. One is ★ primary. */
 export type MetricKind = "driver" | "own";
+/** An own metric's cadence — shiftly needs shift-keyed points the KPI
+ *  card doesn't record, so it is a driver-only cadence. */
+export type OwnCadence = "daily" | "weekly" | "monthly" | "annually";
+export const OWN_CADENCES: OwnCadence[] = ["daily", "weekly", "monthly", "annually"];
 export type MetricRule = "none" | "atLeastOne" | "fromTree";
 export const METRIC_RULE_LABELS: Record<MetricRule, string> = {
   none: "No rule — an initiative may have no metric",
@@ -83,6 +87,9 @@ export interface TemplateMetric {
    *  upper only → lower is better, both → within range. */
   usl?: number | null;
   lsl?: number | null;
+  /** Own metrics only: the grid's period (a driver-linked metric takes the
+   *  driver's). Default weekly. */
+  cadence?: OwnCadence;
   /** Value driver link (P9d): the driver id and whether the metric DRIVES
    *  the leaf (formula, units match) or LEADS it (judgement, dashed). */
   driverId?: string;
@@ -405,6 +412,7 @@ export function parseMetrics(raw: string): TemplateMetric[] {
         ...(x.primary === true ? { primary: true } : {}),
         ...(num(x.usl) !== null ? { usl: num(x.usl) } : {}),
         ...(num(x.lsl) !== null ? { lsl: num(x.lsl) } : {}),
+        ...(OWN_CADENCES.includes(str(x.cadence) as OwnCadence) ? { cadence: str(x.cadence) as OwnCadence } : {}),
       }))
       .filter((m) => m.key !== "" && m.name !== "");
   } catch {

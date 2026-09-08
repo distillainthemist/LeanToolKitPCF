@@ -8,7 +8,7 @@
 import type { Ben_ltkcardserieses } from "../generated/models/Ben_ltkcardseriesesModel";
 import { Ben_ltkcardseriesesService } from "../generated/services/Ben_ltkcardseriesesService";
 import { currentViewer } from "../runtime";
-import { allWhere, eq, firstWhere } from "./dv";
+import { allWhere, eq, firstWhere, odata } from "./dv";
 import {
   KeyedCell,
   partitionSeries,
@@ -101,6 +101,17 @@ export function listSeries(
       void flushReads(boardId);
     });
   });
+}
+
+/** The cells whose key starts with `prefix`, dated ≤ `to` — the spec
+ *  history (grid entry): sparse points that carry forward, so the read
+ *  runs from the beginning of time rather than a window. */
+export async function listSeriesByPrefix(boardId: string, cardId: string, prefix: string, to: string): Promise<SeriesCell[]> {
+  const rows = await allWhere(
+    Ben_ltkcardseriesesService.getAll,
+    `${eq("ben_boardid", boardId)} and ${eq("ben_cardid", cardId)} and startswith(ben_serieskey,'${odata(prefix)}') and ben_date le ${to}`
+  );
+  return rows.map(fromRow);
 }
 
 /** True when the card has ANY series rows (migration guard). */

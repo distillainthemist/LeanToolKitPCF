@@ -120,6 +120,17 @@ as a free-standing object is a card and gets the full recipe.
 - Matrix/list cards: 4px status edge + 13.5–14px semibold statement +
   muted meta lines. Tallies are symbols (`✓ ! ✕`) with zeros muted.
 
+### 5.x The values grid (KPI values, 2026-09-08)
+
+`.app-vg-*`: a white 10px/`#e4dfd6` scroll container; sticky warm-wash
+(`#faf9f7`) first column and header rows; 36px cells, right-aligned
+tabular numerals; inherited (carried-forward) values grey italic;
+today's column `#fbf4ea`; future columns at 0.6 opacity; a focused cell
+`#fff8e6` with a 2px accent inset; the state row is site-palette dots.
+Horizontal scroll is INSIDE the grid, never the page; the table keeps
+10px under its last row so an overlay scrollbar never hides it. One
+component for the Value drivers drawer and the KPI card dialog.
+
 ## 6. Settings surfaces
 
 - Tabbed sections; `h3.app-pr-h3` section titles + `.app-settings-note`

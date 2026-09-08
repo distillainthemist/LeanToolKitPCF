@@ -5,6 +5,8 @@
 // sentinel, not "", because Dataverse stores "" as null and null key
 // columns break alternate-key upserts.
 
+import { isSpecSeriesKey } from "../../../shared/schema/specSeries";
+
 /** One table cell in app form (shift uses the stored sentinel form). */
 export interface SeriesCell {
   key: string; // the entity: dimension letter, condition name, point id
@@ -116,12 +118,14 @@ export function cellsFromPoints(points: SeriesPoint[]): SeriesCell[] {
     .map((p) => ({ key: p.id, date: p.date, shift: WHOLE_DAY, value: String(p.value) }));
 }
 
-/** Cells → points, date-sorted; non-numeric values skipped. */
+/** Cells → points, date-sorted; non-numeric values skipped. Spec cells
+ *  (`spec:` keys — the per-bucket target/limits, grid entry) are not
+ *  readings. */
 export function pointsFromCells(cells: SeriesCell[]): SeriesPoint[] {
   const out: SeriesPoint[] = [];
   for (const c of cells) {
     const value = Number(c.value);
-    if (c.key !== "" && Number.isFinite(value)) {
+    if (c.key !== "" && !isSpecSeriesKey(c.key) && Number.isFinite(value)) {
       out.push({ id: c.key, date: c.date, value });
     }
   }
