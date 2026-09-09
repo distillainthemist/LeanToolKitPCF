@@ -123,7 +123,7 @@ export function renderValueGrid(o: GridOpts): GridHandle {
   const wrap = el("div", "app-vg");
   o.host.appendChild(wrap);
   const perPageEarly = (): number => {
-    const width = o.host.clientWidth;
+    const width = o.host.getBoundingClientRect().width;
     if (width <= 0) return PAGE_BUCKETS[src.cadence];
     const fit = Math.floor((width - 132) / 64);
     const shifts = src.cadence === "shiftly" ? Math.max(1, (src.shifts ?? ["D", "N"]).length) : 1;
@@ -160,7 +160,7 @@ export function renderValueGrid(o: GridOpts): GridHandle {
   const MIN_COL = 64;
   const HEAD_COL = 130;
   const perPage = (): number => {
-    const width = wrap.clientWidth;
+    const width = wrap.getBoundingClientRect().width;
     if (width <= 0) return PAGE_BUCKETS[src.cadence];
     const fit = Math.floor((width - HEAD_COL - 2) / MIN_COL);
     const shifts = src.cadence === "shiftly" ? Math.max(1, (src.shifts ?? ["D", "N"]).length) : 1;
@@ -534,7 +534,7 @@ export function renderValueGrid(o: GridOpts): GridHandle {
   // re-page when the host's width becomes known or changes (a dialog that
   // measured 0 before it was on the page, a resized window)
   const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(() => {
-    if (dead || wrap.clientWidth <= 0) return;
+    if (dead || wrap.getBoundingClientRect().width <= 0) return;
     const p = perPage();
     if (p === pageSize) return;
     void flushing.then(load).then(() => {
