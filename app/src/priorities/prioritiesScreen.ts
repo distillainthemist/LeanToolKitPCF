@@ -19,6 +19,7 @@
 // view — built (P3), persists per user per org via prefs.ts; P4 adds TV
 // walk mode + the embedded card.
 
+import { changeVersion } from "../store/changes";
 import { el, clear } from "../../../shared/ui/dom";
 import { paletteMap } from "../../../shared/palette";
 import { todayIso } from "../../../shared/schema/id";
@@ -171,17 +172,22 @@ export function prioritiesSnapshotSvg(
  * the cascade entry, so the tab still sees its own changes at once.
  */
 const MEMO_TTL_MS = 60_000;
-const memoMap = new Map<string, { at: number; value: Promise<unknown> }>();
+const memoMap = new Map<string, { at: number; ver: number; value: Promise<unknown> }>();
+/** The change topic a memo key depends on (a write bumps it — see
+ *  store/changes.ts — and the next hit reloads instead of serving stale). */
+const MEMO_TOPIC: Record<string, string> = { initiatives: "initiatives", initActions: "initiatives", initBoards: "initiatives", initRows: "initiatives" };
 function memo<T>(key: string, load: () => Promise<T>): Promise<T> {
+  const topic = MEMO_TOPIC[key] ?? "";
+  const ver = topic !== "" ? changeVersion(topic) : 0;
   const hit = memoMap.get(key);
-  if (hit && Date.now() - hit.at < MEMO_TTL_MS) return hit.value as Promise<T>;
+  if (hit && hit.ver === ver && Date.now() - hit.at < MEMO_TTL_MS) return hit.value as Promise<T>;
   const value = load();
-  memoMap.set(key, { at: Date.now(), value });
+  memoMap.set(key, { at: Date.now(), ver, value });
   value.catch(() => memoMap.delete(key));
   return value;
 }
 function memoSet<T>(key: string, v: T): void {
-  memoMap.set(key, { at: Date.now(), value: Promise.resolve(v) });
+  memoMap.set(key, { at: Date.now(), ver: 0, value: Promise.resolve(v) });
 }
 
 interface ScreenState {

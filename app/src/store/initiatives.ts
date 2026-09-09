@@ -5,6 +5,7 @@
 // current and its mandatory cards created"); optional cards are offered
 // later from the template (P6's ＋ Add card from template).
 
+import { bumpChange } from "./changes";
 import { Ben_ltkinitiativesService } from "../generated/services/Ben_ltkinitiativesService";
 import type { Ben_ltkinitiatives } from "../generated/models/Ben_ltkinitiativesModel";
 import { Ben_ltkinitiativeeventsService } from "../generated/services/Ben_ltkinitiativeeventsService";
@@ -81,6 +82,7 @@ export async function unlinkPriorityEverywhere(priorityId: string): Promise<numb
 }
 
 export async function saveInitiative(i: Initiative): Promise<string> {
+  bumpChange("initiatives");
   return upsertWhere(
     Ben_ltkinitiativesService,
     eq("ben_initiativeid", i.id),
