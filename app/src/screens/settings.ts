@@ -3115,7 +3115,9 @@ async function renderBoardsAdmin(body: HTMLElement, me: RosterPerson): Promise<v
     cats.filter((c) => c.color !== "").map((c) => [c.name, c.color])
   );
 
-  const all = await listBoards(true); // archived included; hidden below
+  // rituals only: initiative boards (kind "project", `init-`/`tpl-` ids)
+  // are managed on the Improvement tab, not here (Ben, 2026-09-09)
+  const all = (await listBoards(true)).filter((b) => b.kind === "meeting" && !b.boardId.startsWith("init-") && !b.boardId.startsWith("tpl-")); // archived included; hidden below
   const withInfo = all.map((b) => ({
     board: b,
     owner: parseMeetingInfo(b.occurrenceSettingsRaw)?.owner ?? null,
