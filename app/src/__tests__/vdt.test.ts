@@ -11,6 +11,10 @@ import {
   setValue,
   driverPointsFromCells,
   driverDiffPoints,
+  parseTracking,
+  stateOf,
+  driverStatePointsFromCells,
+  driverDiffStatePoints,
 } from "../improvement/vdt/model";
 import {
   checkFormula,
@@ -225,5 +229,40 @@ describe("linked KPI card ↔ driver series adapters (P9e)", () => {
     const { put, del } = driverDiffPoints(prev, next);
     expect(put.map((c) => `${c.date}=${c.value}`)).toEqual(["2026-08-27=9", "2026-08-28=3"]);
     expect(del.map((c) => c.date).sort()).toEqual(["2026-08-25", "2026-08-26"]);
+  });
+});
+
+describe("non-numeric drivers (good / bad, picklist)", () => {
+  it("parses tracking defensively", () => {
+    expect(parseTracking("")).toEqual({ kind: "value", options: [] });
+    expect(parseTracking(JSON.stringify({ kind: "goodbad", options: [{ label: "x", state: "red" }] }))).toEqual({ kind: "goodbad", options: [] });
+    expect(parseTracking(JSON.stringify({ kind: "picklist", options: [{ label: "Late", state: "red" }, { label: "", state: "green" }] }))).toEqual({ kind: "picklist", options: [{ label: "Late", state: "red" }] });
+  });
+  it("stateOf reads labels and the initiative form's 1/0", () => {
+    const gb = { kind: "goodbad" as const, options: [] };
+    expect(stateOf(gb, "Good")).toEqual({ label: "Good", rag: "green" });
+    expect(stateOf(gb, "0")).toEqual({ label: "Bad", rag: "red" });
+    const pl = { kind: "picklist" as const, options: [{ label: "On track", state: "green" as const }] };
+    expect(stateOf(pl, "on track")).toEqual({ label: "On track", rag: "green" });
+    expect(stateOf(pl, "??")).toEqual({ label: "??", rag: null });
+    expect(stateOf(pl, "")).toEqual({ label: "", rag: null });
+  });
+  it("a non-numeric leaf computes as null and is refused in a formula", () => {
+    const nodes = [
+      mk("r", "", "Root", { formula: "{a} + {b}" }),
+      mk("a", "r", "A", { values: { FY26: { plan: 5 } } }),
+      mk("b", "r", "B", { tracking: { kind: "goodbad", options: [] }, values: { FY26: { plan: 9 } } }),
+    ];
+    expect(computeTree(nodes, "FY26", "plan").get("b")).toBeNull();
+    const chk = checkFormula(nodes[0], nodes);
+    expect(chk.ok).toBe(false);
+    expect(chk.errors.join(" ")).toMatch(/B is measured as good \/ bad/);
+  });
+  it("state points carry the label; the diff writes labels", () => {
+    const t = { kind: "picklist" as const, options: [{ label: "Late", state: "red" as const }, { label: "On time", state: "green" as const }] };
+    const pts = driverStatePointsFromCells([{ key: "actual", date: "2026-09-07", shift: "-", value: "On time" }], t);
+    expect(pts[0]).toMatchObject({ id: "actual@2026-09-07", value: 1, label: "On time" });
+    const { put } = driverDiffStatePoints(pts, [...pts, { id: "k9", date: "2026-09-14", value: 0, label: "Late" }], t);
+    expect(put).toEqual([{ key: "actual", date: "2026-09-14", shift: "-", value: "Late" }]);
   });
 });

@@ -169,6 +169,19 @@ describe("gridCsv / specCell / splitGridCells", () => {
   });
 });
 
+describe("stateCellsFor", () => {
+  it("one label per bucket, coloured by its state", async () => {
+    const { stateCellsFor } = await import("../improvement/vdt/gridModel");
+    const cols = gridColumns("weekly", "2026-09-07", "2026-09-14");
+    const t = { kind: "picklist" as const, options: [{ label: "Late", state: "red" as const }] };
+    const cells = stateCellsFor(cols, [{ key: "actual", date: "2026-09-07", shift: "-", value: "Late" }, { key: "spec:plan", date: "2026-09-07", shift: "-", value: "1" }], (k) => k === "actual", t);
+    expect(cells[0].actual).toMatchObject({ raw: "Late", count: 1, existing: { key: "actual", date: "2026-09-07", shift: "-" } });
+    expect(cells[0].rag).toBe("red");
+    expect(cells[1].actual).toMatchObject({ raw: "", count: 0 });
+    expect(cells[1].rag).toBeNull();
+  });
+});
+
 describe("rows / spread", () => {
   it("rowsFor keeps the configured rows in order, Actual always", async () => {
     const { rowsFor } = await import("../improvement/vdt/gridModel");

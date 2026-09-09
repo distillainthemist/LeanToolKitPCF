@@ -845,6 +845,25 @@ reschedule/cancel history with a reason picklist.
   "Fill plan from targets" is gone. KPI card draws the forecast as a
   muted dotted step and reads out "Plan". `store/gridCells.ts` holds the
   shared cell loader.
+- **Good / bad and picklist value drivers — BUILT 2026-09-09** (Ben: a
+  non-numeric option for value driver KPIs). `DriverNode.tracking
+  {kind: value|goodbad|picklist, options[{label,state}]}` in the NEW
+  `ben_trackingjson` column (deployed to dev, grants confirmed; next
+  release stays solution-carrying); rail "Measured as" select + the
+  shared options editor (`improvement/optionsEditor.ts`); unit / display /
+  grid rows hide for non-numeric. A non-numeric driver never enters a
+  formula (`checkFormula` names it; `computeTree` yields null) and units
+  are moot for linking. Readings are the option label on the driver's
+  one series (`stateOf` also reads the initiative form's 1/0). Grid:
+  the only row is the state — good / bad cycles on click, a picklist is
+  a select per bucket, paste maps labels (`stateCellsFor`,
+  `loadGridCells` branches on `tracking`). Tree: a state chip instead of
+  a number; the popup shows the latest state over the grid. Linked KPI
+  card: state mode (latest chip + a strip of recent states + "Set
+  state…", `KpiPoint.label`, `driverStatePointsFromCells` /
+  `driverDiffStatePoints`). Metrics card rows and the register colour by
+  the driver's tracking (`DriverLast.display`); a from-tree metric
+  inherits the driver's tracking and options.
 - **P10 Reporting** — designed (spec §4).
 
 Each phase ships behind the usual gates + `pac code push`; the specs'

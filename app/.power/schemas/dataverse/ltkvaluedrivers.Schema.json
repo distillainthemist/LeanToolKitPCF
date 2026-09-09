@@ -133,6 +133,14 @@
           "x-ms-schema-name": "ben_sourceurl",
           "maxLength": 1000
         },
+        "ben_trackingjson": {
+          "type": "string",
+          "title": "Tracking (JSON)",
+          "x-ms-dataverse-attribute": "ben_trackingjson",
+          "x-ms-dataverse-type": "MemoType",
+          "x-ms-schema-name": "ben_trackingjson",
+          "maxLength": 4000
+        },
         "ben_unit": {
           "type": "string",
           "title": "Unit",

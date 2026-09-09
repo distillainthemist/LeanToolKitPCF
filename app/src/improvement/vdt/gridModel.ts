@@ -12,7 +12,7 @@
 //    location, CARRY-FORWARD: a column's spec is the latest spec point at
 //    or before its anchor, else the single level target on the metric/card.
 
-import { Aggregate, aggregateSeries, bucketKey, Cadence, SeriesPoint } from "./model";
+import { Aggregate, aggregateSeries, bucketKey, Cadence, DriverTracking, SeriesPoint, stateOf } from "./model";
 import { isSpecSeriesKey, SPEC_SERIES_KEYS, specAtDate, specKindOfKey, SpecKind as SharedSpecKind, SpecRows } from "../../../../shared/schema/specSeries";
 import { addBuckets as addBucketsShared, bucketSpan as bucketSpanShared, isoDate, parseDay } from "../../../../shared/schema/buckets";
 
@@ -37,6 +37,9 @@ export interface GridLocation {
   isActual: (key: string) => boolean;
   /** Shiftly only: the shift labels (existing points' shifts are added). */
   shifts?: string[];
+  /** Non-numeric (good / bad, picklist): readings are option labels; the
+   *  grid's only row is the state. */
+  tracking?: DriverTracking;
 }
 
 export interface GridColumn {
@@ -145,6 +148,8 @@ export interface GridSpecCell {
 
 export interface GridActualCell {
   value: number | null;
+  /** A non-numeric reading's stored label ("" = none). */
+  raw?: string;
   /** Points folded into this column. */
   count: number;
   /** Editable when the bucket holds at most one point (that point is
@@ -229,6 +234,35 @@ export function resolveGrid(
     const lsl = specCell("lsl", col);
     const usl = specCell("usl", col);
     return { column: col, plan, forecast, lsl, usl, actual, rag: ragFor(value, plan.value, lsl.value, usl.value) };
+  });
+}
+
+/** Non-numeric drivers: one reading per bucket (the anchor date + shift),
+ *  shown as its option label and coloured by its state; no spec rows. */
+export function stateCellsFor(
+  cols: GridColumn[],
+  cells: { key: string; date: string; shift: string; value: string }[],
+  isActual: (key: string) => boolean,
+  tracking: DriverTracking
+): GridCell[] {
+  const byKey = new Map<string, { key: string; date: string; shift: string; value: string }>();
+  for (const c of cells) {
+    if (!isActual(c.key) || c.value === "") continue;
+    byKey.set(`${c.date.slice(0, 10)}|${c.shift || "-"}`, c);
+  }
+  const none = { value: null, inherited: true };
+  return cols.map((column) => {
+    const c = byKey.get(`${column.anchor}|${column.shift}`);
+    const st = c ? stateOf(tracking, c.value) : { label: "", rag: null };
+    return {
+      column,
+      plan: none,
+      forecast: none,
+      lsl: none,
+      usl: none,
+      actual: { value: null, raw: st.label, count: c ? 1 : 0, editable: true, existing: c ? { key: c.key, date: c.date.slice(0, 10), shift: c.shift || "-" } : null },
+      rag: st.rag,
+    };
   });
 }
 

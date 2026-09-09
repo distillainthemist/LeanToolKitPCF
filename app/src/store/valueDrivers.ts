@@ -15,8 +15,7 @@ import {
   parseHistory,
   parseScenarioToggles,
   parseValues,
-  Scenario,
-} from "../improvement/vdt/model";
+  Scenario, parseTracking } from "../improvement/vdt/model";
 
 function nodeFromRow(r: Ben_ltkvaluedrivers): DriverNode {
   const cadence = CADENCES.includes(r.ben_cadence as DriverNode["cadence"]) ? (r.ben_cadence as DriverNode["cadence"]) : "monthly";
@@ -36,6 +35,7 @@ function nodeFromRow(r: Ben_ltkvaluedrivers): DriverNode {
     aggregate,
     sourceUrl: r.ben_sourceurl ?? "",
     format: parseFormat(r.ben_formatjson ?? ""),
+    tracking: parseTracking(r.ben_trackingjson ?? ""),
     order: typeof r.ben_order === "number" ? r.ben_order : 0,
     values: parseValues(r.ben_valuesjson ?? ""),
     history: parseHistory(r.ben_historyjson ?? ""),
@@ -66,6 +66,7 @@ export async function saveDriver(n: DriverNode): Promise<string> {
       ben_cadence: n.cadence,
       ben_aggregate: n.aggregate,
       ben_formatjson: JSON.stringify(n.format),
+      ben_trackingjson: JSON.stringify(n.tracking),
       ben_order: n.order,
       ben_valuesjson: JSON.stringify(n.values),
       ben_historyjson: JSON.stringify(n.history),

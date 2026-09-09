@@ -29,6 +29,7 @@ export interface Ben_ltkvaluedriversBase {
   ben_site?: string;
   ben_source?: string;
   ben_sourceurl?: string;
+  ben_trackingjson?: string;
   ben_unit?: string;
   ben_valuesjson?: string;
   ben_valuesource?: string;

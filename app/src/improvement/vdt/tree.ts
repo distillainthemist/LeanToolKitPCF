@@ -20,6 +20,9 @@ export interface TreeOpts {
   /** values: the comparison series' numbers (delta chip = values − compare). */
   compare?: Map<string, number | null>;
   compareLabel?: string;
+  /** values: non-numeric drivers' latest state (label + colour) — shown
+   *  as a chip instead of a number. */
+  states?: Map<string, { label: string; color: string }>;
   /** simulate: nodes that moved (green border + path) and assumed ones (dashed). */
   moved?: Set<string>;
   assumed?: Set<string>;
@@ -59,7 +62,13 @@ export function renderTree(nodes0: DriverNode[], opts0: TreeOpts): TreeHandle {
     if (n.kind === "leading") head.appendChild(el("span", "app-vd-tag", "leading"));
     c.appendChild(head);
     // the value line (values / simulate) or the structure line (settings)
-    if (opts.mode !== "structure" && opts.values) {
+    if (opts.mode !== "structure" && opts.values && opts.states?.has(n.id)) {
+      const st = opts.states.get(n.id) as { label: string; color: string };
+      const chip = el("span", "app-vd-statechip", st.label || "no reading");
+      if (st.label !== "") chip.style.background = st.color;
+      else chip.classList.add("app-vd-statechip-none");
+      c.appendChild(chip);
+    } else if (opts.mode !== "structure" && opts.values) {
       const v = opts.values.get(n.id) ?? null;
       const line = el("div", "app-vd-value", formatValue(v, n.unit, n.format));
       c.appendChild(line);
@@ -72,7 +81,7 @@ export function renderTree(nodes0: DriverNode[], opts0: TreeOpts): TreeHandle {
         }
       }
     } else {
-      const bits = [n.unit || "no unit", n.cadence].filter((x) => x !== "");
+      const bits = [n.tracking.kind === "goodbad" ? "good / bad" : n.tracking.kind === "picklist" ? "picklist" : n.unit || "no unit", n.cadence].filter((x) => x !== "");
       c.appendChild(el("div", "app-vd-meta", bits.join(" · ")));
     }
     if (!root && !leaf && n.formula.trim() !== "") c.appendChild(el("div", "app-vd-formula", formulaInWords(n.formula, nodes)));

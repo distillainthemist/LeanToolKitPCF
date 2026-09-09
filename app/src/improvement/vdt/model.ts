@@ -41,6 +41,45 @@ export const PLANNED_SERIES: Exclude<Series, "actual">[] = ["baseline", "plan", 
 
 export type NodeKind = "driver" | "leading";
 
+/** How a driver is measured (Ben, 2026-09-09): a number, good / bad, or
+ *  an option from a list. A non-numeric driver never enters a formula. */
+export type TrackingKind = "value" | "goodbad" | "picklist";
+export interface TrackingOption {
+  label: string;
+  state: "green" | "amber" | "red";
+}
+export interface DriverTracking {
+  kind: TrackingKind;
+  options: TrackingOption[];
+}
+export const GOODBAD_OPTIONS: TrackingOption[] = [
+  { label: "Good", state: "green" },
+  { label: "Bad", state: "red" },
+];
+export const NUMERIC_TRACKING: DriverTracking = { kind: "value", options: [] };
+
+export function isNumeric(n: Pick<DriverNode, "tracking">): boolean {
+  return n.tracking.kind === "value";
+}
+
+/** The options a tracking offers (good / bad has a fixed pair). */
+export function trackingOptions(t: DriverTracking): TrackingOption[] {
+  return t.kind === "goodbad" ? GOODBAD_OPTIONS : t.kind === "picklist" ? t.options : [];
+}
+
+/** A stored reading's label + state under a tracking. Good / bad also
+ *  reads the initiative form ("1" / "0"). */
+export function stateOf(t: DriverTracking, raw: string): { label: string; rag: "green" | "amber" | "red" | null } {
+  if (raw === "") return { label: "", rag: null };
+  if (t.kind === "goodbad") {
+    if (raw === "1" || raw.toLowerCase() === "good") return { label: "Good", rag: "green" };
+    if (raw === "0" || raw.toLowerCase() === "bad") return { label: "Bad", rag: "red" };
+    return { label: raw, rag: null };
+  }
+  const op = t.options.find((o) => o.label.toLowerCase() === raw.toLowerCase());
+  return op ? { label: op.label, rag: op.state } : { label: raw, rag: null };
+}
+
 export interface NodeFormat {
   decimals: number;
   scale: "" | "k" | "m";
@@ -75,6 +114,8 @@ export interface DriverNode {
   /** …and the report it comes from (Ben, 2026-09-02) — the source line links. */
   sourceUrl: string;
   kind: NodeKind;
+  /** Numeric, good / bad, or a picklist (non-numeric = never in a formula). */
+  tracking: DriverTracking;
   /** "" = a leaf (values entered / fed). Leading nodes never have one. */
   formula: string;
   cadence: Cadence;
@@ -99,6 +140,7 @@ export function newNode(site: string, parentId: string, name: string): DriverNod
     source: "",
     sourceUrl: "",
     kind: "driver",
+    tracking: { kind: "value", options: [] },
     formula: "",
     cadence: "monthly",
     aggregate: "sum",
@@ -296,6 +338,22 @@ function num(v: unknown): number | null {
   return typeof v === "number" && Number.isFinite(v) ? v : null;
 }
 
+export function parseTracking(raw: string): DriverTracking {
+  try {
+    const o = JSON.parse(raw || "{}") as Record<string, unknown>;
+    const kind: TrackingKind = o.kind === "goodbad" || o.kind === "picklist" ? o.kind : "value";
+    const options: TrackingOption[] = Array.isArray(o.options)
+      ? (o.options as unknown[])
+          .map((x) => (x && typeof x === "object" ? (x as Record<string, unknown>) : {}))
+          .map((x) => ({ label: str(x.label), state: (x.state === "amber" || x.state === "red" ? x.state : "green") as TrackingOption["state"] }))
+          .filter((x) => x.label !== "")
+      : [];
+    return { kind, options: kind === "picklist" ? options : [] };
+  } catch {
+    return { kind: "value", options: [] };
+  }
+}
+
 export function parseValues(raw: string): DriverNode["values"] {
   try {
     const o = JSON.parse(raw || "{}") as Record<string, Record<string, unknown>>;
@@ -419,6 +477,36 @@ export function driverDiffPoints(
   }
   for (const gone of before.values()) del.push({ key: "actual", date: gone.date, shift: shiftOf(gone), value: "" });
   return { put, del };
+}
+
+/** A linked card on a NON-numeric driver: readings are option labels;
+ *  the card's points carry the option index as the value and the label. */
+export function driverStatePointsFromCells(cells: { key: string; date: string; shift: string; value: string }[], t: DriverTracking): (KpiLikePoint & { label: string })[] {
+  const opts = trackingOptions(t);
+  const out: (KpiLikePoint & { label: string })[] = [];
+  for (const c of cells) {
+    if (c.key !== "actual" || c.value === "") continue;
+    const st = stateOf(t, c.value);
+    const idx = opts.findIndex((o) => o.label === st.label);
+    out.push({ id: `actual@${c.date}${c.shift && c.shift !== "-" ? "|" + c.shift : ""}`, date: c.date, value: idx >= 0 ? idx : 0, label: st.label, ...(c.shift && c.shift !== "-" ? { shift: c.shift } : {}) });
+  }
+  out.sort((a, b) => (a.date < b.date ? -1 : 1));
+  return out;
+}
+
+export function driverDiffStatePoints(
+  prev: (KpiLikePoint & { label?: string })[],
+  next: (KpiLikePoint & { label?: string })[],
+  t: DriverTracking
+): { put: { key: string; date: string; shift: string; value: string }[]; del: { key: string; date: string; shift: string; value: string }[] } {
+  const opts = trackingOptions(t);
+  const labelOf = (p: KpiLikePoint & { label?: string }) => p.label ?? opts[Math.round(p.value)]?.label ?? "";
+  const { put, del } = driverDiffPoints(
+    prev.map((p) => ({ ...p, value: Math.round(p.value) })),
+    next.map((p) => ({ ...p, value: Math.round(p.value) }))
+  );
+  const byKey = new Map(next.map((p) => [`${p.date}|${p.shift ?? "-"}`, labelOf(p)]));
+  return { put: put.map((c) => ({ ...c, value: byKey.get(`${c.date}|${c.shift}`) ?? c.value })), del };
 }
 
 /** Window days a linked card shows, by the driver's cadence. */

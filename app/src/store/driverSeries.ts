@@ -55,8 +55,14 @@ export async function seedDriverSpecIfEmpty(
 }
 
 /** A driver as a grid location (its rows from the format). */
-export function driverLocation(n: Pick<DriverNode, "id" | "cadence" | "aggregate" | "format">): GridLocation {
-  return { boardId: DRIVER_SERIES_BOARD, cardId: n.id, cadence: n.cadence, aggregate: n.aggregate, level: { target: null, lsl: null, usl: null }, rows: n.format.rows, isActual: (k) => k === DRIVER_SERIES_KEY };
+export function driverLocation(n: Pick<DriverNode, "id" | "cadence" | "aggregate" | "format" | "tracking">): GridLocation {
+  return { boardId: DRIVER_SERIES_BOARD, cardId: n.id, cadence: n.cadence, aggregate: n.aggregate, level: { target: null, lsl: null, usl: null }, rows: n.format.rows, isActual: (k) => k === DRIVER_SERIES_KEY, tracking: n.tracking };
+}
+
+/** The raw actual cells (labels for a non-numeric driver) in a window. */
+export async function listDriverRaw(driverId: string, from: string, to: string): Promise<{ key: string; date: string; shift: string; value: string }[]> {
+  const cells = await listSeries(DRIVER_SERIES_BOARD, driverId, from, to);
+  return cells.filter((c) => c.key === DRIVER_SERIES_KEY && c.value !== "").map((c) => ({ key: c.key, date: c.date.slice(0, 10), shift: c.shift || "-", value: c.value }));
 }
 
 /** The bucket is the unit of entry (Ben, 2026-09-09): a period's plan /

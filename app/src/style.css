@@ -3799,3 +3799,9 @@ textarea.app-cp-statement { font-size: 14px; font-weight: 500; }
 .app-im-optstate { width: 100%; }
 .app-im-rows { display: flex; gap: 14px; flex-wrap: wrap; }
 .app-im-rowchk { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer; }
+/* non-numeric drivers: state chips + grid state cells */
+.app-vd-statechip { display: inline-block; padding: 3px 10px; border-radius: 999px; color: #fff; font-weight: 600; font-size: 12px; }
+.app-vd-statechip-none { background: none; border: 1px solid #d9d3c8; color: #6d675c; font-weight: 400; }
+.app-vg-statebtn { width: 100%; height: 36px; border: none; background: transparent; font: inherit; font-size: 13px; font-weight: 600; text-align: right; padding: 0 10px 0 22px; cursor: pointer; color: #26241f; }
+.app-vg-statebtn-none { color: #9a948a; font-weight: 400; }
+.app-vg-statesel { text-align: right; padding-right: 6px; appearance: auto; }

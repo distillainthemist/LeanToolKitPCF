@@ -65,6 +65,16 @@ export interface ReadingMode {
   shifts: string[] | null;
 }
 
+/** A non-numeric KPI (a good / bad or picklist value driver): readings are
+ *  option labels; the card shows the latest state and a strip of recent
+ *  states instead of a run chart. */
+export interface StateTracking {
+  kind: "goodbad" | "picklist";
+  options: { label: string; state: "green" | "amber" | "red" }[];
+  /** State → colour (the site palette; the host resolves). */
+  color: (state: "green" | "amber" | "red") => string;
+}
+
 export class KpiTrendEditor {
   private readonly root: HTMLElement;
   private env: KpiTrendEnvelope;
@@ -83,6 +93,7 @@ export class KpiTrendEditor {
    *  forward; the level spec above is the fallback. */
   private specSeries: SpecSeries = EMPTY_SPEC_SERIES;
   private reading: ReadingMode = { cadence: "daily", shifts: null };
+  private tracking: StateTracking | null = null;
   /** Linked-driver name for the kebab ("Unlink from …"); "" = none. */
   private linkedTo = "";
   private readonly snapshots: SnapshotScheduler;
@@ -155,6 +166,13 @@ export class KpiTrendEditor {
   /** Reading entry: cadence for the default date, shifts when shiftly. */
   setReadingMode(mode: ReadingMode): void {
     this.reading = mode;
+  }
+
+  /** Non-numeric mode (null = a run chart of numbers). */
+  setTracking(t: StateTracking | null): void {
+    this.tracking = t;
+    this.render();
+    this.snapshots.schedule();
   }
 
   /** The linked driver's name (kebab shows Unlink); "" clears. */
@@ -298,6 +316,10 @@ export class KpiTrendEditor {
     this.root.appendChild(body);
 
     const { points } = this.env.data;
+    if (this.tracking) {
+      this.renderStates(body);
+      return;
+    }
     const gridBtn = (): HTMLElement | null => {
       if (this.readOnly || !this.cb.onGrid) return null;
       const g = el("button", "ltk-kt-add ltk-kt-grid", "⊞ Grid…");
@@ -357,6 +379,120 @@ export class KpiTrendEditor {
       if (g) acts.appendChild(g);
       body.appendChild(acts);
     }
+  }
+
+  // ---- non-numeric: the latest state + a strip of recent states ----
+
+  private stateOf(p: KpiPoint): { label: string; state: "green" | "amber" | "red" | null } {
+    const t = this.tracking;
+    if (!t) return { label: "", state: null };
+    const byLabel = p.label ? t.options.find((o) => o.label.toLowerCase() === p.label!.toLowerCase()) : undefined;
+    const op = byLabel ?? t.options[Math.round(p.value)];
+    return op ? { label: op.label, state: op.state } : { label: p.label ?? "", state: null };
+  }
+
+  private renderStates(body: HTMLElement): void {
+    const t = this.tracking!;
+    const { points } = this.env.data;
+    body.classList.add("ltk-kt-states");
+    if (points.length === 0) {
+      const lines = this.prompts.general.length ? this.prompts.general : ["No state recorded yet", `Set ${t.kind === "goodbad" ? "good or bad" : "a state"} each period.`];
+      const ghost = renderGhost(body, this.readOnly ? lines : [...lines, "Tap to set the first state"]);
+      if (!this.readOnly) ghost.addEventListener("click", () => this.editState(null));
+    } else {
+      const latest = points[points.length - 1];
+      const st = this.stateOf(latest);
+      const readout = el("div", "ltk-kt-readout");
+      const chip = el("div", "ltk-kt-statechip", st.label || "—");
+      if (st.state) chip.style.background = t.color(st.state);
+      readout.appendChild(chip);
+      readout.appendChild(el("div", "ltk-kt-target", `${latest.date}${latest.shift ? " · " + latest.shift : ""}`));
+      body.appendChild(readout);
+      const strip = el("div", "ltk-kt-strip");
+      for (const p of points.slice(-16)) {
+        const s = this.stateOf(p);
+        const cell = el("button", "ltk-kt-stripcell", t.kind === "goodbad" ? (s.state === "green" ? "✓" : s.state === "red" ? "✗" : "·") : (s.label.slice(0, 2) || "·"));
+        cell.type = "button";
+        if (s.state) cell.style.background = t.color(s.state);
+        cell.title = `${p.date}${p.shift ? " · " + p.shift : ""}: ${s.label || "—"}`;
+        if (!this.readOnly) cell.addEventListener("click", () => this.editState(p));
+        else cell.disabled = true;
+        strip.appendChild(cell);
+      }
+      body.appendChild(strip);
+    }
+    if (!this.readOnly) {
+      const acts = el("div", "ltk-kt-acts");
+      const add = el("button", "ltk-kt-add", "＋ Set state");
+      add.type = "button";
+      add.addEventListener("click", () => this.editState(null));
+      acts.appendChild(add);
+      if (this.cb.onGrid) {
+        const g = el("button", "ltk-kt-add ltk-kt-grid", "⊞ Grid…");
+        g.type = "button";
+        g.addEventListener("click", () => this.cb.onGrid?.());
+        acts.appendChild(g);
+      }
+      body.appendChild(acts);
+    }
+  }
+
+  private editState(point: KpiPoint | null): void {
+    const t = this.tracking!;
+    const shifts = this.reading.shifts;
+    const firstShift = shifts && shifts.length > 0 ? shifts[0] : "";
+    const taken = (d: string) => this.env.data.points.some((p) => p.date === d && (!shifts || (p.shift ?? "") === firstShift));
+    const date = textInput(point?.date ?? defaultReadingDate(todayIso(), this.reading.cadence, taken), { type: "date" });
+    const shiftSel = shifts && shifts.length > 0 ? selectInput(point?.shift ?? firstShift, shifts.map((s) => ({ value: s, label: s }))) : null;
+    const cur = point ? this.stateOf(point).label : "";
+    const sel = selectInput(cur, t.options.map((o) => ({ value: o.label, label: o.label })));
+    const buttons = [];
+    if (point) {
+      buttons.push({
+        label: "Delete",
+        kind: "danger" as const,
+        onClick: () => {
+          this.env.data.points = this.env.data.points.filter((p) => p !== point);
+          dlg.close();
+          this.commit();
+        },
+      });
+    }
+    buttons.push({ label: "Cancel", kind: "secondary" as const, onClick: () => dlg.close() });
+    buttons.push({
+      label: point ? "Save" : "Set",
+      kind: "primary" as const,
+      onClick: () => {
+        if (date.value === "" || sel.value === "") return;
+        const idx = Math.max(0, t.options.findIndex((o) => o.label === sel.value));
+        const shift = shiftSel ? shiftSel.value : "";
+        if (point) {
+          point.date = date.value;
+          point.value = idx;
+          point.label = sel.value;
+          if (shiftSel) point.shift = shift;
+        } else {
+          const existing = this.env.data.points.find((p) => p.date === date.value && (p.shift ?? "") === shift);
+          if (existing) {
+            existing.value = idx;
+            existing.label = sel.value;
+          } else this.env.data.points.push({ id: newId("k"), date: date.value, value: idx, label: sel.value, ...(shift !== "" ? { shift } : {}) });
+        }
+        dlg.close();
+        this.commit();
+      },
+    });
+    const dlg = openDialog({ host: this.root, title: point ? "Edit state" : "Set state", buttons });
+    const dateRow = fieldRow("Date", date);
+    dateRow.classList.add("ltk-field-half");
+    dlg.body.appendChild(dateRow);
+    if (shiftSel) {
+      const shiftRow = fieldRow("Shift", shiftSel);
+      shiftRow.classList.add("ltk-field-half");
+      dlg.body.appendChild(shiftRow);
+    }
+    dlg.body.appendChild(fieldRow(t.kind === "goodbad" ? "Good / bad" : "State", sel));
+    sel.focus();
   }
 
   private renderChart(): SVGSVGElement {

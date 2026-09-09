@@ -198,6 +198,9 @@ model section) — the canvas/PCF sections there are historical.
   the source document (mini-tables edit on their source card). Both
   rollups share the store road's source-resolution skeleton
   (`store/rollup.ts`).
+  A value driver may be measured as a number, good / bad or a picklist
+  (`ben_trackingjson`, 2026-09-09); non-numeric drivers never enter
+  formulas and their readings are option labels on the same series.
   A KPI card on ANY board may link itself to a value driver
   (`settings.driver` on the slot, 2026-09-08) and then reads/writes the
   driver's series; initiative boards carry one Metrics card

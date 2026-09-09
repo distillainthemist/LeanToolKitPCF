@@ -16,7 +16,7 @@ import { newId, todayIso } from "../../../../shared/schema/id";
 import { applySeries } from "../../store/series";
 import { loadGridCells } from "../../store/gridCells";
 import { DEFAULT_ROWS_CARD, SPEC_LABELS, SPEC_SERIES_PREFIX, SpecRows } from "../../../../shared/schema/specSeries";
-import { Aggregate, Cadence, CADENCE_LABELS, NodeFormat } from "./model";
+import { Aggregate, Cadence, CADENCE_LABELS, DriverTracking, NodeFormat, stateOf, trackingOptions } from "./model";
 import {
   addBuckets,
   bucketSpan,
@@ -55,7 +55,7 @@ export interface GridSource extends GridLocation {
 }
 
 /** A value driver's location (its rows from the driver's format). */
-export function driverGridSource(n: { id: string; cadence: Cadence; aggregate: Aggregate; unit: string; format: NodeFormat }, level: GridLevel, readOnly: boolean): GridSource {
+export function driverGridSource(n: { id: string; cadence: Cadence; aggregate: Aggregate; unit: string; format: NodeFormat; tracking?: DriverTracking }, level: GridLevel, readOnly: boolean): GridSource {
   return {
     boardId: "vdt",
     cardId: n.id,
@@ -65,6 +65,7 @@ export function driverGridSource(n: { id: string; cadence: Cadence; aggregate: A
     format: n.format,
     level,
     rows: n.format.rows,
+    tracking: n.tracking,
     isActual: (k) => k === "actual",
     newActual: (col) => ({ key: "actual", date: col.anchor, shift: col.shift }),
     readOnly,
@@ -193,6 +194,19 @@ export function renderValueGrid(o: GridOpts): GridHandle {
     await flushing;
   };
 
+  const stateMode = src.tracking !== undefined && src.tracking.kind !== "value";
+  const stateOptions = src.tracking ? trackingOptions(src.tracking) : [];
+
+  /** A non-numeric reading: the option label, or null to clear. */
+  const enterState = (cell: GridCell, label: string | null) => {
+    if (label === null) {
+      if (cell.actual.existing) queue({ ...cell.actual.existing, value: "" }, true);
+      return;
+    }
+    const at = cell.actual.existing ?? src.newActual(cell.column);
+    queue({ ...at, value: label }, false);
+  };
+
   /** Apply one entry to a column/row: the write set + an optimistic cell. */
   const enter = (cell: GridCell, row: GridRowKind, raw: number | null) => {
     const v = raw === null ? null : raw / scale;
@@ -277,10 +291,12 @@ export function renderValueGrid(o: GridOpts): GridHandle {
     head.appendChild(dr);
     table.appendChild(head);
     const body = el("tbody");
-    // the configured rows, then Actual
-    const rows: [GridRowKind, string, string][] = rowsFor(src.rows).map((r) =>
-      r === "actual" ? ["actual", "Actual", CADENCE_LABELS[src.cadence].toLowerCase()] : r === "plan" ? ["plan", "Plan", src.unit] : [r, SPEC_LABELS[r], ""]
-    );
+    // the configured rows, then Actual (a non-numeric driver: the state alone)
+    const rows: [GridRowKind, string, string][] = stateMode
+      ? [["actual", src.tracking?.kind === "goodbad" ? "Good / bad" : "State", CADENCE_LABELS[src.cadence].toLowerCase()]]
+      : rowsFor(src.rows).map((r) =>
+          r === "actual" ? ["actual", "Actual", CADENCE_LABELS[src.cadence].toLowerCase()] : r === "plan" ? ["plan", "Plan", src.unit] : [r, SPEC_LABELS[r], ""]
+        );
     const ragDot = (c: GridCell): HTMLElement | null => {
       if (!c.rag) return null;
       const dot = el("span", "app-vg-dot");
@@ -301,7 +317,51 @@ export function renderValueGrid(o: GridOpts): GridHandle {
           const dot = ragDot(c);
           if (dot) td.appendChild(dot);
         }
-        if (!editable) {
+        if (stateMode && kind === "actual") {
+          // good / bad cycles on click; a picklist is a select
+          const cur = c.actual.raw ?? "";
+          if (src.readOnly) td.appendChild(el("span", "app-vg-ro", cur || ""));
+          else if (src.tracking?.kind === "goodbad") {
+            const b = btn(cur || "—", "app-vg-statebtn" + (cur === "" ? " app-vg-statebtn-none" : ""));
+            b.title = "Click to cycle: Good → Bad → none";
+            b.addEventListener("click", () => {
+              const next = cur === "" ? "Good" : cur === "Good" ? "Bad" : null;
+              enterState(c, next);
+            });
+            td.appendChild(b);
+          } else {
+            const sel = el("select", "app-vg-in app-vg-statesel") as HTMLSelectElement;
+            const none = el("option", "", "—") as HTMLOptionElement;
+            none.value = "";
+            sel.appendChild(none);
+            for (const op of stateOptions) {
+              const o2 = el("option", "", op.label) as HTMLOptionElement;
+              o2.value = op.label;
+              if (op.label === cur) o2.selected = true;
+              sel.appendChild(o2);
+            }
+            sel.dataset.row = kind;
+            sel.dataset.col = String(ci);
+            sel.addEventListener("change", () => enterState(c, sel.value === "" ? null : sel.value));
+            sel.addEventListener("paste", (e) => {
+              const text = e.clipboardData?.getData("text/plain") ?? "";
+              const labels = text.replace(/\r/g, "").split(/\t|\n|,/).map((x) => x.trim());
+              if (labels.length < 2) return;
+              e.preventDefault();
+              let n = 0;
+              labels.forEach((l, k) => {
+                const target = all[ci + k];
+                if (!target || l === "") return;
+                const st = src.tracking ? stateOf(src.tracking, l) : { label: l, rag: null };
+                if (st.rag === null) return;
+                enterState(target, st.label);
+                n++;
+              });
+              note.textContent = `${n} value${n === 1 ? "" : "s"} pasted.`;
+            });
+            td.appendChild(sel);
+          }
+        } else if (!editable) {
           const ro = el("span", "app-vg-ro", kind === "actual" ? fmt(c.actual.value) : fmt(spec?.value ?? null));
           if (kind === "actual" && c.actual.count > 1) {
             ro.classList.add("app-vg-folded");
@@ -389,10 +449,12 @@ export function renderValueGrid(o: GridOpts): GridHandle {
     wrap.appendChild(scroll);
     // footer: paste hint · csv · host extras
     const foot = el("div", "app-vg-foot");
-    foot.appendChild(el("span", "app-cp-muted app-vg-hint", src.readOnly ? "Read-only." : "Grey = carried forward from the previous period (or the level plan). Paste a block from Excel into any cell."));
+    foot.appendChild(el("span", "app-cp-muted app-vg-hint", src.readOnly ? "Read-only." : stateMode ? (src.tracking?.kind === "goodbad" ? "Click a period to cycle Good → Bad → none." : "Pick a state per period; paste a row of labels from Excel into any cell.") : "Grey = carried forward from the previous period (or the level plan). Paste a block from Excel into any cell."));
     const csv = btn("CSV", "app-link");
     csv.addEventListener("click", () => {
-      const text = gridCsv(all, src.unit, src.rows);
+      const text = stateMode
+        ? [["Period", ...all.map((c) => c.column.label)], ["Date", ...all.map((c) => c.column.anchor)], ["State", ...all.map((c) => c.actual.raw ?? "")]].map((r) => r.join(",")).join("\n")
+        : gridCsv(all, src.unit, src.rows);
       const url = URL.createObjectURL(new Blob([text], { type: "text/csv" }));
       const a = document.createElement("a");
       a.href = url;

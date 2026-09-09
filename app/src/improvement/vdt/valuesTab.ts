@@ -14,13 +14,13 @@ import { appPalettes, improvementSettingsJson, orgJson, prioritySettingsJson } f
 import { paletteMap } from "../../../../shared/palette";
 import { listPeople, viewerPerson } from "../../store/people";
 import { listDrivers, saveDriver } from "../../store/valueDrivers";
-import { driverActual, listDriverPoints, putDriverPoint, refoldDriverPeriod, writePeriodSpread } from "../../store/driverSeries";
+import { driverActual, listDriverPoints, listDriverRaw, putDriverPoint, refoldDriverPeriod, writePeriodSpread } from "../../store/driverSeries";
 import { parseOrgTree } from "../../../../shared/schema/meeting";
 import { nowIso, todayIso } from "../../../../shared/schema/id";
 import { parsePrioritySettings, periodFor, periodWindow, nextPeriod, prevPeriod, ragPaletteKey } from "../../priorities/model";
 import { driverGridSource, GridHandle, renderValueGrid } from "./grid";
 import { parseImprovementSettings, roleFillersAt } from "../templateModel";
-import { CADENCE_LABELS, DriverNode, childrenOf, formatValue, isLeaf, pathOf, PLANNED_SERIES, Series, setValue, valueOf } from "./model";
+import { CADENCE_LABELS, DriverNode, childrenOf, formatValue, isLeaf, pathOf, PLANNED_SERIES, Series, setValue, valueOf, isNumeric, stateOf } from "./model";
 import { computeTree, formulaInWords } from "./formula";
 import { renderTree, SERIES_LABELS, TreeHandle } from "./tree";
 import { renderSimulate } from "./simulate";
@@ -77,6 +77,8 @@ export function mountValueDrivers(parent: HTMLElement): () => void {
     let initiatives: Initiative[] = [];
     /** Leaf actuals for the period, folded from each driver's series. */
     let actuals = new Map<string, number | null>();
+    /** Non-numeric drivers' latest state in the period. */
+    let states = new Map<string, { label: string; color: string }>();
     let tree: TreeHandle | null = null;
     /** The open driver popup's grid (2026-09-09). */
     let gridHandle: GridHandle | null = null;
@@ -85,9 +87,18 @@ export function mountValueDrivers(parent: HTMLElement): () => void {
 
     const loadActuals = async () => {
       const w = windowFor();
-      const leaves = nodes.filter((n) => isLeaf(nodes, n));
+      const leaves = nodes.filter((n) => isLeaf(nodes, n) && isNumeric(n));
       const got = await Promise.all(leaves.map((n) => driverActual(n.id, w.from, w.to, n.cadence, n.aggregate).catch(() => null)));
       actuals = new Map(leaves.map((n, i) => [n.id, got[i]]));
+      const stateful = nodes.filter((n) => !isNumeric(n));
+      const raws = await Promise.all(stateful.map((n) => listDriverRaw(n.id, w.from, w.to).catch(() => [])));
+      states = new Map(
+        stateful.map((n, i) => {
+          const last = [...raws[i]].sort((a, b) => (a.date + a.shift < b.date + b.shift ? -1 : 1)).pop();
+          const st = stateOf(n.tracking, last ? last.value : "");
+          return [n.id, { label: st.label, color: st.rag ? ragColor(st.rag) : "#9a948a" }];
+        })
+      );
     };
 
     const load = async () => {
@@ -209,6 +220,7 @@ export function mountValueDrivers(parent: HTMLElement): () => void {
         values: numbers(series),
         compare: compare !== "" ? numbers(compare) : undefined,
         compareLabel: compare !== "" ? SERIES_LABELS[compare].toLowerCase() : undefined,
+        states,
         onSelect: (id) => {
           const n = nodes.find((x) => x.id === id);
           if (n) openDriverDialog(n);
@@ -223,6 +235,7 @@ export function mountValueDrivers(parent: HTMLElement): () => void {
     // driver shows its formula and numbers read-only.
     const openDriverDialog = (n: DriverNode) => {
       const leaf = isLeaf(nodes, n);
+      const numeric = isNumeric(n);
       const editable = canEdit();
       const scrim = el("div", "app-modal-overlay");
       const box = el("div", "app-modal app-modal-wide app-vg-modal app-vd-dialog");
@@ -230,7 +243,7 @@ export function mountValueDrivers(parent: HTMLElement): () => void {
       box.appendChild(el("div", "app-modal-title", n.name));
       const meta = el("div", "app-modal-note");
       meta.append(
-        el("span", undefined, [path.length > 1 ? path.slice(0, -1).join(" › ") : "Top level", CADENCE_LABELS[n.cadence], n.unit || "no unit", leaf ? `folds by ${n.aggregate}` : "computed", n.kind === "leading" ? "leading" : ""].filter((x) => x !== "").join(" · "))
+        el("span", undefined, [path.length > 1 ? path.slice(0, -1).join(" › ") : "Top level", CADENCE_LABELS[n.cadence], !numeric ? (n.tracking.kind === "goodbad" ? "good / bad" : "picklist") : n.unit || "no unit", !numeric ? "" : leaf ? `folds by ${n.aggregate}` : "computed", n.kind === "leading" ? "leading" : ""].filter((x) => x !== "").join(" · "))
       );
       if (n.source !== "" || n.sourceUrl !== "") {
         meta.appendChild(el("span", undefined, " · "));
@@ -256,6 +269,17 @@ export function mountValueDrivers(parent: HTMLElement): () => void {
       };
       const paintStrip = () => {
         clear(cells);
+        if (!numeric) {
+          const st = states.get(n.id);
+          const cell = el("div", "app-vd-periodcell app-vd-periodcell-act");
+          cell.appendChild(el("span", "app-vd-periodlbl", "Latest state"));
+          const chip = el("span", "app-vd-statechip", st?.label || "no reading");
+          if (st && st.label !== "") chip.style.background = st.color;
+          else chip.classList.add("app-vd-statechip-none");
+          cell.appendChild(chip);
+          cells.appendChild(cell);
+          return;
+        }
         for (const sKey of PLANNED_SERIES) {
           // plan / forecast are the FOLD of the buckets (the bucket is the
           // unit of entry, Ben 2026-09-09) — shown only when the driver
@@ -320,7 +344,7 @@ export function mountValueDrivers(parent: HTMLElement): () => void {
             });
           },
           footer: (api) => {
-            if (!editable) return [];
+            if (!editable || !numeric) return [];
             const dated = btn("＋ Dated reading", "app-link");
             dated.title = "A reading on any date or shift — several in one period fold at the driver's aggregate";
             dated.addEventListener("click", () => openEnterActual(n, () => void api.refresh()));

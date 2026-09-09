@@ -46,7 +46,7 @@ import {
 } from "../../controls/ConditionsCard/types";
 import { applySeries, hasAnySeries, listSeries } from "./store/series";
 import { EMPTY_SPEC_SERIES } from "../../shared/schema/specSeries";
-import type { Cadence, NodeFormat } from "./improvement/vdt/model";
+import type { Cadence, DriverTracking, NodeFormat } from "./improvement/vdt/model";
 import { DEFAULT_ROWS_CARD } from "../../shared/schema/specSeries";
 import {
   cellsFromPoints,
@@ -62,6 +62,7 @@ import {
   trailingWindow,
 } from "./store/seriesMap";
 import { driverDiffPoints, driverPointsFromCells, listSpecSeries } from "./store/driverSeries";
+import { driverDiffStatePoints, driverStatePointsFromCells } from "./improvement/vdt/model";
 import { FiveWhysEditor } from "../../controls/FiveWhys/editor";
 import { parseFiveWhys, serializeFiveWhys } from "../../controls/FiveWhys/types";
 import { FaultTreeEditor } from "../../controls/FaultTree/editor";
@@ -741,7 +742,8 @@ const REGISTRY: Record<string, CardMounter> = {
     // P9e: on an initiative board a metric linked (drives) to a value
     // driver reads/writes the DRIVER's one series at the driver's cadence —
     // series location + point identity swap, the editor never knows
-    let link: { driverId: string; name: string; cadenceLabel: string; days: number; node: { id: string; cadence: Cadence; aggregate: "sum" | "avg" | "last" | "min" | "max"; unit: string; format: NodeFormat } } | null = null;
+    let link: { driverId: string; name: string; cadenceLabel: string; days: number; node: { id: string; cadence: Cadence; aggregate: "sum" | "avg" | "last" | "min" | "max"; unit: string; format: NodeFormat; tracking: DriverTracking } } | null = null;
+    const stateLink = () => (link && link.node.tracking.kind !== "value" ? link.node.tracking : null);
     const seriesLoc = () => (link ? { boardId: "vdt", cardId: link.driverId } : { boardId: opts.boardId, cardId: opts.cardId });
     // grid entry (2026-09-08): an own card's cadence from settings (default
     // weekly); a linked card takes the driver's
@@ -763,7 +765,8 @@ const REGISTRY: Record<string, CardMounter> = {
     const editor = new KpiTrendEditor(opts.host, {
       onChange: (env2) => {
         edited = true;
-        const { put, del } = link ? driverDiffPoints(lastPoints, env2.data.points) : diffPoints(lastPoints, env2.data.points);
+        const st = stateLink();
+        const { put, del } = st ? driverDiffStatePoints(lastPoints, env2.data.points, st) : link ? driverDiffPoints(lastPoints, env2.data.points) : diffPoints(lastPoints, env2.data.points);
         lastPoints = env2.data.points.map((p) => ({ ...p }));
         const loc = seriesLoc();
         void applySeries(loc.boardId, loc.cardId, put, del).catch((err) =>
@@ -855,7 +858,8 @@ const REGISTRY: Record<string, CardMounter> = {
       }
       editor.setSpecSeries(spec);
       if (first && edited) return; // never overwrite an edit that beat the load
-      const points = link ? driverPointsFromCells(cells) : pointsFromCells(cells);
+      const st = stateLink();
+      const points = st ? driverStatePointsFromCells(cells, st) : link ? driverPointsFromCells(cells) : pointsFromCells(cells);
       lastPoints = points.map((p) => ({ ...p }));
       env.data.points = points;
       // reading entry: the cadence sets the default date; a shiftly driver
@@ -895,6 +899,11 @@ const REGISTRY: Record<string, CardMounter> = {
       // the chrome says so: "· VDT" on the title, cadence beneath
       editor.setChrome(link ? `${opts.title.split("\n")[0]} · VDT\n${link.cadenceLabel} · from value driver ${link.name}` : opts.title, promptsRaw(opts));
       editor.setLinkedDriver(link ? link.name : "");
+      // a good / bad or picklist driver: the card shows states, not a chart
+      const st = stateLink();
+      const palette = pal(opts);
+      const ragKey = { green: "good", amber: "atrisk", red: "issue" } as const;
+      editor.setTracking(st && st.kind !== "value" ? { kind: st.kind, options: st.kind === "goodbad" ? [{ label: "Good", state: "green" }, { label: "Bad", state: "red" }] : st.options, color: (s) => palette[ragKey[s]] ?? "#9a948a" } : null);
     };
     void (async () => {
       try {

@@ -6,7 +6,7 @@
 
 import { el, clear } from "../../../../shared/ui/dom";
 import { listDrivers } from "../../store/valueDrivers";
-import { DriverNode, isLeaf, pathOf } from "./model";
+import { DriverNode, isLeaf, isNumeric, pathOf } from "./model";
 
 export type DriverLinkMode = "drives" | "leads";
 
@@ -66,11 +66,11 @@ export function openDriverLinkPicker(
         const main = el("div", "app-vd-pickmain");
         main.appendChild(el("div", "app-vd-pickname", n.name));
         main.appendChild(el("div", "app-vd-pickpath", path.slice(0, -1).join(" › ") || "top-level"));
-        main.appendChild(el("div", "app-vd-pickmeta", [n.unit || "no unit", n.cadence, isLeaf(nodes, n) ? "leaf" : "computed"].join(" · ")));
+        main.appendChild(el("div", "app-vd-pickmeta", [!isNumeric(n) ? (n.tracking.kind === "goodbad" ? "good / bad" : "picklist") : n.unit || "no unit", n.cadence, isLeaf(nodes, n) ? "leaf" : "computed"].join(" · ")));
         row.appendChild(main);
         const acts = el("div", "app-vd-pickacts");
         const leaf = isLeaf(nodes, n);
-        const unitOk = metric.unit.trim() === "" || metric.unit.trim().toLowerCase() === n.unit.trim().toLowerCase();
+        const unitOk = !isNumeric(n) || metric.unit.trim() === "" || metric.unit.trim().toLowerCase() === n.unit.trim().toLowerCase();
         const drives = btn("Drives", "app-btn app-btn-primary");
         drives.disabled = !leaf || !unitOk;
         drives.title = !leaf ? "Only a leaf can be driven — computed drivers come from their formula" : !unitOk ? `Units differ (${metric.unit} vs ${n.unit || "none"}) — link as Leads, or align the units` : "The metric's number moves this leaf";

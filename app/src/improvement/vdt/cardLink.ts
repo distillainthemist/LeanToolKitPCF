@@ -4,7 +4,7 @@
 
 import { listInitiatives } from "../../store/initiatives";
 import { listDrivers } from "../../store/valueDrivers";
-import { Aggregate, Cadence, CADENCE_LABELS, NodeFormat } from "./model";
+import { Aggregate, Cadence, CADENCE_LABELS, DriverTracking, NodeFormat } from "./model";
 
 export interface CardDriverLink {
   driverId: string;
@@ -13,7 +13,7 @@ export interface CardDriverLink {
   cadence: Cadence;
   cadenceLabel: string;
   /** What the grid needs of the driver (grid entry, 2026-09-08). */
-  node: { id: string; cadence: Cadence; aggregate: Aggregate; unit: string; format: NodeFormat };
+  node: { id: string; cadence: Cadence; aggregate: Aggregate; unit: string; format: NodeFormat; tracking: DriverTracking };
 }
 
 /** A card's own link, saved in its slot settings (any board, Ben
@@ -30,8 +30,8 @@ export function slotDriverLink(settings: Record<string, unknown>): SlotDriverLin
   return typeof o.driverId === "string" && o.driverId !== "" && typeof o.site === "string" ? { site: o.site, driverId: o.driverId } : null;
 }
 
-function linkOf(n: { id: string; name: string; unit: string; cadence: Cadence; aggregate: Aggregate; format: NodeFormat }): CardDriverLink {
-  return { driverId: n.id, name: n.name, unit: n.unit, cadence: n.cadence, cadenceLabel: CADENCE_LABELS[n.cadence], node: { id: n.id, cadence: n.cadence, aggregate: n.aggregate, unit: n.unit, format: n.format } };
+function linkOf(n: { id: string; name: string; unit: string; cadence: Cadence; aggregate: Aggregate; format: NodeFormat; tracking: DriverTracking }): CardDriverLink {
+  return { driverId: n.id, name: n.name, unit: n.unit, cadence: n.cadence, cadenceLabel: CADENCE_LABELS[n.cadence], node: { id: n.id, cadence: n.cadence, aggregate: n.aggregate, unit: n.unit, format: n.format, tracking: n.tracking } };
 }
 
 /** The driver a KPI card shows: its slot's own link first, else (on an

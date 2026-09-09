@@ -25,8 +25,8 @@ import {
   formatValue,
   formulaChildren,
   newNode,
-  SERIES,
-} from "./model";
+  SERIES, TrackingOption } from "./model";
+import { DEFAULT_PICKLIST, renderOptionsEditor } from "../optionsEditor";
 import { checkFormula, computeTree } from "./formula";
 import { renderTree, TreeHandle } from "./tree";
 
@@ -197,8 +197,23 @@ export async function renderValueDriversSettings(body: HTMLElement): Promise<voi
       }
       field("Kind", kindSel);
     }
+    // tracking (2026-09-09): a number, good / bad, or a picklist
+    const trkSel = el("select", "app-input") as HTMLSelectElement;
+    for (const [v, l] of [["value", "Numeric"], ["goodbad", "Good / bad"], ["picklist", "Pick from a list"]] as const) {
+      const o = el("option", "", l) as HTMLOptionElement;
+      o.value = v;
+      if (v === draft.tracking.kind) o.selected = true;
+      trkSel.appendChild(o);
+    }
+    field("Measured as", trkSel, "A good / bad or picklist driver has no number: it never enters a formula and rolls up by its state colour.");
+    const trkOptions: TrackingOption[] = draft.tracking.options.map((o) => ({ ...o }));
+    const optHost = el("div", "app-im-optlist");
+    field("Options", optHost);
+    const optField = rail.lastElementChild as HTMLElement;
+    renderOptionsEditor(optHost, trkOptions);
     const unit = text(draft.unit, "$, kL, %, $/kL");
     field("Unit", unit);
+    const unitField = rail.lastElementChild as HTMLElement;
     const source = text(draft.source, "e.g. payroll, OEE model");
     field("Source", source, "Named under the card so nobody argues about where the number came from.");
     const sourceUrl = text(draft.sourceUrl, "https://… the report it comes from");
@@ -252,6 +267,19 @@ export async function renderValueDriversSettings(body: HTMLElement): Promise<voi
       rowsBox.appendChild(lab);
     }
     field("Grid rows", rowsBox, "What is entered per period besides Actual. A period's plan and forecast are the fold of its buckets.");
+    const rowsField = rail.lastElementChild as HTMLElement;
+    const numericFields = () => {
+      const numeric = trkSel.value === "value";
+      optField.hidden = trkSel.value !== "picklist";
+      unitField.hidden = !numeric;
+      rowsField.hidden = !numeric;
+      if (trkSel.value === "picklist" && trkOptions.length === 0) {
+        trkOptions.push(...DEFAULT_PICKLIST.map((o) => ({ ...o })));
+        renderOptionsEditor(optHost, trkOptions);
+      }
+    };
+    numericFields();
+    trkSel.addEventListener("change", numericFields);
 
     // ---- formula (drivers with driver children) ----
     let formulaIn: HTMLInputElement | null = null;
@@ -299,7 +327,8 @@ export async function renderValueDriversSettings(body: HTMLElement): Promise<voi
       d.name = name.value.trim();
       d.definition = def.value.trim();
       if (kindSel) d.kind = kindSel.value === "leading" ? "leading" : "driver";
-      d.unit = unit.value.trim();
+      d.unit = trkSel.value === "value" ? unit.value.trim() : "";
+      d.tracking = { kind: trkSel.value as DriverNode["tracking"]["kind"], options: trkSel.value === "picklist" ? trkOptions.filter((o) => o.label.trim() !== "").map((o) => ({ label: o.label.trim(), state: o.state })) : [] };
       d.source = source.value.trim();
       d.sourceUrl = sourceUrl.value.trim();
       d.cadence = cadSel.value as DriverNode["cadence"];

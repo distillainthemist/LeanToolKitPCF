@@ -37,3 +37,23 @@ renderValueGrid({
   home: { from: "2026-08-25", to: "2026-09-14" },
   ragColor,
 });
+// a picklist driver: the grid's only row is the state
+seed("vdt", "audit", [
+  { key: "actual", date: "2026-08-24", shift: "-", value: "On track" },
+  { key: "actual", date: "2026-08-31", shift: "-", value: "At risk" },
+  { key: "actual", date: "2026-09-07", shift: "-", value: "Off track" },
+]);
+const h3 = document.createElement("h3");
+h3.style.cssText = "margin:24px 0 8px";
+h3.textContent = "Picklist driver — state row";
+const pickHost = document.createElement("div");
+document.querySelector("div[style*='max-width']")!.append(h3, pickHost);
+renderValueGrid({
+  host: pickHost,
+  source: driverGridSource(
+    { id: "audit", cadence: "weekly", aggregate: "last", unit: "", format: { decimals: 0, scale: "", percent: false, rows: { plan: true, forecast: true, lsl: false, usl: false } }, tracking: { kind: "picklist", options: [{ label: "On track", state: "green" }, { label: "At risk", state: "amber" }, { label: "Off track", state: "red" }] } },
+    { target: null, lsl: null, usl: null },
+    false
+  ),
+  ragColor,
+});

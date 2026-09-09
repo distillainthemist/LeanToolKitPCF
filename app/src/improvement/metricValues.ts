@@ -12,6 +12,7 @@ import type { CardRow } from "../store/cards";
 import { Initiative, MetricReading, metricRag, worstMetricRag } from "./initiativeModel";
 import { EMPTY_SPEC_SERIES, specFor, SpecSeries } from "../../../shared/schema/specSeries";
 import { metricLocation, trackingDisplay } from "./metricLocation";
+import type { DriverNode } from "./vdt/model";
 
 /** A metric's last reading + its spec history (grid entry: per-period
  *  targets carry forward, so the RAG reads the spec in force on the
@@ -23,6 +24,8 @@ export interface DriverLast {
   raw: string;
   date: string;
   spec: SpecSeries;
+  /** A good / bad or picklist DRIVER's reading as label + state. */
+  display?: { label: string; rag: "green" | "amber" | "red" | null };
 }
 
 export interface MetricValue {
@@ -67,6 +70,10 @@ export function buildMetricState(
       const doc = row ? parseKpiTrend(row.outputJson).envelope.data : null;
       const points = doc?.points ?? [];
       const ml = driverLast.get(`${i.id}|${key}`) ?? (def.driverId && def.driverLink !== "leads" ? driverLast.get(def.driverId) : undefined) ?? null;
+      if (ml?.display) {
+        values.push({ key, name: def.name, unit: "", last: null, display: ml.display.label, target: null, rag: ml.display.rag });
+        continue;
+      }
       if (def.tracking !== "value") {
         const disp = trackingDisplay(def, ml?.raw ?? "");
         values.push({ key, name: def.name, unit: "", last: null, display: disp.label, target: null, rag: disp.rag });
@@ -113,11 +120,12 @@ export async function loadMetricLasts(
   boards: Pick<BoardSummary, "boardId" | "manifestRaw">[] = []
 ): Promise<Map<string, DriverLast>> {
   const out = new Map<string, DriverLast>();
-  const { listDriverPoints, listSpecSeries } = await import("../store/driverSeries");
+  const { listDriverPoints, listDriverRaw, listSpecSeries } = await import("../store/driverSeries");
+  const { stateOf } = await import("./vdt/model");
   const { listSeries } = await import("../store/series");
   const { listDrivers } = await import("../store/valueDrivers");
   const byBoard = new Map(boards.map((b) => [b.boardId, b]));
-  const driverCache = new Map<string, Promise<{ id: string; cadence: "shiftly" | "daily" | "weekly" | "monthly" | "annually"; aggregate: "sum" | "avg" | "last" | "min" | "max" }[]>>();
+  const driverCache = new Map<string, Promise<DriverNode[]>>();
   const driversFor = (site: string) => {
     if (!driverCache.has(site)) driverCache.set(site, listDrivers(site).catch(() => []));
     return driverCache.get(site)!;
@@ -134,7 +142,15 @@ export async function loadMetricLasts(
           const d = m.driverId ? (drivers.find((x) => x.id === m.driverId) ?? null) : null;
           const loc = metricLocation(m, i.boardId, metricsCardId, slots, d);
           try {
-            if (loc.driverId !== "") {
+            if (loc.driverId !== "" && d && d.tracking.kind !== "value") {
+              // a good / bad or picklist driver: the latest label + its state
+              const raw = await listDriverRaw(loc.driverId, "1900-01-01", "2999-12-31");
+              const lastPt = [...raw].sort((a, b) => (a.date + a.shift < b.date + b.shift ? -1 : 1)).pop() ?? null;
+              const st = stateOf(d.tracking, lastPt ? lastPt.value : "");
+              const v: DriverLast = { last: null, raw: lastPt ? lastPt.value : "", date: lastPt ? lastPt.date : "", spec: EMPTY_SPEC_SERIES, display: st };
+              out.set(`${i.id}|${m.key}`, v);
+              out.set(loc.driverId, v);
+            } else if (loc.driverId !== "") {
               const [pts, spec] = await Promise.all([listDriverPoints(loc.driverId, "1900-01-01", "2999-12-31"), listSpecSeries("vdt", loc.driverId, "2999-12-31").catch(() => EMPTY_SPEC_SERIES)]);
               const lastPt = pts.length > 0 ? pts[pts.length - 1] : null;
               const v = { last: lastPt ? lastPt.value : null, raw: lastPt ? String(lastPt.value) : "", date: lastPt ? lastPt.date : "", spec };

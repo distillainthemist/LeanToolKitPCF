@@ -25,8 +25,8 @@ import { listSpecSeries } from "../store/driverSeries";
 import { diffPoints, pointsFromCells } from "../store/seriesMap";
 import { ragPaletteKey } from "../priorities/model";
 import { normalizeMetrics, TemplateMetric } from "./templateModel";
-import { metricLocation, MetricLocation, trackingDisplay } from "./metricLocation";
-import { DriverNode, driverDiffPoints, driverPointsFromCells, formatValue } from "./vdt/model";
+import { metricLocation, MetricLocation } from "./metricLocation";
+import { DriverNode, DriverTracking, driverDiffPoints, driverPointsFromCells, formatValue, stateOf, trackingOptions } from "./vdt/model";
 import { GridSource, loadGridCells } from "./vdt/grid";
 import { GridCell, pageColumns, pageOriginAround, PAGE_BUCKETS } from "./vdt/gridModel";
 import { Initiative } from "./initiativeModel";
@@ -45,6 +45,16 @@ interface Row {
   cells: GridCell[];
   /** Raw last value (own non-value metrics keep strings). */
   lastRaw: string;
+  /** Non-numeric (good / bad, picklist): the driver's tracking, or the
+   *  own metric's; null = a number. */
+  tracking: DriverTracking | null;
+}
+
+/** The tracking a metric row is measured under. */
+function trackingFor(m: TemplateMetric, d: DriverNode | null): DriverTracking | null {
+  if (d && d.tracking.kind !== "value") return d.tracking;
+  if (!d && m.tracking !== "value") return { kind: m.tracking, options: m.options ?? [] };
+  return null;
 }
 
 export function mountMetricsCard(opts: CardMount): () => void {
@@ -64,6 +74,7 @@ export function mountMetricsCard(opts: CardMount): () => void {
   const level = (m: TemplateMetric) => ({ target: m.target, lsl: m.lsl ?? null, usl: m.usl ?? null });
 
   const sourceFor = (m: TemplateMetric, loc: MetricLocation, d: DriverNode | null): GridSource => ({
+    tracking: trackingFor(m, d) ?? undefined,
     boardId: loc.boardId,
     cardId: loc.cardId,
     cadence: loc.cadence,
@@ -83,23 +94,16 @@ export function mountMetricsCard(opts: CardMount): () => void {
     const source = sourceFor(m, loc, d);
     const origin = pageOriginAround(today, loc.cadence);
     const cols = pageColumns(loc.cadence, origin);
-    let cells: GridCell[] = [];
+    const tracking = trackingFor(m, d);
+    // numeric: folded per bucket with spec; non-numeric: one label per bucket
+    const cells = await loadGridCells(source, cols[0].from, cols[cols.length - 1].to).catch(() => []);
     let lastRaw = "";
-    if (m.tracking === "value") {
-      cells = await loadGridCells(source, cols[0].from, cols[cols.length - 1].to).catch(() => []);
-    } else {
-      // non-value metrics: raw strings per bucket, no folding
-      const raw = await listSeries(loc.boardId, loc.cardId, cols[0].from, cols[cols.length - 1].to).catch(() => []);
-      const byDate = new Map(raw.filter((c) => loc.isActual(c.key)).map((c) => [c.date, c]));
-      cells = cols.map((column) => {
-        const c = byDate.get(column.anchor);
-        const disp = c ? trackingDisplay(m, c.value) : { label: "", rag: null };
-        return { column, plan: { value: null, inherited: true }, forecast: { value: null, inherited: true }, lsl: { value: null, inherited: true }, usl: { value: null, inherited: true }, actual: { value: c ? Number(c.value) : null, count: c ? 1 : 0, editable: true, existing: c ? { key: c.key, date: c.date, shift: c.shift } : null }, rag: disp.rag };
-      });
-      const last = [...raw.filter((c) => loc.isActual(c.key))].sort((a, b) => (a.date < b.date ? -1 : 1)).pop();
+    if (tracking) {
+      const raw = await listSeries(loc.boardId, loc.cardId, "1900-01-01", "2999-12-31").catch(() => []);
+      const last = [...raw.filter((c) => loc.isActual(c.key) && c.value !== "")].sort((a, b) => (a.date + a.shift < b.date + b.shift ? -1 : 1)).pop();
       lastRaw = last ? last.value : "";
     }
-    return { m, loc, driver: d, source, cells, lastRaw };
+    return { m, loc, driver: d, source, cells, lastRaw, tracking };
   };
 
   const load = async () => {
@@ -183,7 +187,7 @@ export function mountMetricsCard(opts: CardMount): () => void {
       name.appendChild(el("span", undefined, r.m.name));
       if (r.driver) name.appendChild(el("span", "app-mc-kind", "· VDT"));
       head.appendChild(name);
-      if (r.m.tracking === "value") {
+      if (!r.tracking) {
         const last = latestCell(r);
         head.appendChild(sparkline(r));
         const val = el("div", "app-mc-val");
@@ -202,7 +206,7 @@ export function mountMetricsCard(opts: CardMount): () => void {
         head.classList.add("app-mc-head-click");
       } else {
         head.appendChild(stripFor(r));
-        const disp = trackingDisplay(r.m, r.lastRaw);
+        const disp = stateOf(r.tracking, r.lastRaw);
         const val = el("div", "app-mc-val");
         const dot = el("span", "app-mc-dot");
         if (disp.rag) dot.style.background = ragColor(disp.rag);
@@ -211,7 +215,7 @@ export function mountMetricsCard(opts: CardMount): () => void {
         head.appendChild(val);
       }
       row.appendChild(head);
-      if (expanded === r.m.key && r.m.tracking === "value") row.appendChild(expandedFor(r));
+      if (expanded === r.m.key && !r.tracking) row.appendChild(expandedFor(r));
       wrap.appendChild(row);
     }
   };
@@ -227,7 +231,7 @@ export function mountMetricsCard(opts: CardMount): () => void {
       if (c.rag) {
         cell.style.background = ragColor(c.rag);
         cell.classList.add("app-mc-cell-on");
-        cell.textContent = r.m.tracking === "goodbad" ? (c.rag === "green" ? "✓" : "✗") : "";
+        cell.textContent = r.tracking?.kind === "goodbad" ? (c.rag === "green" ? "✓" : "✗") : "";
       }
       cell.disabled = opts.readOnly;
       cell.addEventListener("click", () => void enterState(r, c, cell));
@@ -248,16 +252,17 @@ export function mountMetricsCard(opts: CardMount): () => void {
       if (k >= 0) rows[k] = fresh;
       if (!dead) paint();
     };
-    if (r.m.tracking === "goodbad") {
-      const cur = c.actual.existing ? String(c.actual.value) : "";
-      await write(cur === "" ? "1" : cur === "1" ? "0" : null);
+    const t = r.tracking ?? { kind: "picklist" as const, options: [] };
+    if (t.kind === "goodbad") {
+      const cur = c.actual.raw ?? "";
+      await write(cur === "" ? "Good" : cur === "Good" ? "Bad" : null);
       return;
     }
     const sel = el("select", "app-input app-mc-pick") as HTMLSelectElement;
     const none = el("option", "", "—") as HTMLOptionElement;
     none.value = "";
     sel.appendChild(none);
-    for (const op of r.m.options ?? []) {
+    for (const op of trackingOptions(t)) {
       const o = el("option", "", op.label) as HTMLOptionElement;
       o.value = op.label;
       if (c.rag && op.state === c.rag) o.selected = true;

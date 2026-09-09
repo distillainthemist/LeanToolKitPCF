@@ -415,6 +415,7 @@ export const TABLES = [
       ben_aggregate: { ...text(10), display: "Aggregate" },
       ben_valuesource: { ...text(10), display: "Value source (manual|metric)" },
       ben_formatjson: { ...text(200), display: "Format (JSON)" },
+      ben_trackingjson: { ...memo(4000), display: "Tracking (JSON)" }, // {kind: value|goodbad|picklist, options:[{label,state}]}
       ben_order: { kind: "int", min: 0, max: 100000, display: "Order" },
       ben_valuesjson: { ...memo(100000), display: "Values (JSON)" },
       ben_historyjson: { ...memo(50000), display: "Value history (JSON)" },

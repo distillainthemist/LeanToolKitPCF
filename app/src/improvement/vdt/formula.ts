@@ -6,7 +6,7 @@
 // (the editor shows them as chips by name, so a rename never breaks a
 // formula). Units are inferred with a small algebra and only ever WARN.
 
-import { CADENCE_RANK, DriverNode, formulaChildren, Series, valueOf } from "./model";
+import { CADENCE_RANK, DriverNode, formulaChildren, Series, valueOf, isNumeric } from "./model";
 
 // ---- AST ---------------------------------------------------------------------
 
@@ -320,12 +320,32 @@ export function checkFormula(node: DriverNode, nodes: DriverNode[]): FormulaChec
     if (kids.length > 0) warnings.push("No formula — this node won't roll its children up");
     return { ok: true, errors, warnings, used: [], unused: kidIds, unit: node.unit };
   }
+  if (!isNumeric(node)) {
+    errors.push(`${node.name || "This driver"} is measured as ${node.tracking.kind === "goodbad" ? "good / bad" : "a picklist"} and has no number to compute`);
+    return { ok: false, errors, warnings, used: [], unused: kidIds, unit: node.unit };
+  }
   let ast: Ast;
   try {
     ast = parseFormula(src);
   } catch (e) {
     errors.push(e instanceof Error ? e.message : String(e));
     return { ok: false, errors, warnings, used: [], unused: kidIds, unit: node.unit };
+  }
+  // a referenced driver that isn't a number
+  const refs = new Set<string>();
+  const walkRefs = (a: unknown) => {
+    if (!a || typeof a !== "object") return;
+    const o = a as Record<string, unknown>;
+    if (o.t === "ref" && typeof o.id === "string") refs.add(o.id);
+    for (const v of Object.values(o)) {
+      if (Array.isArray(v)) v.forEach(walkRefs);
+      else if (v && typeof v === "object") walkRefs(v);
+    }
+  };
+  walkRefs(ast);
+  for (const id of refs) {
+    const r = by.get(id);
+    if (r && !isNumeric(r)) errors.push(`${r.name} is measured as ${r.tracking.kind === "goodbad" ? "good / bad" : "a picklist"} — it has no number to use here`);
   }
   // function arity
   const arity = (a: Ast) => {
@@ -418,6 +438,7 @@ export function computeTree(
     visiting.add(id);
     let v: number | null;
     if (overrides.has(id)) v = overrides.get(id) as number | null;
+    else if (!isNumeric(n)) v = null; // good / bad and picklist drivers have no number
     else if (n.kind === "leading" || n.formula.trim() === "") v = valueOf(n, period, series);
     else {
       const kids = formulaChildren(nodes, n.id).map((k) => k.id);
