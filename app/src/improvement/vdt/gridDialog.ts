@@ -47,6 +47,9 @@ export async function openValueGridDialog(o: GridDialogOpts): Promise<void> {
   );
   const host = el("div");
   box.appendChild(host);
+  // on the page before the grid renders, so it can fit its page to the width
+  scrim.appendChild(box);
+  document.body.appendChild(scrim);
   let changed = false;
   const source = o.driver
     ? driverGridSource(o.driver, o.level, o.readOnly)
@@ -73,6 +76,4 @@ export async function openValueGridDialog(o: GridDialogOpts): Promise<void> {
   });
   foot.appendChild(close);
   box.appendChild(foot);
-  scrim.appendChild(box);
-  document.body.appendChild(scrim);
 }

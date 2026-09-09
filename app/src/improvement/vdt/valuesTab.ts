@@ -63,7 +63,7 @@ export function mountValueDrivers(parent: HTMLElement): () => void {
     let period = periodFor(periodSettings, todayIso()) || periodSettings.currentPeriod;
     let mode: Mode = "read";
     let series: Series = "plan";
-    let compare: Series | "" = "baseline";
+    let compare: Series | "" = "";
     const actor = { whoId: viewer?.objectId ?? "", who: me?.who ?? viewer?.name ?? "" };
     void roster;
 
@@ -163,12 +163,7 @@ export function mountValueDrivers(parent: HTMLElement): () => void {
         });
         seg.appendChild(b);
       }
-      const sim = btn("Simulate", "app-docs-segbtn" + (mode === "simulate" ? " app-docs-segbtn-on" : ""));
-      sim.addEventListener("click", () => {
-        mode = "simulate";
-        render();
-      });
-      seg.appendChild(sim);
+      // Simulate is parked for now (Ben, 2026-09-09) — the code stays
       head.appendChild(seg);
       return head;
     };
@@ -178,7 +173,7 @@ export function mountValueDrivers(parent: HTMLElement): () => void {
       const box = el("div", "app-vd-readwrap");
       const bar = el("div", "app-vd-readbar");
       const showSel = el("select", "app-input app-vd-sel") as HTMLSelectElement;
-      for (const s of ["plan", "forecast", "actual", "baseline"] as Series[]) {
+      for (const s of ["plan", "forecast", "actual"] as Series[]) {
         const o = el("option", "", SERIES_LABELS[s]) as HTMLOptionElement;
         o.value = s;
         if (s === series) o.selected = true;
@@ -192,7 +187,7 @@ export function mountValueDrivers(parent: HTMLElement): () => void {
       const noneO = el("option", "", "No comparison") as HTMLOptionElement;
       noneO.value = "";
       cmpSel.appendChild(noneO);
-      for (const s of ["baseline", "plan", "forecast", "actual"] as Series[]) {
+      for (const s of ["plan", "forecast", "actual"] as Series[]) {
         const o = el("option", "", `vs ${SERIES_LABELS[s].toLowerCase()}`) as HTMLOptionElement;
         o.value = s;
         if (s === compare) o.selected = true;
@@ -257,74 +252,28 @@ export function mountValueDrivers(parent: HTMLElement): () => void {
       }
       box.appendChild(meta);
       if (!leaf) box.appendChild(el("div", "app-cp-muted", `⨍ ${formulaInWords(n.formula, nodes)}`));
-      // this period's four numbers
-      const strip = el("div", "app-vd-periodstrip");
-      strip.appendChild(el("div", "app-field-label", `${period}`));
-      const cells = el("div", "app-vd-periodcells");
-      const computed = {
-        baseline: numbers("baseline"),
-        plan: numbers("plan"),
-        forecast: numbers("forecast"),
-        actual: numbers("actual"),
-      };
-      const paintStrip = () => {
-        clear(cells);
-        if (!numeric) {
-          const st = states.get(n.id);
-          const cell = el("div", "app-vd-periodcell app-vd-periodcell-act");
-          cell.appendChild(el("span", "app-vd-periodlbl", "Latest state"));
-          const chip = el("span", "app-vd-statechip", st?.label || "no reading");
-          if (st && st.label !== "") chip.style.background = st.color;
-          else chip.classList.add("app-vd-statechip-none");
-          cell.appendChild(chip);
-          cells.appendChild(cell);
-          return;
-        }
-        for (const sKey of PLANNED_SERIES) {
-          // plan / forecast are the FOLD of the buckets (the bucket is the
-          // unit of entry, Ben 2026-09-09) — shown only when the driver
-          // carries that row; baseline stays a period number
-          if (sKey !== "baseline" && !n.format.rows[sKey]) continue;
-          const cell = el("label", "app-vd-periodcell");
-          cell.appendChild(el("span", "app-vd-periodlbl", sKey === "baseline" ? SERIES_LABELS[sKey] : `${SERIES_LABELS[sKey]} · ${n.aggregate} of buckets`));
-          if (leaf && editable && sKey === "baseline") {
-            const input = el("input", "app-input app-vd-cell") as HTMLInputElement;
-            input.type = "number";
-            input.step = "any";
-            const cur = valueOf(n, period, sKey);
-            input.value = cur === null ? "" : String(cur);
-            input.placeholder = "—";
-            input.addEventListener("change", () => {
-              const raw = input.value.trim();
-              const v = raw === "" ? null : Number(raw);
-              if (v !== null && !Number.isFinite(v)) return;
-              setValue(n, period, sKey, v, actor, nowIso());
-              void saveDriver(n).then(() => {
-                computed[sKey] = numbers(sKey);
-                paintStrip();
-                render();
-              });
-            });
-            cell.appendChild(input);
-          } else cell.appendChild(el("span", "app-vd-cellro", formatValue(computed[sKey].get(n.id) ?? null, n.unit, n.format)));
-          cells.appendChild(cell);
-        }
-        const act = el("div", "app-vd-periodcell app-vd-periodcell-act");
-        act.appendChild(el("span", "app-vd-periodlbl", "Actual"));
-        const actVal = el("span", "app-vd-cellro app-vd-cellact", formatValue(computed.actual.get(n.id) ?? null, n.unit, n.format));
-        actVal.dataset.actualFor = n.id;
-        act.appendChild(actVal);
-        cells.appendChild(act);
-      };
-      paintStrip();
-      strip.appendChild(cells);
-      box.appendChild(strip);
+      // a good / bad or picklist driver: its latest state (numeric drivers
+      // show nothing above the grid — the period's plan / forecast / actual
+      // are folds of the buckets, seen on the tree; Ben, 2026-09-09)
+      if (!numeric) {
+        const st = states.get(n.id);
+        const cell = el("div", "app-vd-periodcell app-vd-periodcell-act app-vd-latest");
+        cell.appendChild(el("span", "app-vd-periodlbl", "Latest state"));
+        const chip = el("span", "app-vd-statechip", st?.label || "no reading");
+        if (st && st.label !== "") chip.style.background = st.color;
+        else chip.classList.add("app-vd-statechip-none");
+        cell.appendChild(chip);
+        box.appendChild(cell);
+      }
       // the grid (leaves): targets · limits · actuals per bucket, unbounded
       const host = el("div");
       box.appendChild(host);
       const w = windowFor();
       gridHandle?.destroy().catch(() => undefined);
       gridHandle = null;
+      // on the page before the grid renders, so it can fit its page to the width
+      scrim.appendChild(box);
+      document.body.appendChild(scrim);
       if (leaf) {
         gridHandle = renderValueGrid({
           host,
@@ -335,12 +284,7 @@ export function mountValueDrivers(parent: HTMLElement): () => void {
           onSaved: () => {
             // the period's plan / forecast / actual re-fold from the buckets
             void Promise.all([loadActuals(), refoldDriverPeriod(n, period, w, actor, saveDriver)]).then(() => {
-              if (dead) return;
-              computed.actual = numbers("actual");
-              computed.plan = numbers("plan");
-              computed.forecast = numbers("forecast");
-              paintStrip();
-              render();
+              if (!dead) render();
             });
           },
           footer: (api) => {
@@ -370,8 +314,6 @@ export function mountValueDrivers(parent: HTMLElement): () => void {
       });
       foot.appendChild(close);
       box.appendChild(foot);
-      scrim.appendChild(box);
-      document.body.appendChild(scrim);
     };
 
     /** A dated point on the driver's ONE actuals series. */
@@ -435,10 +377,10 @@ export function mountValueDrivers(parent: HTMLElement): () => void {
       const scrim = el("div", "app-modal-overlay");
       const box = el("div", "app-modal");
       box.appendChild(el("div", "app-modal-title", `Import from finance pack — ${period}`));
-      box.appendChild(el("div", "app-modal-note", "One driver per line: name, baseline, plan, forecast (leave a value blank to keep it). Names match the tree; computed drivers are skipped."));
+      box.appendChild(el("div", "app-modal-note", "One driver per line: name, plan, forecast (leave a value blank to keep it). A period value spreads over the driver's buckets. Names match the tree; computed and non-numeric drivers are skipped."));
       const ta = el("textarea", "app-input") as HTMLTextAreaElement;
       ta.rows = 8;
-      ta.placeholder = "Saleable volume, 1800, 2000, 1950\nUnit margin, 5300, 5450,";
+      ta.placeholder = "Saleable volume, 2000, 1950\nUnit margin, 5450,";
       box.appendChild(ta);
       const out = el("div", "app-cp-muted", "");
       box.appendChild(out);
@@ -452,13 +394,13 @@ export function mountValueDrivers(parent: HTMLElement): () => void {
           let applied = 0;
           const missed: string[] = [];
           for (const line of lines) {
-            const [name, b, p, f] = line.split(/\t|,/).map((x) => x.trim());
+            const [name, p, f] = line.split(/\t|,/).map((x) => x.trim());
             const n = nodes.find((x) => x.name.toLowerCase() === (name ?? "").toLowerCase());
-            if (!n || !isLeaf(nodes, n)) {
+            if (!n || !isLeaf(nodes, n) || !isNumeric(n)) {
               missed.push(name ?? "");
               continue;
             }
-            const vals: [Series, string | undefined][] = [["baseline", b], ["plan", p], ["forecast", f]];
+            const vals: [Series, string | undefined][] = [["plan", p], ["forecast", f]];
             let changed = false;
             let baselineChanged = false;
             const w = windowFor();

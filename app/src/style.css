@@ -531,6 +531,7 @@ input[type="color"].app-cat-swatch {
 }
 .app-modal-title { font-size: 17px; font-weight: 700; }
 .app-modal-wide { width: min(92vw, 1080px); max-width: none; }
+.app-vg-modal { width: min(96vw, 1320px); }
 /* roster preview matrix: crews × next 28 days */
 .app-roster-preview { overflow-x: auto; }
 .app-roster-preview table { border-collapse: collapse; font-size: 11px; }
@@ -3725,13 +3726,15 @@ textarea.app-cp-statement { font-size: 14px; font-weight: 500; }
 
 /* ---- KPI values grid (grid entry, 2026-09-08): a column per cadence bucket ---- */
 .app-vg { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
-.app-vg-scroll { overflow-x: auto; overflow-y: hidden; background: #fff; border: 1px solid #e4dfd6; border-radius: 10px; }
-.app-vg-table { border-collapse: separate; border-spacing: 0; font-size: 13px; min-width: 100%; margin-bottom: 10px; /* room under the last row for an overlay scrollbar */ }
+.app-vg-scroll { overflow: hidden; background: #fff; border: 1px solid #e4dfd6; border-radius: 10px; }
+/* the page is sized to fit the width (‹ › move through time) — fixed layout, no scrollbar */
+.app-vg-table { border-collapse: separate; border-spacing: 0; font-size: 13px; width: 100%; table-layout: fixed; }
+.app-vg-table th.app-vg-col, .app-vg-table td.app-vg-cell { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .app-vg-table th, .app-vg-table td { border-bottom: 1px solid #f1efec; border-right: 1px solid #f1efec; padding: 0; height: 36px; white-space: nowrap; }
 .app-vg-table tr:last-child td, .app-vg-table tr:last-child th { border-bottom: none; }
-.app-vg-rowhead { position: sticky; left: 0; z-index: 2; background: #faf9f7; text-align: left; font-weight: 600; padding: 0 12px !important; min-width: 130px; color: #26241f; box-shadow: 1px 0 0 #e4dfd6; }
+.app-vg-rowhead { background: #faf9f7; text-align: left; font-weight: 600; padding: 0 12px !important; width: 130px; color: #26241f; box-shadow: 1px 0 0 #e4dfd6; }
 .app-vg-rowsub { display: block; font-weight: 400; font-size: 11px; color: #6d675c; line-height: 1.1; }
-.app-vg-table thead th { background: #faf9f7; font-weight: 600; text-align: right; padding: 0 10px !important; min-width: 88px; }
+.app-vg-table thead th { background: #faf9f7; font-weight: 600; text-align: right; padding: 0 8px !important; }
 .app-vg-table thead .app-vg-rowhead { z-index: 3; }
 .app-vg-daterow th { font-weight: 400; font-size: 11.5px; color: #6d675c; height: 26px; }
 .app-vg-daterow .app-vg-rowhead { font-weight: 600; font-size: 13px; color: #26241f; }
@@ -3764,6 +3767,7 @@ textarea.app-cp-statement { font-size: 14px; font-weight: 500; }
 .app-vd-periodlbl { font-size: 11px; font-weight: 600; color: #6d675c; text-transform: uppercase; letter-spacing: 0.04em; }
 .app-vd-periodcell .app-vd-cellro, .app-vd-periodcell .app-vd-cell { text-align: left; font-size: 15px; font-weight: 600; color: #26241f; }
 .app-vd-periodcell-act { border-color: #d9d3c8; background: #fff; }
+.app-vd-latest { align-self: flex-start; }
 .app-vd-dialog .app-vd-tree-hint { color: #6d675c; }
 .app-vd-node-clickable { cursor: pointer; }
 

@@ -122,12 +122,19 @@ export function renderValueGrid(o: GridOpts): GridHandle {
   const decimals = src.format?.decimals ?? (src.format?.percent ? 1 : 2);
   const wrap = el("div", "app-vg");
   o.host.appendChild(wrap);
+  const perPageEarly = (): number => {
+    const width = o.host.clientWidth;
+    if (width <= 0) return PAGE_BUCKETS[src.cadence];
+    const fit = Math.floor((width - 132) / 64);
+    const shifts = src.cadence === "shiftly" ? Math.max(1, (src.shifts ?? ["D", "N"]).length) : 1;
+    return Math.max(2, Math.min(PAGE_BUCKETS[src.cadence], Math.floor(fit / shifts)));
+  };
   let dead = false;
   /** The page's cells. */
   let all: GridCell[] = [];
   /** The page's first bucket anchor — moves without bound. */
   const today = todayIso();
-  let origin = o.home && !(today >= o.home.from && today <= o.home.to) ? bucketSpan(o.home.from, src.cadence).from : pageOriginAround(today, src.cadence);
+  let origin = o.home && !(today >= o.home.from && today <= o.home.to) ? bucketSpan(o.home.from, src.cadence).from : pageOriginAround(today, src.cadence, perPageEarly());
   let pending: { put: Map<string, { key: string; date: string; shift: string; value: string }>; del: Map<string, { key: string; date: string; shift: string; value: string }> } = { put: new Map(), del: new Map() };
   let flushTimer: number | null = null;
   let flushing: Promise<void> = Promise.resolve();
@@ -147,8 +154,23 @@ export function renderValueGrid(o: GridOpts): GridHandle {
 
   const resolveRange = (from: string, to: string): Promise<GridCell[]> => loadGridCells(src, from, to, shiftsOf);
 
+  /** Buckets per page: the cadence's default, trimmed to what fits the
+   *  host's width without scrolling (Ben, 2026-09-09 — ‹ › move through
+   *  time instead). Unknown width (not yet on the page) = the default. */
+  const MIN_COL = 64;
+  const HEAD_COL = 130;
+  const perPage = (): number => {
+    const width = wrap.clientWidth;
+    if (width <= 0) return PAGE_BUCKETS[src.cadence];
+    const fit = Math.floor((width - HEAD_COL - 2) / MIN_COL);
+    const shifts = src.cadence === "shiftly" ? Math.max(1, (src.shifts ?? ["D", "N"]).length) : 1;
+    return Math.max(2, Math.min(PAGE_BUCKETS[src.cadence], Math.floor(fit / shifts)));
+  };
+  let pageSize = PAGE_BUCKETS[src.cadence];
+
   const load = async () => {
-    const cols = pageColumns(src.cadence, origin);
+    pageSize = perPage();
+    const cols = pageColumns(src.cadence, origin, undefined, pageSize);
     const got = await resolveRange(cols[0].from, cols[cols.length - 1].to);
     if (dead) return;
     all = got;
@@ -232,7 +254,7 @@ export function renderValueGrid(o: GridOpts): GridHandle {
   const turn = (dir: -1 | 1) => {
     const active = document.activeElement as HTMLInputElement | null;
     if (active && wrap.contains(active) && active.dataset.row) active.dispatchEvent(new Event("change"));
-    origin = addBuckets(origin, src.cadence, dir * PAGE_BUCKETS[src.cadence]);
+    origin = addBuckets(origin, src.cadence, dir * pageSize);
     void flushing.then(load).then(() => {
       if (!dead) paint();
     });
@@ -260,7 +282,7 @@ export function renderValueGrid(o: GridOpts): GridHandle {
     if (!onPage) {
       const home = btn("Today", "app-link");
       home.addEventListener("click", () => {
-        origin = pageOriginAround(today, src.cadence);
+        origin = pageOriginAround(today, src.cadence, pageSize);
         void flushing.then(load).then(() => {
           if (!dead) paint();
         });

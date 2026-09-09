@@ -864,6 +864,18 @@ reschedule/cancel history with a reason picklist.
   `driverDiffStatePoints`). Metrics card rows and the register colour by
   the driver's tracking (`DriverLast.display`); a from-tree metric
   inherits the driver's tracking and options.
+- **Driver popup simplified; grid fits its width — BUILT 2026-09-09**
+  (Ben: the period tiles restate the grid, Simulate is parked for now;
+  no scrolling inside the grid — ‹ › move through time). The popup shows
+  the grid alone (a non-numeric driver keeps its "Latest state" chip);
+  Simulate's seg button is hidden (code kept), the Read selects offer
+  plan / forecast / actual (baseline has no entry surface now), the
+  finance-pack import takes name, plan, forecast. The grid's page is
+  sized to the host width (`perPage`: at least 64px a column after the
+  130px row head, capped at the cadence default, shiftly ÷ shifts) with
+  `table-layout: fixed`, no horizontal scroll; the dialog is attached
+  before the grid renders so it can measure; `pageColumns` /
+  `pageOriginAround` take a size. The values-grid modal is 1320px.
 - **P10 Reporting** — designed (spec §4).
 
 Each phase ships behind the usual gates + `pac code push`; the specs'

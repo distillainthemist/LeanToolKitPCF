@@ -116,14 +116,16 @@ export const PAGE_BUCKETS: Record<Cadence, number> = { shiftly: 7, daily: 7, wee
 /** The anchor `n` buckets on from a bucket anchor (shared helper). */
 export const addBuckets = (anchor: string, cadence: Cadence, n: number): string => addBucketsShared(anchor, cadence, n);
 
-/** The page's columns from its first anchor. */
-export function pageColumns(cadence: Cadence, origin: string, shifts?: string[]): GridColumn[] {
-  return gridColumns(cadence, origin, addBuckets(origin, cadence, PAGE_BUCKETS[cadence] - 1), shifts);
+/** The page's columns from its first anchor (`size` buckets; default the
+ *  cadence's). */
+export function pageColumns(cadence: Cadence, origin: string, shifts?: string[], size = PAGE_BUCKETS[cadence]): GridColumn[] {
+  return gridColumns(cadence, origin, addBuckets(origin, cadence, size - 1), shifts);
 }
 
-/** The page origin that puts `date`'s bucket third from the right. */
-export function pageOriginAround(date: string, cadence: Cadence): string {
-  return addBuckets(bucketSpan(date, cadence).from, cadence, -(PAGE_BUCKETS[cadence] - 3));
+/** The page origin that puts `date`'s bucket third from the right (or
+ *  last, on a narrow page). */
+export function pageOriginAround(date: string, cadence: Cadence, size = PAGE_BUCKETS[cadence]): string {
+  return addBuckets(bucketSpan(date, cadence).from, cadence, -(size - Math.min(3, size)));
 }
 
 /** The read window covering every column (full buckets). */
