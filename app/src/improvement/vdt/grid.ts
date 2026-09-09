@@ -524,12 +524,24 @@ export function renderValueGrid(o: GridOpts): GridHandle {
       }
       await flushing;
       dead = true;
+      ro?.disconnect();
       wrap.remove();
     },
     cells: () => all,
     foldTargets: async (from, to) => foldValues((await resolveRange(from, to)).map((c) => c.plan.value), src.aggregate),
   };
 
+  // re-page when the host's width becomes known or changes (a dialog that
+  // measured 0 before it was on the page, a resized window)
+  const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(() => {
+    if (dead || wrap.clientWidth <= 0) return;
+    const p = perPage();
+    if (p === pageSize) return;
+    void flushing.then(load).then(() => {
+      if (!dead) paint();
+    });
+  }) : null;
+  ro?.observe(wrap);
   wrap.appendChild(el("div", "app-cp-muted", "Loading…"));
   void load()
     .then(() => {
