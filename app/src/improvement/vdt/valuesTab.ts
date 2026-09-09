@@ -20,8 +20,8 @@ import { nowIso, todayIso } from "../../../../shared/schema/id";
 import { parsePrioritySettings, periodFor, periodWindow, nextPeriod, prevPeriod, ragPaletteKey } from "../../priorities/model";
 import { driverGridSource, GridHandle, renderValueGrid } from "./grid";
 import { parseImprovementSettings, roleFillersAt } from "../templateModel";
-import { CADENCE_LABELS, DriverNode, childrenOf, formatValue, isLeaf, PLANNED_SERIES, Series, setValue, valueOf } from "./model";
-import { computeTree } from "./formula";
+import { CADENCE_LABELS, DriverNode, childrenOf, formatValue, isLeaf, pathOf, PLANNED_SERIES, Series, setValue, valueOf } from "./model";
+import { computeTree, formulaInWords } from "./formula";
 import { renderTree, SERIES_LABELS, TreeHandle } from "./tree";
 import { renderSimulate } from "./simulate";
 import { listInitiatives } from "../../store/initiatives";
@@ -33,7 +33,7 @@ const btn = (label: string, cls = "app-btn"): HTMLButtonElement => {
   return b;
 };
 
-type Mode = "read" | "edit" | "simulate";
+type Mode = "read" | "simulate";
 
 export function mountValueDrivers(parent: HTMLElement): () => void {
   const wrap = el("div", "app-vd-wrap");
@@ -78,8 +78,7 @@ export function mountValueDrivers(parent: HTMLElement): () => void {
     /** Leaf actuals for the period, folded from each driver's series. */
     let actuals = new Map<string, number | null>();
     let tree: TreeHandle | null = null;
-    /** Grid entry (2026-09-08): the leaf whose grid drawer is open. */
-    let gridOpen: string | null = null;
+    /** The open driver popup's grid (2026-09-09). */
     let gridHandle: GridHandle | null = null;
 
     const windowFor = () => periodWindow(periodSettings, period) ?? { from: "1900-01-01", to: "2999-12-31" };
@@ -144,13 +143,9 @@ export function mountValueDrivers(parent: HTMLElement): () => void {
       head.appendChild(pager);
       // mode seg
       const seg = el("div", "app-docs-seg");
-      const modes: [Mode, string][] = [["read", "Read"], ["edit", "Edit values"]];
+      const modes: [Mode, string][] = [["read", "Read"]];
       for (const [m, l] of modes) {
         const b = btn(l, "app-docs-segbtn" + (mode === m ? " app-docs-segbtn-on" : ""));
-        if (m === "edit" && !canEdit()) {
-          b.disabled = true;
-          b.title = "Editing values needs a superadmin or the role set in Settings → Value drivers";
-        }
         b.addEventListener("click", () => {
           mode = m;
           render();
@@ -197,6 +192,13 @@ export function mountValueDrivers(parent: HTMLElement): () => void {
         render();
       });
       bar.append(el("span", "app-field-label", "Show"), showSel, cmpSel);
+      bar.appendChild(el("span", "app-cp-muted app-vd-readhint", canEdit() ? "Click a driver to enter its values." : "Click a driver to see its values."));
+      if (canEdit()) {
+        const imp = btn("Import from finance pack…", "app-btn app-vd-importbtn");
+        imp.title = "Paste rows of  driver name, baseline, plan, forecast";
+        imp.addEventListener("click", () => openImport());
+        bar.appendChild(imp);
+      }
       box.appendChild(bar);
       const host = el("div");
       box.appendChild(host);
@@ -207,144 +209,162 @@ export function mountValueDrivers(parent: HTMLElement): () => void {
         values: numbers(series),
         compare: compare !== "" ? numbers(compare) : undefined,
         compareLabel: compare !== "" ? SERIES_LABELS[compare].toLowerCase() : undefined,
+        onSelect: (id) => {
+          const n = nodes.find((x) => x.id === id);
+          if (n) openDriverDialog(n);
+        },
       });
       return box;
     };
 
-    // ---- edit values: the indented rows table -----------------------------------------
-    const renderEdit = (): HTMLElement => {
-      const box = el("div", "app-vd-editwrap");
-      const table = el("div", "app-vd-table");
-      const headRow = el("div", "app-vd-row app-vd-rowhead");
-      headRow.append(
-        el("span", undefined, "Driver"),
-        el("span", undefined, "Baseline"),
-        el("span", undefined, "Plan"),
-        el("span", undefined, "Forecast"),
-        el("span", undefined, `Actual · ${period}`)
+    // ---- the driver popup (Ben, 2026-09-09: the grid opens from the tree;
+    // no Edit values mode) — this period's baseline / plan / forecast /
+    // actual on top, the unbounded grid beneath for a leaf; a computed
+    // driver shows its formula and numbers read-only.
+    const openDriverDialog = (n: DriverNode) => {
+      const leaf = isLeaf(nodes, n);
+      const editable = canEdit();
+      const scrim = el("div", "app-modal-overlay");
+      const box = el("div", "app-modal app-modal-wide app-vg-modal app-vd-dialog");
+      const path = pathOf(nodes, n.id);
+      box.appendChild(el("div", "app-modal-title", n.name));
+      const meta = el("div", "app-modal-note");
+      meta.append(
+        el("span", undefined, [path.length > 1 ? path.slice(0, -1).join(" › ") : "Top level", CADENCE_LABELS[n.cadence], n.unit || "no unit", leaf ? `folds by ${n.aggregate}` : "computed", n.kind === "leading" ? "leading" : ""].filter((x) => x !== "").join(" · "))
       );
-      table.appendChild(headRow);
+      if (n.source !== "" || n.sourceUrl !== "") {
+        meta.appendChild(el("span", undefined, " · "));
+        if (n.sourceUrl !== "") {
+          const a = el("a", "app-link", n.source || "source") as HTMLAnchorElement;
+          a.href = n.sourceUrl;
+          a.target = "_blank";
+          a.rel = "noopener";
+          meta.appendChild(a);
+        } else meta.appendChild(el("span", undefined, n.source));
+      }
+      box.appendChild(meta);
+      if (!leaf) box.appendChild(el("div", "app-cp-muted", `⨍ ${formulaInWords(n.formula, nodes)}`));
+      // this period's four numbers
+      const strip = el("div", "app-vd-periodstrip");
+      strip.appendChild(el("div", "app-field-label", `${period}`));
+      const cells = el("div", "app-vd-periodcells");
       const computed = {
         baseline: numbers("baseline"),
         plan: numbers("plan"),
         forecast: numbers("forecast"),
         actual: numbers("actual"),
       };
-      const walk = (parentId: string, depth: number) => {
-        for (const n of childrenOf(nodes, parentId)) {
-          const leaf = isLeaf(nodes, n);
-          const row = el("div", "app-vd-row" + (leaf ? "" : " app-vd-row-computed") + (n.kind === "leading" ? " app-vd-row-leading" : ""));
-          const nameCell = el("span", "app-vd-rowname");
-          nameCell.style.paddingLeft = `${depth * 18}px`;
-          nameCell.append(el("span", "app-vd-rowtitle", `${!leaf ? "⨍ " : ""}${n.name}`), el("span", "app-vd-rowmeta", [n.unit, CADENCE_LABELS[n.cadence].toLowerCase()].filter((x) => x !== "").join(" · ")));
-          row.appendChild(nameCell);
-          for (const s of PLANNED_SERIES) {
-            if (leaf) {
-              const input = el("input", "app-input app-vd-cell") as HTMLInputElement;
-              input.type = "number";
-              input.step = "any";
-              const cur = valueOf(n, period, s);
-              input.value = cur === null ? "" : String(cur);
-              input.placeholder = "—";
-              input.addEventListener("change", () => {
-                const raw = input.value.trim();
-                const v = raw === "" ? null : Number(raw);
-                if (v !== null && !Number.isFinite(v)) return;
-                setValue(n, period, s, v, actor, nowIso());
-                void saveDriver(n).then(() => render());
+      const paintStrip = () => {
+        clear(cells);
+        for (const sKey of PLANNED_SERIES) {
+          const cell = el("label", "app-vd-periodcell");
+          cell.appendChild(el("span", "app-vd-periodlbl", SERIES_LABELS[sKey]));
+          if (leaf && editable) {
+            const input = el("input", "app-input app-vd-cell") as HTMLInputElement;
+            input.type = "number";
+            input.step = "any";
+            const cur = valueOf(n, period, sKey);
+            input.value = cur === null ? "" : String(cur);
+            input.placeholder = "—";
+            input.addEventListener("change", () => {
+              const raw = input.value.trim();
+              const v = raw === "" ? null : Number(raw);
+              if (v !== null && !Number.isFinite(v)) return;
+              setValue(n, period, sKey, v, actor, nowIso());
+              void saveDriver(n).then(() => {
+                computed[sKey] = numbers(sKey);
+                paintStrip();
+                render();
               });
-              row.appendChild(input);
-            } else {
-              row.appendChild(el("span", "app-vd-cellro", formatValue(computed[s].get(n.id) ?? null, n.unit, n.format)));
-            }
-          }
-          // actual: derived — the dated series folded
-          const act = el("span", "app-vd-cellro app-vd-cellact");
-          const actVal = el("span", undefined, formatValue(computed.actual.get(n.id) ?? null, n.unit, n.format));
-          actVal.dataset.actualFor = n.id;
-          act.appendChild(actVal);
-          if (leaf) {
-            const add = btn("＋", "app-link app-vd-addpt");
-            add.title = `Enter an actual for ${n.name} (${CADENCE_LABELS[n.cadence].toLowerCase()})`;
-            add.addEventListener("click", () => openEnterActual(n));
-            act.appendChild(add);
-            const grid = btn("⊞", "app-link app-vd-gridbtn" + (gridOpen === n.id ? " app-vd-gridbtn-on" : ""));
-            grid.title = gridOpen === n.id ? "Close the grid" : `Grid — targets, limits and actuals per ${CADENCE_LABELS[n.cadence].toLowerCase().replace(/ly$/, "")} for ${period}`;
-            grid.addEventListener("click", () => {
-              gridOpen = gridOpen === n.id ? null : n.id;
-              render();
             });
-            act.appendChild(grid);
-          }
-          row.appendChild(act);
-          table.appendChild(row);
-          if (leaf && gridOpen === n.id) table.appendChild(renderGridDrawer(n));
-          walk(n.id, depth + 1);
+            cell.appendChild(input);
+          } else cell.appendChild(el("span", "app-vd-cellro", formatValue(computed[sKey].get(n.id) ?? null, n.unit, n.format)));
+          cells.appendChild(cell);
         }
+        const act = el("div", "app-vd-periodcell app-vd-periodcell-act");
+        act.appendChild(el("span", "app-vd-periodlbl", "Actual"));
+        const actVal = el("span", "app-vd-cellro app-vd-cellact", formatValue(computed.actual.get(n.id) ?? null, n.unit, n.format));
+        actVal.dataset.actualFor = n.id;
+        act.appendChild(actVal);
+        cells.appendChild(act);
       };
-      walk("", 0);
-      if (nodes.length === 0) table.appendChild(el("div", "app-cp-muted app-vd-tablenote", "No value drivers for this site yet — structure lives in Settings → Value drivers."));
-      box.appendChild(table);
-      const foot = el("div", "app-vd-tablefoot");
-      const imp2 = btn("Import from finance pack…");
-      imp2.title = "Paste rows of  driver name, baseline, plan, forecast";
-      imp2.addEventListener("click", () => openImport());
-      foot.appendChild(imp2);
-      foot.appendChild(el("span", "app-cp-muted", "Planned numbers are per period; actuals are dated points folded at each driver's cadence."));
-      box.appendChild(foot);
-      return box;
-    };
-
-    /** The grid drawer under a leaf: a column per bucket of the period. */
-    const renderGridDrawer = (n: DriverNode): HTMLElement => {
-      const drawer = el("div", "app-vd-drawer");
-      const head = el("div", "app-vd-drawerhead");
-      head.append(el("span", "app-vd-rowtitle", n.name), el("span", "app-cp-muted", `${CADENCE_LABELS[n.cadence]} · ${n.unit || "no unit"} · folds by ${n.aggregate} · ${period}`));
-      drawer.appendChild(head);
+      paintStrip();
+      strip.appendChild(cells);
+      box.appendChild(strip);
+      // the grid (leaves): targets · limits · actuals per bucket, unbounded
       const host = el("div");
-      drawer.appendChild(host);
+      box.appendChild(host);
       const w = windowFor();
       gridHandle?.destroy().catch(() => undefined);
-      gridHandle = renderValueGrid({
-        host,
-        source: driverGridSource(n, { target: null, lsl: null, usl: null }, !canEdit()),
-        home: w,
-        ragColor,
-        csvName: `${n.name}-${period}`.replace(/[^a-z0-9]+/gi, "-").toLowerCase(),
-        onSaved: () => {
-          // the period's Actual column re-folds from the series
-          void loadActuals().then(() => {
-            if (dead) return;
-            const cell = wrap.querySelector(`[data-actual-for="${n.id}"]`);
-            if (cell) cell.textContent = formatValue(numbers("actual").get(n.id) ?? null, n.unit, n.format);
-          });
-        },
-        footer: (api) => {
-          if (!canEdit()) return [];
-          const fill = btn("Fill plan from targets", "app-btn");
-          fill.title = `Fold the columns' targets by ${n.aggregate} into this period's Plan`;
-          fill.addEventListener("click", () => {
-            void api.foldTargets(w.from, w.to).then((v) => {
-              if (v === null) return;
-              return promptConfirm({
-              title: `Set ${period} plan to ${formatValue(v, n.unit, n.format)}?`,
-              note: `The ${n.aggregate} of the grid's targets for ${n.name}. Plan stays a number finance owns — this only fills it, it doesn't link it.`,
-              confirmLabel: "Set plan",
-              }).then((ok) => {
-                if (!ok) return;
-                setValue(n, period, "plan", v, actor, nowIso());
-                void saveDriver(n).then(() => render());
+      gridHandle = null;
+      if (leaf) {
+        gridHandle = renderValueGrid({
+          host,
+          source: driverGridSource(n, { target: null, lsl: null, usl: null }, !editable),
+          home: w,
+          ragColor,
+          csvName: `${n.name}-${period}`.replace(/[^a-z0-9]+/gi, "-").toLowerCase(),
+          onSaved: () => {
+            void loadActuals().then(() => {
+              if (dead) return;
+              computed.actual = numbers("actual");
+              const cell = box.querySelector(`[data-actual-for="${n.id}"]`);
+              if (cell) cell.textContent = formatValue(computed.actual.get(n.id) ?? null, n.unit, n.format);
+            });
+          },
+          footer: (api) => {
+            if (!editable) return [];
+            const dated = btn("＋ Dated reading", "app-link");
+            dated.title = "A reading on any date or shift — several in one period fold at the driver's aggregate";
+            dated.addEventListener("click", () => openEnterActual(n, () => void api.refresh()));
+            const fill = btn("Fill plan from targets", "app-btn");
+            fill.title = `Fold the columns' targets by ${n.aggregate} into ${period}'s Plan`;
+            fill.addEventListener("click", () => {
+              void api.foldTargets(w.from, w.to).then((v) => {
+                if (v === null) return;
+                return promptConfirm({
+                  title: `Set ${period} plan to ${formatValue(v, n.unit, n.format)}?`,
+                  note: `The ${n.aggregate} of the grid's targets for ${n.name}. Plan stays a number finance owns — this only fills it, it doesn't link it.`,
+                  confirmLabel: "Set plan",
+                }).then((ok) => {
+                  if (!ok) return;
+                  setValue(n, period, "plan", v, actor, nowIso());
+                  void saveDriver(n).then(() => {
+                    computed.plan = numbers("plan");
+                    paintStrip();
+                    render();
+                  });
+                });
               });
             });
+            return [dated, fill];
+          },
+        });
+      } else {
+        const kids = childrenOf(nodes, n.id);
+        if (kids.length > 0) box.appendChild(el("div", "app-cp-muted", `Values come from ${kids.map((k) => k.name).join(", ")} — open one of them to enter numbers.`));
+      }
+      const foot = el("div", "app-modal-footer");
+      const close = btn("Done", "app-btn app-btn-primary");
+      close.addEventListener("click", () => {
+        close.disabled = true;
+        const g = gridHandle;
+        gridHandle = null;
+        void (g ? g.destroy() : Promise.resolve()).then(() => {
+          scrim.remove();
+          void loadActuals().then(() => {
+            if (!dead) render();
           });
-          return [fill];
-        },
+        });
       });
-      return drawer;
+      foot.appendChild(close);
+      box.appendChild(foot);
+      scrim.appendChild(box);
+      document.body.appendChild(scrim);
     };
 
     /** A dated point on the driver's ONE actuals series. */
-    const openEnterActual = (n: DriverNode) => {
+    const openEnterActual = (n: DriverNode, onDone?: () => void) => {
       const scrim = el("div", "app-modal-overlay");
       const box = el("div", "app-modal");
       box.appendChild(el("div", "app-modal-title", `Actual — ${n.name}`));
@@ -388,13 +408,14 @@ export function mountValueDrivers(parent: HTMLElement): () => void {
           await putDriverPoint(n.id, date.value, shift?.value.trim() || "-", n.format.percent ? v / 100 : v);
           scrim.remove();
           await loadActuals();
-          render();
+          if (onDone) onDone();
+          else render();
         })();
       });
       foot.append(cancel, save);
       box.appendChild(foot);
       scrim.appendChild(box);
-      wrap.appendChild(scrim);
+      document.body.appendChild(scrim);
       val.focus();
     };
 
@@ -472,14 +493,9 @@ export function mountValueDrivers(parent: HTMLElement): () => void {
     const render = () => {
       simTeardown?.();
       simTeardown = null;
-      if (gridHandle) {
-        void gridHandle.destroy().catch(() => undefined);
-        gridHandle = null;
-      }
       clear(wrap);
       wrap.appendChild(renderHeader());
-      if (mode === "edit" && !canEdit()) mode = "read";
-      wrap.appendChild(mode === "read" ? renderRead() : mode === "edit" ? renderEdit() : renderSimulateMode());
+      wrap.appendChild(mode === "read" ? renderRead() : renderSimulateMode());
     };
 
     await load();
@@ -492,6 +508,7 @@ export function mountValueDrivers(parent: HTMLElement): () => void {
     dead = true;
     for (const fn of cleanups) fn();
     wrap.remove();
+    document.querySelectorAll(".app-vd-dialog").forEach((d) => d.parentElement?.remove());
   };
 }
 

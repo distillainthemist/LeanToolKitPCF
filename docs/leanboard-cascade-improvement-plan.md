@@ -813,6 +813,17 @@ reschedule/cancel history with a reason picklist.
   PRIMARY org alone drives the board's site/department columns, protected
   times, admin scope in Settings → Rituals, and every org-scoped card —
   ownership stays with one organisation. No schema change.
+- **Driver popup replaces Edit values — BUILT 2026-09-09** (Ben: the
+  grid as a popup from clicking the tree, no Edit values tab). Value
+  drivers is now Read | Simulate; in Read, clicking a driver opens a wide
+  dialog: name, path · cadence · unit · aggregate · source link; this
+  period's Baseline / Plan / Forecast (editable for editors on a leaf)
+  and derived Actual as four tiles; beneath, for a leaf, the unbounded
+  values grid with "＋ Dated reading" (any date/shift; folds) and "Fill
+  plan from targets"; a computed driver shows its formula in words and
+  its numbers read-only with a pointer to its children. "Import from
+  finance pack…" stays at tab level in the Read bar (editors). The
+  drawer-under-a-row and the indented edit table are gone.
 - **P10 Reporting** — designed (spec §4).
 
 Each phase ships behind the usual gates + `pac code push`; the specs'

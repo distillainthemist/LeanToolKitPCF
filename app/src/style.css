@@ -3755,12 +3755,17 @@ textarea.app-cp-statement { font-size: 14px; font-weight: 500; }
 .app-vg-pagelbl { font-weight: 600; text-align: center; }
 .app-vg-hint { flex: 1; min-width: 200px; }
 .app-vg-note:empty { display: none; }
-/* the drawer under a leaf row in Edit values */
-.app-vd-drawer { grid-column: 1 / -1; padding: 10px 12px 14px; background: #faf9f7; border-bottom: 1px solid #f1efec; }
-.app-vd-drawerhead { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; font-size: 13px; }
-.app-vd-drawerhead .app-vd-rowtitle { font-weight: 600; }
-.app-vd-gridbtn { font-size: 14px; }
-.app-vd-gridbtn-on { color: var(--app-accent, #b8521c); }
+/* the driver popup (opened from the tree) */
+.app-vd-readhint { margin-left: 6px; }
+.app-vd-importbtn { margin-left: auto; }
+.app-vd-periodstrip { display: flex; flex-direction: column; gap: 6px; }
+.app-vd-periodcells { display: grid; grid-template-columns: repeat(4, minmax(120px, 1fr)); gap: 10px; }
+.app-vd-periodcell { display: flex; flex-direction: column; gap: 4px; background: #faf9f7; border: 1px solid #e4dfd6; border-radius: 10px; padding: 8px 12px; }
+.app-vd-periodlbl { font-size: 11px; font-weight: 600; color: #6d675c; text-transform: uppercase; letter-spacing: 0.04em; }
+.app-vd-periodcell .app-vd-cellro, .app-vd-periodcell .app-vd-cell { text-align: left; font-size: 15px; font-weight: 600; color: #26241f; }
+.app-vd-periodcell-act { border-color: #d9d3c8; background: #fff; }
+.app-vd-dialog .app-vd-tree-hint { color: #6d675c; }
+.app-vd-node-clickable { cursor: pointer; }
 
 /* ---- Metrics card (initiative boards, 2026-09-08) ---- */
 .app-mc { display: flex; flex-direction: column; min-height: 0; overflow: auto; font-size: 13px; }
