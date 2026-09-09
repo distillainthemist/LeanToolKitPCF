@@ -174,13 +174,13 @@ export class KpiTrendEditor {
 
   /** The spec in force on a date: the latest dated point at or before it,
    *  else the level spec. */
-  private specAt(date: string): KpiSpec {
+  private specAt(date: string): KpiSpec & { forecast: number | null } {
     const level = this.effectiveSpec();
     return { ...specFor(this.specSeries, date, level), unit: level.unit };
   }
 
   private hasSpecSeries(): boolean {
-    return this.specSeries.target.length + this.specSeries.usl.length + this.specSeries.lsl.length > 0;
+    return this.specSeries.plan.length + this.specSeries.forecast.length + this.specSeries.usl.length + this.specSeries.lsl.length > 0;
   }
 
   /**
@@ -339,7 +339,7 @@ export class KpiTrendEditor {
         el(
           "div",
           "ltk-kt-target",
-          `Target ${target}${unit ? " " + unit : ""}`
+          `Plan ${target}${unit ? " " + unit : ""}`
         )
       );
     }
@@ -377,6 +377,7 @@ export class KpiTrendEditor {
     const values = points.map((pt) => pt.value);
     for (const sp of specs) {
       if (sp.target !== null) values.push(sp.target);
+      if (sp.forecast !== null) values.push(sp.forecast);
       if (sp.usl !== null) values.push(sp.usl);
       if (sp.lsl !== null) values.push(sp.lsl);
     }
@@ -482,6 +483,19 @@ export class KpiTrendEditor {
         this.theme.accent;
       (tl as SVGElement & { style: CSSStyleDeclaration }).style.opacity = "0.6";
       svg.appendChild(tl);
+    }
+
+    // forecast line (dotted, muted) when the grid carries one
+    const forecastD = stepPath((i) => specs[i].forecast);
+    if (forecastD !== "") {
+      const fl = svgEl("path", {
+        d: forecastD, fill: "none",
+        "stroke-dasharray": "2 4", "stroke-width": 2,
+      });
+      (fl as SVGElement & { style: CSSStyleDeclaration }).style.stroke =
+        this.theme.accent;
+      (fl as SVGElement & { style: CSSStyleDeclaration }).style.opacity = "0.35";
+      svg.appendChild(fl);
     }
 
     // spec-limit lines + small right-hand labels (the latest value)

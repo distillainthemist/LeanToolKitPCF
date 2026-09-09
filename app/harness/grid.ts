@@ -17,19 +17,14 @@ seed("vdt", "oee", [
   { key: "spec:target", date: "2026-07-06", shift: "-", value: "0.62" },
   { key: "spec:target", date: "2026-08-03", shift: "-", value: "0.66" },
   { key: "spec:lsl", date: "2026-07-06", shift: "-", value: "0.58" },
+  { key: "spec:forecast", date: "2026-08-17", shift: "-", value: "0.69" },
 ]);
 const ragColor = (r: "green" | "amber" | "red") => (r === "green" ? "#2e7d32" : r === "amber" ? "#c77800" : "#c62828");
 renderValueGrid({
   host: document.getElementById("weekly")!,
-  source: driverGridSource({ id: "oee", cadence: "weekly", aggregate: "avg", unit: "%", format: { decimals: 1, scale: "", percent: true } }, { target: null, lsl: null, usl: null }, false),
+  source: driverGridSource({ id: "oee", cadence: "weekly", aggregate: "avg", unit: "%", format: { decimals: 1, scale: "", percent: true, rows: { plan: true, forecast: true, lsl: true, usl: false } } }, { target: null, lsl: null, usl: null }, false),
   home: { from: "2026-07-01", to: "2026-09-30" },
   ragColor,
-  footer: () => {
-    const b = document.createElement("button");
-    b.className = "app-btn";
-    b.textContent = "Fill plan from targets";
-    return [b];
-  },
 });
 seed("b1", "kpi-1", [
   { key: "k1", date: "2026-09-01", shift: "-", value: "42" },
@@ -38,7 +33,7 @@ seed("b1", "kpi-1", [
 ]);
 renderValueGrid({
   host: document.getElementById("daily")!,
-  source: cardGridSource("b1", "kpi-1", "daily", "min", { target: 40, lsl: null, usl: 48 }, false),
+  source: cardGridSource("b1", "kpi-1", "daily", "min", { target: 40, lsl: null, usl: 48 }, false, { plan: true, forecast: false, lsl: false, usl: true }),
   home: { from: "2026-08-25", to: "2026-09-14" },
   ragColor,
 });

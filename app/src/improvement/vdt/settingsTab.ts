@@ -239,6 +239,19 @@ export async function renderValueDriversSettings(body: HTMLElement): Promise<voi
     }
     fmtRow.append(dec, scale);
     field("Display", fmtRow);
+    // grid rows (2026-09-09): what the driver's grid enters per bucket
+    const rowsBox = el("div", "app-im-rows");
+    const rowChecks: Record<"plan" | "forecast" | "lsl" | "usl", HTMLInputElement> = {} as Record<"plan" | "forecast" | "lsl" | "usl", HTMLInputElement>;
+    for (const [k, l] of [["plan", "Plan"], ["forecast", "Forecast"], ["lsl", "Lower limit"], ["usl", "Upper limit"]] as ["plan" | "forecast" | "lsl" | "usl", string][]) {
+      const lab = el("label", "app-im-rowchk");
+      const cb = el("input") as HTMLInputElement;
+      cb.type = "checkbox";
+      cb.checked = draft.format.rows[k];
+      rowChecks[k] = cb;
+      lab.append(cb, el("span", undefined, l));
+      rowsBox.appendChild(lab);
+    }
+    field("Grid rows", rowsBox, "What is entered per period besides Actual. A period's plan and forecast are the fold of its buckets.");
 
     // ---- formula (drivers with driver children) ----
     let formulaIn: HTMLInputElement | null = null;
@@ -291,7 +304,7 @@ export async function renderValueDriversSettings(body: HTMLElement): Promise<voi
       d.sourceUrl = sourceUrl.value.trim();
       d.cadence = cadSel.value as DriverNode["cadence"];
       d.aggregate = aggSel.value as DriverNode["aggregate"];
-      d.format = { decimals: Number(dec.value) || 0, scale: scale.value === "k" || scale.value === "m" ? scale.value : "", percent: scale.value === "%" };
+      d.format = { decimals: Number(dec.value) || 0, scale: scale.value === "k" || scale.value === "m" ? scale.value : "", percent: scale.value === "%", rows: { plan: rowChecks.plan.checked, forecast: rowChecks.forecast.checked, lsl: rowChecks.lsl.checked, usl: rowChecks.usl.checked } };
       d.formula = d.kind === "leading" ? "" : formulaIn ? formulaFromNames(formulaIn.value.trim(), kids) : draft.formula;
       return d;
     };

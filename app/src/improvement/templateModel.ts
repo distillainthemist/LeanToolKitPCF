@@ -7,6 +7,8 @@
 // isTemplate) whose slots carry {stage, mandatory}. Everything here is
 // pure and tested; the store maps it to ben_ltkinitiativetemplate.
 
+import { DEFAULT_ROWS_CARD, parseSpecRows, SpecRows } from "../../../shared/schema/specSeries";
+
 export type Pdca = "plan" | "do" | "check" | "act";
 
 /** Fixed app-wide PDCA tokens (design: Plan amber · Do blue · Check green
@@ -98,6 +100,9 @@ export interface TemplateMetric {
   cadence?: OwnCadence;
   /** Picklist tracking: the options and their states. */
   options?: MetricOption[];
+  /** Which spec rows the metric's grid carries (own metrics; a linked
+   *  metric takes the driver's). Default plan + limits. */
+  rows?: SpecRows;
   /** Value driver link (P9d): the driver id and whether the metric DRIVES
    *  the leaf (formula, units match) or LEADS it (judgement, dashed). */
   driverId?: string;
@@ -429,6 +434,7 @@ export function parseMetrics(raw: string): TemplateMetric[] {
         ...(num(x.lsl) !== null ? { lsl: num(x.lsl) } : {}),
         ...(OWN_CADENCES.includes(str(x.cadence) as OwnCadence) ? { cadence: str(x.cadence) as OwnCadence } : {}),
         ...(Array.isArray(x.options) ? { options: parseMetricOptions(x.options) } : {}),
+        ...(x.rows && typeof x.rows === "object" ? { rows: parseSpecRows(x.rows, DEFAULT_ROWS_CARD) } : {}),
       }))
       .filter((m) => m.key !== "" && m.name !== "");
   } catch {

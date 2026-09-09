@@ -391,9 +391,33 @@ export const CARDS: CardSpec[] = [
     config: [
       {
         key: "target",
-        label: "Target",
+        label: "Plan (target)",
         kind: "number",
-        help: "The goal line drawn across the chart. Empty = no target line.",
+        help: "The plan line drawn across the chart — plan and target are one thing. Per-period plans are entered in the grid; this is the level used where none is set.",
+      },
+      {
+        key: "showPlan",
+        label: "Plan row",
+        kind: "boolean",
+        help: "The grid carries a Plan row (default on).",
+      },
+      {
+        key: "showForecast",
+        label: "Forecast row",
+        kind: "boolean",
+        help: "The grid carries a Forecast row (default off).",
+      },
+      {
+        key: "showLsl",
+        label: "Lower limit row",
+        kind: "boolean",
+        help: "The grid carries a Lower limit row (default on).",
+      },
+      {
+        key: "showUsl",
+        label: "Upper limit row",
+        kind: "boolean",
+        help: "The grid carries an Upper limit row (default on).",
       },
       {
         key: "unit",

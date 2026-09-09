@@ -5,7 +5,10 @@
 
 import { applySeries, listSeries, listSeriesByPrefix } from "./series";
 import { Cadence, Aggregate, foldSeries, SeriesPoint } from "../improvement/vdt/model";
-import { isSpecSeriesKey, SPEC_SERIES_KEYS, SPEC_SERIES_PREFIX, SpecSeries, specSeriesFromCells } from "../../../shared/schema/specSeries";
+import { isSpecSeriesKey, SPEC_SERIES_KEYS, SPEC_SERIES_PREFIX, SpecKind, SpecSeries, specSeriesFromCells, spreadOverBuckets } from "../../../shared/schema/specSeries";
+import { DriverNode, setValue } from "../improvement/vdt/model";
+import { foldValues, gridColumns, GridLocation } from "../improvement/vdt/gridModel";
+import { loadGridCells } from "./gridCells";
 
 export const DRIVER_SERIES_BOARD = "vdt";
 export const DRIVER_SERIES_KEY = "actual";
@@ -43,17 +46,70 @@ export async function seedDriverSpecIfEmpty(
 ): Promise<boolean> {
   if (level.target === null && level.lsl === null && level.usl === null) return false;
   const have = await listSpecSeries(DRIVER_SERIES_BOARD, driverId, "2999-12-31");
-  if (have.target.length + have.lsl.length + have.usl.length > 0) return false;
-  const put = (Object.keys(SPEC_SERIES_KEYS) as (keyof typeof SPEC_SERIES_KEYS)[])
-    .filter((k) => level[k] !== null)
-    .map((k) => ({ key: SPEC_SERIES_KEYS[k], date: anchor, shift: "-", value: String(level[k]) }));
+  if (have.plan.length + have.forecast.length + have.lsl.length + have.usl.length > 0) return false;
+  const put = ([["plan", level.target], ["lsl", level.lsl], ["usl", level.usl]] as [SpecKind, number | null][])
+    .filter(([, v]) => v !== null)
+    .map(([k, v]) => ({ key: SPEC_SERIES_KEYS[k], date: anchor, shift: "-", value: String(v) }));
   await applySeries(DRIVER_SERIES_BOARD, driverId, put);
   return true;
 }
 
+/** A driver as a grid location (its rows from the format). */
+export function driverLocation(n: Pick<DriverNode, "id" | "cadence" | "aggregate" | "format">): GridLocation {
+  return { boardId: DRIVER_SERIES_BOARD, cardId: n.id, cadence: n.cadence, aggregate: n.aggregate, level: { target: null, lsl: null, usl: null }, rows: n.format.rows, isActual: (k) => k === DRIVER_SERIES_KEY };
+}
+
+/** The bucket is the unit of entry (Ben, 2026-09-09): a period's plan /
+ *  forecast is the FOLD of its buckets' rows at the driver's aggregate.
+ *  Re-fold after the grid writes so the tree, Read compare and Simulate
+ *  (which read `values[period]`) agree with the buckets. Saves the node. */
+export async function refoldDriverPeriod(
+  n: DriverNode,
+  period: string,
+  window: { from: string; to: string },
+  actor: { whoId: string; who: string },
+  save: (n: DriverNode) => Promise<unknown>
+): Promise<void> {
+  const cells = await loadGridCells(driverLocation(n), window.from, window.to);
+  let changed = false;
+  for (const s of ["plan", "forecast"] as const) {
+    if (!n.format.rows[s]) continue;
+    const v = foldValues(cells.map((c) => c[s].value), n.aggregate);
+    const cur = n.values[period]?.[s] ?? null;
+    if (v === cur) continue;
+    setValue(n, period, s, v, actor, new Date().toISOString());
+    changed = true;
+  }
+  if (changed) await save(n);
+}
+
+/** Write a PERIOD plan / forecast (a finance pack, Adopt) as bucket
+ *  points spread over the period (sum splits, others repeat), then set
+ *  the period value to match. */
+export async function writePeriodSpread(
+  n: DriverNode,
+  period: string,
+  window: { from: string; to: string },
+  series: "plan" | "forecast",
+  value: number,
+  actor: { whoId: string; who: string },
+  save: (n: DriverNode) => Promise<unknown>
+): Promise<void> {
+  const cols = gridColumns(n.cadence, window.from, window.to).filter((c) => c.shift === "-" || c.shift === "D");
+  const anchors = [...new Set(cols.map((c) => c.anchor))];
+  const each = spreadOverBuckets(value, n.aggregate, anchors.length);
+  await applySeries(
+    DRIVER_SERIES_BOARD,
+    n.id,
+    anchors.map((date, i) => ({ key: SPEC_SERIES_KEYS[series], date, shift: "-", value: String(each[i]) }))
+  );
+  setValue(n, period, series, value, actor, new Date().toISOString());
+  await save(n);
+}
+
 /** Write-through (Option C): set one spec value on the driver for the
  *  bucket holding `anchor`; null deletes that bucket's point. */
-export async function putDriverSpec(driverId: string, kind: keyof typeof SPEC_SERIES_KEYS, anchor: string, value: number | null): Promise<void> {
+export async function putDriverSpec(driverId: string, kind: SpecKind, anchor: string, value: number | null): Promise<void> {
   const cell = { key: SPEC_SERIES_KEYS[kind], date: anchor, shift: "-", value: value === null ? "" : String(value) };
   if (value === null) await applySeries(DRIVER_SERIES_BOARD, driverId, [], [cell]);
   else await applySeries(DRIVER_SERIES_BOARD, driverId, [cell]);

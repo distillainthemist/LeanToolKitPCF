@@ -13,15 +13,31 @@
 //    or before its anchor, else the single level target on the metric/card.
 
 import { Aggregate, aggregateSeries, bucketKey, Cadence, SeriesPoint } from "./model";
-import { isSpecSeriesKey, SPEC_SERIES_KEYS, specAtDate } from "../../../../shared/schema/specSeries";
+import { isSpecSeriesKey, SPEC_SERIES_KEYS, specAtDate, specKindOfKey, SpecKind as SharedSpecKind, SpecRows } from "../../../../shared/schema/specSeries";
 import { addBuckets as addBucketsShared, bucketSpan as bucketSpanShared, isoDate, parseDay } from "../../../../shared/schema/buckets";
 
 /** Series keys of the per-bucket spec (shared with the KPI card). */
 export const SPEC_KEYS = SPEC_SERIES_KEYS;
-export type SpecKind = keyof typeof SPEC_KEYS;
-export const SPEC_KINDS: SpecKind[] = ["target", "lsl", "usl"];
-export const SPEC_LABELS: Record<SpecKind, string> = { target: "Target", lsl: "Lower", usl: "Upper" };
+export type SpecKind = SharedSpecKind;
+export const SPEC_KINDS: SpecKind[] = ["plan", "forecast", "lsl", "usl"];
+export const SPEC_LABELS: Record<SpecKind, string> = { plan: "Plan", forecast: "Forecast", lsl: "Lower limit", usl: "Upper limit" };
 export const isSpecKey = isSpecSeriesKey;
+export type { SpecRows };
+
+/** What a grid needs of a location to load and resolve its cells — the
+ *  UI component's GridSource extends this. */
+export interface GridLocation {
+  boardId: string;
+  cardId: string;
+  cadence: Cadence;
+  aggregate: Aggregate;
+  level: GridLevel;
+  rows: SpecRows;
+  /** Which non-spec keys are readings. */
+  isActual: (key: string) => boolean;
+  /** Shiftly only: the shift labels (existing points' shifts are added). */
+  shifts?: string[];
+}
 
 export interface GridColumn {
   /** The bucket key (`bucketKey` of any point in it). */
@@ -140,18 +156,16 @@ export interface GridActualCell {
 
 export interface GridCell {
   column: GridColumn;
-  target: GridSpecCell;
+  plan: GridSpecCell;
+  forecast: GridSpecCell;
   lsl: GridSpecCell;
   usl: GridSpecCell;
   actual: GridActualCell;
   rag: "green" | "amber" | "red" | null;
 }
 
-export interface GridSpecPoints {
-  target: SeriesPoint[];
-  lsl: SeriesPoint[];
-  usl: SeriesPoint[];
-}
+export type GridSpecPoints = Record<SpecKind, SeriesPoint[]>;
+export const EMPTY_GRID_SPEC: GridSpecPoints = { plan: [], forecast: [], lsl: [], usl: [] };
 
 export interface GridLevel {
   target: number | null;
@@ -166,14 +180,15 @@ export interface GridActualPoint extends SeriesPoint {
 }
 
 /** Direction from the column's own limits (the metric rule: lower only →
- *  higher is better; upper only → lower; both → within). */
-export function ragFor(actual: number | null, target: number | null, lsl: number | null, usl: number | null): "green" | "amber" | "red" | null {
+ *  higher is better; upper only → lower; both → within). `plan` is the
+ *  target. */
+export function ragFor(actual: number | null, plan: number | null, lsl: number | null, usl: number | null): "green" | "amber" | "red" | null {
   if (actual === null) return null;
   if ((usl !== null && actual > usl) || (lsl !== null && actual < lsl)) return "red";
-  if (target === null) return null;
+  if (plan === null) return null;
   if (lsl !== null && usl !== null) return "green";
-  if (usl !== null && lsl === null) return actual <= target ? "green" : "amber";
-  return actual >= target ? "green" : "amber";
+  if (usl !== null && lsl === null) return actual <= plan ? "green" : "amber";
+  return actual >= plan ? "green" : "amber";
 }
 
 /** Resolve every column: actuals folded at the cadence, spec carried
@@ -195,7 +210,9 @@ export function resolveGrid(
   const specCell = (kind: SpecKind, col: GridColumn): GridSpecCell => {
     const hit = specAt(spec[kind], col.anchor);
     if (hit) return { value: hit.value, inherited: hit.date !== col.anchor };
-    return { value: level[kind], inherited: true };
+    // the level fallback: plan = the metric's/card's target; limits theirs
+    const lv = kind === "plan" ? level.target : kind === "forecast" ? null : level[kind];
+    return { value: lv, inherited: true };
   };
   return cols.map((col) => {
     const pts = byBucket.get(col.key) ?? [];
@@ -207,10 +224,11 @@ export function resolveGrid(
       editable: pts.length <= 1,
       existing: one ? { key: one.key, date: one.date, shift: one.shift } : null,
     };
-    const target = specCell("target", col);
+    const plan = specCell("plan", col);
+    const forecast = specCell("forecast", col);
     const lsl = specCell("lsl", col);
     const usl = specCell("usl", col);
-    return { column: col, target, lsl, usl, actual, rag: ragFor(value, target.value, lsl.value, usl.value) };
+    return { column: col, plan, forecast, lsl, usl, actual, rag: ragFor(value, plan.value, lsl.value, usl.value) };
   });
 }
 
@@ -229,7 +247,12 @@ export function foldValues(values: (number | null)[], aggregate: Aggregate): num
 // ---- paste (Excel-style) ----------------------------------------------------------
 
 export type GridRowKind = SpecKind | "actual";
-export const ROW_ORDER: GridRowKind[] = ["target", "lsl", "usl", "actual"];
+export const ROW_ORDER: GridRowKind[] = ["plan", "forecast", "lsl", "usl", "actual"];
+
+/** The rows a grid shows: the configured spec rows in order, then Actual. */
+export function rowsFor(rows: SpecRows): GridRowKind[] {
+  return ROW_ORDER.filter((r) => r === "actual" || rows[r]);
+}
 
 export interface PastedRow {
   kind: GridRowKind;
@@ -240,7 +263,8 @@ function rowKindOf(label: string): GridRowKind | "skip" | null {
   const l = label.trim().toLowerCase();
   if (l === "") return null;
   if (/^(period|date|wk|week|month|year|shift)/.test(l)) return "skip";
-  if (/^target/.test(l)) return "target";
+  if (/^(plan|target)/.test(l)) return "plan";
+  if (/^forecast/.test(l)) return "forecast";
   if (/^(lower|lsl|min)/.test(l)) return "lsl";
   if (/^(upper|usl|max)/.test(l)) return "usl";
   if (/^actual/.test(l)) return "actual";
@@ -258,7 +282,7 @@ function numOf(raw: string): number | null | "bad" {
  *  cell is a label maps by it (Target / Lower / Upper / Actual; Period and
  *  Date rows are dropped); unlabeled rows map by position from `fromRow`.
  *  Non-numeric cells are skipped (kept as "no change"). */
-export function parsePasteBlock(text: string, fromRow: GridRowKind = "target"): PastedRow[] {
+export function parsePasteBlock(text: string, fromRow: GridRowKind = "plan"): PastedRow[] {
   const lines = text.replace(/\r/g, "").split("\n").filter((l) => l.trim() !== "");
   const out: PastedRow[] = [];
   let pos = Math.max(0, ROW_ORDER.indexOf(fromRow));
@@ -288,19 +312,20 @@ export function parsePasteBlock(text: string, fromRow: GridRowKind = "target"): 
   return out;
 }
 
-/** CSV of the grid (the mock's layout: one row per line, a column per bucket). */
-export function gridCsv(cells: GridCell[], unit: string): string {
+/** CSV of the grid (the mock's layout: one row per line, a column per
+ *  bucket) — the configured rows, then Actual. */
+export function gridCsv(cells: GridCell[], unit: string, rows: SpecRows = { plan: true, forecast: true, lsl: true, usl: true }): string {
   const q = (s: string) => (/[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s);
   const num = (v: number | null) => (v === null ? "" : String(v));
-  const rows = [
+  const lines: string[][] = [
     ["Period", ...cells.map((c) => c.column.label)],
     ["Date", ...cells.map((c) => c.column.anchor)],
-    [`Target${unit ? ` (${unit})` : ""}`, ...cells.map((c) => num(c.target.value))],
-    ["Lower limit", ...cells.map((c) => num(c.lsl.value))],
-    ["Upper limit", ...cells.map((c) => num(c.usl.value))],
-    ["Actual", ...cells.map((c) => num(c.actual.value))],
   ];
-  return rows.map((r) => r.map(q).join(",")).join("\n");
+  for (const r of rowsFor(rows)) {
+    const label = r === "actual" ? "Actual" : r === "plan" ? `Plan${unit ? ` (${unit})` : ""}` : SPEC_LABELS[r];
+    lines.push([label, ...cells.map((c) => num(r === "actual" ? c.actual.value : c[r].value))]);
+  }
+  return lines.map((r) => r.map(q).join(",")).join("\n");
 }
 
 /** The spec series' point for a column (write helper): day-dated at the
@@ -317,14 +342,21 @@ export function splitGridCells(
   isActual: (key: string) => boolean
 ): { actuals: GridActualPoint[]; spec: GridSpecPoints } {
   const actuals: GridActualPoint[] = [];
-  const spec: GridSpecPoints = { target: [], lsl: [], usl: [] };
+  const spec: GridSpecPoints = { plan: [], forecast: [], lsl: [], usl: [] };
   for (const c of cells) {
     const v = Number(c.value);
     if (!Number.isFinite(v) || c.value === "") continue;
     if (isSpecKey(c.key)) {
-      const kind = SPEC_KINDS.find((k) => SPEC_KEYS[k] === c.key);
+      const kind = specKindOfKey(c.key);
       if (kind) spec[kind].push({ date: c.date.slice(0, 10), shift: "-", value: v });
     } else if (isActual(c.key)) actuals.push({ key: c.key, date: c.date.slice(0, 10), shift: c.shift || "-", value: v });
   }
+  // a legacy spec:target point on the same date as a spec:plan one loses
+  const seen = new Set<string>();
+  spec.plan = spec.plan.filter((p) => {
+    if (seen.has(p.date)) return false;
+    seen.add(p.date);
+    return true;
+  });
   return { actuals, spec };
 }

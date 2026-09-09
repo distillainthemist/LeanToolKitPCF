@@ -171,10 +171,10 @@ describe("values, history and display", () => {
     expect(n.history[0]).toMatchObject({ from: 10, to: 12, series: "plan" });
   });
   it("formats currency, scale and percent", () => {
-    expect(formatValue(7910000, "$", { decimals: 2, scale: "m", percent: false })).toBe("$7.91m");
-    expect(formatValue(0.625, "", { decimals: 1, scale: "", percent: true })).toBe("62.5%");
-    expect(formatValue(1240, "kL", { decimals: 0, scale: "", percent: false })).toBe("1,240 kL");
-    expect(formatValue(null, "$", { decimals: 0, scale: "", percent: false })).toBe("—");
+    expect(formatValue(7910000, "$", { decimals: 2, scale: "m", percent: false, rows: { plan: true, forecast: true, lsl: false, usl: false } })).toBe("$7.91m");
+    expect(formatValue(0.625, "", { decimals: 1, scale: "", percent: true, rows: { plan: true, forecast: true, lsl: false, usl: false } })).toBe("62.5%");
+    expect(formatValue(1240, "kL", { decimals: 0, scale: "", percent: false, rows: { plan: true, forecast: true, lsl: false, usl: false } })).toBe("1,240 kL");
+    expect(formatValue(null, "$", { decimals: 0, scale: "", percent: false, rows: { plan: true, forecast: true, lsl: false, usl: false } })).toBe("—");
   });
 });
 

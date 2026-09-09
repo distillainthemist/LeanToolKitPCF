@@ -9,7 +9,7 @@ const mk = (host: HTMLElement, stepped: boolean) => {
   const ed = new KpiTrendEditor(host, { onChange: () => undefined, onGrid: () => alert("grid") });
   ed.setChrome(stepped ? "OEE · VDT\nWeekly · from value driver OEE" : "OEE (flat spec)", "");
   ed.setSpec({ target: 62, usl: null, lsl: 58, unit: "%" });
-  if (stepped) ed.setSpecSeries({ target: [{ date: "2026-08-03", value: 66 }, { date: "2026-08-31", value: 70 }], lsl: [{ date: "2026-08-17", value: 66 }], usl: [] });
+  if (stepped) ed.setSpecSeries({ plan: [{ date: "2026-08-03", value: 66 }, { date: "2026-08-31", value: 70 }], forecast: [{ date: "2026-08-10", value: 68 }], lsl: [{ date: "2026-08-17", value: 66 }], usl: [] });
   ed.setEnvelope({ schema: SCHEMA_ID, meta: { title: "", updated: "" }, data: { points, target: null, usl: null, lsl: null, unit: "" } });
 };
 mk(document.getElementById("stepped")!, true);

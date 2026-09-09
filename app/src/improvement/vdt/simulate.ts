@@ -9,6 +9,7 @@
 // LEAF forecasts (plan + delta) — the computed nodes fall out of the
 // formulas; assumed effects are not written.
 
+import { writePeriodSpread } from "../../store/driverSeries";
 import { el, clear } from "../../../../shared/ui/dom";
 import { promptConfirm, promptText } from "../../prompts";
 import { newId, nowIso } from "../../../../shared/schema/id";
@@ -33,6 +34,8 @@ export interface SimulateCtx {
   /** Active initiatives whose metrics link into this tree. */
   initiatives: Initiative[];
   actor: { whoId: string; who: string };
+  /** The period's date window (Adopt writes bucket forecasts). */
+  window: { from: string; to: string };
   canAdopt: boolean;
   /** After Adopt: reload values and repaint the host. */
   onAdopted: () => Promise<void>;
@@ -338,8 +341,9 @@ export function renderSimulate(ctx: SimulateCtx): () => void {
       if (p === null) continue;
       const next = p + (leafDeltas.get(n.id) ?? 0);
       if (valueOf(n, period, "forecast") === next) continue;
-      setValue(n, period, "forecast", next, ctx.actor, nowIso());
-      await saveDriver(n);
+      // the bucket is the unit of entry: spread over the period, then the
+      // period value follows
+      await writePeriodSpread(n, period, ctx.window, "forecast", next, ctx.actor, saveDriver);
     }
     await ctx.onAdopted();
   };

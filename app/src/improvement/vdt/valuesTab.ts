@@ -14,7 +14,7 @@ import { appPalettes, improvementSettingsJson, orgJson, prioritySettingsJson } f
 import { paletteMap } from "../../../../shared/palette";
 import { listPeople, viewerPerson } from "../../store/people";
 import { listDrivers, saveDriver } from "../../store/valueDrivers";
-import { driverActual, listDriverPoints, putDriverPoint } from "../../store/driverSeries";
+import { driverActual, listDriverPoints, putDriverPoint, refoldDriverPeriod, writePeriodSpread } from "../../store/driverSeries";
 import { parseOrgTree } from "../../../../shared/schema/meeting";
 import { nowIso, todayIso } from "../../../../shared/schema/id";
 import { parsePrioritySettings, periodFor, periodWindow, nextPeriod, prevPeriod, ragPaletteKey } from "../../priorities/model";
@@ -257,9 +257,13 @@ export function mountValueDrivers(parent: HTMLElement): () => void {
       const paintStrip = () => {
         clear(cells);
         for (const sKey of PLANNED_SERIES) {
+          // plan / forecast are the FOLD of the buckets (the bucket is the
+          // unit of entry, Ben 2026-09-09) — shown only when the driver
+          // carries that row; baseline stays a period number
+          if (sKey !== "baseline" && !n.format.rows[sKey]) continue;
           const cell = el("label", "app-vd-periodcell");
-          cell.appendChild(el("span", "app-vd-periodlbl", SERIES_LABELS[sKey]));
-          if (leaf && editable) {
+          cell.appendChild(el("span", "app-vd-periodlbl", sKey === "baseline" ? SERIES_LABELS[sKey] : `${SERIES_LABELS[sKey]} · ${n.aggregate} of buckets`));
+          if (leaf && editable && sKey === "baseline") {
             const input = el("input", "app-input app-vd-cell") as HTMLInputElement;
             input.type = "number";
             input.step = "any";
@@ -305,11 +309,14 @@ export function mountValueDrivers(parent: HTMLElement): () => void {
           ragColor,
           csvName: `${n.name}-${period}`.replace(/[^a-z0-9]+/gi, "-").toLowerCase(),
           onSaved: () => {
-            void loadActuals().then(() => {
+            // the period's plan / forecast / actual re-fold from the buckets
+            void Promise.all([loadActuals(), refoldDriverPeriod(n, period, w, actor, saveDriver)]).then(() => {
               if (dead) return;
               computed.actual = numbers("actual");
-              const cell = box.querySelector(`[data-actual-for="${n.id}"]`);
-              if (cell) cell.textContent = formatValue(computed.actual.get(n.id) ?? null, n.unit, n.format);
+              computed.plan = numbers("plan");
+              computed.forecast = numbers("forecast");
+              paintStrip();
+              render();
             });
           },
           footer: (api) => {
@@ -317,27 +324,7 @@ export function mountValueDrivers(parent: HTMLElement): () => void {
             const dated = btn("＋ Dated reading", "app-link");
             dated.title = "A reading on any date or shift — several in one period fold at the driver's aggregate";
             dated.addEventListener("click", () => openEnterActual(n, () => void api.refresh()));
-            const fill = btn("Fill plan from targets", "app-btn");
-            fill.title = `Fold the columns' targets by ${n.aggregate} into ${period}'s Plan`;
-            fill.addEventListener("click", () => {
-              void api.foldTargets(w.from, w.to).then((v) => {
-                if (v === null) return;
-                return promptConfirm({
-                  title: `Set ${period} plan to ${formatValue(v, n.unit, n.format)}?`,
-                  note: `The ${n.aggregate} of the grid's targets for ${n.name}. Plan stays a number finance owns — this only fills it, it doesn't link it.`,
-                  confirmLabel: "Set plan",
-                }).then((ok) => {
-                  if (!ok) return;
-                  setValue(n, period, "plan", v, actor, nowIso());
-                  void saveDriver(n).then(() => {
-                    computed.plan = numbers("plan");
-                    paintStrip();
-                    render();
-                  });
-                });
-              });
-            });
-            return [dated, fill];
+            return [dated];
           },
         });
       } else {
@@ -449,15 +436,20 @@ export function mountValueDrivers(parent: HTMLElement): () => void {
             }
             const vals: [Series, string | undefined][] = [["baseline", b], ["plan", p], ["forecast", f]];
             let changed = false;
+            let baselineChanged = false;
+            const w = windowFor();
             for (const [s, raw] of vals) {
               if (raw === undefined || raw === "") continue;
               const v = Number(raw.replace(/[^0-9.\-eE]/g, ""));
               if (!Number.isFinite(v)) continue;
-              setValue(n, period, s, v, actor, nowIso());
+              if (s === "baseline") {
+                setValue(n, period, s, v, actor, nowIso());
+                baselineChanged = true;
+              } else if (s === "plan" || s === "forecast") await writePeriodSpread(n, period, w, s, v, actor, saveDriver); // a period plan / forecast spreads over the buckets
               changed = true;
             }
             if (changed) {
-              await saveDriver(n);
+              if (baselineChanged) await saveDriver(n);
               applied++;
             }
           }
@@ -483,6 +475,7 @@ export function mountValueDrivers(parent: HTMLElement): () => void {
         site,
         initiatives: inTree,
         actor,
+        window: windowFor(),
         canAdopt: canEdit(),
         onAdopted: async () => {
           await load();

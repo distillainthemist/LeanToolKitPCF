@@ -5,6 +5,7 @@
 // edge and never enter a formula.
 
 import { newId } from "../../../../shared/schema/id";
+import { DEFAULT_ROWS_DRIVER, parseSpecRows, SpecRows } from "../../../../shared/schema/specSeries";
 
 export type Cadence = "shiftly" | "daily" | "weekly" | "monthly" | "annually";
 export const CADENCES: Cadence[] = ["shiftly", "daily", "weekly", "monthly", "annually"];
@@ -44,6 +45,9 @@ export interface NodeFormat {
   decimals: number;
   scale: "" | "k" | "m";
   percent: boolean;
+  /** Which spec rows the driver's grid carries (2026-09-09); Actual
+   *  always. Rides in the format JSON column. */
+  rows: SpecRows;
 }
 
 /** One value-change log entry — the audit trail finance will ask for. */
@@ -98,7 +102,7 @@ export function newNode(site: string, parentId: string, name: string): DriverNod
     formula: "",
     cadence: "monthly",
     aggregate: "sum",
-    format: { decimals: 0, scale: "", percent: false },
+    format: { decimals: 0, scale: "", percent: false, rows: { ...DEFAULT_ROWS_DRIVER } },
     order: 0,
     values: {},
     history: [],
@@ -338,9 +342,9 @@ export function parseFormat(raw: string): NodeFormat {
     const o = JSON.parse(raw || "{}") as Record<string, unknown>;
     const scale = o.scale === "k" || o.scale === "m" ? o.scale : "";
     const decimals = num(o.decimals);
-    return { decimals: decimals !== null ? Math.max(0, Math.min(4, Math.round(decimals))) : 0, scale, percent: o.percent === true };
+    return { decimals: decimals !== null ? Math.max(0, Math.min(4, Math.round(decimals))) : 0, scale, percent: o.percent === true, rows: parseSpecRows(o.rows, DEFAULT_ROWS_DRIVER) };
   } catch {
-    return { decimals: 0, scale: "", percent: false };
+    return { decimals: 0, scale: "", percent: false, rows: { ...DEFAULT_ROWS_DRIVER } };
   }
 }
 

@@ -9,6 +9,7 @@ import { ragPaletteKey } from "../../priorities/model";
 import { Cadence, CADENCE_LABELS, NodeFormat } from "./model";
 import { cardGridSource, driverGridSource, renderValueGrid } from "./grid";
 import { GridLevel } from "./gridModel";
+import { SpecRows } from "../../../../shared/schema/specSeries";
 
 export interface GridDialogOpts {
   title: string;
@@ -18,6 +19,8 @@ export interface GridDialogOpts {
   cadence: Cadence;
   unit: string;
   level: GridLevel;
+  /** An own card's rows (a linked card takes the driver's). */
+  rows?: SpecRows;
   /** The card's window — the first page opens around today anyway. */
   window: { from: string; to: string };
   readOnly: boolean;
@@ -47,7 +50,7 @@ export async function openValueGridDialog(o: GridDialogOpts): Promise<void> {
   let changed = false;
   const source = o.driver
     ? driverGridSource(o.driver, o.level, o.readOnly)
-    : cardGridSource(o.location.boardId, o.location.cardId, o.cadence, o.unit, o.level, o.readOnly);
+    : cardGridSource(o.location.boardId, o.location.cardId, o.cadence, o.unit, o.level, o.readOnly, o.rows);
   const grid = renderValueGrid({
     host,
     source,

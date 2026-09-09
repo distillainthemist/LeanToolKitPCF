@@ -8,7 +8,7 @@ import { el, clear } from "../../../shared/ui/dom";
 import { promptConfirm } from "../prompts";
 import { listDrivers, saveDriver } from "../store/valueDrivers";
 import { listSpecSeries, putDriverSpec, seedDriverSpecIfEmpty } from "../store/driverSeries";
-import { specFor, SpecSeries } from "../../../shared/schema/specSeries";
+import { DEFAULT_ROWS_CARD, EMPTY_SPEC_SERIES, SpecRows, specFor, SpecSeries } from "../../../shared/schema/specSeries";
 import { bucketSpan } from "../../../shared/schema/buckets";
 import { todayIso } from "../../../shared/schema/id";
 import { directionOf, keyFor, MetricKind, MetricOption, normalizeMetrics, OWN_CADENCES, OwnCadence, TemplateMetric, Tracking } from "./templateModel";
@@ -67,7 +67,7 @@ export function renderMetricsList(o: MetricsListOpts): { refresh: () => void } {
   };
   const loadSpecFor = async (m: TemplateMetric) => {
     if (!m.driverId || driverSpec.has(m.driverId)) return;
-    driverSpec.set(m.driverId, await listSpecSeries("vdt", m.driverId, "2999-12-31").catch(() => ({ target: [], lsl: [], usl: [] })));
+    driverSpec.set(m.driverId, await listSpecSeries("vdt", m.driverId, "2999-12-31").catch(() => EMPTY_SPEC_SERIES));
   };
 
   const paint = () => {
@@ -119,8 +119,9 @@ export function renderMetricsList(o: MetricsListOpts): { refresh: () => void } {
         // the driver's current-period spec, written through on change
         const ds = driverSpec.get(m.driverId as string);
         const cur = ds ? specFor(ds, anchorFor(m), { target: m.target, lsl: m.lsl ?? null, usl: m.usl ?? null }) : { target: m.target, lsl: m.lsl ?? null, usl: m.usl ?? null };
-        const through = (kind: "target" | "lsl" | "usl") => (v: number | null) => {
-          if (kind === "target") m.target = v;
+        const rows = drivers.find((d) => d.id === m.driverId)?.format.rows ?? DEFAULT_ROWS_CARD;
+        const through = (kind: "plan" | "lsl" | "usl") => (v: number | null) => {
+          if (kind === "plan") m.target = v;
           else m[kind] = v;
           void putDriverSpec(m.driverId as string, kind, anchorFor(m), v)
             .then(() => {
@@ -129,15 +130,16 @@ export function renderMetricsList(o: MetricsListOpts): { refresh: () => void } {
             })
             .then(paint);
         };
-        spec.appendChild(numIn("lower", cur.lsl, through("lsl"), "app-im-limit"));
-        spec.appendChild(numIn("target", cur.target, through("target"), "app-im-target"));
-        spec.appendChild(numIn("upper", cur.usl, through("usl"), "app-im-limit"));
-        spec.title = "Held on the value driver for the current period — every board showing this driver sees the same target.";
+        if (rows.lsl) spec.appendChild(numIn("lower", cur.lsl, through("lsl"), "app-im-limit"));
+        if (rows.plan) spec.appendChild(numIn("plan", cur.target, through("plan"), "app-im-target"));
+        if (rows.usl) spec.appendChild(numIn("upper", cur.usl, through("usl"), "app-im-limit"));
+        spec.title = "Held on the value driver for the current period — every board showing this driver sees the same plan.";
         if (!ds) void loadSpecFor(m).then(paint);
       } else {
-        spec.appendChild(numIn("lower", m.lsl, (v) => (m.lsl = v), "app-im-limit"));
-        spec.appendChild(numIn("target", m.target, (v) => (m.target = v), "app-im-target"));
-        spec.appendChild(numIn("upper", m.usl, (v) => (m.usl = v), "app-im-limit"));
+        const rows = m.rows ?? DEFAULT_ROWS_CARD;
+        if (rows.lsl) spec.appendChild(numIn("lower", m.lsl, (v) => (m.lsl = v), "app-im-limit"));
+        if (rows.plan) spec.appendChild(numIn("plan", m.target, (v) => (m.target = v), "app-im-target"));
+        if (rows.usl) spec.appendChild(numIn("upper", m.usl, (v) => (m.usl = v), "app-im-limit"));
       }
       row.appendChild(spec);
       // own metrics: into the tree
@@ -223,9 +225,32 @@ export function renderMetricsList(o: MetricsListOpts): { refresh: () => void } {
       field(label, inp);
       return inp;
     };
-    const tgtIn = numField("Target", "the number to reach");
+    // the rows the metric carries (Actual always) — the grid shows these
+    const rows: SpecRows = { ...DEFAULT_ROWS_CARD };
+    const rowsBox = el("div", "app-im-rows");
+    const rowInputs: Partial<Record<keyof SpecRows, HTMLElement>> = {};
+    const tgtIn = numField("Plan (target)", "the number to reach");
     const lslIn = numField("Lower limit", "below this = red (blank = none)");
     const uslIn = numField("Upper limit", "above this = red (blank = none)");
+    rowInputs.plan = tgtIn.closest(".app-field") as HTMLElement;
+    rowInputs.lsl = lslIn.closest(".app-field") as HTMLElement;
+    rowInputs.usl = uslIn.closest(".app-field") as HTMLElement;
+    for (const [k, l] of [["plan", "Plan"], ["forecast", "Forecast"], ["lsl", "Lower limit"], ["usl", "Upper limit"]] as [keyof SpecRows, string][]) {
+      const lab = el("label", "app-im-rowchk");
+      const cb = el("input") as HTMLInputElement;
+      cb.type = "checkbox";
+      cb.checked = rows[k];
+      cb.addEventListener("change", () => {
+        rows[k] = cb.checked;
+        const f = rowInputs[k];
+        if (f) f.hidden = !cb.checked;
+      });
+      lab.append(cb, el("span", undefined, l));
+      rowsBox.appendChild(lab);
+    }
+    const rowsField = el("div", "app-field");
+    rowsField.append(el("span", "app-field-label", "Rows"), rowsBox, el("div", "app-field-hint", "What the grid enters per period, besides Actual."));
+    dlg.insertBefore(rowsField, rowInputs.plan as HTMLElement);
     dlg.appendChild(el("div", "app-field-hint", "Direction follows the limits: a lower limit only means higher is better; an upper only, lower is better; both, within range."));
     const trk = el("select", "app-input") as HTMLSelectElement;
     for (const [v, l] of [["value", "Value vs target"], ["goodbad", "Good / bad"], ["picklist", "Status picklist"]] as const) {
@@ -317,6 +342,7 @@ export function renderMetricsList(o: MetricsListOpts): { refresh: () => void } {
         tracking: trk.value as Tracking,
         kind: "own",
         cadence: cad.value as OwnCadence,
+        rows: { ...rows },
         ...(lsl !== null ? { lsl } : {}),
         ...(usl !== null ? { usl } : {}),
         ...(trk.value === "picklist" ? { options: options.filter((x) => x.label.trim() !== "").map((x) => ({ label: x.label.trim(), state: x.state })) } : {}),

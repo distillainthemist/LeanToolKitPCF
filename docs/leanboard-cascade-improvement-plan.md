@@ -824,6 +824,27 @@ reschedule/cancel history with a reason picklist.
   its numbers read-only with a pointer to its children. "Import from
   finance pack…" stays at tab level in the Read bar (editors). The
   drawer-under-a-row and the indented edit table are gone.
+- **KPI rows + plan = target — BUILT 2026-09-09** (Ben: configuring a KPI
+  decides which rows it has — plan/target, forecast, upper, lower — the
+  grid shows only those plus Actual; plan and target are one thing; the
+  cadence bucket is the unit of entry). `SpecRows {plan, forecast, lsl,
+  usl}` (shared/schema/specSeries.ts; defaults: drivers plan+forecast,
+  cards/own metrics plan+limits); spec series keys are now `spec:plan` /
+  `spec:forecast` / `spec:lsl` / `spec:usl` (legacy `spec:target` reads
+  as plan); `specFor` still returns `target` (= plan) for the card and
+  RAG. Rows live: on a driver in its format JSON (Settings → Value
+  drivers rail "Grid rows" checkboxes), on an own metric (`rows`, form
+  checkboxes that hide the level inputs), on a standalone KPI card
+  (settings booleans showPlan/showForecast/showLsl/showUsl; "Target" →
+  "Plan (target)"). Grid (`rowsFor`), CSV and paste follow the rows.
+  A PERIOD's plan / forecast is now the FOLD of its buckets
+  (`refoldDriverPeriod` after grid writes; `writePeriodSpread` for the
+  finance-pack import and Simulate's Adopt — a sum splits evenly, other
+  aggregates repeat); the driver popup's Plan / Forecast tiles are
+  derived read-only ("· sum of buckets"), Baseline stays a period number;
+  "Fill plan from targets" is gone. KPI card draws the forecast as a
+  muted dotted step and reads out "Plan". `store/gridCells.ts` holds the
+  shared cell loader.
 - **P10 Reporting** — designed (spec §4).
 
 Each phase ships behind the usual gates + `pac code push`; the specs'

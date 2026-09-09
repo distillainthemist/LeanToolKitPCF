@@ -46,7 +46,8 @@ import {
 } from "../../controls/ConditionsCard/types";
 import { applySeries, hasAnySeries, listSeries } from "./store/series";
 import { EMPTY_SPEC_SERIES } from "../../shared/schema/specSeries";
-import type { Cadence } from "./improvement/vdt/model";
+import type { Cadence, NodeFormat } from "./improvement/vdt/model";
+import { DEFAULT_ROWS_CARD } from "../../shared/schema/specSeries";
 import {
   cellsFromPoints,
   cellsFromRatings,
@@ -740,7 +741,7 @@ const REGISTRY: Record<string, CardMounter> = {
     // P9e: on an initiative board a metric linked (drives) to a value
     // driver reads/writes the DRIVER's one series at the driver's cadence —
     // series location + point identity swap, the editor never knows
-    let link: { driverId: string; name: string; cadenceLabel: string; days: number; node: { id: string; cadence: Cadence; aggregate: "sum" | "avg" | "last" | "min" | "max"; unit: string; format: { decimals: number; scale: "" | "k" | "m"; percent: boolean } } } | null = null;
+    let link: { driverId: string; name: string; cadenceLabel: string; days: number; node: { id: string; cadence: Cadence; aggregate: "sum" | "avg" | "last" | "min" | "max"; unit: string; format: NodeFormat } } | null = null;
     const seriesLoc = () => (link ? { boardId: "vdt", cardId: link.driverId } : { boardId: opts.boardId, cardId: opts.cardId });
     // grid entry (2026-09-08): an own card's cadence from settings (default
     // weekly); a linked card takes the driver's
@@ -749,6 +750,12 @@ const REGISTRY: Record<string, CardMounter> = {
       return c === "daily" || c === "monthly" || c === "annually" ? c : "weekly";
     };
     const level = () => ({ target: cfgNum(opts, "target") ?? env.data.target, usl: cfgNum(opts, "usl") ?? env.data.usl, lsl: cfgNum(opts, "lsl") ?? env.data.lsl });
+    // an own card's grid rows (2026-09-09): settings booleans over the card default
+    const ownRows = () => {
+      const c = config(opts);
+      const pick = (k: string, d: boolean) => (typeof c[k] === "boolean" ? (c[k] as boolean) : d);
+      return { plan: pick("showPlan", DEFAULT_ROWS_CARD.plan), forecast: pick("showForecast", DEFAULT_ROWS_CARD.forecast), lsl: pick("showLsl", DEFAULT_ROWS_CARD.lsl), usl: pick("showUsl", DEFAULT_ROWS_CARD.usl) };
+    };
     /** The slot's own driver link, overridable after an in-card link /
      *  unlink (the mounted settings blob is a snapshot). */
     let slotLink: Record<string, unknown> | null | undefined = undefined;
@@ -777,6 +784,7 @@ const REGISTRY: Record<string, CardMounter> = {
             cadence: link ? link.node.cadence : ownCadence(),
             unit: link ? link.node.unit : cfgStr(opts, "unit") || env.data.unit,
             level: level(),
+            rows: ownRows(),
             window,
             readOnly: opts.readOnly,
             onClosed: (changed) => {

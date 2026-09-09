@@ -13,30 +13,31 @@
 
 import { el, clear } from "../../../../shared/ui/dom";
 import { newId, todayIso } from "../../../../shared/schema/id";
-import { SPEC_SERIES_PREFIX } from "../../../../shared/schema/specSeries";
-import { applySeries, listSeries, listSeriesByPrefix } from "../../store/series";
+import { applySeries } from "../../store/series";
+import { loadGridCells } from "../../store/gridCells";
+import { DEFAULT_ROWS_CARD, SPEC_LABELS, SPEC_SERIES_PREFIX, SpecRows } from "../../../../shared/schema/specSeries";
 import { Aggregate, Cadence, CADENCE_LABELS, NodeFormat } from "./model";
 import {
   addBuckets,
   bucketSpan,
-  columnsWindow,
   foldValues,
   GridCell,
   GridColumn,
-  gridColumns,
   gridCsv,
   GridLevel,
+  GridLocation,
   GridRowKind,
   PAGE_BUCKETS,
   pageColumns,
   pageOriginAround,
   parsePasteBlock,
-  resolveGrid,
   ROW_ORDER,
+  rowsFor,
   specCell,
   SpecKind,
-  splitGridCells,
 } from "./gridModel";
+
+export { loadGridCells };
 
 const btn = (label: string, cls = "app-btn"): HTMLButtonElement => {
   const b = el("button", cls, label) as HTMLButtonElement;
@@ -44,26 +45,16 @@ const btn = (label: string, cls = "app-btn"): HTMLButtonElement => {
   return b;
 };
 
-export interface GridSource {
-  boardId: string;
-  cardId: string;
-  cadence: Cadence;
-  aggregate: Aggregate;
+export interface GridSource extends GridLocation {
   unit: string;
   /** Display format; percent drivers store fractions and show ×100. */
   format?: NodeFormat;
-  /** The single level target/limits (the fallback under carry-forward). */
-  level: GridLevel;
-  /** Which non-spec keys are readings. */
-  isActual: (key: string) => boolean;
   /** The cell a NEW reading in a column is written to. */
   newActual: (col: GridColumn) => { key: string; date: string; shift: string };
   readOnly: boolean;
-  /** Shiftly only: the shift labels (existing points' shifts are added). */
-  shifts?: string[];
 }
 
-/** A value driver's location. */
+/** A value driver's location (its rows from the driver's format). */
 export function driverGridSource(n: { id: string; cadence: Cadence; aggregate: Aggregate; unit: string; format: NodeFormat }, level: GridLevel, readOnly: boolean): GridSource {
   return {
     boardId: "vdt",
@@ -73,6 +64,7 @@ export function driverGridSource(n: { id: string; cadence: Cadence; aggregate: A
     unit: n.unit,
     format: n.format,
     level,
+    rows: n.format.rows,
     isActual: (k) => k === "actual",
     newActual: (col) => ({ key: "actual", date: col.anchor, shift: col.shift }),
     readOnly,
@@ -80,7 +72,7 @@ export function driverGridSource(n: { id: string; cadence: Cadence; aggregate: A
 }
 
 /** An own KPI card's location: readings keyed by point id, whole days. */
-export function cardGridSource(boardId: string, cardId: string, cadence: Cadence, unit: string, level: GridLevel, readOnly: boolean): GridSource {
+export function cardGridSource(boardId: string, cardId: string, cadence: Cadence, unit: string, level: GridLevel, readOnly: boolean, rows: SpecRows = DEFAULT_ROWS_CARD): GridSource {
   return {
     boardId,
     cardId,
@@ -88,6 +80,7 @@ export function cardGridSource(boardId: string, cardId: string, cadence: Cadence
     aggregate: "last",
     unit,
     level,
+    rows,
     isActual: (k) => k !== "" && !k.startsWith(SPEC_SERIES_PREFIX),
     newActual: (col) => ({ key: newId("k"), date: col.anchor, shift: "-" }),
     readOnly,
@@ -120,22 +113,6 @@ export interface GridHandle {
   /** The targets of every bucket in [from, to] folded at the aggregate
    *  (Plan from targets) — loads that range. */
   foldTargets: (from: string, to: string) => Promise<number | null>;
-}
-
-/** Resolve a range of columns for a source: one windowed read for
- *  readings + one sparse read for the spec history up to its end. Shared
- *  with the Metrics card's rows. */
-export async function loadGridCells(src: GridSource, from: string, to: string, shiftsOf?: (actuals: { shift: string }[]) => string[]): Promise<GridCell[]> {
-  const probe = gridColumns(src.cadence, from, to, src.shifts);
-  const w = columnsWindow(probe);
-  const [cells, specCells] = await Promise.all([
-    listSeries(src.boardId, src.cardId, w.from, w.to),
-    listSeriesByPrefix(src.boardId, src.cardId, SPEC_SERIES_PREFIX, w.to),
-  ]);
-  const { actuals } = splitGridCells(cells, src.isActual);
-  const { spec } = splitGridCells(specCells, () => false);
-  const cols = src.cadence === "shiftly" && shiftsOf ? gridColumns(src.cadence, from, to, shiftsOf(actuals)) : probe;
-  return resolveGrid(cols, actuals, spec, src.level, src.cadence, src.aggregate);
 }
 
 export function renderValueGrid(o: GridOpts): GridHandle {
@@ -300,12 +277,10 @@ export function renderValueGrid(o: GridOpts): GridHandle {
     head.appendChild(dr);
     table.appendChild(head);
     const body = el("tbody");
-    const rows: [GridRowKind, string, string][] = [
-      ["target", "Target", src.unit],
-      ["lsl", "Lower limit", ""],
-      ["usl", "Upper limit", ""],
-      ["actual", "Actual", CADENCE_LABELS[src.cadence].toLowerCase()],
-    ];
+    // the configured rows, then Actual
+    const rows: [GridRowKind, string, string][] = rowsFor(src.rows).map((r) =>
+      r === "actual" ? ["actual", "Actual", CADENCE_LABELS[src.cadence].toLowerCase()] : r === "plan" ? ["plan", "Plan", src.unit] : [r, SPEC_LABELS[r], ""]
+    );
     const ragDot = (c: GridCell): HTMLElement | null => {
       if (!c.rag) return null;
       const dot = el("span", "app-vg-dot");
@@ -391,7 +366,9 @@ export function renderValueGrid(o: GridOpts): GridHandle {
             e.preventDefault();
             const startCol = ci;
             let n = 0;
+            const shown = new Set(rowsFor(src.rows));
             for (const r of block) {
+              if (!shown.has(r.kind)) continue;
               r.values.forEach((v, k) => {
                 const target = all[startCol + k];
                 if (!target || v === null) return;
@@ -412,10 +389,10 @@ export function renderValueGrid(o: GridOpts): GridHandle {
     wrap.appendChild(scroll);
     // footer: paste hint · csv · host extras
     const foot = el("div", "app-vg-foot");
-    foot.appendChild(el("span", "app-cp-muted app-vg-hint", src.readOnly ? "Read-only." : "Grey = carried forward from the previous period (or the level target). Paste a block from Excel into any cell."));
+    foot.appendChild(el("span", "app-cp-muted app-vg-hint", src.readOnly ? "Read-only." : "Grey = carried forward from the previous period (or the level plan). Paste a block from Excel into any cell."));
     const csv = btn("CSV", "app-link");
     csv.addEventListener("click", () => {
-      const text = gridCsv(all, src.unit);
+      const text = gridCsv(all, src.unit, src.rows);
       const url = URL.createObjectURL(new Blob([text], { type: "text/csv" }));
       const a = document.createElement("a");
       a.href = url;
@@ -466,7 +443,7 @@ export function renderValueGrid(o: GridOpts): GridHandle {
       wrap.remove();
     },
     cells: () => all,
-    foldTargets: async (from, to) => foldValues((await resolveRange(from, to)).map((c) => c.target.value), src.aggregate),
+    foldTargets: async (from, to) => foldValues((await resolveRange(from, to)).map((c) => c.plan.value), src.aggregate),
   };
 
   wrap.appendChild(el("div", "app-cp-muted", "Loading…"));

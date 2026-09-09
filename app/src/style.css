@@ -3797,3 +3797,5 @@ textarea.app-cp-statement { font-size: 14px; font-weight: 500; }
 .app-im-optlist { display: flex; flex-direction: column; gap: 6px; }
 .app-im-optrow { display: grid; grid-template-columns: 1fr 130px 32px; gap: 6px; align-items: center; }
 .app-im-optstate { width: 100%; }
+.app-im-rows { display: flex; gap: 14px; flex-wrap: wrap; }
+.app-im-rowchk { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer; }

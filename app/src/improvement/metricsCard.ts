@@ -14,7 +14,7 @@ import { paletteMap } from "../../../shared/palette";
 import { todayIso } from "../../../shared/schema/id";
 import { KpiTrendEditor } from "../../../controls/KpiTrendCard/editor";
 import { SCHEMA_ID } from "../../../controls/KpiTrendCard/types";
-import { EMPTY_SPEC_SERIES } from "../../../shared/schema/specSeries";
+import { DEFAULT_ROWS_CARD, EMPTY_SPEC_SERIES } from "../../../shared/schema/specSeries";
 import { listInitiatives } from "../store/initiatives";
 import { getBoard } from "../store/boards";
 import { parseManifest } from "../store/mappers";
@@ -71,6 +71,7 @@ export function mountMetricsCard(opts: CardMount): () => void {
     unit: d ? d.unit : m.unit,
     format: d ? d.format : undefined,
     level: level(m),
+    rows: d ? d.format.rows : (m.rows ?? DEFAULT_ROWS_CARD),
     isActual: loc.isActual,
     newActual: (col) => (loc.actualKey !== "" ? { key: loc.actualKey, date: col.anchor, shift: col.shift } : { key: `k${Math.random().toString(36).slice(2, 10)}`, date: col.anchor, shift: "-" }),
     readOnly: opts.readOnly,
@@ -93,7 +94,7 @@ export function mountMetricsCard(opts: CardMount): () => void {
       cells = cols.map((column) => {
         const c = byDate.get(column.anchor);
         const disp = c ? trackingDisplay(m, c.value) : { label: "", rag: null };
-        return { column, target: { value: null, inherited: true }, lsl: { value: null, inherited: true }, usl: { value: null, inherited: true }, actual: { value: c ? Number(c.value) : null, count: c ? 1 : 0, editable: true, existing: c ? { key: c.key, date: c.date, shift: c.shift } : null }, rag: disp.rag };
+        return { column, plan: { value: null, inherited: true }, forecast: { value: null, inherited: true }, lsl: { value: null, inherited: true }, usl: { value: null, inherited: true }, actual: { value: c ? Number(c.value) : null, count: c ? 1 : 0, editable: true, existing: c ? { key: c.key, date: c.date, shift: c.shift } : null }, rag: disp.rag };
       });
       const last = [...raw.filter((c) => loc.isActual(c.key))].sort((a, b) => (a.date < b.date ? -1 : 1)).pop();
       lastRaw = last ? last.value : "";
@@ -128,7 +129,7 @@ export function mountMetricsCard(opts: CardMount): () => void {
     const H = 28;
     const svg = svgEl("svg", { class: "app-mc-spark", viewBox: `0 0 ${W} ${H}`, preserveAspectRatio: "none" });
     const vals = r.cells.map((c) => c.actual.value);
-    const tg = r.cells.map((c) => c.target.value);
+    const tg = r.cells.map((c) => c.plan.value);
     const nums = [...vals, ...tg].filter((v): v is number => v !== null);
     if (nums.length === 0) return svg;
     let lo = Math.min(...nums);
@@ -192,7 +193,7 @@ export function mountMetricsCard(opts: CardMount): () => void {
         val.appendChild(dot);
         val.appendChild(el("span", "app-mc-num", last ? fmt(r, last.actual.value) : "—"));
         const tcell = r.cells.find((c) => today >= c.column.from && today <= c.column.to) ?? last;
-        if (tcell && tcell.target.value !== null) val.appendChild(el("span", "app-mc-tgt", `/ ${fmt(r, tcell.target.value)}`));
+        if (tcell && tcell.plan.value !== null) val.appendChild(el("span", "app-mc-tgt", `/ ${fmt(r, tcell.plan.value)}`));
         head.appendChild(val);
         head.addEventListener("click", () => {
           expanded = expanded === r.m.key ? "" : r.m.key;
@@ -301,6 +302,7 @@ export function mountMetricsCard(opts: CardMount): () => void {
             cadence: r.loc.cadence,
             unit: r.driver ? r.driver.unit : r.m.unit,
             level: level(r.m),
+            rows: r.source.rows,
             window,
             readOnly: opts.readOnly,
             onClosed: (changed) => {

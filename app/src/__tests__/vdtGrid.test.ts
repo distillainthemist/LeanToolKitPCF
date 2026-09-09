@@ -83,23 +83,24 @@ describe("resolveGrid", () => {
         { key: "actual", date: "2026-09-15", shift: "-", value: 4 },
         { key: "actual", date: "2026-09-16", shift: "-", value: 6 },
       ],
-      { target: [{ date: "2026-09-14", shift: "-", value: 9 }], lsl: [], usl: [{ date: "2026-09-14", shift: "-", value: 12 }] },
+      { plan: [{ date: "2026-09-14", shift: "-", value: 9 }], forecast: [], lsl: [], usl: [{ date: "2026-09-14", shift: "-", value: 12 }] },
       { target: 8, lsl: null, usl: 20 },
       "weekly",
       "sum"
     );
     // wk 37: one point → editable, level target 8 inherited
     expect(cells[0].actual).toMatchObject({ value: 10, count: 1, editable: true, existing: { key: "actual", date: "2026-09-07", shift: "-" } });
-    expect(cells[0].target).toEqual({ value: 8, inherited: true });
+    expect(cells[0].plan).toEqual({ value: 8, inherited: true });
+    expect(cells[0].forecast).toEqual({ value: null, inherited: true });
     expect(cells[0].usl).toEqual({ value: 20, inherited: true });
     expect(cells[0].rag).toBe("amber"); // upper only → lower is better; 10 > 8
     // wk 38: two points folded (sum 10), read-only; spec set on this column
     expect(cells[1].actual).toMatchObject({ value: 10, count: 2, editable: false, existing: null });
-    expect(cells[1].target).toEqual({ value: 9, inherited: false });
+    expect(cells[1].plan).toEqual({ value: 9, inherited: false });
     expect(cells[1].usl).toEqual({ value: 12, inherited: false });
     // wk 39: nothing → editable empty, spec carried forward
     expect(cells[2].actual).toMatchObject({ value: null, count: 0, editable: true });
-    expect(cells[2].target).toEqual({ value: 9, inherited: true });
+    expect(cells[2].plan).toEqual({ value: 9, inherited: true });
     expect(cells[2].rag).toBeNull();
   });
   it("rag follows the column's limits", () => {
@@ -123,9 +124,9 @@ describe("foldValues", () => {
 
 describe("parsePasteBlock", () => {
   it("maps labelled rows by label, drops Period/Date, keeps blanks as null", () => {
-    const rows = parsePasteBlock("Period\tWk 37\tWk 38\nDate\t7-Sep-26\t14-Sep-26\nTarget\t10\t12\nLower Limit\t\t8\nUpper Limit\t15\t\nActual\t9.5\tabc");
+    const rows = parsePasteBlock("Period\tWk 37\tWk 38\nDate\t7-Sep-26\t14-Sep-26\nPlan\t10\t12\nLower Limit\t\t8\nUpper Limit\t15\t\nActual\t9.5\tabc");
     expect(rows).toEqual([
-      { kind: "target", values: [10, 12] },
+      { kind: "plan", values: [10, 12] },
       { kind: "lsl", values: [null, 8] },
       { kind: "usl", values: [15, null] },
       { kind: "actual", values: [9.5, null] },
@@ -136,18 +137,18 @@ describe("parsePasteBlock", () => {
       { kind: "usl", values: [1, 2] },
       { kind: "actual", values: [3, 4] },
     ]);
-    expect(parsePasteBlock("1\n2\n3\n4\n5")).toHaveLength(4);
+    expect(parsePasteBlock("1\n2\n3\n4\n5\n6")).toHaveLength(5);
   });
   it("strips thousands separators and currency", () => {
-    expect(parsePasteBlock("Target\t$1,200\t45%")).toEqual([{ kind: "target", values: [1200, 45] }]);
+    expect(parsePasteBlock("Target\t$1,200\t45%")).toEqual([{ kind: "plan", values: [1200, 45] }]);
   });
 });
 
 describe("gridCsv / specCell / splitGridCells", () => {
   it("writes the mock's layout", () => {
     const cols = gridColumns("weekly", "2026-09-07", "2026-09-08");
-    const cells = resolveGrid(cols, [], { target: [], lsl: [], usl: [] }, { target: 5, lsl: null, usl: null }, "weekly", "sum");
-    expect(gridCsv(cells, "%")).toBe("Period,Wk 37\nDate,2026-09-07\nTarget (%),5\nLower limit,\nUpper limit,\nActual,");
+    const cells = resolveGrid(cols, [], { plan: [], forecast: [], lsl: [], usl: [] }, { target: 5, lsl: null, usl: null }, "weekly", "sum");
+    expect(gridCsv(cells, "%", { plan: true, forecast: false, lsl: true, usl: true })).toBe("Period,Wk 37\nDate,2026-09-07\nPlan (%),5\nLower limit,\nUpper limit,\nActual,");
     expect(specCell("lsl", cols[0], 3)).toEqual({ key: "spec:lsl", date: "2026-09-07", shift: "-", value: "3" });
     expect(specCell("lsl", cols[0], null).value).toBe("");
   });
@@ -155,14 +156,31 @@ describe("gridCsv / specCell / splitGridCells", () => {
     const r = splitGridCells(
       [
         { key: "spec:target", date: "2026-09-07", shift: "-", value: "5" },
+        { key: "spec:forecast", date: "2026-09-07", shift: "-", value: "6" },
         { key: "actual", date: "2026-09-08", shift: "D", value: "2" },
         { key: "k1", date: "2026-09-09", shift: "-", value: "3" },
         { key: "actual", date: "2026-09-10", shift: "-", value: "" },
       ],
       (k) => k === "actual"
     );
-    expect(r.spec.target).toEqual([{ date: "2026-09-07", shift: "-", value: 5 }]);
+    expect(r.spec.plan).toEqual([{ date: "2026-09-07", shift: "-", value: 5 }]); // legacy spec:target reads as plan
+    expect(r.spec.forecast).toEqual([{ date: "2026-09-07", shift: "-", value: 6 }]);
     expect(r.actuals).toEqual([{ key: "actual", date: "2026-09-08", shift: "D", value: 2 }]);
+  });
+});
+
+describe("rows / spread", () => {
+  it("rowsFor keeps the configured rows in order, Actual always", async () => {
+    const { rowsFor } = await import("../improvement/vdt/gridModel");
+    expect(rowsFor({ plan: true, forecast: false, lsl: false, usl: true })).toEqual(["plan", "usl", "actual"]);
+    expect(rowsFor({ plan: false, forecast: false, lsl: false, usl: false })).toEqual(["actual"]);
+  });
+  it("spreadOverBuckets splits a sum, repeats anything else", async () => {
+    const { spreadOverBuckets, parseSpecRows, DEFAULT_ROWS_DRIVER } = await import("../../../shared/schema/specSeries");
+    expect(spreadOverBuckets(1200, "sum", 12)).toEqual(Array(12).fill(100));
+    expect(spreadOverBuckets(66, "avg", 3)).toEqual([66, 66, 66]);
+    expect(spreadOverBuckets(1, "sum", 0)).toEqual([]);
+    expect(parseSpecRows({ lsl: true }, DEFAULT_ROWS_DRIVER)).toEqual({ plan: true, forecast: true, lsl: true, usl: false });
   });
 });
 
