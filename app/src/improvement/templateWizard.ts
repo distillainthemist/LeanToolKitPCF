@@ -45,8 +45,7 @@ import { METRIC_RULE_LABELS, MetricRule,
   TemplateStage,
   Tracking,
   validateTemplate,
-  withSlotFlags,
-} from "./templateModel";
+  withSlotFlags, activeRoles } from "./templateModel";
 
 const btn = (label: string, cls = "ltk-mw-btn"): HTMLButtonElement => {
   const b = el("button", cls, label) as HTMLButtonElement;
@@ -250,7 +249,7 @@ export function mountTemplateWizard(parent: HTMLElement, templateId: string): ()
           chip.appendChild(x);
           r.appendChild(chip);
         }
-        const addable = t.roles.filter((x) => !gate.approverRoles.includes(x.key));
+        const addable = activeRoles(t).filter((x) => !gate.approverRoles.includes(x.key));
         if (addable.length > 0) {
           const add = selectInput("", [{ value: "", label: "Add…" }, ...addable.map((x) => ({ value: x.key, label: x.label }))], (v) => {
             if (v === "") return;
@@ -398,7 +397,7 @@ export function mountTemplateWizard(parent: HTMLElement, templateId: string): ()
       head.append(el("span", undefined, "Role"), el("span", undefined, "People"), el("span", undefined, "Time commitment"), el("span", undefined, ""));
       list.appendChild(head);
       t.roles.forEach((r, i) => {
-        const tr = el("div", "app-tw-tr");
+        const tr = el("div", "app-tw-tr" + (r.hidden ? " app-tw-tr-hidden" : ""));
         const label = textInput(r.label, (v) => {
           r.label = v || r.label;
           mark();
@@ -422,16 +421,31 @@ export function mountTemplateWizard(parent: HTMLElement, templateId: string): ()
           tcLabel
         );
         tr.appendChild(tc);
-        const x = btn("×", "ltk-mw-chip-x");
         const referenced = [...t.stages.map((s) => s.gate), t.completeGate].some((g) => g.approverRoles.includes(r.key));
-        x.disabled = r.standard || referenced;
-        x.title = r.standard ? "Standard roles stay" : referenced ? "A gate names this role — remove it from the gate first (step 2)" : "Remove role";
-        x.addEventListener("click", () => {
-          t.roles.splice(i, 1);
-          mark();
-          shell.refresh();
-        });
-        tr.appendChild(x);
+        if (r.standard) {
+          // standard roles stay on the template but can be HIDDEN (Ben,
+          // 2026-09-13): out of forms, gates and validation; Owner never
+          const hide = btn(r.hidden ? "Show" : "Hide", "app-link app-tw-rolehide");
+          hide.disabled = r.key === "owner" || (referenced && !r.hidden);
+          hide.title = r.key === "owner" ? "Every initiative needs an owner" : referenced && !r.hidden ? "A gate names this role — remove it from the gate first" : r.hidden ? "Use this role on this template" : "Leave this role off this template";
+          hide.addEventListener("click", () => {
+            r.hidden = !r.hidden;
+            if (!r.hidden) delete r.hidden;
+            mark();
+            shell.refresh();
+          });
+          tr.appendChild(hide);
+        } else {
+          const x = btn("×", "ltk-mw-chip-x");
+          x.disabled = referenced;
+          x.title = referenced ? "A gate names this role — remove it from the gate first (step 2)" : "Remove role";
+          x.addEventListener("click", () => {
+            t.roles.splice(i, 1);
+            mark();
+            shell.refresh();
+          });
+          tr.appendChild(x);
+        }
         list.appendChild(tr);
       });
       form.appendChild(list);
@@ -715,7 +729,7 @@ export function mountTemplateWizard(parent: HTMLElement, templateId: string): ()
         add("Stages", `${t.stages.length} · ${gatedCount} gated — ` + stepperChips(t).map((c) => `${c.gated ? "⚑ " : ""}${c.label}`).join(" › "), "stages");
         add("Metrics rule", METRIC_RULE_LABELS[t.metricRule], "metrics");
       }
-      add("Roles", t.roles.map((r) => r.label + (r.multi ? " (several)" : "")).join(" · "), "roles");
+      add("Roles", activeRoles(t).map((r) => r.label + (r.multi ? " (several)" : "")).join(" · ") + (t.roles.some((r) => r.hidden) ? ` · hidden: ${t.roles.filter((r) => r.hidden).map((r) => r.label).join(", ")}` : ""), "roles");
       add("Fields", t.fields.length === 0 ? "none" : t.fields.map((f) => `${f.label} (${f.kind}${f.required ? ", required" : ""})`).join(" · "), "fields");
       add("Board", t.singleAction ? "none" : t.boardId !== "" ? `laid out (${Object.values(slotCountByStage).reduce((a, b) => a + b, 0)} cards)` : "not yet", "board");
       add("Company", t.company || "all", "basics");
@@ -1187,7 +1201,7 @@ export async function renderImprovementSettings(body: HTMLElement, isSuper: bool
       el(
         "div",
         "app-settings-note",
-        [t.singleAction ? "no stages" : `${t.stages.length} stages`, `${t.roles.length} roles`, METRIC_RULE_LABELS[t.metricRule].split(" — ")[0].toLowerCase(), t.boardId !== "" ? "board laid out" : "no board yet", t.company ? t.company : "all companies", "0 initiatives use this"].join(" · ")
+        [t.singleAction ? "no stages" : `${t.stages.length} stages`, `${activeRoles(t).length} roles`, METRIC_RULE_LABELS[t.metricRule].split(" — ")[0].toLowerCase(), t.boardId !== "" ? "board laid out" : "no board yet", t.company ? t.company : "all companies", "0 initiatives use this"].join(" · ")
       )
     );
     list.appendChild(card);

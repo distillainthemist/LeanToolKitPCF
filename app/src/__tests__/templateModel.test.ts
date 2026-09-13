@@ -122,3 +122,22 @@ describe("health questions", () => {
     expect(m.parseImprovementSettings(m.serializeImprovementSettings(s)).healthQuestions).toEqual(s.healthQuestions);
   });
 });
+
+describe("hidden standard roles (2026-09-13)", () => {
+  it("parse keeps the hidden flag; activeRoles leaves hidden ones out", async () => {
+    const { activeRoles } = await import("../improvement/templateModel");
+    const roles = parseRoles(JSON.stringify([{ key: "support", label: "Support", standard: true, multi: true, timeCommitment: false, hidden: true }]));
+    expect(roles.find((r) => r.key === "support")?.hidden).toBe(true);
+    expect(roles.find((r) => r.key === "owner")?.hidden).toBeUndefined();
+    expect(activeRoles({ roles }).map((r) => r.key)).not.toContain("support");
+  });
+  it("validation refuses a hidden owner and a gate naming a hidden role", () => {
+    const t = newTemplate("tpl-x");
+    t.boardId = "tpl-x";
+    t.roles.find((r) => r.key === "owner")!.hidden = true;
+    expect(validateTemplate(t).join(" ")).toMatch(/Owner role can't be hidden/);
+    delete t.roles.find((r) => r.key === "owner")!.hidden;
+    t.roles.find((r) => r.key === "sponsor")!.hidden = true; // the complete gate names sponsor
+    expect(validateTemplate(t).join(" ")).toMatch(/"sponsor" is not a role/);
+  });
+});

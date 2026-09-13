@@ -19,7 +19,7 @@ import { eq, upsertWhere } from "../store/dv";
 import { pickOwner } from "../priorities/dialogs";
 import { promptConfirm } from "../prompts";
 import { Initiative, validateNewInitiative } from "./initiativeModel";
-import { FieldKind, normalizeMetrics, parseImprovementSettings, roleFillersAt, TemplateField, TemplateRole } from "./templateModel";
+import { FieldKind, normalizeMetrics, parseImprovementSettings, roleFillersAt, TemplateField, TemplateRole, activeRoles } from "./templateModel";
 import { renderMetricsList } from "./metricsList";
 
 const btn = (label: string, cls = "app-btn"): HTMLButtonElement => {
@@ -209,7 +209,7 @@ export function openEditDetails(o: EditDetailsOpts): void {
     // roles: template roles when the template survives, else the roles the
     // initiative carries (snapshot labels)
     const roleDefs: TemplateRole[] =
-      template?.roles ??
+      (template ? activeRoles(template) : undefined) ??
       Object.keys({ ...i.snapshot.roleLabels, ...i.roles }).map((key) => ({
         key,
         label: i.snapshot.roleLabels[key] ?? key,

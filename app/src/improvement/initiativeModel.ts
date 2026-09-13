@@ -6,7 +6,7 @@
 // primary, field values, metrics, the pending gate, stage target dates.
 // History lives in ben_ltkinitiativeevent. Everything here is pure.
 
-import type { MetricRule, InitiativeTemplate, RolePerson, TemplateMetric, TemplateStage, Gate } from "./templateModel";
+import { MetricRule, InitiativeTemplate, RolePerson, TemplateMetric, TemplateStage, Gate, activeRoles } from "./templateModel";
 
 export type InitiativeStatus = "active" | "completed" | "archived";
 export type FlagLevel = "" | "flag" | "escalated";
@@ -69,7 +69,7 @@ export function snapshotOf(t: InitiativeTemplate): InitiativeSnapshot {
   return {
     stages: t.stages.map((s) => ({ ...s, gate: { ...s.gate, approverRoles: [...s.gate.approverRoles] } })),
     completeGate: { ...t.completeGate, approverRoles: [...t.completeGate.approverRoles] },
-    roleLabels: Object.fromEntries(t.roles.map((r) => [r.key, r.label])),
+    roleLabels: Object.fromEntries(activeRoles(t).map((r) => [r.key, r.label])),
     metrics: t.metrics.map((m) => ({ ...m })),
   };
 }

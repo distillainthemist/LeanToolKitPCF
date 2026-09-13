@@ -44,6 +44,14 @@ export interface TemplateRole {
   standard: boolean;
   multi: boolean;
   timeCommitment: boolean;
+  /** A standard role this template doesn't use (Ben, 2026-09-13): kept
+   *  on the template, left out of forms, gates and validation. */
+  hidden?: boolean;
+}
+
+/** The roles a template actually uses. */
+export function activeRoles(t: Pick<InitiativeTemplate, "roles">): TemplateRole[] {
+  return t.roles.filter((r) => r.hidden !== true);
 }
 
 export type FieldKind = "text" | "longtext" | "number" | "date" | "picklist" | "person";
@@ -381,6 +389,7 @@ export function parseRoles(raw: string): TemplateRole[] {
         standard: bool(x.standard),
         multi: bool(x.multi),
         timeCommitment: bool(x.timeCommitment),
+        ...(x.hidden === true ? { hidden: true } : {}),
       }))
       .filter((r) => r.key !== "" && r.label !== "");
     // the five standard roles always exist (labels may be edited)
@@ -477,7 +486,8 @@ export function validateTemplate(t: InitiativeTemplate): string[] {
   const errs: string[] = [];
   if (t.name.trim() === "") errs.push("A name is needed.");
   if (!t.singleAction && t.stages.length === 0) errs.push("At least one stage (single-action templates have none).");
-  const roleKeys = new Set(t.roles.map((r) => r.key));
+  const roleKeys = new Set(activeRoles(t).map((r) => r.key));
+  if (t.roles.some((r) => r.key === "owner" && r.hidden)) errs.push("The Owner role can't be hidden — every initiative needs an owner.");
   const gates = [...t.stages.map((s) => s.gate), t.completeGate];
   for (const g of gates) {
     if (g.enabled && g.approverRoles.length === 0) errs.push("Every gate that is on needs at least one approver role.");

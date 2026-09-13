@@ -52,8 +52,7 @@ import {
   PDCA_TOKENS,
   roleFillersAt,
   STANDARD_ROLES,
-  stepperChips,
-} from "./templateModel";
+  stepperChips, activeRoles } from "./templateModel";
 import { buildTree, childOrgs, pickOrg, pickOwner, siblingOrgs } from "../priorities/dialogs";
 
 const btn = (label: string, cls = "app-btn"): HTMLButtonElement => {
@@ -964,7 +963,7 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
         const rolesBox = el("div", "app-im-roles");
         const paintRoles = () => {
           clear(rolesBox);
-          for (const role of t.roles) {
+          for (const role of activeRoles(t)) {
             const line = el("div", "app-im-rolerow");
             line.appendChild(el("span", "app-im-rolename", role.label));
             const std = imp.standardRoles.find((sr) => sr.key === role.key);
