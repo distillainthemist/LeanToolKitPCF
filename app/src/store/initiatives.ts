@@ -187,38 +187,8 @@ export async function createInitiative(
     const tplBoard = await getBoard(t.boardId);
     if (tplBoard) {
       const manifest = parseManifest(tplBoard.manifestRaw);
-      // mandatory cards only; the charter and the action plan always come
-      const keep = manifest.slots.filter((s) => {
-        const f = slotFlags(s.settings);
-        return f.mandatory || s.cardType === "CanvasCard" || s.cardType === "ActionBoard";
-      });
       const boardId = `init-${i.id}`;
-      const slots = keep.map((s, idx) => ({
-        pos: idx + 1,
-        w: s.w,
-        h: s.h,
-        nav: idx + 1,
-        cardId: s.cardId,
-        cardType: s.cardType,
-        title: s.title,
-        // the initiative's action plan gets the Verify column + reschedule
-        // reasons (design 2.4) whatever the template author set
-        settingsJSON:
-          s.cardType === "ActionBoard"
-            ? {
-                ...s.settings,
-                config: { ...((s.settings.config ?? {}) as Record<string, unknown>), view: "kanban", verifyColumn: true, rescheduleReasons: true },
-              }
-            : s.settings,
-      }));
-      // ONE Metrics card for the initiative (Ben, 2026-09-08), one by one,
-      // second after the charter; it lists the metrics from the definition
-      // so a metric added later appears without touching the board
-      slots.splice(Math.min(1, slots.length), 0, metricsCardSlot());
-      slots.forEach((s, k) => {
-        s.pos = k + 1;
-        s.nav = k + 1;
-      });
+      const slots = slotsFromTemplate(manifest);
       await upsertWhere(
         Ben_ltkboardsService,
         eq("ben_boardid", boardId),
@@ -242,6 +212,101 @@ export async function createInitiative(
   i.rowId = await saveInitiative(i);
   await appendInitiativeEvent(i, "created", { template: t.name, method: t.method }, actor);
   return i;
+}
+
+/** The board slots an initiative starts from (also the reset target, Ben
+ *  2026-09-14): the template's mandatory cards plus the charter and the
+ *  action plan, keeping the template's card ids (so a reset keeps the data
+ *  of cards that survive), the action plan on kanban with Verify +
+ *  reschedule reasons, and ONE Metrics card second after the charter
+ *  (`metricsCardId` keeps an existing one's id, so its sub-location data
+ *  survives a reset). */
+export function slotsFromTemplate(
+  manifest: import("./mappers").BoardManifest,
+  metricsCardId = ""
+): { pos: number; w: number; h: number; nav: number; cardId: string; cardType: string; title: string; settingsJSON: Record<string, unknown> }[] {
+  // mandatory cards only; the charter and the action plan always come
+  const keep = manifest.slots.filter((s) => {
+    const f = slotFlags(s.settings);
+    return f.mandatory || s.cardType === "CanvasCard" || s.cardType === "ActionBoard";
+  });
+  const slots = keep.map((s, idx) => ({
+    pos: idx + 1,
+    w: s.w,
+    h: s.h,
+    nav: idx + 1,
+    cardId: s.cardId,
+    cardType: s.cardType,
+    title: s.title,
+    // the initiative's action plan gets the Verify column + reschedule
+    // reasons (design 2.4) whatever the template author set
+    settingsJSON:
+      s.cardType === "ActionBoard"
+        ? {
+            ...s.settings,
+            config: { ...((s.settings.config ?? {}) as Record<string, unknown>), view: "kanban", verifyColumn: true, rescheduleReasons: true },
+          }
+        : s.settings,
+  }));
+  // ONE Metrics card for the initiative (Ben, 2026-09-08), one by one,
+  // second after the charter; it lists the metrics from the definition
+  // so a metric added later appears without touching the board
+  const mc = metricsCardSlot();
+  if (metricsCardId !== "") mc.cardId = metricsCardId;
+  slots.splice(Math.min(1, slots.length), 0, mc);
+  slots.forEach((s, k) => {
+    s.pos = k + 1;
+    s.nav = k + 1;
+  });
+  return slots;
+}
+
+/** What a reset would do to an initiative board: the cards it drops
+ *  (not from the template, or optional) and the ones it adds back. Card
+ *  DATA is never deleted — a dropped card's rows stay, so re-adding it
+ *  from the template revives them. */
+export async function previewBoardReset(i: Initiative): Promise<{ drops: string[]; adds: string[]; ok: boolean } | null> {
+  if (i.boardId === "" || i.templateId === "") return null;
+  const [{ getTemplate }, { getBoard }, { parseManifest }] = await Promise.all([import("./templates"), import("./boards"), import("./mappers")]);
+  const t = await getTemplate(i.templateId);
+  if (!t || t.boardId === "") return null;
+  const [tplBoard, myBoard] = await Promise.all([getBoard(t.boardId), getBoard(i.boardId)]);
+  if (!tplBoard || !myBoard) return null;
+  const mine = parseManifest(myBoard.manifestRaw).slots;
+  const mc = mine.find((s) => s.cardType === "MetricsCard")?.cardId ?? "";
+  const next = slotsFromTemplate(parseManifest(tplBoard.manifestRaw), mc);
+  const nextIds = new Set(next.map((s) => s.cardId));
+  const mineIds = new Set(mine.map((s) => s.cardId));
+  return {
+    drops: mine.filter((s) => !nextIds.has(s.cardId)).map((s) => s.title || s.cardType),
+    adds: next.filter((s) => !mineIds.has(s.cardId)).map((s) => s.title || s.cardType),
+    ok: true,
+  };
+}
+
+/** Reset the initiative board's cards to the template (Ben, 2026-09-14):
+ *  layout, card set and card settings come from the template; cards that
+ *  keep their id keep their content; hand-added cards leave the board
+ *  (their data stays in the tables). */
+export async function resetBoardToTemplate(i: Initiative, actor: { whoId: string; who: string }): Promise<boolean> {
+  if (i.boardId === "" || i.templateId === "") return false;
+  const [{ getTemplate }, { getBoard, saveManifest }, { parseManifest }] = await Promise.all([import("./templates"), import("./boards"), import("./mappers")]);
+  const t = await getTemplate(i.templateId);
+  if (!t || t.boardId === "") return false;
+  const [tplBoard, myBoard] = await Promise.all([getBoard(t.boardId), getBoard(i.boardId)]);
+  if (!tplBoard || !myBoard) return false;
+  const tpl = parseManifest(tplBoard.manifestRaw);
+  const mine = parseManifest(myBoard.manifestRaw);
+  const mc = mine.slots.find((s) => s.cardType === "MetricsCard")?.cardId ?? "";
+  const slots = slotsFromTemplate(tpl, mc);
+  await saveManifest(myBoard.id, {
+    ...mine,
+    grid: String(tpl.grid ?? mine.grid ?? "2"),
+    columnTitles: tpl.columnTitles,
+    slots: slots.map((s) => ({ pos: s.pos, w: s.w, h: s.h, nav: s.nav, cardId: s.cardId, cardType: s.cardType, title: s.title, settings: s.settingsJSON })) as typeof mine.slots,
+  });
+  await appendInitiativeEvent(i, "edited", { fields: "board reset to template" }, actor);
+  return true;
 }
 
 /** The initiative's Metrics card slot (1×1). */

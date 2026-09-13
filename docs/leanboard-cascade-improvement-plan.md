@@ -876,6 +876,19 @@ reschedule/cancel history with a reason picklist.
   `table-layout: fixed`, no horizontal scroll; the dialog is attached
   before the grid renders so it can measure; `pageColumns` /
   `pageOriginAround` take a size. The values-grid modal is 1320px.
+- **Reset board to template — BUILT 2026-09-14** (Ben): initiative board
+  kebab "Reset board to template…" (owner-side, active, templated):
+  a preview names the cards leaving (hand-added or optional) and coming
+  back, then `resetBoardToTemplate` rebuilds the manifest from the
+  template through the same `slotsFromTemplate` seeding uses — template
+  card ids survive so their content does, the Metrics card keeps its id
+  (sub-location data), the action plan keeps kanban + Verify +
+  reschedule reasons; dropped cards' rows are never deleted (re-adding
+  the card revives them); an "edited · board reset" event is logged.
+  Also 2026-09-13/14: standard template roles can be HIDDEN (Owner
+  never; gate-named only after the gate releases it; `activeRoles`);
+  a new template's method defaults to the first configured method; the
+  create-initiative form has Description.
 - **P10 Reporting** — designed (spec §4).
 
 Each phase ships behind the usual gates + `pac code push`; the specs'

@@ -642,6 +642,7 @@ export function mountInitiativePane(o: InitiativePaneOpts): InitiativePaneHandle
         })();
       }, !mine());
       item("＋ Add card from template", () => void addFromTemplate(), !mine() || i.status !== "active" || i.templateId === "");
+      item("Reset board to template…", () => void resetToTemplate(), !mine() || i.status !== "active" || i.templateId === "");
       item(i.status === "archived" ? "Restore" : "Archive", () => {
         void (async () => {
           i.status = i.status === "archived" ? "active" : "archived";
@@ -714,6 +715,27 @@ export function mountInitiativePane(o: InitiativePaneOpts): InitiativePaneHandle
         }
       };
       setTimeout(() => document.addEventListener("pointerdown", off, true), 0);
+    };
+
+    /** Put the board back to the template's card set and layout (Ben,
+     *  2026-09-14). Cards that survive keep their content; hand-added
+     *  cards leave the board but their data stays in the tables. */
+    const resetToTemplate = async () => {
+      const { previewBoardReset, resetBoardToTemplate } = await import("../store/initiatives");
+      const p = await previewBoardReset(i);
+      if (!p) {
+        await promptConfirm({ title: "No template board", note: "This initiative's template has no board to reset to.", confirmLabel: "OK" });
+        return;
+      }
+      const lines = [
+        "Layout, card set and card settings return to the template's. Cards the template still has keep what's on them.",
+        p.drops.length > 0 ? `Leaving the board: ${p.drops.join(", ")} — their content stays stored and comes back if the card is added again.` : "",
+        p.adds.length > 0 ? `Coming back: ${p.adds.join(", ")}.` : "",
+      ].filter((x) => x !== "");
+      const ok = await promptConfirm({ title: "Reset this board to its template?", note: lines.join("\n\n"), confirmLabel: "Reset board" });
+      if (!ok) return;
+      const done = await resetBoardToTemplate(i, actor());
+      if (done) window.location.reload();
     };
 
     const escalate = async () => {
