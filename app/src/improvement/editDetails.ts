@@ -396,6 +396,9 @@ export function openEditDetails(o: EditDetailsOpts): void {
           ).catch(() => undefined);
         }
         await appendInitiativeEvent(i, "edited", { fields: "details" }, o.actor);
+        // claim the primary priority's primary-initiative slot when empty
+        const primaryLink = i.priorities.find((l) => l.primary) ?? null;
+        if (primaryLink) await import("../store/priorities").then((m) => m.setPrimaryInitiative(primaryLink.priorityId, i.id, true)).catch(() => false);
         close();
         o.onSaved();
       })().catch((e) => {

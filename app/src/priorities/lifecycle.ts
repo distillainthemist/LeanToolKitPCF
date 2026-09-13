@@ -213,6 +213,78 @@ export async function closePriority(
 
 /** Set a completed / archived priority back to active. A carry-forward
  *  copy, if one was made, is left in place — History shows both. */
+/** The primary initiative's charter (its Canvas card, bound fields
+ *  included) and its Metrics card, mounted read-only from the initiative
+ *  board — the same renderers the board uses (Ben, 2026-09-14). */
+async function mountPrimaryCharter(host: HTMLElement, initiativeId: string): Promise<void> {
+  host.appendChild(el("div", "app-cp-muted", "Loading…"));
+  const [{ listInitiatives }, { getBoard }, { parseManifest }, { liveRow }, { cardMounter }, { makeInitiativeBinding }, { defaultTheme }] = await Promise.all([
+    import("../store/initiatives"),
+    import("../store/boards"),
+    import("../store/mappers"),
+    import("../store/cards"),
+    import("../cardRegistry"),
+    import("../improvement/binding"),
+    import("../../../shared/tokens"),
+  ]);
+  if (!host.isConnected) return;
+  const i = (await listInitiatives()).find((x) => x.id === initiativeId) ?? null;
+  clear(host);
+  if (!i) {
+    host.appendChild(el("div", "app-cp-muted", "The primary initiative no longer exists — ★ another on the Initiatives tab."));
+    return;
+  }
+  const head = el("div", "app-cp-ov-charterhead");
+  head.append(el("span", "app-cp-ov-chartertitle", `★ ${i.title}`), el("span", "app-cp-muted", i.description));
+  const open = btn("Open board ↗", "app-link");
+  open.disabled = i.boardId === "";
+  open.addEventListener("click", () => {
+    rememberBoardOrigin("#/priorities", "");
+    window.location.hash = `#/board/${i.boardId}`;
+  });
+  head.appendChild(open);
+  host.appendChild(head);
+  if (i.boardId === "") {
+    host.appendChild(el("div", "app-cp-muted", "A single-action initiative — no charter or board."));
+    return;
+  }
+  const board = await getBoard(i.boardId);
+  if (!board || !host.isConnected) return;
+  const slots = parseManifest(board.manifestRaw).slots;
+  const theme = defaultTheme();
+  const binding = (await makeInitiativeBinding(i.boardId, () => undefined)) ?? undefined;
+  const mountRO = async (cardType: string, title: string) => {
+    const slot = slots.find((s) => s.cardType === cardType);
+    const mounter = slot ? cardMounter(cardType) : null;
+    if (!slot || !mounter) return;
+    const row = await liveRow(i.boardId, slot.cardId).catch(() => null);
+    const card = el("div", "app-cp-ov-chartercard");
+    host.appendChild(card);
+    mounter({
+      host: card,
+      title,
+      boardId: i.boardId,
+      cardId: slot.cardId,
+      outputJson: row?.outputJson ?? "",
+      people: [],
+      theme,
+      readOnly: true,
+      settings: slot.settings,
+      instanceKey: "",
+      instanceWhen: "",
+      binding,
+      actions: [],
+      sources: [],
+      viewer: { whoId: "", who: "" },
+      onSave: () => undefined,
+      onTile: () => undefined,
+      onActions: () => undefined,
+    });
+  };
+  await mountRO("CanvasCard", "Charter");
+  await mountRO("MetricsCard", "Metrics");
+}
+
 export async function reopenPriority(ctx: LifecycleCtx, p: Priority): Promise<void> {
   const was = p.status;
   p.status = "active";
@@ -497,7 +569,7 @@ export function openPriorityOverlay(ctx: LifecycleCtx, p: Priority, onEdit: (p: 
     headText.appendChild(chip);
     headText.appendChild(el("h2", "app-cp-ov-statement", live.statement));
     headText.appendChild(
-      el("div", "app-cp-ov-meta", [orgName(live.org), live.period, live.ownerName !== "" ? `owner ${live.ownerName}` : "no owner", live.status !== "active" ? live.status : ""].filter((s) => s !== "").join(" · "))
+      el("div", "app-cp-ov-meta", [orgName(live.org), live.period, live.ownerName !== "" ? `owner ${live.ownerName}` : "no owner", live.primaryInitiativeId !== "" ? `★ ${ctx.initiativesFor(live).find((r) => r.id === live.primaryInitiativeId)?.title ?? "primary initiative"}` : "", live.status !== "active" ? live.status : ""].filter((s) => s !== "").join(" · "))
     );
     head.appendChild(headText);
     const headBtns = el("div", "app-cp-ov-headbtns");
@@ -672,6 +744,24 @@ export function openPriorityOverlay(ctx: LifecycleCtx, p: Priority, onEdit: (p: 
           el("div", "app-cp-ov-init-meta", [r.orgName, r.ownerName, `${r.open} open action${r.open === 1 ? "" : "s"}`, r.overdue > 0 ? `${r.overdue} overdue` : ""].filter((x) => x !== "").join(" · "))
         );
         rowEl.appendChild(main);
+        // ★ the priority's PRIMARY initiative (its charter + metrics on the
+        // Charter tab) — a direct link only, set by whoever manages the org
+        if (r.inheritedFrom === "") {
+          const isPrimary = live.primaryInitiativeId === r.id;
+          const star = btn(isPrimary ? "★ Primary" : "☆", "app-link app-cp-ov-star" + (isPrimary ? " app-cp-ov-star-on" : ""));
+          star.title = isPrimary ? "The primary initiative — its charter and metrics headline this priority" : "Make this the primary initiative";
+          star.disabled = !ctx.canManage(live.org);
+          star.addEventListener("click", (e) => {
+            e.stopPropagation();
+            void (async () => {
+              live.primaryInitiativeId = isPrimary ? "" : r.id;
+              await savePriority(live, ctx.data());
+              await ctx.changed();
+              if (scrim.isConnected) paint();
+            })();
+          });
+          rowEl.appendChild(star);
+        }
         if (r.stageName !== "") {
           const chip = el("span", "app-im-stagechip", r.stageName);
           chip.style.color = r.pdcaFg;
@@ -692,7 +782,13 @@ export function openPriorityOverlay(ctx: LifecycleCtx, p: Priority, onEdit: (p: 
       const hidden = rows.length - shown.length;
       if (hidden > 0) body.appendChild(el("div", "app-cp-muted", `+ ${hidden} confidential initiative${hidden === 1 ? "" : "s"}`));
     } else if (tab === "charter") {
-      body.appendChild(el("div", "app-cp-muted", live.primaryInitiativeId !== "" ? "The primary initiative's charter shows here." : "No primary initiative linked. Its Canvas charter shows here, read-only, once one is."));
+      if (live.primaryInitiativeId === "") {
+        body.appendChild(el("div", "app-cp-muted", "No primary initiative yet — ★ one on the Initiatives tab. Its charter and metrics show here, read-only."));
+      } else {
+        const host = el("div", "app-cp-ov-charter");
+        body.appendChild(host);
+        void mountPrimaryCharter(host, live.primaryInitiativeId);
+      }
     } else if (tab === "actions") {
       // the actions Gantt (P8) — the List | Gantt switch lives inside it
       const g = ctx.ganttFor(live);

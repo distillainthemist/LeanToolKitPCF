@@ -1103,6 +1103,10 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
               await upsertActions([a]);
             }
             list = await listInitiatives();
+            // the first initiative to call a priority its primary claims the
+            // priority's primary slot when it's empty (Ben, 2026-09-14)
+            const primaryLink = made.priorities.find((l) => l.primary) ?? null;
+            if (primaryLink) await import("../store/priorities").then((m) => m.setPrimaryInitiative(primaryLink.priorityId, made.id, true)).catch(() => false);
             close();
             if (made.boardId !== "") {
               rememberBoardOrigin("#/improvement");

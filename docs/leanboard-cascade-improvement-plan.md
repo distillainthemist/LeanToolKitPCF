@@ -889,6 +889,19 @@ reschedule/cancel history with a reason picklist.
   never; gate-named only after the gate releases it; `activeRoles`);
   a new template's method defaults to the first configured method; the
   create-initiative form has Description.
+- **Primary initiative for a priority — BUILT 2026-09-14** (Ben: how does
+  an initiative become the primary so its charter/metrics show on the
+  priorities interface? — it couldn't; `primaryInitiativeId` was never
+  set and the Charter tab was a P2 stub). Overlay → Initiatives: a ☆ / ★
+  Primary toggle on each directly linked row (org managers; inherited
+  rows excluded), saved on the priority; the header meta shows
+  "★ <title>". Overlay → Charter: the primary initiative's Canvas
+  charter (bound fields via `makeInitiativeBinding`) and its Metrics
+  card mounted READ-ONLY through `cardMounter` from the initiative
+  board's live rows, plus "Open board ↗"; single-action initiatives say
+  so. Auto-claim: the first initiative to call a priority its own primary
+  (create form, Edit details) takes the priority's empty primary slot
+  (`setPrimaryInitiative(priorityId, initiativeId, onlyIfEmpty)`).
 - **P10 Reporting** — designed (spec §4).
 
 Each phase ships behind the usual gates + `pac code push`; the specs'

@@ -3811,3 +3811,11 @@ textarea.app-cp-statement { font-size: 14px; font-weight: 500; }
 .app-vg-statesel { text-align: right; padding-right: 6px; appearance: auto; }
 .app-tw-tr-hidden > *:not(.app-tw-rolehide) { opacity: 0.45; }
 .app-tw-rolehide { justify-self: end; }
+/* the priority overlay's primary initiative */
+.app-cp-ov-star { font-size: 13px; white-space: nowrap; }
+.app-cp-ov-star-on { color: var(--app-accent, #b8521c); font-weight: 600; }
+.app-cp-ov-charter { display: flex; flex-direction: column; gap: 12px; }
+.app-cp-ov-charterhead { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.app-cp-ov-chartertitle { font-weight: 700; font-size: 15px; }
+.app-cp-ov-chartercard { min-height: 360px; background: #fff; border: 1px solid #e4dfd6; border-radius: 10px; overflow: hidden; display: flex; flex-direction: column; }
+.app-cp-ov-chartercard > * { flex: 1; min-height: 0; }
