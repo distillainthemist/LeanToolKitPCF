@@ -905,7 +905,11 @@ reschedule/cancel history with a reason picklist.
   Same day: Charter tab = the charter alone; a METRICS tab carries the
   Metrics card; the priorities grid's Objectives row and the Dynamic
   card's headline show the primary initiative's ★ primary metric
-  (name · value / plan, coloured by its state).
+  (name · value / plan, coloured by its state). Metrics card (2026-09-14):
+  a responsive TILE GRID (auto-fill, 200px min) replaces the row list —
+  each tile: ★, name, latest / plan with state dot, sparkline (state
+  tiles: their strip); a value tile opens its chart + readings + grid in
+  a dialog (no inline expand).
 - **P10 Reporting** — designed (spec §4).
 
 Each phase ships behind the usual gates + `pac code push`; the specs'

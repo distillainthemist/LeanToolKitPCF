@@ -3774,6 +3774,19 @@ textarea.app-cp-statement { font-size: 14px; font-weight: 500; }
 /* ---- Metrics card (initiative boards, 2026-09-08) ---- */
 .app-mc { display: flex; flex-direction: column; min-height: 0; overflow: auto; font-size: 13px; }
 .app-mc-note { padding: 14px 16px; }
+.app-mc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; padding: 12px; }
+.app-mc-tile { background: #fff; border: 1px solid #e4dfd6; border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.app-mc-tile-primary { border-color: var(--app-accent, #b8521c); }
+.app-mc-tile-click { cursor: pointer; }
+.app-mc-tile-click:hover { background: #faf9f7; }
+.app-mc-tile .app-mc-name { font-size: 13px; }
+.app-mc-name-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.app-mc-tile .app-mc-val { justify-self: start; }
+.app-mc-tile .app-mc-num { font-size: 20px; }
+.app-mc-tile .app-mc-spark { width: 100%; height: 34px; }
+.app-mc-tile .app-mc-strip { flex-wrap: wrap; }
+.app-mc-dialoghost { min-height: 380px; display: flex; flex-direction: column; }
+.app-mc-dialoghost .app-mc-expand { flex: 1; border-top: none; padding: 0; }
 .app-mc-row { border-bottom: 1px solid #f1efec; }
 .app-mc-row:last-child { border-bottom: none; }
 .app-mc-head { display: grid; grid-template-columns: minmax(0, 1fr) 120px auto; gap: 12px; align-items: center; padding: 8px 14px; min-height: 44px; }

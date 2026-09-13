@@ -63,7 +63,6 @@ export function mountMetricsCard(opts: CardMount): () => void {
   wrap.appendChild(el("div", "app-cp-muted app-mc-note", "Loading…"));
   let dead = false;
   let editor: KpiTrendEditor | null = null;
-  let expanded = "";
   const today = todayIso();
   let ragColor = (rag: "green" | "amber" | "red"): string => (rag === "green" ? "#2e7d32" : rag === "amber" ? "#c77800" : "#c62828");
   let initiative: Initiative | null = null;
@@ -179,17 +178,20 @@ export function mountMetricsCard(opts: CardMount): () => void {
       wrap.appendChild(el("div", "app-cp-muted app-mc-note", "No metrics on this initiative yet — add them in Edit details."));
       return;
     }
+    // a responsive tile grid (Ben, 2026-09-14): one tile per metric; a
+    // value tile opens its chart + grid in a dialog, a state tile enters
+    // on its strip
+    const grid = el("div", "app-mc-grid");
     for (const r of rows) {
-      const row = el("div", "app-mc-row" + (expanded === r.m.key ? " app-mc-row-open" : ""));
-      const head = el("div", "app-mc-head");
+      const tile = el("div", "app-mc-tile" + (r.m.primary ? " app-mc-tile-primary" : ""));
       const name = el("div", "app-mc-name");
       if (r.m.primary) name.appendChild(el("span", "app-mc-star", "★"));
-      name.appendChild(el("span", undefined, r.m.name));
+      name.appendChild(el("span", "app-mc-name-text", r.m.name));
       if (r.driver) name.appendChild(el("span", "app-mc-kind", "· VDT"));
-      head.appendChild(name);
+      name.title = r.m.name;
+      tile.appendChild(name);
       if (!r.tracking) {
         const last = latestCell(r);
-        head.appendChild(sparkline(r));
         const val = el("div", "app-mc-val");
         const dot = el("span", "app-mc-dot");
         if (last?.rag) dot.style.background = ragColor(last.rag);
@@ -198,26 +200,48 @@ export function mountMetricsCard(opts: CardMount): () => void {
         val.appendChild(el("span", "app-mc-num", last ? fmt(r, last.actual.value) : "—"));
         const tcell = r.cells.find((c) => today >= c.column.from && today <= c.column.to) ?? last;
         if (tcell && tcell.plan.value !== null) val.appendChild(el("span", "app-mc-tgt", `/ ${fmt(r, tcell.plan.value)}`));
-        head.appendChild(val);
-        head.addEventListener("click", () => {
-          expanded = expanded === r.m.key ? "" : r.m.key;
-          paint();
-        });
-        head.classList.add("app-mc-head-click");
+        tile.appendChild(val);
+        tile.appendChild(sparkline(r));
+        tile.classList.add("app-mc-tile-click");
+        tile.title = `${r.m.name} — open the chart and the grid`;
+        tile.addEventListener("click", () => openMetricDialog(r));
       } else {
-        head.appendChild(stripFor(r));
         const disp = stateOf(r.tracking, r.lastRaw);
         const val = el("div", "app-mc-val");
         const dot = el("span", "app-mc-dot");
         if (disp.rag) dot.style.background = ragColor(disp.rag);
         else dot.classList.add("app-mc-dot-none");
         val.append(dot, el("span", "app-mc-num", disp.label || "—"));
-        head.appendChild(val);
+        tile.appendChild(val);
+        tile.appendChild(stripFor(r));
       }
-      row.appendChild(head);
-      if (expanded === r.m.key && !r.tracking) row.appendChild(expandedFor(r));
-      wrap.appendChild(row);
+      grid.appendChild(tile);
     }
+    wrap.appendChild(grid);
+  };
+
+  /** A value metric's chart, readings and grid in a dialog (replaces the
+   *  inline expand, 2026-09-14). */
+  const openMetricDialog = (r: Row) => {
+    const scrim = el("div", "app-modal-overlay");
+    const box = el("div", "app-modal app-modal-wide app-mc-dialog");
+    box.appendChild(el("div", "app-modal-title", `${r.m.primary ? "★ " : ""}${r.m.name}${r.driver ? " · VDT" : ""}`));
+    const host = el("div", "app-mc-dialoghost");
+    box.appendChild(host);
+    scrim.appendChild(box);
+    document.body.appendChild(scrim);
+    host.appendChild(expandedFor(r, () => close()));
+    const foot = el("div", "app-modal-footer");
+    const done = btn("Done", "app-btn app-btn-primary");
+    const close = () => {
+      editor?.destroy();
+      editor = null;
+      scrim.remove();
+      void reloadRow(r);
+    };
+    done.addEventListener("click", close);
+    foot.appendChild(done);
+    box.appendChild(foot);
   };
 
   /** Good/bad and picklist: the last buckets as a strip of cells. */
@@ -277,7 +301,8 @@ export function mountMetricsCard(opts: CardMount): () => void {
   };
 
   /** A value row's chart: the KPI editor bound to the row's location. */
-  const expandedFor = (r: Row): HTMLElement => {
+  const expandedFor = (r: Row, onClose?: () => void): HTMLElement => {
+    void onClose;
     const host = el("div", "app-mc-expand");
     editor?.destroy();
     const window = { from: r.cells[0]?.column.from ?? today, to: r.cells[r.cells.length - 1]?.column.to ?? today };
@@ -339,14 +364,6 @@ export function mountMetricsCard(opts: CardMount): () => void {
       ed.setSpecSeries(spec);
       ed.setEnvelope({ schema: SCHEMA_ID, meta: { title: "", updated: "" }, data: { points, target: null, usl: null, lsl: null, unit: "" } });
     })();
-    const foot = el("div", "app-mc-expandfoot");
-    const close = btn("Collapse", "app-link");
-    close.addEventListener("click", () => {
-      expanded = "";
-      void reloadRow(r);
-    });
-    foot.appendChild(close);
-    host.appendChild(foot);
     return host;
   };
 
