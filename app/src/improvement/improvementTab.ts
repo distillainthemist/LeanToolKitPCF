@@ -840,6 +840,10 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
         const title = el("input", "app-input") as HTMLInputElement;
         title.placeholder = "What this initiative delivers, in a line";
         field("Title", title);
+        const desc = el("textarea", "app-input") as HTMLTextAreaElement;
+        desc.rows = 2;
+        desc.placeholder = "The problem or opportunity, in a sentence or two";
+        field("Description", desc);
         // org: site → department → area from the tree
         const siteSel = el("select", "app-input") as HTMLSelectElement;
         for (const s of sites) {
@@ -1067,7 +1071,7 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
           void (async () => {
             const draft = {
               title: title.value.trim(),
-              description: "",
+              description: desc.value.trim(),
               org: { company: siteCo[siteSel.value] ?? "", site: siteSel.value, department: deptSel.value, area: areaSel.value },
               confidential: confCb.checked,
               flag: "" as const,
