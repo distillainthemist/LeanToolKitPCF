@@ -317,7 +317,7 @@ export function newTemplate(id: string): InitiativeTemplate {
   return {
     id,
     name: "",
-    method: "A3",
+    method: "", // the wizard picks the first configured method (Settings → Improvement)
     description: "",
     singleAction: false,
     active: true,

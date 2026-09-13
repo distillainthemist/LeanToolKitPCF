@@ -152,7 +152,10 @@ export function mountTemplateWizard(parent: HTMLElement, templateId: string): ()
     // ---- step 1: Basics ------------------------------------------------------------
     const basics = (form: HTMLElement) => {
       form.appendChild(row("Name", textInput(t.name, (v) => (t.name = v), "e.g. A3 problem solving"), "How it reads in the template picker."));
-      // the method list is app configuration (Settings → Improvement → Methods)
+      // the method list is app configuration (Settings → Improvement → Methods);
+      // a new template starts on the first configured method — a method
+      // since removed from Settings stays offered only on templates that use it
+      if (t.method === "" && imp.methods.length > 0) t.method = imp.methods[0];
       const methodOpts = [...imp.methods, ...(imp.methods.includes(t.method) || t.method === "" ? [] : [t.method])].map((m) => ({ value: m, label: m }));
       const methodSel = selectInput(t.method || methodOpts[0]?.value || "", methodOpts, (v) => {
         {
