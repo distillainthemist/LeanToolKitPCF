@@ -896,7 +896,13 @@ export function mountPriorities(parent: HTMLElement, opts: PrioritiesMountOpts =
         for (const p of items) {
           const line = el("div", "app-cp-metric");
           line.appendChild(el("span", "app-cp-metric-name", p.statement.slice(0, 40)));
-          line.appendChild(el("span", "app-cp-muted", "No metric set"));
+          // the primary initiative's ★ primary metric (Ben, 2026-09-14)
+          const mv = p.primaryInitiativeId !== "" ? (metricState.get(p.primaryInitiativeId)?.values ?? [])[0] ?? null : null;
+          if (mv) {
+            const v = el("span", "app-cp-metric-val", `${mv.name}: ${mv.display !== "" ? mv.display : "—"}${mv.target !== null ? ` / ${mv.target}${mv.unit}` : ""}`);
+            if (mv.rag) v.style.color = palette[ragPaletteKey(mv.rag)] ?? "";
+            line.appendChild(v);
+          } else line.appendChild(el("span", "app-cp-muted", p.primaryInitiativeId !== "" ? "No metric value yet" : "No primary initiative"));
           cell.appendChild(line);
         }
         grid.appendChild(cell);
@@ -944,8 +950,17 @@ export function mountPriorities(parent: HTMLElement, opts: PrioritiesMountOpts =
       // headline metric: large value + target + 96×40 sparkline (P5 fills)
       const metric = el("div", "app-cp-dcard-metric");
       const val = el("div", "app-cp-dcard-value");
-      val.appendChild(el("span", "app-cp-dcard-num app-cp-muted", "—"));
-      val.appendChild(el("span", "app-cp-dcard-target", "No metric set"));
+      // the primary initiative's ★ primary metric (Ben, 2026-09-14)
+      const mv = p.primaryInitiativeId !== "" ? (metricState.get(p.primaryInitiativeId)?.values ?? [])[0] ?? null : null;
+      if (mv) {
+        const num = el("span", "app-cp-dcard-num", mv.display !== "" ? mv.display : "—");
+        if (mv.rag) num.style.color = palette[ragPaletteKey(mv.rag)] ?? "";
+        val.appendChild(num);
+        val.appendChild(el("span", "app-cp-dcard-target", `${mv.name}${mv.target !== null ? ` · plan ${mv.target}${mv.unit}` : ""}`));
+      } else {
+        val.appendChild(el("span", "app-cp-dcard-num app-cp-muted", "—"));
+        val.appendChild(el("span", "app-cp-dcard-target", p.primaryInitiativeId !== "" ? "No metric value yet" : "No primary initiative"));
+      }
       metric.appendChild(val);
       const spark = el("div", "app-cp-dcard-spark");
       spark.title = "Sparkline — follows the headline metric";

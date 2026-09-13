@@ -214,9 +214,10 @@ export async function closePriority(
 /** Set a completed / archived priority back to active. A carry-forward
  *  copy, if one was made, is left in place — History shows both. */
 /** The primary initiative's charter (its Canvas card, bound fields
- *  included) and its Metrics card, mounted read-only from the initiative
- *  board — the same renderers the board uses (Ben, 2026-09-14). */
-async function mountPrimaryCharter(host: HTMLElement, initiativeId: string): Promise<void> {
+ *  included) or its Metrics card — one per tab (Ben, 2026-09-14) —
+ *  mounted read-only from the initiative board with the board's own
+ *  renderers. */
+async function mountPrimaryCard(host: HTMLElement, initiativeId: string, cardType: "CanvasCard" | "MetricsCard"): Promise<void> {
   host.appendChild(el("div", "app-cp-muted", "Loading…"));
   const [{ listInitiatives }, { getBoard }, { parseManifest }, { liveRow }, { cardMounter }, { makeInitiativeBinding }, { defaultTheme }] = await Promise.all([
     import("../store/initiatives"),
@@ -245,7 +246,7 @@ async function mountPrimaryCharter(host: HTMLElement, initiativeId: string): Pro
   head.appendChild(open);
   host.appendChild(head);
   if (i.boardId === "") {
-    host.appendChild(el("div", "app-cp-muted", "A single-action initiative — no charter or board."));
+    host.appendChild(el("div", "app-cp-muted", cardType === "CanvasCard" ? "A single-action initiative — no charter or board." : "A single-action initiative — no metrics."));
     return;
   }
   const board = await getBoard(i.boardId);
@@ -281,8 +282,11 @@ async function mountPrimaryCharter(host: HTMLElement, initiativeId: string): Pro
       onActions: () => undefined,
     });
   };
-  await mountRO("CanvasCard", "Charter");
-  await mountRO("MetricsCard", "Metrics");
+  if (!slots.some((s) => s.cardType === cardType)) {
+    host.appendChild(el("div", "app-cp-muted", cardType === "CanvasCard" ? "This initiative's board has no charter card." : "This initiative's board has no Metrics card yet — Edit details adds one on save."));
+    return;
+  }
+  await mountRO(cardType, cardType === "CanvasCard" ? "Charter" : "Metrics");
 }
 
 export async function reopenPriority(ctx: LifecycleCtx, p: Priority): Promise<void> {
@@ -544,7 +548,7 @@ export function openPriorityOverlay(ctx: LifecycleCtx, p: Priority, onEdit: (p: 
     if (e.target === scrim) close();
   });
 
-  let tab: "initiatives" | "charter" | "actions" | "cascade" | "history" = "initiatives";
+  let tab: "initiatives" | "charter" | "metrics" | "actions" | "cascade" | "history" = "initiatives";
   let events: PriorityEvent[] | null = null;
 
   const paint = () => {
@@ -701,6 +705,7 @@ export function openPriorityOverlay(ctx: LifecycleCtx, p: Priority, onEdit: (p: 
     const tabDefs: [typeof tab, string][] = [
       ["initiatives", `Initiatives ${rags.length}`],
       ["charter", "Charter"],
+      ["metrics", "Metrics"],
       ["actions", "Actions"],
       ["cascade", "Cascade"],
       ["history", "History"],
@@ -781,13 +786,13 @@ export function openPriorityOverlay(ctx: LifecycleCtx, p: Priority, onEdit: (p: 
       }
       const hidden = rows.length - shown.length;
       if (hidden > 0) body.appendChild(el("div", "app-cp-muted", `+ ${hidden} confidential initiative${hidden === 1 ? "" : "s"}`));
-    } else if (tab === "charter") {
+    } else if (tab === "charter" || tab === "metrics") {
       if (live.primaryInitiativeId === "") {
-        body.appendChild(el("div", "app-cp-muted", "No primary initiative yet — ★ one on the Initiatives tab. Its charter and metrics show here, read-only."));
+        body.appendChild(el("div", "app-cp-muted", `No primary initiative yet — ★ one on the Initiatives tab. Its ${tab === "charter" ? "charter" : "metrics"} show here, read-only.`));
       } else {
         const host = el("div", "app-cp-ov-charter");
         body.appendChild(host);
-        void mountPrimaryCharter(host, live.primaryInitiativeId);
+        void mountPrimaryCard(host, live.primaryInitiativeId, tab === "charter" ? "CanvasCard" : "MetricsCard");
       }
     } else if (tab === "actions") {
       // the actions Gantt (P8) — the List | Gantt switch lives inside it

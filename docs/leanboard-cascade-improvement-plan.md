@@ -902,6 +902,10 @@ reschedule/cancel history with a reason picklist.
   so. Auto-claim: the first initiative to call a priority its own primary
   (create form, Edit details) takes the priority's empty primary slot
   (`setPrimaryInitiative(priorityId, initiativeId, onlyIfEmpty)`).
+  Same day: Charter tab = the charter alone; a METRICS tab carries the
+  Metrics card; the priorities grid's Objectives row and the Dynamic
+  card's headline show the primary initiative's ★ primary metric
+  (name · value / plan, coloured by its state).
 - **P10 Reporting** — designed (spec §4).
 
 Each phase ships behind the usual gates + `pac code push`; the specs'

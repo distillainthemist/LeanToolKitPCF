@@ -3819,3 +3819,4 @@ textarea.app-cp-statement { font-size: 14px; font-weight: 500; }
 .app-cp-ov-chartertitle { font-weight: 700; font-size: 15px; }
 .app-cp-ov-chartercard { min-height: 360px; background: #fff; border: 1px solid #e4dfd6; border-radius: 10px; overflow: hidden; display: flex; flex-direction: column; }
 .app-cp-ov-chartercard > * { flex: 1; min-height: 0; }
+.app-cp-metric-val { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
