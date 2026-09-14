@@ -32,3 +32,18 @@ gb.setChrome("Line audit passed · VDT\nWeekly · from value driver Line audit",
 gb.setReadingMode({ cadence: "weekly", shifts: null });
 gb.setTracking({ kind: "goodbad", options: [{ label: "Good", state: "green" }, { label: "Bad", state: "red" }], color: (s) => (s === "green" ? "#2e7d32" : s === "amber" ? "#c77800" : "#c62828") });
 gb.setEnvelope({ schema: SCHEMA_ID, meta: { title: "", updated: "" }, data: { points: [["2026-08-17", 0, "Good"], ["2026-08-24", 0, "Good"], ["2026-08-31", 1, "Bad"], ["2026-09-07", 0, "Good"]].map(([d, v, l], i) => ({ id: `g${i}`, date: String(d), value: Number(v), label: String(l) })), target: null, usl: null, lsl: null, unit: "" } });
+// the Metrics card's chart grid, as the card mounts it (screencard chrome → .app-mc → grid → cells)
+import "../src/style.css";
+const shell = document.createElement("div");
+shell.style.cssText = "height:420px;margin:24px;background:#fff;border:1px solid #e4dfd6;border-radius:10px;overflow:hidden";
+shell.innerHTML = '<div class="ltk-root app-screencard"><div class="app-screencard-body"><div class="app-mc"><div class="app-mc-chartgrid app-mc-cols-2" id="mcgrid" style="grid-template-rows: repeat(1, minmax(0, 1fr))"></div></div></div></div>';
+document.body.appendChild(shell);
+for (const k of [0, 1]) {
+  const cell = document.createElement("div");
+  cell.className = "app-mc-chart";
+  document.getElementById("mcgrid")!.appendChild(cell);
+  const e = new KpiTrendEditor(cell, { onChange: () => undefined, onGrid: () => undefined });
+  e.setChrome(`★ Yield ${k} · VDT\nweekly · from value driver Yield`, "");
+  e.setSpec({ target: 50, usl: null, lsl: null, unit: "" });
+  e.setEnvelope({ schema: SCHEMA_ID, meta: { title: "", updated: "" }, data: { points: points.slice(0, 8).map((p, i) => ({ ...p, id: `m${k}${i}` })), target: null, usl: null, lsl: null, unit: "" } });
+}

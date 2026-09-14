@@ -3802,12 +3802,6 @@ textarea.app-cp-statement { font-size: 14px; font-weight: 500; }
 .app-mc-tgt { color: #6d675c; font-size: 12px; }
 .app-mc-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; flex: none; }
 .app-mc-dot-none { background: none; border: 1px solid #d9d3c8; }
-.app-mc-strip { display: flex; gap: 3px; align-items: center; justify-self: stretch; }
-.app-mc-cell { width: 18px; height: 18px; border-radius: 4px; border: 1px solid #d9d3c8; background: #fff; padding: 0; font-size: 11px; line-height: 1; color: #fff; cursor: pointer; flex: none; }
-.app-mc-cell-on { border-color: transparent; }
-.app-mc-cell-today { box-shadow: 0 0 0 2px #fbf4ea; }
-.app-mc-cell:disabled { cursor: default; }
-.app-mc-pick { width: auto; padding: 2px 6px; font-size: 12px; }
 .app-mc-expand { padding: 4px 8px 8px; border-top: 1px dashed #e4dfd6; min-height: 320px; display: flex; flex-direction: column; }
 .app-mc-expand .ltk-root { flex: 1; min-height: 300px; }
 .app-mc-expandfoot { display: flex; justify-content: flex-end; }
@@ -3838,8 +3832,8 @@ textarea.app-cp-statement { font-size: 14px; font-weight: 500; }
 .app-mc-cols-1 { grid-template-columns: 1fr; }
 .app-mc-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .app-mc-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-.app-mc-cell { min-height: 0; min-width: 0; display: flex; background: #fff; border: 1px solid #e4dfd6; border-radius: 10px; overflow: hidden; cursor: zoom-in; }
-.app-mc-cell-primary { border-color: var(--app-accent, #b8521c); }
-.app-mc-cell > .ltk-root { flex: 1; min-height: 0; min-width: 0; }
-.app-mc-cell .ltk-kt-svg { flex: 1; min-height: 0; }
+.app-mc-chart { min-height: 0; min-width: 0; display: flex; background: #fff; border: 1px solid #e4dfd6; border-radius: 10px; overflow: hidden; cursor: zoom-in; }
+.app-mc-chart-primary { border-color: var(--app-accent, #b8521c); }
+.app-mc-chart > .ltk-root { flex: 1; min-height: 0; min-width: 0; }
+.app-mc-chart .ltk-kt-svg { flex: 1; min-height: 0; }
 .app-mc { height: 100%; }

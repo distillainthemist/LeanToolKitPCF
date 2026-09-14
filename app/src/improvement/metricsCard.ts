@@ -233,7 +233,7 @@ export function mountMetricsCard(opts: CardMount): () => void {
     const grid = el("div", `app-mc-chartgrid app-mc-cols-${cols}`);
     grid.style.gridTemplateRows = `repeat(${Math.ceil(rows.length / cols)}, minmax(0, 1fr))`;
     for (const r of rows) {
-      const cell = el("div", "app-mc-cell" + (r.m.primary ? " app-mc-cell-primary" : ""));
+      const cell = el("div", "app-mc-chart" + (r.m.primary ? " app-mc-chart-primary" : ""));
       grid.appendChild(cell);
       mountChart(cell, r);
       cell.addEventListener("click", (e) => {
