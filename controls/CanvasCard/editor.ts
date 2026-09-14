@@ -478,11 +478,25 @@ export class CanvasEditor {
     }
 
     if (field.bound !== "" && this.binding) {
-      const v = this.binding.get(field.bound);
+      const b = this.binding;
+      const v = b.get(field.bound);
       area.appendChild(el("span", v === "" ? "ltk-cv-empty" : "", v === "" ? (field.hint || "—") : v));
-      if (!this.readOnly && this.binding.canEdit(field.bound)) {
+      if (!this.readOnly && b.canEdit(field.bound)) {
         area.classList.add("ltk-cv-editable");
-        area.addEventListener("click", () => this.binding?.edit(field.bound));
+        const kind = b.kind ? b.kind(field.bound) : "text";
+        // text targets edit INLINE like any field (Ben, 2026-09-15); people
+        // targets open their picker; read-only ones just show
+        if (kind === "text" && b.set && INLINE_TYPES.has(field.type)) {
+          area.addEventListener("click", () =>
+            this.beginInlineEdit(field, area, {
+              value: v === "" ? undefined : v,
+              commit: (next) => {
+                const text = next === undefined ? "" : typeof next === "string" ? next : typeof next === "number" ? String(next) : typeof next === "object" && next !== null && "start" in next ? `${(next as { start: string }).start}` : String(next);
+                void b.set!(field.bound, text).then(() => this.render());
+              },
+            })
+          );
+        } else if (kind !== "readonly") area.addEventListener("click", () => b.edit(field.bound));
       }
       return box;
     }
@@ -823,15 +837,23 @@ export class CanvasEditor {
 
   // ---- inline editing (typing types) ----
 
-  private beginInlineEdit(field: CanvasField, area: HTMLElement): void {
+  private beginInlineEdit(
+    field: CanvasField,
+    area: HTMLElement,
+    /** A bound field: the header's value in, the header's write out. */
+    bound?: { value: CanvasValue | undefined; commit: (next: CanvasValue | undefined) => void }
+  ): void {
     if (this.readOnly) return;
     clear(area);
     area.classList.remove("ltk-cv-editable");
-    const value = this.env.data.values[field.id];
+    const value = bound ? bound.value : this.env.data.values[field.id];
 
     const finish = (commit: boolean, next: CanvasValue | undefined) => {
       if (commit) {
-        this.commitValue(field, next); // re-renders
+        if (bound) bound.commit(next);
+        else this.commitValue(field, next); // re-renders
+      } else if (bound) {
+        this.render();
       } else {
         area.classList.add("ltk-cv-editable");
         this.paintDisplay(area, field, this.env.data.values[field.id]);

@@ -211,9 +211,9 @@ export function editVision(host: HTMLElement, org: OrgRef, current: string): Pro
 
 // ---- pick a person (owner) ---------------------------------------------------
 
-export function pickOwner(host: HTMLElement, roster: RosterPerson[], current: PersonRef | null): Promise<PersonRef | null | "clear"> {
+export function pickOwner(host: HTMLElement, roster: RosterPerson[], current: PersonRef | null, roleLabel = "owner"): Promise<PersonRef | null | "clear"> {
   return new Promise((resolve) => {
-    const m = modal(host, "Choose the owner", "The person accountable for this priority.");
+    const m = modal(host, `Choose the ${roleLabel.toLowerCase()}`, roleLabel === "owner" ? "The person accountable for this priority." : `The person holding the ${roleLabel} role.`);
     const filter = el("input", "app-input") as HTMLInputElement;
     filter.type = "search";
     filter.placeholder = "Filter people…";
@@ -247,7 +247,7 @@ export function pickOwner(host: HTMLElement, roster: RosterPerson[], current: Pe
     });
     m.footer.appendChild(cancel);
     if (current) {
-      const clr = el("button", "app-btn", "Clear owner") as HTMLButtonElement;
+      const clr = el("button", "app-btn", `Clear ${roleLabel.toLowerCase()}`) as HTMLButtonElement;
       clr.type = "button";
       clr.addEventListener("click", () => {
         m.close();
@@ -255,6 +255,53 @@ export function pickOwner(host: HTMLElement, roster: RosterPerson[], current: Pe
       });
       m.footer.appendChild(clr);
     }
+    filter.focus();
+  });
+}
+
+/** Several people for a role (a charter's bound multi-person role,
+ *  2026-09-15): tick from the roster, Done. */
+export function pickPeople(host: HTMLElement, roster: RosterPerson[], current: PersonRef[], roleLabel: string): Promise<PersonRef[] | null> {
+  return new Promise((resolve) => {
+    const m = modal(host, `Choose the ${roleLabel.toLowerCase()}`, "Tick everyone holding this role.");
+    const chosen = new Map(current.map((p) => [p.whoId, p]));
+    const filter = el("input", "app-input") as HTMLInputElement;
+    filter.type = "search";
+    filter.placeholder = "Filter people…";
+    const list = el("div", "app-cp-people");
+    const paint = () => {
+      clear(list);
+      const q = filter.value.trim().toLowerCase();
+      const hits = roster.filter((p) => p.active !== false && (q === "" || p.who.toLowerCase().includes(q))).slice(0, 60);
+      for (const p of hits) {
+        const b = el("button", "app-cp-person" + (chosen.has(p.whoId) ? " app-cp-person-on" : "")) as HTMLButtonElement;
+        b.type = "button";
+        b.textContent = (chosen.has(p.whoId) ? "✓ " : "") + p.who;
+        b.addEventListener("click", () => {
+          if (chosen.has(p.whoId)) chosen.delete(p.whoId);
+          else chosen.set(p.whoId, { whoId: p.whoId, who: p.who });
+          paint();
+        });
+        list.appendChild(b);
+      }
+      if (hits.length === 0) list.appendChild(el("div", "app-settings-note", "No one matches."));
+    };
+    filter.addEventListener("input", paint);
+    paint();
+    m.body.append(filter, list);
+    const cancel = el("button", "app-link", "Cancel") as HTMLButtonElement;
+    cancel.type = "button";
+    cancel.addEventListener("click", () => {
+      m.close();
+      resolve(null);
+    });
+    const done = el("button", "app-btn app-btn-primary", "Done") as HTMLButtonElement;
+    done.type = "button";
+    done.addEventListener("click", () => {
+      m.close();
+      resolve([...chosen.values()]);
+    });
+    m.footer.append(cancel, done);
     filter.focus();
   });
 }

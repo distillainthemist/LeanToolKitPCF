@@ -483,10 +483,10 @@ export function openCardStudio(opts: StudioOptions): Promise<StudioResult> {
       // the inspector's select, so nobody types a key by hand
       void (async () => {
         try {
-          const { headerFieldsForBoard } = await import("../improvement/binding");
-          const fields = await headerFieldsForBoard(opts.boardId);
+          const { headerFieldsForBoard, bindingTargetsForBoard } = await import("../improvement/binding");
+          const [fields, targets] = await Promise.all([headerFieldsForBoard(opts.boardId), bindingTargetsForBoard(opts.boardId)]);
           if (!overlay.isConnected) return;
-          settingsEditor.setBindingContext({ fields });
+          settingsEditor.setBindingContext({ fields, targets });
         } catch {
           /* the select falls back to a typed key */
         }

@@ -81,6 +81,12 @@ export interface CanvasBinding {
   canEdit: (bound: string) => boolean;
   /** Opens the target's own edit affordance, then re-renders the host. */
   edit: (bound: string) => void;
+  /** What the target is (2026-09-15): "text" edits INLINE in the field
+   *  (the card's own inline editor, committed through `set`); "people"
+   *  opens the picker; "readonly" shows only. */
+  kind?: (bound: string) => "text" | "people" | "readonly";
+  /** Direct write of a text target (inline editing). */
+  set?: (bound: string, value: string) => Promise<void>;
 }
 
 /** The header data a charter field can bind to (P6d). Custom header

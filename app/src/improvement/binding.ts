@@ -9,11 +9,12 @@ import type { CanvasBinding } from "../../../controls/CanvasCard/types";
 import { promptText } from "../prompts";
 import { listPeople } from "../store/people";
 import { listInitiatives, saveInitiative } from "../store/initiatives";
-import { pickOwner } from "../priorities/dialogs";
+import { pickOwner, pickPeople } from "../priorities/dialogs";
 import { getTemplate, listTemplates } from "../store/templates";
 import { improvementSettingsJson } from "../store/config";
-import { parseImprovementSettings, roleFillersAt } from "./templateModel";
-import type { TemplateField } from "./templateModel";
+import { activeRoles, parseImprovementSettings, roleFillersAt } from "./templateModel";
+import type { TemplateField, TemplateRole } from "./templateModel";
+import { orgName as priorityOrgName } from "../priorities/model";
 
 /** The header fields a charter field on this board may bind to: the
  *  app's standard fields (every initiative) + the template's own. Works
@@ -41,6 +42,45 @@ export async function headerFieldsForBoard(boardId: string): Promise<{ key: stri
   };
   add(imp.standardFields, "Standard fields");
   add(tpl?.fields ?? [], tpl ? `Template fields · ${tpl.name}` : "Template fields");
+  return out;
+}
+
+/** EVERY bindable header target for a charter field on this board
+ *  (Ben's review, 2026-09-15): the header itself, every role the template
+ *  uses (standard, app-level and template roles alike), then the custom
+ *  fields. `value` is the binding key the CanvasCard stores. */
+export async function bindingTargetsForBoard(boardId: string): Promise<{ value: string; label: string; group: string }[]> {
+  let templateId = boardId.startsWith("tpl-") ? boardId.slice(4) : "";
+  let initiative: Awaited<ReturnType<typeof listInitiatives>>[number] | null = null;
+  if (boardId.startsWith("init-")) {
+    initiative = (await listInitiatives()).find((x) => x.boardId === boardId) ?? null;
+    templateId = initiative?.templateId ?? "";
+  }
+  let tpl = templateId !== "" ? await getTemplate(templateId).catch(() => null) : null;
+  if (!tpl && boardId.startsWith("tpl-")) tpl = (await listTemplates().catch(() => [])).find((t) => t.boardId === boardId) ?? null;
+  const header: [string, string][] = [
+    ["title", "Initiative title"],
+    ["description", "Description"],
+    ["period", "Period"],
+    ["method", "Method"],
+    ["status", "Status (read-only)"],
+    ["stage", "Stage (read-only)"],
+    ["stage_target", "Stage target date (read-only)"],
+    ["org", "Organisation (read-only)"],
+    ["org:site", "Site (read-only)"],
+    ["org:department", "Department (read-only)"],
+    ["org:area", "Area (read-only)"],
+    ["priority", "Primary priority (read-only)"],
+    ["template", "Template (read-only)"],
+    ["metric:primary", "Primary metric (read-only)"],
+  ];
+  const out = header.map(([value, label]) => ({ value, label, group: "Initiative header" }));
+  // roles: the template's active roles, else the initiative's snapshot
+  const roles: { key: string; label: string }[] = tpl
+    ? activeRoles(tpl).map((r: TemplateRole) => ({ key: r.key, label: r.label }))
+    : Object.entries(initiative?.snapshot.roleLabels ?? {}).map(([key, label]) => ({ key, label }));
+  for (const r of roles) out.push({ value: `role:${r.key}`, label: r.label, group: "Roles" });
+  for (const f of await headerFieldsForBoard(boardId)) out.push({ value: `field:${f.key}`, label: f.label, group: f.group });
   return out;
 }
 
@@ -79,35 +119,77 @@ export async function makeInitiativeBinding(boardId: string, onChanged: () => vo
   // the fields' display labels, for the edit prompt's title
   const fieldLabel = new Map((await headerFieldsForBoard(boardId).catch(() => [])).map((f) => [f.key, f.label]));
 
+  const tpl = i.templateId !== "" ? await getTemplate(i.templateId).catch(() => null) : null;
+  const roleDefs = new Map((tpl ? activeRoles(tpl) : []).map((r) => [r.key, r]));
+  const roleKeyOf = (bound: string): string | null => (bound === "owner" ? "owner" : bound.startsWith("role:") ? bound.slice(5) : null);
+  const roleLabel = (key: string) => roleDefs.get(key)?.label ?? i.snapshot.roleLabels[key] ?? key;
+  const READONLY = new Set(["stage", "stage_target", "status", "org", "org:site", "org:department", "org:area", "priority", "template", "metric:primary"]);
+
   const get = (bound: string): string => {
     if (bound === "title") return i.title;
     if (bound === "description") return i.description;
-    if (bound === "owner") return (i.roles.owner ?? []).map((p) => p.who).join(", ");
     if (bound === "period") return i.period;
-    if (bound === "stage") {
-      if (i.singleAction) return "single action";
-      return i.snapshot.stages.find((s) => s.id === i.stageId)?.name ?? "";
+    if (bound === "method") return i.method;
+    if (bound === "status") return i.status;
+    if (bound === "stage") return i.singleAction ? "single action" : (i.snapshot.stages.find((s) => s.id === i.stageId)?.name ?? "");
+    if (bound === "stage_target") return i.stageTargets[i.stageId] ?? "";
+    if (bound === "org") return priorityOrgName(i.org);
+    if (bound === "org:site") return i.org.site;
+    if (bound === "org:department") return i.org.department;
+    if (bound === "org:area") return i.org.area;
+    if (bound === "template") return tpl?.name ?? "";
+    if (bound === "priority") return i.priorities.find((l) => l.primary)?.priorityId !== undefined ? (priorityLabel ?? "") : "";
+    if (bound === "metric:primary") {
+      const m = i.metrics.find((x) => x.primary) ?? i.metrics[0];
+      return m ? `${m.name}${m.target !== null ? ` · plan ${m.target}${m.unit ? " " + m.unit : ""}` : ""}` : "";
     }
+    const rk = roleKeyOf(bound);
+    if (rk !== null) return (i.roles[rk] ?? []).map((p) => p.who).join(", ");
     if (bound.startsWith("field:")) return i.fieldValues[bound.slice(6)] ?? "";
     return "";
   };
 
-  const canEdit = (bound: string): boolean => bound !== "stage" && i.status === "active";
+  const canEdit = (bound: string): boolean => !READONLY.has(bound) && i.status === "active";
+  const kind = (bound: string): "text" | "people" | "readonly" => (READONLY.has(bound) ? "readonly" : roleKeyOf(bound) !== null ? "people" : "text");
+
+  /** Direct write of a text target (the card's inline editor). */
+  const set = async (bound: string, value: string): Promise<void> => {
+    const v = value.trim();
+    if (bound === "title") i.title = v;
+    else if (bound === "description") i.description = v;
+    else if (bound === "period") i.period = v;
+    else if (bound === "method") i.method = v;
+    else if (bound.startsWith("field:")) i.fieldValues[bound.slice(6)] = v;
+    else return;
+    await saveInitiative(i);
+    onChanged();
+  };
 
   const edit = (bound: string): void => {
     void (async () => {
-      if (bound === "owner") {
-        const res = await pickOwner(host, roster, (i.roles.owner ?? [])[0] ?? null);
-        if (res === null) return;
-        i.roles.owner = res === "clear" ? [] : [{ whoId: res.whoId, who: res.who }];
+      const rk = roleKeyOf(bound);
+      if (rk !== null) {
+        const def = roleDefs.get(rk);
+        const multi = def ? def.multi : rk !== "owner";
+        const cur = i.roles[rk] ?? [];
+        if (multi) {
+          const res = await pickPeople(host, roster, cur, roleLabel(rk));
+          if (res === null) return;
+          i.roles[rk] = res.map((p) => ({ whoId: p.whoId, who: p.who }));
+        } else {
+          const res = await pickOwner(host, roster, cur[0] ?? null, roleLabel(rk));
+          if (res === null) return;
+          i.roles[rk] = res === "clear" ? [] : [{ whoId: res.whoId, who: res.who }];
+        }
       } else {
-        const labels: Record<string, string> = { title: "Initiative title", description: "Description", period: "Period" };
+        const labels: Record<string, string> = { title: "Initiative title", description: "Description", period: "Period", method: "Method" };
         const label = bound.startsWith("field:") ? (fieldLabel.get(bound.slice(6)) ?? bound.slice(6).replace(/_/g, " ")) : (labels[bound] ?? bound);
         const v = await promptText({ title: label, initial: get(bound), confirmLabel: "Save" });
         if (v === null) return;
         if (bound === "title") i.title = v.trim();
         else if (bound === "description") i.description = v.trim();
         else if (bound === "period") i.period = v.trim();
+        else if (bound === "method") i.method = v.trim();
         else if (bound.startsWith("field:")) i.fieldValues[bound.slice(6)] = v.trim();
       }
       await saveInitiative(i);
@@ -115,5 +197,17 @@ export async function makeInitiativeBinding(boardId: string, onChanged: () => vo
     })();
   };
 
-  return { get, canEdit, edit };
+  // the primary priority's statement (read-only target) — loaded once
+  let priorityLabel: string | null = null;
+  const primaryPriorityId = i.priorities.find((l) => l.primary)?.priorityId ?? "";
+  if (primaryPriorityId !== "") {
+    try {
+      const { loadCascade } = await import("../store/priorities");
+      priorityLabel = (await loadCascade("")).priorities.find((p) => p.id === primaryPriorityId)?.statement ?? "";
+    } catch {
+      priorityLabel = "";
+    }
+  }
+
+  return { get, canEdit, edit, kind, set };
 }

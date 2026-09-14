@@ -32,6 +32,9 @@ export interface FieldHost {
 }
 
 export interface BindingContext {
+  /** Every bindable header target, grouped (2026-09-15) — when given,
+   *  the select is built from it alone. */
+  targets?: { value: string; label: string; group: string }[];
   fields: { key: string; label: string; group: string }[];
 }
 

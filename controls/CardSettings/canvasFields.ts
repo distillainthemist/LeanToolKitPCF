@@ -426,30 +426,29 @@ export function canvasFieldsEditor(
           into.appendChild(opt);
         };
         addOpt(bind, "", "Not bound");
-        const header = el("optgroup") as HTMLOptGroupElement;
-        header.label = "Initiative header";
-        for (const [v, l] of [["title", "Initiative title"], ["description", "Description"], ["owner", "Owner"], ["stage", "Stage"], ["period", "Period"]]) addOpt(header, v, l);
-        bind.appendChild(header);
-        // the header FIELDS: grouped by where they are defined (standard /
-        // this template) when the host knows them; a typed key otherwise
-        const ctxFields = host.bindings?.fields ?? [];
+        // the host's full target list (header · roles · fields, grouped)
+        // when it knows the initiative; the bare header + a typed key otherwise
+        const targets = host.bindings?.targets ?? [
+          ...[["title", "Initiative title"], ["description", "Description"], ["owner", "Owner"], ["stage", "Stage"], ["period", "Period"]].map(([value, label]) => ({ value, label, group: "Initiative header" })),
+          ...(host.bindings?.fields ?? []).map((cf) => ({ value: `field:${cf.key}`, label: cf.label, group: cf.group })),
+        ];
         const groups = new Map<string, HTMLOptGroupElement>();
-        for (const cf of ctxFields) {
-          let g = groups.get(cf.group);
+        for (const t of targets) {
+          let g = groups.get(t.group);
           if (!g) {
             g = el("optgroup") as HTMLOptGroupElement;
-            g.label = cf.group;
-            groups.set(cf.group, g);
+            g.label = t.group;
+            groups.set(t.group, g);
             bind.appendChild(g);
           }
-          addOpt(g, `field:${cf.key}`, cf.label);
+          addOpt(g, t.value, t.label);
         }
-        if (f.bound.startsWith("field:") && !ctxFields.some((cf) => `field:${cf.key}` === f.bound)) {
-          // a key the template no longer defines (or no context): keep it
+        if (f.bound !== "" && !targets.some((t) => t.value === f.bound)) {
+          // a target the template no longer defines (or no context): keep it
           // selectable so the binding is visible, not silently dropped
-          addOpt(bind, f.bound, `Field: ${f.bound.slice(6)}${ctxFields.length > 0 ? " (not in template)" : ""}`);
+          addOpt(bind, f.bound, `${f.bound.startsWith("field:") ? "Field: " + f.bound.slice(6) : f.bound.startsWith("role:") ? "Role: " + f.bound.slice(5) : f.bound}${targets.length > 5 ? " (not on this template)" : ""}`);
         }
-        if (ctxFields.length === 0) addOpt(bind, "__custom", "Header field…");
+        if (!host.bindings) addOpt(bind, "__custom", "Header field…");
         bind.value = f.bound;
         if (bind.value !== f.bound) bind.value = "";
         bind.disabled = host.readOnly;

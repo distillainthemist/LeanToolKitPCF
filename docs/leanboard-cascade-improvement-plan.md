@@ -929,6 +929,22 @@ reschedule/cancel history with a reason picklist.
   `listInitiatives`, `getBoard`, `listDrivers`, `appPalettes` are cached
   and bumped by their writers, so the priority overlay's Charter /
   Metrics tabs and the Metrics card's rows hit the network once.
+- **Charter bound fields: inline editing + every header target — BUILT
+  2026-09-15** (Ben: a linked field forced a popup; sponsor etc. weren't
+  bindable). `CanvasBinding` gains `kind(bound)` (text | people |
+  readonly) and `set(bound, value)`; the CanvasCard edits a TEXT-kind
+  bound field INLINE with its own editor (the header value in, `set`
+  out, re-render), people targets open their picker, read-only ones just
+  show. `bindingTargetsForBoard` lists every target, grouped: Initiative
+  header (title, description, period, method — editable; status, stage,
+  stage target date, organisation / site / department / area, primary
+  priority statement, template, primary metric — read-only), Roles
+  (`role:<key>` for every active template role — standard, app-level and
+  template roles; single roles use the owner picker with the role's
+  name, multi roles the new `pickPeople` tick list), Standard / Template
+  fields (`field:<key>`). The card studio's binding select is built from
+  that list (`BindingContext.targets`); a stale binding stays visible as
+  "(not on this template)".
 - **P10 Reporting** — designed (spec §4).
 
 Each phase ships behind the usual gates + `pac code push`; the specs'
