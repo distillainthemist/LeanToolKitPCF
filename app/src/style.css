@@ -3837,3 +3837,13 @@ textarea.app-cp-statement { font-size: 14px; font-weight: 500; }
 .app-mc-chart > .ltk-root { flex: 1; min-height: 0; min-width: 0; }
 .app-mc-chart .ltk-kt-svg { flex: 1; min-height: 0; }
 .app-mc { height: 100%; }
+/* the Objectives row: metric name · Plan / Actual with a traffic light */
+.app-cp-objective { display: flex; align-items: flex-start; gap: 10px; padding: 6px 0; }
+.app-cp-objective + .app-cp-objective { border-top: 1px solid #f1efec; }
+.app-cp-objective-light { width: 12px; height: 12px; border-radius: 50%; flex: none; margin-top: 3px; }
+.app-cp-objective-text { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.app-cp-objective-name { font-weight: 600; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.app-cp-objective-nums { display: grid; grid-template-columns: auto auto auto auto; gap: 2px 8px; align-items: baseline; font-size: 12.5px; }
+.app-cp-objective-k { font-size: 10.5px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: #6d675c; }
+.app-cp-objective-v { font-variant-numeric: tabular-nums; font-weight: 600; }
+.app-cp-objective-actual { font-size: 14px; }

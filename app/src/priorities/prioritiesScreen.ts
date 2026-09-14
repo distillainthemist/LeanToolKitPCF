@@ -894,14 +894,25 @@ export function mountPriorities(parent: HTMLElement, opts: PrioritiesMountOpts =
         const cell = el("div", "app-cp-cell app-cp-cell-obj");
         const items = byColumn.get(col.id) ?? [];
         for (const p of items) {
-          const line = el("div", "app-cp-metric");
-          line.appendChild(el("span", "app-cp-metric-name", p.statement.slice(0, 40)));
-          // the primary initiative's ★ primary metric (Ben, 2026-09-14)
+          // the primary initiative's ★ primary metric (Ben, 2026-09-15): the
+          // metric's name, then plan and actual side by side with a
+          // traffic light — no priority statement (the row above names it)
           const mv = p.primaryInitiativeId !== "" ? (metricState.get(p.primaryInitiativeId)?.values ?? [])[0] ?? null : null;
+          const line = el("div", "app-cp-objective");
           if (mv) {
-            const v = el("span", "app-cp-metric-val", `${mv.name}: ${mv.display !== "" ? mv.display : "—"}${mv.target !== null ? ` / ${mv.target}${mv.unit}` : ""}`);
-            if (mv.rag) v.style.color = palette[ragPaletteKey(mv.rag)] ?? "";
-            line.appendChild(v);
+            const light = el("span", "app-cp-objective-light");
+            light.style.background = mv.rag ? (palette[ragPaletteKey(mv.rag)] ?? "#9a948a") : "#d9d3c8";
+            light.title = mv.rag === "red" ? "Outside the limits" : mv.rag === "amber" ? "Short of plan" : mv.rag === "green" ? "On plan" : "No reading";
+            line.appendChild(light);
+            const text = el("div", "app-cp-objective-text");
+            text.appendChild(el("div", "app-cp-objective-name", mv.name));
+            const nums = el("div", "app-cp-objective-nums");
+            nums.appendChild(el("span", "app-cp-objective-k", "Plan"));
+            nums.appendChild(el("span", "app-cp-objective-v", mv.target !== null ? `${mv.target}${mv.unit}` : "—"));
+            nums.appendChild(el("span", "app-cp-objective-k", "Actual"));
+            nums.appendChild(el("span", "app-cp-objective-v app-cp-objective-actual", mv.display !== "" ? mv.display : "—"));
+            text.appendChild(nums);
+            line.appendChild(text);
           } else line.appendChild(el("span", "app-cp-muted", p.primaryInitiativeId !== "" ? "No metric value yet" : "No primary initiative"));
           cell.appendChild(line);
         }
