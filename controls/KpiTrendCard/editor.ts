@@ -411,7 +411,7 @@ export class KpiTrendEditor {
     }
   }
 
-  /** The category trend: options bottom → top in their listed order, each
+  /** The category trend: options top → bottom in their listed order, each
    *  row a band tinted by its state; readings as a line through the rows. */
   private renderStateChart(): SVGSVGElement {
     const t = this.tracking!;
@@ -427,9 +427,9 @@ export class KpiTrendEditor {
     const plotH = VB_H - M.top - M.bottom;
     const n = Math.max(1, opts.length);
     const rowH = plotH / n;
-    // bands (bottom row = the first option)
+    // bands (top row = the first option — lists start with the good state)
     opts.forEach((op, k) => {
-      const yTop = M.top + plotH - (k + 1) * rowH;
+      const yTop = M.top + k * rowH;
       const band = svgEl("rect", { x: left, y: yTop, width: plotW, height: rowH });
       const st = (band as SVGElement & { style: CSSStyleDeclaration }).style;
       st.fill = t.color(op.state);
@@ -448,7 +448,7 @@ export class KpiTrendEditor {
       const k = opts.findIndex((o) => o.label === s.label);
       return k >= 0 ? k : Math.max(0, Math.min(n - 1, Math.round(p.value)));
     };
-    const y = (k: number) => M.top + plotH - (k + 0.5) * rowH;
+    const y = (k: number) => M.top + (k + 0.5) * rowH;
     // x tick labels: first + last dates
     const first = svgEl("text", { x: x(0), y: VB_H - 12, class: "ltk-kt-tick", "text-anchor": "start" });
     first.textContent = points[0].date.slice(5);
