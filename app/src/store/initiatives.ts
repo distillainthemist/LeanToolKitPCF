@@ -5,7 +5,7 @@
 // current and its mandatory cards created"); optional cards are offered
 // later from the template (P6's ＋ Add card from template).
 
-import { bumpChange } from "./changes";
+import { bumpChange, memoRead } from "./changes";
 import { Ben_ltkinitiativesService } from "../generated/services/Ben_ltkinitiativesService";
 import type { Ben_ltkinitiatives } from "../generated/models/Ben_ltkinitiativesModel";
 import { Ben_ltkinitiativeeventsService } from "../generated/services/Ben_ltkinitiativeeventsService";
@@ -61,7 +61,8 @@ function fromRow(r: Ben_ltkinitiatives): Initiative {
 }
 
 export async function listInitiatives(): Promise<Initiative[]> {
-  const rows = await allWhere(Ben_ltkinitiativesService.getAll);
+  // cached 60s; every write bumps "initiatives" (and callers mutate copies)
+  const rows = await memoRead("initiatives", "all", () => allWhere(Ben_ltkinitiativesService.getAll));
   return rows.map(fromRow).filter((i) => i.id !== "");
 }
 
@@ -189,6 +190,7 @@ export async function createInitiative(
       const manifest = parseManifest(tplBoard.manifestRaw);
       const boardId = `init-${i.id}`;
       const slots = slotsFromTemplate(manifest);
+      bumpChange("boards");
       await upsertWhere(
         Ben_ltkboardsService,
         eq("ben_boardid", boardId),

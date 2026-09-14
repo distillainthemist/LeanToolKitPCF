@@ -1,6 +1,7 @@
 // Value driver tree store (P9a): one row per node, one per saved
 // scenario. Values + the change log ride JSON columns on the node.
 
+import { bumpChange, memoRead } from "./changes";
 import { Ben_ltkvaluedriversService } from "../generated/services/Ben_ltkvaluedriversService";
 import type { Ben_ltkvaluedrivers } from "../generated/models/Ben_ltkvaluedriversModel";
 import { Ben_ltkvdtscenariosService } from "../generated/services/Ben_ltkvdtscenariosService";
@@ -43,11 +44,16 @@ function nodeFromRow(r: Ben_ltkvaluedrivers): DriverNode {
 }
 
 export async function listDrivers(site: string): Promise<DriverNode[]> {
+  return memoRead("drivers", site, () => listDriversUncached(site));
+}
+
+async function listDriversUncached(site: string): Promise<DriverNode[]> {
   const rows = await allWhere(Ben_ltkvaluedriversService.getAll, site !== "" ? eq("ben_site", site) : undefined);
   return rows.map(nodeFromRow).filter((n) => n.id !== "");
 }
 
 export async function saveDriver(n: DriverNode): Promise<string> {
+  bumpChange("drivers");
   const rowId = await upsertWhere(
     Ben_ltkvaluedriversService,
     eq("ben_driverid", n.id),
@@ -78,6 +84,7 @@ export async function saveDriver(n: DriverNode): Promise<string> {
 
 /** Delete a node AND its subtree (children first — never orphan). */
 export async function deleteDriverTree(nodes: DriverNode[], id: string): Promise<void> {
+  bumpChange("drivers");
   const kids = nodes.filter((n) => n.parentId === id);
   for (const k of kids) await deleteDriverTree(nodes, k.id);
   const n = nodes.find((x) => x.id === id);

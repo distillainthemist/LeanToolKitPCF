@@ -2,6 +2,7 @@
 // rows → the orgJSON the wizard and hub share), protected times, and
 // per-user preferences.
 
+import { bumpChange, memoRead } from "./changes";
 import { Ben_ltksitesettingsesService } from "../generated/services/Ben_ltksitesettingsesService";
 import { Ben_ltkuserprefsesService } from "../generated/services/Ben_ltkuserprefsesService";
 import { parseHubTabs, serializeHubTabs } from "../../../shared/schema/hubTabs";
@@ -547,6 +548,13 @@ export async function appPalettesJson(): Promise<{ states: string; titles: strin
 /** Both app palettes, defaults when unset/unreachable. Cards SELECT from
  *  these entries; the app resolves selections to concrete colours. */
 export async function appPalettes(): Promise<{
+  states: import("../../../shared/palette").PaletteEntry[];
+  titles: import("../../../shared/palette").PaletteEntry[];
+}> {
+  return memoRead("palettes", "app", () => appPalettesUncached());
+}
+
+async function appPalettesUncached(): Promise<{
   states: PaletteEntry[];
   titles: PaletteEntry[];
 }> {
@@ -562,6 +570,7 @@ export async function appPalettes(): Promise<{
 }
 
 export async function saveAppPalettes(states: string, titles: string): Promise<void> {
+  bumpChange("palettes");
   await upsertWhere(
     Ben_ltksitesettingsesService,
     eq("ben_site", APP_ROW),

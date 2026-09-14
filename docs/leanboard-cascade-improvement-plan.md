@@ -920,7 +920,15 @@ reschedule/cancel history with a reason picklist.
   CATEGORY TREND: the y axis is the options (first at the bottom), each
   row a band tinted by its state colour, the line runs through the rows
   (`renderStateChart`). Own state metrics reach the grid dialog with
-  their tracking.
+  their tracking. 2026-09-15: "Update values" moved into each chart's
+  TITLE STRIP (`.ltk-titlebar-actions`; chrome-less cards keep it under
+  the chart); the big readout is gone — readings carry value labels on
+  the chart (every nth when crowded, the last always), the plan line and
+  the forecast line carry their own right-end labels like USL/LSL.
+  Speed: `store/changes.ts` gained `memoRead` (60s, topic-invalidated) —
+  `listInitiatives`, `getBoard`, `listDrivers`, `appPalettes` are cached
+  and bumped by their writers, so the priority overlay's Charter /
+  Metrics tabs and the Metrics card's rows hit the network once.
 - **P10 Reporting** — designed (spec §4).
 
 Each phase ships behind the usual gates + `pac code push`; the specs'

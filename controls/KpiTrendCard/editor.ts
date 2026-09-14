@@ -288,7 +288,24 @@ export class KpiTrendEditor {
   private renderBody(): void {
     clear(this.root);
     applyThemeVars(this.root, this.theme);
-    renderTitleBar(this.root, this.cardTitle, this.prompts);
+    const bar = renderTitleBar(this.root, this.cardTitle, this.prompts);
+    // "Update values…" lives in the title strip (Ben, 2026-09-15) — the one
+    // road to enter values; a chrome-less card keeps it under the chart
+    let headBtn = false;
+    if (bar && !this.readOnly && this.cb.onGrid) {
+      const slot = bar.querySelector(".ltk-titlebar-actions");
+      if (slot) {
+        const g = el("button", "ltk-titlebar-btn", "Update values");
+        g.type = "button";
+        g.title = "Enter plan, limits and actuals period by period";
+        g.addEventListener("click", (e) => {
+          e.stopPropagation();
+          this.cb.onGrid?.();
+        });
+        slot.appendChild(g);
+        headBtn = true;
+      }
+    }
     if (!this.readOnly) {
       const n = this.openFor("");
       const items = [];
@@ -317,11 +334,11 @@ export class KpiTrendEditor {
 
     const { points } = this.env.data;
     if (this.tracking) {
-      this.renderStates(body);
+      this.renderStates(body, headBtn);
       return;
     }
     const gridBtn = (): HTMLElement | null => {
-      if (this.readOnly || !this.cb.onGrid) return null;
+      if (this.readOnly || !this.cb.onGrid || headBtn) return null;
       const g = el("button", "ltk-kt-add ltk-kt-grid", "Update values…");
       g.type = "button";
       g.title = "Enter plan, limits and actuals period by period — the one place values are entered";
@@ -338,29 +355,8 @@ export class KpiTrendEditor {
       return;
     }
 
-    // readout: latest value, red only when it is out of the spec in force
-    // on its date; the target shown is that date's too
-    const latest = points[points.length - 1];
-    const { target, unit } = this.specAt(latest.date);
-    const readout = el("div", "ltk-kt-readout");
-    const current = el(
-      "div",
-      "ltk-kt-current",
-      `${latest.value}${unit ? " " + unit : ""}`
-    );
-    if (this.outOfSpec(latest.value, latest.date)) current.style.color = this.badColor();
-    readout.appendChild(current);
-    if (target !== null) {
-      readout.appendChild(
-        el(
-          "div",
-          "ltk-kt-target",
-          `Plan ${target}${unit ? " " + unit : ""}`
-        )
-      );
-    }
-    body.appendChild(readout);
-
+    // no readout (Ben, 2026-09-15): the readings are labelled on the chart
+    // and the plan line carries its own label like the limits
     body.appendChild(this.renderChart());
 
     if (!this.readOnly) {
@@ -382,25 +378,15 @@ export class KpiTrendEditor {
     return op ? { label: op.label, state: op.state } : { label: p.label ?? "", state: null };
   }
 
-  private renderStates(body: HTMLElement): void {
+  private renderStates(body: HTMLElement, headBtn = false): void {
     const t = this.tracking!;
     const { points } = this.env.data;
     body.classList.add("ltk-kt-states");
     if (points.length === 0) {
       const lines = this.prompts.general.length ? this.prompts.general : ["No state recorded yet", `Enter ${t.kind === "goodbad" ? "good or bad" : "a state"} each period with Update values.`];
       renderGhost(body, lines);
-    } else {
-      const latest = points[points.length - 1];
-      const st = this.stateOf(latest);
-      const readout = el("div", "ltk-kt-readout");
-      const chip = el("div", "ltk-kt-statechip", st.label || "—");
-      if (st.state) chip.style.background = t.color(st.state);
-      readout.appendChild(chip);
-      readout.appendChild(el("div", "ltk-kt-target", `${latest.date}${latest.shift ? " · " + latest.shift : ""}`));
-      body.appendChild(readout);
-      body.appendChild(this.renderStateChart());
-    }
-    if (!this.readOnly && this.cb.onGrid) {
+    } else body.appendChild(this.renderStateChart());
+    if (!this.readOnly && this.cb.onGrid && !headBtn) {
       const acts = el("div", "ltk-kt-acts");
       const g = el("button", "ltk-kt-add ltk-kt-grid", "Update values…");
       g.type = "button";
@@ -591,7 +577,7 @@ export class KpiTrendEditor {
       if (cur !== null) d += ` H ${M.left + plotW}`;
       return d;
     };
-    // target line
+    // target line, labelled at its right end like the limits
     const targetD = stepPath((i) => specs[i].target);
     if (targetD !== "") {
       const tl = svgEl("path", {
@@ -602,6 +588,12 @@ export class KpiTrendEditor {
         this.theme.accent;
       (tl as SVGElement & { style: CSSStyleDeclaration }).style.opacity = "0.6";
       svg.appendChild(tl);
+      if (target !== null) {
+        const t = svgEl("text", { x: M.left + plotW, y: clampY(y(target)) - 3, class: "ltk-kt-limit", "text-anchor": "end" });
+        (t as SVGElement & { style: CSSStyleDeclaration }).style.fill = this.theme.accent;
+        t.textContent = `Plan ${target}`;
+        svg.appendChild(t);
+      }
     }
 
     // forecast line (dotted, muted) when the grid carries one
@@ -615,6 +607,14 @@ export class KpiTrendEditor {
         this.theme.accent;
       (fl as SVGElement & { style: CSSStyleDeclaration }).style.opacity = "0.35";
       svg.appendChild(fl);
+      const lastF = latestSpec.forecast;
+      if (lastF !== null) {
+        const t = svgEl("text", { x: M.left + plotW, y: clampY(y(lastF)) + 11, class: "ltk-kt-limit", "text-anchor": "end" });
+        (t as SVGElement & { style: CSSStyleDeclaration }).style.fill = this.theme.accent;
+        (t as SVGElement & { style: CSSStyleDeclaration }).style.opacity = "0.7";
+        t.textContent = `Forecast ${lastF}`;
+        svg.appendChild(t);
+      }
     }
 
     // spec-limit lines + small right-hand labels (the latest value)
@@ -650,6 +650,14 @@ export class KpiTrendEditor {
       this.theme.foreground;
     svg.appendChild(line);
 
+    // value labels on the readings (every nth when crowded; the last always)
+    const every = Math.max(1, Math.ceil(points.length / 16));
+    points.forEach((pt, i) => {
+      if (i % every !== 0 && i !== points.length - 1) return;
+      const lbl = svgEl("text", { x: x(i), y: y(pt.value) - 9, class: "ltk-kt-vlabel", "text-anchor": i === 0 ? "start" : i === points.length - 1 ? "end" : "middle" });
+      lbl.textContent = String(Math.round(pt.value * 100) / 100);
+      svg.appendChild(lbl);
+    });
     points.forEach((pt, i) => {
       // a reading is flagged red (and larger) only when it is out of spec;
       // otherwise it stays neutral

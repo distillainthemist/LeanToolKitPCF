@@ -3,6 +3,7 @@
 
 import { Ben_ltkboardsService } from "../generated/services/Ben_ltkboardsService";
 import { allWhere, eq, firstWhere, upsertWhere } from "./dv";
+import { bumpChange, memoRead } from "./changes";
 import { BoardManifest, BoardSummary, boardFromRow, parseManifest, serializeManifest } from "./mappers";
 
 export async function listBoards(includeArchived = false): Promise<BoardSummary[]> {
@@ -17,11 +18,13 @@ export async function listBoards(includeArchived = false): Promise<BoardSummary[
 
 /** Archive (or restore) a ritual — archived boards leave every list. */
 export async function setBoardArchived(boardGuid: string, archived: boolean): Promise<void> {
+  bumpChange("boards");
   await Ben_ltkboardsService.update(boardGuid, { ben_isarchived: archived });
 }
 
 export async function getBoard(boardId: string): Promise<BoardSummary | null> {
-  const row = await firstWhere(Ben_ltkboardsService.getAll, eq("ben_boardid", boardId));
+  // cached 60s; every board write here bumps "boards"
+  const row = await memoRead("boards", boardId, () => firstWhere(Ben_ltkboardsService.getAll, eq("ben_boardid", boardId)));
   return row ? boardFromRow(row) : null;
 }
 
@@ -70,6 +73,7 @@ export async function saveMeetingBoard(
   const meeting = (blob.meeting ?? {}) as Record<string, unknown>;
   const org = (meeting.org ?? {}) as Record<string, unknown>;
   const participants = Array.isArray(meeting.participants) ? meeting.participants : [];
+  bumpChange("boards");
   await upsertWhere(
     Ben_ltkboardsService,
     eq("ben_boardid", boardId),
@@ -90,6 +94,7 @@ export async function saveMeetingBoard(
   const board = await getBoard(boardId);
   if (board && board.manifestRaw.trim() === "") {
     const rand = () => Math.random().toString(36).slice(2, 6);
+    bumpChange("boards");
     await Ben_ltkboardsService.update(board.id, {
       ben_manifestjson: JSON.stringify({
         grid: "2",
@@ -119,6 +124,7 @@ export async function saveManifest(
   boardGuid: string,
   manifest: BoardManifest
 ): Promise<void> {
+  bumpChange("boards");
   await Ben_ltkboardsService.update(boardGuid, {
     ben_manifestjson: serializeManifest(manifest),
   });
@@ -145,6 +151,7 @@ export async function saveOccurrenceSettings(
   boardGuid: string,
   settingsRaw: string
 ): Promise<void> {
+  bumpChange("boards");
   await Ben_ltkboardsService.update(boardGuid, { ben_occurrencesettings: settingsRaw });
 }
 
@@ -152,6 +159,7 @@ export async function saveOccurrenceSettings(
 export async function renameBoardsSite(oldSite: string, newSite: string): Promise<void> {
   const rows = await allWhere(Ben_ltkboardsService.getAll, eq("ben_site", oldSite));
   for (const row of rows) {
+    bumpChange("boards");
     await Ben_ltkboardsService.update(row.ben_ltkboardid, { ben_site: newSite });
   }
 }
@@ -167,6 +175,7 @@ export async function renameBoardsDepartment(
     `${eq("ben_site", site)} and ${eq("ben_department", oldDept)}`
   );
   for (const row of rows) {
+    bumpChange("boards");
     await Ben_ltkboardsService.update(row.ben_ltkboardid, { ben_department: newDept });
   }
 }
@@ -189,6 +198,7 @@ export async function replicateBoard(
   await saveMeetingBoard(newBoardId, blobRaw);
   const created = await getBoard(newBoardId);
   if (created && src.manifestRaw.trim() !== "") {
+    bumpChange("boards");
     await Ben_ltkboardsService.update(created.id, { ben_manifestjson: src.manifestRaw });
   }
   return newBoardId;
