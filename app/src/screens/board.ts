@@ -471,6 +471,7 @@ async function renderBoard(
   let slotFilter: ((settings: Record<string, unknown>) => boolean) | null = null;
   let stageInfo: { currentId: string; stages: { id: string; name: string; fg: string; bg: string }[] } | null = null;
   let charterBinding: import("../../../controls/CanvasCard/types").CanvasBinding | undefined;
+  let paneHandle: import("../improvement/boardHeader").InitiativePaneHandle | null = null;
   const slotStage = (settings: Record<string, unknown>): string => {
     const tpl = (settings.template ?? {}) as Record<string, unknown>;
     return typeof tpl.stage === "string" ? tpl.stage : "";
@@ -855,6 +856,7 @@ async function renderBoard(
             await loadGateSnaps();
           },
         });
+        paneHandle = handle;
         cleanups.push(handle.teardown);
         // opening the pane lands on the active stage
         scheduleBtn.addEventListener("click", () => {
@@ -862,8 +864,10 @@ async function renderBoard(
         });
       });
       // the charter's bound fields read/write the initiative header
+      // a bound field's write repaints the header pane only — the card
+      // re-renders itself (Ben, 2026-09-15: no whole-card reload)
       void import("../improvement/binding").then(async ({ makeInitiativeBinding }) => {
-        charterBinding = (await makeInitiativeBinding(board.boardId, () => renderTiles())) ?? undefined;
+        charterBinding = (await makeInitiativeBinding(board.boardId, () => void paneHandle?.refresh())) ?? undefined;
         renderTiles();
       });
       void loadGateSnaps();

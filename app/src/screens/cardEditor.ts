@@ -200,7 +200,9 @@ export function mountCardEditor(
     let initiativePeople: { whoId: string; who: string }[] = [];
     if (board && board.boardId.startsWith("init-")) {
       const { makeInitiativeBinding, initiativeAssignees } = await import("../improvement/binding");
-      charterBinding = (await makeInitiativeBinding(board.boardId, () => window.location.reload())) ?? undefined;
+      // the card re-renders itself after a bound write; nothing else here
+      // shows the header, so no reload (2026-09-15)
+      charterBinding = (await makeInitiativeBinding(board.boardId, () => undefined)) ?? undefined;
       initiativePeople = await initiativeAssignees(board.boardId).catch(() => []);
     }
     // an adjusted meeting's cards live in its override manifest, not

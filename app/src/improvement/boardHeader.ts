@@ -56,6 +56,9 @@ export interface InitiativePaneHandle {
   teardown: () => void;
   /** Scroll the pane's stage rail to the active stage (Show details). */
   revealActive: () => void;
+  /** Re-read the initiative and repaint the pane alone (a charter's bound
+   *  field wrote the header — no board remount, 2026-09-15). */
+  refresh: () => Promise<void>;
 }
 
 export function mountInitiativePane(o: InitiativePaneOpts): InitiativePaneHandle {
@@ -64,6 +67,7 @@ export function mountInitiativePane(o: InitiativePaneOpts): InitiativePaneHandle
   let dead = false;
   const cleanups: (() => void)[] = [];
   let activeStageEl: HTMLElement | null = null;
+  let refreshPane: () => Promise<void> = async () => undefined;
 
   void (async () => {
     const who = currentViewer();
@@ -75,6 +79,12 @@ export function mountInitiativePane(o: InitiativePaneOpts): InitiativePaneHandle
       return;
     }
     let i = initiative;
+    refreshPane = async () => {
+      const fresh = (await listInitiatives()).find((x) => x.boardId === o.boardId) ?? null;
+      if (dead || !fresh) return;
+      i = fresh;
+      render();
+    };
     const imp = parseImprovementSettings(impRaw);
     const palettes = await import("../store/config").then((m) => m.appPalettes()).catch(() => null);
     const stateMap = palettes ? (await import("../../../shared/palette")).paletteMap(palettes.states) : {};
@@ -775,6 +785,7 @@ export function mountInitiativePane(o: InitiativePaneOpts): InitiativePaneHandle
     revealActive: () => {
       activeStageEl?.scrollIntoView({ block: "center", behavior: "smooth" });
     },
+    refresh: () => refreshPane(),
   };
 }
 
