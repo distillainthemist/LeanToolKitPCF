@@ -27,7 +27,7 @@ const M = { top: 14, right: 16, bottom: 34, left: 46 };
 
 const DEFAULT_GHOST = [
   "No readings yet",
-  "Add a value each day/week and watch the trend against target.",
+  "Enter values period by period with Update values and watch the trend against plan.",
 ];
 
 /**
@@ -322,9 +322,9 @@ export class KpiTrendEditor {
     }
     const gridBtn = (): HTMLElement | null => {
       if (this.readOnly || !this.cb.onGrid) return null;
-      const g = el("button", "ltk-kt-add ltk-kt-grid", "⊞ Grid…");
+      const g = el("button", "ltk-kt-add ltk-kt-grid", "Update values…");
       g.type = "button";
-      g.title = "Enter targets, limits and actuals period by period";
+      g.title = "Enter plan, limits and actuals period by period — the one place values are entered";
       g.addEventListener("click", () => this.cb.onGrid?.());
       return g;
     };
@@ -332,13 +332,7 @@ export class KpiTrendEditor {
       const lines = this.prompts.general.length
         ? this.prompts.general
         : DEFAULT_GHOST;
-      const ghost = renderGhost(
-        body,
-        this.readOnly ? lines : [...lines, "Tap to add the first reading"]
-      );
-      if (!this.readOnly) {
-        ghost.addEventListener("click", () => this.editPoint(null));
-      }
+      renderGhost(body, lines);
       const g = gridBtn();
       if (g) body.appendChild(g);
       return;
@@ -371,17 +365,14 @@ export class KpiTrendEditor {
 
     if (!this.readOnly) {
       const acts = el("div", "ltk-kt-acts");
-      const add = el("button", "ltk-kt-add", "＋ Add reading");
-      add.type = "button";
-      add.addEventListener("click", () => this.editPoint(null));
-      acts.appendChild(add);
       const g = gridBtn();
       if (g) acts.appendChild(g);
-      body.appendChild(acts);
+      if (acts.childElementCount > 0) body.appendChild(acts);
     }
   }
 
-  // ---- non-numeric: the latest state + a strip of recent states ----
+  // ---- non-numeric: a category trend — the y axis is the options, each
+  // with a band in its state colour; the line runs through the categories ----
 
   private stateOf(p: KpiPoint): { label: string; state: "green" | "amber" | "red" | null } {
     const t = this.tracking;
@@ -396,9 +387,8 @@ export class KpiTrendEditor {
     const { points } = this.env.data;
     body.classList.add("ltk-kt-states");
     if (points.length === 0) {
-      const lines = this.prompts.general.length ? this.prompts.general : ["No state recorded yet", `Set ${t.kind === "goodbad" ? "good or bad" : "a state"} each period.`];
-      const ghost = renderGhost(body, this.readOnly ? lines : [...lines, "Tap to set the first state"]);
-      if (!this.readOnly) ghost.addEventListener("click", () => this.editState(null));
+      const lines = this.prompts.general.length ? this.prompts.general : ["No state recorded yet", `Enter ${t.kind === "goodbad" ? "good or bad" : "a state"} each period with Update values.`];
+      renderGhost(body, lines);
     } else {
       const latest = points[points.length - 1];
       const st = this.stateOf(latest);
@@ -408,91 +398,84 @@ export class KpiTrendEditor {
       readout.appendChild(chip);
       readout.appendChild(el("div", "ltk-kt-target", `${latest.date}${latest.shift ? " · " + latest.shift : ""}`));
       body.appendChild(readout);
-      const strip = el("div", "ltk-kt-strip");
-      for (const p of points.slice(-16)) {
-        const s = this.stateOf(p);
-        const cell = el("button", "ltk-kt-stripcell", t.kind === "goodbad" ? (s.state === "green" ? "✓" : s.state === "red" ? "✗" : "·") : (s.label.slice(0, 2) || "·"));
-        cell.type = "button";
-        if (s.state) cell.style.background = t.color(s.state);
-        cell.title = `${p.date}${p.shift ? " · " + p.shift : ""}: ${s.label || "—"}`;
-        if (!this.readOnly) cell.addEventListener("click", () => this.editState(p));
-        else cell.disabled = true;
-        strip.appendChild(cell);
-      }
-      body.appendChild(strip);
+      body.appendChild(this.renderStateChart());
     }
-    if (!this.readOnly) {
+    if (!this.readOnly && this.cb.onGrid) {
       const acts = el("div", "ltk-kt-acts");
-      const add = el("button", "ltk-kt-add", "＋ Set state");
-      add.type = "button";
-      add.addEventListener("click", () => this.editState(null));
-      acts.appendChild(add);
-      if (this.cb.onGrid) {
-        const g = el("button", "ltk-kt-add ltk-kt-grid", "⊞ Grid…");
-        g.type = "button";
-        g.addEventListener("click", () => this.cb.onGrid?.());
-        acts.appendChild(g);
-      }
+      const g = el("button", "ltk-kt-add ltk-kt-grid", "Update values…");
+      g.type = "button";
+      g.title = "Enter the state period by period — the one place values are entered";
+      g.addEventListener("click", () => this.cb.onGrid?.());
+      acts.appendChild(g);
       body.appendChild(acts);
     }
   }
 
-  private editState(point: KpiPoint | null): void {
+  /** The category trend: options bottom → top in their listed order, each
+   *  row a band tinted by its state; readings as a line through the rows. */
+  private renderStateChart(): SVGSVGElement {
     const t = this.tracking!;
-    const shifts = this.reading.shifts;
-    const firstShift = shifts && shifts.length > 0 ? shifts[0] : "";
-    const taken = (d: string) => this.env.data.points.some((p) => p.date === d && (!shifts || (p.shift ?? "") === firstShift));
-    const date = textInput(point?.date ?? defaultReadingDate(todayIso(), this.reading.cadence, taken), { type: "date" });
-    const shiftSel = shifts && shifts.length > 0 ? selectInput(point?.shift ?? firstShift, shifts.map((s) => ({ value: s, label: s }))) : null;
-    const cur = point ? this.stateOf(point).label : "";
-    const sel = selectInput(cur, t.options.map((o) => ({ value: o.label, label: o.label })));
-    const buttons = [];
-    if (point) {
-      buttons.push({
-        label: "Delete",
-        kind: "danger" as const,
-        onClick: () => {
-          this.env.data.points = this.env.data.points.filter((p) => p !== point);
-          dlg.close();
-          this.commit();
-        },
-      });
-    }
-    buttons.push({ label: "Cancel", kind: "secondary" as const, onClick: () => dlg.close() });
-    buttons.push({
-      label: point ? "Save" : "Set",
-      kind: "primary" as const,
-      onClick: () => {
-        if (date.value === "" || sel.value === "") return;
-        const idx = Math.max(0, t.options.findIndex((o) => o.label === sel.value));
-        const shift = shiftSel ? shiftSel.value : "";
-        if (point) {
-          point.date = date.value;
-          point.value = idx;
-          point.label = sel.value;
-          if (shiftSel) point.shift = shift;
-        } else {
-          const existing = this.env.data.points.find((p) => p.date === date.value && (p.shift ?? "") === shift);
-          if (existing) {
-            existing.value = idx;
-            existing.label = sel.value;
-          } else this.env.data.points.push({ id: newId("k"), date: date.value, value: idx, label: sel.value, ...(shift !== "" ? { shift } : {}) });
-        }
-        dlg.close();
-        this.commit();
-      },
+    const { points } = this.env.data;
+    const opts = t.options;
+    const svg = svgEl("svg", {
+      class: "ltk-kt-svg",
+      viewBox: `0 0 ${VB_W} ${VB_H}`,
+      preserveAspectRatio: "xMidYMid meet",
     });
-    const dlg = openDialog({ host: this.root, title: point ? "Edit state" : "Set state", buttons });
-    const dateRow = fieldRow("Date", date);
-    dateRow.classList.add("ltk-field-half");
-    dlg.body.appendChild(dateRow);
-    if (shiftSel) {
-      const shiftRow = fieldRow("Shift", shiftSel);
-      shiftRow.classList.add("ltk-field-half");
-      dlg.body.appendChild(shiftRow);
+    const left = 96; // room for the option labels
+    const plotW = VB_W - left - M.right;
+    const plotH = VB_H - M.top - M.bottom;
+    const n = Math.max(1, opts.length);
+    const rowH = plotH / n;
+    // bands (bottom row = the first option)
+    opts.forEach((op, k) => {
+      const yTop = M.top + plotH - (k + 1) * rowH;
+      const band = svgEl("rect", { x: left, y: yTop, width: plotW, height: rowH });
+      const st = (band as SVGElement & { style: CSSStyleDeclaration }).style;
+      st.fill = t.color(op.state);
+      st.opacity = "0.14";
+      svg.appendChild(band);
+      const lbl = svgEl("text", { x: left - 8, y: yTop + rowH / 2 + 3, class: "ltk-kt-tick", "text-anchor": "end" });
+      lbl.textContent = op.label.length > 14 ? op.label.slice(0, 13) + "…" : op.label;
+      svg.appendChild(lbl);
+      const sep = svgEl("line", { x1: left, y1: yTop, x2: left + plotW, y2: yTop, class: "ltk-kt-axis" });
+      svg.appendChild(sep);
+    });
+    svg.appendChild(svgEl("line", { x1: left, y1: M.top + plotH, x2: left + plotW, y2: M.top + plotH, class: "ltk-kt-axis" }));
+    const x = (i: number) => left + (points.length === 1 ? plotW / 2 : (i / (points.length - 1)) * plotW);
+    const idx = (p: KpiPoint) => {
+      const s = this.stateOf(p);
+      const k = opts.findIndex((o) => o.label === s.label);
+      return k >= 0 ? k : Math.max(0, Math.min(n - 1, Math.round(p.value)));
+    };
+    const y = (k: number) => M.top + plotH - (k + 0.5) * rowH;
+    // x tick labels: first + last dates
+    const first = svgEl("text", { x: x(0), y: VB_H - 12, class: "ltk-kt-tick", "text-anchor": "start" });
+    first.textContent = points[0].date.slice(5);
+    svg.appendChild(first);
+    if (points.length > 1) {
+      const last = svgEl("text", { x: x(points.length - 1), y: VB_H - 12, class: "ltk-kt-tick", "text-anchor": "end" });
+      last.textContent = points[points.length - 1].date.slice(5);
+      svg.appendChild(last);
     }
-    dlg.body.appendChild(fieldRow(t.kind === "goodbad" ? "Good / bad" : "State", sel));
-    sel.focus();
+    const line = svgEl("polyline", {
+      points: points.map((pt, i) => `${x(i)},${y(idx(pt))}`).join(" "),
+      fill: "none", "stroke-width": 2.5, "stroke-linejoin": "round", "stroke-linecap": "round",
+    });
+    (line as SVGElement & { style: CSSStyleDeclaration }).style.stroke = this.theme.foreground;
+    svg.appendChild(line);
+    points.forEach((pt, i) => {
+      const s = this.stateOf(pt);
+      const dot = svgEl("circle", { cx: x(i), cy: y(idx(pt)), r: 5, class: "ltk-kt-dot" + (this.readOnly ? " ltk-readonly" : "") });
+      (dot as SVGElement & { style: CSSStyleDeclaration }).style.fill = s.state ? t.color(s.state) : this.theme.foreground;
+      const nAct = this.openFor(pt.id);
+      const tip = svgEl("title", {});
+      tip.textContent = `${pt.date}${pt.shift ? " · " + pt.shift : ""}: ${s.label || "—"}${nAct > 0 ? ` — ${nAct} open action${nAct === 1 ? "" : "s"}` : ""}`;
+      dot.appendChild(tip);
+      if (!this.readOnly && (this.canRaise || nAct > 0)) dot.addEventListener("click", () => this.manage(pt.id, `${pt.date}: ${s.label}`));
+      svg.appendChild(dot);
+    });
+    return svg;
   }
 
   private renderChart(): SVGSVGElement {
@@ -696,8 +679,9 @@ export class KpiTrendEditor {
         (ring as SVGElement & { style: CSSStyleDeclaration }).style.pointerEvents = "none";
         svg.appendChild(ring);
       }
-      if (!this.readOnly) {
-        dot.addEventListener("click", () => this.editPoint(pt));
+      // a reading's actions (the grid is the one place values change)
+      if (!this.readOnly && (this.canRaise || nAct > 0)) {
+        dot.addEventListener("click", () => this.manage(pt.id, `${pt.date}: ${pt.value}${this.effectiveSpec().unit ? " " + this.effectiveSpec().unit : ""}`));
       }
       svg.appendChild(dot);
     });
@@ -712,96 +696,6 @@ export class KpiTrendEditor {
     this.render();
     this.cb.onChange(this.env);
     this.snapshots.schedule();
-  }
-
-  private editPoint(point: KpiPoint | null): void {
-    const shifts = this.reading.shifts;
-    const firstShift = shifts && shifts.length > 0 ? shifts[0] : "";
-    // default: this period's start, or next period's when it already holds
-    // a reading (on the first shift when shifts apply)
-    const taken = (d: string) => this.env.data.points.some((p) => p.date === d && (!shifts || (p.shift ?? "") === firstShift));
-    const date = textInput(point?.date ?? defaultReadingDate(todayIso(), this.reading.cadence, taken), { type: "date" });
-    const shiftSel = shifts && shifts.length > 0 ? selectInput(point?.shift ?? firstShift, shifts.map((s) => ({ value: s, label: s }))) : null;
-    const value = textInput(point !== null ? String(point.value) : "", {
-      type: "number",
-    });
-    const buttons = [];
-    if (point) {
-      buttons.push({
-        label: "Delete",
-        kind: "danger" as const,
-        onClick: () => {
-          this.env.data.points = this.env.data.points.filter((p) => p !== point);
-          dlg.close();
-          this.commit();
-        },
-      });
-    }
-    buttons.push({
-      label: "Cancel",
-      kind: "secondary" as const,
-      onClick: () => dlg.close(),
-    });
-    buttons.push({
-      label: point ? "Save" : "Add",
-      kind: "primary" as const,
-      onClick: () => {
-        const v = Number(value.value);
-        if (date.value === "" || !Number.isFinite(v)) return;
-        const shift = shiftSel ? shiftSel.value : "";
-        if (point) {
-          point.date = date.value;
-          point.value = v;
-          if (shiftSel) point.shift = shift;
-        } else {
-          // one reading per date (and shift) — a re-entry updates in place
-          // (keeping its id, so any actions on it survive) rather than replacing
-          const existing = this.env.data.points.find((p) => p.date === date.value && (p.shift ?? "") === shift);
-          if (existing) {
-            existing.value = v;
-          } else {
-            this.env.data.points.push({ id: newId("k"), date: date.value, value: v, ...(shift !== "" ? { shift } : {}) });
-          }
-        }
-        dlg.close();
-        this.commit();
-      },
-    });
-    const dlg = openDialog({
-      host: this.root,
-      title: point ? "Edit reading" : "Add reading",
-      buttons,
-    });
-    const dateRow = fieldRow("Date", date);
-    dateRow.classList.add("ltk-field-half");
-    dlg.body.appendChild(dateRow);
-    if (shiftSel) {
-      const shiftRow = fieldRow("Shift", shiftSel);
-      shiftRow.classList.add("ltk-field-half");
-      dlg.body.appendChild(shiftRow);
-    }
-    const valueRow = fieldRow("Value", value);
-    valueRow.classList.add("ltk-field-half");
-    dlg.body.appendChild(valueRow);
-    // per-reading actions (existing readings only)
-    if (point && !this.readOnly && (this.canRaise || this.openFor(point.id) > 0)) {
-      const n = this.openFor(point.id);
-      const actBtn = el(
-        "button",
-        "ltk-btn ltk-btn-secondary",
-        n > 0 ? `Actions (${n})…` : "＋ Raise action on this reading"
-      );
-      (actBtn as HTMLButtonElement).type = "button";
-      actBtn.addEventListener("click", () => {
-        dlg.close();
-        this.manage(
-          point.id,
-          `${point.date}: ${point.value}${this.effectiveSpec().unit ? " " + this.effectiveSpec().unit : ""}`
-        );
-      });
-      dlg.body.appendChild(actBtn);
-    }
-    value.focus();
   }
 
   // ---- snapshot + downloads ----

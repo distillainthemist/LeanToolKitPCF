@@ -6,7 +6,7 @@ import { el } from "../../../../shared/ui/dom";
 import { paletteMap } from "../../../../shared/palette";
 import { appPalettes } from "../../store/config";
 import { ragPaletteKey } from "../../priorities/model";
-import { Cadence, CADENCE_LABELS, NodeFormat } from "./model";
+import { Cadence, CADENCE_LABELS, DriverTracking, NodeFormat } from "./model";
 import { cardGridSource, driverGridSource, renderValueGrid } from "./grid";
 import { GridLevel } from "./gridModel";
 import { SpecRows } from "../../../../shared/schema/specSeries";
@@ -15,7 +15,9 @@ export interface GridDialogOpts {
   title: string;
   /** The card's own location, or the driver's when linked. */
   location: { boardId: string; cardId: string };
-  driver: { id: string; cadence: Cadence; aggregate: "sum" | "avg" | "last" | "min" | "max"; unit: string; format: NodeFormat } | null;
+  driver: { id: string; cadence: Cadence; aggregate: "sum" | "avg" | "last" | "min" | "max"; unit: string; format: NodeFormat; tracking?: DriverTracking } | null;
+  /** An own metric's non-numeric tracking (a driver carries its own). */
+  tracking?: DriverTracking;
   cadence: Cadence;
   unit: string;
   level: GridLevel;
@@ -53,7 +55,7 @@ export async function openValueGridDialog(o: GridDialogOpts): Promise<void> {
   let changed = false;
   const source = o.driver
     ? driverGridSource(o.driver, o.level, o.readOnly)
-    : cardGridSource(o.location.boardId, o.location.cardId, o.cadence, o.unit, o.level, o.readOnly, o.rows);
+    : { ...cardGridSource(o.location.boardId, o.location.cardId, o.cadence, o.unit, o.level, o.readOnly, o.rows), tracking: o.tracking };
   const grid = renderValueGrid({
     host,
     source,

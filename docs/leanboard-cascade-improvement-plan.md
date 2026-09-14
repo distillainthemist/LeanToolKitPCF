@@ -909,7 +909,18 @@ reschedule/cancel history with a reason picklist.
   a responsive TILE GRID (auto-fill, 200px min) replaces the row list —
   each tile: ★, name, latest / plan with state dot, sparkline (state
   tiles: their strip); a value tile opens its chart + readings + grid in
-  a dialog (no inline expand).
+  a dialog (no inline expand). REPLACED the same day (Ben): the card IS
+  a CHART GRID — every metric's full trend (the KPI editor, its own title
+  strip) laid out 1 / 2 / 3 columns by count (1 · 2–4 · 5+), rows sharing
+  the card's height (`grid-template-rows: repeat(n, minmax(0,1fr))`); a
+  click on a chart pops it out large. "Update values…" (the grid dialog)
+  is the ONE entry road on every KPI chart: "＋ Add reading", "＋ Set
+  state", tap-to-edit and the ghost's tap-to-add are gone; a dot click
+  opens that reading's actions only. Good / bad and picklist charts are a
+  CATEGORY TREND: the y axis is the options (first at the bottom), each
+  row a band tinted by its state colour, the line runs through the rows
+  (`renderStateChart`). Own state metrics reach the grid dialog with
+  their tracking.
 - **P10 Reporting** — designed (spec §4).
 
 Each phase ships behind the usual gates + `pac code push`; the specs'

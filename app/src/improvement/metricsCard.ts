@@ -9,7 +9,7 @@
 // this card — so single KPI cards and the drivers tab show the same data.
 
 import type { CardMount } from "../cardRegistry";
-import { el, clear, svgEl } from "../../../shared/ui/dom";
+import { el, clear } from "../../../shared/ui/dom";
 import { paletteMap } from "../../../shared/palette";
 import { todayIso } from "../../../shared/schema/id";
 import { KpiTrendEditor } from "../../../controls/KpiTrendCard/editor";
@@ -26,9 +26,9 @@ import { diffPoints, pointsFromCells } from "../store/seriesMap";
 import { ragPaletteKey } from "../priorities/model";
 import { normalizeMetrics, TemplateMetric } from "./templateModel";
 import { metricLocation, MetricLocation } from "./metricLocation";
-import { DriverNode, DriverTracking, driverDiffPoints, driverPointsFromCells, formatValue, stateOf, trackingOptions } from "./vdt/model";
+import { DriverNode, DriverTracking, driverDiffPoints, driverDiffStatePoints, driverPointsFromCells, driverStatePointsFromCells, stateOf, trackingOptions } from "./vdt/model";
 import { GridSource, loadGridCells } from "./vdt/grid";
-import { GridCell, pageColumns, pageOriginAround, PAGE_BUCKETS } from "./vdt/gridModel";
+import { GridCell, pageColumns, pageOriginAround } from "./vdt/gridModel";
 import { Initiative } from "./initiativeModel";
 
 const btn = (label: string, cls = "app-btn"): HTMLButtonElement => {
@@ -62,7 +62,7 @@ export function mountMetricsCard(opts: CardMount): () => void {
   opts.host.appendChild(wrap);
   wrap.appendChild(el("div", "app-cp-muted app-mc-note", "Loading…"));
   let dead = false;
-  let editor: KpiTrendEditor | null = null;
+  const editors: KpiTrendEditor[] = [];
   const today = todayIso();
   let ragColor = (rag: "green" | "amber" | "red"): string => (rag === "green" ? "#2e7d32" : rag === "amber" ? "#c77800" : "#c62828");
   let initiative: Initiative | null = null;
@@ -125,197 +125,26 @@ export function mountMetricsCard(opts: CardMount): () => void {
     paint();
   };
 
-  const latestCell = (r: Row): GridCell | null => [...r.cells].reverse().find((c) => c.actual.value !== null) ?? null;
-
-  const sparkline = (r: Row): SVGSVGElement => {
-    const W = 120;
-    const H = 28;
-    const svg = svgEl("svg", { class: "app-mc-spark", viewBox: `0 0 ${W} ${H}`, preserveAspectRatio: "none" });
-    const vals = r.cells.map((c) => c.actual.value);
-    const tg = r.cells.map((c) => c.plan.value);
-    const nums = [...vals, ...tg].filter((v): v is number => v !== null);
-    if (nums.length === 0) return svg;
-    let lo = Math.min(...nums);
-    let hi = Math.max(...nums);
-    if (lo === hi) {
-      lo -= 1;
-      hi += 1;
-    }
-    const x = (i: number) => (r.cells.length === 1 ? W / 2 : (i / (r.cells.length - 1)) * (W - 4) + 2);
-    const y = (v: number) => H - 3 - ((v - lo) / (hi - lo)) * (H - 6);
-    // target as a faint step
-    let d = "";
-    tg.forEach((v, i) => {
-      if (v === null) return;
-      d += (d === "" ? "M" : "L") + `${x(i)} ${y(v)}`;
-    });
-    if (d !== "") {
-      const t = svgEl("path", { d, fill: "none", "stroke-dasharray": "3 2", "stroke-width": 1 });
-      (t as SVGElement & { style: CSSStyleDeclaration }).style.stroke = "#9a948a";
-      svg.appendChild(t);
-    }
-    let pts = "";
-    vals.forEach((v, i) => {
-      if (v !== null) pts += `${x(i)},${y(v)} `;
-    });
-    const line = svgEl("polyline", { points: pts.trim(), fill: "none", "stroke-width": 1.8, "stroke-linejoin": "round" });
-    (line as SVGElement & { style: CSSStyleDeclaration }).style.stroke = "#26241f";
-    svg.appendChild(line);
-    r.cells.forEach((c, i) => {
-      if (c.actual.value === null || !c.rag) return;
-      const dot = svgEl("circle", { cx: x(i), cy: y(c.actual.value), r: 2.2 });
-      (dot as SVGElement & { style: CSSStyleDeclaration }).style.fill = ragColor(c.rag);
-      svg.appendChild(dot);
-    });
-    return svg;
-  };
-
-  const fmt = (r: Row, v: number | null): string => (r.driver ? formatValue(v, r.driver.unit, r.driver.format) : v === null ? "—" : `${Math.round(v * 100) / 100}${r.m.unit ? " " + r.m.unit : ""}`);
-
-  const paint = () => {
-    clear(wrap);
-    if (rows.length === 0) {
-      wrap.appendChild(el("div", "app-cp-muted app-mc-note", "No metrics on this initiative yet — add them in Edit details."));
-      return;
-    }
-    // a responsive tile grid (Ben, 2026-09-14): one tile per metric; a
-    // value tile opens its chart + grid in a dialog, a state tile enters
-    // on its strip
-    const grid = el("div", "app-mc-grid");
-    for (const r of rows) {
-      const tile = el("div", "app-mc-tile" + (r.m.primary ? " app-mc-tile-primary" : ""));
-      const name = el("div", "app-mc-name");
-      if (r.m.primary) name.appendChild(el("span", "app-mc-star", "★"));
-      name.appendChild(el("span", "app-mc-name-text", r.m.name));
-      if (r.driver) name.appendChild(el("span", "app-mc-kind", "· VDT"));
-      name.title = r.m.name;
-      tile.appendChild(name);
-      if (!r.tracking) {
-        const last = latestCell(r);
-        const val = el("div", "app-mc-val");
-        const dot = el("span", "app-mc-dot");
-        if (last?.rag) dot.style.background = ragColor(last.rag);
-        else dot.classList.add("app-mc-dot-none");
-        val.appendChild(dot);
-        val.appendChild(el("span", "app-mc-num", last ? fmt(r, last.actual.value) : "—"));
-        const tcell = r.cells.find((c) => today >= c.column.from && today <= c.column.to) ?? last;
-        if (tcell && tcell.plan.value !== null) val.appendChild(el("span", "app-mc-tgt", `/ ${fmt(r, tcell.plan.value)}`));
-        tile.appendChild(val);
-        tile.appendChild(sparkline(r));
-        tile.classList.add("app-mc-tile-click");
-        tile.title = `${r.m.name} — open the chart and the grid`;
-        tile.addEventListener("click", () => openMetricDialog(r));
-      } else {
-        const disp = stateOf(r.tracking, r.lastRaw);
-        const val = el("div", "app-mc-val");
-        const dot = el("span", "app-mc-dot");
-        if (disp.rag) dot.style.background = ragColor(disp.rag);
-        else dot.classList.add("app-mc-dot-none");
-        val.append(dot, el("span", "app-mc-num", disp.label || "—"));
-        tile.appendChild(val);
-        tile.appendChild(stripFor(r));
-      }
-      grid.appendChild(tile);
-    }
-    wrap.appendChild(grid);
-  };
-
-  /** A value metric's chart, readings and grid in a dialog (replaces the
-   *  inline expand, 2026-09-14). */
-  const openMetricDialog = (r: Row) => {
-    const scrim = el("div", "app-modal-overlay");
-    const box = el("div", "app-modal app-modal-wide app-mc-dialog");
-    box.appendChild(el("div", "app-modal-title", `${r.m.primary ? "★ " : ""}${r.m.name}${r.driver ? " · VDT" : ""}`));
-    const host = el("div", "app-mc-dialoghost");
-    box.appendChild(host);
-    scrim.appendChild(box);
-    document.body.appendChild(scrim);
-    host.appendChild(expandedFor(r, () => close()));
-    const foot = el("div", "app-modal-footer");
-    const done = btn("Done", "app-btn app-btn-primary");
-    const close = () => {
-      editor?.destroy();
-      editor = null;
-      scrim.remove();
-      void reloadRow(r);
-    };
-    done.addEventListener("click", close);
-    foot.appendChild(done);
-    box.appendChild(foot);
-  };
-
-  /** Good/bad and picklist: the last buckets as a strip of cells. */
-  const stripFor = (r: Row): HTMLElement => {
-    const strip = el("div", "app-mc-strip");
-    const show = r.cells.slice(-Math.min(r.cells.length, PAGE_BUCKETS[r.loc.cadence]));
-    for (const c of show) {
-      const cell = el("button", "app-mc-cell" + (today >= c.column.from && today <= c.column.to ? " app-mc-cell-today" : "")) as HTMLButtonElement;
-      cell.type = "button";
-      cell.title = `${c.column.label}${c.column.dateLabel !== c.column.label ? " · " + c.column.dateLabel : ""}`;
-      if (c.rag) {
-        cell.style.background = ragColor(c.rag);
-        cell.classList.add("app-mc-cell-on");
-        cell.textContent = r.tracking?.kind === "goodbad" ? (c.rag === "green" ? "✓" : "✗") : "";
-      }
-      cell.disabled = opts.readOnly;
-      cell.addEventListener("click", () => void enterState(r, c, cell));
-      strip.appendChild(cell);
-    }
-    return strip;
-  };
-
-  /** Good/bad cycles none → good → bad → none; picklist opens a select. */
-  const enterState = async (r: Row, c: GridCell, cell: HTMLButtonElement) => {
-    const write = async (value: string | null) => {
-      const at = c.actual.existing ?? r.source.newActual(c.column);
-      if (value === null) {
-        if (c.actual.existing) await applySeries(r.loc.boardId, r.loc.cardId, [], [{ ...c.actual.existing, value: "" }]);
-      } else await applySeries(r.loc.boardId, r.loc.cardId, [{ ...at, value }]);
-      const fresh = await loadRow(r.m);
-      const k = rows.findIndex((x) => x.m.key === r.m.key);
-      if (k >= 0) rows[k] = fresh;
-      if (!dead) paint();
-    };
-    const t = r.tracking ?? { kind: "picklist" as const, options: [] };
-    if (t.kind === "goodbad") {
-      const cur = c.actual.raw ?? "";
-      await write(cur === "" ? "Good" : cur === "Good" ? "Bad" : null);
-      return;
-    }
-    const sel = el("select", "app-input app-mc-pick") as HTMLSelectElement;
-    const none = el("option", "", "—") as HTMLOptionElement;
-    none.value = "";
-    sel.appendChild(none);
-    for (const op of trackingOptions(t)) {
-      const o = el("option", "", op.label) as HTMLOptionElement;
-      o.value = op.label;
-      if (c.rag && op.state === c.rag) o.selected = true;
-      sel.appendChild(o);
-    }
-    cell.replaceWith(sel);
-    sel.focus();
-    sel.addEventListener("change", () => void write(sel.value === "" ? null : sel.value));
-    sel.addEventListener("blur", () => {
-      if (sel.isConnected) sel.replaceWith(cell);
-    });
-  };
-
-  /** A value row's chart: the KPI editor bound to the row's location. */
-  const expandedFor = (r: Row, onClose?: () => void): HTMLElement => {
-    void onClose;
-    const host = el("div", "app-mc-expand");
-    editor?.destroy();
+  /** A metric's full trend (the KPI editor) mounted into `host` — a numeric
+   *  run chart or, for good / bad and picklist, the category trend. The
+   *  grid dialog ("Update values…") is the one place values are entered. */
+  const mountChart = (host: HTMLElement, r: Row): KpiTrendEditor => {
     const window = { from: r.cells[0]?.column.from ?? today, to: r.cells[r.cells.length - 1]?.column.to ?? today };
     const prefix = `${r.m.key}:`;
-    let lastPoints: { id: string; date: string; value: number; shift?: string }[] = [];
+    let lastPoints: { id: string; date: string; value: number; shift?: string; label?: string }[] = [];
     const ed = new KpiTrendEditor(host, {
       onChange: (env2) => {
+        // values change only through the grid; this covers a stray edit
         const next = env2.data.points.map((p) => ({ ...p }));
-        if (r.driver) {
+        if (r.driver && r.tracking) {
+          const strip = (p: { id: string; date: string; value: number; shift?: string; label?: string }) => ({ ...p, id: p.id.startsWith(prefix) ? p.id.slice(prefix.length) : p.id });
+          const { put, del } = driverDiffStatePoints(lastPoints.map(strip), next.map(strip), r.tracking);
+          void applySeries(r.loc.boardId, r.loc.cardId, put, del).catch((err) => console.warn("metrics card save failed", err));
+        } else if (r.driver) {
           const strip = (p: { id: string; date: string; value: number; shift?: string }) => ({ ...p, id: p.id.startsWith(prefix) ? p.id.slice(prefix.length) : p.id });
           const { put, del } = driverDiffPoints(lastPoints.map(strip), next.map(strip));
           void applySeries(r.loc.boardId, r.loc.cardId, put, del).catch((err) => console.warn("metrics card save failed", err));
-        } else {
+        } else if (!r.tracking) {
           const { put, del } = diffPoints(lastPoints, next);
           void applySeries(r.loc.boardId, r.loc.cardId, put, del).catch((err) => console.warn("metrics card save failed", err));
         }
@@ -328,11 +157,12 @@ export function mountMetricsCard(opts: CardMount): () => void {
           await openValueGridDialog({
             title: r.m.name,
             location: { boardId: r.loc.boardId, cardId: r.loc.cardId },
-            driver: r.driver ? { id: r.driver.id, cadence: r.driver.cadence, aggregate: r.driver.aggregate, unit: r.driver.unit, format: r.driver.format } : null,
+            driver: r.driver ? { id: r.driver.id, cadence: r.driver.cadence, aggregate: r.driver.aggregate, unit: r.driver.unit, format: r.driver.format, tracking: r.driver.tracking } : null,
             cadence: r.loc.cadence,
             unit: r.driver ? r.driver.unit : r.m.unit,
             level: level(r.m),
             rows: r.source.rows,
+            tracking: r.tracking ?? undefined,
             window,
             readOnly: opts.readOnly,
             onClosed: (changed) => {
@@ -342,9 +172,9 @@ export function mountMetricsCard(opts: CardMount): () => void {
         })();
       },
     });
-    editor = ed;
+    editors.push(ed);
     ed.setTheme(opts.theme);
-    ed.setChrome("", "");
+    ed.setChrome(`${r.m.primary ? "★ " : ""}${r.m.name}${r.driver ? " · VDT" : ""}\n${r.loc.cadence}${r.driver ? ` · from value driver ${r.driver.name}` : ""}`, "");
     ed.setReadOnly(opts.readOnly);
     ed.setPeople(opts.people);
     ed.setActions(opts.actions);
@@ -352,19 +182,88 @@ export function mountMetricsCard(opts: CardMount): () => void {
     ed.setSpec({ target: r.m.target, usl: r.m.usl ?? null, lsl: r.m.lsl ?? null, unit: r.driver ? r.driver.unit : r.m.unit });
     const shifts = r.loc.cadence === "shiftly" ? ["D", "N"] : null;
     ed.setReadingMode({ cadence: r.loc.cadence, shifts });
+    if (r.tracking) {
+      const t = r.tracking;
+      ed.setTracking({ kind: t.kind === "goodbad" ? "goodbad" : "picklist", options: trackingOptions(t), color: (st) => ragColor(st) });
+    }
     void (async () => {
       const [cells, spec] = await Promise.all([
         listSeries(r.loc.boardId, r.loc.cardId, window.from, window.to),
         listSpecSeries(r.loc.boardId, r.loc.cardId, window.to).catch(() => EMPTY_SPEC_SERIES),
       ]);
-      if (dead || editor !== ed) return;
-      const points = r.driver ? driverPointsFromCells(cells).map((p) => ({ ...p, id: prefix + p.id })) : pointsFromCells(cells);
+      if (dead || !editors.includes(ed)) return;
+      let points: { id: string; date: string; value: number; shift?: string; label?: string }[];
+      if (r.tracking && r.driver) points = driverStatePointsFromCells(cells, r.tracking).map((p) => ({ ...p, id: prefix + p.id }));
+      else if (r.tracking) {
+        const t = r.tracking;
+        const optsList = trackingOptions(t);
+        points = cells
+          .filter((c) => r.loc.isActual(c.key) && c.value !== "")
+          .map((c) => {
+            const st = stateOf(t, c.value);
+            const idx = optsList.findIndex((o) => o.label === st.label);
+            return { id: c.key, date: c.date, value: idx >= 0 ? idx : 0, label: st.label, ...(c.shift && c.shift !== "-" ? { shift: c.shift } : {}) };
+          })
+          .sort((a, b) => (a.date < b.date ? -1 : 1));
+      } else points = r.driver ? driverPointsFromCells(cells).map((p) => ({ ...p, id: prefix + p.id })) : pointsFromCells(cells);
       lastPoints = points.map((p) => ({ ...p }));
-      if (shifts) ed.setReadingMode({ cadence: r.loc.cadence, shifts: [...new Set([...shifts, ...points.map((p) => (p as { shift?: string }).shift ?? "").filter((x) => x !== "")])] });
+      if (shifts) ed.setReadingMode({ cadence: r.loc.cadence, shifts: [...new Set([...shifts, ...points.map((p) => p.shift ?? "").filter((x) => x !== "")])] });
       ed.setSpecSeries(spec);
       ed.setEnvelope({ schema: SCHEMA_ID, meta: { title: "", updated: "" }, data: { points, target: null, usl: null, lsl: null, unit: "" } });
     })();
-    return host;
+    return ed;
+  };
+
+  const destroyEditors = () => {
+    for (const e of editors) e.destroy();
+    editors.length = 0;
+  };
+
+  /** The chart grid (Ben, 2026-09-14): every metric's full trend, 1 / 2 / 3
+   *  columns by count (1 · 2–4 · 5+), rows sharing the card's height; a
+   *  click on a chart pops it out large. */
+  const paint = () => {
+    destroyEditors();
+    clear(wrap);
+    if (rows.length === 0) {
+      wrap.appendChild(el("div", "app-cp-muted app-mc-note", "No metrics on this initiative yet — add them in Edit details."));
+      return;
+    }
+    const cols = rows.length <= 1 ? 1 : rows.length <= 4 ? 2 : 3;
+    const grid = el("div", `app-mc-chartgrid app-mc-cols-${cols}`);
+    grid.style.gridTemplateRows = `repeat(${Math.ceil(rows.length / cols)}, minmax(0, 1fr))`;
+    for (const r of rows) {
+      const cell = el("div", "app-mc-cell" + (r.m.primary ? " app-mc-cell-primary" : ""));
+      grid.appendChild(cell);
+      mountChart(cell, r);
+      cell.addEventListener("click", (e) => {
+        const t = e.target as HTMLElement;
+        if (t.closest("button, .ltk-dialog-overlay, .ltk-kebab, .ltk-menu, circle")) return;
+        popOut(r);
+      });
+    }
+    wrap.appendChild(grid);
+  };
+
+  /** One metric's trend, large, with the same Update values road. */
+  const popOut = (r: Row) => {
+    const scrim = el("div", "app-modal-overlay");
+    const box = el("div", "app-modal app-modal-wide app-mc-dialog");
+    const host = el("div", "app-mc-dialoghost");
+    box.appendChild(host);
+    scrim.appendChild(box);
+    document.body.appendChild(scrim);
+    const ed = mountChart(host, r);
+    const foot = el("div", "app-modal-footer");
+    const done = btn("Done", "app-btn app-btn-primary");
+    done.addEventListener("click", () => {
+      ed.destroy();
+      editors.splice(editors.indexOf(ed), 1);
+      scrim.remove();
+      void reloadRow(r);
+    });
+    foot.appendChild(done);
+    box.appendChild(foot);
   };
 
   const reloadRow = async (r: Row) => {
@@ -380,7 +279,7 @@ export function mountMetricsCard(opts: CardMount): () => void {
   });
   return () => {
     dead = true;
-    editor?.destroy();
+    destroyEditors();
     wrap.remove();
   };
 }
