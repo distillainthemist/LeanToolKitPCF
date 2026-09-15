@@ -51,6 +51,45 @@
           "x-ms-schema-name": "ben_commentsjson",
           "maxLength": 100000
         },
+        "ben_confidential": {
+          "type": "string",
+          "title": "Confidential",
+          "x-ms-dataverse-attribute": "ben_confidential",
+          "x-ms-dataverse-type": "BooleanType",
+          "x-ms-schema-name": "ben_confidential",
+          "enum": [
+            "No",
+            "Yes"
+          ],
+          "x-ms-enum-values": [
+            0,
+            1
+          ],
+          "Color": [
+            null,
+            null
+          ],
+          "x-ms-optionsetmetadataid": "d922c213-e6b0-f111-aaab-6045bd3d14fc",
+          "x-ms-isGlobal": false,
+          "x-ms-optionsetdisplayname": "Confidential",
+          "x-ms-optionSetType": "Boolean"
+        },
+        "ben_confidentialname": {
+          "type": "string",
+          "title": "ben_confidentialname",
+          "x-ms-dataverse-attribute": "ben_confidentialname",
+          "x-ms-dataverse-type": "VirtualType",
+          "x-ms-schema-name": "ben_confidentialName",
+          "x-ms-read-only": true
+        },
+        "ben_createdby": {
+          "type": "string",
+          "title": "Created by (whoId)",
+          "x-ms-dataverse-attribute": "ben_createdby",
+          "x-ms-dataverse-type": "StringType",
+          "x-ms-schema-name": "ben_createdby",
+          "maxLength": 120
+        },
         "ben_description": {
           "type": "string",
           "title": "Description",
@@ -209,6 +248,14 @@
           "x-ms-dataverse-type": "StringType",
           "x-ms-schema-name": "ben_verifiedby",
           "maxLength": 120
+        },
+        "ben_visiblejson": {
+          "type": "string",
+          "title": "Visible to (JSON whoIds)",
+          "x-ms-dataverse-attribute": "ben_visiblejson",
+          "x-ms-dataverse-type": "MemoType",
+          "x-ms-schema-name": "ben_visiblejson",
+          "maxLength": 4000
         },
         "createdby": {
           "type": "string",

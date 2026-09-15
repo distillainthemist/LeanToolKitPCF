@@ -198,6 +198,11 @@ model section) — the canvas/PCF sections there are historical.
   the source document (mini-tables edit on their source card). Both
   rollups share the store road's source-resolution skeleton
   (`store/rollup.ts`).
+  Actions may be CONFIDENTIAL (`ben_confidential` / `ben_createdby` /
+  `ben_visiblejson`, 2026-09-16): app-level filtering at the actions
+  store's reads (creator, assignees, their Office 365 managers, super
+  admins) — the same model as confidential initiatives; the rows remain
+  readable through Dataverse itself.
   A value driver may be measured as a number, good / bad or a picklist
   (`ben_trackingjson`, 2026-09-09); non-numeric drivers never enter
   formulas and their readings are option labels on the same series.

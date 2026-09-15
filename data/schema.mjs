@@ -127,6 +127,12 @@ export const TABLES = [
       // reschedule/cancel history the reporting counts. Status gains
       // "verify" (done, awaiting the initiative owner's verification).
       ben_verifiedby: { ...text(120), display: "Verified by (whoId)" },
+      // confidential actions (2026-09-16): creator + assignees + their direct
+      // managers (Office 365) + super admins see it; the visible set is
+      // stored at save time. App-level confidentiality, like initiatives.
+      ben_confidential: { kind: "bool", display: "Confidential", default: false },
+      ben_createdby: { ...text(120), display: "Created by (whoId)" },
+      ben_visiblejson: { ...memo(4000), display: "Visible to (JSON whoIds)" },
       ben_verifiedat: { kind: "datetime", display: "Verified at" },
       ben_historyjson: { ...memo(20000), display: "History (JSON)" },
       ben_initiativeid: { ...text(40), display: "Initiative Id" },

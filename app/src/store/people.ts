@@ -7,6 +7,7 @@ import { Office365UsersService } from "../generated/services/Office365UsersServi
 import { currentViewer } from "../runtime";
 import { syncPersonAccess } from "./accessGroup";
 import { allWhere, eq, upsertWhere } from "./dv";
+import { memoRead } from "./changes";
 import { personFromRow, RosterPerson } from "./mappers";
 
 export async function listPeople(includeInactive = false): Promise<RosterPerson[]> {
@@ -108,6 +109,21 @@ export async function directoryProfile(whoId: string): Promise<DirectoryProfile>
 }
 
 /** The viewer's roster row, matched by Entra object id (whoId). */
+/** A person's direct manager in the directory (Office 365 Users) — the
+ *  "leader" a confidential action is visible to. "" = none / unknown.
+ *  Cached for the session. */
+export async function managerOf(whoId: string): Promise<string> {
+  if (whoId.trim() === "") return "";
+  return memoRead("managers", whoId, async () => {
+    try {
+      const res = await Office365UsersService.Manager(whoId);
+      return res.data?.Id ?? "";
+    } catch {
+      return "";
+    }
+  });
+}
+
 export async function viewerPerson(entraObjectId: string): Promise<RosterPerson | null> {
   const rows = await allWhere(Ben_ltkpeoplesService.getAll, eq("ben_whoid", entraObjectId));
   return rows.length ? personFromRow(rows[0]) : null;

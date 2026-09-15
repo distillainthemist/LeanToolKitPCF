@@ -121,6 +121,44 @@ export interface LtkAction {
   verified?: Verification;
   /** The improvement initiative this action belongs to ("" = none). */
   initiativeId?: string;
+  /** Confidential (2026-09-16): seen only by its creator, its assignees,
+   *  their direct managers (Office 365) and super admins. App-level
+   *  confidentiality — the row itself stays readable through Dataverse. */
+  confidential?: boolean;
+  /** The creator's whoId (set on first save). */
+  createdBy?: string;
+  /** The stored visible set for a confidential action — computed at save
+   *  time from creator + assignees + managers (+ escalation targets). */
+  visibleTo?: string[];
+}
+
+/** Is a viewer allowed to see this action? Non-confidential: everyone.
+ *  Confidential: super admins, and anyone in the stored visible set
+ *  (creator and assignees are always in it even if the set is stale). */
+export function actionVisibleTo(a: LtkAction, viewerWhoId: string, isSuperAdmin: boolean): boolean {
+  if (a.confidential !== true) return true;
+  if (isSuperAdmin) return true;
+  if (viewerWhoId === "") return false;
+  if (a.createdBy === viewerWhoId) return true;
+  if (a.assignees.some((x) => x.whoId === viewerWhoId)) return true;
+  return (a.visibleTo ?? []).includes(viewerWhoId);
+}
+
+/** The visible set for a confidential action: creator, assignees, each
+ *  assignee's manager, plus any extra ids the host adds (escalation
+ *  targets). De-duplicated, no blanks. */
+export function visibleSetFor(a: LtkAction, managerOf: (whoId: string) => string, extra: string[] = []): string[] {
+  const out = new Set<string>();
+  const add = (id: string | undefined) => {
+    if (id && id.trim() !== "") out.add(id);
+  };
+  add(a.createdBy);
+  for (const x of a.assignees) {
+    add(x.whoId);
+    add(managerOf(x.whoId));
+  }
+  for (const e of extra) add(e);
+  return [...out];
 }
 
 export function newAction(context: ActionContext): LtkAction {
@@ -238,6 +276,10 @@ export function sanitizeAction(a: Partial<LtkAction>): LtkAction {
     ...(history ? { history } : {}),
     ...(verified ? { verified } : {}),
     ...(initiativeId ? { initiativeId } : {}),
+    // confidential actions (2026-09-16) — the whitelist must let them through
+    ...(a.confidential === true ? { confidential: true } : {}),
+    ...(typeof a.createdBy === "string" && a.createdBy !== "" ? { createdBy: a.createdBy } : {}),
+    ...(Array.isArray(a.visibleTo) ? { visibleTo: a.visibleTo.filter((x): x is string => typeof x === "string" && x !== "") } : {}),
   };
 }
 

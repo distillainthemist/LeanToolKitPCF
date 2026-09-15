@@ -18,7 +18,7 @@ import { clear, el, ensureStylesheet } from "../../shared/ui/dom";
 import { parsePrompts, Prompts, renderGhost, renderTitleBar } from "../../shared/ui/chrome";
 import { pdcaOf, isOverdue, LtkAction, newAction } from "../../shared/schema/actions";
 import { Person } from "../../shared/schema/people";
-import { openActionDialog, pdcaDisc } from "../../shared/ui/actionUi";
+import { openActionDialog, pdcaDisc, confidentialGlyph } from "../../shared/ui/actionUi";
 import { DAY_LABELS, MONTH_LABELS, isoLocal, startOfDay } from "../../shared/schema/recurrence";
 import { OrgSite } from "../../shared/schema/meeting";
 import {
@@ -940,6 +940,8 @@ export class LeanHubView {
     }
     // PDCA progression at a glance (Ben, 2026-09-01)
     row.appendChild(pdcaDisc(pdcaOf(action), 15));
+    const lock = confidentialGlyph(action);
+    if (lock) row.appendChild(lock);
     // the row edits in place — same dialog as the boards
     if (!this.readOnly) {
       row.classList.add("ltk-lh-action-edit");

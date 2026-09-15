@@ -217,6 +217,9 @@ export function actionFromRow(row: Ben_ltkactions): LtkAction {
         ? { whoId: row.ben_verifiedby ?? "", who: "", when: row.ben_verifiedat }
         : undefined,
     initiativeId: row.ben_initiativeid || undefined,
+    confidential: row.ben_confidential === true ? true : undefined,
+    createdBy: row.ben_createdby || undefined,
+    visibleTo: parseJsonOr(row.ben_visiblejson, undefined),
   });
 }
 
@@ -247,6 +250,9 @@ export function actionToRow(
     ben_verifiedby: action.verified?.whoId ?? "",
     ben_verifiedat: action.verified?.when ?? undefined,
     ben_initiativeid: action.initiativeId ?? "",
+    ben_confidential: action.confidential === true,
+    ben_createdby: action.createdBy ?? "",
+    ben_visiblejson: action.confidential === true ? JSON.stringify(action.visibleTo ?? []) : "",
     ben_pdca: action.pdca ?? "",
   };
 }

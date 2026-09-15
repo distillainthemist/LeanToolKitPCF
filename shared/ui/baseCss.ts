@@ -62,6 +62,7 @@ export const LTK_BASE_CSS = `
   flex: 0 0 auto;
 }
 .ltk-kebab.ltk-kebab-inbar { position: relative; top: auto; right: auto; }
+.ltk-conf-glyph { font-size: 12px; opacity: 0.8; margin-left: 4px; }
 .ltk-titlebar-btn {
   border: 1px solid color-mix(in srgb, currentColor 35%, transparent);
   background: none;

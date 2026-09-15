@@ -369,6 +369,14 @@ export interface ActionDialogOptions {
 }
 
 /** The raise/edit action dialog (with escalation, completion and cancel). */
+/** A small lock for confidential actions, wherever a row or card shows one. */
+export function confidentialGlyph(a: LtkAction): HTMLElement | null {
+  if (a.confidential !== true) return null;
+  const g = el("span", "ltk-conf-glyph", "🔒");
+  g.title = "Confidential — seen only by whoever raised it, the people assigned, their leaders and super admins.";
+  return g;
+}
+
 export function openActionDialog(o: ActionDialogOptions): void {
   const action = o.action;
   const issue = textInput(action.issue, { placeholder: "Issue" });
@@ -377,6 +385,12 @@ export function openActionDialog(o: ActionDialogOptions): void {
   const escChk = checkItem("Escalated");
   escChk.box.checked = action.escalated;
   escChk.wrap.classList.toggle("ltk-check-on", action.escalated);
+  // confidential (2026-09-16): creator, assignees, their leaders and super
+  // admins only — the row helps say who
+  const confChk = checkItem("Confidential");
+  confChk.box.checked = action.confidential === true;
+  confChk.wrap.classList.toggle("ltk-check-on", action.confidential === true);
+  confChk.wrap.title = "Seen only by whoever raised it, the people assigned, their leaders and super admins.";
 
   const wasDone = action.status === "done";
   // PDCA toggle (Ben, 2026-08-31): five states, disc + label each —
@@ -427,6 +441,7 @@ export function openActionDialog(o: ActionDialogOptions): void {
     if (pdca === "closed" && !wasDone && action.status !== "cancelled") action.status = "done";
     else if (pdca !== "closed" && wasDone) action.status = "open";
     action.escalated = escChk.box.checked;
+    action.confidential = confChk.box.checked ? true : undefined;
     form.apply(action); // after status, so assignee done flags match
     if (linkSel !== null) {
       action.instanceId = linkSel.value;
@@ -472,6 +487,7 @@ export function openActionDialog(o: ActionDialogOptions): void {
   dlg.body.appendChild(sectionLabel("PDCA state"));
   dlg.body.appendChild(pdcaWrap);
   dlg.body.appendChild(escChk.wrap);
+  dlg.body.appendChild(confChk.wrap);
   form.focus();
 }
 

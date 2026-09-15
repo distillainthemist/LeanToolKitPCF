@@ -19,6 +19,8 @@ export interface Ben_ltkactionsBase {
   ben_assigneesjson?: string;
   ben_boardid?: string;
   ben_commentsjson?: string;
+  ben_confidential?: boolean;
+  ben_createdby?: string;
   ben_description?: string;
   ben_due?: string;
   ben_escalated?: boolean;
@@ -36,6 +38,7 @@ export interface Ben_ltkactionsBase {
   ben_status?: string;
   ben_verifiedat?: string;
   ben_verifiedby?: string;
+  ben_visiblejson?: string;
   importsequencenumber?: number;
   overriddencreatedon?: string;
   statecode: Ben_ltkactionsstatecode;
@@ -45,6 +48,7 @@ export interface Ben_ltkactionsBase {
 }
 
 export interface Ben_ltkactions extends Ben_ltkactionsBase {
+  ben_confidentialname?: string;
   ben_escalatedname?: string;
   createdbyname?: string;
   createdbyyominame: string;

@@ -945,6 +945,27 @@ reschedule/cancel history with a reason picklist.
   fields (`field:<key>`). The card studio's binding select is built from
   that list (`BindingContext.targets`); a stale binding stays visible as
   "(not on this template)".
+- **Confidential actions — BUILT 2026-09-16** (Ben: flag an action as
+  confidential — visible to its creator, its assignees, the assignees'
+  leaders via Office 365, and super admins). APP-LEVEL confidentiality,
+  like initiatives: the row stays readable through Dataverse itself.
+  Schema: `ben_confidential`, `ben_createdby`, `ben_visiblejson` on
+  ben_ltkaction (deployed to dev; next release SOLUTION-CARRYING).
+  `LtkAction.confidential / createdBy / visibleTo`; `actionVisibleTo`
+  (creator and assignees always, the stored set, super admins) and
+  `visibleSetFor` (creator + assignees + each assignee's direct manager
+  via `managerOf` — Office 365 Users `Manager`, session-cached — + extra
+  ids). ONE read choke point: every store read (`actionsForInstance /
+  Board / Initiatives / Viewer`) filters through `visible()` with the
+  viewer's id and role, so boards, badges, the hub, the Gantt, roll-ups
+  and tiles inherit it; roll-ups are therefore viewer-dependent. ONE
+  write choke point: `upsertActions` stamps the creator on first save and
+  recomputes the visible set for a confidential action on every save
+  (reassignment moves visibility); an escalated confidential action also
+  admits the owners of boards whose Escalation viewer sources its board.
+  The shared action dialog gains a Confidential check (help says who
+  sees it); 🔒 on kanban / list / hub rows. Direct manager only; no
+  manager in the directory = creator + assignees (+ admins).
 - **P10 Reporting** — designed (spec §4).
 
 Each phase ships behind the usual gates + `pac code push`; the specs'
