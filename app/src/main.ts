@@ -34,8 +34,8 @@ reportLink.addEventListener("click", (e) => {
 });
 // ＋ Add action (Ben, 2026-09-16): capture and assign an action from any
 // surface — the dialog module loads on demand
-const addActionLink = el("a", "app-link app-link-addaction") as HTMLAnchorElement;
-addActionLink.append(el("span", "app-mode-icon", "\uFF0B"), el("span", "", "Add action"));
+const addActionLink = el("a", "app-btn app-btn-primary app-btn-addaction") as HTMLAnchorElement;
+addActionLink.append(el("span", "app-btn-addaction-plus", "\uFF0B"), el("span", "", "Add action"));
 addActionLink.href = "#";
 addActionLink.title = "Capture an action and assign it — yours unless you link it to a board";
 addActionLink.addEventListener("click", (e) => {
@@ -49,9 +49,9 @@ const modeText = el("span", "", "Settings");
 modeLink.append(modeIcon, modeText);
 modeLink.href = "#/settings";
 nav.appendChild(gap);
-nav.appendChild(addActionLink);
 nav.appendChild(reportLink);
 nav.appendChild(modeLink);
+nav.appendChild(addActionLink);
 bar.append(brand, nav);
 app.appendChild(bar);
 
