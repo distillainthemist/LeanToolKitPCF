@@ -460,6 +460,23 @@ export function mountHub(parent: HTMLElement): () => void {
   // without this catch it would strand the loading spinner forever
   void boot().catch(bootFail(host, "The hub"));
 
+  // an action captured from the top bar (or saved anywhere else) lands in
+  // My actions without a reload
+  const onActionsChanged = () => {
+    const v = currentViewer();
+    if (dead || !v) return;
+    void fetchHubData(v)
+      .then((fresh) => {
+        if (dead || view === null) return;
+        hubCache = fresh;
+        view.setActions(fresh.actions);
+        view.setSourceLabels(fresh.sourceLabels);
+      })
+      .catch(() => undefined);
+  };
+  window.addEventListener("ltk-actions-changed", onActionsChanged);
+  cleanups.push(() => window.removeEventListener("ltk-actions-changed", onActionsChanged));
+
   return () => {
     dead = true;
     for (const fn of cleanups.splice(0)) fn();

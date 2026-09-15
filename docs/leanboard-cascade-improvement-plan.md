@@ -966,6 +966,15 @@ reschedule/cancel history with a reason picklist.
   The shared action dialog gains a Confidential check (help says who
   sees it); 🔒 on kanban / list / hub rows. Direct manager only; no
   manager in the directory = creator + assignees (+ admins).
+- **Top-bar "＋ Add action" — BUILT 2026-09-16** (Ben): a text-link beside
+  Report / Settings (`app-link-addaction`, same metric) opens the shared
+  action dialog (`app/src/actions/quickAdd.ts`, lazy, in an
+  `.app-dlghost ltk-root` on body): assignee defaults to the viewer
+  (roster behind the search), "Linked card" offers My actions (personal
+  — `hub:<whoId>`, the hub reads it as Personal) or any viewable board's
+  action card (an `init-` board also ties the action to its initiative);
+  save upserts, bumps "actions" and fires `ltk-actions-changed`, which
+  the hub listens to and re-feeds My actions without a reload.
 - **P10 Reporting** — designed (spec §4).
 
 Each phase ships behind the usual gates + `pac code push`; the specs'

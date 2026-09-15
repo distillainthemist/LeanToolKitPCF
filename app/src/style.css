@@ -3847,3 +3847,7 @@ textarea.app-cp-statement { font-size: 14px; font-weight: 500; }
 .app-cp-objective-k { font-size: 10.5px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: #6d675c; }
 .app-cp-objective-v { font-variant-numeric: tabular-nums; font-weight: 600; }
 .app-cp-objective-actual { font-size: 14px; }
+/* the top bar's ＋ Add action (matches Report / Settings) */
+.app-link-addaction { display: flex; align-items: center; gap: 8px; font-size: 15.5px; padding: 6px 14px; }
+.app-quickadd-host { position: fixed; inset: 0; width: 0; height: 0; overflow: visible; z-index: 60; }
+.app-quickadd-host .ltk-dialog-overlay { position: fixed; }

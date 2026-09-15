@@ -32,6 +32,16 @@ reportLink.addEventListener("click", (e) => {
     openReportDialog({ host: document.body })
   );
 });
+// ＋ Add action (Ben, 2026-09-16): capture and assign an action from any
+// surface — the dialog module loads on demand
+const addActionLink = el("a", "app-link app-link-addaction") as HTMLAnchorElement;
+addActionLink.append(el("span", "app-mode-icon", "\uFF0B"), el("span", "", "Add action"));
+addActionLink.href = "#";
+addActionLink.title = "Capture an action and assign it — yours unless you link it to a board";
+addActionLink.addEventListener("click", (e) => {
+  e.preventDefault();
+  void import("./actions/quickAdd").then(({ openQuickAction }) => openQuickAction());
+});
 // one context button: Settings from the hub, Home everywhere else
 const modeLink = el("a", "app-link app-link-cog") as HTMLAnchorElement;
 const modeIcon = el("span", "app-mode-icon", "\u2699");
@@ -39,6 +49,7 @@ const modeText = el("span", "", "Settings");
 modeLink.append(modeIcon, modeText);
 modeLink.href = "#/settings";
 nav.appendChild(gap);
+nav.appendChild(addActionLink);
 nav.appendChild(reportLink);
 nav.appendChild(modeLink);
 bar.append(brand, nav);
