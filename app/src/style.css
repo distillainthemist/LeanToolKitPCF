@@ -3824,7 +3824,8 @@ textarea.app-cp-statement { font-size: 14px; font-weight: 500; }
 .app-cp-ov-charter { display: flex; flex-direction: column; gap: 12px; }
 .app-cp-ov-charterhead { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
 .app-cp-ov-chartertitle { font-weight: 700; font-size: 15px; }
-.app-cp-ov-chartercard { min-height: 360px; background: #fff; border: 1px solid #e4dfd6; border-radius: 10px; overflow: hidden; display: flex; flex-direction: column; }
+/* a definite height so a tall charter scrolls INSIDE its card (2026-09-17) */
+.app-cp-ov-chartercard { height: calc(90vh - 270px); min-height: 360px; background: #fff; border: 1px solid #e4dfd6; border-radius: 10px; overflow: hidden; display: flex; flex-direction: column; }
 .app-cp-ov-chartercard > * { flex: 1; min-height: 0; }
 .app-cp-metric-val { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* Metrics card: the chart grid (2026-09-14) */
@@ -3853,3 +3854,7 @@ textarea.app-cp-statement { font-size: 14px; font-weight: 500; }
 .app-link-cog { margin-left: 0; }
 .app-quickadd-host { position: fixed; inset: 0; width: 0; height: 0; overflow: visible; z-index: 60; }
 .app-quickadd-host .ltk-dialog-overlay { position: fixed; }
+/* hub tabs that mount app screens scroll inside the tab (the register was
+   cut off below the fold — 2026-09-17) */
+.ltk-lh-ext > .app-im-wrap, .ltk-lh-ext > .app-vd-wrap { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+.app-im-wrap > * { flex: none; }

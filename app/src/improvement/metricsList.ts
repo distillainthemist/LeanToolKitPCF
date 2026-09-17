@@ -145,6 +145,10 @@ export function renderMetricsList(o: MetricsListOpts): { refresh: () => void } {
       // own metrics: into the tree
       const acts = el("div", "app-im-metricacts");
       if (kindOf(m) === "own") {
+        const edit = btn("Edit…", "app-link");
+        edit.title = "Change the name, unit, plan and limits, tracking, cadence or rows";
+        edit.addEventListener("click", () => openOwnForm(m));
+        acts.appendChild(edit);
         const link = btn("Link…", "app-link");
         link.title = "Link to an existing driver — its series takes this metric's points";
         link.addEventListener("click", () => void linkOwn(m));
@@ -202,10 +206,10 @@ export function renderMetricsList(o: MetricsListOpts): { refresh: () => void } {
   };
 
   /** Propose an initiative-specific metric inline. */
-  const openOwnForm = () => {
+  const openOwnForm = (existing?: TemplateMetric) => {
     const scrim = el("div", "app-modal-overlay");
     const dlg = el("div", "app-modal");
-    dlg.appendChild(el("div", "app-modal-title", "Initiative-specific metric"));
+    dlg.appendChild(el("div", "app-modal-title", existing ? `Edit metric — ${existing.name}` : "Initiative-specific metric"));
     dlg.appendChild(el("div", "app-modal-note", "Measured on this initiative's own KPI card. It can be linked to, or promoted into, the value driver tree later."));
     const field = (label: string, control: HTMLElement) => {
       const f = el("div", "app-field");
@@ -227,7 +231,7 @@ export function renderMetricsList(o: MetricsListOpts): { refresh: () => void } {
       return inp;
     };
     // the rows the metric carries (Actual always) — the grid shows these
-    const rows: SpecRows = { ...DEFAULT_ROWS_CARD };
+    const rows: SpecRows = { ...(existing?.rows ?? DEFAULT_ROWS_CARD) };
     const rowsBox = el("div", "app-im-rows");
     const rowInputs: Partial<Record<keyof SpecRows, HTMLElement>> = {};
     const tgtIn = numField("Plan (target)", "the number to reach");
@@ -266,7 +270,7 @@ export function renderMetricsList(o: MetricsListOpts): { refresh: () => void } {
     optField.append(el("span", "app-field-label", "Options"), optBox);
     optField.hidden = true;
     dlg.appendChild(optField);
-    const options: MetricOption[] = [];
+    const options: MetricOption[] = (existing?.options ?? []).map((x) => ({ ...x }));
     const paintOptions = () => {
       clear(optBox);
       options.forEach((op, k) => {
@@ -311,17 +315,31 @@ export function renderMetricsList(o: MetricsListOpts): { refresh: () => void } {
     for (const c of OWN_CADENCES) {
       const op = el("option", "", c[0].toUpperCase() + c.slice(1)) as HTMLOptionElement;
       op.value = c;
-      if (c === "weekly") op.selected = true;
+      if (c === (existing?.cadence ?? "weekly")) op.selected = true;
       cad.appendChild(op);
     }
     field("Cadence", cad);
     dlg.appendChild(el("div", "app-field-hint", "The period the KPI card's grid enters values by — a column per day, week, month or year."));
+    // editing: the form opens on the metric as it stands
+    if (existing) {
+      nameIn.value = existing.name;
+      unitIn.value = existing.unit;
+      tgtIn.value = existing.target !== null ? String(existing.target) : "";
+      lslIn.value = typeof existing.lsl === "number" ? String(existing.lsl) : "";
+      uslIn.value = typeof existing.usl === "number" ? String(existing.usl) : "";
+      trk.value = existing.tracking;
+      optField.hidden = existing.tracking !== "picklist";
+    }
+    for (const k of Object.keys(rowInputs) as (keyof SpecRows)[]) {
+      const f = rowInputs[k];
+      if (f && !rows[k]) f.hidden = true;
+    }
     const err = el("div", "app-cp-err", "");
     dlg.appendChild(err);
     const foot = el("div", "app-modal-footer");
     const cancel = btn("Cancel", "app-link");
     cancel.addEventListener("click", () => scrim.remove());
-    const add = btn("Add metric", "app-btn app-btn-primary");
+    const add = btn(existing ? "Save" : "Add metric", "app-btn app-btn-primary");
     add.addEventListener("click", () => {
       const nm = nameIn.value.trim();
       if (nm === "") {
@@ -334,8 +352,7 @@ export function renderMetricsList(o: MetricsListOpts): { refresh: () => void } {
       };
       const lsl = numOf(lslIn);
       const usl = numOf(uslIn);
-      o.metrics.push({
-        key: keyFor(nm, o.metrics.map((x) => x.key)),
+      const fields: Omit<TemplateMetric, "key"> = {
         name: nm,
         unit: unitIn.value.trim(),
         target: numOf(tgtIn),
@@ -347,7 +364,14 @@ export function renderMetricsList(o: MetricsListOpts): { refresh: () => void } {
         ...(lsl !== null ? { lsl } : {}),
         ...(usl !== null ? { usl } : {}),
         ...(trk.value === "picklist" ? { options: options.filter((x) => x.label.trim() !== "").map((x) => ({ label: x.label.trim(), state: x.state })) } : {}),
-      });
+      };
+      if (existing) {
+        // the key stays — the board's readings hang off it
+        delete existing.lsl;
+        delete existing.usl;
+        delete existing.options;
+        Object.assign(existing, fields);
+      } else o.metrics.push({ key: keyFor(nm, o.metrics.map((x) => x.key)), ...fields });
       scrim.remove();
       changed();
     });

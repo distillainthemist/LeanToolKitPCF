@@ -1276,10 +1276,11 @@ async function renderUsers(body: HTMLElement, me: RosterPerson): Promise<void> {
   const canEdit = me.role === "superadmin";
   if (!canEdit) {
     body.appendChild(
-      el("div", "app-settings-note", "Site admins can view the roster; role and site changes need a super admin.")
+      el("div", "app-settings-note", `Site admins can place people who have no site yet into ${me.site || "their site"}, and set department and crew for their own site's people. Roles and moves between sites need a super admin.`)
     );
   }
-  const sites = parseOrgTree(await orgJson()).map((s) => s.site);
+  const orgTree = parseOrgTree(await orgJson());
+  const sites = orgTree.map((s) => s.site);
   const crewLib = await rosterPatternLibrary();
   let people = await listPeople(true);
   // reload the roster and repaint the list in place (keeps the cards'
@@ -1412,7 +1413,7 @@ async function renderUsers(body: HTMLElement, me: RosterPerson): Promise<void> {
     count.textContent =
       `${shown.length} of ${people.length} ${people.length === 1 ? "person" : "people"}` +
       (revoked > 0 ? ` · ${revoked} revoked` : "");
-    for (const p of shown) list.appendChild(userRow(p, sites, crewLib, canEdit, me, dir, draw));
+    for (const p of shown) list.appendChild(userRow(p, sites, crewLib, canEdit, me, dir, draw, orgTree));
     if (shown.length === 0) {
       list.appendChild(el("div", "app-settings-note", "No users match those filters."));
     }
@@ -1496,7 +1497,8 @@ function userRow(
   canEdit: boolean,
   me: RosterPerson,
   dir: DirectoryLookup,
-  onChanged: () => void
+  onChanged: () => void,
+  orgTree: { site: string; departments: { department: string; areas: string[] }[] }[] = []
 ): HTMLElement {
   const r = el("div", "app-user-row");
   r.dataset.whoid = p.whoId;
@@ -1551,26 +1553,43 @@ function userRow(
   // a revoked person's placement and role are frozen — restore access
   // first, then edit (prevents silent changes to someone locked out)
   const editable = canEdit && p.active;
+  // a SITE ADMIN (Ben, 2026-09-17) places people who have no site yet into
+  // their own site, and sets department + crew for their own site's people
+  const siteAdmin = !canEdit && me.role === "siteadmin" && me.site !== "" && p.active;
+  const canPlace = siteAdmin && p.site === "";
+  const canSubPlace = editable || (siteAdmin && (p.site === "" || p.site === me.site));
   // crew: from the site's roster patterns; a site with none offers only —
   const crew = select(crewsForSite(crewLib, p.site), p.crew ?? "");
-  crew.disabled = !editable;
+  crew.disabled = !canSubPlace || p.site === "";
+  const deptsOf = (siteName: string) => orgTree.find((x) => x.site === siteName)?.departments.map((d) => d.department) ?? [];
+  const dept = select(deptsOf(p.site), p.department);
+  dept.disabled = !canSubPlace || p.site === "";
+  dept.addEventListener("change", () => {
+    if (dept.value !== p.department) p.area = "";
+    p.department = dept.value;
+    void upsertPerson({ ...p });
+  });
   crew.addEventListener("change", () => {
     p.crew = crew.value || undefined;
     void upsertPerson({ ...p });
   });
   // editable site (clearing department/area/crew when the site changes so
   // a stale sub-placement can't outlive its site)
-  const site = select(sites, p.site);
+  const site = select(canPlace ? [me.site] : sites, p.site);
   site.value = p.site;
-  site.disabled = !editable;
+  site.disabled = !editable && !canPlace;
+  if (canPlace) site.title = `Place ${p.who} in ${me.site}`;
   site.addEventListener("change", () => {
     if (site.value !== p.site) {
       p.department = "";
       p.area = "";
       p.crew = undefined;
       rebuildSelect(crew, crewsForSite(crewLib, site.value));
+      rebuildSelect(dept, deptsOf(site.value));
     }
     p.site = site.value;
+    crew.disabled = !canSubPlace || p.site === "";
+    dept.disabled = !canSubPlace || p.site === "";
     void upsertPerson({ ...p });
   });
   // access-group sync rides every roster write (inside upsertPerson); a
@@ -1606,7 +1625,7 @@ function userRow(
     // say WHY it is disabled (Phase 5.3)
     roleCell.appendChild(el("span", "app-user-selfhint", "You can't change your own role"));
   }
-  controls.append(labelledControl("Site", site), labelledControl("Crew", crew), roleCell);
+  controls.append(labelledControl("Site", site), labelledControl("Department", dept), labelledControl("Crew", crew), roleCell);
 
   // revoke / restore app access (removes them from meeting rosters and
   // people pickers while keeping the row so it can be restored). Revoke
