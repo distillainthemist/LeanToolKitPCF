@@ -892,7 +892,7 @@ input[type="color"].app-color:disabled { opacity: 0.4; cursor: default; }
 @media (min-width: 1280px) {
   .app-user-head {
     display: grid;
-    grid-template-columns: minmax(280px, 1.6fr) 140px 120px 170px 150px;
+    grid-template-columns: minmax(240px, 1.4fr) 130px 140px 130px 120px 140px 150px;
     gap: 16px;
     align-items: end;
     padding: 4px 14px 0;
@@ -905,7 +905,7 @@ input[type="color"].app-color:disabled { opacity: 0.4; cursor: default; }
   .app-user-head-count { text-transform: none; letter-spacing: 0; font-weight: 400; font-size: 12.5px; }
   .app-user-row {
     display: grid;
-    grid-template-columns: minmax(280px, 1.6fr) 140px 120px 170px 150px;
+    grid-template-columns: minmax(240px, 1.4fr) 130px 140px 130px 120px 140px 150px;
     align-items: center;
     column-gap: 16px;
   }

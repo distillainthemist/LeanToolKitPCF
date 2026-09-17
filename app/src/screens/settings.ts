@@ -1386,6 +1386,8 @@ async function renderUsers(body: HTMLElement, me: RosterPerson): Promise<void> {
   head.append(
     count,
     el("span", "app-user-head-col", "Site"),
+    el("span", "app-user-head-col", "Department"),
+    el("span", "app-user-head-col", "Area"),
     el("span", "app-user-head-col", "Crew"),
     el("span", "app-user-head-col", "Role"),
     el("span", "app-user-head-col", "Access")
@@ -1562,11 +1564,22 @@ function userRow(
   const crew = select(crewsForSite(crewLib, p.site), p.crew ?? "");
   crew.disabled = !canSubPlace || p.site === "";
   const deptsOf = (siteName: string) => orgTree.find((x) => x.site === siteName)?.departments.map((d) => d.department) ?? [];
+  const areasOf = (siteName: string, d: string) => orgTree.find((x) => x.site === siteName)?.departments.find((x) => x.department === d)?.areas ?? [];
   const dept = select(deptsOf(p.site), p.department);
   dept.disabled = !canSubPlace || p.site === "";
+  const area = select(areasOf(p.site, p.department), p.area);
+  area.disabled = !canSubPlace || p.department === "";
   dept.addEventListener("change", () => {
-    if (dept.value !== p.department) p.area = "";
+    if (dept.value !== p.department) {
+      p.area = "";
+      rebuildSelect(area, areasOf(p.site, dept.value));
+    }
     p.department = dept.value;
+    area.disabled = !canSubPlace || p.department === "";
+    void upsertPerson({ ...p });
+  });
+  area.addEventListener("change", () => {
+    p.area = area.value;
     void upsertPerson({ ...p });
   });
   crew.addEventListener("change", () => {
@@ -1586,10 +1599,12 @@ function userRow(
       p.crew = undefined;
       rebuildSelect(crew, crewsForSite(crewLib, site.value));
       rebuildSelect(dept, deptsOf(site.value));
+      rebuildSelect(area, []);
     }
     p.site = site.value;
     crew.disabled = !canSubPlace || p.site === "";
     dept.disabled = !canSubPlace || p.site === "";
+    area.disabled = !canSubPlace || p.department === "";
     void upsertPerson({ ...p });
   });
   // access-group sync rides every roster write (inside upsertPerson); a
@@ -1625,7 +1640,7 @@ function userRow(
     // say WHY it is disabled (Phase 5.3)
     roleCell.appendChild(el("span", "app-user-selfhint", "You can't change your own role"));
   }
-  controls.append(labelledControl("Site", site), labelledControl("Department", dept), labelledControl("Crew", crew), roleCell);
+  controls.append(labelledControl("Site", site), labelledControl("Department", dept), labelledControl("Area", area), labelledControl("Crew", crew), roleCell);
 
   // revoke / restore app access (removes them from meeting rosters and
   // people pickers while keeping the row so it can be restored). Revoke
