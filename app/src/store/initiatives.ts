@@ -6,6 +6,8 @@
 // later from the template (P6's ＋ Add card from template).
 
 import { bumpChange, memoRead } from "./changes";
+import { firstFreePos, metricsCardSlot, slotsFromTemplate } from "../improvement/boardLayout";
+export { firstFreePos, metricsCardSlot, slotsFromTemplate };
 import { Ben_ltkinitiativesService } from "../generated/services/Ben_ltkinitiativesService";
 import type { Ben_ltkinitiatives } from "../generated/models/Ben_ltkinitiativesModel";
 import { Ben_ltkinitiativeeventsService } from "../generated/services/Ben_ltkinitiativeeventsService";
@@ -217,52 +219,6 @@ export async function createInitiative(
   return i;
 }
 
-/** The board slots an initiative starts from (also the reset target, Ben
- *  2026-09-14): the template's mandatory cards plus the charter and the
- *  action plan, keeping the template's card ids (so a reset keeps the data
- *  of cards that survive), the action plan on kanban with Verify +
- *  reschedule reasons, and ONE Metrics card second after the charter
- *  (`metricsCardId` keeps an existing one's id, so its sub-location data
- *  survives a reset). */
-export function slotsFromTemplate(
-  manifest: import("./mappers").BoardManifest,
-  metricsCardId = ""
-): { pos: number; w: number; h: number; nav: number; cardId: string; cardType: string; title: string; settingsJSON: Record<string, unknown> }[] {
-  // mandatory cards only; the charter and the action plan always come
-  const keep = manifest.slots.filter((s) => {
-    const f = slotFlags(s.settings);
-    return f.mandatory || s.cardType === "CanvasCard" || s.cardType === "ActionBoard";
-  });
-  const slots = keep.map((s, idx) => ({
-    pos: idx + 1,
-    w: s.w,
-    h: s.h,
-    nav: idx + 1,
-    cardId: s.cardId,
-    cardType: s.cardType,
-    title: s.title,
-    // the initiative's action plan gets the Verify column + reschedule
-    // reasons (design 2.4) whatever the template author set
-    settingsJSON:
-      s.cardType === "ActionBoard"
-        ? {
-            ...s.settings,
-            config: { ...((s.settings.config ?? {}) as Record<string, unknown>), view: "kanban", verifyColumn: true, rescheduleReasons: true },
-          }
-        : s.settings,
-  }));
-  // ONE Metrics card for the initiative (Ben, 2026-09-08), one by one,
-  // second after the charter; it lists the metrics from the definition
-  // so a metric added later appears without touching the board
-  const mc = metricsCardSlot();
-  if (metricsCardId !== "") mc.cardId = metricsCardId;
-  slots.splice(Math.min(1, slots.length), 0, mc);
-  slots.forEach((s, k) => {
-    s.pos = k + 1;
-    s.nav = k + 1;
-  });
-  return slots;
-}
 
 /** What a reset would do to an initiative board: the cards it drops
  *  (not from the template, or optional) and the ones it adds back. Card
@@ -312,20 +268,6 @@ export async function resetBoardToTemplate(i: Initiative, actor: { whoId: string
   return true;
 }
 
-/** The initiative's Metrics card slot (1×1). */
-export function metricsCardSlot(): { pos: number; w: number; h: number; nav: number; cardId: string; cardType: string; title: string; settingsJSON: Record<string, unknown> } {
-  const rand = Math.random().toString(36).slice(2, 6);
-  return {
-    pos: 2,
-    w: 1,
-    h: 1,
-    nav: 2,
-    cardId: `metrics-${rand}`,
-    cardType: "MetricsCard",
-    title: "Metrics",
-    settingsJSON: { template: { stage: "", mandatory: true }, config: {} },
-  };
-}
 
 /** The KPI-trend slot a metric gets on the initiative board — titled with
  *  the metric and its target; `metric.key` ties the card to its
@@ -373,12 +315,11 @@ export async function ensureMetricCards(i: Initiative): Promise<{ added: number;
   // of it and no per-metric cards (2026-09-08); single KPI cards that
   // already exist stay (the Metrics card adopts their series)
   if (!manifest.slots.some((sl) => sl.cardType === "MetricsCard")) {
+    // the first free cell — the board's layout is never renumbered
     const slot = metricsCardSlot();
-    manifest.slots.splice(Math.min(1, manifest.slots.length), 0, { pos: slot.pos, w: slot.w, h: slot.h, nav: slot.nav, cardId: slot.cardId, cardType: slot.cardType, title: slot.title, settings: slot.settingsJSON } as (typeof manifest.slots)[number]);
-    manifest.slots.forEach((s, k) => {
-      s.pos = k + 1;
-      s.nav = k + 1;
-    });
+    slot.pos = firstFreePos(manifest.slots, Number(manifest.grid) || 2);
+    slot.nav = Math.max(0, ...manifest.slots.map((s) => s.nav || 0)) + 1;
+    manifest.slots.push({ pos: slot.pos, w: slot.w, h: slot.h, nav: slot.nav, cardId: slot.cardId, cardType: slot.cardType, title: slot.title, settings: slot.settingsJSON } as (typeof manifest.slots)[number]);
     await saveManifest(board.id, manifest);
     return { added: 1, removed: 0, kept: [] };
   }

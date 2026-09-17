@@ -995,6 +995,18 @@ reschedule/cancel history with a reason picklist.
   people (new Department control on the row); roles and moves between
   sites stay with super admins. Bullet points in fields like scope were
   withdrawn from this round by Ben.
+- **Initiative boards keep the template's layout — FIXED 2026-09-17**
+  (Ben: cards came out in a different order and blanks collapsed). The
+  renderer (BoardGrid `placeTiles`) always honoured `pos` and gaps —
+  meetings were never affected; the fault was `slotsFromTemplate`
+  renumbering `pos`/`nav` 1…n and splicing the Metrics card in second.
+  Now (pure, `improvement/boardLayout.ts`, tested): every kept card
+  keeps its template cell and walk order; a Metrics card the author
+  placed on the template is used where it sits, else the Metrics card
+  takes the FIRST FREE CELL (`firstFreePos`, span-aware); the same rule
+  for `ensureMetricCards` and "Add card from template" (its template
+  cell when free). Boards created before the fix: Reset board to
+  template restores the layout.
 - **P10 Reporting** — designed (spec §4).
 
 Each phase ships behind the usual gates + `pac code push`; the specs'

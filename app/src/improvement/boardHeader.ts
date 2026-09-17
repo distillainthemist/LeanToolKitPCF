@@ -708,7 +708,12 @@ export function mountInitiativePane(o: InitiativePaneOpts): InitiativePaneHandle
         b.addEventListener("click", () => {
           menu.remove();
           void (async () => {
-            manifest.slots.push({ ...sl, pos: manifest.slots.length + 1, nav: manifest.slots.length + 1 });
+            // its template cell when that is free, else the first free cell
+            const { firstFreePos } = await import("../store/initiatives");
+            const cols = Number(manifest.grid) || 2;
+            const taken = manifest.slots.some((x) => x.pos === sl.pos);
+            const wanted = sl.pos >= 1 && !taken ? sl.pos : firstFreePos(manifest.slots, cols);
+            manifest.slots.push({ ...sl, pos: wanted, nav: Math.max(0, ...manifest.slots.map((x) => x.nav || 0)) + 1 });
             await saveManifest(myBoard.id, manifest);
             window.location.reload();
           })();

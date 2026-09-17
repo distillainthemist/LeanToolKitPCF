@@ -180,3 +180,20 @@ describe("initiatives listed under several orgs (2026-09-17)", () => {
     expect(orgsOf({ org })).toEqual([org]);
   });
 });
+
+describe("initiative boards keep the template's layout (2026-09-17)", () => {
+  it("firstFreePos honours spans and gaps", async () => {
+    const { firstFreePos } = await import("../improvement/boardLayout");
+    expect(firstFreePos([], 3)).toBe(1);
+    expect(firstFreePos([{ pos: 1, w: 1, h: 1 }, { pos: 2, w: 1, h: 1 }, { pos: 3, w: 1, h: 1 }, { pos: 4, w: 1, h: 1 }, { pos: 5, w: 1, h: 1 }, { pos: 7, w: 1, h: 1 }], 3)).toBe(6);
+    expect(firstFreePos([{ pos: 1, w: 2, h: 2 }], 3)).toBe(3);
+  });
+  it("slotsFromTemplate keeps cells and walk order; Metrics takes the first blank", async () => {
+    const { slotsFromTemplate } = await import("../improvement/boardLayout");
+    const slot = (pos: number, cardType: string, nav: number) => ({ pos, w: 1, h: 1, nav, cardId: `c${pos}`, cardType, title: cardType, settings: { template: { mandatory: true } } });
+    const manifest = { grid: "3", columnTitles: [], archivedSlots: [], slots: [slot(1, "CanvasCard", 1), slot(2, "CaptureCard", 4), slot(3, "ActionBoard", 2), slot(4, "ProcessMap", 2), slot(5, "FaultTree", 5), slot(7, "Fishbone", 3)] };
+    const out = slotsFromTemplate(manifest as never);
+    expect(out.filter((s) => s.cardType !== "MetricsCard").map((s) => [s.cardId, s.pos, s.nav])).toEqual([["c1", 1, 1], ["c2", 2, 4], ["c3", 3, 2], ["c4", 4, 2], ["c5", 5, 5], ["c7", 7, 3]]);
+    expect(out.find((s) => s.cardType === "MetricsCard")?.pos).toBe(6);
+  });
+});
