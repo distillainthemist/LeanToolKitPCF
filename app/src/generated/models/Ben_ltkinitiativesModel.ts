@@ -14,6 +14,7 @@ export const Ben_ltkinitiativesstatuscode = {
 export type Ben_ltkinitiativesstatuscode = keyof typeof Ben_ltkinitiativesstatuscode;
 
 export interface Ben_ltkinitiativesBase {
+  ben_alsoorgsjson?: string;
   ben_area?: string;
   ben_boardid?: string;
   ben_company?: string;

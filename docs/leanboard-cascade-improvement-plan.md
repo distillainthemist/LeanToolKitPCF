@@ -975,6 +975,26 @@ reschedule/cancel history with a reason picklist.
   action card (an `init-` board also ties the action to its initiative);
   save upserts, bumps "actions" and fires `ltk-actions-changed`, which
   the hub listens to and re-feeds My actions without a reload.
+- **Field feedback round — BUILT 2026-09-17.** (1) Initiatives under
+  SEVERAL departments: `Initiative.alsoOrgs` in the new
+  `ben_alsoorgsjson` column (deployed to dev; next release
+  SOLUTION-CARRYING); `orgsOf(i)` feeds the register's scope crumb, the
+  team grouping, confidentiality's org-owner test and the Gantt card's
+  org filter; "Also shown in" chips + site/department/area add row on
+  the create form and Edit details (`improvement/alsoOrgs.ts`); the Org
+  cell reads "Dept +n". Several sponsors / owners / leads were already
+  possible — a role's People = Several on the template; the register
+  now lists every owner. (2) The Improvement and Value drivers tabs
+  scroll inside the hub tab (`.ltk-lh-ext > .app-im-wrap` overflow).
+  (3) Own metrics are editable after adding: "Edit…" reopens the form
+  (name, unit, plan, limits, tracking + options, cadence, rows); the key
+  stays so readings stay attached. (4) The priority overlay's charter
+  card has a definite height, so a tall charter scrolls inside it.
+  (5) Settings › Users: a SITE ADMIN places people who have no site yet
+  into their own site and sets department + crew for their site's
+  people (new Department control on the row); roles and moves between
+  sites stay with super admins. Bullet points in fields like scope were
+  withdrawn from this round by Ben.
 - **P10 Reporting** — designed (spec §4).
 
 Each phase ships behind the usual gates + `pac code push`; the specs'

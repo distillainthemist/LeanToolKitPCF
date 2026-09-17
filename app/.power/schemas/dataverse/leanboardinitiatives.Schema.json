@@ -10,6 +10,14 @@
       "x-ms-dataverse-primary-id": "ben_ltkinitiativeid",
       "x-ms-dataverse-primary-name": "ben_name",
       "properties": {
+        "ben_alsoorgsjson": {
+          "type": "string",
+          "title": "Also shown in (orgs JSON)",
+          "x-ms-dataverse-attribute": "ben_alsoorgsjson",
+          "x-ms-dataverse-type": "MemoType",
+          "x-ms-schema-name": "ben_alsoorgsjson",
+          "maxLength": 4000
+        },
         "ben_area": {
           "type": "string",
           "title": "Area",

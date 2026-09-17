@@ -39,8 +39,8 @@ import {
   nextGateFor,
   orgKeyOf,
   ragInputsFor,
-  validateNewInitiative,
-} from "./initiativeModel";
+  validateNewInitiative, orgsOf } from "./initiativeModel";
+import { renderAlsoOrgs } from "./alsoOrgs";
 import { initiativeRag } from "../priorities/model";
 import {
   primaryMetric,
@@ -160,7 +160,7 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
 
     const visible = (i: Initiative): boolean =>
       (search === "" || i.title.toLowerCase().includes(search.toLowerCase())) &&
-      inScope(i.org) &&
+      orgsOf(i).some(inScope) &&
       (f.period === "" || i.period === f.period) &&
       (f.status === "all" || i.status === f.status) &&
       (!f.flagOnly || i.flag !== "") &&
@@ -231,7 +231,7 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
       for (const i of groups.mine) table.appendChild(rowFor(i));
       // 2 — owned by my team (org owners only)
       if (ownedOrgKeys.length > 0) {
-        const scoped = f.teamScope === "" ? groups.team : groups.team.filter((i) => orgKeyOf(i.org).startsWith(f.teamScope.replace(/\|+$/, "")));
+        const scoped = f.teamScope === "" ? groups.team : groups.team.filter((i) => orgsOf(i).some((o) => orgKeyOf(o).startsWith(f.teamScope.replace(/\|+$/, ""))));
         const head = groupHead(`Owned by my team · ${scoped.length}`);
         const scope = el("select", "app-input app-im-scope") as HTMLSelectElement;
         const opts: [string, string][] = [["", "All my orgs + children"]];
@@ -539,12 +539,13 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
       // meta = priority statement · owner (org and roles are columns now)
       const primary = i.priorities.find((p) => p.primary) ?? i.priorities[0] ?? null;
       const priorityText = primary ? (priorityStatement.get(primary.priorityId) ?? "Linked priority") : "Other";
-      const owner = (i.roles.owner ?? [])[0]?.who ?? "";
+      const owner = (i.roles.owner ?? []).map((p) => p.who).join(", ");
       main.appendChild(el("div", "app-im-meta", [priorityText, owner].filter((x) => x !== "").join(" · ")));
       row.appendChild(main);
       // org column: department (or site), full chain on hover
-      const orgCell = el("div", "app-im-cell", i.org.department || i.org.site);
-      orgCell.title = [i.org.company, i.org.site, i.org.department, i.org.area].filter((x) => x !== "").join(" › ");
+      const also = i.alsoOrgs ?? [];
+      const orgCell = el("div", "app-im-cell", (i.org.department || i.org.site) + (also.length > 0 ? ` +${also.length}` : ""));
+      orgCell.title = [[i.org.company, i.org.site, i.org.department, i.org.area].filter((x) => x !== "").join(" › "), ...also.map((o) => `also: ${[o.site, o.department, o.area].filter((x) => x !== "").join(" › ")}`)].join("\n");
       row.appendChild(orgCell);
       // your role(s) on this initiative
       const roleKeys = myRoles(i, viewer.whoId);
@@ -886,6 +887,11 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
         const orgRow = el("div", "app-im-orgrow");
         orgRow.append(siteSel, deptSel, areaSel);
         field("Organisation", orgRow);
+        // also shown in: further departments the work spans
+        const alsoOrgs: Initiative["org"][] = [];
+        const alsoHost = el("div");
+        renderAlsoOrgs({ host: alsoHost, sites, siteCo, list: alsoOrgs, primary: () => ({ company: siteCo[siteSel.value] ?? "", site: siteSel.value, department: deptSel.value, area: areaSel.value }) });
+        field("Also shown in", alsoHost, "Other departments this initiative belongs to — it lists under them too. The organisation above stays its owner.");
         // linked priorities (multi, one primary); a handoff from a priority
         // arrives pre-linked and locked
         const links: { priorityId: string; primary: boolean; label: string; locked?: boolean }[] = lockedPriority
@@ -1073,6 +1079,7 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
               title: title.value.trim(),
               description: desc.value.trim(),
               org: { company: siteCo[siteSel.value] ?? "", site: siteSel.value, department: deptSel.value, area: areaSel.value },
+              alsoOrgs,
               confidential: confCb.checked,
               flag: "" as const,
               flagNote: "",

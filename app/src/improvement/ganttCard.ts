@@ -47,8 +47,7 @@ export function mountGanttCard(opts: CardMount): () => void {
       (i) =>
         i.status === "active" &&
         !i.confidential &&
-        (site === "" || i.org.site === site) &&
-        (department === "" || i.org.department === department)
+        [i.org, ...(i.alsoOrgs ?? [])].some((o) => (site === "" || o.site === site) && (department === "" || o.department === department))
     );
     const weeks = Number(cfg(opts, "gxWeeks")) || 4;
     const today = todayIso();

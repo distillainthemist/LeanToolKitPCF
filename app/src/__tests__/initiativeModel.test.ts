@@ -168,3 +168,15 @@ describe("metric limits (2026-09-03)", () => {
     expect(metricRag({ last: 19, target: 15, usl: 18, lsl: 12, goodDirection: "range" })).toBe("red");
   });
 });
+
+describe("initiatives listed under several orgs (2026-09-17)", () => {
+  it("parseAlsoOrgs is defensive; orgsOf leads with the primary", async () => {
+    const { orgsOf, parseAlsoOrgs } = await import("../improvement/initiativeModel");
+    expect(parseAlsoOrgs("")).toEqual([]);
+    expect(parseAlsoOrgs("nope")).toEqual([]);
+    expect(parseAlsoOrgs(JSON.stringify([{ site: "Mine", department: "Ops" }, { department: "no site" }]))).toEqual([{ company: "", site: "Mine", department: "Ops", area: "" }]);
+    const org = { company: "P", site: "Mine", department: "Maint", area: "" };
+    expect(orgsOf({ org, alsoOrgs: [{ ...org, department: "Ops" }] }).map((o) => o.department)).toEqual(["Maint", "Ops"]);
+    expect(orgsOf({ org })).toEqual([org]);
+  });
+});

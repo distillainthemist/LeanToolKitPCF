@@ -22,8 +22,7 @@ import {
   parseSnapshot,
   parseStringMap,
   snapshotOf,
-  stageTargetsFrom,
-} from "../improvement/initiativeModel";
+  stageTargetsFrom, parseAlsoOrgs } from "../improvement/initiativeModel";
 import { TemplateMetric, InitiativeTemplate, parseMetrics, slotFlags } from "../improvement/templateModel";
 
 function fromRow(r: Ben_ltkinitiatives): Initiative {
@@ -57,6 +56,7 @@ function fromRow(r: Ben_ltkinitiatives): Initiative {
     metrics: parseMetrics(r.ben_metricsjson ?? ""),
     gate: parsePendingGate(r.ben_gatejson ?? ""),
     stageTargets: parseStringMap(r.ben_stagetargetsjson ?? ""),
+    alsoOrgs: parseAlsoOrgs(r.ben_alsoorgsjson ?? ""),
   };
 }
 
@@ -114,6 +114,7 @@ export async function saveInitiative(i: Initiative): Promise<string> {
       ben_metricsjson: JSON.stringify(i.metrics),
       ben_gatejson: i.gate ? JSON.stringify(i.gate) : "",
       ben_stagetargetsjson: JSON.stringify(i.stageTargets),
+      ben_alsoorgsjson: JSON.stringify(i.alsoOrgs ?? []),
     }
   );
 }

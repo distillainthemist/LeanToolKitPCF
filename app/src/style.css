@@ -3858,3 +3858,4 @@ textarea.app-cp-statement { font-size: 14px; font-weight: 500; }
    cut off below the fold — 2026-09-17) */
 .ltk-lh-ext > .app-im-wrap, .ltk-lh-ext > .app-vd-wrap { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
 .app-im-wrap > * { flex: none; }
+.app-im-also { display: flex; flex-direction: column; gap: 8px; }

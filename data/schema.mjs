@@ -622,6 +622,7 @@ export const TABLES = [
       ben_metricsjson: { ...memo(10000), display: "Metrics (JSON)" },
       ben_gatejson: { ...memo(4000), display: "Pending gate (JSON)" },
       ben_stagetargetsjson: { ...memo(2000), display: "Stage target dates (JSON)" },
+      ben_alsoorgsjson: { ...memo(4000), display: "Also shown in (orgs JSON)" }, // further departments an initiative is listed under (2026-09-17)
     },
     key: ["ben_initiativeid"],
     role: { delete: true },

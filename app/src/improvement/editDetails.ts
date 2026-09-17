@@ -6,6 +6,7 @@
 // the title changes); History gets an "edited" event. Reached from the
 // Improvement row kebab and the board header's ⋮.
 
+import { renderAlsoOrgs } from "./alsoOrgs";
 import { el, clear } from "../../../shared/ui/dom";
 import { parseOrgTree } from "../../../shared/schema/meeting";
 import { improvementSettingsJson, orgJson, siteCompanies } from "../store/config";
@@ -125,6 +126,11 @@ export function openEditDetails(o: EditDetailsOpts): void {
     const orgRow = el("div", "app-im-orgrow");
     orgRow.append(siteSel, deptSel, areaSel);
     field("Organisation", orgRow);
+    // also shown in: further departments the work spans
+    const alsoOrgs: Initiative["org"][] = (i.alsoOrgs ?? []).map((x) => ({ ...x }));
+    const alsoHost = el("div");
+    renderAlsoOrgs({ host: alsoHost, sites, siteCo, list: alsoOrgs, primary: () => ({ company: siteCo[siteSel.value] ?? "", site: siteSel.value, department: deptSel.value, area: areaSel.value }) });
+    field("Also shown in", alsoHost, "Other departments this initiative belongs to — it lists under them too. The organisation above stays its owner.");
 
     // linked priorities: pre-filled with real statements
     const links: { priorityId: string; primary: boolean; label: string }[] = i.priorities.map((l) => ({ ...l, label: l.priorityId }));
@@ -360,6 +366,7 @@ export function openEditDetails(o: EditDetailsOpts): void {
           description: desc.value.trim(),
           period: period.value.trim(),
           org: { company: siteCo[siteSel.value] ?? "", site: siteSel.value, department: deptSel.value, area: areaSel.value },
+          alsoOrgs,
           confidential: confCb.checked,
           roles: rolePeople,
           priorities: links.map((l) => ({ priorityId: l.priorityId, primary: l.primary })),

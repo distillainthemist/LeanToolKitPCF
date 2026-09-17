@@ -46,6 +46,9 @@ export interface Initiative {
   description: string;
   singleAction: boolean;
   org: { company: string; site: string; department: string; area: string };
+  /** Further orgs the initiative is ALSO listed under (2026-09-17: work
+   *  that spans departments); `org` stays the primary, owning org. */
+  alsoOrgs?: { company: string; site: string; department: string; area: string }[];
   stageId: string;
   status: InitiativeStatus;
   confidential: boolean;
@@ -130,6 +133,24 @@ export function orgKeyOf(o: Initiative["org"]): string {
   return [o.company, o.site, o.department, o.area].join("|");
 }
 
+/** Every org an initiative is listed under: its own, then the also-orgs. */
+export function orgsOf(i: Pick<Initiative, "org" | "alsoOrgs">): Initiative["org"][] {
+  return [i.org, ...(i.alsoOrgs ?? [])];
+}
+
+export function parseAlsoOrgs(raw: string): Initiative["org"][] {
+  try {
+    const a = JSON.parse(raw || "[]") as unknown;
+    if (!Array.isArray(a)) return [];
+    return a
+      .map((x) => (x && typeof x === "object" ? (x as Record<string, unknown>) : {}))
+      .map((x) => ({ company: str(x.company), site: str(x.site), department: str(x.department), area: str(x.area) }))
+      .filter((x) => x.site !== "");
+  } catch {
+    return [];
+  }
+}
+
 /** Is `org` at or under an owned key ("Pechey|Mine||" owns "Pechey|Mine|Ops|"). */
 function underKey(orgKey: string, ownedKey: string): boolean {
   const a = orgKey.split("|");
@@ -152,7 +173,7 @@ export function canSee(i: Initiative, v: ImprovementViewer): boolean {
   if (!i.confidential) return true;
   if (v.isAdmin) return true;
   if (myRoles(i, v.whoId).length > 0) return true;
-  return v.ownedOrgKeys.some((k) => underKey(orgKeyOf(i.org), k));
+  return v.ownedOrgKeys.some((k) => orgsOf(i).some((o) => underKey(orgKeyOf(o), k)));
 }
 
 export interface ImprovementGroups {
@@ -166,7 +187,7 @@ export function groupInitiatives(list: Initiative[], v: ImprovementViewer): Impr
   const visible = list.filter((i) => canSee(i, v));
   return {
     mine: visible.filter((i) => myRoles(i, v.whoId).length > 0),
-    team: visible.filter((i) => v.ownedOrgKeys.some((k) => underKey(orgKeyOf(i.org), k))),
+    team: visible.filter((i) => v.ownedOrgKeys.some((k) => orgsOf(i).some((o) => underKey(orgKeyOf(o), k)))),
     all: visible,
     hiddenConfidential: list.length - visible.length,
   };
