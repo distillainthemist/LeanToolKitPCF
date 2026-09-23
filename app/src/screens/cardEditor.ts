@@ -268,13 +268,17 @@ export function mountCardEditor(
         (slot.title || cardLabel(slot.cardType)) + (isLive && board.kind !== "project" ? " — standard content" : "");
       bar.append(back, el("span", "app-board-title", heading), saved);
       if (isLive) {
-        bar.appendChild(
-          el(
-            "span",
-            "app-settings-note",
-            "New meetings start from this unless they carry a previous meeting."
-          )
-        );
+        // the standing-content hint is a MEETING notion; an initiative board
+        // has no occurrences (2026-09-23)
+        if (board.kind !== "project") {
+          bar.appendChild(
+            el(
+              "span",
+              "app-settings-note",
+              "New meetings start from this unless they carry a previous meeting."
+            )
+          );
+        }
         back.addEventListener("click", (e) => {
           e.preventDefault();
           // overlay host closes in place; the route flavour walks back
