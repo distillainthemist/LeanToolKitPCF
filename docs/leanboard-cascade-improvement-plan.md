@@ -1067,7 +1067,8 @@ reschedule/cancel history with a reason picklist.
   initiative board is open. The store infers the board for a
   board-less write from an `init-…:board` key and clears it for a
   `hub…` key. Hub labels a board channel by the board's name. Tests
-  631. Hosted checks Ben's; app-only.
+  631. Hosted checks Ben's. Released with the Priorities grid wrap fix
+  (columns `minmax(0, 1fr)`) as **v0.56.0** (app-only, 2026-09-24).
 - **Where things stand (2026-09-24).** Released: v0.51.0 (2026-09-14,
   solution-carrying — value driver tree, grid entry, Metrics card,
   meeting-board driver links, rituals in several orgs, driver popup,
