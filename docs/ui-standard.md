@@ -61,6 +61,11 @@ the same commit.
 - **The top bar**: brand left; Report and Settings as text-links; the
   ONE accent primary at the far right is `＋ Add action`
   (`.app-btn-addaction`, 40px) — always present, always the same place.
+  Its dialog carries a **Goes to** select when a board is open (that
+  board by default, or Personal) and an **Initiative** select elsewhere
+  (none by default); the same Initiative select appears on the hub's
+  action rows, so a personal action can be moved onto an initiative
+  after the fact.
 - **Scope bars** (Cadence, Actions): `Person | Organisation` select +
   a roster search with a "Me" shortcut, or the cascading site →
   department → area selects; flush left, no inset. Group-by chips

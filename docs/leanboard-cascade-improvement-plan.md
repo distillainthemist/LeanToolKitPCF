@@ -1050,6 +1050,24 @@ reschedule/cancel history with a reason picklist.
   initiative — line 1 "**Name**: objective", line 2 Plan / Actual with
   the traffic light; the Dynamic card captions its first starred metric
   with the objective.
+- **2026-09-24 — actions orphaned as personal in production.** Cause
+  (two roads): rows written before v0.55.0 on initiative board cards
+  carried no initiative id (v0.55.0 heals them on read), and the
+  top-bar ＋ Add action / Actions-tab composer wrote personal actions
+  by design, with nothing to heal from. Built: the shared action
+  dialog gains an **Initiative** select (`relinkInitiative` —
+  channel-keyed actions move onto the initiative board's channel
+  `init-…:board`, card-keyed ones keep their card and gain the id;
+  none unlinks and returns a channel action to Personal); the hub's
+  rows offer it (active initiatives fed from the host, dynamic import
+  keeps the improvement store out of the hub chunk); quick add gains
+  a **Goes to** select defaulting to the OPEN board (initiative or
+  meeting; the store stamps the initiative id for an `init-` board)
+  with Personal as the alternative, and the Initiative select when no
+  initiative board is open. The store infers the board for a
+  board-less write from an `init-…:board` key and clears it for a
+  `hub…` key. Hub labels a board channel by the board's name. Tests
+  631. Hosted checks Ben's; app-only.
 - **Where things stand (2026-09-24).** Released: v0.51.0 (2026-09-14,
   solution-carrying — value driver tree, grid entry, Metrics card,
   meeting-board driver links, rituals in several orgs, driver popup,

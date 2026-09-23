@@ -147,12 +147,17 @@ export async function upsertActions(
     // (Ben, 2026-09-23) — stamped here, at the one write path
     const home = boardOf(action, boardId);
     if (!action.initiativeId && home.startsWith("init-")) action.initiativeId = await initiativeIdForBoard(home);
-    await stampVisibility(action, boardId);
+    // no board given (hub edits, quick add): an action keyed to an
+    // initiative board's channel lives on that board; a personal one
+    // lives on none (a relink off an initiative clears it). Anything
+    // else leaves the stamped board alone.
+    const stamped = boardId !== undefined ? boardId : home.startsWith("init-") ? home : action.instanceId.startsWith("hub") ? "" : undefined;
+    await stampVisibility(action, stamped);
     await upsertWhere(
       Ben_ltkactionsService,
       eq("ben_actionid", action.id),
       (row) => row.ben_ltkactionid,
-      actionToRow(action, boardId)
+      actionToRow(action, stamped)
     );
   }
   bumpChange("actions");

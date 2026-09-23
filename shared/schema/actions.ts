@@ -140,6 +140,47 @@ export function actionBelongsTo(i: { id: string; boardId: string }, a: Pick<LtkA
   return i.boardId !== "" && a.instanceId.startsWith(`${i.boardId}:`);
 }
 
+/** An initiative an action can be linked to from a dialog (the hub's rows,
+ *  the top-bar quick add). */
+export interface InitiativeTarget {
+  id: string;
+  title: string;
+  /** The initiative's own board ("init-…"), "" when it has none. */
+  boardId: string;
+}
+
+/** A board's own channel — where an action raised for the board as a
+ *  whole (quick add, a hub relink) lives: "<boardId>:board". The board's
+ *  action surface lists every action on the board, so it shows there. */
+export function boardChannelKey(boardId: string): string {
+  return `${boardId}:board`;
+}
+
+/** Does the action move with a relink? The personal channel, an
+ *  initiative board's channel and the legacy single-action key do; a
+ *  card-keyed action and a meeting board's channel keep their home (the
+ *  meeting still owns it — the link is an extra). */
+export function isChannelKeyed(instanceId: string): boolean {
+  return instanceId === "" || instanceId.startsWith("hub") || instanceId.startsWith("improvement:") || /^init-[^:]*:board$/.test(instanceId);
+}
+
+/** Link an action to an initiative, or unlink it (target null). The
+ *  initiative id is what the register, overlay and Gantt read; a
+ *  channel-keyed action also moves onto the initiative board's channel
+ *  (or the legacy key when the initiative has no board), and back to the
+ *  personal channel on unlink. A card-keyed action keeps its card. */
+export function relinkInitiative(a: LtkAction, target: InitiativeTarget | null, personalWho: string): void {
+  const moves = isChannelKeyed(a.instanceId);
+  if (target === null) {
+    if (a.initiativeId === undefined) return;
+    delete a.initiativeId;
+    if (moves && !a.instanceId.startsWith("hub")) a.instanceId = `hub:${personalWho}`;
+    return;
+  }
+  a.initiativeId = target.id;
+  if (moves) a.instanceId = target.boardId !== "" ? boardChannelKey(target.boardId) : `improvement:${target.id}`;
+}
+
 /** Is a viewer allowed to see this action? Non-confidential: everyone.
  *  Confidential: super admins, and anyone in the stored visible set
  *  (creator and assignees are always in it even if the set is stale). */

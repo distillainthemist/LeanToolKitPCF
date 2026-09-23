@@ -262,9 +262,18 @@ model section) — the canvas/PCF sections there are historical.
 
 - One central table on the standard channel: every card raises actions
   keyed by `instanceId` = `board:card`; the hub's personal list uses
-  `hub:<whoId>`. `initiativeId` is stamped at the ONE write path for any
-  action whose board is an initiative board and healed onto older rows
-  on read (`actionBelongsTo` is the one match rule readers use). PDCA
+  `hub:<whoId>`; an action raised for a board as a whole (quick add, a
+  relink) lives on the board's channel `<boardId>:board`
+  (`boardChannelKey`), which the board's action surface lists and the
+  hub labels by the board's name. `initiativeId` is stamped at the ONE
+  write path for any action whose board is an initiative board and
+  healed onto older rows on read (`actionBelongsTo` is the one match
+  rule readers use). When no board is given to the write, an
+  `init-…:board` key stamps that board and a `hub…` key clears it.
+  `relinkInitiative` (shared) moves an action onto / off an initiative
+  from a dialog: channel-keyed actions (personal, initiative channel,
+  legacy `improvement:`) move with the link; card-keyed ones and a
+  meeting board's channel keep their home and only gain the id. PDCA
   progression rides `ben_pdca` (Closed mirrors done).
 - **Confidential actions** (`ben_confidential` / `ben_createdby` /
   `ben_visiblejson`): seen by the creator, the assignees, each
@@ -277,9 +286,12 @@ model section) — the canvas/PCF sections there are historical.
   through Dataverse itself.
 - **Entry points:** every card's action dialog (Confidential check
   included), the action board's kanban / list, the hub's rows, the
-  top-bar **＋ Add action** (always the viewer's personal list, assignee
-  defaults to the viewer), the Actions tab's composer (assigns to the
-  scoped person). The focused card view flushes a pending save on
+  top-bar **＋ Add action** (assignee defaults to the viewer; "Goes to"
+  defaults to the OPEN board — initiative or meeting — else Personal;
+  an Initiative select links a personal / meeting-board action
+  outright), the Actions tab's composer (assigns to the scoped person).
+  The hub's rows and quick add pass `initiatives` (active, by title)
+  to the shared dialog, whose Initiative select relinks on save. The focused card view flushes a pending save on
   leave and fires `ltk-actions-changed`; boards and the hub refresh on
   that signal.
 

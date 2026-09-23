@@ -7,7 +7,7 @@
 // actions are never hard-deleted (the danger button cancels); Done/Due/
 // Overdue are capitalised; circle colours are set inline (Safari rule).
 
-import { ActionPdca, ACTION_PDCA, isOverdue, LtkAction, newAction, PDCA_LABELS, PDCA_QUARTERS, pdcaOf } from "../schema/actions";
+import { ActionPdca, ACTION_PDCA, InitiativeTarget, isOverdue, LtkAction, newAction, PDCA_LABELS, PDCA_QUARTERS, pdcaOf, relinkInitiative } from "../schema/actions";
 import { Person } from "../schema/people";
 import { textOn } from "../tokens";
 import { el } from "./dom";
@@ -366,6 +366,14 @@ export interface ActionDialogOptions {
   linkTargets?: { key: string; label: string }[];
   /** The origin card's instance key — the select's initial value. */
   linkTarget?: string;
+  /** Initiatives the action may be linked to (2026-09-24) — shown as an
+   *  "Initiative" select with a none option; a change relinks on save. */
+  initiatives?: InitiativeTarget[];
+  /** The viewer's whoId — an unlinked channel action returns to their
+   *  personal channel. */
+  personalWho?: string;
+  /** Host-supplied rows placed under Issue (quick add's destination). */
+  extraFields?: { label: string; control: HTMLElement }[];
 }
 
 /** The raise/edit action dialog (with escalation, completion and cancel). */
@@ -432,6 +440,19 @@ export function openActionDialog(o: ActionDialogOptions): void {
     );
   }
 
+  // initiative link (2026-09-24): the hub's rows and quick add offer the
+  // list; "none" unlinks. Untouched, the save leaves the link alone.
+  let initSel: HTMLSelectElement | null = null;
+  const initOrigin = action.initiativeId ?? "";
+  if (o.initiatives !== undefined && o.initiatives.length > 0) {
+    const known = o.initiatives.some((i) => i.id === initOrigin);
+    initSel = selectInput(initOrigin, [
+      { value: "", label: "— none —" },
+      ...(initOrigin !== "" && !known ? [{ value: initOrigin, label: "(current initiative)" }] : []),
+      ...o.initiatives.map((i) => ({ value: i.id, label: i.title })),
+    ]);
+  }
+
   const save = () => {
     if (o.isNew && !form.hasContent() && issue.value.trim() === "") return;
     action.issue = issue.value.trim();
@@ -448,6 +469,10 @@ export function openActionDialog(o: ActionDialogOptions): void {
       // moved to another card: drop the origin's element context so it
       // reads as a card-level action of its new home
       if (linkSel.value !== origin) action.context = { source: "card", sourceId: "" };
+    }
+    if (initSel !== null && initSel.value !== initOrigin) {
+      const target = o.initiatives?.find((i) => i.id === initSel!.value) ?? null;
+      relinkInitiative(action, target, o.personalWho ?? "");
     }
     dlg.close();
     o.onCommit();
@@ -482,7 +507,9 @@ export function openActionDialog(o: ActionDialogOptions): void {
     buttons,
   });
   dlg.body.appendChild(fieldRow("Issue", issue));
+  for (const f of o.extraFields ?? []) dlg.body.appendChild(fieldRow(f.label, f.control));
   if (linkSel !== null) dlg.body.appendChild(fieldRow("Linked card", linkSel));
+  if (initSel !== null) dlg.body.appendChild(fieldRow("Initiative", initSel));
   dlg.body.appendChild(form.el);
   dlg.body.appendChild(sectionLabel("PDCA state"));
   dlg.body.appendChild(pdcaWrap);

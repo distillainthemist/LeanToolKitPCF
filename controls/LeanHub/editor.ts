@@ -16,7 +16,7 @@ import { LTK_BASE_CSS } from "../../shared/ui/baseCss";
 import { copyText } from "../../shared/ui/clipboard";
 import { clear, el, ensureStylesheet } from "../../shared/ui/dom";
 import { parsePrompts, Prompts, renderGhost, renderTitleBar } from "../../shared/ui/chrome";
-import { pdcaOf, isOverdue, LtkAction, newAction } from "../../shared/schema/actions";
+import { pdcaOf, isOverdue, InitiativeTarget, LtkAction, newAction } from "../../shared/schema/actions";
 import { Person } from "../../shared/schema/people";
 import { openActionDialog, pdcaDisc, confidentialGlyph } from "../../shared/ui/actionUi";
 import { DAY_LABELS, MONTH_LABELS, isoLocal, startOfDay } from "../../shared/schema/recurrence";
@@ -105,6 +105,8 @@ export class LeanHubView {
   private viewerId = "";
   private actions: LtkAction[] = [];
   private sourceLabels: Record<string, string> = {};
+  /** Initiatives an action row may be linked to (2026-09-24). */
+  private initiatives: InitiativeTarget[] = [];
   private canEditSite = false;
   private theme: Theme = defaultTheme();
   private cardTitle = "";
@@ -216,6 +218,11 @@ export class LeanHubView {
     if (JSON.stringify(actions) === JSON.stringify(this.actions)) return;
     this.actions = actions;
     this.render();
+  }
+
+  setInitiatives(list: InitiativeTarget[]): void {
+    if (JSON.stringify(list) === JSON.stringify(this.initiatives)) return;
+    this.initiatives = list;
   }
 
   setSourceLabels(labels: Record<string, string>): void {
@@ -1047,6 +1054,8 @@ export class LeanHubView {
           action,
           people: this.people,
           isNew: false,
+          initiatives: this.initiatives,
+          personalWho: this.viewerId,
           onCommit: () => {
             this.cb.onActions(this.actions);
             this.render();
