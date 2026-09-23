@@ -3839,7 +3839,7 @@ textarea.app-cp-statement { font-size: 14px; font-weight: 500; }
 .app-mc-chart .ltk-kt-svg { flex: 1; min-height: 0; }
 .app-mc { height: 100%; }
 /* the Objectives row: metric name · Plan / Actual with a traffic light */
-.app-cp-objective { display: flex; align-items: flex-start; gap: 10px; padding: 6px 0; }
+.app-cp-objective { display: flex; align-items: flex-start; gap: 10px; padding: 8px 12px; }
 .app-cp-objective + .app-cp-objective { border-top: 1px solid #f1efec; }
 .app-cp-objective-light { width: 12px; height: 12px; border-radius: 50%; flex: none; margin-top: 3px; }
 .app-cp-objective-text { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
