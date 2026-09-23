@@ -3859,3 +3859,5 @@ textarea.app-cp-statement { font-size: 14px; font-weight: 500; }
 .ltk-lh-ext > .app-im-wrap, .ltk-lh-ext > .app-vd-wrap { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
 .app-im-wrap > * { flex: none; }
 .app-im-also { display: flex; flex-direction: column; gap: 8px; }
+.app-im-metricobj { font-size: 12.5px; padding: 4px 8px; margin: 2px 0 4px; width: 100%; box-sizing: border-box; }
+.app-cp-objective-name .app-cp-objective-obj { font-weight: 400; color: #57534a; }

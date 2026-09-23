@@ -38,6 +38,9 @@ export interface MetricValue {
   display: string;
   target: number | null;
   rag: "green" | "amber" | "red" | null;
+  /** ★ starred (several may be) + the metric's objective sentence. */
+  starred: boolean;
+  objective: string;
 }
 
 export interface InitiativeMetricState {
@@ -71,12 +74,12 @@ export function buildMetricState(
       const points = doc?.points ?? [];
       const ml = driverLast.get(`${i.id}|${key}`) ?? (def.driverId && def.driverLink !== "leads" ? driverLast.get(def.driverId) : undefined) ?? null;
       if (ml?.display) {
-        values.push({ key, name: def.name, unit: "", last: null, display: ml.display.label, target: null, rag: ml.display.rag });
+        values.push({ key, name: def.name, unit: "", last: null, display: ml.display.label, target: null, rag: ml.display.rag, starred: def.primary === true, objective: def.objective ?? "" });
         continue;
       }
       if (def.tracking !== "value") {
         const disp = trackingDisplay(def, ml?.raw ?? "");
-        values.push({ key, name: def.name, unit: "", last: null, display: disp.label, target: null, rag: disp.rag });
+        values.push({ key, name: def.name, unit: "", last: null, display: disp.label, target: null, rag: disp.rag, starred: def.primary === true, objective: def.objective ?? "" });
         continue;
       }
       const last = ml ? ml.last : points.length > 0 ? points[points.length - 1].value : null;
@@ -102,11 +105,14 @@ export function buildMetricState(
         display: last === null ? "" : `${last}${def.unit}`,
         target: reading.target,
         rag: metricRag(reading),
+        starred: def.primary === true,
+        objective: def.objective ?? "",
       });
     }
-    // ★ primary first — the register, tiles and roll-up read values[0]
-    const primaryKey = i.metrics.find((m) => m.primary === true)?.key ?? i.metrics[0]?.key ?? "";
-    values.sort((a, b) => (a.key === primaryKey ? -1 : b.key === primaryKey ? 1 : 0));
+    // ★ starred first (definition order within) — the register, tiles and
+    // roll-up read values[0]; the Objectives row reads every starred one
+    if (!values.some((v) => v.starred) && values.length > 0) values[0].starred = true;
+    values.sort((a, b) => (a.starred === b.starred ? 0 : a.starred ? -1 : 1));
     out.set(i.id, { values, rag: worstMetricRag(values.map((v) => v.rag)) });
   }
   return out;

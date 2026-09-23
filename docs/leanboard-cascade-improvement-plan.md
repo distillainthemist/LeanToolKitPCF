@@ -1039,6 +1039,17 @@ reschedule/cancel history with a reason picklist.
   line: never for ActionBoard / Metrics / Gantt / Escalation / Priorities
   cards (data elsewhere); "Nothing recorded yet" on initiative boards
   (`BoardGrid.setEmptyLineText`).
+- **Several starred metrics + objective — BUILT 2026-09-23** (Ben). ★
+  toggles per metric, several may be starred (`normalizeMetrics` keeps
+  every star, stars the first when none; validation asks for at least
+  one when there are several); `primaryMetric` = the first starred (the
+  register column, tiles, the Metrics card accent), `starredMetrics` =
+  all. `TemplateMetric.objective`: a short sentence, edited in place on
+  the metric row (both kinds). `MetricValue.starred / objective`; the
+  priorities Objectives row lists EVERY starred metric of the primary
+  initiative — line 1 "**Name**: objective", line 2 Plan / Actual with
+  the traffic light; the Dynamic card captions its first starred metric
+  with the objective.
 - **P10 Reporting** — designed (spec §4).
 
 Each phase ships behind the usual gates + `pac code push`; the specs'

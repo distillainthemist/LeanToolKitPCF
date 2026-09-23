@@ -75,12 +75,13 @@ export function renderMetricsList(o: MetricsListOpts): { refresh: () => void } {
     if (o.metrics.length === 0) box.appendChild(el("div", "app-cp-muted", "No metrics yet — pick one from the value driver tree, or propose one for this initiative."));
     o.metrics.forEach((m, idx) => {
       const row = el("div", "app-im-metricrow");
-      // ★ primary
+      // ★ starred (several may be): the starred set headlines the
+      // priorities Objectives row; the first starred is the register's
       const star = btn(m.primary ? "★" : "☆", "app-im-metricstar" + (m.primary ? " app-im-metricstar-on" : ""));
-      star.title = m.primary ? "Primary metric — headlines the register and the roll-up" : "Make primary";
+      star.title = m.primary ? "Starred — headlines the priority's Objectives (click to unstar)" : "Star — headline the priority's Objectives with this metric";
       star.addEventListener("click", () => {
-        o.metrics.forEach((x) => delete x.primary);
-        m.primary = true;
+        if (m.primary) delete m.primary;
+        else m.primary = true;
         changed();
       });
       row.appendChild(star);
@@ -93,6 +94,18 @@ export function renderMetricsList(o: MetricsListOpts): { refresh: () => void } {
         if (p.length > 0) name.title = p.join(" › ");
       } else name.appendChild(el("span", "app-im-metrickind", "· initiative-specific"));
       main.appendChild(name);
+      // objective: a short sentence, edited in place
+      const obj = el("input", "app-input app-im-metricobj") as HTMLInputElement;
+      obj.value = m.objective ?? "";
+      obj.placeholder = "Objective — e.g. lift first-pass yield to 95% by December";
+      obj.title = "Shown as “Name: objective” on the priority's Objectives row";
+      obj.addEventListener("change", () => {
+        const v = obj.value.trim();
+        if (v === "") delete m.objective;
+        else m.objective = v;
+        o.onChanged?.();
+      });
+      main.appendChild(obj);
       const dir = directionOf(m);
       main.appendChild(el("div", "app-im-metricmeta", [m.unit || "no unit", ...(m.tracking === "value" ? [dir === "down" ? "lower is better" : dir === "range" ? "within limits" : "higher is better", "value vs target"] : m.tracking === "goodbad" ? ["good / bad"] : [`picklist: ${(m.options ?? []).map((x) => x.label).join(" / ") || "no options"}`]), ...(kindOf(m) === "own" ? [m.cadence ?? "weekly"] : [])].join(" · ")));
       row.appendChild(main);

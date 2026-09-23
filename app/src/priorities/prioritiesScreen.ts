@@ -894,18 +894,28 @@ export function mountPriorities(parent: HTMLElement, opts: PrioritiesMountOpts =
         const cell = el("div", "app-cp-cell app-cp-cell-obj");
         const items = byColumn.get(col.id) ?? [];
         for (const p of items) {
-          // the primary initiative's ★ primary metric (Ben, 2026-09-15): the
-          // metric's name, then plan and actual side by side with a
+          // the primary initiative's ★ STARRED metrics (Ben, 2026-09-23:
+          // several may be): "Name: objective" then plan / actual with a
           // traffic light — no priority statement (the row above names it)
-          const mv = p.primaryInitiativeId !== "" ? (metricState.get(p.primaryInitiativeId)?.values ?? [])[0] ?? null : null;
-          const line = el("div", "app-cp-objective");
-          if (mv) {
+          const starred = p.primaryInitiativeId !== "" ? (metricState.get(p.primaryInitiativeId)?.values ?? []).filter((v) => v.starred) : [];
+          if (starred.length === 0) {
+            const line = el("div", "app-cp-objective");
+            line.appendChild(el("span", "app-cp-muted", p.primaryInitiativeId !== "" ? "No metric value yet" : "No primary initiative"));
+            cell.appendChild(line);
+            continue;
+          }
+          for (const mv of starred) {
+            const line = el("div", "app-cp-objective");
             const light = el("span", "app-cp-objective-light");
             light.style.background = mv.rag ? (palette[ragPaletteKey(mv.rag)] ?? "#9a948a") : "#d9d3c8";
             light.title = mv.rag === "red" ? "Outside the limits" : mv.rag === "amber" ? "Short of plan" : mv.rag === "green" ? "On plan" : "No reading";
             line.appendChild(light);
             const text = el("div", "app-cp-objective-text");
-            text.appendChild(el("div", "app-cp-objective-name", mv.name));
+            const nameLine = el("div", "app-cp-objective-name");
+            nameLine.appendChild(el("span", undefined, mv.name));
+            if (mv.objective !== "") nameLine.appendChild(el("span", "app-cp-objective-obj", `: ${mv.objective}`));
+            nameLine.title = mv.objective !== "" ? `${mv.name}: ${mv.objective}` : mv.name;
+            text.appendChild(nameLine);
             const nums = el("div", "app-cp-objective-nums");
             nums.appendChild(el("span", "app-cp-objective-k", "Plan"));
             nums.appendChild(el("span", "app-cp-objective-v", mv.target !== null ? `${mv.target}${mv.unit}` : "—"));
@@ -913,8 +923,8 @@ export function mountPriorities(parent: HTMLElement, opts: PrioritiesMountOpts =
             nums.appendChild(el("span", "app-cp-objective-v app-cp-objective-actual", mv.display !== "" ? mv.display : "—"));
             text.appendChild(nums);
             line.appendChild(text);
-          } else line.appendChild(el("span", "app-cp-muted", p.primaryInitiativeId !== "" ? "No metric value yet" : "No primary initiative"));
-          cell.appendChild(line);
+            cell.appendChild(line);
+          }
         }
         grid.appendChild(cell);
       }
@@ -961,13 +971,14 @@ export function mountPriorities(parent: HTMLElement, opts: PrioritiesMountOpts =
       // headline metric: large value + target + 96×40 sparkline (P5 fills)
       const metric = el("div", "app-cp-dcard-metric");
       const val = el("div", "app-cp-dcard-value");
-      // the primary initiative's ★ primary metric (Ben, 2026-09-14)
+      // the primary initiative's first ★ starred metric (Ben, 2026-09-14);
+      // its objective, when written, captions it
       const mv = p.primaryInitiativeId !== "" ? (metricState.get(p.primaryInitiativeId)?.values ?? [])[0] ?? null : null;
       if (mv) {
         const num = el("span", "app-cp-dcard-num", mv.display !== "" ? mv.display : "—");
         if (mv.rag) num.style.color = palette[ragPaletteKey(mv.rag)] ?? "";
         val.appendChild(num);
-        val.appendChild(el("span", "app-cp-dcard-target", `${mv.name}${mv.target !== null ? ` · plan ${mv.target}${mv.unit}` : ""}`));
+        val.appendChild(el("span", "app-cp-dcard-target", `${mv.name}${mv.objective !== "" ? `: ${mv.objective}` : ""}${mv.target !== null ? ` · plan ${mv.target}${mv.unit}` : ""}`));
       } else {
         val.appendChild(el("span", "app-cp-dcard-num app-cp-muted", "—"));
         val.appendChild(el("span", "app-cp-dcard-target", p.primaryInitiativeId !== "" ? "No metric value yet" : "No primary initiative"));

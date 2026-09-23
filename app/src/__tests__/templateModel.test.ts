@@ -141,3 +141,17 @@ describe("hidden standard roles (2026-09-13)", () => {
     expect(validateTemplate(t).join(" ")).toMatch(/"sponsor" is not a role/);
   });
 });
+
+describe("several starred metrics + objective (2026-09-23)", () => {
+  it("normalizeMetrics keeps every star; stars the first when none", async () => {
+    const { normalizeMetrics, starredMetrics, parseMetrics } = await import("../improvement/templateModel");
+    const base = (key: string, primary?: boolean) => ({ key, name: key, unit: "", target: null, goodDirection: "up" as const, tracking: "value" as const, ...(primary ? { primary: true } : {}) });
+    const out = normalizeMetrics([base("a"), base("b", true), base("c", true)]);
+    expect(out.filter((m) => m.primary).map((m) => m.key)).toEqual(["b", "c"]);
+    expect(normalizeMetrics([base("a"), base("b")]).filter((m) => m.primary).map((m) => m.key)).toEqual(["a"]);
+    expect(starredMetrics(out).map((m) => m.key)).toEqual(["b", "c"]);
+    const parsed = parseMetrics(JSON.stringify([{ key: "y", name: "Yield", objective: "lift to 95%", primary: true }, { key: "z", name: "Z", objective: "" }]));
+    expect(parsed[0].objective).toBe("lift to 95%");
+    expect(parsed[1].objective).toBeUndefined();
+  });
+});

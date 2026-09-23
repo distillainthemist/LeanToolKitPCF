@@ -315,7 +315,7 @@ export function validateNewInitiative(
       for (const m of i.metrics) if (!m.driverId) errs.push(`Metric "${m.name}" must come from the value driver tree (this template's rule).`);
     }
   }
-  if (i.metrics.length > 1 && i.metrics.filter((m) => m.primary === true).length !== 1) errs.push("Star one metric as the primary.");
+  if (i.metrics.length > 1 && !i.metrics.some((m) => m.primary === true)) errs.push("Star at least one metric.");
   return errs;
 }
 

@@ -97,7 +97,13 @@ export interface TemplateMetric {
   goodDirection: GoodDirection;
   tracking: Tracking;
   kind?: MetricKind;
+  /** ★ starred (Ben, 2026-09-23: SEVERAL may be) — the starred set
+   *  headlines the priorities Objectives row; the first starred one is
+   *  "the" primary where one is wanted (register column, tiles). */
   primary?: boolean;
+  /** A short sentence saying what the improvement objective is — shown
+   *  as "Name: objective" on the priorities Objectives row. */
+  objective?: string;
   /** Limits (Ben, 2026-09-03: target + upper/lower, aligned with the KPI
    *  card's spec). Direction is DERIVED: lower only → higher is better,
    *  upper only → lower is better, both → within range. */
@@ -439,6 +445,7 @@ export function parseMetrics(raw: string): TemplateMetric[] {
         ...(x.requireDriver === true ? { requireDriver: true } : {}),
         ...(x.kind === "driver" || x.kind === "own" ? { kind: x.kind as MetricKind } : {}),
         ...(x.primary === true ? { primary: true } : {}),
+        ...(str(x.objective) !== "" ? { objective: str(x.objective) } : {}),
         ...(num(x.usl) !== null ? { usl: num(x.usl) } : {}),
         ...(num(x.lsl) !== null ? { lsl: num(x.lsl) } : {}),
         ...(OWN_CADENCES.includes(str(x.cadence) as OwnCadence) ? { cadence: str(x.cadence) as OwnCadence } : {}),
@@ -553,16 +560,23 @@ export function parseTemplateMetricsBlob(raw: string): { rule: MetricRule; metri
  *  default from the link (linked = driver, else own). Pure. */
 export function normalizeMetrics(metrics: TemplateMetric[]): TemplateMetric[] {
   const out = metrics.map((m) => ({ ...m, kind: m.kind ?? (m.driverId ? "driver" : "own") }));
-  const star = out.findIndex((m) => m.primary === true);
-  out.forEach((m, i) => {
-    if (i === (star >= 0 ? star : 0)) m.primary = true;
-    else delete m.primary;
-  });
+  // several may be starred; with none, the first is
+  if (out.length > 0 && !out.some((m) => m.primary === true)) out[0].primary = true;
+  for (const m of out) if (m.primary !== true) delete m.primary;
   return out;
 }
 
+/** The first starred metric (the register column, tiles, the Metrics
+ *  card's accent). */
 export function primaryMetric(metrics: TemplateMetric[]): TemplateMetric | null {
   return metrics.find((m) => m.primary === true) ?? metrics[0] ?? null;
+}
+
+/** Every starred metric, in definition order; the first metric when
+ *  none is starred. */
+export function starredMetrics(metrics: TemplateMetric[]): TemplateMetric[] {
+  const s = metrics.filter((m) => m.primary === true);
+  return s.length > 0 ? s : metrics.slice(0, 1);
 }
 
 /** The direction the limits imply (legacy goodDirection when none set). */
