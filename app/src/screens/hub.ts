@@ -18,7 +18,7 @@ import { appTheme, editorHost } from "../cardHost";
 import { boardHash, boardUrl, hasPendingDocView, hasPendingWorkDoc } from "../links";
 import { currentViewer, detectHost } from "../runtime";
 import { readTaskCount } from "../taskBadge";
-import { actionsForViewer, upsertActions } from "../store/actions";
+import { actionsForViewer, openActions, upsertActions } from "../store/actions";
 import { canViewBoard, listBoards } from "../store/boards";
 import { selfHealCatalog } from "../store/catalog";
 import {
@@ -252,6 +252,15 @@ export function mountHub(parent: HTMLElement): () => void {
       },
       onActions: (all) =>
         hosted ? void upsertActions(all) : console.log("demo: actions", all),
+      // the Actions tab scoped to another person or an organisation
+      // (Ben, 2026-09-23): a person = their assigned actions; an org =
+      // every open action assigned to anyone PLACED there (site →
+      // department → area cascade); the store's confidentiality filter
+      // applies to both
+      onActionsScope: (scope) => {
+        lastActionsScope = scope;
+        void loadScopedActions(scope);
+      },
       // merge, not overwrite: other areas (Priorities view prefs) keep
       // their own keys in the same ben_preferences JSON
       onPrefs: (prefs) =>
@@ -474,6 +483,32 @@ export function mountHub(parent: HTMLElement): () => void {
       })
       .catch(() => undefined);
   };
+  let lastActionsScope: import("../../../controls/LeanHub/types").ActionsScope | null = null;
+  const loadScopedActions = async (scope: import("../../../controls/LeanHub/types").ActionsScope) => {
+    try {
+      let out: LtkAction[];
+      if (scope.kind === "person") {
+        out = await actionsForViewer(scope.person !== "" ? scope.person : (currentViewer()?.objectId ?? ""));
+      } else {
+        const [roster, open] = await Promise.all([listPeople(), openActions()]);
+        const members = new Set(
+          roster
+            .filter((p) => p.active !== false && p.site !== "" && (scope.org.site === "" || p.site === scope.org.site) && (scope.org.department === "" || p.department === scope.org.department) && (scope.org.area === "" || p.area === scope.org.area))
+            .map((p) => p.whoId)
+        );
+        out = open.filter((a) => a.assignees.some((x) => members.has(x.whoId)));
+      }
+      if (dead || view === null || lastActionsScope !== scope) return;
+      view.setScopedActions(out);
+    } catch {
+      if (!dead && view && lastActionsScope === scope) view.setScopedActions([]);
+    }
+  };
+  const refreshScoped = () => {
+    if (lastActionsScope) void loadScopedActions(lastActionsScope);
+  };
+  window.addEventListener("ltk-actions-changed", refreshScoped);
+  cleanups.push(() => window.removeEventListener("ltk-actions-changed", refreshScoped));
   window.addEventListener("ltk-actions-changed", onActionsChanged);
   cleanups.push(() => window.removeEventListener("ltk-actions-changed", onActionsChanged));
 

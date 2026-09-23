@@ -407,4 +407,8 @@ export const LEANHUB_CSS = `
   border-radius: 999px;
 }
 .ltk-lh-zone-x:hover { color: var(--ltk-accent); }
+
+.ltk-lh-actbar { margin-bottom: 8px; }
+.ltk-lh-groupby { margin: 0; }
+.ltk-lh-compose-for { align-self: center; font-size: 12.5px; color: var(--ltk-muted); white-space: nowrap; }
 `;

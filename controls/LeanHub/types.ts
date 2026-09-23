@@ -52,7 +52,19 @@ export interface OrgScope {
   area: string;
 }
 
+/** The Actions tab's own scope (Ben, 2026-09-23): a person (default the
+ *  viewer) or an organisation (default the viewer's placement) — kept
+ *  apart from the Cadence tab's. */
+export interface ActionsScope {
+  kind: ScopeKind;
+  /** whoId; "" = the viewer. */
+  person: string;
+  org: OrgScope;
+}
+
 export interface HubPrefs {
+  /** The Actions tab's remembered scope; absent = me. */
+  actions?: ActionsScope;
   scopeKind: ScopeKind;
   /** Person scope: a whoId; "" = the viewer. */
   person: string;
@@ -310,6 +322,16 @@ export function parsePrefs(raw: string | null | undefined): HubPrefs {
       if (kind === "site") d.org.site = value;
       if (kind === "department") d.org.department = value;
       if (kind === "area") d.org.area = value;
+    }
+    const act = (o.actions ?? null) as Record<string, unknown> | null;
+    if (act && typeof act === "object") {
+      const ak = asStr(act.kind);
+      const aorg = (act.org ?? {}) as Record<string, unknown>;
+      d.actions = {
+        kind: ak === "org" ? "org" : "person",
+        person: asStr(act.person),
+        org: { site: asStr(aorg.site), department: asStr(aorg.department), area: asStr(aorg.area) },
+      };
     }
     if (asStr(o.view) === "day") d.view = "day";
     if (o.weekStart === 0) d.weekStart = 0;

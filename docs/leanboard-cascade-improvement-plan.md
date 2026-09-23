@@ -1007,6 +1007,21 @@ reschedule/cancel history with a reason picklist.
   for `ensureMetricCards` and "Add card from template" (its template
   cell when free). Boards created before the fix: Reset board to
   template restores the layout.
+- **Actions tab scope — BUILT 2026-09-23** (Ben: filter like Cadence —
+  a person, default me; or an organisation drilling site → department →
+  area, default my placement). `HubPrefs.actions` (`ActionsScope`,
+  remembered apart from Cadence's); the view's bar reuses the Person |
+  Organisation select, a shared `personPickerFor` and `orgCascade`;
+  non-me scopes ask the host (`onActionsScope`) → hub.ts loads a
+  person's assigned actions, or for an org EVERY open action assigned to
+  anyone PLACED there (roster site/department/area cascade) via the new
+  `openActions()` read — the store's confidentiality filter applies;
+  `setScopedActions` feeds the view. Group by source (person scope
+  default) or by person (org default) with a toggle; the tick and Done
+  section follow the scoped person's part (`myPart` → `focusWho`); full
+  editing as on boards; the composer assigns to the scoped person and
+  says so ("Add an action for X…", "→ X"), hidden under org scope. The
+  tab badge and My day stay the viewer's.
 - **P10 Reporting** — designed (spec §4).
 
 Each phase ships behind the usual gates + `pac code push`; the specs'

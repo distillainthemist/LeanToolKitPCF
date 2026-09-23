@@ -35,8 +35,7 @@ import {
   ProtectedTime,
   ScopeKind,
   sourceLabel,
-  timeToMinutes,
-} from "./types";
+  timeToMinutes, ActionsScope } from "./types";
 import { dueTone, relativeDue, statusChip } from "../../shared/ui/format";
 import { LEANHUB_CSS } from "./styles";
 
@@ -48,6 +47,10 @@ export interface LeanHubCallbacks {
   onActions: (actions: LtkAction[]) => void;
   onPrefs: (prefs: HubPrefs) => void;
   onProtected: (times: ProtectedTime[]) => void;
+  /** The Actions tab's scope left "me" (2026-09-23): the host loads that
+   *  person's / organisation's actions and hands them to
+   *  `setScopedActions`. */
+  onActionsScope?: (scope: ActionsScope) => void;
 }
 
 type Tab = "myday" | "calendar" | "actions" | "settings";
@@ -64,6 +67,38 @@ export class LeanHubView {
   /** Actions-tab filter chip (Phase 1.5) + Done disclosure (1.6). */
   private actionFilter: "all" | "overdue" | "today" | "done" = "all";
   private showDone = false;
+  /** The Actions tab's scope (person = me by default) + the host-supplied
+   *  set when it isn't me (null = loading). */
+  private actScope: ActionsScope = { kind: "person", person: "", org: { site: "", department: "", area: "" } };
+  private scopedActions: LtkAction[] | null = null;
+  private actGroupBy: "" | "source" | "person" = "";
+  private actScopeTouched = false;
+
+  /** The person the Actions tab is about: the scoped person, else me. */
+  private focusWho(): string {
+    return this.actScope.kind === "person" && this.actScope.person !== "" ? this.actScope.person : this.viewerId;
+  }
+  private scopeIsMe(): boolean {
+    return this.actScope.kind === "person" && this.focusWho() === this.viewerId;
+  }
+
+  /** The host's answer for a non-me scope. */
+  setScopedActions(actions: LtkAction[]): void {
+    this.scopedActions = actions;
+    if (this.tab === "actions") this.render();
+  }
+
+  private changeActScope(next: ActionsScope): void {
+    this.actScope = next;
+    this.actScopeTouched = true;
+    this.prefs.actions = { kind: next.kind, person: next.person, org: { ...next.org } };
+    this.cb.onPrefs(this.prefs);
+    if (!this.scopeIsMe()) {
+      this.scopedActions = null;
+      this.cb.onActionsScope?.(next);
+    }
+    this.render();
+  }
   private people: Person[] = [];
   private viewerId = "";
   private actions: LtkAction[] = [];
@@ -131,6 +166,8 @@ export class LeanHubView {
   }
 
   setPrefs(prefs: HubPrefs): void {
+    if (prefs.actions) this.actScope = { kind: prefs.actions.kind, person: prefs.actions.person, org: { ...prefs.actions.org } };
+    else if (!this.actScopeTouched) this.actScope = { kind: "person", person: "", org: { ...prefs.org } };
     if (JSON.stringify(prefs) === JSON.stringify(this.prefs)) return;
     this.prefs = prefs;
     if (!this.scopeTouched) {
@@ -771,22 +808,57 @@ export class LeanHubView {
   // ---- actions ----
 
   private myPart(a: LtkAction): { idx: number; done: boolean } | null {
-    if (this.viewerId === "") return null;
-    const idx = a.assignees.findIndex((x) => x.whoId === this.viewerId);
+    const who = this.focusWho();
+    if (who === "") return null;
+    const idx = a.assignees.findIndex((x) => x.whoId === who);
     return idx >= 0 ? { idx, done: a.assignees[idx].done } : null;
   }
 
   private renderActions(body: HTMLElement): void {
     const wrap = el("div", "ltk-lh-actions");
     body.appendChild(wrap);
-    if (!this.readOnly) wrap.appendChild(this.renderActionComposer());
+    // scope bar (Ben, 2026-09-23): the Cadence tab's Person | Organisation
+    // control, defaulting to me / my placement — remembered on its own
+    const bar = el("div", "ltk-lh-bar ltk-lh-actbar");
+    bar.appendChild(
+      this.select(this.actScope.kind, [{ value: "person", label: "Person" }, { value: "org", label: "Organisation" }], (v) => {
+        this.changeActScope(v === "org" ? { kind: "org", person: "", org: { ...(this.prefs.actions?.org ?? this.prefs.org) } } : { kind: "person", person: "", org: this.actScope.org });
+      })
+    );
+    if (this.actScope.kind === "person") {
+      bar.appendChild(this.personPickerFor(this.focusWho(), (whoId) => this.changeActScope({ ...this.actScope, person: whoId === this.viewerId ? "" : whoId }), "My actions"));
+    } else {
+      const org = { ...this.actScope.org };
+      for (const sel of this.orgCascade(org, () => this.changeActScope({ ...this.actScope, org }))) bar.appendChild(sel);
+    }
+    // group by: source (a person's list) or person (an organisation's)
+    const groupBy: "source" | "person" = this.actGroupBy !== "" ? this.actGroupBy : this.actScope.kind === "org" ? "person" : "source";
+    bar.appendChild(el("span", "ltk-lh-bar-gap"));
+    const gb = el("span", "ltk-lh-fchips ltk-lh-groupby");
+    for (const [k, l] of [["source", "By source"], ["person", "By person"]] as const) {
+      const b = el("button", "ltk-lh-fchip" + (groupBy === k ? " ltk-lh-fchip-on" : ""), l) as HTMLButtonElement;
+      b.type = "button";
+      b.addEventListener("click", () => {
+        this.actGroupBy = k;
+        this.render();
+      });
+      gb.appendChild(b);
+    }
+    bar.appendChild(gb);
+    wrap.appendChild(bar);
+    if (!this.readOnly && this.actScope.kind === "person") wrap.appendChild(this.renderActionComposer());
 
+    const isMe = this.scopeIsMe();
+    const source = isMe ? this.actions : this.scopedActions;
+    if (source === null) {
+      renderGhost(wrap, ["Loading…", this.actScope.kind === "org" ? "Open actions across the organisation." : "That person's actions."]);
+      return;
+    }
+    const who = this.focusWho();
     const mine =
-      this.viewerId === ""
-        ? this.actions
-        : this.actions.filter((a) =>
-            a.assignees.some((x) => x.whoId === this.viewerId)
-          );
+      this.actScope.kind === "org" || who === ""
+        ? source
+        : source.filter((a) => a.assignees.some((x) => x.whoId === who));
     const open = mine.filter((a) => a.status !== "done" && a.status !== "cancelled");
     // "done" here = the viewer's part is ticked (whole-action done rows
     // left the open set already) — these collapse under one disclosure
@@ -826,22 +898,32 @@ export class LeanHubView {
             : active;
     if (visible.length === 0 && (this.actionFilter !== "all" || doneMine.length === 0)) {
       renderGhost(wrap, [
-        this.actionFilter === "all" ? "Nothing on your plate" : "Nothing here",
+        this.actionFilter === "all" ? (isMe ? "Nothing on your plate" : "Nothing open") : "Nothing here",
         this.actionFilter === "all"
-          ? "Actions assigned to you appear here."
+          ? isMe
+            ? "Actions assigned to you appear here."
+            : this.actScope.kind === "org"
+              ? "No open actions assigned to anyone placed here."
+              : "No actions assigned to this person."
           : "No actions match this filter.",
       ]);
       return;
     }
 
-    // group by source, overdue-then-due order inside each. The label
-    // NEVER shows a raw id (Phase 1.4 — sourceLabel's fallback chain).
+    // group by source (a person's list) or by person (an organisation's);
+    // overdue-then-due order inside each. The label NEVER shows a raw id
+    // (Phase 1.4 — sourceLabel's fallback chain).
     const boardTitle = (boardId: string) =>
       this.meetings.find((m) => m.boardId === boardId)?.title;
     const groups = new Map<string, LtkAction[]>();
     for (const a of visible) {
-      const label = sourceLabel(a.instanceId, a.context.source, this.sourceLabels, boardTitle);
-      groups.set(label, [...(groups.get(label) ?? []), a]);
+      if (groupBy === "person") {
+        const names = a.assignees.length > 0 ? a.assignees.map((x) => x.who || "Unnamed") : ["Unassigned"];
+        for (const n of names) groups.set(n, [...(groups.get(n) ?? []), a]);
+      } else {
+        const label = sourceLabel(a.instanceId, a.context.source, this.sourceLabels, boardTitle);
+        groups.set(label, [...(groups.get(label) ?? []), a]);
+      }
     }
     for (const [label, group] of groups) {
       wrap.appendChild(el("div", "ltk-lh-group", label));
@@ -883,9 +965,12 @@ export class LeanHubView {
    */
   private renderActionComposer(): HTMLElement {
     const row = el("div", "ltk-lh-compose");
+    const who = this.focusWho();
+    const focus = this.people.find((p) => p.whoId === who);
+    const forOther = who !== "" && who !== this.viewerId;
     const issue = el("input", "ltk-lh-input ltk-lh-compose-issue") as HTMLInputElement;
     issue.type = "text";
-    issue.placeholder = "Add an action…";
+    issue.placeholder = forOther ? `Add an action for ${focus?.who ?? "this person"}…` : "Add an action…";
     const due = el("input", "ltk-lh-input ltk-lh-compose-due") as HTMLInputElement;
     due.type = "date";
     due.title = "Due date (optional)";
@@ -894,20 +979,20 @@ export class LeanHubView {
     const submit = () => {
       const text = issue.value.trim();
       if (text === "") return;
-      const me = this.people.find((p) => p.whoId === this.viewerId);
       const action = newAction({ source: "leanhub", sourceId: "" });
-      action.instanceId = this.viewerId !== "" ? `hub-${this.viewerId}` : "hub";
+      action.instanceId = who !== "" ? `hub-${who}` : "hub";
       action.issue = text;
       action.due = due.value;
-      action.assignees = [
-        {
-          whoId: this.viewerId !== "" ? this.viewerId : "me",
-          who: me?.who ?? "Me",
-          done: false,
-        },
-      ];
-      this.actions.push(action);
-      this.cb.onActions(this.actions);
+      // assigned to the scoped person (me by default) — the placeholder
+      // and the chip say so
+      action.assignees = [{ whoId: who !== "" ? who : "me", who: focus?.who ?? "Me", done: false }];
+      if (forOther) {
+        this.scopedActions = [...(this.scopedActions ?? []), action];
+        this.cb.onActions([action]);
+      } else {
+        this.actions.push(action);
+        this.cb.onActions(this.actions);
+      }
       this.render();
     };
     issue.addEventListener("keydown", (e) => {
@@ -918,6 +1003,7 @@ export class LeanHubView {
     });
     add.addEventListener("click", submit);
     row.append(issue, due, add);
+    if (forOther) row.appendChild(el("span", "ltk-lh-compose-for", `→ ${focus?.who ?? "this person"}`));
     return row;
   }
 
@@ -1213,13 +1299,27 @@ export class LeanHubView {
    * jumps to the viewer.
    */
   private personPicker(): HTMLElement {
+    return this.personPickerFor(
+      this.scopePerson,
+      (whoId) => {
+        this.scopePerson = whoId;
+        this.scopeTouched = true;
+        this.render();
+      },
+      "My cadence"
+    );
+  }
+
+  /** A roster search that resolves to a whoId ("" = everyone) + a "Me"
+   *  shortcut — the Cadence and Actions tabs share it. */
+  private personPickerFor(current: string, pick: (whoId: string) => void, meTitle: string): HTMLElement {
     const wrap = el("span", "ltk-lh-person-pick");
     const input = el("input", "ltk-lh-input ltk-lh-person-input") as HTMLInputElement;
     input.type = "search";
     input.placeholder = "Everyone — type a name…";
     input.setAttribute("list", "ltk-lh-people-list");
-    const current = this.people.find((p) => p.whoId === this.scopePerson);
-    input.value = current ? current.who : "";
+    const currentPerson = this.people.find((p) => p.whoId === current);
+    input.value = currentPerson ? currentPerson.who : "";
     const suggestions = el("datalist") as HTMLDataListElement;
     suggestions.id = "ltk-lh-people-list";
     for (const p of this.people) {
@@ -1230,29 +1330,22 @@ export class LeanHubView {
     input.addEventListener("change", () => {
       const name = input.value.trim();
       if (name === "") {
-        this.scopePerson = "";
-        this.scopeTouched = true;
-        this.render();
+        pick("");
         return;
       }
       const match = this.people.find(
         (p) => p.who.toLowerCase() === name.toLowerCase()
       );
-      if (match) {
-        this.scopePerson = match.whoId;
-        this.scopeTouched = true;
-      }
-      this.render(); // unmatched: snap the field back to the current person
+      if (match) pick(match.whoId);
+      else this.render(); // unmatched: snap the field back to the current person
     });
     wrap.append(input, suggestions);
-    if (this.viewerId !== "" && this.scopePerson !== this.viewerId) {
+    if (this.viewerId !== "" && current !== this.viewerId) {
       const me = el("button", "ltk-lh-btn", "Me") as HTMLButtonElement;
       me.type = "button";
-      me.title = "My cadence";
+      me.title = meTitle;
       me.addEventListener("click", () => {
-        this.scopePerson = this.viewerId;
-        this.scopeTouched = true;
-        this.render();
+        pick(this.viewerId);
       });
       wrap.appendChild(me);
     }

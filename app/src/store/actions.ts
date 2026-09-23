@@ -57,6 +57,13 @@ export async function actionsForViewer(whoId: string): Promise<LtkAction[]> {
   return visible(rows.map(actionFromRow));
 }
 
+/** Every open action (not done / cancelled) — the Actions tab's
+ *  organisation scope filters these by assignee placement. */
+export async function openActions(): Promise<LtkAction[]> {
+  const rows = await allWhere(Ben_ltkactionsService.getAll, "ben_status ne 'done' and ben_status ne 'cancelled'");
+  return visible(rows.map(actionFromRow));
+}
+
 /** The owners of boards whose Escalation viewer sources `boardId` — an
  *  escalated confidential action extends its visibility to them (Ben's
  *  decision 4, 2026-09-16). */
