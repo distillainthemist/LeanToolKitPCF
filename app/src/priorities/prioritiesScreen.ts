@@ -809,7 +809,10 @@ export function mountPriorities(parent: HTMLElement, opts: PrioritiesMountOpts =
       }
 
       const grid = el("div", "app-cp-grid");
-      grid.style.gridTemplateColumns = `126px repeat(${Math.max(1, columns.length)}, 1fr)`;
+      // minmax(0, 1fr): a bare 1fr floors at the content's min width, so a
+      // long title or objective stretched its column sideways (Ben,
+      // 2026-09-24) — text wraps and the page grows downward instead
+      grid.style.gridTemplateColumns = `126px repeat(${Math.max(1, columns.length)}, minmax(0, 1fr))`;
       box.appendChild(grid);
 
       // row 1: rail "Strategic Pillars" over the pillar spans + column heads.

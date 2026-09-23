@@ -58,6 +58,10 @@ the same commit.
   `ltk-check` chips for mutually exclusive modes (Ben, 2026-08-30).
 - **Kebab menus**: `.app-cp-menu` fixed popover, `.app-cp-menu-h` small
   caps section heads, ●/○ prefix for radio-ish items.
+- **Priorities grid columns** are `minmax(0, 1fr)`, every cell
+  `min-width: 0` with `overflow-wrap: anywhere`: long titles and
+  objectives wrap and the page scrolls vertically, never sideways (the
+  "scroll" density for many columns is the one deliberate exception).
 - **The top bar**: brand left; Report and Settings as text-links; the
   ONE accent primary at the far right is `＋ Add action`
   (`.app-btn-addaction`, 40px) — always present, always the same place.
