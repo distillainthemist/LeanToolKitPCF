@@ -63,7 +63,8 @@ export interface ActionsScope {
 }
 
 export interface HubPrefs {
-  /** The Actions tab's remembered scope; absent = me. */
+  /** (2026-09-23: no longer written — the Actions tab always opens on me;
+   *  still parsed so older blobs load.) */
   actions?: ActionsScope;
   scopeKind: ScopeKind;
   /** Person scope: a whoId; "" = the viewer. */

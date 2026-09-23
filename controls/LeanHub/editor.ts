@@ -73,6 +73,9 @@ export class LeanHubView {
   private scopedActions: LtkAction[] | null = null;
   private actGroupBy: "" | "source" | "person" = "";
   private actScopeTouched = false;
+  /** The scope the host was last asked for — a non-me scope that was never
+   *  requested (e.g. restored) asks on render rather than hang on Loading. */
+  private scopeRequested: ActionsScope | null = null;
 
   /** The person the Actions tab is about: the scoped person, else me. */
   private focusWho(): string {
@@ -91,10 +94,9 @@ export class LeanHubView {
   private changeActScope(next: ActionsScope): void {
     this.actScope = next;
     this.actScopeTouched = true;
-    this.prefs.actions = { kind: next.kind, person: next.person, org: { ...next.org } };
-    this.cb.onPrefs(this.prefs);
     if (!this.scopeIsMe()) {
       this.scopedActions = null;
+      this.scopeRequested = next;
       this.cb.onActionsScope?.(next);
     }
     this.render();
@@ -166,8 +168,10 @@ export class LeanHubView {
   }
 
   setPrefs(prefs: HubPrefs): void {
-    if (prefs.actions) this.actScope = { kind: prefs.actions.kind, person: prefs.actions.person, org: { ...prefs.actions.org } };
-    else if (!this.actScopeTouched) this.actScope = { kind: "person", person: "", org: { ...prefs.org } };
+    // the Actions tab always opens on ME (Ben, 2026-09-23) — a scope picked
+    // during the session is kept until the app reloads; the org default
+    // still follows the viewer's placement
+    if (!this.actScopeTouched) this.actScope = { kind: "person", person: "", org: { ...prefs.org } };
     if (JSON.stringify(prefs) === JSON.stringify(this.prefs)) return;
     this.prefs = prefs;
     if (!this.scopeTouched) {
@@ -848,6 +852,10 @@ export class LeanHubView {
     if (!this.readOnly && this.actScope.kind === "person") wrap.appendChild(this.renderActionComposer());
 
     const isMe = this.scopeIsMe();
+    if (!isMe && this.scopedActions === null && this.scopeRequested !== this.actScope) {
+      this.scopeRequested = this.actScope;
+      this.cb.onActionsScope?.(this.actScope);
+    }
     const source = isMe ? this.actions : this.scopedActions;
     if (source === null) {
       renderGhost(wrap, ["Loading…", this.actScope.kind === "org" ? "Open actions across the organisation." : "That person's actions."]);
