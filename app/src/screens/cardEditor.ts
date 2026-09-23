@@ -130,6 +130,7 @@ export function mountCardEditor(
   const show = (cardId: string, initial: boolean): void => {
     const gen = ++showGen;
     const cleanups: Array<() => void> = [];
+    let pendingFlush: (() => Promise<void>) | null = null;
     const wrap = el("div", "app-screen-root"); // layout-transparent wrapper
     if (!initial) wrap.style.display = "none"; // built offstage, swapped when ready
     parent.appendChild(wrap);
@@ -281,9 +282,12 @@ export function mountCardEditor(
         }
         back.addEventListener("click", (e) => {
           e.preventDefault();
-          // overlay host closes in place; the route flavour walks back
-          if (onClose) onClose();
-          else window.history.back();
+          // the pending action save lands BEFORE the board mounts and reads
+          void (pendingFlush ? pendingFlush() : Promise.resolve()).then(() => {
+            // overlay host closes in place; the route flavour walks back
+            if (onClose) onClose();
+            else window.history.back();
+          });
         });
       }
       wrap.appendChild(bar);
@@ -357,16 +361,33 @@ export function mountCardEditor(
     // action upserts are debounced per emitted set; the LAST set wins
     // (controls emit the full set every time, upsert is by action id)
     let actionsTimer: ReturnType<typeof setTimeout> | null = null;
-    cleanups.push(() => {
-      if (actionsTimer !== null) clearTimeout(actionsTimer);
-    });
+    let pendingSet: typeof actions | null = null;
+    let inflight: Promise<void> = Promise.resolve();
+    const flushActions = (): Promise<void> => {
+      if (actionsTimer !== null) {
+        clearTimeout(actionsTimer);
+        actionsTimer = null;
+      }
+      const set = pendingSet;
+      pendingSet = null;
+      if (set) {
+        inflight = inflight.then(() =>
+          upsertActions(set, sourceBoardId).then(() => {
+            saved.textContent = `saved ${new Date().toLocaleTimeString()}`;
+            window.dispatchEvent(new CustomEvent("ltk-actions-changed"));
+          })
+        );
+      }
+      return inflight;
+    };
+    // leaving the view FLUSHES a pending save (it used to cancel it —
+    // the last edit was lost, and the board mounted before the write)
+    cleanups.push(() => void flushActions());
+    pendingFlush = flushActions;
     const pushActions = (set: typeof actions) => {
+      pendingSet = set;
       if (actionsTimer !== null) clearTimeout(actionsTimer);
-      actionsTimer = setTimeout(() => {
-        void upsertActions(set, sourceBoardId).then(() => {
-          saved.textContent = `saved ${new Date().toLocaleTimeString()}`;
-        });
-      }, 500);
+      actionsTimer = setTimeout(() => void flushActions(), 500);
     };
 
     // full-height rails either side (stretching past the tabs to the

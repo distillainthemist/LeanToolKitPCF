@@ -1022,6 +1022,23 @@ reschedule/cancel history with a reason picklist.
   editing as on boards; the composer assigns to the scoped person and
   says so ("Add an action for X…", "→ X"), hidden under org scope. The
   tab badge and My day stay the viewer's.
+- **Initiative actions found everywhere — FIXED 2026-09-23** (Ben:
+  board-raised actions missing from the register, overlay and Gantt; the
+  board card not updating). Root cause: only single-action creation ever
+  stamped `initiativeId`; every initiative-level reader keyed on it.
+  Now: `upsertActions` stamps the id for ANY action whose board (stamped
+  or from the instance key) is an `init-` board; `actionsForInitiatives`
+  reads the id OR an `init-` board/instance and heals missing ids onto
+  the rows once per session (`healInitiativeIds`); one shared
+  `actionBelongsTo(i, a)` (id, or instance on the initiative's board)
+  replaces the per-reader matches (RAG inputs, Gantt). The focused
+  view's pending action save is FLUSHED on leave (it used to be
+  cancelled — the last edit was lost and the board mounted before the
+  write), Back waits for it, and saves fire `ltk-actions-changed`, which
+  the board now listens to (refresh + re-render live tiles). Empty-tile
+  line: never for ActionBoard / Metrics / Gantt / Escalation / Priorities
+  cards (data elsewhere); "Nothing recorded yet" on initiative boards
+  (`BoardGrid.setEmptyLineText`).
 - **P10 Reporting** — designed (spec §4).
 
 Each phase ships behind the usual gates + `pac code push`; the specs'

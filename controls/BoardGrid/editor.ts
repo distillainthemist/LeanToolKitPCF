@@ -117,6 +117,15 @@ export class BoardGridView {
     this.render();
   }
 
+  /** The empty-tile line — a meeting says "Not filled in this meeting",
+   *  an initiative board "Nothing recorded yet" (2026-09-23). */
+  private emptyLineText = "Not filled in this meeting";
+  setEmptyLineText(text: string): void {
+    if (text === this.emptyLineText) return;
+    this.emptyLineText = text;
+    this.render();
+  }
+
   setEditMode(on: boolean): void {
     if (this.editMode !== on) {
       this.editMode = on;
@@ -419,7 +428,7 @@ export class BoardGridView {
     if (tile.noData) {
       // an empty card says so in the body, quietly — the title bar
       // carries identity, not alarm badges (design review Phase 2.2)
-      const emptyLine = el("div", "ltk-bg-emptyline", "Not filled in this meeting");
+      const emptyLine = el("div", "ltk-bg-emptyline", this.emptyLineText);
       emptyLine.title = "Nothing was recorded on this card";
       snap.appendChild(emptyLine);
     }

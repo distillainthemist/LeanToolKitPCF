@@ -3,6 +3,7 @@
 // purpose, emulated through the generated client).
 
 import { actionVisibleTo, LtkAction, visibleSetFor } from "../../../shared/schema/actions";
+import { bumpChange } from "./changes";
 import { Ben_ltkactionsService } from "../generated/services/Ben_ltkactionsService";
 import { allWhere, eq, odata, upsertWhere } from "./dv";
 import { actionFromRow, actionToRow, parseManifest } from "./mappers";
@@ -41,11 +42,50 @@ export async function actionsForBoard(boardId: string): Promise<LtkAction[]> {
   return visible(rows.map(actionFromRow));
 }
 
+/** The initiative an action belongs to, from the board it lives on
+ *  (`init-<initiativeId>` boards). "" when it isn't an initiative board. */
+async function initiativeIdForBoard(boardId: string): Promise<string> {
+  if (!boardId.startsWith("init-")) return "";
+  const { listInitiatives } = await import("./initiatives");
+  const i = (await listInitiatives().catch(() => [])).find((x) => x.boardId === boardId);
+  return i?.id ?? "";
+}
+
+/** The board an action lives on: the stamped one, else the instance key's
+ *  prefix ("board:card"; the hub's personal keys don't count). */
+function boardOf(action: LtkAction, boardId?: string): string {
+  if (boardId) return boardId;
+  const k = action.instanceId;
+  if (k.includes(":") && !k.startsWith("hub")) return k.split(":")[0];
+  return "";
+}
+
+/** Rows written before the initiative id was stamped at the write: heal
+ *  them once per session (fire-and-forget, chunked). */
+const healed = new Set<string>();
+async function healInitiativeIds(actions: LtkAction[]): Promise<void> {
+  const fixed = actions.filter((a) => a.initiativeId && !healed.has(a.id));
+  for (const a of fixed) healed.add(a.id);
+  for (let i = 0; i < fixed.length; i += 10) {
+    await Promise.all(fixed.slice(i, i + 10).map((a) => upsertWhere(Ben_ltkactionsService, eq("ben_actionid", a.id), (row) => row.ben_ltkactionid, { ben_initiativeid: a.initiativeId ?? "" }).catch(() => undefined)));
+  }
+}
+
 /** Every action linked to ANY initiative — one query for the cascade's
- *  R/A/G rollups and the Improvement rows (P6b). */
+ *  R/A/G rollups and the Improvement rows (P6b). Reads the stamped id AND
+ *  (2026-09-23) anything living on an initiative board, healing the id
+ *  onto rows that predate the stamp. */
 export async function actionsForInitiatives(): Promise<LtkAction[]> {
-  const rows = await allWhere(Ben_ltkactionsService.getAll, "ben_initiativeid ne null and ben_initiativeid ne ''");
-  return visible(rows.map(actionFromRow));
+  const rows = await allWhere(
+    Ben_ltkactionsService.getAll,
+    "(ben_initiativeid ne null and ben_initiativeid ne '') or startswith(ben_boardid,'init-') or startswith(ben_instanceid,'init-')"
+  );
+  const actions = rows.map(actionFromRow);
+  // in-memory first (this read sees them right), then the rows
+  for (const a of actions) if (!a.initiativeId && boardOf(a).startsWith("init-")) a.initiativeId = await initiativeIdForBoard(boardOf(a));
+  // rows that lacked the id but resolved to one: write it back once
+  void healInitiativeIds(actions.filter((a) => a.initiativeId && !rows.find((r) => r.ben_actionid === a.id)?.ben_initiativeid)).catch(() => undefined);
+  return visible(actions);
 }
 
 /** The viewer's rollup for LeanHub — their whoId appears in assignees. */
@@ -103,6 +143,10 @@ export async function upsertActions(
   boardId?: string
 ): Promise<void> {
   for (const action of actions) {
+    // ANY action raised on an initiative board belongs to that initiative
+    // (Ben, 2026-09-23) — stamped here, at the one write path
+    const home = boardOf(action, boardId);
+    if (!action.initiativeId && home.startsWith("init-")) action.initiativeId = await initiativeIdForBoard(home);
     await stampVisibility(action, boardId);
     await upsertWhere(
       Ben_ltkactionsService,
@@ -111,4 +155,5 @@ export async function upsertActions(
       actionToRow(action, boardId)
     );
   }
+  bumpChange("actions");
 }

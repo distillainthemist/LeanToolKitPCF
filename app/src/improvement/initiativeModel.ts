@@ -6,6 +6,7 @@
 // primary, field values, metrics, the pending gate, stage target dates.
 // History lives in ben_ltkinitiativeevent. Everything here is pure.
 
+import { actionBelongsTo } from "../../../shared/schema/actions";
 import { MetricRule, InitiativeTemplate, RolePerson, TemplateMetric, TemplateStage, Gate, activeRoles } from "./templateModel";
 
 export type InitiativeStatus = "active" | "completed" | "archived";
@@ -333,10 +334,10 @@ export interface InitiativeRagInput {
  *  flags and the action position already move the colour. */
 export function ragInputsFor(
   i: Initiative,
-  actions: { initiativeId?: string; status: string; due: string; assignees: { done: boolean }[] }[],
+  actions: { initiativeId?: string; instanceId?: string; status: string; due: string; assignees: { done: boolean }[] }[],
   today: string
 ): InitiativeRagInput {
-  const mine = actions.filter((a) => a.initiativeId === i.id);
+  const mine = actions.filter((a) => actionBelongsTo(i, { initiativeId: a.initiativeId, instanceId: a.instanceId ?? "" }));
   const open = mine.filter((a) => a.status !== "done" && a.status !== "cancelled");
   const overdue = open.filter((a) => a.due !== "" && a.due < today && a.status !== "verify");
   return {

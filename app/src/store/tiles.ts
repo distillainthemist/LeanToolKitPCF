@@ -34,7 +34,10 @@ export function joinTiles(
     const fallback = catalogSvgByType[slot.cardType] ?? "";
     // neither this meeting's row nor a shared card's live row held a tile,
     // so nothing was ever saved here and the fallback art is generic
-    const noData = own === "" && live === "";
+    // action / metrics / gantt cards keep their data in other tables — the
+    // document says nothing about them (2026-09-23)
+    const dataElsewhere = ["ActionBoard", "MetricsCard", "GanttCard", "EscalationViewer", "PrioritiesCard"].includes(slot.cardType);
+    const noData = !dataElsewhere && own === "" && live === "";
     return {
       pos: slot.pos,
       w: slot.w,

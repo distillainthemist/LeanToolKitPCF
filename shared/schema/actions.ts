@@ -132,6 +132,14 @@ export interface LtkAction {
   visibleTo?: string[];
 }
 
+/** Does an action belong to an initiative? By its stamped initiative id,
+ *  or — for rows written before the id was stamped at the write — by
+ *  living on the initiative's board (instance key "init-…:card"). */
+export function actionBelongsTo(i: { id: string; boardId: string }, a: Pick<LtkAction, "initiativeId" | "instanceId">): boolean {
+  if (a.initiativeId === i.id) return true;
+  return i.boardId !== "" && a.instanceId.startsWith(`${i.boardId}:`);
+}
+
 /** Is a viewer allowed to see this action? Non-confidential: everyone.
  *  Confidential: super admins, and anyone in the stored visible set
  *  (creator and assignees are always in it even if the set is stale). */

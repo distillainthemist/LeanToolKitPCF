@@ -219,6 +219,7 @@ async function renderBoard(
     },
     onLayout: () => undefined, // edit mode arrives with the composer slice
   });
+  if (board.kind === "project") gridView.setEmptyLineText("Nothing recorded yet");
   gridView.setTheme(appTheme());
   cleanups.push(() => {
     gridView.destroy();
@@ -486,6 +487,14 @@ async function renderBoard(
     return idx > cur && cur >= 0;
   };
   const snapBanner = el("div", "app-ib-snapbanner");
+  // an action saved elsewhere (the focused view, the top bar) reaches the
+  // live cards without a reload (2026-09-23)
+  const onActionsChanged = () => {
+    void refreshBoardActions().then(() => renderTiles());
+  };
+  window.addEventListener("ltk-actions-changed", onActionsChanged);
+  cleanups.push(() => window.removeEventListener("ltk-actions-changed", onActionsChanged));
+
   const renderTiles = () => {
     if (!current) return;
     snapBanner.remove();

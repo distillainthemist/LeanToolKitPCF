@@ -35,3 +35,14 @@ describe("sanitizeAction keeps the confidential fields", () => {
     expect(sanitizeAction(base()).confidential).toBeUndefined();
   });
 });
+
+describe("actionBelongsTo (2026-09-23)", () => {
+  it("matches by stamped id, or by living on the initiative's board", async () => {
+    const { actionBelongsTo } = await import("../../../shared/schema/actions");
+    const i = { id: "in1", boardId: "init-in1" };
+    expect(actionBelongsTo(i, { initiativeId: "in1", instanceId: "" })).toBe(true);
+    expect(actionBelongsTo(i, { initiativeId: undefined, instanceId: "init-in1:ab-1" })).toBe(true);
+    expect(actionBelongsTo(i, { initiativeId: "in2", instanceId: "init-in2:ab" })).toBe(false);
+    expect(actionBelongsTo({ id: "in3", boardId: "" }, { initiativeId: undefined, instanceId: ":x" })).toBe(false);
+  });
+});

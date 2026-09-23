@@ -12,6 +12,7 @@
 // select, ±1d/±1w steppers + Set dates… — no drag. Dependencies are out
 // of scope by design.
 
+import { actionBelongsTo } from "../../../shared/schema/actions";
 import { el, clear } from "../../../shared/ui/dom";
 import { LtkAction, ActionHistoryEntry } from "../../../shared/schema/actions";
 import { todayIso } from "../../../shared/schema/id";
@@ -115,7 +116,7 @@ export function mountGantt(opts: GanttOpts): () => void {
   };
 
   const owns = (i: Initiative, a: LtkAction): boolean =>
-    a.initiativeId === i.id || (i.boardId !== "" && a.instanceId.startsWith(`${i.boardId}:`));
+    actionBelongsTo(i, a);
   const byInitiative = (i: Initiative): LtkAction[] => opts.actions.filter((a) => owns(i, a));
   const initOf = (a: LtkAction): Initiative | null => opts.initiatives.find((i) => owns(i, a)) ?? null;
 
