@@ -831,9 +831,9 @@ export class LeanHubView {
       const org = { ...this.actScope.org };
       for (const sel of this.orgCascade(org, () => this.changeActScope({ ...this.actScope, org }))) bar.appendChild(sel);
     }
-    // group by: source (a person's list) or person (an organisation's)
+    // group by: source (a person's list) or person (an organisation's) —
+    // the chips sit on the filter row, right-aligned
     const groupBy: "source" | "person" = this.actGroupBy !== "" ? this.actGroupBy : this.actScope.kind === "org" ? "person" : "source";
-    bar.appendChild(el("span", "ltk-lh-bar-gap"));
     const gb = el("span", "ltk-lh-fchips ltk-lh-groupby");
     for (const [k, l] of [["source", "By source"], ["person", "By person"]] as const) {
       const b = el("button", "ltk-lh-fchip" + (groupBy === k ? " ltk-lh-fchip-on" : ""), l) as HTMLButtonElement;
@@ -844,7 +844,6 @@ export class LeanHubView {
       });
       gb.appendChild(b);
     }
-    bar.appendChild(gb);
     wrap.appendChild(bar);
     if (!this.readOnly && this.actScope.kind === "person") wrap.appendChild(this.renderActionComposer());
 
@@ -874,7 +873,7 @@ export class LeanHubView {
       { key: "today", label: "Due today" },
       { key: "done", label: "Done" },
     ];
-    const chipRow = el("div", "ltk-lh-fchips");
+    const chipRow = el("div", "ltk-lh-fchips ltk-lh-fchips-row");
     for (const c of chips) {
       const b = el("button", "ltk-lh-fchip", c.label) as HTMLButtonElement;
       b.type = "button";
@@ -886,6 +885,8 @@ export class LeanHubView {
       });
       chipRow.appendChild(b);
     }
+    chipRow.appendChild(el("span", "ltk-lh-bar-gap"));
+    chipRow.appendChild(gb);
     wrap.appendChild(chipRow);
 
     const visible =
@@ -1053,7 +1054,7 @@ export class LeanHubView {
       main.appendChild(el("div", "ltk-lh-action-desc", action.description));
     }
     row.appendChild(main);
-    const others = action.assignees.filter((x) => x.whoId !== this.viewerId);
+    const others = action.assignees.filter((x) => x.whoId !== this.focusWho());
     if (others.length > 0) {
       row.appendChild(
         el("span", "ltk-lh-action-with", `with ${others.map((o) => o.who).join(", ")}`)

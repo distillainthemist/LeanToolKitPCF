@@ -408,7 +408,8 @@ export const LEANHUB_CSS = `
 }
 .ltk-lh-zone-x:hover { color: var(--ltk-accent); }
 
-.ltk-lh-actbar { margin-bottom: 8px; }
-.ltk-lh-groupby { margin: 0; }
+.ltk-lh-actbar { padding: 0 0 8px; margin: 0; }
+.ltk-lh-fchips-row { align-items: center; }
+.ltk-lh-groupby { margin: 0; flex-wrap: nowrap; }
 .ltk-lh-compose-for { align-self: center; font-size: 12.5px; color: var(--ltk-muted); white-space: nowrap; }
 `;
