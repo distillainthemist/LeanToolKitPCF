@@ -15,11 +15,15 @@ Last reviewed: 2026-08-18 (v0.46.0).
 ## 1. What the application is
 
 LeanBoard is a **Power Apps code app** (code-first, `pac code push`,
-running in the Power Apps player) with two halves sharing one shell:
+running in the Power Apps player) with three areas sharing one shell:
 
 - **Lean boards** — a board engine for meeting boards and
-  problem-solving/project boards, built from a catalog of ~24 card
-  types (agenda, actions, KPI trend, Pareto, SQDPC, …).
+  problem-solving/project boards, built from a catalog of ~26 card
+  types (agenda, actions, KPI trend, Metrics, Pareto, SQDPC, …).
+- **Improvement system** — cascaded priorities (company pillars →
+  priorities cascaded down the organisation), improvement initiatives
+  (templated, staged, gated, with metrics and their own boards) and
+  the per-site value driver tree with KPI value entry (§3.3).
 - **Standard Documents** — a SharePoint-backed document management
   system (register, lifecycle, approvals, links, tags, audit) for
   controlled standards.
@@ -38,10 +42,18 @@ app/            the code app (vanilla TypeScript, Vite, no framework)
   src/main.ts        shell: hash router, top bar, dynamic screen imports
   src/screens/       hub, board, composer, card editor, settings, …
   src/docs/          the ENTIRE document management system
+  src/priorities/    cascaded priorities (model, screen, overlay, dialogs)
+  src/improvement/   initiatives, templates, metrics, boards; vdt/ = the
+                     value driver tree, grid entry, KPI card links
+  src/actions/       the top-bar ＋ Add action (quick capture)
   src/issues/        report dialog + admin triage tab
-  src/store/         Dataverse data layer (typed helpers over services)
+  src/store/         Dataverse data layer (typed helpers over services);
+                     changes.ts = read cache + change signals (§3.5)
   src/generated/     pac-generated connector/table services (do not edit)
   tools/             import-gate, chunk-report (build-time checks)
+  harness/           Vite pages that mount controls with stubbed stores
+                     for screenshots (grid, kpi, vdt, wizard, pdca) —
+                     served by the `pdca-harness` launch config
 shared/         UI kit + tokens shared with the (retired) PCF controls
 controls/       retired PCF controls — kept for shared model code
 data/           declarative Dataverse schema + admin scripting tools
@@ -68,49 +80,49 @@ model section) — the canvas/PCF sections there are historical.
   because a grid of N live components was unbuildable and unaffordable;
   the snapshot repaints when the card saves.
 - **Data model (Dataverse):** `ben_ltkboard` (board manifest JSON,
-  people, occurrence settings) → `ben_ltkboardinstance` (one per
-  meeting occurrence; problem boards have one living instance) →
-  `ben_ltkcarddata` (per card per instance: output JSON + tile SVG).
-  `ben_ltkcardcatalog` holds the card-type catalog and default tiles;
-  `ben_ltkcardseries` supports series data; `ben_ltkaction` is the
-  actions register (ben_pdca carries the Plan/Do/Check/Act/Closed
-  progression, 2026-09-01 — closed mirrors status done); `ben_ltkpeoples` is the app's user record (role:
-  user/siteadmin/superadmin, site, department — the site drives the
-  DMS default filter); `ben_ltksitesettings` and `ben_ltkuserprefs`
-  hold settings — the APP_ROW also carries `ben_improvementsettings`;
-  `ben_ltkvaluedriver` + `ben_ltkvdtscenario` are the per-site value
-  driver tree (P9a, 2026-09-01: period-free nodes, dated values in JSON
-  with a capped change log; scenarios = toggles / deltas / assumed effects)
-  (methods · standard roles with per-site fillers · standard fields);
-  **Improvement (P5/P7, 2026-08-20):** `ben_ltkinitiativetemplate`
-  (stages/gates/roles/fields/metrics JSON + a template board),
-  `ben_ltkinitiative` (header + snapshot/roles/links/gate JSON columns)
-  and `ben_ltkinitiativeevent` (history, lookup) — all solution-carrying.
-  The site row also carries `ben_hubtabs` (per-site
-  enablement of the hub's main tabs; `shared/schema/hubTabs.ts` is the
-  one list, default order My day · Cadence · Priorities · Actions ·
-  Documents) and `ben_isarchived` (an archived site keeps its row and
-  data but leaves `orgJson()` and so every picker; Organisation settings
-  lists it under "Archived sites" with Restore) and `ben_siteorder` (drag
-  a site card onto another in the same company to reorder; `orgJson()`
-  sorts by it, unset last) — all 2026-08-19, solution-carrying. **Cascaded priorities (P0, 2026-08-19):**
-  `ben_ltkpillar` (company pillars, two levels via a self lookup),
-  `ben_ltkpriority` (one row per priority, owned by its originating org
-  by NAME — company/site/department/area columns — with pillar and
-  parent-priority lookups), `ben_ltkpriorityassignment` (priority ×
-  receiving org: proposed/accepted/rejected/onhold/completed + reason;
-  `childpriorityid` when customised), `ben_ltkpriorityevent` (the
-  history tab), `ben_ltkactionfile` (evidence files on actions); actions
-  gained `verify` status, verification stamps, reschedule/cancel history
-  and an initiative id; site settings gained per-org visions and the
-  app-level priorities settings (period definition, RAG ratio). The
-  initiative-side tables arrive with P5 once the templates builder is
-  designed. Pure model + tests: `app/src/priorities/model.ts`; IO:
-  `store/priorities.ts`; the org's OWNERS (site + department, plural)
-  and visions ride the existing site-settings JSON (`store/config.ts`).
-  Plan of record: [leanboard-cascade-improvement-plan.md](leanboard-cascade-improvement-plan.md).
-- **The hub** is the landing screen: My day agenda, boards, actions,
-  a Documents tab count. **Doc cards** (Standard documents, Document
+  people, occurrence settings; `ben_boardkind` meeting | project) →
+  `ben_ltkboardinstance` (one per meeting occurrence; project boards
+  have one living instance plus gate snapshots) → `ben_ltkcarddata`
+  (per card per instance: output JSON + tile SVG). `ben_ltkcardcatalog`
+  holds the card-type catalog and default tiles; `ben_ltkcardseries`
+  holds every dated series (card readings, value-driver actuals and the
+  per-period `spec:*` plan / forecast / limit points — §3.3);
+  `ben_ltkaction` is the central actions register (§3.4);
+  `ben_ltkpeoples` is the app's user record (role user / siteadmin /
+  superadmin, site / department / area / crew); `ben_ltksitesettings`
+  and `ben_ltkuserprefs` hold settings — the site row carries
+  `ben_hubtabs` (per-site enablement of the hub's tabs;
+  `shared/schema/hubTabs.ts` is the one list: My day · Cadence ·
+  Priorities · Improvement · Value drivers · Actions · Documents),
+  `ben_isarchived` and `ben_siteorder`; the APP_ROW carries the
+  improvement settings (methods · standard roles with per-site fillers
+  · standard fields · the value-driver editor role) and the priorities
+  settings (period definition, RAG ratio).
+  **Cascaded priorities:** `ben_ltkpillar`, `ben_ltkpriority` (owned by
+  its originating org by NAME; `ben_primaryinitiativeid` = the ★
+  primary initiative whose charter / metrics headline it),
+  `ben_ltkpriorityassignment`, `ben_ltkpriorityevent`.
+  **Improvement:** `ben_ltkinitiativetemplate` (stages / gates / roles
+  incl. hidden standard roles / fields / metric rule + a template
+  board), `ben_ltkinitiative` (header + snapshot / roles / priority
+  links / metrics / gate / stage-target JSON columns;
+  `ben_alsoorgsjson` = further departments it is listed under),
+  `ben_ltkinitiativeevent`, `ben_ltkactionfile`.
+  **Value drivers:** `ben_ltkvaluedriver` (per-site tree nodes:
+  formula, cadence, aggregate, format incl. grid rows, `ben_sourceurl`,
+  `ben_trackingjson` = numeric | good/bad | picklist) and
+  `ben_ltkvdtscenario` (parked Simulate scenarios).
+  All of these are solution-carrying (the managed LeanToolKitData
+  solution); every column is declared in `data/schema.mjs`.
+  Design of record: [leanboard-cascade-improvement-plan.md](leanboard-cascade-improvement-plan.md)
+  (a dated ledger of every phase and decision).
+- **The hub** is the landing screen: My day (today's rituals + the
+  viewer's actions), Cadence (a person's or an organisation's rituals
+  on a day/week grid — rituals may be listed under several
+  organisations via `alsoOrgs`), Priorities, Improvement, Value
+  drivers, Actions (the same Person | Organisation scope as Cadence,
+  opening on the viewer each load) and Documents. App-screen tabs mount
+  lazily and scroll inside the tab. **Doc cards** (Standard documents, Document
   health) render register-true rows inside boards, configured by
   pasting a register view link; they load via the dynamic-import door
   and fetch after paint with jitter so a wall of boards can't
@@ -198,23 +210,88 @@ model section) — the canvas/PCF sections there are historical.
   the source document (mini-tables edit on their source card). Both
   rollups share the store road's source-resolution skeleton
   (`store/rollup.ts`).
-  Actions may be CONFIDENTIAL (`ben_confidential` / `ben_createdby` /
-  `ben_visiblejson`, 2026-09-16): app-level filtering at the actions
-  store's reads (creator, assignees, their Office 365 managers, super
-  admins) — the same model as confidential initiatives; the rows remain
-  readable through Dataverse itself.
-  A value driver may be measured as a number, good / bad or a picklist
-  (`ben_trackingjson`, 2026-09-09); non-numeric drivers never enter
-  formulas and their readings are option labels on the same series.
-  A KPI card on ANY board may link itself to a value driver
-  (`settings.driver` on the slot, 2026-09-08) and then reads/writes the
-  driver's series; initiative boards carry one Metrics card
-  (`MetricsCard`) whose rows read the initiative's metric definitions
-  and each metric's own location (driver / seeded card / sub-location).
-  Grid entry (2026-09-08) adds per-bucket target / lower / upper as
-  dated `spec:*` keys on the same series location (a driver's virtual
-  `vdt`/driver-id location or an own KPI card's), carried forward by
-  date; readings never use that prefix.
+
+
+### 3.3 Improvement, priorities, value drivers & KPIs
+
+- **Initiatives** are created from templates (stages with gates and
+  approver roles; standard roles Sponsor / Owner / Improvement lead /
+  Team / Support can be HIDDEN per template, Owner never; app-level
+  standard roles such as Finance lead have per-site fillers; template
+  roles are free). A role's People = Several allows many holders. An
+  initiative has one owning organisation plus optional further
+  organisations it is listed under. Its board is seeded from the
+  template's board with the template's exact cells and walk order
+  (blanks stay blank; `improvement/boardLayout.ts`), and can be reset
+  to the template from the board's kebab (card data is never deleted).
+- **Metrics belong to the initiative.** A metric is either picked from
+  the site's value driver tree (leaf or leading node; the metric IS the
+  driver, its readings live on the driver's series) or
+  initiative-specific (own series under the board's Metrics card; may
+  later be linked or promoted into the tree). Several metrics may be
+  ★ starred; each carries an objective sentence. The board's
+  **Metrics card** is a chart grid (1 / 2 / 3 columns by count) of full
+  KPI trends; "Update values…" in each chart's title strip opens the
+  values grid — the one place values are entered.
+- **Value driver tree** (`improvement/vdt/`): per-site nodes with
+  formulas (+ − × ÷ ^ %, SUM/AVG/MIN/MAX/ABS/ROUND, CHILDREN), cadence
+  (shiftly … annually), aggregate, format and grid rows; numeric,
+  good/bad or picklist tracking (non-numeric nodes never enter a
+  formula). Hub → Value drivers shows the tree with numbers; clicking a
+  driver opens the grid popup. Simulate is parked (code kept).
+- **Grid entry** (`vdt/grid.ts` + `gridModel.ts`, pure and tested): a
+  column per cadence bucket, rows Plan / Forecast / Lower / Upper as
+  configured plus Actual, unbounded paging through time with the page
+  fitted to the width, Excel paste, CSV. Plan and limits are dated
+  `spec:*` series that carry forward; a period's plan / forecast /
+  actual is the fold of its buckets. Plan and target are one thing.
+- **KPI cards on any board** may link themselves to a value driver
+  (`settings.driver` on the slot); linked cards read and write the
+  driver's one series and take the driver's cadence, rows and
+  targets (Option C: the driver owns targets, the card's level values
+  only seed an empty driver). Good/bad and picklist KPIs draw a
+  category trend.
+- **A priority's primary initiative** (★ on the overlay's Initiatives
+  tab, or auto-claimed by the first initiative naming the priority as
+  its own primary) supplies the overlay's Charter and Metrics tabs and
+  the Priorities screen's Objectives row (every starred metric:
+  "Name: objective" over Plan / Actual with a traffic light). The
+  primary leads the overlay's Initiatives tab in its own section.
+
+### 3.4 Actions
+
+- One central table on the standard channel: every card raises actions
+  keyed by `instanceId` = `board:card`; the hub's personal list uses
+  `hub:<whoId>`. `initiativeId` is stamped at the ONE write path for any
+  action whose board is an initiative board and healed onto older rows
+  on read (`actionBelongsTo` is the one match rule readers use). PDCA
+  progression rides `ben_pdca` (Closed mirrors done).
+- **Confidential actions** (`ben_confidential` / `ben_createdby` /
+  `ben_visiblejson`): seen by the creator, the assignees, each
+  assignee's DIRECT manager (Office 365 Users `Manager`, session-cached)
+  and super admins; the visible set is computed at save and stored;
+  escalation admits the receiving board's owner. Enforced at the
+  actions store's read choke point, so every surface inherits it —
+  and roll-ups are therefore viewer-dependent. App-level like
+  confidential initiatives and meetings: the rows stay readable
+  through Dataverse itself.
+- **Entry points:** every card's action dialog (Confidential check
+  included), the action board's kanban / list, the hub's rows, the
+  top-bar **＋ Add action** (always the viewer's personal list, assignee
+  defaults to the viewer), the Actions tab's composer (assigns to the
+  scoped person). The focused card view flushes a pending save on
+  leave and fires `ltk-actions-changed`; boards and the hub refresh on
+  that signal.
+
+### 3.5 Store read cache & change signals
+
+`store/changes.ts` keeps a 60-second read cache keyed by topic
+(`memoRead`) that writers invalidate (`bumpChange`): initiatives,
+boards, drivers, palettes, people roles, managers. Any new reader of
+those tables goes through the cached function; any new writer bumps
+the topic in the same call. The Priorities screen's boot memo checks
+the same versions. `ltk-actions-changed` is the DOM-level signal for
+action saves.
 
 ## 4. The document management system
 
@@ -311,7 +388,7 @@ conditional access all apply. The important roads:
 | Microsoft Teams (`shared_teams`) | `MicrosoftTeamsService` | notifications: CreateChat + adaptive card (plain-message fallback); sender = the acting user (self-chats refused by the connector) |
 | Office 365 Outlook (`shared_office365`) | `Office365OutlookService` | e-mail alternative for notifications (SendEmailV2) |
 | Office 365 Groups (`shared_office365groups`) | `Office365GroupsService` | Graph passthrough (`HttpRequestV2`) for Entra group membership: pool checks, controller checks, member/owner add/remove |
-| Office 365 Users (`shared_office365users`) | `Office365UsersService` | people search for pickers, profiles |
+| Office 365 Users (`shared_office365users`) | `Office365UsersService` | people search for pickers, profiles, and the direct-manager lookup behind confidential actions (app-wide, not docs-only) |
 
 Teams/Outlook are **docs-only by the import gate** and load by dynamic
 import at the moment of sending — the board bundle never carries them.
@@ -328,7 +405,7 @@ Operating instructions of record: [../CLAUDE.md](../CLAUDE.md) (agent),
 [deployment-cookbook.md](deployment-cookbook.md) (operational recipes).
 
 - **Gates before any push**: `tsc --noEmit`, the import gate, vitest
-  (~500 tests), `npm run build`, chunk report — plus repo-root
+  (~620 tests), `npm run build`, chunk report — plus repo-root
   typecheck when `shared/`/`controls/` change. Check the test COUNT
   line, not just exit codes, when chaining, and `set -o pipefail`
   (`tsc | tail` reports tail's exit). The chunk report's ceiling on
@@ -354,6 +431,12 @@ Operating instructions of record: [../CLAUDE.md](../CLAUDE.md) (agent),
   to a temp directory outside the repo, never printed, and deleted
   after use. Direct SPO REST rejects this client in this tenant —
   Graph is the admin-scripting road.
+- **Harness pages** (`app/harness/*.html`, `pdca-harness` in
+  `.claude/launch.json`): mount a control or a screen fragment with an
+  in-memory series stub (a Vite alias in `harness/vite.config.ts`) for
+  screenshots and layout checks without Dataverse. Anything that reads
+  live tables (the popup, the register, the overlay) stays a hosted
+  check.
 - **Releases**: `./release.sh <x.y.z>` + `git push origin main --tags`.
   The tag triggers GitHub Actions: build the app package, export the
   managed LeanToolKitData solution from dev, attach both to a GitHub
@@ -389,7 +472,11 @@ the app can never do what its user cannot.
    (internal transparency powers dedupe and known-issues culture).
 3. In-app gates (superadmin/siteadmin roles in `ben_ltkpeoples`,
    controller/pool Entra groups) — these only *hide affordances* and
-   route workflows; they are UX, not security. Elevation checks fail
+   route workflows; they are UX, not security. **Confidentiality of
+   initiatives, meetings and actions is of this kind**: hidden in every
+   screen, readable through Dataverse by anyone with the app role. A
+   hardened design (a separately secured table with per-record sharing)
+   is logged in the backlog, not built. Elevation checks fail
    closed; convenience checks fail open (documented per gate).
    **Documents domain (2026-08-28):** admin standing there is the
    Document Controllers group ALONE — app site/super admins are not in

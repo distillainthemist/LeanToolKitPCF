@@ -58,6 +58,13 @@ the same commit.
   `ltk-check` chips for mutually exclusive modes (Ben, 2026-08-30).
 - **Kebab menus**: `.app-cp-menu` fixed popover, `.app-cp-menu-h` small
   caps section heads, ●/○ prefix for radio-ish items.
+- **The top bar**: brand left; Report and Settings as text-links; the
+  ONE accent primary at the far right is `＋ Add action`
+  (`.app-btn-addaction`, 40px) — always present, always the same place.
+- **Scope bars** (Cadence, Actions): `Person | Organisation` select +
+  a roster search with a "Me" shortcut, or the cascading site →
+  department → area selects; flush left, no inset. Group-by chips
+  ride the filter row, right-aligned.
 
 - **Screen-mount cards** (Priorities, Documents, Actions Gantt): they
   render app screens, but still wear the SAME ltk title strip as every
@@ -124,22 +131,56 @@ as a free-standing object is a card and gets the full recipe.
 - Matrix/list cards: 4px status edge + 13.5–14px semibold statement +
   muted meta lines. Tallies are symbols (`✓ ! ✕`) with zeros muted.
 
-### 5.x The values grid (KPI values, 2026-09-08)
+### 5.1 The values grid (KPI values, 2026-09-08/09)
 
-`.app-vg-*`: a white 10px/`#e4dfd6` scroll container; sticky warm-wash
-(`#faf9f7`) first column and header rows; 36px cells, right-aligned
-tabular numerals; inherited (carried-forward) values grey italic;
-today's column `#fbf4ea`; future columns at 0.6 opacity; a focused cell
-`#fff8e6` with a 2px accent inset; the state is a site-palette dot at the
-left of the Actual cell once a value is in (no separate row).
-Horizontal scroll is INSIDE the grid, never the page; the table keeps
-10px under its last row so an overlay scrollbar never hides it. One
-component for the Value drivers drawer and the KPI card dialog.
+`.app-vg-*`: a white 10px/`#e4dfd6` container; warm-wash (`#faf9f7`)
+first column and header rows; 36px cells, right-aligned tabular
+numerals; inherited (carried-forward) values grey italic; today's
+column `#fbf4ea`; future columns at 0.6 opacity; a focused cell
+`#fff8e6` with a 2px accent inset; the state is a site-palette dot at
+the left of the Actual cell once a value is in (no separate row). The
+pager (‹ › + label) sits ABOVE the grid either side; the page is sized
+to fit the width (`table-layout: fixed`) — no scrolling inside the
+grid, ‹ › move through time without bound. Rows are only the KPI's
+configured ones plus Actual; a non-numeric KPI shows one state row
+(good/bad cycles on click, a picklist is a select). One component for
+the driver popup and the KPI card dialog (`.app-vg-modal`, 1320px).
+
+### 5.2 KPI charts and the Metrics card (2026-09-14/15)
+
+- A KPI chart has NO big readout: readings carry value labels, the plan
+  line is labelled "Plan n" at its right end (accent), the forecast
+  "Forecast n" (accent, faint), limits "USL / LSL n" (issue colour).
+  "Update values" lives in the title strip (`.ltk-titlebar-btn`) as the
+  ONE way values are entered — no add-reading, no tap-to-edit; a dot
+  click opens that reading's actions only.
+- Good/bad and picklist KPIs draw a category trend: the y axis is the
+  options (first at the top), each row a band tinted by its state at
+  0.14 opacity, the line through the rows, dots in their state colour.
+- The Metrics card (`.app-mc-chartgrid`) is a grid of full charts: 1
+  column for one metric, 2 for two to four, 3 for five or more; rows
+  share the card's height (`repeat(n, minmax(0,1fr))`); the ★ primary's
+  cell has an accent border; a click pops the chart out
+  (`.app-modal-wide`).
+
+### 5.3 The Objectives row (Priorities, 2026-09-15/23)
+
+`.app-cp-objective`: one entry per starred metric of the priority's
+primary initiative — a 12px site-palette traffic light (neutral
+`#d9d3c8` when no reading), then line 1 "**Name**: objective" (name
+bold, objective regular muted), line 2 small-caps PLAN / ACTUAL labels
+with tabular values (Actual 14px). Entries inset 12px with hairline
+dividers. No priority statement here — the card above names it.
 
 ## 6. Settings surfaces
 
 - Tabbed sections; `h3.app-pr-h3` section titles + `.app-settings-note`
-  intro line. Editable lists = the org editor's row look: `#faf9f7`
+  intro line.
+- **The Users register is a fixed grid** whose header and rows share ONE
+  column template (`.app-user-head` / `.app-user-row`, ≥1280px): person
+  · Site · Department · Area · Crew · Role · Access. Adding a control to
+  the row WITHOUT widening the template shifts every column and wraps
+  Access onto a second row (2026-09-17) — change both together. Editable lists = the org editor's row look: `#faf9f7`
   rounded rows, ⠿ drag handle, red `×` (`.app-org-x`), input + `＋`
   adder row (`.app-org-row`). Owner chips = `.app-owner`.
 

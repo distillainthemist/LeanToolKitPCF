@@ -151,6 +151,41 @@ package, exports the managed LeanToolKitData solution, attaches both to a
 GitHub Release). Watch it with `gh run list` / `gh run watch <id>`.
 Version lives in the tag alone — nothing is stamped into files.
 
+## Lessons ledger (September 2026)
+
+- **Never truncate a deploy log with `head`/`tail` in a pipe** — SIGPIPE
+  can cut `deploy-schema.mjs` off BEFORE the role grants. Write to a
+  file in the scratchpad, then grep it (2026-09-02).
+- **Store reads are cached** (`app/src/store/changes.ts`, 60 s, by
+  topic): every new writer of initiatives / boards / drivers /
+  palettes / people must `bumpChange(topic)`; every new reader goes
+  through the cached function. Action saves also fire the DOM event
+  `ltk-actions-changed`; boards and the hub refresh on it.
+- **One write path, one read path.** Anything that must hold for EVERY
+  action (initiative id, confidentiality, board id) lives in
+  `store/actions.ts` — `upsertActions` and the `visible()` filter on
+  every read — never in a surface (2026-09-16/23: three surfaces
+  disagreed because a stamp lived in one creation flow).
+- **The Users register's grid template is shared by header and rows**
+  (`app/src/style.css` `.app-user-head` / `.app-user-row`): adding a
+  control means widening both (2026-09-17).
+- **Every `<button>` wears `.app-btn` / `.app-btn-primary` /
+  `.app-link`** — a browser-default grey button is a defect Ben spots
+  at once (twice, 2026-08-29 and 2026-09-08). `button.app-link` is
+  reset globally.
+- **Harness pages** (`app/harness/`, launch config `pdca-harness`) are
+  the screenshot road for controls; the series store is aliased to an
+  in-memory stub. Anything reading live tables is Ben's hosted check —
+  confidentiality checks need TWO accounts.
+- **Confidentiality is app-level** (initiatives, meetings, actions):
+  say so plainly when asked; the rows stay readable via Dataverse.
+- **A template's board layout is sacred**: seeding, reset and
+  add-card keep each card's `pos`/`nav`; never renumber
+  (`improvement/boardLayout.ts`, 2026-09-17).
+- **Solution-carrying releases** since v0.50: v0.51 (value drivers,
+  scenarios, sourceurl, tracking, pdca), v0.53 (confidential action
+  columns), v0.54 (alsoorgs). Prod imports the managed solution FIRST.
+
 ## Key docs
 
 - docs/sharepoint-writes.md — the SP write cookbook (VULI vs connector

@@ -180,3 +180,15 @@ pac code push
 
 The pushed app is identical; it just lives outside the solution until
 someone does the portal Add-existing step there.
+
+## What each schema-carrying release added (import the managed solution first)
+
+| Release | Schema change | Notes |
+|---|---|---|
+| v0.51.0 | `ben_ltkvaluedriver` (+ `ben_sourceurl`, `ben_trackingjson`), `ben_ltkvdtscenario`; `ben_pdca` on `ben_ltkaction` | value driver tree, KPI grid entry, PDCA on actions |
+| v0.53.0 | `ben_confidential`, `ben_createdby`, `ben_visiblejson` on `ben_ltkaction` | confidential actions; the Office 365 Users connection is used for the manager lookup — its connection reference must be satisfied at import |
+| v0.54.0 | `ben_alsoorgsjson` on `ben_ltkinitiative` | initiatives listed under several departments |
+
+v0.52.0 and v0.55.0 were app-only. After a solution import, existing
+action rows are healed (initiative ids) automatically on the first
+open of the Improvement or Priorities tab — nothing to run.

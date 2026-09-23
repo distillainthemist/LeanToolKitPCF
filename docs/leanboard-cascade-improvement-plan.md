@@ -1050,6 +1050,18 @@ reschedule/cancel history with a reason picklist.
   initiative — line 1 "**Name**: objective", line 2 Plan / Actual with
   the traffic light; the Dynamic card captions its first starred metric
   with the objective.
+- **Where things stand (2026-09-24).** Released: v0.51.0 (2026-09-14,
+  solution-carrying — value driver tree, grid entry, Metrics card,
+  meeting-board driver links, rituals in several orgs, driver popup,
+  KPI rows, non-numeric drivers, role hiding, primary initiative),
+  v0.52.0 (app-only — chart grid, Update values, labelled charts, read
+  cache, inline charter bindings, Objectives row), v0.53.0
+  (solution-carrying — confidential actions, ＋ Add action), v0.54.0
+  (solution-carrying — several departments, scroll fixes, editable
+  metrics, site-admin placement, layout preservation), v0.55.0
+  (app-only — Actions tab scope, initiative actions found everywhere,
+  starred metrics + objective, primary pinned). Open items:
+  backlog.md → "Improvement / KPI tranche".
 - **P10 Reporting** — designed (spec §4).
 
 Each phase ships behind the usual gates + `pac code push`; the specs'

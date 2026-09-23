@@ -227,6 +227,34 @@ when written):
   spreadsheet process outside the app.
 - AI assistant (FR-AI-*): a future project iteration.
 
+## Improvement / KPI tranche — open items (2026-09-24)
+
+Everything through v0.55.0 is built; these are the decisions and
+deferrals still open (details in leanboard-cascade-improvement-plan.md).
+
+- **P10 Reporting** — designed (plan §4), not built. Awaiting Ben's go.
+- **Simulate** — parked 2026-09-09 (button hidden, code kept). Reviving
+  it needs a home for BASELINE again (its entry surface went with the
+  period tiles).
+- **Owner endorsement toggle** on initiatives — still inert: wire into
+  gate decisions or remove (Ben's call).
+- **Evidence attach on actions** — table exists (`ben_ltkactionfile`),
+  no UI.
+- **Confidential actions, hardened** — a separately secured table with
+  per-record sharing if app-level hiding ever proves insufficient.
+- **Organisation-scope Actions read** — one query of all open actions,
+  filtered in the app; page by board once open rows pass a few
+  thousand.
+- **Picklist option library** (site-level reusable option sets) and a
+  **target-state row** for picklist KPIs — if the same lists keep being
+  retyped / a "short of plan" state is wanted.
+- **Standalone KPI cards as good/bad or picklist** — drivers and own
+  initiative metrics have it; standalone meeting-board cards are numeric.
+- **Secondary organisations on a ritual** see it in Cadence only; site
+  admins there don't see it in Settings › Rituals — extend if asked.
+- **Metrics card on hand-deleted boards** returns only on the next Edit
+  details save (or Reset board to template).
+
 ## Done / no longer tracked
 
 - Folder counts REMOVED (Ben, 2026-08-08, UI design review): they cost
