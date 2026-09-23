@@ -1179,7 +1179,7 @@ export function mountPriorities(parent: HTMLElement, opts: PrioritiesMountOpts =
         roster,
         cascadeTargets: cascadeTargetsFor(p),
         alreadyCascaded: already,
-        primaryInitiativeLabel: "",
+        primaryInitiativeLabel: initiativeList.find((x) => x.id === p.primaryInitiativeId)?.title ?? "",
       });
       if (!r) return;
       const before = p.statement;

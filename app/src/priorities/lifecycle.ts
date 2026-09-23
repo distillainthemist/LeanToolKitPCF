@@ -730,14 +730,7 @@ export function openPriorityOverlay(ctx: LifecycleCtx, p: Priority, onEdit: (p: 
       // grouped by RAG (Ben, 2026-08-24: the groups replace the rail's
       // tally chips; empty groups are omitted)
       const GROUPS: [string, string][] = [["red", "Issue"], ["amber", "At risk"], ["green", "On track"], ["grey", "No signal"]];
-      const grouped = GROUPS.map(([rag, label]) => ({ rag, label, rows: shown.filter((r) => r.rag === rag) })).filter((g) => g.rows.length > 0);
-      for (const g of grouped) {
-        const h = el("div", "app-cp-ov-group");
-        const dot = el("span", "app-cp-ov-group-dot");
-        dot.style.background = ctx.palette[ragPaletteKey(g.rag as "red")] ?? "#9a948a";
-        h.append(dot, el("span", undefined, `${g.label} · ${g.rows.length}`));
-        body.appendChild(h);
-        for (const r of g.rows) {
+      const buildRow = (r: (typeof shown)[number]): HTMLElement => {
         const rowEl = el("div", "app-cp-ov-init");
         rowEl.style.borderLeftColor = ctx.palette[ragPaletteKey(r.rag)] ?? "#9a948a";
         const main = el("div", "app-cp-ov-init-main");
@@ -781,7 +774,28 @@ export function openPriorityOverlay(ctx: LifecycleCtx, p: Priority, onEdit: (p: 
             window.location.hash = `#/board/${r.boardId}`;
           });
         }
-          body.appendChild(rowEl);
+        return rowEl;
+      };
+      // ★ the primary initiative always leads (Ben, 2026-09-23), set apart
+      const primaryRow = shown.find((r) => r.id === live.primaryInitiativeId) ?? null;
+      if (primaryRow) {
+        const h = el("div", "app-cp-ov-group app-cp-ov-group-primary");
+        h.append(el("span", "app-cp-ov-star-on", "★"), el("span", undefined, "Primary initiative"));
+        body.appendChild(h);
+        const row = buildRow(primaryRow);
+        row.classList.add("app-cp-ov-init-primary");
+        body.appendChild(row);
+      }
+      const rest = primaryRow ? shown.filter((r) => r.id !== primaryRow.id) : shown;
+      const grouped = GROUPS.map(([rag, label]) => ({ rag, label, rows: rest.filter((r) => r.rag === rag) })).filter((g) => g.rows.length > 0);
+      for (const g of grouped) {
+        const h = el("div", "app-cp-ov-group");
+        const dot = el("span", "app-cp-ov-group-dot");
+        dot.style.background = ctx.palette[ragPaletteKey(g.rag as "red")] ?? "#9a948a";
+        h.append(dot, el("span", undefined, `${g.label} · ${g.rows.length}`));
+        body.appendChild(h);
+        for (const r of g.rows) {
+          body.appendChild(buildRow(r));
         }
       }
       const hidden = rows.length - shown.length;

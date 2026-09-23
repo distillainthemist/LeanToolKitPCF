@@ -459,7 +459,7 @@ export function priorityDialog(o: PriorityDialogOpts): Promise<PriorityDialogRes
     }
 
     // primary initiative (initiatives arrive with P5)
-    const primary = el("div", "app-cp-muted", o.primaryInitiativeLabel !== "" ? o.primaryInitiativeLabel : "None yet — link one when initiatives exist.");
+    const primary = el("div", "app-cp-muted", o.primaryInitiativeLabel !== "" ? `★ ${o.primaryInitiativeLabel}` : "None yet — star one on the priority's Initiatives tab.");
 
     // cascade to — children and peers, clearly separated (Ben, 2026-08-19)
     const already = new Map(o.alreadyCascaded.map((a) => [orgKey(a.org), { status: a.status, reason: a.reason }]));
