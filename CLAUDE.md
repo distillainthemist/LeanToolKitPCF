@@ -163,6 +163,11 @@ Version lives in the tag alone — nothing is stamped into files.
   `tools/native-dialog-gate.mjs` scans the source and runs in CI. Prompts open on the
   topmost layer, so one asked from the card picker is never hidden
   behind it (2026-09-29).
+- **Links that leave the app use `boardUrl`** (`app/src/links.ts`),
+  never `window.location`: hosted, the page is a frame on
+  `powerplatformusercontent.com` and its URL opens nothing for the
+  person who receives it. Three notification links had this wrong
+  (2026-09-29).
 - **Store reads are cached** (`app/src/store/changes.ts`, 60 s, by
   topic): every new writer of initiatives / boards / drivers /
   palettes / people must `bumpChange(topic)`; every new reader goes

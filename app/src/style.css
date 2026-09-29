@@ -3996,3 +3996,4 @@ textarea.app-cp-statement { font-size: 14px; font-weight: 500; }
 .app-sb-revert { font-size: 12.5px; font-weight: 600; color: #7a4d00; }
 .app-sb-revertwhy { font-size: 12.5px; color: #57534a; overflow-wrap: anywhere; }
 .app-ib-revert { align-self: flex-start; font-size: 12px; }
+.app-ib-linkbox { margin: 4px 8px; width: calc(100% - 16px); box-sizing: border-box; font-size: 12px; }

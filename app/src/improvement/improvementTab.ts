@@ -10,7 +10,7 @@
 import { el, clear } from "../../../shared/ui/dom";
 import { showLoading } from "../loading";
 import { currentViewer } from "../runtime";
-import { boardHash } from "../links";
+import { boardHash, boardUrl } from "../links";
 import { rememberBoardOrigin } from "./boardOrigin";
 import { renderMetricsList } from "./metricsList";
 import { dayLabel } from "../linkTitle";
@@ -747,7 +747,7 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
           initiativeTitle: i.title,
           orgLine: `${actor().who} escalated "${i.title}" (${i.org.site}${i.org.department ? " · " + i.org.department : ""})`,
           recipients: sponsors,
-          link: `${window.location.origin}${window.location.pathname}${window.location.search}#/board/${i.boardId}`,
+          link: boardUrl(i.boardId),
           onEscalate: async (note) => {
             i.flag = "escalated";
             i.flagNote = note;

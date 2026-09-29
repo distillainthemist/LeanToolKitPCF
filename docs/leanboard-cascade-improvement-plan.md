@@ -1151,6 +1151,15 @@ reschedule/cancel history with a reason picklist.
   note. Admins may also withdraw (they already act on every other
   board step). No schema change. Tests 679. App-only; hosted checks
   Ben's — the notify send needs a real sponsor with an email.
+- **2026-09-29 — initiative permalink; notification links fixed.**
+  `🔗 Copy link to this initiative` on the board's ⋮ menu copies the
+  player URL (`boardUrl`). Found on the way: the escalation (board and
+  register) and revert notifications built their link from
+  `window.location` — inside the player that is the embedded frame's
+  URL, which opens nothing for the person receiving it. All three now
+  send `boardUrl`. The Owner endorsement switch on the same menu is
+  still inert (it saves a flag nothing reads) — Ben asked why it is
+  there; remove or wire is his call (backlog).
 - **Where things stand (2026-09-24).** Released: v0.51.0 (2026-09-14,
   solution-carrying — value driver tree, grid entry, Metrics card,
   meeting-board driver links, rituals in several orgs, driver popup,

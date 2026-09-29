@@ -25,6 +25,8 @@ import { improvementSettingsJson } from "../store/config";
 import { appendInitiativeEvent, listInitiativeEvents, listInitiatives, saveInitiative } from "../store/initiatives";
 import { InitiativeEvent } from "../store/initiatives";
 import { dayLabel } from "../linkTitle";
+import { boardUrl } from "../links";
+import { copyText } from "../../../shared/ui/clipboard";
 import { Initiative, myRoles, nextGateFor, PendingGate } from "./initiativeModel";
 import { mergeUserPrefs, userPrefsJson } from "../store/config";
 import { openUpdateDialog, renderTrail } from "./commentary";
@@ -497,7 +499,7 @@ export function mountInitiativePane(o: InitiativePaneOpts): InitiativePaneHandle
             return out;
           },
           lineFor: (toName) => `${actor().who} ${completed ? "reopened" : "reverted"} "${i.title}" from ${fromName} to ${toName} (${i.org.site}${i.org.department ? " · " + i.org.department : ""})`,
-          link: `${window.location.origin}${window.location.pathname}${window.location.search}#/board/${i.boardId}`,
+          link: boardUrl(i.boardId),
           onRevert: async (toStageId, reason, newTarget) => {
             const moved = applyRevert(i, toStageId, newTarget);
             if (moved === null) throw new Error("that stage is no longer one it can go back to");
@@ -776,6 +778,32 @@ export function mountInitiativePane(o: InitiativePaneOpts): InitiativePaneHandle
         });
         menu.appendChild(b);
       };
+      // a permalink (Ben, 2026-09-29): the player's own URL, so it opens
+      // the app ON this initiative from a chat, an email or a bookmark.
+      // The menu stays open to say it worked; a host that refuses the
+      // clipboard hands over the raw URL to copy by hand (the ritual
+      // "Copy link" pattern).
+      if (i.boardId !== "") {
+        const copy = btn("🔗 Copy link to this initiative", "app-cp-menu-item");
+        copy.addEventListener("click", () => {
+          const link = boardUrl(i.boardId);
+          void copyText(link).then((ok) => {
+            if (!ok) {
+              const box = el("input", "app-input app-ritual-link app-ib-linkbox") as HTMLInputElement;
+              box.value = link;
+              box.readOnly = true;
+              box.setAttribute("aria-label", "Link to this initiative — copy it");
+              copy.replaceWith(box);
+              box.focus();
+              box.select();
+              return;
+            }
+            copy.textContent = "✓ Link copied";
+            window.setTimeout(() => menu.remove(), 1100);
+          });
+        });
+        menu.appendChild(copy);
+      }
       item("Edit details…", () => {
         void import("./editDetails").then(({ openEditDetails }) => {
           openEditDetails({
@@ -920,7 +948,7 @@ export function mountInitiativePane(o: InitiativePaneOpts): InitiativePaneHandle
         initiativeTitle: i.title,
         orgLine: `${actor().who} escalated "${i.title}" (${i.org.site}${i.org.department ? " · " + i.org.department : ""})`,
         recipients: sponsors,
-        link: `${window.location.origin}${window.location.pathname}${window.location.search}#/board/${i.boardId}`,
+        link: boardUrl(i.boardId),
         onEscalate: async (note) => {
           i.flag = "escalated";
           i.flagNote = note;
