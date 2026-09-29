@@ -50,7 +50,9 @@ export function isOnHold(a: { status: string; pdca?: string }): boolean {
  *  what was stored; a stored "closed" on a live action falls back to Do
  *  (the two are kept in step by the dialog, this covers older writes). */
 export function pdcaOf(a: { status: ActionStatus; pdca?: ActionPdca }): ActionPdca {
-  if (a.status === "done" || a.status === "cancelled") return "closed";
+  // awaiting endorsement: the work is done — it reads Closed, with its
+  // marker beside it (Ben, 2026-09-30)
+  if (a.status === "done" || a.status === "cancelled" || a.status === "verify") return "closed";
   return a.pdca !== undefined && a.pdca !== "closed" ? a.pdca : "do";
 }
 

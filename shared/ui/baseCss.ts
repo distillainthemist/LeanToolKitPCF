@@ -239,6 +239,20 @@ export const LTK_BASE_CSS = `
 .ltk-link-hit-title { font-size: 14px; font-weight: 600; overflow-wrap: anywhere; }
 .ltk-link-hit-detail { font-size: 12px; color: var(--ltk-muted); overflow-wrap: anywhere; }
 
+/* endorsement: the waiting banner in the dialog, the row marker */
+.ltk-endorse {
+  display: flex; flex-direction: column; gap: 8px; padding: 10px 12px;
+  border: 1px solid #f0c36d; border-radius: 6px; background: #fff7e0;
+}
+.ltk-endorse-msg { font-size: 13.5px; font-weight: 600; color: #7a4d00; }
+.ltk-endorse-note { font-size: 12.5px; color: var(--ltk-muted); }
+.ltk-endorse-glyph {
+  flex: none; font-size: 11.5px; font-weight: 600; color: #7a4d00; white-space: nowrap;
+  background: #fff7e0; border: 1px solid #f0c36d; border-radius: 999px; padding: 1px 8px;
+}
+.ltk-confirm-err { font-size: 12.5px; color: #d13438; }
+.ltk-confirm-err:empty { display: none; }
+
 /* comments on an action: the trail, the box, the row glyph */
 .ltk-cmt { display: flex; flex-direction: column; gap: 8px; }
 .ltk-cmt-list { display: flex; flex-direction: column; gap: 6px; max-height: 200px; overflow: auto; scrollbar-width: thin; }

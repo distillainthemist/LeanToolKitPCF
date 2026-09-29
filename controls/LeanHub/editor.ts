@@ -18,7 +18,7 @@ import { clear, el, ensureStylesheet } from "../../shared/ui/dom";
 import { parsePrompts, Prompts, renderGhost, renderTitleBar } from "../../shared/ui/chrome";
 import { pdcaOf, isOnHold, isOverdue, LtkAction, newAction } from "../../shared/schema/actions";
 import { Person } from "../../shared/schema/people";
-import { openActionDialog, pdcaDisc, confidentialGlyph, commentGlyph } from "../../shared/ui/actionUi";
+import { openActionDialog, pdcaDisc, confidentialGlyph, commentGlyph, endorseGlyph } from "../../shared/ui/actionUi";
 import { DAY_LABELS, MONTH_LABELS, isoLocal, startOfDay } from "../../shared/schema/recurrence";
 import { OrgSite } from "../../shared/schema/meeting";
 import {
@@ -71,6 +71,7 @@ export class LeanHubView {
    *  set when it isn't me (null = loading). */
   private actScope: ActionsScope = { kind: "person", person: "", org: { site: "", department: "", area: "" } };
   private scopedActions: LtkAction[] | null = null;
+  private endorseQueue: LtkAction[] = [];
   private actGroupBy: "" | "source" | "person" = "";
   private actScopeTouched = false;
   /** The scope the host was last asked for — a non-me scope that was never
@@ -855,6 +856,15 @@ export class LeanHubView {
     if (!this.readOnly && this.actScope.kind === "person") wrap.appendChild(this.renderActionComposer());
 
     const isMe = this.scopeIsMe();
+    // the endorser's queue leads their own list: work done by others,
+    // waiting on them
+    const waiting = isMe ? this.endorseQueue.filter((a) => a.status === "verify") : [];
+    if (waiting.length > 0) {
+      const box = el("div", "ltk-lh-endorse");
+      box.appendChild(el("div", "ltk-lh-group ltk-lh-endorse-h", `Awaiting your endorsement · ${waiting.length}`));
+      for (const a of waiting) box.appendChild(this.renderActionRow(a));
+      wrap.appendChild(box);
+    }
     if (!isMe && this.scopedActions === null && this.scopeRequested !== this.actScope) {
       this.scopeRequested = this.actScope;
       this.cb.onActionsScope?.(this.actScope);
@@ -1019,6 +1029,23 @@ export class LeanHubView {
     return row;
   }
 
+  /** Save what changed on a row. The viewer's own list goes as a set (as
+   *  it always did); an action from ANOTHER list — a person's or an
+   *  organisation's scope, the endorser's queue — goes on its own. Until
+   *  2026-09-30 only the viewer's list was ever sent, so an edit made in
+   *  another scope was never saved. */
+  private emitFor(action: LtkAction): void {
+    this.cb.onActions(this.actions.includes(action) ? this.actions : [action]);
+  }
+
+  /** Actions waiting for THIS viewer's endorsement (the host finds them:
+   *  initiatives they own, sponsor or administer). */
+  setEndorseQueue(actions: LtkAction[]): void {
+    const same = JSON.stringify(actions.map((a) => [a.id, a.status])) === JSON.stringify(this.endorseQueue.map((a) => [a.id, a.status]));
+    this.endorseQueue = actions;
+    if (!same) this.render();
+  }
+
   private renderActionRow(action: LtkAction): HTMLElement {
     const row = el("div", "ltk-lh-action");
     const my = this.myPart(action);
@@ -1031,7 +1058,7 @@ export class LeanHubView {
       tick.addEventListener("click", (e) => e.stopPropagation());
       tick.addEventListener("change", () => {
         action.assignees[my.idx].done = tick.checked;
-        this.cb.onActions(this.actions);
+        this.emitFor(action);
         this.render();
       });
       row.appendChild(tick);
@@ -1042,6 +1069,8 @@ export class LeanHubView {
     if (lock) row.appendChild(lock);
     const said = commentGlyph(action);
     if (said) row.appendChild(said);
+    const waits = endorseGlyph(action);
+    if (waits) row.appendChild(waits);
     // the row edits in place — same dialog as the boards
     if (!this.readOnly) {
       row.classList.add("ltk-lh-action-edit");
@@ -1053,7 +1082,7 @@ export class LeanHubView {
           people: this.people,
           isNew: false,
           onCommit: () => {
-            this.cb.onActions(this.actions);
+            this.emitFor(action);
             this.render();
           },
         });

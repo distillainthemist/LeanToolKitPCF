@@ -115,6 +115,11 @@ the same commit.
   the field's own box), the card's own picker for the rest. Never a
   one-line prompt. The field wears its TARGET's type; the builder's
   bind select names that type beside each header field.
+- **Awaiting endorsement** reads the same everywhere: an amber pill
+  `◐ Awaiting endorsement` on rows, the amber banner under the PDCA
+  state in the dialog (with `Send back…` and `Endorse` for an
+  endorser, a one-line note for everyone else), `◐` in the tick. Send
+  back always asks for a reason, in place.
 - **PDCA state** in the action dialog is six states, three to a row:
   Plan, Do, Check / Act, On hold, Closed. On hold wears a pause
   glyph inside the ring, wherever a PDCA disc shows.

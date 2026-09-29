@@ -46,6 +46,9 @@ export interface BandOpts {
   onToggle: () => void;
   /** null = no stages to show (the initiative is complete). */
   stage: BandStage | null;
+  /** Actions whose work is done and wait for an endorser. `mine`: the
+   *  viewer may endorse — they get Review. */
+  endorse?: { count: number; mine: boolean; onReview: () => void } | null;
   /** The revert the initiative still stands on (its latest stage move
    *  was one) — said until it moves forward again. */
   revert?: LastRevert | null;
@@ -95,6 +98,7 @@ export function renderStatusBand(o: BandOpts): HTMLElement {
     const line = el("div", "app-sb-oneline");
     line.appendChild(stagePill(o));
     if (o.gate) line.appendChild(el("span", "app-sb-gatetext app-sb-gate-" + o.gate.tone, o.gate.text));
+    if (o.endorse && o.endorse.count > 0) line.appendChild(el("span", "app-sb-stale", `◐ ${o.endorse.count} to endorse`));
     line.appendChild(el("span", "app-sb-sep", "·"));
     if (o.latest) {
       const first = UPDATE_LABELS.map(([k, l]) => [l, o.latest![k]] as const).find(([, v]) => v !== "");
@@ -177,6 +181,16 @@ export function renderStatusBand(o: BandOpts): HTMLElement {
       g.appendChild(acts);
     }
     left.appendChild(g);
+  }
+  if (o.endorse && o.endorse.count > 0) {
+    const e = el("div", "app-sb-endorse");
+    e.appendChild(el("span", "app-sb-endorsetext", `◐ ${o.endorse.count} action${o.endorse.count === 1 ? "" : "s"} awaiting endorsement`));
+    if (o.endorse.mine) {
+      const review = btn("Review", "app-btn app-btn-primary app-ib-gatebtn");
+      review.addEventListener("click", o.endorse.onReview);
+      e.appendChild(review);
+    }
+    left.appendChild(e);
   }
   band.appendChild(left);
 

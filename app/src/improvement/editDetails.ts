@@ -338,9 +338,9 @@ export function openEditDetails(o: EditDetailsOpts): void {
     const endorseCb = el("input") as HTMLInputElement;
     endorseCb.type = "checkbox";
     endorseCb.checked = i.endorsement;
-    endorse.append(endorseCb, el("span", undefined, "Owner endorsement — the owner endorses completed actions"));
+    endorse.append(endorseCb, el("span", undefined, "Endorsement — completed actions wait for the owner or sponsor"));
     body.appendChild(endorse);
-    body.appendChild(el("span", "app-field-hint", "Recorded on the initiative. The endorsement step on actions is not built yet, so this changes nothing until it is."));
+    body.appendChild(el("span", "app-field-hint", "An action closed by anyone else waits until the owner, the sponsor or an admin endorses it. Switching this off closes whatever is waiting."));
 
     const err = el("div", "app-cp-err", "");
     body.appendChild(err);
@@ -372,8 +372,19 @@ export function openEditDetails(o: EditDetailsOpts): void {
           return;
         }
         save.disabled = true;
+        const endorsementWentOff = i.endorsement && !next.endorsement;
         Object.assign(i, next);
         await saveInitiative(i);
+        // endorsement switched off: what was waiting for an endorser closes
+        if (endorsementWentOff) {
+          try {
+            const { closeAwaitingEndorsement } = await import("../store/actions");
+            const n = await closeAwaitingEndorsement(i);
+            if (n > 0) await promptConfirm({ title: "Waiting actions closed", note: `${n} action${n === 1 ? " was" : "s were"} awaiting endorsement and ${n === 1 ? "is" : "are"} now closed.`, confirmLabel: "OK" });
+          } catch {
+            /* the details are saved; the actions stay waiting and can be closed by hand */
+          }
+        }
         // a KPI card per metric on the board — added for new metrics, dropped
         // for removed ones only when empty
         try {

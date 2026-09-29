@@ -83,7 +83,7 @@ function addDays(iso: string, n: number): string {
 
 type BarState = "ontrack" | "overdue" | "verify" | "hold" | "done";
 
-const STATE_LABEL: Record<BarState, string> = { ontrack: "On track", overdue: "Overdue", verify: "Awaiting verification", hold: "On hold", done: "Done" };
+const STATE_LABEL: Record<BarState, string> = { ontrack: "On track", overdue: "Overdue", verify: "Awaiting endorsement", hold: "On hold", done: "Done" };
 
 function barState(a: LtkAction, today: string): BarState {
   if (a.status === "done" || a.status === "cancelled") return "done";
@@ -297,7 +297,7 @@ export function mountGantt(opts: GanttOpts): () => void {
         bar.appendChild(sel);
       }
       const st = el("select", "app-input app-gx-sel") as HTMLSelectElement;
-      for (const [v, l] of [["", "All states"], ["ontrack", "On track"], ["overdue", "Overdue"], ["verify", "Awaiting verification"], ["hold", "On hold"]] as const) {
+      for (const [v, l] of [["", "All states"], ["ontrack", "On track"], ["overdue", "Overdue"], ["verify", "Awaiting endorsement"], ["hold", "On hold"]] as const) {
         const o = el("option", "", l) as HTMLOptionElement;
         o.value = v;
         if (v === status) o.selected = true;
@@ -715,7 +715,7 @@ export function mountGantt(opts: GanttOpts): () => void {
     };
     key("On track", (sw) => (sw.style.background = colours.ontrack));
     key("Overdue", (sw) => (sw.style.background = colours.overdue));
-    key("Awaiting verification", (sw) => {
+    key("Awaiting endorsement", (sw) => {
       sw.style.background = `repeating-linear-gradient(45deg, ${colours.verify}, ${colours.verify} 3px, color-mix(in srgb, ${colours.verify} 45%, white) 3px, color-mix(in srgb, ${colours.verify} 45%, white) 6px)`;
     });
     key("On hold", (sw) => {

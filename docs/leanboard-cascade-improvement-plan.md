@@ -1176,6 +1176,20 @@ reschedule/cancel history with a reason picklist.
   the Gantt's "Awaiting verification"); what is missing is the
   initiative's switch driving it, every closing route honouring it,
   and the rule for who may endorse.
+- **2026-09-30 — action endorsement built.** Ben's decisions: the
+  owner, the sponsor or admins endorse; an endorser's own close is
+  direct; it shows as Closed with a marker; a count in the app, no
+  message; switching off closes what waits; earlier closes are left;
+  single-action initiatives are exempt. Built as one pure rule
+  applied at the dialog, the tick, the kanban drop and — the backstop
+  — the store's write; the band's count and Review; the hub's
+  "Awaiting your endorsement"; the details forms say what the option
+  does. The Gantt and the kanban marker now say "endorsement" (the
+  kanban COLUMN is still named Verify). **Found and fixed on the
+  way:** edits made in the hub's Actions tab to another person's or
+  an organisation's actions were never saved (since v0.55.0).
+  Tests 698. No schema change; app-only. Hosted checks Ben's — two
+  accounts: a team member who closes, an owner who endorses.
 - **Where things stand (2026-09-24).** Released: v0.51.0 (2026-09-14,
   solution-carrying — value driver tree, grid entry, Metrics card,
   meeting-board driver links, rituals in several orgs, driver popup,

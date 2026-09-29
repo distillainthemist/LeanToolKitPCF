@@ -33,6 +33,8 @@ import { openUpdateDialog, renderTrail } from "./commentary";
 import { addUpdate, editUpdate } from "./commentaryActions";
 import { daysBetween, staleDays, Update, updatesFrom } from "./commentaryModel";
 import { BandGate, BandStage, renderStatusBand } from "./statusBand";
+import { actionBelongsTo, LtkAction } from "../../../shared/schema/actions";
+import { endorsementOn, endorserIds } from "./endorsers";
 import { applyRevert, gateDeclined, mayRevert, mayWithdraw, revertTargets, standingRevert, StageViewer, undoneApproverRoles } from "./stageRevert";
 import { HealthQuestion, parseImprovementSettings, PDCA_TOKENS, roleFillersAt } from "./templateModel";
 
@@ -145,8 +147,18 @@ export function mountInitiativePane(o: InitiativePaneOpts): InitiativePaneHandle
 
     // one event read serves the rail's history AND the commentary trail
     let events: InitiativeEvent[] = [];
+    // the actions waiting for an endorser (endorsement on), for the band
+    let awaiting: LtkAction[] = [];
+    const loadAwaiting = async () => {
+      if (!endorsementOn(i)) {
+        awaiting = [];
+        return;
+      }
+      const { actionsForInitiatives } = await import("../store/actions");
+      awaiting = (await actionsForInitiatives().catch(() => [])).filter((a) => a.status === "verify" && actionBelongsTo(i, a));
+    };
     const loadEvents = async () => {
-      events = await listInitiativeEvents(i).catch(() => []);
+      [events] = await Promise.all([listInitiativeEvents(i).catch(() => []), loadAwaiting()]);
     };
 
     const render = () => {
@@ -601,6 +613,34 @@ export function mountInitiativePane(o: InitiativePaneOpts): InitiativePaneHandle
       return box;
     };
 
+    // ---- endorsement: the owner's, the sponsor's, an admin's queue ---------------
+    const mayEndorse = (): boolean => isAdmin || endorserIds(i, imp.standardRoles).includes(who?.objectId ?? "");
+    const openReview = () => {
+      void import("./endorseReview").then(({ openEndorseReview }) =>
+        openEndorseReview({
+          host: document.body,
+          initiativeTitle: i.title,
+          actions: awaiting,
+          by: actor(),
+          onDecided: async (changed) => {
+            const { upsertActions } = await import("../store/actions");
+            await upsertActions(changed);
+            await loadEvents();
+            render();
+            window.dispatchEvent(new CustomEvent("ltk-actions-changed"));
+          },
+        })
+      );
+    };
+    // an action closed, endorsed or sent back elsewhere on the board
+    const onActionsSaved = () => {
+      void loadAwaiting().then(() => {
+        if (!dead) render();
+      });
+    };
+    window.addEventListener("ltk-actions-changed", onActionsSaved);
+    cleanups.push(() => window.removeEventListener("ltk-actions-changed", onActionsSaved));
+
     // ---- the status band (above the cards) ----------------------------------------
     const openPaneAt = (reveal: () => void) => {
       o.onOpenPane?.();
@@ -693,6 +733,7 @@ export function mountInitiativePane(o: InitiativePaneOpts): InitiativePaneHandle
         },
         stage: i.singleAction ? null : bandStage(),
         revert: i.status === "active" ? standingRevert(events) : null,
+        endorse: endorsementOn(i) ? { count: awaiting.length, mine: mayEndorse(), onReview: openReview } : null,
         completed: i.status === "completed",
         gate: i.singleAction ? null : bandGate(),
         onOpenStages: () => openPaneAt(() => activeStageEl?.scrollIntoView({ block: "center", behavior: "smooth" })),

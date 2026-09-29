@@ -6,6 +6,7 @@
 // the shell imports it without pulling the dialog in.
 
 import { LinkTarget } from "../schema/actionLinks";
+import type { EndorseContext } from "../schema/actionEndorsement";
 
 export interface ActionLinkContext {
   targets: LinkTarget[];
@@ -48,3 +49,25 @@ export function actionViewer(): { whoId: string; who: string } | null {
     return null;
   }
 }
+
+/** Does closing this action need an endorsement, and may the viewer give
+ *  it? Answered at once from what the host already knows (null = not on
+ *  an initiative, or not known yet — the store applies the rule again at
+ *  the write, so nothing slips through). */
+let endorsementLookup: ((a: { initiativeId?: string; instanceId: string }) => EndorseContext | null) | null = null;
+
+export function setEndorsementLookup(f: ((a: { initiativeId?: string; instanceId: string }) => EndorseContext | null) | null): void {
+  endorsementLookup = f;
+}
+
+export function endorsementFor(a: { initiativeId?: string; instanceId: string }): EndorseContext | null {
+  try {
+    return endorsementLookup ? endorsementLookup(a) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Fired when the endorsement rule changed an action at the write (a
+ *  closing road that could not apply it itself) — open lists refresh. */
+export const ACTION_RULED_EVENT = "ltk-action-ruled";

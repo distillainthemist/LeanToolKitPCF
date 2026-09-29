@@ -19,7 +19,7 @@ import {
 } from "../../../shared/schema/recurrence";
 import { readableShade, textOn } from "../../../shared/tokens";
 import { openActionManager } from "../../../shared/ui/actionUi";
-import { ACTION_MOVED_EVENT } from "../../../shared/ui/actionLinkProvider";
+import { ACTION_MOVED_EVENT, ACTION_RULED_EVENT } from "../../../shared/ui/actionLinkProvider";
 import { setTitleBarExtras } from "../../../shared/ui/chrome";
 import { el } from "../../../shared/ui/dom";
 import { statusChip } from "../../../shared/ui/format";
@@ -391,6 +391,10 @@ export function mountCardEditor(
     };
     window.addEventListener(ACTION_MOVED_EVENT, onMoved);
     cleanups.push(() => window.removeEventListener(ACTION_MOVED_EVENT, onMoved));
+    // the endorsement rule changed an action at the write (a kanban drop
+    // cannot apply it itself): show the card as the store now holds it
+    window.addEventListener(ACTION_RULED_EVENT, onMoved);
+    cleanups.push(() => window.removeEventListener(ACTION_RULED_EVENT, onMoved));
     pendingFlush = flushActions;
     const pushActions = (set: typeof actions) => {
       pendingSet = set;

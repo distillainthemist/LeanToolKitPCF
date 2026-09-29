@@ -283,6 +283,7 @@ export function mountHub(parent: HTMLElement): () => void {
     view.setProtectedTimes(parseProtectedTimes(protectedRaw));
     view.setActions(actions);
     view.setSourceLabels(sourceLabels);
+    void feedEndorseQueue();
     view.setCanEditSite(true);
     view.setPrefs(parsePrefs(prefsRaw));
     view.setHideSettingsTab(true); // settings live behind the header cog now
@@ -473,9 +474,27 @@ export function mountHub(parent: HTMLElement): () => void {
 
   // an action captured from the top bar (or saved anywhere else) lands in
   // My actions without a reload
+  // the endorser's queue: actions waiting on THIS viewer, whoever they
+  // are assigned to (2026-09-30)
+  const feedEndorseQueue = async () => {
+    try {
+      const [{ actionsForInitiatives }, { endorsementAtWrite }] = await Promise.all([import("../store/actions"), import("../actions/endorsement")]);
+      const waiting = (await actionsForInitiatives()).filter((a) => a.status === "verify");
+      const mine: LtkAction[] = [];
+      for (const a of waiting) {
+        const ctx = await endorsementAtWrite(a);
+        if (ctx?.on && ctx.mine) mine.push(a);
+      }
+      if (!dead && view) view.setEndorseQueue(mine);
+    } catch {
+      /* the queue is a convenience — the board's band and column show it too */
+    }
+  };
+  void feedEndorseQueue();
   const onActionsChanged = () => {
     const v = currentViewer();
     if (dead || !v) return;
+    void feedEndorseQueue();
     void fetchHubData(v)
       .then((fresh) => {
         if (dead || view === null) return;

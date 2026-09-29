@@ -3997,3 +3997,14 @@ textarea.app-cp-statement { font-size: 14px; font-weight: 500; }
 .app-sb-revertwhy { font-size: 12.5px; color: #57534a; overflow-wrap: anywhere; }
 .app-ib-revert { align-self: flex-start; font-size: 12px; }
 .app-ib-linkbox { margin: 4px 8px; width: calc(100% - 16px); box-sizing: border-box; font-size: 12px; }
+/* endorsement on the band, and the review list */
+.app-sb-endorse { border-top: 1px dashed #e4dfd6; padding-top: 8px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.app-sb-endorsetext { font-size: 12.5px; font-weight: 700; color: #7a4d00; }
+.app-er-list { display: flex; flex-direction: column; gap: 8px; max-height: 56vh; overflow: auto; }
+.app-er-row { border: 1px solid #e4dfd6; border-radius: 8px; padding: 8px 12px; display: flex; flex-direction: column; gap: 6px; }
+.app-er-row-done { opacity: 0.6; }
+.app-er-title { font-size: 13.5px; font-weight: 600; overflow-wrap: anywhere; }
+.app-er-meta { font-size: 12px; color: #6d675c; }
+.app-er-btns { display: flex; gap: 8px; justify-content: flex-end; align-items: center; flex-wrap: wrap; }
+.app-er-outcome { font-size: 12.5px; font-weight: 600; margin-right: auto; }
+.app-er-reason { width: 100%; box-sizing: border-box; }

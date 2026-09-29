@@ -12,6 +12,8 @@ import {
 import { makeInteractive } from "../../shared/interact/drag";
 import { htmlToPng, htmlToSvg, saveSvg, SnapshotScheduler } from "../../shared/export/png";
 import { pdcaOf, ActionStatus, isOverdue, LtkAction, newAction } from "../../shared/schema/actions";
+import { applyEndorsementRule } from "../../shared/schema/actionEndorsement";
+import { endorsementFor } from "../../shared/ui/actionLinkProvider";
 import { Person } from "../../shared/schema/people";
 import { ACTIONBOARD_CSS } from "./styles";
 
@@ -441,7 +443,7 @@ export class ActionBoardEditor {
     const whoEl = el("span", undefined, a.assignees[0]?.who ?? "Unassigned");
     meta.appendChild(whoEl);
     if (a.status === "verify") {
-      meta.appendChild(el("span", "ltk-ab-verify", "◐ awaiting verification"));
+      meta.appendChild(el("span", "ltk-ab-verify", "◐ awaiting endorsement"));
     }
     if (a.due !== "") {
       const dueEl = el("span", undefined, `Due ${a.due}`);
@@ -767,6 +769,7 @@ export class ActionBoardEditor {
   private dropInColumn(a: LtkAction, key: string): void {
     if (this.groupBy === "status") {
       const wasVerify = a.status === "verify";
+      const prior = a.status;
       a.status = key as ActionStatus;
       // verify = the work is done, awaiting the owner; done from verify
       // stamps who verified (decision 6's endorsement)
@@ -776,6 +779,9 @@ export class ActionBoardEditor {
         a.verified = { whoId: this.actor.whoId, who: this.actor.who, when: new Date().toISOString().slice(0, 10) };
       }
       if (a.status !== "done") a.verified = undefined;
+      // on an initiative that asks for endorsement, only an endorser's
+      // drop closes — anyone else's waits (the store applies this again)
+      if (this.actor.whoId !== "") applyEndorsementRule(a, prior, endorsementFor(a), this.actor, new Date().toISOString());
     } else {
       a.issue = key;
     }

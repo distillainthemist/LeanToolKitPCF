@@ -1051,9 +1051,9 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
         const endorse = el("label", "app-cp-cascade-row") as HTMLLabelElement;
         const endorseCb = el("input") as HTMLInputElement;
         endorseCb.type = "checkbox";
-        endorse.append(endorseCb, el("span", undefined, "Owner endorsement — the owner endorses completed actions"));
+        endorse.append(endorseCb, el("span", undefined, "Endorsement — completed actions wait for the owner or sponsor"));
         body.appendChild(endorse);
-        body.appendChild(el("span", "app-field-hint", "Recorded on the initiative. The endorsement step on actions is not built yet, so this changes nothing until it is."));
+        body.appendChild(el("span", "app-field-hint", "An action closed by anyone else waits until the owner, the sponsor or an admin endorses it. Switching this off closes whatever is waiting."));
         const err = el("div", "app-cp-err", "");
         body.appendChild(err);
         const foot = el("div", "app-modal-footer");

@@ -5,6 +5,8 @@ import { renderStatusBand, BandGate, BandOpts } from "../src/improvement/statusB
 import { openUpdateDialog, renderTrail } from "../src/improvement/commentary";
 import { editedDetail, staleDays, Update, updatesFrom } from "../src/improvement/commentaryModel";
 import { openRevertDialog } from "../src/improvement/revertDialog";
+import { openEndorseReview } from "../src/improvement/endorseReview";
+import { newAction } from "../../shared/schema/actions";
 
 const today = "2026-09-29";
 let events = [
@@ -47,6 +49,28 @@ const revert = (completed: boolean) =>
   });
 let state = { gate: "waiting", collapsed: false, canComment: true, none: false, completed: false, reverted: false };
 (window as unknown as { revert: typeof revert }).revert = revert;
+const waiting = ["Refit the guard on filler 2", "Record torque values", "Brief night shift"].map((t, n) => {
+  const a = newAction({ source: "card", sourceId: "" });
+  a.id = `w${n}`;
+  a.issue = t;
+  a.description = n === 0 ? "Refit and torque the guard bolts" : "";
+  a.status = "verify";
+  a.assignees = [{ whoId: "u2", who: n === 1 ? "Sam Lee" : "Jane Smith", done: true }];
+  a.due = "2026-09-28";
+  if (n === 0) a.comments = [{ whoId: "u2", who: "Jane Smith", when: "2026-09-29", text: "Bolts torqued to 45 Nm, photo on the card." }];
+  return a;
+});
+const review = () =>
+  openEndorseReview({
+    host: document.body,
+    initiativeTitle: "Reduce changeover on line 2",
+    actions: waiting.filter((a) => a.status === "verify"),
+    by: { whoId: "u9", who: "Ben O'Brien" },
+    onDecided: async (changed) => {
+      log.push(`decided ${changed.map((a) => `${a.id}=${a.status}`).join(",")}`);
+      paint();
+    },
+  });
 const band = document.getElementById("band")!;
 const trail = document.getElementById("trail")!;
 const edit = (u: Update) =>
@@ -80,6 +104,7 @@ function paint(): void {
     completed: state.completed,
     revert: state.reverted && !state.completed ? { from: "Improve", to: "Analyse", who: "Jane Smith", at: "2026-09-27T09:00:00Z", reason: "The trial data covered one shift only" } : null,
     gate: state.completed ? gates.done : gates[state.gate],
+    endorse: { count: waiting.filter((a) => a.status === "verify").length, mine: state.canComment, onReview: review },
     onOpenStages: () => log.push("open stages"),
     latest: list[0] ?? null,
     updateCount: list.length,

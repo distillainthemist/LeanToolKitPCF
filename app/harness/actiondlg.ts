@@ -6,7 +6,7 @@ import { LTK_BASE_CSS } from "../../shared/ui/baseCss";
 import { openActionDialog } from "../../shared/ui/actionUi";
 import { newAction, LtkAction } from "../../shared/schema/actions";
 import { LinkTarget } from "../../shared/schema/actionLinks";
-import { setActionLinkProvider, setActionViewerProvider } from "../../shared/ui/actionLinkProvider";
+import { setActionLinkProvider, setActionViewerProvider, setEndorsementLookup } from "../../shared/ui/actionLinkProvider";
 
 ensureStylesheet("ltk-base-css", LTK_BASE_CSS);
 const t = (over: Partial<LinkTarget>): LinkTarget => ({ kind: "ritual", id: "B1", boardId: "B1", title: "Daily production meeting", detail: "Bendigo / Packaging · Tier 1 · Jane Smith", keywords: "Sam Lee", mine: true, near: true, cards: { C1: "Actions", C2: "Safety cross" }, ...over });
@@ -21,6 +21,10 @@ let openBoardId: string | null = null;
 setActionLinkProvider(() => Promise.resolve({ targets, personalWho: "u1", openBoardId, openHome: "" }));
 
 setActionViewerProvider(() => ({ whoId: "u1", who: "Ben O'Brien" }));
+// I1 asks for endorsement; the harness flips whether the viewer may give it
+let endorser = false;
+(window as unknown as { setEndorser: (v: boolean) => void }).setEndorser = (v) => (endorser = v);
+setEndorsementLookup((a) => (a.initiativeId === "I1" ? { on: true, mine: endorser } : null));
 const host = document.getElementById("h")!;
 const people = [{ whoId: "u1", who: "Ben O'Brien" }, { whoId: "u2", who: "Jane Smith" }];
 const make = (instanceId: string, initiativeId?: string): LtkAction => {
@@ -41,6 +45,13 @@ const cases: [string, () => void][] = [
     const a = make("B1:C2");
     a.pdca = "hold";
     a.comments = [{ whoId: "u2", who: "Jane Smith", when: "2026-09-26", text: "Guard bolts are on order, due Friday." }, { whoId: "u1", who: "Ben O'Brien", when: "2026-09-28", text: "Holding until the parts land." }];
+    open(a, false);
+  }],
+  ["Initiative action, open", () => open(make("init-I1:K1", "I1"), false)],
+  ["Awaiting endorsement", () => {
+    const a = make("init-I1:K1", "I1");
+    a.status = "verify";
+    a.pdca = "closed";
     open(a, false);
   }],
   ["Quick add (board open)", () => { openBoardId = "init-I1"; open(make("hub:u1"), true, true); openBoardId = null; }],

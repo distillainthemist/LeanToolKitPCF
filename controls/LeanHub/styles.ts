@@ -294,6 +294,9 @@ export const LEANHUB_CSS = `
 }
 .ltk-lh-compose-issue { flex: 1; min-width: 0; }
 .ltk-lh-compose-due { width: 140px; }
+/* the endorser's queue: work done by others, waiting on the viewer */
+.ltk-lh-endorse { border: 1px solid #f0c36d; background: #fff7e0; border-radius: 8px; padding: 8px 10px; margin-bottom: 10px; display: flex; flex-direction: column; gap: 4px; }
+.ltk-lh-endorse-h { color: #7a4d00; }
 .ltk-lh-group {
   font-size: 11px;
   font-weight: 700;

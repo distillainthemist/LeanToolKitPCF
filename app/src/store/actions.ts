@@ -2,11 +2,13 @@
 // cards, boards and the viewer; upsert by action id (the alternate key's
 // purpose, emulated through the generated client).
 
-import { actionVisibleTo, LtkAction, visibleSetFor } from "../../../shared/schema/actions";
+import { actionBelongsTo, actionVisibleTo, LtkAction, visibleSetFor } from "../../../shared/schema/actions";
+import { applyEndorsementRule } from "../../../shared/schema/actionEndorsement";
+import { ACTION_RULED_EVENT } from "../../../shared/ui/actionLinkProvider";
 import { homeBoardOf, homeCardOf } from "../../../shared/schema/actionLinks";
 import { bumpChange } from "./changes";
 import { Ben_ltkactionsService } from "../generated/services/Ben_ltkactionsService";
-import { allWhere, eq, odata, upsertWhere } from "./dv";
+import { allWhere, eq, firstWhere, odata, upsertWhere } from "./dv";
 import { actionFromRow, actionToRow, parseManifest } from "./mappers";
 import { currentViewer } from "../runtime";
 import { memoRead } from "./changes";
@@ -154,6 +156,8 @@ export async function upsertActions(
   actions: LtkAction[],
   boardId?: string
 ): Promise<void> {
+  let ruled = false;
+  const who = currentViewer();
   for (const action of actions) {
     // ANY action raised on an initiative board belongs to that initiative
     // (Ben, 2026-09-23) — stamped here, at the one write path
@@ -162,6 +166,19 @@ export async function upsertActions(
     // the key decides when it names a channel (a link made in the dialog
     // moved the action — even from a card editor that passes ITS board)
     const stamped = stampedBoard(action.instanceId, boardId);
+    // endorsement, the BACKSTOP (2026-09-30): the dialog and the tick
+    // apply the rule themselves; a road that could not (a kanban drop, a
+    // screen opened before the rule was known) is put right here, against
+    // the status the row actually holds
+    if (who && who.objectId !== "" && (action.status === "done" || action.verified !== undefined)) {
+      const { endorsementAtWrite } = await import("../actions/endorsement");
+      const ctx = await endorsementAtWrite(action);
+      if (ctx?.on) {
+        const existing = await firstWhere(Ben_ltkactionsService.getAll, eq("ben_actionid", action.id)).catch(() => null);
+        const prior = existing ? ((existing.ben_status as LtkAction["status"]) ?? "open") : null;
+        if (applyEndorsementRule(action, prior, ctx, { whoId: who.objectId, who: who.name }, new Date().toISOString())) ruled = true;
+      }
+    }
     await stampVisibility(action, stamped);
     await upsertWhere(
       Ben_ltkactionsService,
@@ -171,4 +188,23 @@ export async function upsertActions(
     );
   }
   bumpChange("actions");
+  // the rule changed what the screen believes: open lists refresh
+  if (ruled && typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent(ACTION_RULED_EVENT));
+    window.dispatchEvent(new CustomEvent("ltk-actions-changed"));
+  }
+}
+
+/** Endorsement was switched OFF on an initiative: what was waiting for an
+ *  endorser closes (Ben, 2026-09-30). Returns how many closed. */
+export async function closeAwaitingEndorsement(i: { id: string; boardId: string }): Promise<number> {
+  const waiting = (await actionsForInitiatives()).filter((a) => a.status === "verify" && actionBelongsTo(i, a));
+  for (const a of waiting) {
+    a.status = "done";
+    a.pdca = "closed";
+    for (const x of a.assignees) x.done = true;
+    await upsertWhere(Ben_ltkactionsService, eq("ben_actionid", a.id), (row) => row.ben_ltkactionid, actionToRow(a, undefined));
+  }
+  if (waiting.length > 0) bumpChange("actions");
+  return waiting.length;
 }

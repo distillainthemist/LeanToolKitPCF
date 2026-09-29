@@ -3,7 +3,7 @@
 // from the typed Dataverse store inside Power Apps, demo data on a bare
 // dev server.
 
-import { setActionLinkProvider, setActionViewerProvider } from "../../shared/ui/actionLinkProvider";
+import { setActionLinkProvider, setActionViewerProvider, setEndorsementLookup } from "../../shared/ui/actionLinkProvider";
 import { currentViewer } from "./runtime";
 import { el, clear } from "../../shared/ui/dom";
 import { boardOrigin, REOPEN_PRIORITY_KEY } from "./improvement/boardOrigin";
@@ -14,6 +14,14 @@ import { releaseFramesExcept } from "./embedFrames";
 // what an action may be linked to — every action dialog reads this one
 // provider (loaded on first use; the shell carries the registry only)
 setActionLinkProvider(() => import("./actions/linkTargets").then((m) => m.loadLinkContext()));
+// endorsement: does closing this action wait for its endorser, and may
+// the viewer endorse? Answered from a cache the module keeps warm; the
+// module loads on first use (the shell carries the registry only)
+let endorsementNow: ((a: { initiativeId?: string; instanceId: string }) => { on: boolean; mine: boolean } | null) | null = null;
+void import("./actions/endorsement").then((m) => {
+  endorsementNow = m.endorsementNow;
+});
+setEndorsementLookup((a) => (endorsementNow && currentViewer() ? endorsementNow(a) : null));
 // who is commenting — the author stamped on a comment written in any
 // action dialog
 setActionViewerProvider(() => {

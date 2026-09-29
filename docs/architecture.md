@@ -378,6 +378,33 @@ model section) — the canvas/PCF sections there are historical.
   and My day's Late / Due buckets. Resuming is choosing another
   state; nothing remembers the state it was held from.
 
+- **Action endorsement** (2026-09-30). An initiative with endorsement
+  on (its details; never a single-action one) makes a close by anyone
+  but an ENDORSER wait: status `verify`, shown as Closed with an
+  "Awaiting endorsement" marker, not overdue. Endorsers are the
+  initiative's owner and sponsor — assigned, or the site's fillers of
+  those standard roles — and admins (`improvement/endorsers.ts`). An
+  endorser endorses (closed, `verified` stamped, a `verified` history
+  entry) or sends back (reopened into Do, a `reopened` entry with the
+  required reason); an endorser closing an action closes it directly.
+  The rule is ONE pure function (`shared/schema/actionEndorsement.ts`
+  `applyEndorsementRule`) applied at every save: the dialog, the tick
+  and the kanban drop apply it for an honest screen
+  (`endorsementFor`, answered from a cache the shell keeps warm), and
+  `upsertActions` applies it AGAIN against the status the row holds —
+  the backstop, so no closing road skips it. A change made there
+  fires `ltk-action-ruled` and `ltk-actions-changed`. Actions closed
+  before are left alone; switching endorsement off closes what is
+  waiting (`closeAwaitingEndorsement`). With endorsement off, or off
+  an initiative, nothing is enforced — a board's voluntary Verify
+  column works as it always did. The queue shows on the board's band
+  (count, Review), in the hub's Actions tab ("Awaiting your
+  endorsement") and in the board's Verify column. No schema change.
+- **Hub edits in another scope were not being saved** until
+  2026-09-30: a row edited in a person's or an organisation's scope
+  sent the viewer's own list to the store, never the row itself.
+  `emitFor` sends the row when it is not one of the viewer's.
+
 ### 3.5 Store read cache & change signals
 
 `store/changes.ts` keeps a 60-second read cache keyed by topic

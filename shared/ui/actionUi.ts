@@ -9,7 +9,8 @@
 
 import { ActionComment, ActionPdca, ACTION_PDCA, isOverdue, LtkAction, newAction, newComment, PDCA_LABELS, PDCA_QUARTERS, pdcaOf } from "../schema/actions";
 import { ActionLink, applyLink, currentLink, isCardKeyed, linkChanges, linkLabel, LinkTarget, searchLinkTargets } from "../schema/actionLinks";
-import { ACTION_MOVED_EVENT, ActionLinkContext, actionLinkProvider, actionViewer } from "./actionLinkProvider";
+import { ACTION_MOVED_EVENT, ActionLinkContext, actionLinkProvider, actionViewer, endorsementFor } from "./actionLinkProvider";
+import { applyEndorsementRule, awaitingEndorsement, endorse, sendBack } from "../schema/actionEndorsement";
 import { Person } from "../schema/people";
 import { textOn } from "../tokens";
 import { el } from "./dom";
@@ -279,9 +280,10 @@ export function completeCircle(
   const circle = el("button", "ltk-action-circle") as HTMLButtonElement;
   circle.type = "button";
   const paint = () => {
-    const done = a.status === "done";
-    circle.textContent = done ? "✓" : "";
-    circle.title = done ? "Mark not complete" : "Mark complete";
+    const waiting = a.status === "verify";
+    const done = a.status === "done" || waiting;
+    circle.textContent = waiting ? "◐" : done ? "✓" : "";
+    circle.title = waiting ? "Awaiting endorsement — tick to reopen" : done ? "Mark not complete" : "Mark complete";
     circle.style.background = done ? doneColor : "";
     circle.style.borderColor = done ? doneColor : "";
     circle.style.color = done ? textOn(doneColor) : "transparent";
@@ -290,10 +292,15 @@ export function completeCircle(
   if (!readOnly) {
     circle.addEventListener("click", (e) => {
       e.stopPropagation();
-      const nowDone = a.status !== "done";
+      const prior = a.status;
+      // a tick on a WAITING action reopens it (its work was ticked done;
+      // only an endorser closes it — through the dialog)
+      const nowDone = a.status !== "done" && a.status !== "verify";
       a.status = nowDone ? "done" : "open";
       a.pdca = nowDone ? "closed" : "do"; // the PDCA disc follows completion
       for (const x of a.assignees) x.done = nowDone;
+      const who = actionViewer();
+      if (who !== null) applyEndorsementRule(a, prior, endorsementFor(a), who, new Date().toISOString());
       paint();
       onToggled();
     });
@@ -354,6 +361,8 @@ export function actionRow(a: LtkAction, opts: ActionRowOptions): HTMLElement {
   }
   const said = commentGlyph(a);
   if (said) right.appendChild(said);
+  const waits = endorseGlyph(a);
+  if (waits) right.appendChild(waits);
 
   if (!opts.readOnly) {
     main.addEventListener("click", () => opts.onEdit(a));
@@ -392,6 +401,49 @@ export interface ActionDialogOptions {
   /** Who is commenting. Omitted: the host's registered viewer answers;
    *  neither: comments show, and none can be added. */
   viewer?: { whoId: string; who: string };
+}
+
+/** "◐ Awaiting endorsement" for an action whose work is done and waits
+ *  for its endorser, wherever a row shows one. */
+export function endorseGlyph(a: Pick<LtkAction, "status">): HTMLElement | null {
+  if (!awaitingEndorsement(a)) return null;
+  const g = el("span", "ltk-endorse-glyph", "◐ Awaiting endorsement");
+  g.title = "The work is done — it closes when the owner, the sponsor or an admin endorses it.";
+  return g;
+}
+
+/** An inline bar that asks for a REASON before a step (one at a time). */
+function reasonBar(body: HTMLElement, message: string, placeholder: string, yes: string, onYes: (reason: string) => void): void {
+  body.querySelector(".ltk-confirm")?.remove();
+  const bar = el("div", "ltk-confirm");
+  bar.appendChild(el("div", "ltk-confirm-msg", message));
+  const box = el("textarea", "ltk-input ltk-textarea") as HTMLTextAreaElement;
+  box.rows = 2;
+  box.placeholder = placeholder;
+  box.setAttribute("aria-label", message);
+  bar.appendChild(box);
+  const err = el("div", "ltk-confirm-err", "");
+  bar.appendChild(err);
+  const row = el("div", "ltk-confirm-btns");
+  const keep = el("button", "ltk-btn ltk-btn-secondary", "Cancel") as HTMLButtonElement;
+  keep.type = "button";
+  keep.addEventListener("click", () => bar.remove());
+  const go = el("button", "ltk-btn ltk-btn-danger", yes) as HTMLButtonElement;
+  go.type = "button";
+  go.addEventListener("click", () => {
+    if (box.value.trim() === "") {
+      err.textContent = "A reason is needed.";
+      box.focus();
+      return;
+    }
+    bar.remove();
+    onYes(box.value.trim());
+  });
+  row.append(keep, go);
+  bar.appendChild(row);
+  body.appendChild(bar);
+  bar.scrollIntoView({ block: "nearest" });
+  box.focus();
 }
 
 /** "💬 3" for an action that carries comments, wherever a row shows one. */
@@ -627,7 +679,10 @@ export function openActionDialog(o: ActionDialogOptions): void {
 
   const comments = buildCommentField(o);
 
-  const wasDone = action.status === "done";
+  // the status the action arrived with — what "closing" and "reopening"
+  // are measured against, and what the endorsement rule calls prior
+  const prior = o.isNew ? null : action.status;
+  const wasClosed = action.status === "done" || action.status === "verify";
   // PDCA toggle (Ben, 2026-08-31): disc + label each — replaces the old
   // Completed checkbox (Closed IS completion). On hold (2026-09-30)
   // pauses: the action stays open and is not overdue while held.
@@ -685,15 +740,19 @@ export function openActionDialog(o: ActionDialogOptions): void {
     action.issue = issue.value.trim();
     action.pdca = pdca;
     // Closed IS completion; leaving Closed reopens. An untouched state
-    // keeps the status (verify / in-progress survive).
-    if (pdca === "closed" && !wasDone && action.status !== "cancelled") action.status = "done";
-    else if (pdca !== "closed" && wasDone) action.status = "open";
+    // keeps the status (awaiting endorsement / in-progress survive).
+    if (pdca === "closed" && !wasClosed && action.status !== "cancelled") action.status = "done";
+    else if (pdca !== "closed" && wasClosed) action.status = "open";
     action.escalated = escChk.box.checked;
     action.confidential = confChk.box.checked ? true : undefined;
     form.apply(action); // after status, so assignee done flags match
     // what was written here, the box's text included
     const said = comments.added();
     if (said.length > 0) action.comments = [...action.comments, ...said];
+    // endorsement: closing on an initiative that asks for it waits for
+    // its endorser — unless an endorser is the one closing
+    const who = o.viewer ?? actionViewer();
+    if (who !== null) applyEndorsementRule(action, prior, endorsementFor(action), who, new Date().toISOString());
     const linkedNow = linkField?.origin() ?? null;
     const picked = linkField?.chosen();
     const moves = linkedNow !== null && picked !== undefined && linkChanges(linkedNow, picked);
@@ -755,6 +814,46 @@ export function openActionDialog(o: ActionDialogOptions): void {
   dlg.body.appendChild(form.el);
   dlg.body.appendChild(sectionLabel("PDCA state"));
   dlg.body.appendChild(pdcaWrap);
+  if (!o.isNew && awaitingEndorsement(action)) {
+    // the work is done and waits: say so, and hand the endorser their
+    // two steps (off an endorsing initiative anyone may verify, as the
+    // board's Verify column always allowed)
+    const ctx = endorsementFor(action);
+    const who = o.viewer ?? actionViewer();
+    const may = who !== null && (ctx === null || !ctx.on || ctx.mine);
+    const wait = el("div", "ltk-endorse");
+    wait.appendChild(el("div", "ltk-endorse-msg", "◐ Awaiting endorsement — the work is done."));
+    if (may) {
+      const row = el("div", "ltk-confirm-btns");
+      const back = el("button", "ltk-btn ltk-btn-secondary", "Send back…") as HTMLButtonElement;
+      back.type = "button";
+      back.addEventListener("click", () =>
+        reasonBar(dlg.body, "Send this action back? It reopens for the people assigned.", "What still needs doing", "Send back", (reason) => {
+          sendBack(action, who!, new Date().toISOString(), reason);
+          const said = comments.added();
+          if (said.length > 0) action.comments = [...action.comments, ...said];
+          dlg.close();
+          o.onCommit();
+        })
+      );
+      const ok = el("button", "ltk-btn ltk-btn-primary", "Endorse") as HTMLButtonElement;
+      ok.type = "button";
+      ok.addEventListener("click", () => {
+        endorse(action, who!, new Date().toISOString());
+        const said = comments.added();
+        if (said.length > 0) action.comments = [...action.comments, ...said];
+        dlg.close();
+        o.onCommit();
+      });
+      row.append(back, ok);
+      wait.appendChild(row);
+    } else {
+      wait.appendChild(el("div", "ltk-endorse-note", "It closes when the initiative's owner, its sponsor or an admin endorses it."));
+    }
+    dlg.body.appendChild(wait);
+  } else if (!o.isNew && action.status === "done" && action.verified) {
+    dlg.body.appendChild(el("div", "ltk-endorse-note", `✓ Endorsed${action.verified.who !== "" ? ` by ${action.verified.who}` : ""} · ${action.verified.when.slice(0, 10)}`));
+  }
   dlg.body.appendChild(escChk.wrap);
   dlg.body.appendChild(confChk.wrap);
   const count = action.comments.length;
