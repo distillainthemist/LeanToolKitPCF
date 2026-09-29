@@ -824,13 +824,8 @@ export function mountInitiativePane(o: InitiativePaneOpts): InitiativePaneHandle
         })();
       }, !mine());
       item("▲ Escalate to sponsor", () => void escalate(), !mine() || i.flag === "escalated");
-      item(i.endorsement ? "Owner endorsement: on" : "Owner endorsement: off", () => {
-        void (async () => {
-          i.endorsement = !i.endorsement;
-          await persist();
-          render();
-        })();
-      }, !mine());
+      // Owner endorsement is a DETAIL of the initiative, set in Edit
+      // details — not a menu action (Ben, 2026-09-29)
       if (!i.singleAction) {
         item(i.status === "completed" ? "↩ Reopen initiative…" : "↩ Revert to an earlier stage…", () => openRevert(), !mayRevert(i, stageViewer()));
       }

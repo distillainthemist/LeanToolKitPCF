@@ -244,8 +244,12 @@ deferrals still open (details in leanboard-cascade-improvement-plan.md).
 - **Simulate** — parked 2026-09-09 (button hidden, code kept). Reviving
   it needs a home for BASELINE again (its entry surface went with the
   period tiles).
-- **Owner endorsement toggle** on initiatives — still inert: wire into
-  gate decisions or remove (Ben's call).
+- **Owner endorsement** on initiatives — still inert. Ben, 2026-09-29:
+  it is a DETAIL of the initiative (set in the create and Edit
+  details forms; it left the board's ⋮ menu). The form says plainly
+  that the endorsement step on actions is not built. To build: a
+  completed action on an initiative with the option on waits for the
+  owner's endorsement before it closes.
 - **Evidence attach on actions** — table exists (`ben_ltkactionfile`),
   no UI.
 - **Confidential actions, hardened** — a separately secured table with

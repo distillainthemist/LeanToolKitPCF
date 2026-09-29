@@ -1160,6 +1160,10 @@ reschedule/cancel history with a reason picklist.
   send `boardUrl`. The Owner endorsement switch on the same menu is
   still inert (it saves a flag nothing reads) — Ben asked why it is
   there; remove or wire is his call (backlog).
+- **2026-09-29 — Owner endorsement moves to the details.** Off the
+  board's ⋮ menu (a menu is for actions; this is a setting); a
+  checkbox beside Confidential on the create and Edit details forms.
+  Still inert — the form's hint says so.
 - **Where things stand (2026-09-24).** Released: v0.51.0 (2026-09-14,
   solution-carrying — value driver tree, grid entry, Metrics card,
   meeting-board driver links, rituals in several orgs, driver popup,

@@ -1048,6 +1048,12 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
         confCb.type = "checkbox";
         conf.append(confCb, el("span", undefined, "Confidential — visible to its roles and org owners only"));
         body.appendChild(conf);
+        const endorse = el("label", "app-cp-cascade-row") as HTMLLabelElement;
+        const endorseCb = el("input") as HTMLInputElement;
+        endorseCb.type = "checkbox";
+        endorse.append(endorseCb, el("span", undefined, "Owner endorsement — the owner endorses completed actions"));
+        body.appendChild(endorse);
+        body.appendChild(el("span", "app-field-hint", "Recorded on the initiative. The endorsement step on actions is not built yet, so this changes nothing until it is."));
         const err = el("div", "app-cp-err", "");
         body.appendChild(err);
         const foot = el("div", "app-modal-footer");
@@ -1066,7 +1072,7 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
               confidential: confCb.checked,
               flag: "" as const,
               flagNote: "",
-              endorsement: false,
+              endorsement: endorseCb.checked,
               period: f.period !== "" ? f.period : currentPeriod,
               roles: rolePeople,
               priorities: links.map((l) => ({ priorityId: l.priorityId, primary: l.primary })),

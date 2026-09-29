@@ -332,6 +332,15 @@ export function openEditDetails(o: EditDetailsOpts): void {
     confCb.checked = i.confidential;
     conf.append(confCb, el("span", undefined, "Confidential — visible to its roles and org owners only"));
     body.appendChild(conf);
+    // owner endorsement: a detail of the initiative (it left the board's
+    // ⋮ menu, 2026-09-29)
+    const endorse = el("label", "app-cp-cascade-row") as HTMLLabelElement;
+    const endorseCb = el("input") as HTMLInputElement;
+    endorseCb.type = "checkbox";
+    endorseCb.checked = i.endorsement;
+    endorse.append(endorseCb, el("span", undefined, "Owner endorsement — the owner endorses completed actions"));
+    body.appendChild(endorse);
+    body.appendChild(el("span", "app-field-hint", "Recorded on the initiative. The endorsement step on actions is not built yet, so this changes nothing until it is."));
 
     const err = el("div", "app-cp-err", "");
     body.appendChild(err);
@@ -349,6 +358,7 @@ export function openEditDetails(o: EditDetailsOpts): void {
           org: { company: siteCo[siteSel.value] ?? "", site: siteSel.value, department: deptSel.value, area: areaSel.value },
           alsoOrgs,
           confidential: confCb.checked,
+          endorsement: endorseCb.checked,
           roles: rolePeople,
           priorities: links.map((l) => ({ priorityId: l.priorityId, primary: l.primary })),
           fieldValues,
