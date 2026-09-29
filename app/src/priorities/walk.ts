@@ -2,8 +2,8 @@
 // One objective (sub-pillar column) per step; cascades to accept are one
 // extra, final step when any are pending. Navigation uses the card-walk
 // grammar: a full-height PREV / NEXT rail either side, the neighbours
-// named in the footer beside ⊞ All pillars, ←/→, swipe. Every control
-// ≥44px; no hover-only content.
+// named in the footer, ✕ Exit presentation top right beside the step
+// counter, ←/→, swipe, Esc. Every control ≥44px; no hover-only content.
 //
 // Mounts INTO a host: the Priorities screen gives it a fixed full-screen
 // layer; the embedded ritual card's focused editor gives it the card body
@@ -40,7 +40,7 @@ export interface WalkOpts {
    *  them — the same builder, so the two can never disagree. */
   objectiveLines: (p: Priority) => HTMLElement[];
   startStep?: number;
-  /** ⊞ All pillars / Esc — leave the walk. */
+  /** ✕ Exit presentation / Esc — leave the walk. */
   onExit: () => void;
   onOpen: (p: Priority) => void;
   /** Step changed (the screen remembers it across repaints). */
@@ -73,7 +73,7 @@ export function mountWalk(o: WalkOpts): () => void {
     const n = stepCount();
     if (n === 0) {
       root.appendChild(el("div", "app-cp-walk-empty", "Nothing to walk — no objectives are visible with the current filters."));
-      const back = btn("⊞ All pillars");
+      const back = btn("✕ Exit presentation");
       back.addEventListener("click", o.onExit);
       root.appendChild(back);
       return;
@@ -104,6 +104,12 @@ export function mountWalk(o: WalkOpts): () => void {
     }
     prog.appendChild(dots);
     prog.appendChild(el("div", "app-cp-walk-count", `${step + 1} / ${n}`));
+    // the way out: top right, beside the counter, named for what it does
+    // (Ben, 2026-09-29 — "⊞ All pillars" in the footer did not read as it)
+    const exit = btn("✕ Exit presentation", "app-btn app-cp-walk-exit");
+    exit.title = "Leave the presentation and return to all pillars (Esc)";
+    exit.addEventListener("click", o.onExit);
+    prog.appendChild(exit);
     head.appendChild(prog);
     root.appendChild(head);
 
@@ -141,7 +147,7 @@ export function mountWalk(o: WalkOpts): () => void {
     stage.append(rail("prev"), body, rail("next"));
     root.appendChild(stage);
 
-    // footer: where each rail leads, and the way out
+    // footer: where each rail leads
     const foot = el("div", "app-cp-walk-foot");
     const name = (to: number, dir: "prev" | "next"): HTMLElement => {
       if (to < 0 || to >= n) return el("span", "app-cp-walk-nav");
@@ -149,9 +155,7 @@ export function mountWalk(o: WalkOpts): () => void {
       b.addEventListener("click", () => go(to));
       return b;
     };
-    const all = btn("⊞ All pillars", "app-btn app-cp-walk-all");
-    all.addEventListener("click", o.onExit);
-    foot.append(name(step - 1, "prev"), all, name(step + 1, "next"));
+    foot.append(name(step - 1, "prev"), name(step + 1, "next"));
     root.appendChild(foot);
   };
 

@@ -78,8 +78,10 @@ the same commit.
   its title. Never a full list: it would not scale.
 - **Present view (cascaded priorities)**: a full-height PREV / NEXT
   rail either side of the stage (72px, glyph + caption — the meeting
-  ritual's card walk at TV scale), the neighbours named in the footer
-  beside ⊞ All pillars. A row carries what the main view carries:
+  ritual's card walk at TV scale), the neighbours named in the footer;
+  the way out is `✕ Exit presentation`, top right beside the step
+  counter — an exit is named for what it does, and sits where exits
+  sit. A row carries what the main view carries:
   statement, owner, R/A/G tallies with the initiative count, and the
   SAME objective lines as the Objectives row (one builder,
   `objectiveLinesFor`) — a present view never paints its own version

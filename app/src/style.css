@@ -3163,6 +3163,12 @@ textarea.app-cp-statement { font-size: 14px; font-weight: 500; }
 .app-cp-walk-dot-on { background: #fff; }
 .app-cp-walk-dot-review { border-style: dashed; }
 .app-cp-walk-count { font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; }
+/* the way out, on the coloured header: outlined in white, filled on hover */
+.app-cp-walk-exit {
+  min-height: 44px; padding: 0 16px; margin-left: 6px; font-size: 15px; font-weight: 600; white-space: nowrap;
+  color: #fff; background: rgba(255, 255, 255, 0.12); border: 1.5px solid rgba(255, 255, 255, 0.85); border-radius: 8px;
+}
+.app-cp-walk-exit:hover, .app-cp-walk-exit:focus-visible { background: #fff; color: #26241f; border-color: #fff; outline: none; }
 .app-cp-walk-stage { flex: 1; min-height: 0; display: flex; align-items: stretch; gap: 10px; padding: 12px 10px; background: #faf8f4; }
 .app-cp-walk-body { flex: 1; min-width: 0; overflow: auto; padding: 4px 6px; display: flex; flex-direction: column; gap: 12px; }
 /* PREV / NEXT: full-height rails, the meeting ritual's card walk at TV scale */
@@ -3223,6 +3229,8 @@ textarea.app-cp-statement { font-size: 14px; font-weight: 500; }
   .app-cp-walk-stage { gap: 6px; padding: 8px 4px; }
   .app-cp-walk-rail { flex-basis: 44px; }
   .app-cp-walk-rail-glyph { font-size: 32px; }
+  .app-cp-walk-head { flex-wrap: wrap; }
+  .app-cp-walk-dots { display: none; }
 }
 /* embedded card: tile is compact and non-interactive; focused fills the host */
 .app-cp-cardmount { height: 100%; box-sizing: border-box; }
