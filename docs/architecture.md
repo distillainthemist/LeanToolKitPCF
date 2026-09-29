@@ -53,7 +53,8 @@ app/            the code app (vanilla TypeScript, Vite, no framework)
   tools/             import-gate, chunk-report (build-time checks)
   harness/           Vite pages that mount controls with stubbed stores
                      for screenshots (grid, kpi, vdt, wizard, pdca, actiondlg,
-                     charter, walk, band, prompts) —
+                     charter, walk, band, prompts,
+                     agenda) —
                      served by the `pdca-harness` launch config
 shared/         UI kit + tokens shared with the (retired) PCF controls
 controls/       retired PCF controls — kept for shared model code

@@ -11,7 +11,7 @@ import { ActionComment, ActionPdca, ACTION_PDCA, isOverdue, LtkAction, newAction
 import { ActionLink, applyLink, currentLink, isCardKeyed, linkChanges, linkLabel, LinkTarget, searchLinkTargets } from "../schema/actionLinks";
 import { ACTION_MOVED_EVENT, ActionLinkContext, actionLinkProvider, actionViewer, endorsementFor } from "./actionLinkProvider";
 import { applyEndorsementRule, awaitingEndorsement, endorse, sendBack } from "../schema/actionEndorsement";
-import { Person } from "../schema/people";
+import { Person, splitWho } from "../schema/people";
 import { textOn } from "../tokens";
 import { el } from "./dom";
 import {
@@ -58,10 +58,7 @@ export function buildActionForm(
   // become a wall of chips) — the overflow joins the search, which
   // covers everyone not already a chip. Hosts order `people` by
   // closeness (self · crew · site …), so the cap keeps the near circle.
-  const CHIP_CAP = 20;
-  const allPrimary = people.filter((p) => p.secondary !== true);
-  const primary = allPrimary.slice(0, CHIP_CAP);
-  const secondary = [...allPrimary.slice(CHIP_CAP), ...people.filter((p) => p.secondary === true)];
+  const { upFront: primary, behindSearch: secondary } = splitWho(people);
   const whoWrap = people.length > 0 ? checklist() : el("div");
   const checks: { box: HTMLInputElement; wrap: HTMLElement; person: Person }[] = [];
   let freeWho: HTMLInputElement | null = null;

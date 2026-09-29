@@ -10,7 +10,7 @@
 import { checkItem, openDialog, textInput } from "../../shared/ui/dialog";
 import { clear, el } from "../../shared/ui/dom";
 import { fileToDataUrl, shrinkImage } from "../../shared/ui/imageIngest";
-import { initialsFor, Person } from "../../shared/schema/people";
+import { initialsFor, Person, splitWho } from "../../shared/schema/people";
 import { textOn } from "../../shared/tokens";
 import { buildCaptureField } from "../CaptureCard/fields";
 import {
@@ -164,7 +164,8 @@ function statusDialog(o: CanvasFieldDialogOpts): void {
 function peopleDialog(o: CanvasFieldDialogOpts): void {
   const single = o.field.type === "person";
   const selected = new Map(vPeople(o.value).map((p) => [p.id, p.name]));
-  const primaries = o.people.filter((p) => p.secondary !== true);
+  // the board's own people up front, capped — the shared rule
+  const primaries = splitWho(o.people).upFront;
   const chipsBox = el("div", "ltk-cv-peoplepick");
   const searchBox = el("div", "ltk-cv-peoplepick");
 

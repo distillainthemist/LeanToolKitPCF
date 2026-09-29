@@ -37,6 +37,8 @@ import { ensureLiveRow, liveRow, saveCard } from "../store/cards";
 import { appPalettes } from "../store/config";
 import { ManifestSlot } from "../store/mappers";
 import { listPeople } from "../store/people";
+import { getBoard } from "../store/boards";
+import { parseMeetingInfo } from "../../../shared/schema/meeting";
 
 export type StudioResult = "saved" | "cancelled" | "archived" | "duplicated";
 
@@ -508,7 +510,23 @@ export function openCardStudio(opts: StudioOptions): Promise<StudioResult> {
         listPeople().catch(() => []),
         appPalettes(),
       ]);
-      people = assigneePeople([], roster);
+      // the people this board draws on: a ritual's owner and participants,
+      // an initiative's role-holders. Everyone else is behind the search;
+      // a board with nobody of its own (a template) is search only — a
+      // design surface must not open on a list of every user
+      let own: { whoId: string; who: string }[] = [];
+      try {
+        const b = await getBoard(opts.boardId);
+        const info = b ? parseMeetingInfo(b.occurrenceSettingsRaw) : null;
+        own = [...(info?.owner ? [info.owner] : []), ...(info?.participants ?? [])];
+        if (opts.boardId.startsWith("init-")) {
+          const { initiativeAssignees } = await import("../improvement/binding");
+          own = [...own, ...(await initiativeAssignees(opts.boardId))];
+        }
+      } catch {
+        own = [];
+      }
+      people = assigneePeople(own, roster, "search");
       stateColors = paletteMap(palettes.states);
       titleColors = paletteMap(palettes.titles);
       settings?.setPalettes(palettes.states, palettes.titles);

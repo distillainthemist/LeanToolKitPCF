@@ -115,6 +115,12 @@ the same commit.
   the field's own box), the card's own picker for the rest. Never a
   one-line prompt. The field wears its TARGET's type; the builder's
   bind select names that type beside each header field.
+- **Who pickers** open on the board's OWN people — a ritual's owner
+  and participants, an initiative's role-holders — as chips, capped
+  at 20, with everyone else behind `Search everyone…`. ONE function
+  decides (`splitWho`), for the action form and every card's picker.
+  A surface with nobody of its own (a template, a form) opens on the
+  search alone — never on a list of every user.
 - **Awaiting endorsement** reads the same everywhere: an amber pill
   `◐ Awaiting endorsement` on rows, the amber banner under the PDCA
   state in the dialog (with `Send back…` and `Endorse` for an

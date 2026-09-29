@@ -1017,7 +1017,7 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
         const fieldValues: Record<string, string> = {};
         const allFields = [...imp.standardFields, ...t.fields];
         // every kind enters as it does on the charter card (fieldInput.ts)
-        const fiCtx = { people: assigneePeople([], roster), palette: stateColors };
+        const fiCtx = { people: assigneePeople([], roster, "search"), palette: stateColors };
         for (const cf of allFields) {
           field(cf.label + (cf.required ? " *" : ""), fieldInput(cf, "", (raw) => (fieldValues[cf.key] = raw), fiCtx));
         }

@@ -278,7 +278,7 @@ export function openEditDetails(o: EditDetailsOpts): void {
     const fieldValues: Record<string, string> = { ...i.fieldValues };
     const allFields: TemplateField[] = [...imp.standardFields, ...(template?.fields ?? [])];
     // every kind enters as it does on the charter card (fieldInput.ts)
-    const fiCtx = { people: assigneePeople([], roster), palette: paletteMap(palettes.states) };
+    const fiCtx = { people: assigneePeople([], roster, "search"), palette: paletteMap(palettes.states) };
     for (const cf of allFields) {
       field(cf.label + (cf.required ? " *" : ""), fieldInput(cf, fieldValues[cf.key] ?? "", (raw) => (fieldValues[cf.key] = raw), fiCtx));
     }

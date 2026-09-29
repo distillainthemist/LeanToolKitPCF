@@ -85,7 +85,12 @@ export interface PersonLike {
  */
 export function assigneePeople(
   meetingPeople: PersonLike[],
-  roster: PersonLike[]
+  roster: PersonLike[],
+  /** With nobody of its own: "roster" puts the whole roster up front (the
+   *  old behaviour, the default); "search" keeps everyone behind the
+   *  search box — a design surface with no meeting to draw people from
+   *  must not open on a wall of every user (Ben, 2026-09-30). */
+  whenEmpty: "roster" | "search" = "roster"
 ): Person[] {
   const toPerson = (p: PersonLike, secondary: boolean): Person => ({
     whoId: p.whoId,
@@ -101,10 +106,23 @@ export function assigneePeople(
     seen.add(p.whoId);
     primary.push(toPerson(p, false));
   }
-  if (primary.length === 0) return roster.map((p) => toPerson(p, false));
+  if (primary.length === 0 && whenEmpty === "roster") return roster.map((p) => toPerson(p, false));
   const rest = roster
     .filter((p) => !seen.has(p.whoId))
     .sort((a, b) => a.who.localeCompare(b.who))
     .map((p) => toPerson(p, true));
   return [...primary, ...rest];
+}
+
+/** How many people a who-picker shows up front. */
+export const WHO_CHIP_CAP = 20;
+
+/** A who-picker's two halves: the people shown up front, and everyone
+ *  behind the search box. The up-front set is the board's own people,
+ *  CAPPED (a 500-person site must not become a wall of chips — Ben,
+ *  2026-09-01); the overflow joins the search with the wider roster.
+ *  ONE rule for the action form and every card's picker. */
+export function splitWho(people: Person[], cap = WHO_CHIP_CAP): { upFront: Person[]; behindSearch: Person[] } {
+  const own = people.filter((p) => p.secondary !== true);
+  return { upFront: own.slice(0, cap), behindSearch: [...own.slice(cap), ...people.filter((p) => p.secondary === true)] };
 }

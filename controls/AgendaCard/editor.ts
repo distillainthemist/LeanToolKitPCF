@@ -25,7 +25,7 @@ import { htmlToPng, htmlToSvg, saveSvg, SnapshotScheduler } from "../../shared/e
 import { makeInteractive } from "../../shared/interact/drag";
 import { LtkAction, newAction } from "../../shared/schema/actions";
 import { nowIso } from "../../shared/schema/id";
-import { Person } from "../../shared/schema/people";
+import { Person, splitWho } from "../../shared/schema/people";
 import {
   AgendaEnvelope,
   AgendaItem,
@@ -875,10 +875,11 @@ export class AgendaEditor {
     wrap.style.flexDirection = "column";
     wrap.style.gap = "8px";
 
-    // the board's own people as chips; `secondary` (the wider roster)
-    // stays behind the search below — the action form's convention
-    const primary = this.people.filter((p) => p.secondary !== true);
-    const secondary = this.people.filter((p) => p.secondary === true);
+    // the board's own people as chips — capped; the overflow and the
+    // wider roster stay behind the search below. The action form's
+    // convention, by the same function (2026-09-30: this picker had no
+    // cap, so a board with no people of its own listed every user)
+    const { upFront: primary, behindSearch: secondary } = splitWho(this.people);
     const checks: { box: HTMLInputElement; wrap: HTMLElement; person: Person }[] = [];
     const isCurrent = (p: Person) =>
       current.some((c) => (c.whoId !== "" && c.whoId === p.whoId) || c.who === p.who);
@@ -895,7 +896,7 @@ export class AgendaEditor {
     for (const person of primary) addChip(person, isCurrent(person));
     // wider-roster people already on the item stay visible, pre-ticked
     for (const person of secondary) if (isCurrent(person)) addChip(person, true);
-    if (this.people.length > 0) wrap.appendChild(chips);
+    if (checks.length > 0 || secondary.length > 0) wrap.appendChild(chips);
 
     // search everyone: a match pins as a ticked chip (multi — nothing unticks)
     if (secondary.length > 0) {

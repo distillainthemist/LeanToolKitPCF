@@ -1190,6 +1190,18 @@ reschedule/cancel history with a reason picklist.
   an organisation's actions were never saved (since v0.55.0).
   Tests 698. No schema change; app-only. Hosted checks Ben's — two
   accounts: a team member who closes, an owner who endorses.
+- **2026-09-30 — who pickers never list every user.** Ben, setting up
+  a template's agenda card: adding a pre-work, agenda or output item
+  listed every app user. Cause: the CARD STUDIO (template and ritual
+  setup) handed every card the whole roster as up-front choices, and
+  the agenda card's picker had no cap (the action form capped at 20).
+  Fixed: the studio passes the board's own people (a ritual's owner
+  and participants, an initiative's role-holders) and keeps everyone
+  else behind the search — search only on a template; `splitWho` is
+  the one split for the action form, the agenda card and the canvas
+  card's person fields; the initiative forms' person fields are
+  search only. The skills matrix on a template now shows its empty
+  state rather than every user as a row. Harness page `agenda.html`.
 - **Where things stand (2026-09-24).** Released: v0.51.0 (2026-09-14,
   solution-carrying — value driver tree, grid entry, Metrics card,
   meeting-board driver links, rituals in several orgs, driver popup,
