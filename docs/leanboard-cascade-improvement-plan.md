@@ -1202,6 +1202,13 @@ reschedule/cancel history with a reason picklist.
   card's person fields; the initiative forms' person fields are
   search only. The skills matrix on a template now shows its empty
   state rather than every user as a row. Harness page `agenda.html`.
+- **2026-09-30 — released as v0.57.0** (app-only; the schema is
+  unchanged since v0.54.0). Everything dated 2026-09-29 and
+  2026-09-30 above. Production needs the app package only. Two fixes
+  in it matter for data already in production: confidential
+  initiative titles no longer show in the action dialog's list, and
+  edits made in the hub's Actions tab to another person's or an
+  organisation's actions are now saved (they were not, from v0.55.0).
 - **Where things stand (2026-09-24).** Released: v0.51.0 (2026-09-14,
   solution-carrying — value driver tree, grid entry, Metrics card,
   meeting-board driver links, rituals in several orgs, driver popup,
