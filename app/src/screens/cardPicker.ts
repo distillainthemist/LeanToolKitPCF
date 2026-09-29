@@ -18,6 +18,7 @@ import { BoardRef } from "../../../controls/CardSettings/types";
 import { clear, el } from "../../../shared/ui/dom";
 import { markDialog, trapFocus } from "../focusTrap";
 import { ManifestSlot } from "../store/mappers";
+import { promptConfirm } from "../prompts";
 
 export type PickerResult =
   | { kind: "new"; cardType: string }
@@ -171,12 +172,15 @@ export function openCardPicker(opts: PickerOptions): Promise<PickerResult> {
         del.title = "Remove this card from the archive for good";
         del.addEventListener("click", () => {
           void (async () => {
-            const ok = window.confirm(
-              `Delete "${entry.slot.title || cardLabel(entry.slot.cardType)}" for good?\n\n` +
+            const ok = await promptConfirm({
+              title: `Delete "${entry.slot.title || cardLabel(entry.slot.cardType)}" for good?`,
+              note:
                 "It leaves the archive and cannot be added back. Its saved content stays " +
                 "in the database — including the images past meetings archived — but " +
-                "nothing in the app will show it again."
-            );
+                "nothing in the app will show it again.",
+              confirmLabel: "Delete",
+              danger: true,
+            });
             if (!ok) return;
             await opts.onDeleteArchived(entry.slot.cardId);
             const i = archived.indexOf(entry);

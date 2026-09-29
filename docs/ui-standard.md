@@ -101,6 +101,16 @@ the same commit.
   the field's own box), the card's own picker for the rest. Never a
   one-line prompt. The field wears its TARGET's type; the builder's
   bind select names that type beside each header field.
+- **Never a browser-native dialog.** `prompt`, `confirm` and `alert`
+  render unstyled and show the hosting domain as their title. The app
+  asks through `prompts.ts` (`promptText` — one line, or `multiline`
+  for a reason or a comment, `required` to refuse an empty answer,
+  `danger` for a destructive confirm; `promptConfirm`;
+  `promptUnsaved`); the controls through `shared/ui/dialog.ts` or an
+  input in place. Prompts sit on the topmost layer
+  (`.app-modal-top`), above the picker and any form that asks one.
+  `tools/native-dialog-gate.mjs` scans the source for native calls
+  and runs in CI.
 - **Destructive steps inside a dialog confirm inline** (`.ltk-confirm`
   bar in the body, safe choice focused): taking an action off the
   card it hangs from, and **Cancel action**. One dialog at a time per

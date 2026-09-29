@@ -1127,6 +1127,17 @@ reschedule/cancel history with a reason picklist.
   `updateInitiativeEventDetail` is the one new store write. No schema
   change (Write was already granted on the events table). Harness
   page `band.html`. Tests 665. App-only; hosted checks Ben's.
+- **2026-09-29 — no browser-native dialogs.** Ben met the browser's
+  own prompt on the stage move (unstyled, the hosting domain as its
+  title). Review found five native calls, all replaced: the stage
+  move and the gate decline (`promptText`, now with `multiline`,
+  `required` and `danger`), deleting an archived card and archiving a
+  card (`promptConfirm`), and the canvas builder's typed header key
+  (an input in place). Also found: the card picker (z 10001) sat
+  above the modal layer (10000), so a confirmation asked from it
+  would have opened BEHIND it — prompts now open on `.app-modal-top`
+  (10500). `tools/native-dialog-gate.mjs` scans the source so a new
+  native call fails the gate (CI runs it). Harness page `prompts.html`. App-only.
 - **Where things stand (2026-09-24).** Released: v0.51.0 (2026-09-14,
   solution-carrying — value driver tree, grid entry, Metrics card,
   meeting-board driver links, rituals in several orgs, driver popup,

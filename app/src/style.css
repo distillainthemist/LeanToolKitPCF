@@ -3986,3 +3986,9 @@ textarea.app-cp-statement { font-size: 14px; font-weight: 500; }
 .app-ib-handle:hover, .app-ib-handle:focus-visible { color: var(--app-accent); outline: none; }
 .app-cm-tab { display: flex; flex-direction: column; gap: 8px; }
 .app-cm-earlier { margin-top: 6px; }
+/* prompts (prompts.ts) sit above every other layer that can ask one: the
+   card picker and menus (10001), a form's picker dialogs (10050) */
+.app-modal-top { z-index: 10500; }
+.app-modal textarea.app-input { width: 100%; box-sizing: border-box; resize: vertical; }
+/* the canvas builder's typed header-field key (in place of the select) */
+.ltk-cs-canvas-bindkey { min-width: 200px; }

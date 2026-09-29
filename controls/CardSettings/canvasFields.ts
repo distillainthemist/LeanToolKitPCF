@@ -455,11 +455,39 @@ export function canvasFieldsEditor(
         bind.title = "Bound fields show initiative-header data — edit here or there, same data.";
         bind.addEventListener("change", () => {
           if (bind.value === "__custom") {
-            const key = (prompt("Header field key (from the template's Fields step, e.g. cost_centre)") ?? "").trim();
-            f.bound = key !== "" ? `field:${key}` : f.bound;
-          } else {
-            f.bound = bind.value;
+            // the key is typed in place, beside the select (no browser
+            // prompt): Enter or leaving the box binds, Escape abandons
+            const keyIn = el("input", "ltk-input ltk-cs-cell ltk-cs-canvas-bindkey") as HTMLInputElement;
+            keyIn.type = "text";
+            keyIn.placeholder = "Header field key, e.g. cost_centre";
+            keyIn.title = "The key from the template's Fields step";
+            keyIn.setAttribute("aria-label", "Header field key");
+            bind.style.display = "none";
+            bindWrap.appendChild(keyIn);
+            let settled = false;
+            const settle = (commit: boolean) => {
+              if (settled) return;
+              settled = true;
+              const key = keyIn.value.trim();
+              if (commit && key !== "") f.bound = `field:${key}`;
+              push();
+              host.onChanged();
+            };
+            keyIn.addEventListener("keydown", (e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                settle(true);
+              } else if (e.key === "Escape") {
+                e.preventDefault();
+                e.stopPropagation();
+                settle(false);
+              }
+            });
+            keyIn.addEventListener("blur", () => settle(true));
+            keyIn.focus();
+            return;
           }
+          f.bound = bind.value;
           push();
           host.onChanged();
         });

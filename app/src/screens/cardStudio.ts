@@ -32,7 +32,7 @@ import { clear, el } from "../../../shared/ui/dom";
 import { cardMounter } from "../cardRegistry";
 import { appTheme } from "../cardHost";
 import { markDialog, trapFocus } from "../focusTrap";
-import { promptUnsaved } from "../prompts";
+import { promptConfirm, promptUnsaved } from "../prompts";
 import { ensureLiveRow, liveRow, saveCard } from "../store/cards";
 import { appPalettes } from "../store/config";
 import { ManifestSlot } from "../store/mappers";
@@ -167,11 +167,11 @@ export function openCardStudio(opts: StudioOptions): Promise<StudioResult> {
       archive.addEventListener("click", () => {
         void (async () => {
           const named = draft.title.trim();
-          const ok = window.confirm(
-            (named !== "" ? `Archive "${named}"?` : `Archive this ${typeLabel} card?`) +
-              "\n\nIt comes off the board but keeps its settings and saved content — " +
-              "add it back any time from ＋ Add card → Archived."
-          );
+          const ok = await promptConfirm({
+            title: named !== "" ? `Archive "${named}"?` : `Archive this ${typeLabel} card?`,
+            note: "It comes off the board but keeps its settings and saved content — add it back any time from ＋ Add card → Archived.",
+            confirmLabel: "Archive card",
+          });
           if (!ok) return;
           await opts.onArchive!();
           close("archived");

@@ -26,6 +26,7 @@ From `app/`:
 ```bash
 npx tsc --noEmit
 node tools/import-gate.mjs
+node tools/native-dialog-gate.mjs
 npx vitest run
 npm run build
 node tools/chunk-report.mjs
@@ -156,6 +157,12 @@ Version lives in the tag alone — nothing is stamped into files.
 - **Never truncate a deploy log with `head`/`tail` in a pipe** — SIGPIPE
   can cut `deploy-schema.mjs` off BEFORE the role grants. Write to a
   file in the scratchpad, then grep it (2026-09-02).
+- **No browser-native dialogs** — `prompt` / `confirm` / `alert` show
+  unstyled with the hosting domain as their title. Ask through
+  `app/src/prompts.ts` (or `shared/ui/dialog.ts` in a control);
+  `tools/native-dialog-gate.mjs` scans the source and runs in CI. Prompts open on the
+  topmost layer, so one asked from the card picker is never hidden
+  behind it (2026-09-29).
 - **Store reads are cached** (`app/src/store/changes.ts`, 60 s, by
   topic): every new writer of initiatives / boards / drivers /
   palettes / people must `bumpChange(topic)`; every new reader goes

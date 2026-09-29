@@ -9,7 +9,7 @@
     "preview": "vite preview",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "gate": "node tools/import-gate.mjs",
+    "gate": "node tools/import-gate.mjs && node tools/native-dialog-gate.mjs",
     "chunks": "node tools/chunk-report.mjs"
   },
   "devDependencies": {

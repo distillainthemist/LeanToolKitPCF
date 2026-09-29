@@ -5,9 +5,13 @@
 import { el } from "../../shared/ui/dom";
 
 /** Save / Discard / Cancel prompt for leaving with unsaved edits. */
+// Every prompt here is the TOPMOST layer (`.app-modal-top`): a
+// confirmation is asked from inside other layers — the card picker, the
+// studio, a form's own modal — and must never open behind the one that
+// asked (2026-09-29: the picker sat above the plain modal layer).
 export function promptUnsaved(): Promise<"save" | "discard" | "cancel"> {
   return new Promise((resolve) => {
-    const overlay = el("div", "app-modal-overlay");
+    const overlay = el("div", "app-modal-overlay app-modal-top");
     const box = el("div", "app-modal");
     box.append(
       el("div", "app-modal-title", "Unsaved changes"),
@@ -53,23 +57,34 @@ export function promptText(opts: {
   initial?: string;
   placeholder?: string;
   confirmLabel?: string;
+  /** A few lines rather than one (a reason, a comment for the log). */
+  multiline?: boolean;
+  /** Refuse an empty answer, saying what is needed. */
+  required?: string;
+  /** The confirm button is a destructive step. */
+  danger?: boolean;
 }): Promise<string | null> {
   return new Promise((resolve) => {
-    const overlay = el("div", "app-modal-overlay");
+    const overlay = el("div", "app-modal-overlay app-modal-top");
     const box = el("div", "app-modal");
     box.appendChild(el("div", "app-modal-title", opts.title));
     if (opts.note) box.appendChild(el("div", "app-modal-note", opts.note));
-    const input = el("input", "app-input") as HTMLInputElement;
+    const input = (opts.multiline ? el("textarea", "app-input") : el("input", "app-input")) as HTMLInputElement | HTMLTextAreaElement;
+    if (input instanceof HTMLTextAreaElement) input.rows = 3;
     input.value = opts.initial ?? "";
     if (opts.placeholder) input.placeholder = opts.placeholder;
     box.appendChild(input);
+    const err = el("div", "app-cp-err", "");
+    box.appendChild(err);
     const footer = el("div", "app-modal-footer");
     const cancel = el("button", "app-link", "Cancel") as HTMLButtonElement;
+    cancel.type = "button";
     const ok = el(
       "button",
-      "app-btn app-btn-primary",
+      "app-btn " + (opts.danger ? "app-btn-danger" : "app-btn-primary"),
       opts.confirmLabel ?? "Save"
     ) as HTMLButtonElement;
+    ok.type = "button";
     footer.append(cancel, ok);
     box.appendChild(footer);
     const done = (v: string | null) => {
@@ -77,17 +92,29 @@ export function promptText(opts: {
       document.removeEventListener("keydown", onKey, true);
       resolve(v);
     };
+    const submit = () => {
+      if (opts.required !== undefined && input.value.trim() === "") {
+        err.textContent = opts.required;
+        input.focus();
+        return;
+      }
+      done(input.value);
+    };
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         e.stopPropagation();
         done(null);
-      } else if (e.key === "Enter" && document.activeElement === input) {
+      } else if (e.key === "Enter" && document.activeElement === input && !(input instanceof HTMLTextAreaElement)) {
+        // Enter saves a one-line answer; in a text area it is a new line
         e.stopPropagation();
-        done(input.value);
+        submit();
       }
     };
+    input.addEventListener("input", () => {
+      err.textContent = "";
+    });
     cancel.addEventListener("click", () => done(null));
-    ok.addEventListener("click", () => done(input.value));
+    ok.addEventListener("click", submit);
     overlay.addEventListener("click", (e) => {
       if (e.target === overlay) done(null);
     });
@@ -107,7 +134,7 @@ export function promptConfirm(opts: {
   danger?: boolean;
 }): Promise<boolean> {
   return new Promise((resolve) => {
-    const overlay = el("div", "app-modal-overlay");
+    const overlay = el("div", "app-modal-overlay app-modal-top");
     const box = el("div", "app-modal");
     box.appendChild(el("div", "app-modal-title", opts.title));
     if (opts.note) box.appendChild(el("div", "app-modal-note", opts.note));

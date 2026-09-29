@@ -46,6 +46,9 @@ jobs:
       # board path, and board-path chunks must stay under their ceilings.
       - name: Import gate
         run: node tools/import-gate.mjs
+
+      - name: Native-dialog gate
+        run: node tools/native-dialog-gate.mjs
       - name: Build
         run: npm run build
       - name: Chunk sizes

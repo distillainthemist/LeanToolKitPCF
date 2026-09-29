@@ -19,7 +19,7 @@ import { el, clear } from "../../../shared/ui/dom";
 import { initialsFor } from "../../../shared/schema/people";
 import { nowIso, todayIso } from "../../../shared/schema/id";
 import { currentViewer } from "../runtime";
-import { promptConfirm } from "../prompts";
+import { promptConfirm, promptText } from "../prompts";
 import { listPeople } from "../store/people";
 import { improvementSettingsJson } from "../store/config";
 import { appendInitiativeEvent, listInitiativeEvents, listInitiatives, saveInitiative } from "../store/initiatives";
@@ -387,8 +387,16 @@ export function mountInitiativePane(o: InitiativePaneOpts): InitiativePaneHandle
       if (myRolesHere.length === 0) return;
       let comment = "";
       if (!approved) {
-        const c = prompt("Why is this gate declined? The team sees this.") ?? "";
-        if (c.trim() === "") return;
+        const c = await promptText({
+          title: "Decline this gate?",
+          note: "Say why — the team sees this, and it stays on the stage's record.",
+          placeholder: "What needs to change before this can move on",
+          confirmLabel: "Decline",
+          multiline: true,
+          required: "A reason is needed.",
+          danger: true,
+        });
+        if (c === null) return;
         comment = c.trim();
       }
       for (const role of myRolesHere) {
@@ -441,9 +449,16 @@ export function mountInitiativePane(o: InitiativePaneOpts): InitiativePaneHandle
         });
         return;
       }
-      const c = prompt(`Move to ${toName}? A comment for the log (optional):`);
-      if (c === null) return;
-      void moveStage(toStageId, c.trim());
+      void promptText({
+        title: toStageId === "" ? "Complete this initiative?" : `Move to ${toName}?`,
+        note: "A comment for the log (optional).",
+        placeholder: "What this stage achieved, or why it is moving on",
+        confirmLabel: toStageId === "" ? "Complete" : `Move to ${toName}`,
+        multiline: true,
+      }).then((c) => {
+        if (c === null) return;
+        void moveStage(toStageId, c.trim());
+      });
     };
 
     // ---- commentary (High / Low / Next / Support needed) -------------------------
