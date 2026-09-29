@@ -17,7 +17,7 @@ import { currentViewer } from "../runtime";
 import { listPeople, viewerPerson } from "../store/people";
 import { upsertActions } from "../store/actions";
 import { getBoard } from "../store/boards";
-import { listInitiatives } from "../store/initiatives";
+import { visibleInitiatives } from "./linkTargets";
 import { bumpChange } from "../store/changes";
 import { openBoardId } from "./openBoard";
 
@@ -56,10 +56,7 @@ export async function openQuickAction(): Promise<void> {
   const initBoard = board !== null && board.boardId.startsWith("init-");
   const initiatives: InitiativeTarget[] = initBoard
     ? []
-    : (await listInitiatives().catch(() => []))
-        .filter((i) => i.status === "active")
-        .map((i) => ({ id: i.id, title: i.title, boardId: i.boardId }))
-        .sort((a, b) => a.title.localeCompare(b.title));
+    : (await visibleInitiatives()).map((i) => ({ id: i.id, title: i.title, boardId: i.boardId }));
   openActionDialog({
     host: dialogHost(),
     action,

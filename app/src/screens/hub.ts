@@ -65,12 +65,8 @@ interface HubData {
  *  relinks from the hub — 2026-09-24). Dynamic: the improvement store
  *  stays out of the hub chunk. */
 async function initiativeTargets(): Promise<InitiativeTarget[]> {
-  const { listInitiatives } = await import("../store/initiatives");
-  const list = await listInitiatives().catch(() => []);
-  return list
-    .filter((i) => i.status === "active")
-    .map((i) => ({ id: i.id, title: i.title, boardId: i.boardId }))
-    .sort((a, b) => a.title.localeCompare(b.title));
+  const { visibleInitiatives } = await import("../actions/linkTargets");
+  return (await visibleInitiatives()).map((i) => ({ id: i.id, title: i.title, boardId: i.boardId }));
 }
 
 /** The last boot round, kept for the session. Returning to the hub
