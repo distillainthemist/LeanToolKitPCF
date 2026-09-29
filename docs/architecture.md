@@ -365,6 +365,19 @@ model section) — the canvas/PCF sections there are historical.
   leave and fires `ltk-actions-changed`; boards and the hub refresh on
   that signal.
 
+- **Comments on any action** (2026-09-30): `comments` was always in
+  the model and the row (`ben_commentsjson`), with a UI only on the
+  escalation viewer. The shared action dialog now lists them and adds
+  to them — so every surface that opens the dialog has them. What is
+  written is saved with the dialog's Save (the box's text included);
+  Close asks before it is lost. The author comes from the viewer the
+  shell registers (`setActionViewerProvider`). Rows wear `💬 n`.
+- **On hold** is a sixth PDCA state (`hold`, a pause glyph). The
+  action stays open; while held it is NOT overdue — in `isOverdue`,
+  the initiative roll-up, the Gantt (its own state and legend entry)
+  and My day's Late / Due buckets. Resuming is choosing another
+  state; nothing remembers the state it was held from.
+
 ### 3.5 Store read cache & change signals
 
 `store/changes.ts` keeps a 60-second read cache keyed by topic

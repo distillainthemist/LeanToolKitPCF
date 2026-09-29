@@ -45,13 +45,18 @@ export const LTK_BASE_CSS = `
 .ltk-pdca-disc { display: inline-block; flex: none; }
 .ltk-action-descline { display: flex; align-items: baseline; gap: 7px; }
 .ltk-action-descline .ltk-pdca-disc { align-self: center; }
-.ltk-pdca-seg { display: inline-flex; border: 1px solid #ddd; border-radius: 8px; overflow: hidden; width: fit-content; }
-.ltk-pdca-btn {
-  display: inline-flex; align-items: center; gap: 6px;
-  border: none; background: none; font: inherit; font-size: 12.5px;
-  padding: 8px 12px; cursor: pointer; color: #444;
+/* six states, three to a row: the cycle's four, then On hold and Closed
+   (one row of six does not fit a dialog; a ragged wrap read as a fault).
+   The 1px gaps over the grey ground draw the dividers. */
+.ltk-pdca-seg {
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px;
+  background: #ddd; border: 1px solid #ddd; border-radius: 8px; overflow: hidden; width: 100%; max-width: 420px;
 }
-.ltk-pdca-btn + .ltk-pdca-btn { border-left: 1px solid #ddd; }
+.ltk-pdca-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  border: none; background: var(--ltk-bg, #fff); font: inherit; font-size: 12.5px;
+  padding: 8px 10px; min-height: 40px; cursor: pointer; color: #444;
+}
 .ltk-pdca-on { background: var(--ltk-accent, #2563eb); color: #fff; font-weight: 600; }
 /* the right-hand slot: app extras (＋ Action) then the kebab, flowed */
 .ltk-titlebar-actions {
@@ -233,6 +238,19 @@ export const LTK_BASE_CSS = `
 .ltk-link-hit:hover, .ltk-link-hit:focus-visible { border-color: var(--ltk-accent); }
 .ltk-link-hit-title { font-size: 14px; font-weight: 600; overflow-wrap: anywhere; }
 .ltk-link-hit-detail { font-size: 12px; color: var(--ltk-muted); overflow-wrap: anywhere; }
+
+/* comments on an action: the trail, the box, the row glyph */
+.ltk-cmt { display: flex; flex-direction: column; gap: 8px; }
+.ltk-cmt-list { display: flex; flex-direction: column; gap: 6px; max-height: 200px; overflow: auto; scrollbar-width: thin; }
+.ltk-cmt-none { font-size: 12.5px; color: var(--ltk-muted); }
+.ltk-cmt-row { border: 1px solid var(--ltk-hairline); border-radius: 6px; padding: 6px 10px; background: var(--ltk-bg); }
+.ltk-cmt-fresh { border-style: dashed; border-color: var(--ltk-accent); }
+.ltk-cmt-meta { font-size: 11.5px; color: var(--ltk-muted); }
+.ltk-cmt-text { font-size: 13.5px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.ltk-cmt-entry { display: flex; gap: 8px; align-items: flex-end; }
+.ltk-cmt-box { flex: 1; min-width: 0; min-height: 44px; }
+.ltk-cmt-add { flex: none; }
+.ltk-cmt-glyph { flex: none; font-size: 12px; color: var(--ltk-muted); white-space: nowrap; }
 
 /* an inline confirmation inside a dialog's body */
 .ltk-confirm {

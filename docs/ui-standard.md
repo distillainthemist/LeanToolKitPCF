@@ -115,6 +115,13 @@ the same commit.
   the field's own box), the card's own picker for the rest. Never a
   one-line prompt. The field wears its TARGET's type; the builder's
   bind select names that type beside each header field.
+- **PDCA state** in the action dialog is six states, three to a row:
+  Plan, Do, Check / Act, On hold, Closed. On hold wears a pause
+  glyph inside the ring, wherever a PDCA disc shows.
+- **Comments** sit last in the action dialog: the trail, newest last,
+  then a box with `Add`. A comment not yet saved wears a dashed
+  accent border and "not saved yet".
+- **Commentary labels**: Highs, Lows, Next, Support needed.
 - **Never a browser-native dialog.** `prompt`, `confirm` and `alert`
   render unstyled and show the hosting domain as their title. The app
   asks through `prompts.ts` (`promptText` — one line, or `multiline`

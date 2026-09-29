@@ -1,5 +1,5 @@
 // Initiative commentary — the pure model (2026-09-29). An update is one
-// "comment" event: High / Low / Next / Support needed. It can be EDITED
+// "comment" event: Highs / Lows / Next / Support needed. It can be EDITED
 // by the initiative team: the same row is rewritten, stamped with who
 // edited and when, and the earlier wording is kept behind "edited" (no
 // update is ever deleted). Pure — the status band, the details pane, the
@@ -30,8 +30,8 @@ export interface Update extends UpdateFields {
 }
 
 export const UPDATE_LABELS: [keyof UpdateFields, string, string][] = [
-  ["high", "High", "What went well"],
-  ["low", "Low", "What hurt"],
+  ["high", "Highs", "What went well"],
+  ["low", "Lows", "What hurt"],
   ["next", "Next", "What happens next"],
   ["support", "Support needed", "What would unblock this"],
 ];

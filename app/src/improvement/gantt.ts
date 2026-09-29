@@ -12,7 +12,7 @@
 // select, ±1d/±1w steppers + Set dates… — no drag. Dependencies are out
 // of scope by design.
 
-import { actionBelongsTo } from "../../../shared/schema/actions";
+import { actionBelongsTo, isOnHold } from "../../../shared/schema/actions";
 import { el, clear } from "../../../shared/ui/dom";
 import { LtkAction, ActionHistoryEntry } from "../../../shared/schema/actions";
 import { todayIso } from "../../../shared/schema/id";
@@ -81,11 +81,15 @@ function addDays(iso: string, n: number): string {
   return t === null ? iso : toIso(t + n * DAY);
 }
 
-type BarState = "ontrack" | "overdue" | "verify" | "done";
+type BarState = "ontrack" | "overdue" | "verify" | "hold" | "done";
+
+const STATE_LABEL: Record<BarState, string> = { ontrack: "On track", overdue: "Overdue", verify: "Awaiting verification", hold: "On hold", done: "Done" };
 
 function barState(a: LtkAction, today: string): BarState {
   if (a.status === "done" || a.status === "cancelled") return "done";
   if (a.status === "verify") return "verify";
+  // paused by decision (2026-09-30): held, and not late while it is
+  if (isOnHold(a)) return "hold";
   if (a.due !== "" && a.due < today) return "overdue";
   return "ontrack";
 }
@@ -112,6 +116,7 @@ export function mountGantt(opts: GanttOpts): () => void {
     ontrack: accent,
     overdue: opts.palette.issue ?? "#c0392b",
     verify: opts.palette.atrisk ?? "#d9a441",
+    hold: "#6d675c",
     done: "#b8b1a5",
   };
 
@@ -292,7 +297,7 @@ export function mountGantt(opts: GanttOpts): () => void {
         bar.appendChild(sel);
       }
       const st = el("select", "app-input app-gx-sel") as HTMLSelectElement;
-      for (const [v, l] of [["", "All states"], ["ontrack", "On track"], ["overdue", "Overdue"], ["verify", "Awaiting verification"]] as const) {
+      for (const [v, l] of [["", "All states"], ["ontrack", "On track"], ["overdue", "Overdue"], ["verify", "Awaiting verification"], ["hold", "On hold"]] as const) {
         const o = el("option", "", l) as HTMLOptionElement;
         o.value = v;
         if (v === status) o.selected = true;
@@ -357,7 +362,7 @@ export function mountGantt(opts: GanttOpts): () => void {
       const listBox = el("div", "app-gx-list");
       const stateChip = (a: LtkAction): HTMLElement => {
         const st = barState(a, today);
-        const chip = el("span", "app-gx-statechip", st === "ontrack" ? "On track" : st === "overdue" ? "Overdue" : st === "verify" ? "Awaiting verification" : "Done");
+        const chip = el("span", "app-gx-statechip", (st === "hold" ? "⏸ " : "") + STATE_LABEL[st]);
         const c = colours[st];
         chip.style.color = c;
         chip.style.background = `color-mix(in srgb, ${c} 14%, white)`;
@@ -521,9 +526,14 @@ export function mountGantt(opts: GanttOpts): () => void {
       barEl.style.width = `${Math.max(dayW, Math.min(width + 4, x2 + dayW) - left)}px`;
       if (state === "verify") {
         barEl.style.background = `repeating-linear-gradient(45deg, ${col}, ${col} 5px, color-mix(in srgb, ${col} 45%, white) 5px, color-mix(in srgb, ${col} 45%, white) 10px)`;
+      } else if (state === "hold") {
+        // on hold: an outlined, washed bar — present, not progressing
+        barEl.style.background = `color-mix(in srgb, ${col} 18%, white)`;
+        barEl.style.border = `1.5px dashed ${col}`;
+        barEl.style.boxSizing = "border-box";
       } else barEl.style.background = col;
       if (state === "done") barEl.style.opacity = "0.55";
-      barEl.title = `${a.issue}\n${dayLabel(a.start)} → ${dayLabel(a.due)}`;
+      barEl.title = `${a.issue}\n${dayLabel(a.start)} → ${dayLabel(a.due)}${state === "hold" ? "\nOn hold" : ""}`;
       tl.appendChild(barEl);
 
       if (opts.canEdit && state !== "done") wireDrag(barEl, a, dayW);
@@ -707,6 +717,11 @@ export function mountGantt(opts: GanttOpts): () => void {
     key("Overdue", (sw) => (sw.style.background = colours.overdue));
     key("Awaiting verification", (sw) => {
       sw.style.background = `repeating-linear-gradient(45deg, ${colours.verify}, ${colours.verify} 3px, color-mix(in srgb, ${colours.verify} 45%, white) 3px, color-mix(in srgb, ${colours.verify} 45%, white) 6px)`;
+    });
+    key("On hold", (sw) => {
+      sw.style.background = `color-mix(in srgb, ${colours.hold} 18%, white)`;
+      sw.style.border = `1.5px dashed ${colours.hold}`;
+      sw.style.boxSizing = "border-box";
     });
     key("Completed", (sw) => {
       sw.style.background = colours.done;

@@ -14,15 +14,19 @@ export type ActionStatus = "open" | "in-progress" | "verify" | "done" | "cancell
 /** The PDCA progression (Ben, 2026-08-31): a parallel axis to status —
  *  where the work IS in the improvement cycle. Closed mirrors status
  *  done/cancelled; new actions start at Do. */
-export type ActionPdca = "plan" | "do" | "check" | "act" | "closed";
+/** "hold" (Ben, 2026-09-30): ON HOLD — paused, not abandoned. It sits
+ *  beside the cycle rather than on it (a pause glyph, no quadrants): the
+ *  action stays open, and while it is held it is not overdue. */
+export type ActionPdca = "plan" | "do" | "check" | "act" | "hold" | "closed";
 
-export const ACTION_PDCA: ActionPdca[] = ["plan", "do", "check", "act", "closed"];
+export const ACTION_PDCA: ActionPdca[] = ["plan", "do", "check", "act", "hold", "closed"];
 
 export const PDCA_LABELS: Record<ActionPdca, string> = {
   plan: "Plan",
   do: "Do",
   check: "Check",
   act: "Act",
+  hold: "On hold",
   closed: "Closed",
 };
 
@@ -33,8 +37,14 @@ export const PDCA_QUARTERS: Record<ActionPdca, number> = {
   do: 1,
   check: 2,
   act: 3,
+  hold: 0, // drawn as a pause glyph, not as quadrants
   closed: 4,
 };
+
+/** Paused: an open action whose PDCA state is On hold. */
+export function isOnHold(a: { status: string; pdca?: string }): boolean {
+  return a.pdca === "hold" && a.status !== "done" && a.status !== "cancelled";
+}
 
 /** The state to DISPLAY: a done/cancelled action is closed regardless of
  *  what was stored; a stored "closed" on a live action falls back to Do
@@ -334,6 +344,11 @@ export function serializeActions(
 }
 
 /** Overdue is derived: due in the past and the action still open. */
+/** A comment as it is written now (2026-09-30): who, and the day. */
+export function newComment(viewer: { whoId: string; who: string }, text: string, today = todayIso()): ActionComment {
+  return { whoId: viewer.whoId, who: viewer.who !== "" ? viewer.who : undefined, when: today, text: text.trim() };
+}
+
 export function isOverdue(a: LtkAction, today = todayIso()): boolean {
   // "verify" is finished work awaiting endorsement — the assignee's part is
   // done, so it is not overdue (it is the owner's queue, not theirs)
@@ -342,7 +357,9 @@ export function isOverdue(a: LtkAction, today = todayIso()): boolean {
     a.due < today &&
     a.status !== "done" &&
     a.status !== "verify" &&
-    a.status !== "cancelled"
+    a.status !== "cancelled" &&
+    // on hold is paused by decision — not late
+    !isOnHold(a)
   );
 }
 

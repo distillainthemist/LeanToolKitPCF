@@ -3,7 +3,8 @@
 // from the typed Dataverse store inside Power Apps, demo data on a bare
 // dev server.
 
-import { setActionLinkProvider } from "../../shared/ui/actionLinkProvider";
+import { setActionLinkProvider, setActionViewerProvider } from "../../shared/ui/actionLinkProvider";
+import { currentViewer } from "./runtime";
 import { el, clear } from "../../shared/ui/dom";
 import { boardOrigin, REOPEN_PRIORITY_KEY } from "./improvement/boardOrigin";
 import { getLeaveGuard, setLeaveGuard } from "./navGuard";
@@ -13,6 +14,12 @@ import { releaseFramesExcept } from "./embedFrames";
 // what an action may be linked to — every action dialog reads this one
 // provider (loaded on first use; the shell carries the registry only)
 setActionLinkProvider(() => import("./actions/linkTargets").then((m) => m.loadLinkContext()));
+// who is commenting — the author stamped on a comment written in any
+// action dialog
+setActionViewerProvider(() => {
+  const v = currentViewer();
+  return v && v.objectId !== "" ? { whoId: v.objectId, who: v.name } : null;
+});
 
 const app = document.querySelector<HTMLDivElement>("#app")!;
 

@@ -1164,6 +1164,18 @@ reschedule/cancel history with a reason picklist.
   board's ⋮ menu (a menu is for actions; this is a setting); a
   checkbox beside Confidential on the create and Edit details forms.
   Still inert — the form's hint says so.
+- **2026-09-30 — comments on any action, On hold, Highs / Lows.**
+  Ben asked for all three with the endorsement proposal. Built:
+  the comments section in the shared action dialog and `💬 n` on
+  rows; `hold` as a sixth PDCA state, not overdue while held
+  (assumption stated to Ben — one line to reverse in `isOverdue`);
+  the commentary labels. No schema change (`ben_pdca` is text(10),
+  comments already had their column). Tests 686. **Action
+  endorsement**: proposal given, not built — most of the machinery
+  exists (status `verify`, `verified`, the kanban's Verify column,
+  the Gantt's "Awaiting verification"); what is missing is the
+  initiative's switch driving it, every closing route honouring it,
+  and the rule for who may endorse.
 - **Where things stand (2026-09-24).** Released: v0.51.0 (2026-09-14,
   solution-carrying — value driver tree, grid entry, Metrics card,
   meeting-board driver links, rituals in several orgs, driver popup,

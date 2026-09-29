@@ -7,9 +7,9 @@
 // actions are never hard-deleted (the danger button cancels); Done/Due/
 // Overdue are capitalised; circle colours are set inline (Safari rule).
 
-import { ActionPdca, ACTION_PDCA, isOverdue, LtkAction, newAction, PDCA_LABELS, PDCA_QUARTERS, pdcaOf } from "../schema/actions";
+import { ActionComment, ActionPdca, ACTION_PDCA, isOverdue, LtkAction, newAction, newComment, PDCA_LABELS, PDCA_QUARTERS, pdcaOf } from "../schema/actions";
 import { ActionLink, applyLink, currentLink, isCardKeyed, linkChanges, linkLabel, LinkTarget, searchLinkTargets } from "../schema/actionLinks";
-import { ACTION_MOVED_EVENT, ActionLinkContext, actionLinkProvider } from "./actionLinkProvider";
+import { ACTION_MOVED_EVENT, ActionLinkContext, actionLinkProvider, actionViewer } from "./actionLinkProvider";
 import { Person } from "../schema/people";
 import { textOn } from "../tokens";
 import { el } from "./dom";
@@ -244,6 +244,19 @@ export function pdcaDisc(state: ActionPdca, size = 16, fill = "#26241f"): SVGSVG
     [0, r, r, 0], // bottom-right
     [r, 0, 0, -r], // top-right
   ];
+  if (state === "hold") {
+    // on hold: a pause glyph inside the ring — beside the cycle, not on it
+    for (const x of [-3.6, 1.2]) {
+      const bar = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+      bar.setAttribute("x", String(x));
+      bar.setAttribute("y", "-4.2");
+      bar.setAttribute("width", "2.4");
+      bar.setAttribute("height", "8.4");
+      bar.setAttribute("rx", "0.6");
+      bar.style.fill = fill;
+      svg.appendChild(bar);
+    }
+  }
   for (let i = 0; i < PDCA_QUARTERS[state]; i++) {
     const [x1, y1, x2, y2] = QUADS[i];
     const wedge = document.createElementNS("http://www.w3.org/2000/svg", "path");
@@ -339,6 +352,8 @@ export function actionRow(a: LtkAction, opts: ActionRowOptions): HTMLElement {
   } else if (a.escalated) {
     whoEl.appendChild(el("span", "ltk-action-flag", " ⚑"));
   }
+  const said = commentGlyph(a);
+  if (said) right.appendChild(said);
 
   if (!opts.readOnly) {
     main.addEventListener("click", () => opts.onEdit(a));
@@ -374,6 +389,87 @@ export interface ActionDialogOptions {
   links?: ActionLinkContext;
   /** A NEW action starts linked to the board on screen (quick add). */
   linkToOpenBoard?: boolean;
+  /** Who is commenting. Omitted: the host's registered viewer answers;
+   *  neither: comments show, and none can be added. */
+  viewer?: { whoId: string; who: string };
+}
+
+/** "💬 3" for an action that carries comments, wherever a row shows one. */
+export function commentGlyph(a: Pick<LtkAction, "comments">): HTMLElement | null {
+  if (a.comments.length === 0) return null;
+  const g = el("span", "ltk-cmt-glyph", `💬 ${a.comments.length}`);
+  const last = a.comments[a.comments.length - 1];
+  g.title = `${a.comments.length} comment${a.comments.length === 1 ? "" : "s"} — latest: ${last.who ?? "someone"}, ${last.when}`;
+  return g;
+}
+
+interface CommentField {
+  el: HTMLElement;
+  /** The comments written in this dialog, the box's text included. */
+  added: () => ActionComment[];
+  /** Something written that a plain Close would lose. */
+  unsaved: () => boolean;
+}
+
+/** Comments on an action (2026-09-30): everything said so far, newest
+ *  last, and a box to add to it. What is written here is saved with the
+ *  dialog's own Save — Close asks before it is lost. */
+function buildCommentField(o: ActionDialogOptions): CommentField {
+  const viewer = o.viewer ?? actionViewer();
+  const wrap = el("div", "ltk-cmt");
+  const list = el("div", "ltk-cmt-list");
+  const staged: ActionComment[] = [];
+  const paint = () => {
+    while (list.firstChild) list.removeChild(list.firstChild);
+    const all = [...o.action.comments.map((c) => ({ c, fresh: false })), ...staged.map((c) => ({ c, fresh: true }))];
+    if (all.length === 0) list.appendChild(el("div", "ltk-cmt-none", "No comments yet."));
+    for (const { c, fresh } of all) {
+      const row = el("div", "ltk-cmt-row" + (fresh ? " ltk-cmt-fresh" : ""));
+      row.appendChild(el("div", "ltk-cmt-meta", `${c.who ?? "Someone"} · ${c.when}${fresh ? " · not saved yet" : ""}`));
+      row.appendChild(el("div", "ltk-cmt-text", c.text));
+      list.appendChild(row);
+    }
+    list.scrollTop = list.scrollHeight;
+  };
+  wrap.appendChild(list);
+  let box: HTMLTextAreaElement | null = null;
+  if (viewer !== null && viewer.whoId !== "") {
+    const entry = el("div", "ltk-cmt-entry");
+    box = el("textarea", "ltk-input ltk-textarea ltk-cmt-box") as HTMLTextAreaElement;
+    box.rows = 2;
+    box.placeholder = "Add a comment…";
+    box.setAttribute("aria-label", "Add a comment");
+    const add = el("button", "ltk-btn ltk-btn-secondary ltk-cmt-add", "Add") as HTMLButtonElement;
+    add.type = "button";
+    add.title = "Add the comment to the list — it is saved with the action";
+    const push = () => {
+      const text = box!.value.trim();
+      if (text === "") return;
+      staged.push(newComment(viewer, text));
+      box!.value = "";
+      paint();
+      box!.focus();
+    };
+    add.addEventListener("click", push);
+    // Ctrl/⌘ + Enter adds; a bare Enter is a new line
+    box.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        push();
+      }
+    });
+    entry.append(box, add);
+    wrap.appendChild(entry);
+  }
+  paint();
+  return {
+    el: wrap,
+    added: () => {
+      const typed = box !== null && viewer !== null && box.value.trim() !== "" ? [newComment(viewer, box.value)] : [];
+      return [...staged, ...typed];
+    },
+    unsaved: () => staged.length > 0 || (box !== null && box.value.trim() !== ""),
+  };
 }
 
 /** An inline confirmation inside a dialog's body (one dialog at a time per
@@ -529,9 +625,12 @@ export function openActionDialog(o: ActionDialogOptions): void {
   confChk.wrap.classList.toggle("ltk-check-on", action.confidential === true);
   confChk.wrap.title = "Seen only by whoever raised it, the people assigned, their leaders and super admins.";
 
+  const comments = buildCommentField(o);
+
   const wasDone = action.status === "done";
-  // PDCA toggle (Ben, 2026-08-31): five states, disc + label each —
-  // replaces the old Completed checkbox (Closed IS completion)
+  // PDCA toggle (Ben, 2026-08-31): disc + label each — replaces the old
+  // Completed checkbox (Closed IS completion). On hold (2026-09-30)
+  // pauses: the action stays open and is not overdue while held.
   let pdca: ActionPdca = o.isNew ? (action.pdca ?? "do") : pdcaOf(action);
   const pdcaWrap = el("div", "ltk-pdca-seg");
   const pdcaBtns = new Map<ActionPdca, HTMLButtonElement>();
@@ -592,6 +691,9 @@ export function openActionDialog(o: ActionDialogOptions): void {
     action.escalated = escChk.box.checked;
     action.confidential = confChk.box.checked ? true : undefined;
     form.apply(action); // after status, so assignee done flags match
+    // what was written here, the box's text included
+    const said = comments.added();
+    if (said.length > 0) action.comments = [...action.comments, ...said];
     const linkedNow = linkField?.origin() ?? null;
     const picked = linkField?.chosen();
     const moves = linkedNow !== null && picked !== undefined && linkChanges(linkedNow, picked);
@@ -627,7 +729,11 @@ export function openActionDialog(o: ActionDialogOptions): void {
   buttons.push({
     label: o.isNew ? "Cancel" : "Close",
     kind: "secondary" as const,
-    onClick: () => dlg.close(),
+    // a comment written and not saved is asked about, never lost quietly
+    onClick: () => {
+      if (!comments.unsaved()) return dlg.close();
+      confirmBar(dlg.body, "A comment you wrote has not been saved. Leave without it?", "Leave without saving", "Keep editing", () => dlg.close());
+    },
   });
   buttons.push({
     label: o.isNew ? "Raise" : "Save",
@@ -651,6 +757,9 @@ export function openActionDialog(o: ActionDialogOptions): void {
   dlg.body.appendChild(pdcaWrap);
   dlg.body.appendChild(escChk.wrap);
   dlg.body.appendChild(confChk.wrap);
+  const count = action.comments.length;
+  dlg.body.appendChild(sectionLabel(count > 0 ? `Comments · ${count}` : "Comments"));
+  dlg.body.appendChild(comments.el);
   form.focus();
 }
 

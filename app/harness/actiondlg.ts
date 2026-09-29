@@ -6,7 +6,7 @@ import { LTK_BASE_CSS } from "../../shared/ui/baseCss";
 import { openActionDialog } from "../../shared/ui/actionUi";
 import { newAction, LtkAction } from "../../shared/schema/actions";
 import { LinkTarget } from "../../shared/schema/actionLinks";
-import { setActionLinkProvider } from "../../shared/ui/actionLinkProvider";
+import { setActionLinkProvider, setActionViewerProvider } from "../../shared/ui/actionLinkProvider";
 
 ensureStylesheet("ltk-base-css", LTK_BASE_CSS);
 const t = (over: Partial<LinkTarget>): LinkTarget => ({ kind: "ritual", id: "B1", boardId: "B1", title: "Daily production meeting", detail: "Bendigo / Packaging · Tier 1 · Jane Smith", keywords: "Sam Lee", mine: true, near: true, cards: { C1: "Actions", C2: "Safety cross" }, ...over });
@@ -20,6 +20,7 @@ const targets: LinkTarget[] = [
 let openBoardId: string | null = null;
 setActionLinkProvider(() => Promise.resolve({ targets, personalWho: "u1", openBoardId, openHome: "" }));
 
+setActionViewerProvider(() => ({ whoId: "u1", who: "Ben O'Brien" }));
 const host = document.getElementById("h")!;
 const people = [{ whoId: "u1", who: "Ben O'Brien" }, { whoId: "u2", who: "Jane Smith" }];
 const make = (instanceId: string, initiativeId?: string): LtkAction => {
@@ -36,6 +37,12 @@ const cases: [string, () => void][] = [
   ["On a ritual card", () => open(make("B1:C2"), false)],
   ["On an initiative", () => open(make("init-I1:board", "I1"), false)],
   ["Restricted initiative", () => open(make("init-X:K1", "X"), false)],
+  ["With comments, on hold", () => {
+    const a = make("B1:C2");
+    a.pdca = "hold";
+    a.comments = [{ whoId: "u2", who: "Jane Smith", when: "2026-09-26", text: "Guard bolts are on order, due Friday." }, { whoId: "u1", who: "Ben O'Brien", when: "2026-09-28", text: "Holding until the parts land." }];
+    open(a, false);
+  }],
   ["Quick add (board open)", () => { openBoardId = "init-I1"; open(make("hub:u1"), true, true); openBoardId = null; }],
 ];
 function open(action: LtkAction, isNew: boolean, linkToOpenBoard = false): void {

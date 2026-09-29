@@ -16,9 +16,9 @@ import { LTK_BASE_CSS } from "../../shared/ui/baseCss";
 import { copyText } from "../../shared/ui/clipboard";
 import { clear, el, ensureStylesheet } from "../../shared/ui/dom";
 import { parsePrompts, Prompts, renderGhost, renderTitleBar } from "../../shared/ui/chrome";
-import { pdcaOf, isOverdue, LtkAction, newAction } from "../../shared/schema/actions";
+import { pdcaOf, isOnHold, isOverdue, LtkAction, newAction } from "../../shared/schema/actions";
 import { Person } from "../../shared/schema/people";
-import { openActionDialog, pdcaDisc, confidentialGlyph } from "../../shared/ui/actionUi";
+import { openActionDialog, pdcaDisc, confidentialGlyph, commentGlyph } from "../../shared/ui/actionUi";
 import { DAY_LABELS, MONTH_LABELS, isoLocal, startOfDay } from "../../shared/schema/recurrence";
 import { OrgSite } from "../../shared/schema/meeting";
 import {
@@ -757,21 +757,24 @@ export class LeanHubView {
     const weekEndIso = isoLocal(new Date(today.getTime() + (6 - offset) * DAY_MS));
     const byDue = (a: LtkAction, b: LtkAction) =>
       (a.due || "9999") < (b.due || "9999") ? -1 : 1;
+    // an action on hold is paused by decision — it presses on nobody's
+    // day (it still counts among the open ones below)
+    const live = mine.filter((a) => !isOnHold(a));
     const buckets = [
       {
         key: "late",
         label: "Late",
-        items: mine.filter((a) => a.due !== "" && a.due < todayIso).sort(byDue),
+        items: live.filter((a) => a.due !== "" && a.due < todayIso).sort(byDue),
       },
       {
         key: "today",
         label: "Due today",
-        items: mine.filter((a) => a.due === todayIso).sort(byDue),
+        items: live.filter((a) => a.due === todayIso).sort(byDue),
       },
       {
         key: "week",
         label: "Due this week",
-        items: mine
+        items: live
           .filter((a) => a.due > todayIso && a.due <= weekEndIso)
           .sort(byDue),
       },
@@ -1037,6 +1040,8 @@ export class LeanHubView {
     row.appendChild(pdcaDisc(pdcaOf(action), 15));
     const lock = confidentialGlyph(action);
     if (lock) row.appendChild(lock);
+    const said = commentGlyph(action);
+    if (said) row.appendChild(said);
     // the row edits in place — same dialog as the boards
     if (!this.readOnly) {
       row.classList.add("ltk-lh-action-edit");

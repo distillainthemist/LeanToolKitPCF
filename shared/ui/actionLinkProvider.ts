@@ -31,3 +31,20 @@ export function actionLinkProvider(): (() => Promise<ActionLinkContext>) | null 
 /** Fired after a save that moved an action to another home — the host
  *  showing the list it left refreshes. */
 export const ACTION_MOVED_EVENT = "ltk-action-moved";
+
+/** Who is using the app — the author of a comment written in the action
+ *  dialog. The host registers it once; a standalone control passes
+ *  `viewer` to the dialog instead, or comments are read-only there. */
+let viewerProvider: (() => { whoId: string; who: string } | null) | null = null;
+
+export function setActionViewerProvider(p: (() => { whoId: string; who: string } | null) | null): void {
+  viewerProvider = p;
+}
+
+export function actionViewer(): { whoId: string; who: string } | null {
+  try {
+    return viewerProvider ? viewerProvider() : null;
+  } catch {
+    return null;
+  }
+}

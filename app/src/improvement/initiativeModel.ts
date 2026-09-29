@@ -334,12 +334,13 @@ export interface InitiativeRagInput {
  *  flags and the action position already move the colour. */
 export function ragInputsFor(
   i: Initiative,
-  actions: { initiativeId?: string; instanceId?: string; status: string; due: string; assignees: { done: boolean }[] }[],
+  actions: { initiativeId?: string; instanceId?: string; status: string; pdca?: string; due: string; assignees: { done: boolean }[] }[],
   today: string
 ): InitiativeRagInput {
   const mine = actions.filter((a) => actionBelongsTo(i, { initiativeId: a.initiativeId, instanceId: a.instanceId ?? "" }));
   const open = mine.filter((a) => a.status !== "done" && a.status !== "cancelled");
-  const overdue = open.filter((a) => a.due !== "" && a.due < today && a.status !== "verify");
+  // awaiting verification is the owner's queue; on hold is paused by decision
+  const overdue = open.filter((a) => a.due !== "" && a.due < today && a.status !== "verify" && a.pdca !== "hold");
   return {
     metric: null,
     escalated: i.flag === "escalated",

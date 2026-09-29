@@ -8,7 +8,7 @@ import { clear, el, ensureStylesheet } from "../../shared/ui/dom";
 import { parsePrompts, Prompts, renderGhost, renderTitleBar } from "../../shared/ui/chrome";
 import { renderKebab } from "../../shared/ui/menu";
 import {
-  pdcaDisc, actionRow, completeCircle, openActionDialog, confidentialGlyph } from "../../shared/ui/actionUi";
+  pdcaDisc, actionRow, completeCircle, openActionDialog, confidentialGlyph, commentGlyph } from "../../shared/ui/actionUi";
 import { makeInteractive } from "../../shared/interact/drag";
 import { htmlToPng, htmlToSvg, saveSvg, SnapshotScheduler } from "../../shared/export/png";
 import { pdcaOf, ActionStatus, isOverdue, LtkAction, newAction } from "../../shared/schema/actions";
@@ -423,6 +423,8 @@ export class ActionBoardEditor {
     head.appendChild(pdcaDisc(pdcaOf(a), 16));
     const lock = confidentialGlyph(a);
     if (lock) head.appendChild(lock);
+    const said = commentGlyph(a);
+    if (said) head.appendChild(said);
     if (this.groupBy !== "issue" && a.issue.trim() !== "") {
       head.appendChild(el("div", "ltk-ab-card-issue", a.issue));
     }
