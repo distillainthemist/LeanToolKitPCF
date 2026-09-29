@@ -76,6 +76,14 @@ the same commit.
   never both. An existing linked action always opens on its chip. A
   target the viewer may not see reads "not available to you" — never
   its title. Never a full list: it would not scale.
+- **Present view (cascaded priorities)**: a full-height PREV / NEXT
+  rail either side of the stage (72px, glyph + caption — the meeting
+  ritual's card walk at TV scale), the neighbours named in the footer
+  beside ⊞ All pillars. A row carries what the main view carries:
+  statement, owner, R/A/G tallies with the initiative count, and the
+  SAME objective lines as the Objectives row (one builder,
+  `objectiveLinesFor`) — a present view never paints its own version
+  of a figure the main view shows.
 - **A bound charter field edits like a free one**: in place for
   typing types (rich text shows its toolbar over the surface inside
   the field's own box), the card's own picker for the rest. Never a

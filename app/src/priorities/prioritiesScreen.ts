@@ -596,6 +596,7 @@ export function mountPriorities(parent: HTMLElement, opts: PrioritiesMountOpts =
         pillars: data.pillars,
         byColumn,
         adoptedIds,
+        objectiveLines: objectiveLinesFor,
         startStep: walkStep,
         className: card ? "" : "app-cp-walk-fixed",
         onStep: (i) => {
@@ -776,6 +777,41 @@ export function mountPriorities(parent: HTMLElement, opts: PrioritiesMountOpts =
       cleanups.push(() => menu.remove());
     };
 
+    /** A priority's objectives: the primary initiative's ★ STARRED metrics
+     *  (Ben, 2026-09-23: several may be) — "Name: objective", then plan /
+     *  actual with a traffic light. ONE builder: the grid's Objectives row
+     *  and the present view show the same lines (2026-09-29 — the present
+     *  view carried a placeholder and never showed a metric). */
+    const objectiveLinesFor = (p: Priority): HTMLElement[] => {
+      const starred = p.primaryInitiativeId !== "" ? (metricState.get(p.primaryInitiativeId)?.values ?? []).filter((v) => v.starred) : [];
+      if (starred.length === 0) {
+        const line = el("div", "app-cp-objective");
+        line.appendChild(el("span", "app-cp-muted", p.primaryInitiativeId !== "" ? "No metric value yet" : "No primary initiative"));
+        return [line];
+      }
+      return starred.map((mv) => {
+        const line = el("div", "app-cp-objective");
+        const light = el("span", "app-cp-objective-light");
+        light.style.background = mv.rag ? (palette[ragPaletteKey(mv.rag)] ?? "#9a948a") : "#d9d3c8";
+        light.title = mv.rag === "red" ? "Outside the limits" : mv.rag === "amber" ? "Short of plan" : mv.rag === "green" ? "On plan" : "No reading";
+        line.appendChild(light);
+        const text = el("div", "app-cp-objective-text");
+        const nameLine = el("div", "app-cp-objective-name");
+        nameLine.appendChild(el("span", undefined, mv.name));
+        if (mv.objective !== "") nameLine.appendChild(el("span", "app-cp-objective-obj", `: ${mv.objective}`));
+        nameLine.title = mv.objective !== "" ? `${mv.name}: ${mv.objective}` : mv.name;
+        text.appendChild(nameLine);
+        const nums = el("div", "app-cp-objective-nums");
+        nums.appendChild(el("span", "app-cp-objective-k", "Plan"));
+        nums.appendChild(el("span", "app-cp-objective-v", mv.target !== null ? `${mv.target}${mv.unit}` : "—"));
+        nums.appendChild(el("span", "app-cp-objective-k", "Actual"));
+        nums.appendChild(el("span", "app-cp-objective-v app-cp-objective-actual", mv.display !== "" ? mv.display : "—"));
+        text.appendChild(nums);
+        line.appendChild(text);
+        return line;
+      });
+    };
+
     // ---- the matrix -------------------------------------------------------
 
     const visibleFor = (org: OrgRef): Priority[] => {
@@ -896,39 +932,7 @@ export function mountPriorities(parent: HTMLElement, opts: PrioritiesMountOpts =
       for (const col of columns) {
         const cell = el("div", "app-cp-cell app-cp-cell-obj");
         const items = byColumn.get(col.id) ?? [];
-        for (const p of items) {
-          // the primary initiative's ★ STARRED metrics (Ben, 2026-09-23:
-          // several may be): "Name: objective" then plan / actual with a
-          // traffic light — no priority statement (the row above names it)
-          const starred = p.primaryInitiativeId !== "" ? (metricState.get(p.primaryInitiativeId)?.values ?? []).filter((v) => v.starred) : [];
-          if (starred.length === 0) {
-            const line = el("div", "app-cp-objective");
-            line.appendChild(el("span", "app-cp-muted", p.primaryInitiativeId !== "" ? "No metric value yet" : "No primary initiative"));
-            cell.appendChild(line);
-            continue;
-          }
-          for (const mv of starred) {
-            const line = el("div", "app-cp-objective");
-            const light = el("span", "app-cp-objective-light");
-            light.style.background = mv.rag ? (palette[ragPaletteKey(mv.rag)] ?? "#9a948a") : "#d9d3c8";
-            light.title = mv.rag === "red" ? "Outside the limits" : mv.rag === "amber" ? "Short of plan" : mv.rag === "green" ? "On plan" : "No reading";
-            line.appendChild(light);
-            const text = el("div", "app-cp-objective-text");
-            const nameLine = el("div", "app-cp-objective-name");
-            nameLine.appendChild(el("span", undefined, mv.name));
-            if (mv.objective !== "") nameLine.appendChild(el("span", "app-cp-objective-obj", `: ${mv.objective}`));
-            nameLine.title = mv.objective !== "" ? `${mv.name}: ${mv.objective}` : mv.name;
-            text.appendChild(nameLine);
-            const nums = el("div", "app-cp-objective-nums");
-            nums.appendChild(el("span", "app-cp-objective-k", "Plan"));
-            nums.appendChild(el("span", "app-cp-objective-v", mv.target !== null ? `${mv.target}${mv.unit}` : "—"));
-            nums.appendChild(el("span", "app-cp-objective-k", "Actual"));
-            nums.appendChild(el("span", "app-cp-objective-v app-cp-objective-actual", mv.display !== "" ? mv.display : "—"));
-            text.appendChild(nums);
-            line.appendChild(text);
-            cell.appendChild(line);
-          }
-        }
+        for (const p of items) for (const line of objectiveLinesFor(p)) cell.appendChild(line);
         grid.appendChild(cell);
       }
       if (columns.length === 0) grid.appendChild(el("div", "app-cp-cell"));

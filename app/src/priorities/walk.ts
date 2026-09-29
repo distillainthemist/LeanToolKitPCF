@@ -1,7 +1,8 @@
 // Cascaded priorities — TV walk mode (design §15: displayed AND walked).
 // One objective (sub-pillar column) per step; cascades to accept are one
-// extra, final step when any are pending. Footer uses the card-walk
-// grammar: named prev/next, ⊞ All objectives, ←/→, swipe. Every control
+// extra, final step when any are pending. Navigation uses the card-walk
+// grammar: a full-height PREV / NEXT rail either side, the neighbours
+// named in the footer beside ⊞ All pillars, ←/→, swipe. Every control
 // ≥44px; no hover-only content.
 //
 // Mounts INTO a host: the Priorities screen gives it a fixed full-screen
@@ -35,6 +36,9 @@ export interface WalkOpts {
   /** Priorities per column id, in matrix order. */
   byColumn: Map<string, Priority[]>;
   adoptedIds: Set<string>;
+  /** A priority's objectives, as the main view's Objectives row paints
+   *  them — the same builder, so the two can never disagree. */
+  objectiveLines: (p: Priority) => HTMLElement[];
   startStep?: number;
   /** ⊞ All pillars / Esc — leave the walk. */
   onExit: () => void;
@@ -103,6 +107,26 @@ export function mountWalk(o: WalkOpts): () => void {
     head.appendChild(prog);
     root.appendChild(head);
 
+    // the stage: a full-height rail either side of the body — the meeting
+    // ritual's card walk grammar (glyph + caption, never a bare chevron)
+    const rail = (dir: "prev" | "next"): HTMLButtonElement => {
+      const to = dir === "prev" ? step - 1 : step + 1;
+      const live = to >= 0 && to < n;
+      const b = btn("", "app-cp-walk-rail" + (live ? "" : " app-cp-walk-rail-off"));
+      b.appendChild(el("span", "app-cp-walk-rail-glyph", dir === "prev" ? "‹" : "›"));
+      b.appendChild(el("span", "app-cp-walk-rail-cap", dir === "prev" ? "PREV" : "NEXT"));
+      b.disabled = !live;
+      if (live) {
+        b.title = stepTitle(to);
+        b.setAttribute("aria-label", `${dir === "prev" ? "Previous" : "Next"}: ${stepTitle(to)}`);
+        b.addEventListener("click", () => go(to));
+      } else {
+        b.setAttribute("aria-hidden", "true");
+      }
+      return b;
+    };
+    const stage = el("div", "app-cp-walk-stage");
+
     // body
     const body = el("div", "app-cp-walk-body");
     if (isReview) {
@@ -114,19 +138,20 @@ export function mountWalk(o: WalkOpts): () => void {
       if (items.length === 0) body.appendChild(el("div", "app-cp-walk-empty", "No priorities in this objective."));
       for (const p of items) body.appendChild(row(p));
     }
-    root.appendChild(body);
+    stage.append(rail("prev"), body, rail("next"));
+    root.appendChild(stage);
 
-    // footer
+    // footer: where each rail leads, and the way out
     const foot = el("div", "app-cp-walk-foot");
-    const prev = btn(step > 0 ? `‹ ${stepTitle(step - 1)}` : "‹", "app-btn app-cp-walk-nav");
-    prev.disabled = step === 0;
-    prev.addEventListener("click", () => go(step - 1));
+    const name = (to: number, dir: "prev" | "next"): HTMLElement => {
+      if (to < 0 || to >= n) return el("span", "app-cp-walk-nav");
+      const b = btn(dir === "prev" ? `‹ ${stepTitle(to)}` : `${stepTitle(to)} ›`, "app-link app-cp-walk-nav app-cp-walk-nav-" + dir);
+      b.addEventListener("click", () => go(to));
+      return b;
+    };
     const all = btn("⊞ All pillars", "app-btn app-cp-walk-all");
     all.addEventListener("click", o.onExit);
-    const next = btn(step < n - 1 ? `${stepTitle(step + 1)} ›` : "›", "app-btn app-cp-walk-nav");
-    next.disabled = step >= n - 1;
-    next.addEventListener("click", () => go(step + 1));
-    foot.append(prev, all, next);
+    foot.append(name(step - 1, "prev"), all, name(step + 1, "next"));
     root.appendChild(foot);
   };
 
@@ -147,7 +172,7 @@ export function mountWalk(o: WalkOpts): () => void {
     // the walk row (Ben, 2026-08-19) — same rule as the matrix cards
     const flags = el("div", "app-cp-walk-flags");
     if (parentClosed(p, data.priorities)) flags.appendChild(el("span", "app-cp-flag app-cp-flag-amber", "▲ Parent completed — decide"));
-    if (p.status !== "active") flags.appendChild(el("span", "app-cp-flag", p.status === "completed" ? "✓ Completed" : "▣ " + p.status));
+    if (p.status !== "active") flags.appendChild(el("span", "app-cp-flag", p.status === "completed" ? "✓ Completed" : p.status === "archived" ? "▣ Archived" : "▣ Retired"));
     if (flags.childElementCount > 0) main.appendChild(flags);
     r.appendChild(main);
     // R/A/G as three large single-digit tallies
@@ -159,12 +184,15 @@ export function mountWalk(o: WalkOpts): () => void {
       if (part.count > 0) cell.style.color = o.ctx.palette[ragPaletteKey(part.rag)] ?? "";
       tl.appendChild(cell);
     }
-    r.appendChild(tl);
-    // headline metric cell, divided by a rule
+    // the count the main view's card carries beside its tallies
+    const tlBox = el("div", "app-cp-walk-tallybox");
+    tlBox.appendChild(tl);
+    tlBox.appendChild(el("div", "app-cp-walk-total", `${t.total} initiative${t.total === 1 ? "" : "s"}`));
+    r.appendChild(tlBox);
+    // objectives, divided by a rule: the SAME lines as the main view's
+    // Objectives row — every starred metric, plan / actual, its light
     const metric = el("div", "app-cp-walk-metric");
-    metric.appendChild(el("div", "app-cp-walk-metric-v app-cp-muted", "—"));
-    metric.appendChild(el("div", "app-cp-walk-metric-t", "No metric set"));
-    metric.appendChild(el("div", "app-cp-walk-spark"));
+    for (const line of o.objectiveLines(p)) metric.appendChild(line);
     r.appendChild(metric);
     r.addEventListener("click", () => o.onOpen(p));
     return r;

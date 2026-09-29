@@ -1103,6 +1103,17 @@ reschedule/cancel history with a reason picklist.
   (layout), mini-table (needs its own columns), image (binary in the
   header row). Existing fields keep their kinds and values. Harness
   page `charter.html`. Tests 657. App-only; hosted checks Ben's.
+- **2026-09-29 — present view aligned with the main view.** Ben: the
+  details in Present did not match the main view, metrics included.
+  Cause: the walk row's metric cell was the P1 placeholder ("— / No
+  metric set" + an empty sparkline) and was never wired when metrics
+  landed. Fixed by sharing the builder: `objectiveLinesFor(p)` paints
+  the Objectives row AND the present row (every ★ starred metric,
+  "Name: objective", plan / actual, traffic light). Also aligned: the
+  initiative count beside the tallies, the Archived / Retired labels.
+  Navigation: full-height PREV / NEXT rails (the ritual card walk's
+  grammar), neighbours named in the footer. Harness page `walk.html`.
+  App-only; hosted check Ben's.
 - **Where things stand (2026-09-24).** Released: v0.51.0 (2026-09-14,
   solution-carrying — value driver tree, grid entry, Metrics card,
   meeting-board driver links, rituals in several orgs, driver popup,

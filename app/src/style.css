@@ -3163,11 +3163,22 @@ textarea.app-cp-statement { font-size: 14px; font-weight: 500; }
 .app-cp-walk-dot-on { background: #fff; }
 .app-cp-walk-dot-review { border-style: dashed; }
 .app-cp-walk-count { font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; }
-.app-cp-walk-body { flex: 1; overflow: auto; padding: 16px 22px; display: flex; flex-direction: column; gap: 12px; }
+.app-cp-walk-stage { flex: 1; min-height: 0; display: flex; align-items: stretch; gap: 10px; padding: 12px 10px; background: #faf8f4; }
+.app-cp-walk-body { flex: 1; min-width: 0; overflow: auto; padding: 4px 6px; display: flex; flex-direction: column; gap: 12px; }
+/* PREV / NEXT: full-height rails, the meeting ritual's card walk at TV scale */
+.app-cp-walk-rail {
+  flex: 0 0 72px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+  font: inherit; color: #57534a; background: #fff; border: 1px solid #e4dfd6; border-radius: 10px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08); cursor: pointer; user-select: none; padding: 0;
+}
+.app-cp-walk-rail-glyph { font-size: 46px; line-height: 1; }
+.app-cp-walk-rail-cap { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; }
+.app-cp-walk-rail:hover:not(:disabled), .app-cp-walk-rail:focus-visible { color: var(--app-accent); border-color: var(--app-accent); outline: none; }
+.app-cp-walk-rail-off { opacity: 0.25; cursor: default; box-shadow: none; }
 .app-cp-walk-empty { color: #6d675c; font-size: 16px; padding: 24px; text-align: center; }
 .app-cp-walk-row {
   display: grid;
-  grid-template-columns: 1fr auto 220px;
+  grid-template-columns: minmax(0, 1fr) auto minmax(260px, 38%);
   gap: 18px;
   align-items: center;
   border: 1px solid #e4dfd6;
@@ -3187,18 +3198,31 @@ textarea.app-cp-statement { font-size: 14px; font-weight: 500; }
 .app-cp-walk-tally { text-align: center; min-width: 44px; }
 .app-cp-walk-tally-n { font-size: 30px; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
 .app-cp-walk-tally-g { font-size: 14px; font-weight: 700; }
-.app-cp-walk-metric { border-left: 1px solid #e4dfd6; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; }
-.app-cp-walk-metric-v { font-size: 24px; font-weight: 700; line-height: 1.1; }
-.app-cp-walk-metric-t { font-size: 13px; color: #6d675c; }
-.app-cp-walk-spark { width: 62px; height: 34px; border-bottom: 1px dashed #d9d3c8; }
+.app-cp-walk-tallybox { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.app-cp-walk-total { font-size: 13px; color: #6d675c; white-space: nowrap; }
+/* objectives: the main view's lines, at presenting size */
+.app-cp-walk-metric { border-left: 1px solid #e4dfd6; padding-left: 8px; display: flex; flex-direction: column; min-width: 0; }
+.app-cp-walk-metric .app-cp-objective { padding: 8px 10px; gap: 12px; }
+.app-cp-walk-metric .app-cp-objective-light { width: 16px; height: 16px; margin-top: 4px; }
+.app-cp-walk-metric .app-cp-objective-name { font-size: 16px; }
+.app-cp-walk-metric .app-cp-objective-nums { font-size: 15px; gap: 2px 10px; justify-content: start; }
+.app-cp-walk-metric .app-cp-objective-k { font-size: 11.5px; }
+.app-cp-walk-metric .app-cp-objective-actual { font-size: 18px; }
+.app-cp-walk-metric .app-cp-muted { font-size: 14px; }
 .app-cp-walk-review { max-height: none; }
 .app-cp-walk-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 22px; border-top: 1px solid #ece8e0; background: #faf8f4; }
 .app-cp-walk-nav, .app-cp-walk-all { min-height: 48px; padding: 0 18px; font-size: 15px; max-width: 40%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.app-cp-walk-nav { flex: 1 1 0; min-width: 0; color: #57534a; }
+.app-cp-walk-nav-prev { text-align: left; }
+.app-cp-walk-nav-next { text-align: right; }
 .app-cp-walk-all { flex: 0 0 auto; }
 @media (max-width: 719px) {
   .app-cp-walk-row { grid-template-columns: 1fr; }
   .app-cp-walk-metric { border-left: none; padding-left: 0; border-top: 1px solid #e4dfd6; padding-top: 8px; }
   .app-cp-walk-nav { max-width: 30%; }
+  .app-cp-walk-stage { gap: 6px; padding: 8px 4px; }
+  .app-cp-walk-rail { flex-basis: 44px; }
+  .app-cp-walk-rail-glyph { font-size: 32px; }
 }
 /* embedded card: tile is compact and non-interactive; focused fills the host */
 .app-cp-cardmount { height: 100%; box-sizing: border-box; }
