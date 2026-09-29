@@ -3992,3 +3992,7 @@ textarea.app-cp-statement { font-size: 14px; font-weight: 500; }
 .app-modal textarea.app-input { width: 100%; box-sizing: border-box; resize: vertical; }
 /* the canvas builder's typed header-field key (in place of the select) */
 .ltk-cs-canvas-bindkey { min-width: 200px; }
+/* going back a stage: the standing revert on the band, the rail's links */
+.app-sb-revert { font-size: 12.5px; font-weight: 600; color: #7a4d00; }
+.app-sb-revertwhy { font-size: 12.5px; color: #57534a; overflow-wrap: anywhere; }
+.app-ib-revert { align-self: flex-start; font-size: 12px; }

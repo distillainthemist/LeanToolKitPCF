@@ -31,6 +31,7 @@ import { openUpdateDialog, renderTrail } from "./commentary";
 import { addUpdate, editUpdate } from "./commentaryActions";
 import { daysBetween, staleDays, Update, updatesFrom } from "./commentaryModel";
 import { BandGate, BandStage, renderStatusBand } from "./statusBand";
+import { applyRevert, gateDeclined, mayRevert, mayWithdraw, revertTargets, standingRevert, StageViewer, undoneApproverRoles } from "./stageRevert";
 import { HealthQuestion, parseImprovementSettings, PDCA_TOKENS, roleFillersAt } from "./templateModel";
 
 const btn = (label: string, cls = "app-btn"): HTMLButtonElement => {
@@ -261,7 +262,7 @@ export function mountInitiativePane(o: InitiativePaneOpts): InitiativePaneHandle
       const historyFor = (stageName: string): string[] =>
         events
           .filter((e) => (e.kind === "stagemove" || e.kind === "gate") && (String(e.detail.from ?? "") === stageName || String(e.detail.to ?? "") === stageName))
-          .map((e) => `${e.at.slice(0, 10)} · ${e.actorName} · ${e.kind === "gate" ? `gate ${String(e.detail.what ?? "")}` : `${String(e.detail.from ?? "")} → ${String(e.detail.to ?? "")}`}${String(e.detail.comment ?? "") !== "" ? ` — “${String(e.detail.comment)}”` : ""}`)
+          .map((e) => `${e.at.slice(0, 10)} · ${e.actorName} · ${e.kind === "gate" ? `gate ${String(e.detail.what ?? "")}` : `${e.detail.revert === true ? "↩ reverted " : ""}${String(e.detail.from ?? "")} → ${String(e.detail.to ?? "")}`}${String(e.detail.comment ?? "") !== "" ? ` — “${String(e.detail.comment)}”` : ""}`)
           .reverse();
 
       const gateBlock = (stageIdx: number): HTMLElement | null => {
@@ -306,16 +307,28 @@ export function mountInitiativePane(o: InitiativePaneOpts): InitiativePaneHandle
               req.addEventListener("click", () => requestGate(isLast ? "" : stages[stageIdx + 1].id, toName, gate.approverRoles));
               box.appendChild(req);
             }
-          } else if (iAmApprover(gate.approverRoles.filter((r) => !pending.decisions[r]))) {
-            const line = el("div", "app-ib-gatebtns");
-            const approve = btn("Approve", "app-btn app-btn-primary app-ib-gatebtn");
-            const decline = btn("Decline", "app-btn app-btn-danger app-ib-gatebtn");
-            approve.addEventListener("click", () => void decide(pending, true));
-            decline.addEventListener("click", () => void decide(pending, false));
-            line.append(approve, decline);
-            box.appendChild(line);
           } else {
             box.appendChild(el("div", "app-cp-muted", `requested by ${pending.requestedByName} · ${pending.requestedAt.slice(0, 10)}`));
+            const line = el("div", "app-ib-gatebtns");
+            if (iAmApprover(gate.approverRoles.filter((r) => !pending.decisions[r]))) {
+              const approve = btn("Approve", "app-btn app-btn-primary app-ib-gatebtn");
+              const decline = btn("Decline", "app-btn app-btn-danger app-ib-gatebtn");
+              approve.addEventListener("click", () => void decide(pending, true));
+              decline.addEventListener("click", () => void decide(pending, false));
+              line.append(approve, decline);
+            }
+            // a declined gate can be asked again; a waiting one withdrawn
+            if (gateDeclined(i) && mine()) {
+              const again = btn("Request again", "app-btn app-btn-primary app-ib-gatebtn");
+              again.addEventListener("click", () => requestGate(isLast ? "" : stages[stageIdx + 1].id, toName, gate.approverRoles));
+              line.appendChild(again);
+            }
+            if (mayWithdraw(i, stageViewer())) {
+              const wd = btn("Withdraw request", "app-btn app-ib-gatebtn");
+              wd.addEventListener("click", () => void withdrawGate());
+              line.appendChild(wd);
+            }
+            if (line.childElementCount > 0) box.appendChild(line);
           }
         }
         return box;
@@ -348,6 +361,11 @@ export function mountInitiativePane(o: InitiativePaneOpts): InitiativePaneHandle
             for (const lineTxt of hist.slice(0, 3)) h.appendChild(el("div", undefined, lineTxt));
             row.appendChild(h);
           }
+          if (mayRevert(i, stageViewer())) {
+            const back = btn(i.status === "completed" ? "↩ Reopen into this stage…" : "↩ Revert to this stage…", "app-cp-ov-link app-ib-revert");
+            back.addEventListener("click", () => openRevert(s.id));
+            row.appendChild(back);
+          }
         }
         const gb = gateBlock(idx);
         if (gb) row.appendChild(gb);
@@ -356,6 +374,11 @@ export function mountInitiativePane(o: InitiativePaneOpts): InitiativePaneHandle
       // the Complete row
       const doneRow = el("div", "app-ib-railstage app-ib-railstage-" + (i.status === "completed" ? "done" : "future"));
       doneRow.appendChild(el("div", "app-ib-railhead")).appendChild(el("span", "app-ib-railname", `${i.status === "completed" ? "✓ " : ""}Complete`));
+      if (i.status === "completed" && mayRevert(i, stageViewer())) {
+        const reopen = btn("↩ Reopen…", "app-cp-ov-link app-ib-revert");
+        reopen.addEventListener("click", () => openRevert());
+        doneRow.appendChild(reopen);
+      }
       rail.appendChild(doneRow);
       return rail;
     };
@@ -416,6 +439,75 @@ export function mountInitiativePane(o: InitiativePaneOpts): InitiativePaneHandle
       await persist();
       await loadEvents();
       render();
+    };
+
+    // ---- going back (2026-09-29): withdraw a request, revert a stage ------------
+    const stageViewer = (): StageViewer => ({
+      whoId: who?.objectId ?? "",
+      isAdmin,
+      ownerIds: actorsForRole("owner").map((p) => p.whoId),
+      sponsorIds: actorsForRole("sponsor").map((p) => p.whoId),
+    });
+    const withdrawGate = async () => {
+      const pending = i.gate;
+      if (pending === null || !mayWithdraw(i, stageViewer())) return;
+      const toName = pending.to === "" ? "Complete" : (i.snapshot.stages.find((st) => st.id === pending.to)?.name ?? pending.to);
+      const why = await promptText({
+        title: "Withdraw the gate request?",
+        note: `The request to move to ${toName} is cancelled and the decisions made so far are cleared. It can be requested again later.`,
+        placeholder: "Why it is being withdrawn",
+        confirmLabel: "Withdraw request",
+        multiline: true,
+        required: "A reason is needed — it goes on the record.",
+      });
+      if (why === null) return;
+      i.gate = null;
+      await persist();
+      await appendInitiativeEvent(i, "gate", { what: "withdrawn", to: toName, comment: why.trim() }, actor());
+      await loadEvents();
+      render();
+    };
+    const openRevert = (preselect?: string) => {
+      if (!mayRevert(i, stageViewer())) return;
+      const completed = i.status === "completed";
+      const fromName = completed ? "Complete" : (i.snapshot.stages.find((st) => st.id === i.stageId)?.name ?? i.stageId);
+      const me = actor().whoId;
+      void import("./revertDialog").then(({ openRevertDialog }) =>
+        openRevertDialog({
+          host: document.body,
+          initiativeTitle: i.title,
+          completed,
+          fromName,
+          targets: revertTargets(i),
+          preselect,
+          targetDates: { ...i.stageTargets },
+          // the approvers whose sign-off this undoes, and the sponsor —
+          // never the person doing it
+          recipientsFor: (toStageId) => {
+            const seen = new Set<string>([me]);
+            const out: { name: string; email: string }[] = [];
+            for (const role of [...undoneApproverRoles(i, toStageId), "sponsor"]) {
+              for (const p of actorsForRole(role)) {
+                if (seen.has(p.whoId)) continue;
+                seen.add(p.whoId);
+                const email = emailOf(p.whoId);
+                if (email !== "") out.push({ name: p.who, email });
+              }
+            }
+            return out;
+          },
+          lineFor: (toName) => `${actor().who} ${completed ? "reopened" : "reverted"} "${i.title}" from ${fromName} to ${toName} (${i.org.site}${i.org.department ? " · " + i.org.department : ""})`,
+          link: `${window.location.origin}${window.location.pathname}${window.location.search}#/board/${i.boardId}`,
+          onRevert: async (toStageId, reason, newTarget) => {
+            const moved = applyRevert(i, toStageId, newTarget);
+            if (moved === null) throw new Error("that stage is no longer one it can go back to");
+            await persist();
+            await appendInitiativeEvent(i, "stagemove", { from: moved.from, to: moved.to, comment: reason, revert: true, ...(newTarget !== "" ? { target: newTarget } : {}) }, actor());
+            await loadEvents();
+            render();
+          },
+        })
+      );
     };
 
     // ---- stage moves ------------------------------------------------------------
@@ -531,6 +623,14 @@ export function mountInitiativePane(o: InitiativePaneOpts): InitiativePaneHandle
     };
     const bandGate = (): BandGate | null => {
       const stages = i.snapshot.stages;
+      if (i.status === "completed" && stages.length > 0) {
+        return {
+          tone: "muted",
+          text: "Every stage is complete",
+          approvals: [],
+          actions: mayRevert(i, stageViewer()) ? [{ label: "↩ Reopen…", kind: "plain", onClick: () => openRevert() }] : [],
+        };
+      }
       if (i.status !== "active" || stages.length === 0) return null;
       const idx = Math.max(0, stages.findIndex((st) => st.id === i.stageId));
       const isLast = idx === stages.length - 1;
@@ -566,12 +666,16 @@ export function mountInitiativePane(o: InitiativePaneOpts): InitiativePaneHandle
           const d = pending.decisions[r];
           return { label: roleLabel(r), state: d ? (d.approved ? ("ok" as const) : ("no" as const)) : ("wait" as const) };
         }),
-        actions: iAmApprover(undecided)
-          ? [
-              { label: "Approve", kind: "primary", onClick: () => void decide(pending, true) },
-              { label: "Decline", kind: "danger", onClick: () => void decide(pending, false) },
-            ]
-          : [],
+        actions: [
+          ...(iAmApprover(undecided)
+            ? [
+                { label: "Approve", kind: "primary" as const, onClick: () => void decide(pending, true) },
+                { label: "Decline", kind: "danger" as const, onClick: () => void decide(pending, false) },
+              ]
+            : []),
+          ...(declined.length > 0 && mine() ? [{ label: "Request again", kind: "primary" as const, onClick: () => requestGate(toId, toName, gate.approverRoles) }] : []),
+          ...(mayWithdraw(i, stageViewer()) ? [{ label: "Withdraw request", kind: "plain" as const, onClick: () => void withdrawGate() }] : []),
+        ],
       };
     };
     const renderBand = (): HTMLElement => {
@@ -586,6 +690,7 @@ export function mountInitiativePane(o: InitiativePaneOpts): InitiativePaneHandle
           if (id !== "") void mergeUserPrefs(id, { initiativeBand: { collapsed: bandCollapsed } }).catch(() => undefined);
         },
         stage: i.singleAction ? null : bandStage(),
+        revert: i.status === "active" ? standingRevert(events) : null,
         completed: i.status === "completed",
         gate: i.singleAction ? null : bandGate(),
         onOpenStages: () => openPaneAt(() => activeStageEl?.scrollIntoView({ block: "center", behavior: "smooth" })),
@@ -698,6 +803,9 @@ export function mountInitiativePane(o: InitiativePaneOpts): InitiativePaneHandle
           render();
         })();
       }, !mine());
+      if (!i.singleAction) {
+        item(i.status === "completed" ? "↩ Reopen initiative…" : "↩ Revert to an earlier stage…", () => openRevert(), !mayRevert(i, stageViewer()));
+      }
       item("＋ Add card from template", () => void addFromTemplate(), !mine() || i.status !== "active" || i.templateId === "");
       item("Reset board to template…", () => void resetToTemplate(), !mine() || i.status !== "active" || i.templateId === "");
       item(i.status === "archived" ? "Restore" : "Archive", () => {

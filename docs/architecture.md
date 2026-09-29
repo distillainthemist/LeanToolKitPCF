@@ -295,6 +295,23 @@ model section) — the canvas/PCF sections there are historical.
   when, and keeps the earlier wording in the row's detail (capped at
   ten). Nothing is deleted. Stale after 14 days without an update.
 
+- **Going back a stage** (2026-09-29, `improvement/stageRevert.ts`,
+  pure). A waiting gate request can be WITHDRAWN (whoever requested
+  it, the owner, an admin); a declined one REQUESTED AGAIN; and an
+  initiative REVERTED to any earlier stage — a completed one
+  reopened into a stage — by its owner, its sponsor or an admin, with
+  a required reason and no approval. A revert sets the stage, clears
+  any waiting request, optionally re-dates the stage returned to, and
+  writes one `stagemove` event with `revert: true`; a withdrawal
+  writes a `gate` event (`what: "withdrawn"`). Card content, gate
+  snapshots and history are left alone, and moving forward again
+  passes each gate afresh. The approvers whose sign-off is undone
+  (`undoneApproverRoles`) and the sponsor are told by the escalation
+  notify road — the revert is applied first, so a send failure never
+  reads as the revert failing. The band says "Reverted from …" until
+  the next move forward (`standingRevert`, derived from the events).
+  No schema change.
+
 ### 3.4 Actions
 
 - One central table on the standard channel: every card raises actions

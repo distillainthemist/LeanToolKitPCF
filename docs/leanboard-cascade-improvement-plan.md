@@ -1138,6 +1138,19 @@ reschedule/cancel history with a reason picklist.
   would have opened BEHIND it — prompts now open on `.app-modal-top`
   (10500). `tools/native-dialog-gate.mjs` scans the source so a new
   native call fails the gate (CI runs it). Harness page `prompts.html`. App-only.
+- **2026-09-29 — withdraw, request again, revert, reopen.** Ben's
+  decisions: revert to ANY earlier stage; owner, sponsor and admins
+  may; a required reason, no approval; the requester and the owner
+  withdraw; a completed initiative reopens under the same rule;
+  target dates are kept with an optional new date for the stage
+  returned to; approvers and sponsor are told; no flag is raised.
+  Before this a requested gate could not be withdrawn, a declined one
+  could not be asked again, and no move went backward. Built:
+  `stageRevert.ts` (pure, 14 tests), `revertDialog.ts`, the rail's
+  and the band's new buttons, the ⋮ menu item, the band's standing
+  note. Admins may also withdraw (they already act on every other
+  board step). No schema change. Tests 679. App-only; hosted checks
+  Ben's — the notify send needs a real sponsor with an email.
 - **Where things stand (2026-09-24).** Released: v0.51.0 (2026-09-14,
   solution-carrying — value driver tree, grid entry, Metrics card,
   meeting-board driver links, rituals in several orgs, driver popup,

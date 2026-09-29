@@ -4,6 +4,7 @@ import "../src/style.css";
 import { renderStatusBand, BandGate, BandOpts } from "../src/improvement/statusBand";
 import { openUpdateDialog, renderTrail } from "../src/improvement/commentary";
 import { editedDetail, staleDays, Update, updatesFrom } from "../src/improvement/commentaryModel";
+import { openRevertDialog } from "../src/improvement/revertDialog";
 
 const today = "2026-09-29";
 let events = [
@@ -19,8 +20,33 @@ const gates: Record<string, BandGate | null> = {
   request: { tone: "muted", text: "⚑ Gate to Improve · not yet requested", approvals: [{ label: "Owner", state: "wait" }, { label: "Sponsor", state: "wait" }], actions: [{ label: "Request gate", kind: "primary", onClick: () => log.push("request") }] },
   declined: { tone: "no", text: "⚑ Gate to Improve · declined by Sponsor", approvals: [{ label: "Owner", state: "ok" }, { label: "Sponsor", state: "no" }], actions: [] },
   open: { tone: "muted", text: "Next: Improve · no approval needed", approvals: [], actions: [{ label: "Move to Improve", kind: "plain", onClick: () => log.push("move") }] },
+  requester: { tone: "wait", text: "⚑ Gate to Improve · waiting on Sponsor", approvals: [{ label: "Owner", state: "ok" }, { label: "Sponsor", state: "wait" }], actions: [{ label: "Withdraw request", kind: "plain", onClick: () => log.push("withdraw") }] },
+  declinedOwner: { tone: "no", text: "⚑ Gate to Improve · declined by Sponsor", approvals: [{ label: "Owner", state: "ok" }, { label: "Sponsor", state: "no" }], actions: [{ label: "Request again", kind: "primary", onClick: () => log.push("again") }, { label: "Withdraw request", kind: "plain", onClick: () => log.push("withdraw") }] },
+  done: { tone: "muted", text: "Every stage is complete", approvals: [], actions: [{ label: "↩ Reopen…", kind: "plain", onClick: () => revert(true) }] },
 };
-let state = { gate: "waiting", collapsed: false, canComment: true, none: false, completed: false };
+const revert = (completed: boolean) =>
+  openRevertDialog({
+    host: document.body,
+    initiativeTitle: "Reduce changeover on line 2",
+    completed,
+    fromName: completed ? "Complete" : "Analyse",
+    targets: completed ? [{ id: "d", name: "Define", index: 0 }, { id: "a", name: "Analyse", index: 1 }, { id: "i", name: "Improve", index: 2 }] : [{ id: "d", name: "Define", index: 0 }],
+    targetDates: { d: "2026-08-30", a: "2026-09-26" },
+    recipientsFor: (id) => (id === "d" ? [{ name: "Sam Lee", email: "sam@x.test" }, { name: "Ann Ray", email: "ann@x.test" }] : [{ name: "Ann Ray", email: "ann@x.test" }]),
+    lineFor: (to) => `Ben O'Brien reverted "Reduce changeover on line 2" to ${to} (Bendigo · Packaging)`,
+    link: "https://example.test/#/board/init-1",
+    onRevert: async (to, reason, target) => {
+      log.push(`revert to=${to} reason=${reason} target=${target}`);
+      state = { ...state, reverted: true, completed: false, gate: "request" };
+      paint();
+    },
+    send: async (kind, to, subject, body) => {
+      log.push(`send ${kind} to=${to.map((p) => p.name).join("+")} subject=${subject} body=${body}`);
+      return { error: "", how: kind === "teams" ? "card" : "email" };
+    },
+  });
+let state = { gate: "waiting", collapsed: false, canComment: true, none: false, completed: false, reverted: false };
+(window as unknown as { revert: typeof revert }).revert = revert;
 const band = document.getElementById("band")!;
 const trail = document.getElementById("trail")!;
 const edit = (u: Update) =>
@@ -52,7 +78,8 @@ function paint(): void {
     },
     stage,
     completed: state.completed,
-    gate: state.completed ? null : gates[state.gate],
+    revert: state.reverted && !state.completed ? { from: "Improve", to: "Analyse", who: "Jane Smith", at: "2026-09-27T09:00:00Z", reason: "The trial data covered one shift only" } : null,
+    gate: state.completed ? gates.done : gates[state.gate],
     onOpenStages: () => log.push("open stages"),
     latest: list[0] ?? null,
     updateCount: list.length,
@@ -71,6 +98,9 @@ const cases: [string, () => void][] = [
   ["Not requested", () => (state = { ...state, gate: "request" })],
   ["Declined", () => (state = { ...state, gate: "declined" })],
   ["No approval needed", () => (state = { ...state, gate: "open" })],
+  ["Requester waiting", () => (state = { ...state, gate: "requester" })],
+  ["Declined, owner", () => (state = { ...state, gate: "declinedOwner" })],
+  ["Standing revert", () => (state = { ...state, reverted: !state.reverted })],
   ["No commentary", () => (state = { ...state, none: !state.none })],
   ["Viewer not on team", () => (state = { ...state, canComment: !state.canComment })],
   ["Completed", () => (state = { ...state, completed: !state.completed })],

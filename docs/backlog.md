@@ -227,6 +227,14 @@ when written):
   spreadsheet process outside the app.
 - AI assistant (FR-AI-*): a future project iteration.
 
+## Initiative stages — open items (2026-09-29)
+
+- A revert needs no approval (Ben's call). If sign-off being undone by
+  an owner alone becomes a concern: require one approver of the gate
+  being undone to agree.
+- Gate snapshots taken before a revert are kept and listed as before;
+  nothing marks them as superseded by a later pass through the gate.
+
 ## Improvement / KPI tranche — open items (2026-09-24)
 
 Everything through v0.55.0 is built; these are the decisions and

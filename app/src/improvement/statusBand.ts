@@ -8,7 +8,8 @@
 import { el } from "../../../shared/ui/dom";
 import { dayLabel } from "../linkTitle";
 import { renderUpdateBody, updateMeta } from "./commentary";
-import { Update, UPDATE_LABELS } from "./commentaryModel";
+import { ageLabel, Update, UPDATE_LABELS } from "./commentaryModel";
+import type { LastRevert } from "./stageRevert";
 
 const btn = (label: string, cls = "app-btn"): HTMLButtonElement => {
   const b = el("button", cls, label) as HTMLButtonElement;
@@ -45,6 +46,9 @@ export interface BandOpts {
   onToggle: () => void;
   /** null = no stages to show (the initiative is complete). */
   stage: BandStage | null;
+  /** The revert the initiative still stands on (its latest stage move
+   *  was one) — said until it moves forward again. */
+  revert?: LastRevert | null;
   completed: boolean;
   gate: BandGate | null;
   /** Opens the details pane at the stage rail. */
@@ -146,6 +150,12 @@ export function renderStatusBand(o: BandOpts): HTMLElement {
       }
       left.appendChild(due);
     }
+  }
+  if (o.revert) {
+    const note = el("div", "app-sb-revert", `↩ Reverted from ${o.revert.from} by ${o.revert.who} · ${ageLabel(o.revert.at, o.today)}`);
+    if (o.revert.reason !== "") note.title = o.revert.reason;
+    left.appendChild(note);
+    if (o.revert.reason !== "") left.appendChild(el("div", "app-sb-revertwhy", `“${o.revert.reason}”`));
   }
   if (o.gate) {
     const g = el("div", "app-sb-gate app-sb-gate-" + o.gate.tone);

@@ -84,6 +84,14 @@ the same commit.
   vertical caption, the card-walk rail's look), not a toolbar button.
   What a team must see every visit lives on the band; reference
   detail lives in the pane.
+- **Going back** on an initiative board: `↩ Revert to this stage…`
+  on each completed stage of the rail, `↩ Revert to an earlier
+  stage…` (or `↩ Reopen initiative…`) on the ⋮ menu, `Withdraw
+  request` / `Request again` beside the gate's other buttons on the
+  band and the rail. The revert dialog follows the escalation
+  dialog's anatomy: what happens in words, the choice, a required
+  reason, removable recipient chips, send by Teams or email, the
+  outcome reported in place.
 - **Priority popup tabs**, in this order: Initiatives, Actions,
   Commentary, Metrics, Cascade, Charter, History.
 - **Present view (cascaded priorities)**: a full-height PREV / NEXT
