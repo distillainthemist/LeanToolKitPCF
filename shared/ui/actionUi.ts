@@ -8,7 +8,7 @@
 // Overdue are capitalised; circle colours are set inline (Safari rule).
 
 import { ActionPdca, ACTION_PDCA, isOverdue, LtkAction, newAction, PDCA_LABELS, PDCA_QUARTERS, pdcaOf } from "../schema/actions";
-import { ActionLink, applyLink, currentLink, isCardKeyed, linkChanges, linkLabel, LinkTarget, searchLinkTargets, suggestLinkTargets } from "../schema/actionLinks";
+import { ActionLink, applyLink, currentLink, isCardKeyed, linkChanges, linkLabel, LinkTarget, searchLinkTargets } from "../schema/actionLinks";
 import { ACTION_MOVED_EVENT, ActionLinkContext, actionLinkProvider } from "./actionLinkProvider";
 import { Person } from "../schema/people";
 import { textOn } from "../tokens";
@@ -474,11 +474,9 @@ function buildLinkField(o: ActionDialogOptions, body: () => HTMLElement, onTouch
     const renderResults = () => {
       while (results.firstChild) results.removeChild(results.firstChild);
       if (ctx === null) return;
-      if (query.value.trim() === "") {
-        const s = suggestLinkTargets(ctx.targets, ctx.openBoardId);
-        group("Suggested", s);
-        return;
-      }
+      // nothing until something is typed (Ben, 2026-09-29: a suggested
+      // list cost the dialog too much height)
+      if (query.value.trim() === "") return;
       const found = searchLinkTargets(ctx.targets, query.value);
       group("Rituals", found.rituals);
       group("Initiatives", found.initiatives);

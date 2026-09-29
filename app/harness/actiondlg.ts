@@ -1,3 +1,4 @@
+// (no suggestions are listed before typing)
 // The action dialog's "Linked to" field and its confirmations, with stub
 // targets. Buttons open the dialog on each kind of action.
 import { ensureStylesheet } from "../../shared/ui/dom";

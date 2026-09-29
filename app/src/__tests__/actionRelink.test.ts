@@ -3,7 +3,7 @@
 // id, applied exclusively, and searched across both kinds.
 import { describe, expect, it } from "vitest";
 import { boardChannelKey, newAction } from "../../../shared/schema/actions";
-import { applyLink, currentLink, homeBoardOf, homeCardOf, isCardKeyed, linkChanges, linkLabel, LinkTarget, searchLinkTargets, suggestLinkTargets } from "../../../shared/schema/actionLinks";
+import { applyLink, currentLink, homeBoardOf, homeCardOf, isCardKeyed, linkChanges, linkLabel, LinkTarget, searchLinkTargets } from "../../../shared/schema/actionLinks";
 import { openBoardId, openCardKey } from "../actions/openBoard";
 import { sourceLabel } from "../../../controls/LeanHub/types";
 
@@ -101,7 +101,7 @@ describe("linkChanges", () => {
   });
 });
 
-describe("search and suggestions", () => {
+describe("search", () => {
   it("groups by kind; every word must match somewhere", () => {
     const r = searchLinkTargets(all, "bottling jane");
     expect(r.rituals.map((x) => x.id)).toEqual(["B1"]);
@@ -120,10 +120,6 @@ describe("search and suggestions", () => {
     const many = Array.from({ length: 9 }, (_, n) => t({ id: `R${n}`, boardId: `R${n}`, title: `Meeting ${n}` }));
     expect(searchLinkTargets(many, "meeting").rituals).toHaveLength(5);
     expect(searchLinkTargets(many, "  ").rituals).toEqual([]);
-  });
-  it("suggests the open board first, then the viewer's own", () => {
-    expect(suggestLinkTargets(all, "init-I1").map((x) => x.id)).toEqual(["I1", "B2"]);
-    expect(suggestLinkTargets(all, null).map((x) => x.id)).toEqual(["B2"]);
   });
 });
 

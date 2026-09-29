@@ -132,14 +132,6 @@ export function searchLinkTargets(targets: LinkTarget[], query: string, cap = 5)
   return { rituals: of("ritual"), initiatives: of("initiative") };
 }
 
-/** Before any typing: the open board, then what the viewer owns, attends
- *  or holds a role on. */
-export function suggestLinkTargets(targets: LinkTarget[], openBoardId: string | null, cap = 5): LinkTarget[] {
-  const open = openBoardId !== null && openBoardId !== "" ? targets.filter((t) => t.boardId === openBoardId) : [];
-  const mine = targets.filter((t) => t.mine && !open.includes(t)).sort((a, b) => a.title.localeCompare(b.title));
-  return [...open, ...mine].slice(0, cap);
-}
-
 /** The chip's words: the kind, the title, the card. */
 export function linkLabel(l: ActionLink): { kind: string; text: string } {
   if (l.kind === "personal") return { kind: "Personal", text: "not linked" };
