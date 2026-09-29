@@ -349,6 +349,18 @@ export const CANVAS_CSS = `
   outline: none;
 }
 .ltk-cv-richedit:focus { border-color: var(--ltk-accent); }
+/* rich text edited in place: the toolbar over the surface, inside the
+   field's own box (the surface scrolls; a one-row field grows to fit) */
+.ltk-cv-richinline { display: flex; flex-direction: column; height: 100%; min-height: 0; cursor: auto; }
+.ltk-cv-richinline .ltk-cv-richbar { flex: none; margin-bottom: 4px; }
+.ltk-cv-richinline .ltk-cv-richbtn { padding: 2px 7px; font-size: 12.5px; }
+.ltk-cv-richinline .ltk-cv-richlink { min-height: 0; padding: 3px 8px; font-size: 12.5px; flex: 1 1 120px; }
+.ltk-cv-richinline .ltk-cv-richedit {
+  flex: 1; min-height: 56px; max-height: none;
+  background: var(--ltk-bg); border-color: var(--ltk-accent);
+}
+.ltk-cv-field:has(.ltk-cv-richinline) { min-height: 150px; }
+.ltk-cv-field.ltk-cv-h1:has(.ltk-cv-richinline) .ltk-cv-value { overflow: visible; }
 
 .ltk-cv-checkedit { display: flex; flex-direction: column; gap: 6px; }
 .ltk-cv-checkedit-row { display: flex; gap: 6px; align-items: center; }

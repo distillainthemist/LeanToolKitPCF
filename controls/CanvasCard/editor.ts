@@ -16,7 +16,7 @@ import { newId, nowIso } from "../../shared/schema/id";
 import { Person } from "../../shared/schema/people";
 import { buildCaptureField, optionChip, readFields } from "../CaptureCard/fields";
 import { CaptureRow } from "../CaptureCard/types";
-import { canvasFieldDialog } from "./fieldDialog";
+import { buildRichTextEditor, canvasFieldDialog } from "./fieldDialog";
 import type { CanvasBinding } from "./types";
 import { paintCanvasValue } from "./display";
 import { CAPTURE_CSS } from "../CaptureCard/styles";
@@ -61,6 +61,7 @@ export interface CanvasEditorCallbacks {
 const INLINE_TYPES = new Set([
   "text",
   "longtext",
+  "richtext",
   "number",
   "decimal",
   "date",
@@ -68,6 +69,13 @@ const INLINE_TYPES = new Set([
   "percent",
   "url",
 ]);
+
+/** Where a field's value is read and written: the card's own document,
+ *  or — for a bound field — whatever it is bound to. */
+interface ValuePort {
+  get: () => CanvasValue | undefined;
+  set: (next: CanvasValue | undefined) => void;
+}
 
 export class CanvasEditor {
   private readonly root: HTMLElement;
@@ -447,7 +455,14 @@ export class CanvasEditor {
       return box;
     }
 
-    const value = this.env.data.values[field.id];
+    // a bound field whose target has its OWN type is shown and edited as
+    // that type (2026-09-29): the target's value in, the target's write out
+    const typed = !designing ? this.typedBound(field) : null;
+    const free: ValuePort = {
+      get: () => this.env.data.values[field.id],
+      set: (next) => this.commitValue(field, next),
+    };
+    const value = typed ? typed.port.get() : free.get();
     const label = el("div", "ltk-cv-label");
     if (designing) label.appendChild(el("span", "ltk-cv-glyph", CANVAS_TYPE_GLYPH[field.type]));
     label.appendChild(
@@ -455,7 +470,7 @@ export class CanvasEditor {
     );
     // required renders at BOTH times — the one property with real consequence
     if (field.required) label.appendChild(el("span", "ltk-cv-req", "✱"));
-    if (!designing && field.required && isEmptyValue(field.type, value)) {
+    if (!designing && field.required && isEmptyValue(typed ? typed.field.type : field.type, value)) {
       label.appendChild(el("span", "ltk-cv-needed", "· needed"));
     }
     // ⛓ bound fields (design 2.5): a sunken dashed slot holding header
@@ -477,6 +492,13 @@ export class CanvasEditor {
       return box;
     }
 
+    if (typed && this.binding) {
+      const editable = !this.readOnly && this.binding.canEdit(field.bound);
+      this.paintDisplay(area, typed.field, value, editable ? typed.port : null);
+      if (editable) this.wireEditing(area, typed.field, typed.port);
+      return box;
+    }
+
     if (field.bound !== "" && this.binding) {
       const b = this.binding;
       const v = b.get(field.bound);
@@ -489,8 +511,8 @@ export class CanvasEditor {
         if (kind === "text" && b.set && INLINE_TYPES.has(field.type)) {
           area.addEventListener("click", () =>
             this.beginInlineEdit(field, area, {
-              value: v === "" ? undefined : v,
-              commit: (next) => {
+              get: () => (v === "" ? undefined : v),
+              set: (next) => {
                 const text = next === undefined ? "" : typeof next === "string" ? next : typeof next === "number" ? String(next) : typeof next === "object" && next !== null && "start" in next ? `${(next as { start: string }).start}` : String(next);
                 void b.set!(field.bound, text).then(() => this.render());
               },
@@ -501,38 +523,57 @@ export class CanvasEditor {
       return box;
     }
 
-    this.paintDisplay(area, field, value);
-    if (!this.readOnly) {
-      if (INLINE_TYPES.has(field.type)) {
-        area.classList.add("ltk-cv-editable");
-        area.addEventListener("click", () => this.beginInlineEdit(field, area));
-      } else if (field.type === "yesno") {
-        area.classList.add("ltk-cv-editable");
-        area.addEventListener("click", () => {
-          this.commitValue(field, !vBool(this.env.data.values[field.id]));
-        });
-      } else if (
-        field.type === "choice" ||
-        field.type === "multichoice" ||
-        field.type === "person" ||
-        field.type === "people" ||
-        field.type === "status" ||
-        field.type === "richtext" ||
-        field.type === "checklist" ||
-        field.type === "minitable" ||
-        field.type === "image"
-      ) {
-        // rating handles its own star clicks; checklist ticks are inline
-        // but item management is a picker (C3)
-        area.classList.add("ltk-cv-editable");
-        area.addEventListener("click", (e) => {
-          // a checklist tick already handled the click
-          if ((e.target as HTMLElement).closest(".ltk-cv-check-item")) return;
-          this.openPicker(field);
-        });
-      }
-    }
+    this.paintDisplay(area, field, value, free);
+    if (!this.readOnly) this.wireEditing(area, field, free);
     return box;
+  }
+
+  /** A bound field's target as a typed field + its port; null when the
+   *  field is free, or its target carries no typed value. */
+  private typedBound(field: CanvasField): { field: CanvasField; port: ValuePort } | null {
+    const b = this.binding;
+    if (field.bound === "" || !b || !b.typeOf || !b.value || !b.setValue) return null;
+    const t = b.typeOf(field.bound);
+    if (!t) return null;
+    return {
+      field: { ...field, type: t.type, options: t.options },
+      port: {
+        get: () => b.value!(field.bound),
+        set: (next) => {
+          void b.setValue!(field.bound, next).then(() => this.render());
+        },
+      },
+    };
+  }
+
+  /** The tap that starts an edit — the same for a free field and a bound
+   *  one: typing types edit in place, the rest open their picker. */
+  private wireEditing(area: HTMLElement, field: CanvasField, port: ValuePort): void {
+    if (INLINE_TYPES.has(field.type)) {
+      area.classList.add("ltk-cv-editable");
+      area.addEventListener("click", () => this.beginInlineEdit(field, area, port));
+    } else if (field.type === "yesno") {
+      area.classList.add("ltk-cv-editable");
+      area.addEventListener("click", () => port.set(!vBool(port.get())));
+    } else if (
+      field.type === "choice" ||
+      field.type === "multichoice" ||
+      field.type === "person" ||
+      field.type === "people" ||
+      field.type === "status" ||
+      field.type === "checklist" ||
+      field.type === "minitable" ||
+      field.type === "image"
+    ) {
+      // rating handles its own star clicks; checklist ticks are inline
+      // but item management is a picker (C3)
+      area.classList.add("ltk-cv-editable");
+      area.addEventListener("click", (e) => {
+        // a checklist tick already handled the click
+        if ((e.target as HTMLElement).closest(".ltk-cv-check-item")) return;
+        this.openPicker(field, port);
+      });
+    }
   }
 
   // ---- direct manipulation (design mode, D2) ----
@@ -823,40 +864,39 @@ export class CanvasEditor {
   private paintDisplay(
     area: HTMLElement,
     field: CanvasField,
-    value: CanvasValue | undefined
+    value: CanvasValue | undefined,
+    /** Where taps write; null = display only (a bound target the viewer
+     *  may not edit). */
+    port: ValuePort | null
   ): void {
     paintCanvasValue(area, field, value, {
       palette: this.palette,
       hint: hintFor(this.prompts, field.id, field.hint),
-      readOnly: this.readOnly,
-      onRatingSet: (n) => this.commitValue(field, n),
-      onCheckToggle: (items) => this.commitValue(field, items),
+      readOnly: this.readOnly || port === null,
+      onRatingSet: port ? (n) => port.set(n) : undefined,
+      onCheckToggle: port ? (items) => port.set(items) : undefined,
       onMiniRowClick: (row) => this.openMiniRow(field, row),
     });
   }
 
   // ---- inline editing (typing types) ----
 
-  private beginInlineEdit(
-    field: CanvasField,
-    area: HTMLElement,
-    /** A bound field: the header's value in, the header's write out. */
-    bound?: { value: CanvasValue | undefined; commit: (next: CanvasValue | undefined) => void }
-  ): void {
+  private beginInlineEdit(field: CanvasField, area: HTMLElement, port: ValuePort): void {
     if (this.readOnly) return;
+    // already editing: a click inside the editor must not restart it
+    if (area.dataset.editing === "1") return;
+    area.dataset.editing = "1";
     clear(area);
     area.classList.remove("ltk-cv-editable");
-    const value = bound ? bound.value : this.env.data.values[field.id];
+    const value = port.get();
 
     const finish = (commit: boolean, next: CanvasValue | undefined) => {
+      delete area.dataset.editing;
       if (commit) {
-        if (bound) bound.commit(next);
-        else this.commitValue(field, next); // re-renders
-      } else if (bound) {
-        this.render();
+        port.set(next); // re-renders
       } else {
         area.classList.add("ltk-cv-editable");
-        this.paintDisplay(area, field, this.env.data.values[field.id]);
+        this.paintDisplay(area, field, port.get(), port);
       }
     };
 
@@ -874,6 +914,29 @@ export class CanvasEditor {
       });
     };
     let cancelled = false;
+
+    if (field.type === "richtext") {
+      // rich text edits IN PLACE (2026-09-29): the toolbar over the
+      // surface; leaving the editor saves, Escape abandons
+      const ed = buildRichTextEditor(value);
+      const wrap = el("div", "ltk-cv-richinline");
+      wrap.append(ed.bar, ed.surface);
+      wrap.addEventListener("focusout", () => {
+        setTimeout(() => {
+          if (cancelled || !wrap.isConnected) return;
+          if (!wrap.contains(document.activeElement)) finish(true, ed.read());
+        }, 0);
+      });
+      wrap.addEventListener("keydown", (e) => {
+        if (e.key !== "Escape") return;
+        e.preventDefault();
+        cancelled = true;
+        finish(false, undefined);
+      });
+      area.appendChild(wrap);
+      ed.surface.focus();
+      return;
+    }
 
     if (field.type === "longtext") {
       const ta = el("textarea") as HTMLTextAreaElement;
@@ -958,7 +1021,7 @@ export class CanvasEditor {
 
   // ---- pickers & heavy types (the hybrid's dialog half) ----
 
-  private openPicker(field: CanvasField): void {
+  private openPicker(field: CanvasField, port: ValuePort): void {
     if (this.readOnly) return;
     // mini-tables have their own add/edit-row flow; everything else is the
     // shared field dialog (fieldDialog.ts — the canvas ROLLUP uses the same)
@@ -966,10 +1029,10 @@ export class CanvasEditor {
     canvasFieldDialog({
       host: this.root,
       field,
-      value: this.env.data.values[field.id],
+      value: port.get(),
       palette: this.palette,
       people: this.people,
-      onSave: (v) => this.commitValue(field, v),
+      onSave: (v) => port.set(v),
     });
   }
 

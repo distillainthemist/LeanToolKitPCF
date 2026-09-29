@@ -76,6 +76,11 @@ the same commit.
   never both. An existing linked action always opens on its chip. A
   target the viewer may not see reads "not available to you" — never
   its title. Never a full list: it would not scale.
+- **A bound charter field edits like a free one**: in place for
+  typing types (rich text shows its toolbar over the surface inside
+  the field's own box), the card's own picker for the rest. Never a
+  one-line prompt. The field wears its TARGET's type; the builder's
+  bind select names that type beside each header field.
 - **Destructive steps inside a dialog confirm inline** (`.ltk-confirm`
   bar in the body, safe choice focused): taking an action off the
   card it hangs from, and **Cancel action**. One dialog at a time per

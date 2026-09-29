@@ -232,10 +232,20 @@ function peopleDialog(o: CanvasFieldDialogOpts): void {
 
 /** Rich text: contenteditable with a minimal toolbar; sanitised on save
  *  (and again on every render — stored HTML is never trusted). */
-function richTextDialog(o: CanvasFieldDialogOpts): void {
+export interface RichTextEditor {
+  /** Toolbar + surface, in that order. */
+  bar: HTMLElement;
+  surface: HTMLElement;
+  /** The sanitised HTML; undefined when there is no text. */
+  read: () => string | undefined;
+}
+
+/** The rich text editor: a contenteditable surface and its toolbar. The
+ *  dialog hosts it; the canvas card and the forms mount it in place. */
+export function buildRichTextEditor(initial: CanvasValue | undefined): RichTextEditor {
   const surface = el("div", "ltk-cv-rich ltk-cv-richedit");
   surface.contentEditable = "true";
-  surface.innerHTML = sanitizeRichText(vString(o.value));
+  surface.innerHTML = sanitizeRichText(vString(initial));
 
   const bar = el("div", "ltk-cv-richbar");
   const cmd = (label: string, title: string, run: () => void) => {
@@ -260,7 +270,16 @@ function richTextDialog(o: CanvasFieldDialogOpts): void {
     const url = linkIn.value.trim();
     if (/^https?:\/\//i.test(url)) document.execCommand("createLink", false, url);
   });
+  bar.appendChild(linkIn);
+  const read = (): string | undefined => {
+    const html = sanitizeRichText(surface.innerHTML);
+    return html.replace(/<[^>]*>/g, "").trim() === "" ? undefined : html;
+  };
+  return { bar, surface, read };
+}
 
+function richTextDialog(o: CanvasFieldDialogOpts): void {
+  const ed = buildRichTextEditor(o.value);
   const dlg = openDialog({
     host: o.host,
     title: o.field.label,
@@ -270,17 +289,16 @@ function richTextDialog(o: CanvasFieldDialogOpts): void {
         label: "Save",
         kind: "primary" as const,
         onClick: () => {
-          const html = sanitizeRichText(surface.innerHTML);
+          const html = ed.read();
           dlg.close();
-          o.onSave(html.replace(/<[^>]*>/g, "").trim() === "" ? undefined : html);
+          o.onSave(html);
         },
       },
     ],
   });
-  bar.appendChild(linkIn);
-  dlg.body.appendChild(bar);
-  dlg.body.appendChild(surface);
-  surface.focus();
+  dlg.body.appendChild(ed.bar);
+  dlg.body.appendChild(ed.surface);
+  ed.surface.focus();
 }
 
 /** Checklist item management (ticks stay inline on the canvas card; the

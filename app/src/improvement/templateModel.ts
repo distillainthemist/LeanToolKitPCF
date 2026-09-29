@@ -54,7 +54,60 @@ export function activeRoles(t: Pick<InitiativeTemplate, "roles">): TemplateRole[
   return t.roles.filter((r) => r.hidden !== true);
 }
 
-export type FieldKind = "text" | "longtext" | "number" | "date" | "picklist" | "person";
+/** A header field's data type (2026-09-29: the canvas card's full set of
+ *  VALUE types — a header field and the charter field bound to it are the
+ *  same datum, so they enter the same way). "picklist" is the canvas
+ *  "choice" and "number" its "decimal" (the names older fields carry);
+ *  headings, mini-tables and images stay card-only. Values are stored as
+ *  strings — fieldCodec.ts is the boundary. */
+export type FieldKind =
+  | "text"
+  | "longtext"
+  | "richtext"
+  | "integer"
+  | "number"
+  | "percent"
+  | "rating"
+  | "date"
+  | "daterange"
+  | "picklist"
+  | "multichoice"
+  | "yesno"
+  | "status"
+  | "person"
+  | "people"
+  | "url"
+  | "checklist";
+
+/** The kinds in menu order, with the labels the canvas card uses. */
+export const FIELD_KINDS: { value: FieldKind; label: string }[] = [
+  { value: "text", label: "Text" },
+  { value: "longtext", label: "Long text" },
+  { value: "richtext", label: "Rich text" },
+  { value: "integer", label: "Whole number" },
+  { value: "number", label: "Decimal" },
+  { value: "percent", label: "Percent" },
+  { value: "rating", label: "Rating" },
+  { value: "date", label: "Date" },
+  { value: "daterange", label: "Date range" },
+  { value: "picklist", label: "Choice" },
+  { value: "multichoice", label: "Multi choice" },
+  { value: "yesno", label: "Yes / no" },
+  { value: "status", label: "Status" },
+  { value: "person", label: "Person" },
+  { value: "people", label: "People" },
+  { value: "url", label: "Link" },
+  { value: "checklist", label: "Checklist" },
+];
+
+export function fieldKindLabel(kind: FieldKind): string {
+  return FIELD_KINDS.find((k) => k.value === kind)?.label ?? kind;
+}
+
+/** Kinds that take a list of options. */
+export function kindHasOptions(kind: FieldKind): boolean {
+  return kind === "picklist" || kind === "multichoice";
+}
 
 export interface TemplateField {
   key: string;
@@ -413,7 +466,7 @@ export function parseFields(raw: string): TemplateField[] {
       .map((x) => ({
         key: str(x.key),
         label: str(x.label),
-        kind: (["text", "longtext", "number", "date", "picklist", "person"].includes(str(x.kind)) ? str(x.kind) : "text") as FieldKind,
+        kind: (FIELD_KINDS.some((k) => k.value === str(x.kind)) ? str(x.kind) : "text") as FieldKind,
         options: arr(x.options).map((o) => str(o)).filter((o) => o !== ""),
         required: bool(x.required),
       }))

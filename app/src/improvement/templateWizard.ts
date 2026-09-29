@@ -26,6 +26,9 @@ import { pickOwner } from "../priorities/dialogs";
 import { parseOrgTree } from "../../../shared/schema/meeting";
 import { METRIC_RULE_LABELS, MetricRule,
   FieldKind,
+  FIELD_KINDS,
+  fieldKindLabel,
+  kindHasOptions,
   HealthQuestion,
   Gate,
   GoodDirection,
@@ -494,20 +497,13 @@ export function mountTemplateWizard(parent: HTMLElement, templateId: string): ()
         for (const f of imp.standardFields) {
           const line = el("div", "app-tw-stdfield");
           line.appendChild(el("span", "app-tw-stdfield-name", f.label));
-          line.appendChild(el("span", "ltk-mw-help", `${f.kind}${f.required ? " · required" : ""}`));
+          line.appendChild(el("span", "ltk-mw-help", `${fieldKindLabel(f.kind)}${f.required ? " · required" : ""}`));
           std.appendChild(line);
         }
         std.appendChild(el("div", "ltk-mw-help", "Set in Settings → Improvement; templates add their own below."));
         form.appendChild(std);
       }
-      const KINDS: { value: FieldKind; label: string }[] = [
-        { value: "text", label: "Text" },
-        { value: "longtext", label: "Long text" },
-        { value: "number", label: "Number" },
-        { value: "date", label: "Date" },
-        { value: "picklist", label: "Picklist" },
-        { value: "person", label: "Person" },
-      ];
+      const KINDS = FIELD_KINDS;
       const list = el("div", "app-tw-table");
       const head = el("div", "app-tw-tr app-tw-th");
       head.append(el("span", undefined, "Field"), el("span", undefined, "Kind"), el("span", undefined, "Required"), el("span", undefined, ""));
@@ -539,7 +535,7 @@ export function mountTemplateWizard(parent: HTMLElement, templateId: string): ()
         });
         tr.appendChild(x);
         list.appendChild(tr);
-        if (f.kind === "picklist") {
+        if (kindHasOptions(f.kind)) {
           const opts = el("div", "app-tw-tr app-tw-sub");
           const input = textInput(f.options.join(", "), (v) => {
             f.options = v.split(",").map((x) => x.trim()).filter((x) => x !== "");
@@ -733,7 +729,7 @@ export function mountTemplateWizard(parent: HTMLElement, templateId: string): ()
         add("Metrics rule", METRIC_RULE_LABELS[t.metricRule], "metrics");
       }
       add("Roles", activeRoles(t).map((r) => r.label + (r.multi ? " (several)" : "")).join(" · ") + (t.roles.some((r) => r.hidden) ? ` · hidden: ${t.roles.filter((r) => r.hidden).map((r) => r.label).join(", ")}` : ""), "roles");
-      add("Fields", t.fields.length === 0 ? "none" : t.fields.map((f) => `${f.label} (${f.kind}${f.required ? ", required" : ""})`).join(" · "), "fields");
+      add("Fields", t.fields.length === 0 ? "none" : t.fields.map((f) => `${f.label} (${fieldKindLabel(f.kind)}${f.required ? ", required" : ""})`).join(" · "), "fields");
       add("Board", t.singleAction ? "none" : t.boardId !== "" ? `laid out (${Object.values(slotCountByStage).reduce((a, b) => a + b, 0)} cards)` : "not yet", "board");
       add("Company", t.company || "all", "basics");
       add("Availability", t.active ? "active" : "retired", "basics");
@@ -973,14 +969,7 @@ export async function renderImprovementSettings(body: HTMLElement, isSuper: bool
     rBox.appendChild(roleList);
 
     const fBox = section("Standard fields", "Header fields EVERY initiative carries, whichever template it uses — the counterpart of standard roles. Templates add their own fields on top.");
-    const KIND_OPTS: { value: FieldKind; label: string }[] = [
-      { value: "text", label: "Text" },
-      { value: "longtext", label: "Long text" },
-      { value: "number", label: "Number" },
-      { value: "date", label: "Date" },
-      { value: "picklist", label: "Picklist" },
-      { value: "person", label: "Person" },
-    ];
+    const KIND_OPTS = FIELD_KINDS;
     const fieldList = el("div", "app-tw-methods");
     const paintFields = () => {
       clear(fieldList);
@@ -1000,7 +989,7 @@ export async function renderImprovementSettings(body: HTMLElement, isSuper: bool
           paintFields();
         });
         rowEl.appendChild(kind);
-        if (f.kind === "picklist") {
+        if (kindHasOptions(f.kind)) {
           const opts = el("input", "app-input app-tw-stdfield-opts") as HTMLInputElement;
           opts.value = f.options.join(", ");
           opts.placeholder = "Option A, Option B";

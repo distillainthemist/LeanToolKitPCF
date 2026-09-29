@@ -87,6 +87,14 @@ export interface CanvasBinding {
   kind?: (bound: string) => "text" | "people" | "readonly";
   /** Direct write of a text target (inline editing). */
   set?: (bound: string, value: string) => Promise<void>;
+  /** The target's OWN data type (2026-09-29). When given, the card shows
+   *  and edits the bound field AS that type — the target's, not the one
+   *  the layout chose — through `value` / `setValue`: one datum, one
+   *  type, the same editor as a free field of that type. null = the
+   *  target has no typed value (roles, read-only targets). */
+  typeOf?: (bound: string) => { type: CanvasFieldType; options: ListOption[] } | null;
+  value?: (bound: string) => CanvasValue | undefined;
+  setValue?: (bound: string, next: CanvasValue | undefined) => Promise<void>;
 }
 
 /** The header data a charter field can bind to (P6d). Custom header

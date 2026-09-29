@@ -52,7 +52,8 @@ app/            the code app (vanilla TypeScript, Vite, no framework)
   src/generated/     pac-generated connector/table services (do not edit)
   tools/             import-gate, chunk-report (build-time checks)
   harness/           Vite pages that mount controls with stubbed stores
-                     for screenshots (grid, kpi, vdt, wizard, pdca, actiondlg) —
+                     for screenshots (grid, kpi, vdt, wizard, pdca, actiondlg,
+                     charter) —
                      served by the `pdca-harness` launch config
 shared/         UI kit + tokens shared with the (retired) PCF controls
 controls/       retired PCF controls — kept for shared model code
@@ -257,6 +258,26 @@ model section) — the canvas/PCF sections there are historical.
   the Priorities screen's Objectives row (every starred metric:
   "Name: objective" over Plan / Actual with a traffic light). The
   primary leads the overlay's Initiatives tab in its own section.
+
+- **Header fields and the charter card are one datum** (2026-09-29).
+  A header field (Settings → Improvement standard fields, or a
+  template's own) has a KIND from the canvas card's full set of value
+  types — text, long text, rich text, whole number, decimal, percent,
+  rating, date, date range, choice, multi choice, yes / no, status,
+  person, people, link, checklist (`FIELD_KINDS`; headings,
+  mini-tables and images stay card-only). Values are stored as
+  strings in the initiative's `fieldValues` JSON;
+  `improvement/fieldCodec.ts` is the ONE boundary (decode for an
+  editor, encode for the row, plain words for a line of text) and
+  reads values written before a field changed kind. A charter field
+  bound to a target is shown and edited AS THE TARGET'S TYPE, not the
+  type the layout gave it (`CanvasBinding.typeOf / value / setValue`):
+  typing types edit in place — rich text included, toolbar over the
+  surface, leaving saves, Escape abandons — and picking types open the
+  card's own dialogs. The forms (create, edit details) enter every
+  kind through `improvement/fieldInput.ts`, which reuses the canvas
+  card's display and dialogs. No `promptText` popup remains on a
+  typed target; roles keep their people pickers.
 
 ### 3.4 Actions
 

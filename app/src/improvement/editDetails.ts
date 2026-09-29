@@ -9,7 +9,11 @@
 import { renderAlsoOrgs } from "./alsoOrgs";
 import { el, clear } from "../../../shared/ui/dom";
 import { parseOrgTree } from "../../../shared/schema/meeting";
-import { improvementSettingsJson, orgJson, siteCompanies } from "../store/config";
+import { appPalettes, improvementSettingsJson, orgJson, siteCompanies } from "../store/config";
+import { paletteMap } from "../../../shared/palette";
+import { assigneePeople } from "../../../shared/schema/people";
+import { fieldInput } from "./fieldInput";
+import { isFieldEmpty } from "./fieldCodec";
 import { listPeople } from "../store/people";
 import { loadCascade } from "../store/priorities";
 import { groupPrioritiesForPicker, isDescendant, orgRef, sameOrg } from "../priorities/model";
@@ -20,7 +24,7 @@ import { eq, upsertWhere } from "../store/dv";
 import { pickOwner } from "../priorities/dialogs";
 import { promptConfirm } from "../prompts";
 import { Initiative, validateNewInitiative } from "./initiativeModel";
-import { FieldKind, normalizeMetrics, parseImprovementSettings, roleFillersAt, TemplateField, TemplateRole, activeRoles } from "./templateModel";
+import { normalizeMetrics, parseImprovementSettings, roleFillersAt, TemplateField, TemplateRole, activeRoles } from "./templateModel";
 import { renderMetricsList } from "./metricsList";
 
 const btn = (label: string, cls = "app-btn"): HTMLButtonElement => {
@@ -52,12 +56,13 @@ export function openEditDetails(o: EditDetailsOpts): void {
 
   void (async () => {
     const i = o.initiative;
-    const [treeRaw, siteCo, roster, impRaw, template] = await Promise.all([
+    const [treeRaw, siteCo, roster, impRaw, template, palettes] = await Promise.all([
       orgJson(),
       siteCompanies(),
       listPeople(),
       improvementSettingsJson(),
       i.templateId !== "" ? getTemplate(i.templateId).catch(() => null) : Promise.resolve(null),
+      appPalettes().catch(() => ({ states: [], titles: [] })),
     ]);
     clear(body);
     const sites = parseOrgTree(treeRaw);
@@ -272,34 +277,10 @@ export function openEditDetails(o: EditDetailsOpts): void {
     // custom fields (standard + template), pre-filled
     const fieldValues: Record<string, string> = { ...i.fieldValues };
     const allFields: TemplateField[] = [...imp.standardFields, ...(template?.fields ?? [])];
+    // every kind enters as it does on the charter card (fieldInput.ts)
+    const fiCtx = { people: assigneePeople([], roster), palette: paletteMap(palettes.states) };
     for (const cf of allFields) {
-      const cur = fieldValues[cf.key] ?? "";
-      if (cf.kind === "picklist") {
-        const sel = el("select", "app-input") as HTMLSelectElement;
-        const blank = el("option", "", cf.required ? "Choose…" : "—") as HTMLOptionElement;
-        blank.value = "";
-        sel.appendChild(blank);
-        for (const opt of cf.options) {
-          const oEl = el("option", "", opt) as HTMLOptionElement;
-          oEl.value = opt;
-          if (opt === cur) oEl.selected = true;
-          sel.appendChild(oEl);
-        }
-        sel.addEventListener("change", () => (fieldValues[cf.key] = sel.value));
-        field(cf.label + (cf.required ? " *" : ""), sel);
-      } else if ((cf.kind as FieldKind) === "longtext") {
-        const ta = el("textarea", "app-input") as HTMLTextAreaElement;
-        ta.rows = 3;
-        ta.value = cur;
-        ta.addEventListener("change", () => (fieldValues[cf.key] = ta.value.trim()));
-        field(cf.label + (cf.required ? " *" : ""), ta);
-      } else {
-        const inp = el("input", "app-input") as HTMLInputElement;
-        inp.type = cf.kind === "number" ? "number" : cf.kind === "date" ? "date" : "text";
-        inp.value = cur;
-        inp.addEventListener("change", () => (fieldValues[cf.key] = inp.value.trim()));
-        field(cf.label + (cf.required ? " *" : ""), inp);
-      }
+      field(cf.label + (cf.required ? " *" : ""), fieldInput(cf, fieldValues[cf.key] ?? "", (raw) => (fieldValues[cf.key] = raw), fiCtx));
     }
 
     // metrics belong to the initiative (rework 2026-09-03): the shared list —
@@ -374,7 +355,7 @@ export function openEditDetails(o: EditDetailsOpts): void {
           metrics: normalizeMetrics(metrics),
         };
         const errs = validateNewInitiative({ title: next.title, org: next.org, metrics: next.metrics, singleAction: i.singleAction, roles: rolePeople }, template?.metricRule ?? "none");
-        const missingReq = allFields.filter((cf) => cf.required && !(fieldValues[cf.key] ?? "").trim()).map((cf) => `"${cf.label}" is needed.`);
+        const missingReq = allFields.filter((cf) => cf.required && isFieldEmpty(cf.kind, fieldValues[cf.key])).map((cf) => `"${cf.label}" is needed.`);
         const allErrs = [...errs, ...missingReq];
         if (allErrs.length > 0) {
           err.textContent = allErrs.join(" ");

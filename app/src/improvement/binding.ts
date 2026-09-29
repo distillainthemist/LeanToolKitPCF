@@ -5,14 +5,16 @@
 // edit here or there, same data. Stage is read-only here (the stepper is
 // its edit affordance).
 
-import type { CanvasBinding } from "../../../controls/CanvasCard/types";
+import type { CanvasBinding, CanvasFieldType, CanvasValue } from "../../../controls/CanvasCard/types";
+import type { ListOption } from "../../../controls/CaptureCard/types";
+import { canvasFieldFor, decodeFieldValue, encodeFieldValue, plainFieldValue } from "./fieldCodec";
 import { promptText } from "../prompts";
 import { listPeople } from "../store/people";
 import { listInitiatives, saveInitiative } from "../store/initiatives";
 import { pickOwner, pickPeople } from "../priorities/dialogs";
 import { getTemplate, listTemplates } from "../store/templates";
 import { improvementSettingsJson } from "../store/config";
-import { activeRoles, parseImprovementSettings, roleFillersAt } from "./templateModel";
+import { activeRoles, fieldKindLabel, parseImprovementSettings, roleFillersAt } from "./templateModel";
 import type { TemplateField, TemplateRole } from "./templateModel";
 import { orgName as priorityOrgName } from "../priorities/model";
 
@@ -21,7 +23,7 @@ import { orgName as priorityOrgName } from "../priorities/model";
  *  for a template board (`tpl-<id>`) and an initiative board (`init-`,
  *  via the initiative's template). Labels are the fields' display
  *  labels; the group says where each is defined. */
-export async function headerFieldsForBoard(boardId: string): Promise<{ key: string; label: string; group: string }[]> {
+export async function headerFieldsForBoard(boardId: string): Promise<{ key: string; label: string; group: string; field: TemplateField }[]> {
   const imp = parseImprovementSettings(await improvementSettingsJson().catch(() => ""));
   let templateId = boardId.startsWith("tpl-") ? boardId.slice(4) : "";
   if (boardId.startsWith("init-")) {
@@ -31,13 +33,13 @@ export async function headerFieldsForBoard(boardId: string): Promise<{ key: stri
   let tpl = templateId !== "" ? await getTemplate(templateId).catch(() => null) : null;
   // a template board whose id is not tpl-<templateId>: find it by boardId
   if (!tpl && boardId.startsWith("tpl-")) tpl = (await listTemplates().catch(() => [])).find((t) => t.boardId === boardId) ?? null;
-  const out: { key: string; label: string; group: string }[] = [];
+  const out: { key: string; label: string; group: string; field: TemplateField }[] = [];
   const seen = new Set<string>();
   const add = (fs: TemplateField[], group: string) => {
     for (const f of fs) {
       if (f.key === "" || seen.has(f.key)) continue;
       seen.add(f.key);
-      out.push({ key: f.key, label: f.label || f.key, group });
+      out.push({ key: f.key, label: f.label || f.key, group, field: f });
     }
   };
   add(imp.standardFields, "Standard fields");
@@ -80,7 +82,9 @@ export async function bindingTargetsForBoard(boardId: string): Promise<{ value: 
     ? activeRoles(tpl).map((r: TemplateRole) => ({ key: r.key, label: r.label }))
     : Object.entries(initiative?.snapshot.roleLabels ?? {}).map(([key, label]) => ({ key, label }));
   for (const r of roles) out.push({ value: `role:${r.key}`, label: r.label, group: "Roles" });
-  for (const f of await headerFieldsForBoard(boardId)) out.push({ value: `field:${f.key}`, label: f.label, group: f.group });
+  // the type rides the label: a bound field is shown and edited AS its
+  // target's type, whatever type the layout gave it
+  for (const f of await headerFieldsForBoard(boardId)) out.push({ value: `field:${f.key}`, label: `${f.label} (${fieldKindLabel(f.field.kind)})`, group: f.group });
   return out;
 }
 
@@ -116,8 +120,11 @@ export async function makeInitiativeBinding(boardId: string, onChanged: () => vo
   if (!i) return null;
   const roster = await listPeople().catch(() => []);
   const host = document.body;
-  // the fields' display labels, for the edit prompt's title
-  const fieldLabel = new Map((await headerFieldsForBoard(boardId).catch(() => [])).map((f) => [f.key, f.label]));
+  // the header's custom fields: labels for the edit prompt, kinds for the
+  // typed editors
+  const headerFields = await headerFieldsForBoard(boardId).catch(() => []);
+  const fieldLabel = new Map(headerFields.map((f) => [f.key, f.label]));
+  const fieldDef = new Map(headerFields.map((f) => [f.key, f.field]));
 
   const tpl = i.templateId !== "" ? await getTemplate(i.templateId).catch(() => null) : null;
   const roleDefs = new Map((tpl ? activeRoles(tpl) : []).map((r) => [r.key, r]));
@@ -145,8 +152,47 @@ export async function makeInitiativeBinding(boardId: string, onChanged: () => vo
     }
     const rk = roleKeyOf(bound);
     if (rk !== null) return (i.roles[rk] ?? []).map((p) => p.who).join(", ");
-    if (bound.startsWith("field:")) return i.fieldValues[bound.slice(6)] ?? "";
+    if (bound.startsWith("field:")) {
+      const key = bound.slice(6);
+      const def = fieldDef.get(key);
+      return def ? plainFieldValue(def.kind, i.fieldValues[key]) : (i.fieldValues[key] ?? "");
+    }
     return "";
+  };
+
+  // ---- typed targets (2026-09-29): the card shows and edits a bound
+  // field AS its target's type — the same editors as a free field
+  const HEADER_TYPES: Record<string, CanvasFieldType> = { title: "text", description: "longtext", period: "text", method: "text" };
+  const typeOf = (bound: string): { type: CanvasFieldType; options: ListOption[] } | null => {
+    if (HEADER_TYPES[bound] !== undefined) return { type: HEADER_TYPES[bound], options: [] };
+    if (bound.startsWith("field:")) {
+      const def = fieldDef.get(bound.slice(6));
+      // a field the settings no longer define stays a line of text
+      if (!def) return { type: "text", options: [] };
+      const cf = canvasFieldFor(def);
+      return { type: cf.type, options: cf.options };
+    }
+    return null;
+  };
+  const value = (bound: string): CanvasValue | undefined => {
+    if (bound.startsWith("field:")) {
+      const key = bound.slice(6);
+      const def = fieldDef.get(key);
+      if (def) return decodeFieldValue(def.kind, i.fieldValues[key]);
+    }
+    const s = get(bound);
+    return s === "" ? undefined : s;
+  };
+  const setValue = async (bound: string, next: CanvasValue | undefined): Promise<void> => {
+    if (bound.startsWith("field:")) {
+      const key = bound.slice(6);
+      const def = fieldDef.get(key);
+      i.fieldValues[key] = def ? encodeFieldValue(def.kind, next) : typeof next === "string" ? next.trim() : "";
+      await saveInitiative(i);
+      onChanged();
+      return;
+    }
+    await set(bound, typeof next === "string" ? next : next === undefined ? "" : String(next));
   };
 
   const canEdit = (bound: string): boolean => !READONLY.has(bound) && i.status === "active";
@@ -209,5 +255,5 @@ export async function makeInitiativeBinding(boardId: string, onChanged: () => vo
     }
   }
 
-  return { get, canEdit, edit, kind, set };
+  return { get, canEdit, edit, kind, set, typeOf, value, setValue };
 }

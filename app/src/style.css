@@ -3867,3 +3867,22 @@ textarea.app-cp-statement { font-size: 14px; font-weight: 500; }
 .app-cp-objective-name .app-cp-objective-obj { font-weight: 400; color: #57534a; }
 .app-cp-ov-group-primary { color: var(--app-accent, #b8521c); }
 .app-cp-ov-init-primary { border-color: var(--app-accent, #b8521c); background: #f7f9ff; }
+
+/* header field inputs (fieldInput.ts): the canvas card's display and
+   editors inside the app's forms */
+.app-fi {
+  --ltk-bg: #ffffff; --ltk-fg: #26241f; --ltk-muted: #57534a; --ltk-hairline: #ddd9d1;
+  --ltk-accent: var(--app-accent, #2563eb);
+  font-size: 14px;
+}
+.app-fi-pick { border: 1px solid #d9d3c8; border-radius: 6px; padding: 7px 10px; min-height: 40px; background: #fff; display: flex; align-items: center; }
+.app-fi-pick .ltk-cv-value { flex: 1; overflow: visible; text-align: left; }
+.app-fi-pick .ltk-cv-value > * { justify-content: flex-start; text-align: left; }
+.app-fi-tap { cursor: pointer; }
+.app-fi-tap:hover, .app-fi-tap:focus-visible { border-color: var(--app-accent, #2563eb); outline: none; }
+.app-fi-rich .ltk-cv-richedit { min-height: 110px; max-height: 260px; background: #fff; }
+.app-fi-range { display: flex; align-items: center; gap: 8px; }
+.app-fi-range .app-input { flex: 1; min-width: 0; }
+.app-fi-to { font-size: 12.5px; color: #6d675c; }
+.app-fi-dlghost { position: fixed; inset: 0; width: 0; height: 0; overflow: visible; z-index: 10050; }
+.app-fi-dlghost .ltk-dialog-overlay { position: fixed; }

@@ -1086,6 +1086,23 @@ reschedule/cancel history with a reason picklist.
   `canSee` / `canViewBoard` once, and an unseen target's chip never
   names it. Harness page `actiondlg.html`. Tests 642. App-only;
   hosted checks Ben's (two accounts for the confidentiality check).
+- **2026-09-29 — header fields: the full set of types, edited in
+  place on the charter.** Ben: a charter field bound to a rich / long
+  text standard field opened a one-line popup; standard fields need
+  the canvas card's entry types, rich text included. Cause: bound
+  fields only edited inline when the LAYOUT's type was a typing type,
+  and rich text was not one — everything else fell to `promptText`.
+  Built: `FieldKind` widened to 17 kinds (`FIELD_KINDS`), the value
+  codec (`fieldCodec.ts`), typed bindings (`typeOf / value /
+  setValue` — the target's type wins), value ports in the canvas
+  editor (one edit path for free and bound fields), rich text INLINE
+  for every rich text field (`buildRichTextEditor` shared with the
+  dialog), `fieldInput.ts` for the create / edit forms, both kind
+  pickers (template wizard, Settings → Improvement) on the one list,
+  options for choice and multi choice. Excluded by design: heading
+  (layout), mini-table (needs its own columns), image (binary in the
+  header row). Existing fields keep their kinds and values. Harness
+  page `charter.html`. Tests 657. App-only; hosted checks Ben's.
 - **Where things stand (2026-09-24).** Released: v0.51.0 (2026-09-14,
   solution-carrying — value driver tree, grid entry, Metrics card,
   meeting-board driver links, rituals in several orgs, driver popup,

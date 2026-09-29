@@ -40,6 +40,9 @@ import {
   orgKeyOf,
   ragInputsFor,
   validateNewInitiative, orgsOf } from "./initiativeModel";
+import { fieldInput } from "./fieldInput";
+import { isFieldEmpty } from "./fieldCodec";
+import { assigneePeople } from "../../../shared/schema/people";
 import { renderAlsoOrgs } from "./alsoOrgs";
 import { initiativeRag } from "../priorities/model";
 import {
@@ -1013,30 +1016,10 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
         // custom fields: standard + template
         const fieldValues: Record<string, string> = {};
         const allFields = [...imp.standardFields, ...t.fields];
+        // every kind enters as it does on the charter card (fieldInput.ts)
+        const fiCtx = { people: assigneePeople([], roster), palette: stateColors };
         for (const cf of allFields) {
-          if (cf.kind === "picklist") {
-            const s = el("select", "app-input") as HTMLSelectElement;
-            const blank = el("option", "", cf.required ? "Choose…" : "—") as HTMLOptionElement;
-            blank.value = "";
-            s.appendChild(blank);
-            for (const opt of cf.options) {
-              const o = el("option", "", opt) as HTMLOptionElement;
-              o.value = opt;
-              s.appendChild(o);
-            }
-            s.addEventListener("change", () => (fieldValues[cf.key] = s.value));
-            field(cf.label + (cf.required ? " *" : ""), s);
-          } else if (cf.kind === "longtext") {
-            const ta = el("textarea", "app-input") as HTMLTextAreaElement;
-            ta.rows = 3;
-            ta.addEventListener("change", () => (fieldValues[cf.key] = ta.value.trim()));
-            field(cf.label + (cf.required ? " *" : ""), ta);
-          } else {
-            const inp = el("input", "app-input") as HTMLInputElement;
-            inp.type = cf.kind === "number" ? "number" : cf.kind === "date" ? "date" : "text";
-            inp.addEventListener("change", () => (fieldValues[cf.key] = inp.value.trim()));
-            field(cf.label + (cf.required ? " *" : ""), inp);
-          }
+          field(cf.label + (cf.required ? " *" : ""), fieldInput(cf, "", (raw) => (fieldValues[cf.key] = raw), fiCtx));
         }
         // metrics belong to the INITIATIVE (rework 2026-09-03): from the value
         // driver tree, or proposed here; the template only sets the rule
@@ -1091,7 +1074,7 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
               metrics: normalizeMetrics(metrics),
             };
             const errs = validateNewInitiative({ title: draft.title, org: draft.org, metrics: normalizeMetrics(metrics), singleAction: t.singleAction, roles: rolePeople }, t.metricRule);
-            const missingReq = allFields.filter((cf) => cf.required && !(fieldValues[cf.key] ?? "").trim()).map((cf) => `"${cf.label}" is needed.`);
+            const missingReq = allFields.filter((cf) => cf.required && isFieldEmpty(cf.kind, fieldValues[cf.key])).map((cf) => `"${cf.label}" is needed.`);
             const allErrs = [...errs, ...missingReq];
             if (allErrs.length > 0) {
               err.textContent = allErrs.join(" ");
