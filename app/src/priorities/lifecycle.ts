@@ -217,6 +217,92 @@ export async function closePriority(
  *  included) or its Metrics card — one per tab (Ben, 2026-09-14) —
  *  mounted read-only from the initiative board with the board's own
  *  renderers. */
+/** The primary initiative's commentary (2026-09-29): the latest update in
+ *  full, the earlier ones beneath — and the team adds and edits here as
+ *  on the initiative's own board (the same dialog, the same writes). */
+async function mountPrimaryCommentary(host: HTMLElement, initiativeId: string, actor: { whoId: string; who: string }): Promise<void> {
+  host.appendChild(el("div", "app-cp-muted", "Loading…"));
+  const [{ listInitiatives, listInitiativeEvents }, { listPeople }, { myRoles }, { updatesFrom, staleDays }, { renderUpdateCard, renderTrail, openUpdateDialog }, { addUpdate, editUpdate }, { todayIso }] = await Promise.all([
+    import("../store/initiatives"),
+    import("../store/people"),
+    import("../improvement/initiativeModel"),
+    import("../improvement/commentaryModel"),
+    import("../improvement/commentary"),
+    import("../improvement/commentaryActions"),
+    import("../../../shared/schema/id"),
+  ]);
+  if (!host.isConnected) return;
+  const [all, roster] = await Promise.all([listInitiatives(), listPeople().catch(() => [])]);
+  const i = all.find((x) => x.id === initiativeId) ?? null;
+  if (!host.isConnected) return;
+  clear(host);
+  if (!i) {
+    host.appendChild(el("div", "app-cp-muted", "The primary initiative no longer exists — ★ another on the Initiatives tab."));
+    return;
+  }
+  const role = roster.find((p) => p.whoId === actor.whoId)?.role ?? "user";
+  const canComment = i.status === "active" && (myRoles(i, actor.whoId).length > 0 || role === "superadmin" || role === "siteadmin");
+  const head = el("div", "app-cp-ov-charterhead");
+  head.append(el("span", "app-cp-ov-chartertitle", `★ ${i.title}`), el("span", "app-cp-muted", i.description));
+  const open = btn("Open board ↗", "app-link");
+  open.disabled = i.boardId === "";
+  open.addEventListener("click", () => {
+    rememberBoardOrigin("#/priorities", "");
+    window.location.hash = `#/board/${i.boardId}`;
+  });
+  head.appendChild(open);
+  host.appendChild(head);
+  const bodyEl = el("div", "app-cm-tab");
+  host.appendChild(bodyEl);
+  const paint = async () => {
+    const events = await listInitiativeEvents(i).catch(() => []);
+    if (!bodyEl.isConnected) return;
+    clear(bodyEl);
+    const list = updatesFrom(events);
+    const today = todayIso();
+    const bar = el("div", "app-cm-tabhead");
+    bar.appendChild(el("span", "app-sb-h", list.length > 0 ? `Commentary · ${list.length}` : "Commentary"));
+    const stale = i.status === "active" ? staleDays(list[0]?.at ?? "", events.length > 0 ? events[events.length - 1].at : "", today) : null;
+    if (stale !== null) bar.appendChild(el("span", "app-sb-stale", `⚠ No update for ${stale} days`));
+    bar.appendChild(el("span", "app-bar-gap"));
+    const edit = (u: (typeof list)[number]) =>
+      openUpdateDialog({
+        existing: u,
+        offerFlag: false,
+        onSave: async (fields) => {
+          await editUpdate(u, fields, actor);
+          await paint();
+        },
+      });
+    if (canComment) {
+      const add = btn("＋ Add update", "app-btn app-btn-primary app-sb-btn");
+      add.addEventListener("click", () =>
+        openUpdateDialog({
+          offerFlag: i.flag === "",
+          onSave: async (fields, raiseFlag) => {
+            await addUpdate(i, fields, raiseFlag, actor);
+            await paint();
+          },
+        })
+      );
+      bar.appendChild(add);
+    }
+    bodyEl.appendChild(bar);
+    if (list.length === 0) {
+      bodyEl.appendChild(el("div", "app-cp-muted", "No commentary yet."));
+      return;
+    }
+    const lead = renderUpdateCard(list[0], today, canComment ? () => edit(list[0]) : null);
+    lead.classList.add("app-cm-lead");
+    bodyEl.appendChild(lead);
+    if (list.length > 1) {
+      bodyEl.appendChild(el("div", "app-sb-h app-cm-earlier", "Earlier updates"));
+      bodyEl.appendChild(renderTrail({ list, today, canEdit: canComment, onEdit: edit, skipLatest: true }));
+    }
+  };
+  await paint();
+}
+
 async function mountPrimaryCard(host: HTMLElement, initiativeId: string, cardType: "CanvasCard" | "MetricsCard"): Promise<void> {
   host.appendChild(el("div", "app-cp-muted", "Loading…"));
   const [{ listInitiatives }, { getBoard }, { parseManifest }, { liveRow }, { cardMounter }, { makeInitiativeBinding }, { defaultTheme }] = await Promise.all([
@@ -548,7 +634,7 @@ export function openPriorityOverlay(ctx: LifecycleCtx, p: Priority, onEdit: (p: 
     if (e.target === scrim) close();
   });
 
-  let tab: "initiatives" | "charter" | "metrics" | "actions" | "cascade" | "history" = "initiatives";
+  let tab: "initiatives" | "actions" | "commentary" | "metrics" | "cascade" | "charter" | "history" = "initiatives";
   let events: PriorityEvent[] | null = null;
 
   const paint = () => {
@@ -703,11 +789,14 @@ export function openPriorityOverlay(ctx: LifecycleCtx, p: Priority, onEdit: (p: 
     const tabs = el("div", "app-cp-ov-tabs");
     const rags = ctx.ragsFor(live);
     const tabDefs: [typeof tab, string][] = [
+      // Ben's order, 2026-09-29: what is being done, then how it is
+      // going, then the reference material
       ["initiatives", `Initiatives ${rags.length}`],
-      ["charter", "Charter"],
-      ["metrics", "Metrics"],
       ["actions", "Actions"],
+      ["commentary", "Commentary"],
+      ["metrics", "Metrics"],
       ["cascade", "Cascade"],
+      ["charter", "Charter"],
       ["history", "History"],
     ];
     for (const [key, label] of tabDefs) {
@@ -807,6 +896,14 @@ export function openPriorityOverlay(ctx: LifecycleCtx, p: Priority, onEdit: (p: 
         const host = el("div", "app-cp-ov-charter");
         body.appendChild(host);
         void mountPrimaryCard(host, live.primaryInitiativeId, tab === "charter" ? "CanvasCard" : "MetricsCard");
+      }
+    } else if (tab === "commentary") {
+      if (live.primaryInitiativeId === "") {
+        body.appendChild(el("div", "app-cp-muted", "No primary initiative yet — ★ one on the Initiatives tab. Its commentary shows here."));
+      } else {
+        const host = el("div", "app-cp-ov-charter");
+        body.appendChild(host);
+        void mountPrimaryCommentary(host, live.primaryInitiativeId, ctx.actor());
       }
     } else if (tab === "actions") {
       // the actions Gantt (P8) — the List | Gantt switch lives inside it

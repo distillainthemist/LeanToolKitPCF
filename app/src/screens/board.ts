@@ -193,8 +193,23 @@ async function renderBoard(
   // a meeting created because the viewer arrived on a link to it returns
   // them to the board alone — the schedule was only opened to confirm
   let reHideAfterCreate = false;
+  // initiative boards open their details pane from a handle on the
+  // board's right edge (2026-09-29), not a toolbar button
+  let detailsHandle: HTMLButtonElement | null = null;
+  const paintDetailsHandle = () => {
+    if (!detailsHandle) return;
+    detailsHandle.replaceChildren(
+      el("span", "app-ib-handle-glyph", scheduleHidden ? "‹" : "›"),
+      el("span", "app-ib-handle-cap", "DETAILS")
+    );
+    const label = scheduleHidden ? "Show the details: people, stages and gates, commentary" : "Hide the details";
+    detailsHandle.title = label;
+    detailsHandle.setAttribute("aria-label", label);
+    detailsHandle.setAttribute("aria-expanded", scheduleHidden ? "false" : "true");
+  };
   const setScheduleHidden = (on: boolean) => {
     scheduleHidden = on;
+    paintDetailsHandle();
     split.classList.toggle("app-board-solo", on);
     scheduleBtn.textContent = initBoard
       ? on
@@ -827,11 +842,25 @@ async function renderBoard(
       leftHost.replaceChildren();
       const paneHost = el("div", "app-ib-panehost");
       leftHost.appendChild(paneHost);
-      scheduleBtn.style.display = "";
+      // the status band sits above the cards; the details pane opens from
+      // the handle on the board's right edge (the toolbar button retires)
+      const bandHost = el("div", "app-sb-host");
+      rightHost.prepend(bandHost);
+      const edge = el("button", "app-ib-handle") as HTMLButtonElement;
+      edge.type = "button";
+      detailsHandle = edge;
+      split.insertBefore(edge, leftHost);
+      split.classList.add("app-board-hashandle");
+      scheduleBtn.style.display = "none";
       setScheduleHidden(true); // always collapsed on open (Ben)
       void import("../improvement/boardHeader").then(({ mountInitiativePane }) => {
         const handle = mountInitiativePane({
           paneHost,
+          bandHost,
+          onOpenPane: () => {
+            reHideAfterCreate = false;
+            setScheduleHidden(false);
+          },
           titleHost: titleBits,
           controlsHost: paneControls,
           kebabHost: paneKebab,
@@ -868,7 +897,9 @@ async function renderBoard(
         paneHandle = handle;
         cleanups.push(handle.teardown);
         // opening the pane lands on the active stage
-        scheduleBtn.addEventListener("click", () => {
+        edge.addEventListener("click", () => {
+          reHideAfterCreate = false;
+          setScheduleHidden(!scheduleHidden);
           if (!scheduleHidden) setTimeout(() => handle.revealActive(), 60);
         });
       });

@@ -1,0 +1,11 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Status band harness</title></head>
+<body style="margin:0;background:#f2f1ee;font-family:'Segoe UI',system-ui,sans-serif;color:#26241f">
+<div id="cases" style="padding:10px 16px;display:flex;gap:8px;flex-wrap:wrap"></div>
+<div style="margin:0 16px;display:grid;grid-template-columns:minmax(0,5fr) 40px;gap:8px;height:430px" class="app-board-split app-board-hashandle app-board-solo">
+  <div class="app-board-right"><div id="band" class="app-sb-host"></div><div style="flex:1;padding:14px;color:#6d675c;font-size:13px">the cards</div></div>
+  <button class="app-ib-handle" type="button"><span class="app-ib-handle-glyph">‹</span><span class="app-ib-handle-cap">DETAILS</span></button>
+</div>
+<div id="trail" style="margin:16px;max-width:420px" class="app-ib-pane"></div>
+<script type="module" src="./band.ts"></script>
+</body></html>

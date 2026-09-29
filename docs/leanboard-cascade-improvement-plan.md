@@ -1114,6 +1114,19 @@ reschedule/cancel history with a reason picklist.
   Navigation: full-height PREV / NEXT rails (the ritual card walk's
   grammar), neighbours named in the footer. Harness page `walk.html`.
   App-only; hosted check Ben's.
+- **2026-09-29 — commentary and the stage gate made visible.** Ben's
+  decisions: any member of the initiative team edits; earlier wording
+  is kept; no delete; the band collapses; stale after 14 days; gate
+  buttons on the band; the popup's Commentary tab is editable; an
+  edge handle opens the pane. Built: the status band, the editable
+  trail (every update, newest first, "Earlier wording" behind an
+  edited one), the details handle (the toolbar's Show details button
+  retires on initiative boards), the popup's Commentary tab and the
+  tab order Initiatives · Actions · Commentary · Metrics · Cascade ·
+  Charter · History. `InitiativeEvent` now carries its row id;
+  `updateInitiativeEventDetail` is the one new store write. No schema
+  change (Write was already granted on the events table). Harness
+  page `band.html`. Tests 665. App-only; hosted checks Ben's.
 - **Where things stand (2026-09-24).** Released: v0.51.0 (2026-09-14,
   solution-carrying — value driver tree, grid entry, Metrics card,
   meeting-board driver links, rituals in several orgs, driver popup,

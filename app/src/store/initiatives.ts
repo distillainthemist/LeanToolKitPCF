@@ -140,11 +140,20 @@ export async function appendInitiativeEvent(
 }
 
 export interface InitiativeEvent {
+  /** The row's GUID — what an edit writes back to. */
+  id: string;
   kind: string;
   detail: Record<string, unknown>;
   actorId: string;
   actorName: string;
   at: string;
+}
+
+/** Rewrite one event's detail (an edited commentary update — the detail
+ *  itself carries who edited, when, and the earlier wording). */
+export async function updateInitiativeEventDetail(eventId: string, detail: Record<string, unknown>): Promise<void> {
+  if (eventId === "") return;
+  await Ben_ltkinitiativeeventsService.update(eventId, { ben_detailjson: JSON.stringify(detail) } as never);
 }
 
 export async function listInitiativeEvents(i: Initiative): Promise<InitiativeEvent[]> {
@@ -158,7 +167,7 @@ export async function listInitiativeEvents(i: Initiative): Promise<InitiativeEve
     } catch {
       detail = {};
     }
-    return { kind: r.ben_kind ?? "", detail, actorId: r.ben_actorid ?? "", actorName: r.ben_actorname ?? "", at: r.ben_at ?? "" };
+    return { id: r.ben_ltkinitiativeeventid ?? "", kind: r.ben_kind ?? "", detail, actorId: r.ben_actorid ?? "", actorName: r.ben_actorname ?? "", at: r.ben_at ?? "" };
   });
 }
 

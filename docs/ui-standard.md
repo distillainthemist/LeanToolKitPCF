@@ -76,6 +76,16 @@ the same commit.
   never both. An existing linked action always opens on its chip. A
   target the viewer may not see reads "not available to you" — never
   its title. Never a full list: it would not scale.
+- **Initiative board**: a status band above the cards (stage and
+  gate left, latest update right; cards `#fff` on the `#faf8f4`
+  strip, uppercase 11px block heads, `.app-btn` / `.app-btn-primary`
+  at 34px, `.app-cp-ov-link` for the quiet links). The details pane
+  opens from a full-height handle on the board's right edge (glyph +
+  vertical caption, the card-walk rail's look), not a toolbar button.
+  What a team must see every visit lives on the band; reference
+  detail lives in the pane.
+- **Priority popup tabs**, in this order: Initiatives, Actions,
+  Commentary, Metrics, Cascade, Charter, History.
 - **Present view (cascaded priorities)**: a full-height PREV / NEXT
   rail either side of the stage (72px, glyph + caption — the meeting
   ritual's card walk at TV scale), the neighbours named in the footer;

@@ -53,7 +53,7 @@ app/            the code app (vanilla TypeScript, Vite, no framework)
   tools/             import-gate, chunk-report (build-time checks)
   harness/           Vite pages that mount controls with stubbed stores
                      for screenshots (grid, kpi, vdt, wizard, pdca, actiondlg,
-                     charter, walk) —
+                     charter, walk, band) —
                      served by the `pdca-harness` launch config
 shared/         UI kit + tokens shared with the (retired) PCF controls
 controls/       retired PCF controls — kept for shared model code
@@ -278,6 +278,22 @@ model section) — the canvas/PCF sections there are historical.
   kind through `improvement/fieldInput.ts`, which reuses the canvas
   card's display and dialogs. No `promptText` popup remains on a
   typed target; roles keep their people pickers.
+
+- **The initiative board's status band** (2026-09-29,
+  `improvement/statusBand.ts`): above the cards, always in view — the
+  current stage and its gate (with the button that applies to the
+  viewer: Request gate, Approve / Decline, Move to…) and the latest
+  commentary. It collapses to one line, remembered per person
+  (`initiativeBand` in the prefs JSON). The full stage rail and the
+  whole trail stay in the details pane, which opens from a handle on
+  the board's right edge. **Commentary** is one event kind
+  (`comment`: High / Low / Next / Support needed) with a pure model
+  (`commentaryModel.ts`), one UI (`commentary.ts`) and two writes
+  (`commentaryActions.ts`) shared by the band, the pane and the
+  priority popup's Commentary tab. Any member of the initiative team
+  adds and edits; an edit rewrites the same event row, stamps who and
+  when, and keeps the earlier wording in the row's detail (capped at
+  ten). Nothing is deleted. Stale after 14 days without an update.
 
 ### 3.4 Actions
 

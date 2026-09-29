@@ -7,7 +7,9 @@
 //     key details (org · period · priority · roles · health) → the STAGE
 //     RAIL (every stage with target date + gate approvals, the chevron
 //     stepper's replacement — richer and vertical) → commentary
-//     (High / Low / Next / Support needed; latest with ‹ older stepping).
+//     (High / Low / Next / Support needed; every update, newest first).
+//   • bandHost (above the cards, 2026-09-29): the STATUS BAND — the
+//     current stage and its gate, and the latest update, always in view.
 //
 // Escalation notifies the sponsor by Teams/email through the docs notify
 // road (dynamic import — the connectors stay docs-only per the import
@@ -24,6 +26,11 @@ import { appendInitiativeEvent, listInitiativeEvents, listInitiatives, saveIniti
 import { InitiativeEvent } from "../store/initiatives";
 import { dayLabel } from "../linkTitle";
 import { Initiative, myRoles, nextGateFor, PendingGate } from "./initiativeModel";
+import { mergeUserPrefs, userPrefsJson } from "../store/config";
+import { openUpdateDialog, renderTrail } from "./commentary";
+import { addUpdate, editUpdate } from "./commentaryActions";
+import { daysBetween, staleDays, Update, updatesFrom } from "./commentaryModel";
+import { BandGate, BandStage, renderStatusBand } from "./statusBand";
 import { HealthQuestion, parseImprovementSettings, PDCA_TOKENS, roleFillersAt } from "./templateModel";
 
 const btn = (label: string, cls = "app-btn"): HTMLButtonElement => {
@@ -50,12 +57,18 @@ export interface InitiativePaneOpts {
   /** Called when a gate's final approval lands, BEFORE the stage moves —
    *  the board stamps its snapshot here (P6e). */
   onGateApproved?: (stageName: string) => Promise<void>;
+  /** Above the cards: the status band (stage and gate · latest update). */
+  bandHost?: HTMLElement;
+  /** The band asks for the details pane to be opened. */
+  onOpenPane?: () => void;
 }
 
 export interface InitiativePaneHandle {
   teardown: () => void;
   /** Scroll the pane's stage rail to the active stage (Show details). */
   revealActive: () => void;
+  /** Scroll the pane to its commentary trail. */
+  revealCommentary: () => void;
   /** Re-read the initiative and repaint the pane alone (a charter's bound
    *  field wrote the header — no board remount, 2026-09-15). */
   refresh: () => Promise<void>;
@@ -67,6 +80,7 @@ export function mountInitiativePane(o: InitiativePaneOpts): InitiativePaneHandle
   let dead = false;
   const cleanups: (() => void)[] = [];
   let activeStageEl: HTMLElement | null = null;
+  let commentaryEl: HTMLElement | null = null;
   let refreshPane: () => Promise<void> = async () => undefined;
 
   void (async () => {
@@ -94,6 +108,15 @@ export function mountInitiativePane(o: InitiativePaneOpts): InitiativePaneHandle
     const mine = () => myRoles(i, who?.objectId ?? "").length > 0 || isAdmin;
     const actor = () => ({ whoId: who?.objectId ?? "", who: me?.who ?? who?.name ?? "" });
     let stageMode: "current" | "all" = "all"; // default All (Ben, 2026-08-28)
+    // the band's one-line state follows the person (their prefs row)
+    let bandCollapsed = false;
+    try {
+      const prefs = JSON.parse((await userPrefsJson(who?.objectId ?? "").catch(() => "")) || "{}") as { initiativeBand?: { collapsed?: unknown } };
+      bandCollapsed = prefs.initiativeBand?.collapsed === true;
+    } catch {
+      bandCollapsed = false;
+    }
+    if (dead) return;
 
     const roleLabel = (key: string) => i.snapshot.roleLabels[key] ?? key;
     const emailOf = (whoId: string) => roster.find((p) => p.whoId === whoId)?.email ?? "";
@@ -128,6 +151,10 @@ export function mountInitiativePane(o: InitiativePaneOpts): InitiativePaneHandle
       clear(o.controlsHost);
       if (o.kebabHost) clear(o.kebabHost);
       clear(pane);
+      if (o.bandHost) {
+        clear(o.bandHost);
+        o.bandHost.appendChild(renderBand());
+      }
       o.onStageFilter(
         stageMode,
         i.stageId,
@@ -420,137 +447,142 @@ export function mountInitiativePane(o: InitiativePaneOpts): InitiativePaneHandle
     };
 
     // ---- commentary (High / Low / Next / Support needed) -------------------------
-    interface Comment {
-      high: string;
-      low: string;
-      next: string;
-      support: string;
-      who: string;
-      at: string;
-    }
-    let commentIdx = 0; // 0 = latest
-    const commentList = (): Comment[] =>
-      events
-        .filter((e) => e.kind === "comment")
-        .map((c) => ({
-          high: String(c.detail.high ?? ""),
-          low: String(c.detail.low ?? ""),
-          next: String(c.detail.next ?? ""),
-          support: String(c.detail.support ?? ""),
-          who: c.actorName,
-          at: c.at,
-        }));
+    // Any member of the initiative team may add AND edit (Ben, 2026-09-29);
+    // an edit keeps the earlier wording. Nothing is deleted.
+    const canComment = () => mine() && i.status === "active";
+    const updates = (): Update[] => updatesFrom(events);
+    const afterWrite = async () => {
+      await loadEvents();
+      render();
+    };
+    const openAdd = () =>
+      openUpdateDialog({
+        offerFlag: i.flag === "",
+        onSave: async (fields, raiseFlag) => {
+          await addUpdate(i, fields, raiseFlag, actor());
+          await afterWrite();
+        },
+      });
+    const openEdit = (u: Update) =>
+      openUpdateDialog({
+        existing: u,
+        offerFlag: false,
+        onSave: async (fields) => {
+          await editUpdate(u, fields, actor());
+          await afterWrite();
+        },
+      });
 
+    /** The pane's trail: every update, newest first. */
     const renderCommentary = (): HTMLElement => {
       const box = el("div", "app-ib-comment");
+      commentaryEl = box;
       const head = el("div", "app-ib-comment-head");
-      head.appendChild(el("span", "app-tw-preview-h", "Commentary"));
+      const list = updates();
+      head.appendChild(el("span", "app-tw-preview-h", list.length > 0 ? `Commentary · ${list.length}` : "Commentary"));
       head.appendChild(el("span", "app-bar-gap"));
-      if (mine() && i.status === "active") {
-        const add = btn("Add", "app-cp-ov-link");
-        add.addEventListener("click", () => openAddComment());
+      if (canComment()) {
+        const add = btn("Add update", "app-cp-ov-link");
+        add.addEventListener("click", openAdd);
         head.appendChild(add);
       }
       box.appendChild(head);
-      const list = commentList();
-      if (commentIdx >= list.length) commentIdx = Math.max(0, list.length - 1);
-      const c = list[commentIdx] ?? null;
-      if (c === null) box.appendChild(el("div", "app-cp-muted", "No commentary yet."));
-      else {
-        for (const [label, text] of [["High", c.high], ["Low", c.low], ["Next", c.next], ["Support needed", c.support]] as const) {
-          if (text === "") continue;
-          const line = el("div", "app-ib-comment-line");
-          line.append(el("span", "app-ib-comment-k", label), el("span", undefined, text));
-          box.appendChild(line);
-        }
-        const meta = el("div", "app-ib-comment-meta");
-        meta.appendChild(el("span", "ltk-mw-help", `${c.who} · ${c.at.slice(0, 10)}${commentIdx > 0 ? ` · ${commentIdx} newer` : ""}`));
-        meta.appendChild(el("span", "app-bar-gap"));
-        if (commentIdx < list.length - 1) {
-          const older = btn("‹ older", "app-cp-ov-link");
-          older.addEventListener("click", () => {
-            commentIdx++;
-            render();
-          });
-          meta.appendChild(older);
-        }
-        if (commentIdx > 0) {
-          const newer = btn("newer ›", "app-cp-ov-link");
-          newer.addEventListener("click", () => {
-            commentIdx--;
-            render();
-          });
-          meta.appendChild(newer);
-        }
-        box.appendChild(meta);
-      }
+      if (list.length === 0) box.appendChild(el("div", "app-cp-muted", "No commentary yet."));
+      else box.appendChild(renderTrail({ list, today: todayIso(), canEdit: canComment(), onEdit: openEdit }));
       return box;
     };
 
-    const openAddComment = () => {
-      const scrim = el("div", "app-modal-overlay");
-      const box = el("div", "app-modal");
-      box.appendChild(el("div", "app-modal-title", "Add commentary"));
-      const mk = (label: string, ph: string) => {
-        const ta = el("textarea", "app-input") as HTMLTextAreaElement;
-        ta.rows = 2;
-        ta.placeholder = ph;
-        const f = el("div", "app-field");
-        f.append(el("span", "app-field-label", label), ta);
-        box.appendChild(f);
-        return ta;
+    // ---- the status band (above the cards) ----------------------------------------
+    const openPaneAt = (reveal: () => void) => {
+      o.onOpenPane?.();
+      setTimeout(reveal, 80);
+    };
+    const bandStage = (): BandStage | null => {
+      const stages = i.snapshot.stages;
+      if (stages.length === 0) return null;
+      const idx = Math.max(0, stages.findIndex((st) => st.id === i.stageId));
+      const cur = stages[idx];
+      const target = i.stageTargets[cur.id] ?? "";
+      return {
+        name: cur.name,
+        position: idx + 1,
+        count: stages.length,
+        colours: stages.map((st) => PDCA_TOKENS[st.pdca].fg),
+        fg: PDCA_TOKENS[cur.pdca].fg,
+        bg: PDCA_TOKENS[cur.pdca].bg,
+        target,
+        overdueDays: target !== "" && target < todayIso() ? daysBetween(target, todayIso()) : null,
       };
-      const high = mk("High", "What went well");
-      const low = mk("Low", "What hurt");
-      const next = mk("Next", "What happens next");
-      const support = mk("Support needed", "What would unblock this");
-      // support text and the ⚐ flag must not silently disagree — the tick
-      // pre-arms when support text exists, stays the author's call
-      let flagWrap: HTMLElement | null = null;
-      let flagBox: HTMLInputElement | null = null;
-      if (i.flag === "") {
-        flagWrap = el("label", "app-check app-ib-supportflag");
-        flagBox = el("input") as HTMLInputElement;
-        flagBox.type = "checkbox";
-        flagWrap.append(flagBox, el("span", undefined, "Raise the ⚐ Needs support flag"));
-        flagWrap.style.display = "none";
-        box.appendChild(flagWrap);
-        support.addEventListener("input", () => {
-          const has = support.value.trim() !== "";
-          flagWrap!.style.display = has ? "" : "none";
-          if (has && !flagBox!.dataset.touched) flagBox!.checked = true;
-        });
-        flagBox.addEventListener("change", () => {
-          flagBox!.dataset.touched = "1";
-        });
+    };
+    const bandGate = (): BandGate | null => {
+      const stages = i.snapshot.stages;
+      if (i.status !== "active" || stages.length === 0) return null;
+      const idx = Math.max(0, stages.findIndex((st) => st.id === i.stageId));
+      const isLast = idx === stages.length - 1;
+      const gate = isLast ? i.snapshot.completeGate : stages[idx].gate;
+      const toName = isLast ? "Complete" : stages[idx + 1].name;
+      const toId = isLast ? "" : stages[idx + 1].id;
+      if (!gate.enabled) {
+        return {
+          tone: "muted",
+          text: `Next: ${toName} · no approval needed`,
+          approvals: [],
+          actions: mine() ? [{ label: `Move to ${toName}`, kind: "plain", onClick: () => openMoveDialog(toId) }] : [],
+        };
       }
-      const foot = el("div", "app-modal-footer");
-      const cancel = btn("Cancel", "app-link");
-      cancel.addEventListener("click", () => scrim.remove());
-      const save = btn("Save", "app-btn app-btn-primary");
-      save.addEventListener("click", () => {
-        void (async () => {
-          await appendInitiativeEvent(
-            i,
-            "comment",
-            { high: high.value.trim(), low: low.value.trim(), next: next.value.trim(), support: support.value.trim() },
-            actor()
-          );
-          if (flagBox?.checked && support.value.trim() !== "" && i.flag === "") {
-            i.flag = "flag";
-            await persist();
-            await appendInitiativeEvent(i, "flag", { flag: "flag" }, actor());
-          }
-          scrim.remove();
-          commentIdx = 0;
-          await loadEvents();
+      const pending = i.gate;
+      if (pending === null) {
+        return {
+          tone: "muted",
+          text: `⚑ Gate to ${toName} · not yet requested`,
+          approvals: gate.approverRoles.map((r) => ({ label: roleLabel(r), state: "wait" as const })),
+          actions: mine() ? [{ label: "Request gate", kind: "primary", onClick: () => requestGate(toId, toName, gate.approverRoles) }] : [],
+        };
+      }
+      const undecided = pending.approverRoles.filter((r) => !pending.decisions[r]);
+      const declined = pending.approverRoles.filter((r) => pending.decisions[r] && !pending.decisions[r].approved);
+      return {
+        tone: declined.length > 0 ? "no" : "wait",
+        text:
+          declined.length > 0
+            ? `⚑ Gate to ${toName} · declined by ${declined.map(roleLabel).join(", ")}`
+            : `⚑ Gate to ${toName} · waiting on ${undecided.map(roleLabel).join(", ")}`,
+        approvals: pending.approverRoles.map((r) => {
+          const d = pending.decisions[r];
+          return { label: roleLabel(r), state: d ? (d.approved ? ("ok" as const) : ("no" as const)) : ("wait" as const) };
+        }),
+        actions: iAmApprover(undecided)
+          ? [
+              { label: "Approve", kind: "primary", onClick: () => void decide(pending, true) },
+              { label: "Decline", kind: "danger", onClick: () => void decide(pending, false) },
+            ]
+          : [],
+      };
+    };
+    const renderBand = (): HTMLElement => {
+      const list = updates();
+      const started = events.length > 0 ? events[events.length - 1].at : "";
+      return renderStatusBand({
+        collapsed: bandCollapsed,
+        onToggle: () => {
+          bandCollapsed = !bandCollapsed;
           render();
-        })();
+          const id = who?.objectId ?? "";
+          if (id !== "") void mergeUserPrefs(id, { initiativeBand: { collapsed: bandCollapsed } }).catch(() => undefined);
+        },
+        stage: i.singleAction ? null : bandStage(),
+        completed: i.status === "completed",
+        gate: i.singleAction ? null : bandGate(),
+        onOpenStages: () => openPaneAt(() => activeStageEl?.scrollIntoView({ block: "center", behavior: "smooth" })),
+        latest: list[0] ?? null,
+        updateCount: list.length,
+        today: todayIso(),
+        stale: i.status === "active" ? staleDays(list[0]?.at ?? "", started, todayIso()) : null,
+        canComment: canComment(),
+        onAdd: openAdd,
+        onEdit: openEdit,
+        onAllUpdates: () => openPaneAt(() => commentaryEl?.scrollIntoView({ block: "start", behavior: "smooth" })),
       });
-      foot.append(cancel, save);
-      box.appendChild(foot);
-      scrim.appendChild(box);
-      document.body.appendChild(scrim);
     };
 
     // ---- health check (§2.4; questions from Settings → Improvement) --------------
@@ -786,9 +818,13 @@ export function mountInitiativePane(o: InitiativePaneOpts): InitiativePaneHandle
       dead = true;
       for (const fn of cleanups) fn();
       pane.remove();
+      if (o.bandHost) clear(o.bandHost);
     },
     revealActive: () => {
       activeStageEl?.scrollIntoView({ block: "center", behavior: "smooth" });
+    },
+    revealCommentary: () => {
+      commentaryEl?.scrollIntoView({ block: "start", behavior: "smooth" });
     },
     refresh: () => refreshPane(),
   };
