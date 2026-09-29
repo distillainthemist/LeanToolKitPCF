@@ -4,7 +4,6 @@
 // dev server.
 
 import { setActionLinkProvider, setActionViewerProvider, setEndorsementLookup } from "../../shared/ui/actionLinkProvider";
-import { currentViewer } from "./runtime";
 import { el, clear } from "../../shared/ui/dom";
 import { boardOrigin, REOPEN_PRIORITY_KEY } from "./improvement/boardOrigin";
 import { getLeaveGuard, setLeaveGuard } from "./navGuard";
@@ -17,11 +16,27 @@ setActionLinkProvider(() => import("./actions/linkTargets").then((m) => m.loadLi
 // endorsement: does closing this action wait for its endorser, and may
 // the viewer endorse? Answered from a cache the module keeps warm; the
 // module loads on first use (the shell carries the registry only)
+// the runtime module is loaded by the boot below (a dynamic import — it
+// carries the host SDK, which stays out of the shell chunk); until then
+// nobody is signed in as far as these providers know
+let viewerNow: (() => { objectId: string; name: string } | null) | null = null;
+const currentViewer = (): { objectId: string; name: string } | null => (viewerNow ? viewerNow() : null);
 let endorsementNow: ((a: { initiativeId?: string; instanceId: string }) => { on: boolean; mine: boolean } | null) | null = null;
-void import("./actions/endorsement").then((m) => {
-  endorsementNow = m.endorsementNow;
+let endorsementAsked = false;
+setEndorsementLookup((a) => {
+  if (!currentViewer()) return null;
+  if (endorsementNow) return endorsementNow(a);
+  // first use: fetch the module and warm its cache. This ask answers
+  // "not known yet" — the store applies the rule at the write regardless
+  if (!endorsementAsked) {
+    endorsementAsked = true;
+    void import("./actions/endorsement").then((m) => {
+      endorsementNow = m.endorsementNow;
+      m.warmEndorsement();
+    });
+  }
+  return null;
 });
-setEndorsementLookup((a) => (endorsementNow && currentViewer() ? endorsementNow(a) : null));
 // who is commenting — the author stamped on a comment written in any
 // action dialog
 setActionViewerProvider(() => {
@@ -83,6 +98,7 @@ app.appendChild(outlet);
 void (async () => {
   try {
     const { detectHost, currentViewer } = await import("./runtime");
+    viewerNow = currentViewer;
     if (!(await detectHost())) return;
     // a shared ritual link arrives as a player launch parameter — honour
     // it once, and only when the app opened on its landing route

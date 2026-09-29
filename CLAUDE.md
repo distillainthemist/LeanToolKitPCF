@@ -168,6 +168,11 @@ Version lives in the tag alone — nothing is stamped into files.
   `powerplatformusercontent.com` and its URL opens nothing for the
   person who receives it. Three notification links had this wrong
   (2026-09-29).
+- **`main.ts` imports nothing heavy statically.** `./runtime` carries
+  the host SDK and is loaded by a dynamic import at boot; a static
+  `import { currentViewer } from "./runtime"` moved 7 kB into the
+  shell chunk (2026-09-30). Read the chunk report's `index` line after
+  touching `main.ts`, not only its OK.
 - **Store reads are cached** (`app/src/store/changes.ts`, 60 s, by
   topic): every new writer of initiatives / boards / drivers /
   palettes / people must `bumpChange(topic)`; every new reader goes
