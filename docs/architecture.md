@@ -52,7 +52,7 @@ app/            the code app (vanilla TypeScript, Vite, no framework)
   src/generated/     pac-generated connector/table services (do not edit)
   tools/             import-gate, chunk-report (build-time checks)
   harness/           Vite pages that mount controls with stubbed stores
-                     for screenshots (grid, kpi, vdt, wizard, pdca) —
+                     for screenshots (grid, kpi, vdt, wizard, pdca, actiondlg) —
                      served by the `pdca-harness` launch config
 shared/         UI kit + tokens shared with the (retired) PCF controls
 controls/       retired PCF controls — kept for shared model code
@@ -268,13 +268,30 @@ model section) — the canvas/PCF sections there are historical.
   hub labels by the board's name. `initiativeId` is stamped at the ONE
   write path for any action whose board is an initiative board and
   healed onto older rows on read (`actionBelongsTo` is the one match
-  rule readers use). When no board is given to the write, an
-  `init-…:board` key stamps that board and a `hub…` key clears it.
-  `relinkInitiative` (shared) moves an action onto / off an initiative
-  from a dialog: channel-keyed actions (personal, initiative channel,
-  legacy `improvement:`) move with the link; card-keyed ones and a
-  meeting board's channel keep their home and only gain the id. PDCA
-  progression rides `ben_pdca` (Closed mirrors done).
+  rule readers use). PDCA progression rides `ben_pdca` (Closed mirrors
+  done).
+- **Links are exclusive** (2026-09-29): an action is personal, or
+  linked to ONE ritual, or to ONE initiative. No column holds the
+  link — `shared/schema/actionLinks.ts` reads it from the instance
+  key and the initiative id (`currentLink`), and `applyLink` MOVES
+  the action: onto the target board's channel (the legacy
+  `improvement:<id>` key for an initiative without a board) or the
+  personal channel, setting or clearing the initiative id. Rows from
+  v0.56.0 that carry both read as the initiative and normalise on
+  their next relink. At the write, a channel key is authoritative
+  for the board column (`stampedBoard`): `<board>:board` stamps that
+  board, `hub…` clears it, even when a card editor passes its own
+  board; a card key takes the caller's board, or keeps the stamped
+  one when none is given.
+- **One link provider** (`shared/ui/actionLinkProvider.ts`): the shell
+  registers it at boot and every action dialog — cards, hub rows,
+  quick add — reads it, so no control is handed a list. It resolves
+  to `app/src/actions/linkTargets.ts`, which applies visibility ONCE:
+  rituals through `canViewBoard` (and not on an archived site),
+  initiatives through `canSee`, active only. Cached 60s, dropped by a
+  boards / initiatives / people bump. A save that moved an existing
+  action fires `ltk-action-moved`; the focused card view flushes and
+  re-mounts so the list it left no longer shows it.
 - **Confidential actions** (`ben_confidential` / `ben_createdby` /
   `ben_visiblejson`): seen by the creator, the assignees, each
   assignee's DIRECT manager (Office 365 Users `Manager`, session-cached)
@@ -286,12 +303,11 @@ model section) — the canvas/PCF sections there are historical.
   through Dataverse itself.
 - **Entry points:** every card's action dialog (Confidential check
   included), the action board's kanban / list, the hub's rows, the
-  top-bar **＋ Add action** (assignee defaults to the viewer; "Goes to"
-  defaults to the OPEN board — initiative or meeting — else Personal;
-  an Initiative select links a personal / meeting-board action
-  outright), the Actions tab's composer (assigns to the scoped person).
-  The hub's rows and quick add pass `initiatives` (active, by title)
-  to the shared dialog, whose Initiative select relinks on save. The focused card view flushes a pending save on
+  top-bar **＋ Add action** (assignee defaults to the viewer; starts
+  linked to the OPEN board — ritual or initiative — else personal),
+  the Actions tab's composer (assigns to the scoped person). Every
+  dialog carries the "Linked to" field; Cancel action and taking an
+  action off its card confirm inline. The focused card view flushes a pending save on
   leave and fires `ltk-actions-changed`; boards and the hub refresh on
   that signal.
 

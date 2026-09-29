@@ -3,6 +3,7 @@
 // purpose, emulated through the generated client).
 
 import { actionVisibleTo, LtkAction, visibleSetFor } from "../../../shared/schema/actions";
+import { homeBoardOf, homeCardOf } from "../../../shared/schema/actionLinks";
 import { bumpChange } from "./changes";
 import { Ben_ltkactionsService } from "../generated/services/Ben_ltkactionsService";
 import { allWhere, eq, odata, upsertWhere } from "./dv";
@@ -58,6 +59,17 @@ function boardOf(action: LtkAction, boardId?: string): string {
   const k = action.instanceId;
   if (k.includes(":") && !k.startsWith("hub")) return k.split(":")[0];
   return "";
+}
+
+/** The board column for a write. A channel key is authoritative: a
+ *  board's channel ("<board>:board") lives on that board and a personal
+ *  key on none. A card key takes the caller's board (an action surface
+ *  may roll up another board), and keeps the stamped one when the caller
+ *  gives none (hub edits across boards). */
+function stampedBoard(instanceId: string, boardId?: string): string | undefined {
+  if (instanceId.startsWith("hub")) return "";
+  if (homeCardOf(instanceId) === "" && homeBoardOf(instanceId) !== "") return homeBoardOf(instanceId);
+  return boardId;
 }
 
 /** Rows written before the initiative id was stamped at the write: heal
@@ -147,11 +159,9 @@ export async function upsertActions(
     // (Ben, 2026-09-23) — stamped here, at the one write path
     const home = boardOf(action, boardId);
     if (!action.initiativeId && home.startsWith("init-")) action.initiativeId = await initiativeIdForBoard(home);
-    // no board given (hub edits, quick add): an action keyed to an
-    // initiative board's channel lives on that board; a personal one
-    // lives on none (a relink off an initiative clears it). Anything
-    // else leaves the stamped board alone.
-    const stamped = boardId !== undefined ? boardId : home.startsWith("init-") ? home : action.instanceId.startsWith("hub") ? "" : undefined;
+    // the key decides when it names a channel (a link made in the dialog
+    // moved the action — even from a card editor that passes ITS board)
+    const stamped = stampedBoard(action.instanceId, boardId);
     await stampVisibility(action, stamped);
     await upsertWhere(
       Ben_ltkactionsService,

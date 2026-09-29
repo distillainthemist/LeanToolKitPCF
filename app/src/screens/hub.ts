@@ -10,7 +10,7 @@ import {
   parsePrefs,
   parseProtectedTimes,
 } from "../../../controls/LeanHub/types";
-import { boardChannelKey, InitiativeTarget, LtkAction, parseActionsJson } from "../../../shared/schema/actions";
+import { boardChannelKey, LtkAction, parseActionsJson } from "../../../shared/schema/actions";
 import { effectiveTabs } from "../../../shared/schema/hubTabs";
 import { parseOrgTree } from "../../../shared/schema/meeting";
 import { parsePeople } from "../../../shared/schema/people";
@@ -59,14 +59,6 @@ interface HubData {
   visibleBoards: Awaited<ReturnType<typeof listBoards>>;
   categories: Awaited<ReturnType<typeof meetingCategories>>;
   me: Awaited<ReturnType<typeof viewerPerson>>;
-}
-
-/** Active initiatives for the Actions tab's "Initiative" select (a row
- *  relinks from the hub — 2026-09-24). Dynamic: the improvement store
- *  stays out of the hub chunk. */
-async function initiativeTargets(): Promise<InitiativeTarget[]> {
-  const { visibleInitiatives } = await import("../actions/linkTargets");
-  return (await visibleInitiatives()).map((i) => ({ id: i.id, title: i.title, boardId: i.boardId }));
 }
 
 /** The last boot round, kept for the session. Returning to the hub
@@ -181,10 +173,6 @@ export function mountHub(parent: HTMLElement): () => void {
   const stopLoading = showLoading(host);
   let view: LeanHubView | null = null;
   let dead = false;
-  const feedInitiatives = async () => {
-    const list = await initiativeTargets();
-    if (!dead && view) view.setInitiatives(list);
-  };
   // extra-tab content (the Documents area) registers its teardown here
   const cleanups: (() => void)[] = [];
 
@@ -295,7 +283,6 @@ export function mountHub(parent: HTMLElement): () => void {
     view.setProtectedTimes(parseProtectedTimes(protectedRaw));
     view.setActions(actions);
     view.setSourceLabels(sourceLabels);
-    void feedInitiatives();
     view.setCanEditSite(true);
     view.setPrefs(parsePrefs(prefsRaw));
     view.setHideSettingsTab(true); // settings live behind the header cog now
@@ -429,8 +416,7 @@ export function mountHub(parent: HTMLElement): () => void {
             view.setProtectedTimes(parseProtectedTimes(fresh.protectedRaw));
             view.setActions(fresh.actions);
             view.setSourceLabels(fresh.sourceLabels);
-            void feedInitiatives();
-            view.setPrefs(parsePrefs(fresh.prefsRaw));
+                    view.setPrefs(parsePrefs(fresh.prefsRaw));
             const freshColors = Object.fromEntries(
               fresh.categories.filter((c) => c.color !== "").map((c) => [c.name, c.color])
             );

@@ -65,11 +65,21 @@ the same commit.
 - **The top bar**: brand left; Report and Settings as text-links; the
   ONE accent primary at the far right is `＋ Add action`
   (`.app-btn-addaction`, 40px) — always present, always the same place.
-  Its dialog carries a **Goes to** select when a board is open (that
-  board by default, or Personal) and an **Initiative** select elsewhere
-  (none by default); the same Initiative select appears on the hub's
-  action rows, so a personal action can be moved onto an initiative
-  after the fact.
+  A new action starts linked to the board on screen, personal
+  elsewhere.
+- **The action dialog's "Linked to" field** (every dialog, one
+  provider): a chip — kind pill, title, card — with ✕, or a search
+  over rituals AND initiatives ("Search rituals and initiatives…",
+  results grouped by kind, five each, a muted second line of
+  organisation · owner; suggestions before typing = the open board,
+  then the viewer's own). ONE link at most: a ritual or an initiative,
+  never both. An existing linked action always opens on its chip. A
+  target the viewer may not see reads "not available to you" — never
+  its title. Never a full list: it would not scale.
+- **Destructive steps inside a dialog confirm inline** (`.ltk-confirm`
+  bar in the body, safe choice focused): taking an action off the
+  card it hangs from, and **Cancel action**. One dialog at a time per
+  host, so never a second dialog.
 - **Scope bars** (Cadence, Actions): `Person | Organisation` select +
   a roster search with a "Me" shortcut, or the cascading site →
   department → area selects; flush left, no inset. Group-by chips

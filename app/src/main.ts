@@ -3,11 +3,16 @@
 // from the typed Dataverse store inside Power Apps, demo data on a bare
 // dev server.
 
+import { setActionLinkProvider } from "../../shared/ui/actionLinkProvider";
 import { el, clear } from "../../shared/ui/dom";
 import { boardOrigin, REOPEN_PRIORITY_KEY } from "./improvement/boardOrigin";
 import { getLeaveGuard, setLeaveGuard } from "./navGuard";
 import "./style.css";
 import { releaseFramesExcept } from "./embedFrames";
+
+// what an action may be linked to — every action dialog reads this one
+// provider (loaded on first use; the shell carries the registry only)
+setActionLinkProvider(() => import("./actions/linkTargets").then((m) => m.loadLinkContext()));
 
 const app = document.querySelector<HTMLDivElement>("#app")!;
 

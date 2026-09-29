@@ -1069,6 +1069,23 @@ reschedule/cancel history with a reason picklist.
   `hub…` key. Hub labels a board channel by the board's name. Tests
   631. Hosted checks Ben's. Released with the Priorities grid wrap fix
   (columns `minmax(0, 1fr)`) as **v0.56.0** (app-only, 2026-09-24).
+- **2026-09-29 — "Linked to": one ritual or one initiative, by
+  search.** Ben: a full initiative list would get busy; make the link
+  generic (ritual OR initiative, never both) and show it on any
+  already-linked action; confirm before taking an action off its card
+  and before Cancel action. Built: `shared/schema/actionLinks.ts`
+  (pure — `currentLink`, `applyLink`, `linkChanges`,
+  `searchLinkTargets`, `suggestLinkTargets`), one provider registered
+  by the shell (`actionLinkProvider.ts` → `actions/linkTargets.ts`),
+  the dialog's chip / search field, inline `.ltk-confirm` bars, the
+  store's key-driven board stamp, `ltk-action-moved`. Replaces
+  v0.56.0's Initiative select and quick add's "Goes to"
+  (`relinkInitiative` retired). **Confidentiality fix** shipped first
+  as its own commit: v0.56.0's select listed every active initiative
+  by title, confidential ones included — the loader now applies
+  `canSee` / `canViewBoard` once, and an unseen target's chip never
+  names it. Harness page `actiondlg.html`. Tests 642. App-only;
+  hosted checks Ben's (two accounts for the confidentiality check).
 - **Where things stand (2026-09-24).** Released: v0.51.0 (2026-09-14,
   solution-carrying — value driver tree, grid entry, Metrics card,
   meeting-board driver links, rituals in several orgs, driver popup,

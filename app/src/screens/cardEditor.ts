@@ -19,6 +19,7 @@ import {
 } from "../../../shared/schema/recurrence";
 import { readableShade, textOn } from "../../../shared/tokens";
 import { openActionManager } from "../../../shared/ui/actionUi";
+import { ACTION_MOVED_EVENT } from "../../../shared/ui/actionLinkProvider";
 import { setTitleBarExtras } from "../../../shared/ui/chrome";
 import { el } from "../../../shared/ui/dom";
 import { statusChip } from "../../../shared/ui/format";
@@ -383,6 +384,13 @@ export function mountCardEditor(
     // leaving the view FLUSHES a pending save (it used to cancel it —
     // the last edit was lost, and the board mounted before the write)
     cleanups.push(() => void flushActions());
+    // an action linked elsewhere in the dialog has left this card: save,
+    // then re-mount in place so the list it left no longer shows it
+    const onMoved = () => {
+      window.setTimeout(() => void flushActions().then(() => window.dispatchEvent(new Event("hashchange"))), 0);
+    };
+    window.addEventListener(ACTION_MOVED_EVENT, onMoved);
+    cleanups.push(() => window.removeEventListener(ACTION_MOVED_EVENT, onMoved));
     pendingFlush = flushActions;
     const pushActions = (set: typeof actions) => {
       pendingSet = set;

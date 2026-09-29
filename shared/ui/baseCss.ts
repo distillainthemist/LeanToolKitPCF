@@ -200,6 +200,47 @@ export const LTK_BASE_CSS = `
   display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px;
 }
 .ltk-who-hit { font: inherit; background: var(--ltk-bg); color: var(--ltk-fg); text-align: left; }
+
+/* "Linked to": the chip, the search and its grouped results */
+.ltk-link { display: flex; flex-direction: column; gap: 6px; }
+.ltk-link-note { font-size: 12.5px; color: var(--ltk-muted); }
+.ltk-link-chip {
+  display: flex; align-items: center; gap: 8px; min-height: 44px;
+  border: 1px solid var(--ltk-hairline); border-radius: 6px;
+  padding: 4px 4px 4px 10px; background: var(--ltk-bg);
+}
+.ltk-link-kind {
+  flex: none; font-size: 10.5px; font-weight: 700; letter-spacing: 0.05em;
+  text-transform: uppercase; color: var(--ltk-muted);
+  border: 1px solid var(--ltk-hairline); border-radius: 999px; padding: 2px 8px;
+}
+.ltk-link-text { flex: 1; min-width: 0; font-size: 14px; font-weight: 600; overflow-wrap: anywhere; }
+.ltk-link-x {
+  flex: none; font: inherit; font-size: 14px; width: 36px; height: 36px;
+  border: none; border-radius: 6px; background: none; color: var(--ltk-muted); cursor: pointer;
+}
+.ltk-link-x:hover { background: var(--ltk-hairline); color: var(--ltk-fg); }
+.ltk-link-results { display: flex; flex-direction: column; gap: 4px; }
+.ltk-link-group {
+  font-size: 10.5px; font-weight: 700; letter-spacing: 0.05em;
+  text-transform: uppercase; color: var(--ltk-muted); padding: 4px 2px 0;
+}
+.ltk-link-hit {
+  font: inherit; text-align: left; cursor: pointer; display: flex; flex-direction: column; gap: 1px;
+  background: var(--ltk-bg); color: var(--ltk-fg);
+  border: 1px solid var(--ltk-hairline); border-radius: 6px; padding: 7px 10px; min-height: 44px;
+}
+.ltk-link-hit:hover, .ltk-link-hit:focus-visible { border-color: var(--ltk-accent); }
+.ltk-link-hit-title { font-size: 14px; font-weight: 600; overflow-wrap: anywhere; }
+.ltk-link-hit-detail { font-size: 12px; color: var(--ltk-muted); overflow-wrap: anywhere; }
+
+/* an inline confirmation inside a dialog's body */
+.ltk-confirm {
+  display: flex; flex-direction: column; gap: 8px; padding: 10px 12px;
+  border: 1px solid #d13438; border-radius: 6px; background: rgba(209, 52, 56, 0.06);
+}
+.ltk-confirm-msg { font-size: 13.5px; font-weight: 600; }
+.ltk-confirm-btns { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
 .ltk-input {
   font: inherit; font-size: 14px; color: var(--ltk-fg);
   background: var(--ltk-bg); border: 1px solid var(--ltk-hairline);

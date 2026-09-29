@@ -7,7 +7,9 @@
 // actions are never hard-deleted (the danger button cancels); Done/Due/
 // Overdue are capitalised; circle colours are set inline (Safari rule).
 
-import { ActionPdca, ACTION_PDCA, InitiativeTarget, isOverdue, LtkAction, newAction, PDCA_LABELS, PDCA_QUARTERS, pdcaOf, relinkInitiative } from "../schema/actions";
+import { ActionPdca, ACTION_PDCA, isOverdue, LtkAction, newAction, PDCA_LABELS, PDCA_QUARTERS, pdcaOf } from "../schema/actions";
+import { ActionLink, applyLink, currentLink, isCardKeyed, linkChanges, linkLabel, LinkTarget, searchLinkTargets, suggestLinkTargets } from "../schema/actionLinks";
+import { ACTION_MOVED_EVENT, ActionLinkContext, actionLinkProvider } from "./actionLinkProvider";
 import { Person } from "../schema/people";
 import { textOn } from "../tokens";
 import { el } from "./dom";
@@ -366,14 +368,143 @@ export interface ActionDialogOptions {
   linkTargets?: { key: string; label: string }[];
   /** The origin card's instance key — the select's initial value. */
   linkTarget?: string;
-  /** Initiatives the action may be linked to (2026-09-24) — shown as an
-   *  "Initiative" select with a none option; a change relinks on save. */
-  initiatives?: InitiativeTarget[];
-  /** The viewer's whoId — an unlinked channel action returns to their
-   *  personal channel. */
-  personalWho?: string;
-  /** Host-supplied rows placed under Issue (quick add's destination). */
-  extraFields?: { label: string; control: HTMLElement }[];
+  /** What the action may be linked to — a ritual or an initiative, one
+   *  at most (2026-09-29). Omitted: the host's registered provider
+   *  answers; neither: no "Linked to" field. */
+  links?: ActionLinkContext;
+  /** A NEW action starts linked to the board on screen (quick add). */
+  linkToOpenBoard?: boolean;
+}
+
+/** An inline confirmation inside a dialog's body (one dialog at a time per
+ *  host — a second dialog would replace the first). One bar at a time. */
+function confirmBar(body: HTMLElement, message: string, yes: string, no: string, onYes: () => void): void {
+  body.querySelector(".ltk-confirm")?.remove();
+  const bar = el("div", "ltk-confirm");
+  bar.setAttribute("role", "alertdialog");
+  bar.appendChild(el("div", "ltk-confirm-msg", message));
+  const row = el("div", "ltk-confirm-btns");
+  const keep = el("button", "ltk-btn ltk-btn-secondary", no) as HTMLButtonElement;
+  keep.type = "button";
+  keep.addEventListener("click", () => bar.remove());
+  const go = el("button", "ltk-btn ltk-btn-danger", yes) as HTMLButtonElement;
+  go.type = "button";
+  go.addEventListener("click", () => {
+    bar.remove();
+    onYes();
+  });
+  row.append(keep, go);
+  bar.appendChild(row);
+  body.appendChild(bar);
+  bar.scrollIntoView({ block: "nearest" });
+  keep.focus();
+}
+
+interface LinkField {
+  el: HTMLElement;
+  /** The user's choice: undefined = untouched; null = personal. */
+  chosen: () => LinkTarget | null | undefined;
+  origin: () => ActionLink | null;
+  personalWho: () => string;
+}
+
+/** "Linked to": a chip naming the ritual or initiative the action belongs
+ *  to (✕ unlinks), or a search over both. Taking an existing action off
+ *  the card it hangs from is confirmed first. */
+function buildLinkField(o: ActionDialogOptions, body: () => HTMLElement, onTouched: () => void): LinkField | null {
+  const source = o.links ? () => Promise.resolve(o.links!) : actionLinkProvider();
+  if (source === null) return null;
+  const wrap = el("div", "ltk-link");
+  let ctx: ActionLinkContext | null = null;
+  let origin: ActionLink | null = null;
+  let chosen: LinkTarget | null | undefined = undefined;
+
+  const shown = (): ActionLink | null =>
+    chosen === undefined ? origin : chosen === null ? { kind: "personal", target: null, cardId: "", cardLabel: "" } : { kind: chosen.kind, target: chosen, cardId: "", cardLabel: "" };
+
+  const choose = (t: LinkTarget | null) => {
+    chosen = t;
+    onTouched();
+    paint();
+  };
+
+  const hit = (t: LinkTarget): HTMLElement => {
+    const b = el("button", "ltk-link-hit") as HTMLButtonElement;
+    b.type = "button";
+    b.appendChild(el("span", "ltk-link-hit-title", t.title));
+    if (t.detail !== "") b.appendChild(el("span", "ltk-link-hit-detail", t.detail));
+    b.addEventListener("click", () => choose(t));
+    return b;
+  };
+
+  const paint = () => {
+    while (wrap.firstChild) wrap.removeChild(wrap.firstChild);
+    const link = shown();
+    if (ctx === null || link === null) {
+      wrap.appendChild(el("div", "ltk-link-note", "Loading…"));
+      return;
+    }
+    if (link.kind !== "personal") {
+      const words = linkLabel(link);
+      const chip = el("div", "ltk-link-chip");
+      chip.appendChild(el("span", "ltk-link-kind", words.kind));
+      chip.appendChild(el("span", "ltk-link-text", words.text));
+      const x = el("button", "ltk-link-x", "✕") as HTMLButtonElement;
+      x.type = "button";
+      x.title = "Unlink";
+      x.setAttribute("aria-label", `Unlink from ${words.text}`);
+      x.addEventListener("click", () => {
+        // an existing action leaves the card it hangs off — say so first
+        const offCard = !o.isNew && chosen === undefined && isCardKeyed(o.action.instanceId);
+        if (!offCard) return choose(null);
+        confirmBar(body(), `Take this action off "${words.text}"? It will no longer show on that card.`, "Take it off", "Keep it there", () => choose(null));
+      });
+      chip.appendChild(x);
+      wrap.appendChild(chip);
+      return;
+    }
+    wrap.appendChild(el("div", "ltk-link-note", "Personal — not linked to a ritual or an initiative."));
+    const query = textInput("", { placeholder: "Search rituals and initiatives…" });
+    const results = el("div", "ltk-link-results");
+    const group = (label: string, list: LinkTarget[]) => {
+      if (list.length === 0) return;
+      results.appendChild(el("div", "ltk-link-group", label));
+      for (const t of list) results.appendChild(hit(t));
+    };
+    const renderResults = () => {
+      while (results.firstChild) results.removeChild(results.firstChild);
+      if (ctx === null) return;
+      if (query.value.trim() === "") {
+        const s = suggestLinkTargets(ctx.targets, ctx.openBoardId);
+        group("Suggested", s);
+        return;
+      }
+      const found = searchLinkTargets(ctx.targets, query.value);
+      group("Rituals", found.rituals);
+      group("Initiatives", found.initiatives);
+      if (found.rituals.length + found.initiatives.length === 0) results.appendChild(el("div", "ltk-link-note", "Nothing matches."));
+    };
+    query.addEventListener("input", renderResults);
+    renderResults();
+    wrap.append(query, results);
+  };
+
+  paint();
+  void source()
+    .then((c) => {
+      ctx = c;
+      origin = currentLink(o.action, c.targets, o.linkTarget ?? c.openHome);
+      if (o.isNew && o.linkToOpenBoard === true && c.openBoardId !== null) {
+        const open = c.targets.find((t) => t.boardId === c.openBoardId);
+        if (open) chosen = open;
+      }
+      paint();
+    })
+    .catch(() => {
+      while (wrap.firstChild) wrap.removeChild(wrap.firstChild);
+      wrap.appendChild(el("div", "ltk-link-note", "Links could not be loaded — the action keeps its current one."));
+    });
+  return { el: wrap, chosen: () => chosen, origin: () => origin, personalWho: () => ctx?.personalWho ?? "" };
 }
 
 /** The raise/edit action dialog (with escalation, completion and cancel). */
@@ -440,18 +571,17 @@ export function openActionDialog(o: ActionDialogOptions): void {
     );
   }
 
-  // initiative link (2026-09-24): the hub's rows and quick add offer the
-  // list; "none" unlinks. Untouched, the save leaves the link alone.
-  let initSel: HTMLSelectElement | null = null;
-  const initOrigin = action.initiativeId ?? "";
-  if (o.initiatives !== undefined && o.initiatives.length > 0) {
-    const known = o.initiatives.some((i) => i.id === initOrigin);
-    initSel = selectInput(initOrigin, [
-      { value: "", label: "— none —" },
-      ...(initOrigin !== "" && !known ? [{ value: initOrigin, label: "(current initiative)" }] : []),
-      ...o.initiatives.map((i) => ({ value: i.id, label: i.title })),
-    ]);
-  }
+  // linked to (2026-09-29): one ritual or one initiative, or nothing.
+  // A changed link MOVES the action; the within-board card select then
+  // has nothing to say and hides.
+  let linkRow: HTMLElement | null = null;
+  const linkField: LinkField | null = buildLinkField(
+    o,
+    () => dlg.body,
+    () => {
+      if (linkRow !== null) linkRow.style.display = "none";
+    }
+  );
 
   const save = () => {
     if (o.isNew && !form.hasContent() && issue.value.trim() === "") return;
@@ -464,18 +594,21 @@ export function openActionDialog(o: ActionDialogOptions): void {
     action.escalated = escChk.box.checked;
     action.confidential = confChk.box.checked ? true : undefined;
     form.apply(action); // after status, so assignee done flags match
-    if (linkSel !== null) {
+    const linkedNow = linkField?.origin() ?? null;
+    const picked = linkField?.chosen();
+    const moves = linkedNow !== null && picked !== undefined && linkChanges(linkedNow, picked);
+    if (moves) {
+      applyLink(action, picked, linkField!.personalWho());
+    } else if (linkSel !== null) {
       action.instanceId = linkSel.value;
       // moved to another card: drop the origin's element context so it
       // reads as a card-level action of its new home
       if (linkSel.value !== origin) action.context = { source: "card", sourceId: "" };
     }
-    if (initSel !== null && initSel.value !== initOrigin) {
-      const target = o.initiatives?.find((i) => i.id === initSel!.value) ?? null;
-      relinkInitiative(action, target, o.personalWho ?? "");
-    }
     dlg.close();
     o.onCommit();
+    // an existing action that left its home: the list it left refreshes
+    if (moves && !o.isNew) window.dispatchEvent(new CustomEvent(ACTION_MOVED_EVENT, { detail: { id: action.id } }));
   };
 
   const buttons = [];
@@ -483,11 +616,14 @@ export function openActionDialog(o: ActionDialogOptions): void {
     buttons.push({
       label: "Cancel action",
       kind: "danger" as const,
-      onClick: () => {
-        action.status = "cancelled";
-        dlg.close();
-        o.onCommit();
-      },
+      // confirmed first (Ben, 2026-09-29) — one stray click used to
+      // cancel the action outright
+      onClick: () =>
+        confirmBar(dlg.body, "Cancel this action? It is marked cancelled and leaves the open lists.", "Yes, cancel it", "Keep the action", () => {
+          action.status = "cancelled";
+          dlg.close();
+          o.onCommit();
+        }),
     });
   }
   buttons.push({
@@ -507,9 +643,11 @@ export function openActionDialog(o: ActionDialogOptions): void {
     buttons,
   });
   dlg.body.appendChild(fieldRow("Issue", issue));
-  for (const f of o.extraFields ?? []) dlg.body.appendChild(fieldRow(f.label, f.control));
-  if (linkSel !== null) dlg.body.appendChild(fieldRow("Linked card", linkSel));
-  if (initSel !== null) dlg.body.appendChild(fieldRow("Initiative", initSel));
+  if (linkField !== null) dlg.body.appendChild(fieldRow("Linked to", linkField.el));
+  if (linkSel !== null) {
+    linkRow = fieldRow("Linked card", linkSel);
+    dlg.body.appendChild(linkRow);
+  }
   dlg.body.appendChild(form.el);
   dlg.body.appendChild(sectionLabel("PDCA state"));
   dlg.body.appendChild(pdcaWrap);
