@@ -1285,6 +1285,20 @@ reschedule/cancel history with a reason picklist.
 - **2026-10-01 — released as v0.60.0** (app-only): the read cache is
   write-aware, so linked charter fields show their last edit on the
   overview.
+- **2026-10-01 — Gantt named the issue; charter tile still behind.**
+  Ben, after v0.60.0: the actions card's Gantt on a meeting ritual
+  showed the kanban category, not the action; a charter with linked
+  fields still did not update on the overview. Gantt: rows, bar
+  tooltips and the CSV used `issue`; now `titleOf` (description, else
+  issue) names the row and the issue rides the meta line / an "Issue"
+  CSV column. Charter: the third layer — the board mounts its tiles
+  before the charter binding loads, and `BoardGrid.setTiles` skips
+  unchanged input, so the later `renderTiles()` never re-mounted the
+  tile and it kept the card's stored copy. `BoardGrid.refreshLive()`
+  re-mounts live tiles on demand; the board calls it when the binding
+  lands, on `ltk-actions-changed` and after the live action refresh.
+  Harness-verified for the Gantt; the tile is Ben's hosted check.
+  Unreleased.
 - **Where things stand (2026-10-01).** Released since the entry
   below, all app-only (the schema is unchanged since v0.54.0):
   v0.56.0 (2026-09-24 — initiative relink, quick add to the open

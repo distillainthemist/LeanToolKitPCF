@@ -480,6 +480,14 @@ model section) — the canvas/PCF sections there are historical.
   Rule: a reader called from INSIDE a tracked write must not wait
   (it would wait for itself) — `listInitiatives` is deliberately not
   wrapped because `upsertActions` calls it.
+- **Live tiles re-mount on demand** (`BoardGrid.refreshLive`): the
+  grid's `setTiles` / `setLiveRenderer` are no-ops when their input is
+  unchanged, so a tile mounted BEFORE something it renders from
+  existed (the charter binding, which loads after the first paint;
+  refreshed actions) kept its first picture. The board calls
+  `refreshLive()` once the binding lands, on `ltk-actions-changed`
+  and after the live-mode action refresh; a repaint through
+  `renderTiles()` alone does nothing there (2026-10-01).
 - **Change signals**: the Priorities screen's boot memo checks the
   topic versions; `ltk-actions-changed` is the DOM-level signal for
   action saves (boards, the hub and the initiative band refresh on

@@ -183,6 +183,11 @@ Version lives in the tag alone — nothing is stamped into files.
   `whenSettled`). Debounced saves are flushed when their screen is
   left. Never `whenSettled` inside a function a tracked write calls —
   it would wait for itself (2026-10-01).
+- **`BoardGrid.setTiles` is a no-op on unchanged input.** A tile
+  mounted before its data existed (the charter binding loads after
+  the first paint) keeps its first picture until
+  `gridView.refreshLive()` re-mounts it — `renderTiles()` alone does
+  nothing there (2026-10-01, the third layer of the stale charter).
 - **Store reads are cached** (`app/src/store/changes.ts`, 60 s, by
   topic): every new reader of initiatives / boards / drivers /
   palettes / people goes through the cached function; every writer

@@ -452,7 +452,10 @@ async function renderBoard(
   liveBtn.addEventListener("click", () => {
     if (!initBoard) {
       localStorage.setItem(LIVE_TILES_KEY, liveOn() ? "0" : "1");
-      void refreshBoardActions().then(applyLiveMode);
+      void refreshBoardActions().then(() => {
+        applyLiveMode();
+        gridView.refreshLive();
+      });
       return;
     }
     document.querySelectorAll(".app-cp-menu").forEach((m) => m.remove());
@@ -536,7 +539,10 @@ async function renderBoard(
   // an action saved elsewhere (the focused view, the top bar) reaches the
   // live cards without a reload (2026-09-23)
   const onActionsChanged = () => {
-    void refreshBoardActions().then(() => renderTiles());
+    void refreshBoardActions().then(() => {
+      renderTiles();
+      gridView.refreshLive(); // the tiles read boardActions as they mount
+    });
   };
   window.addEventListener("ltk-actions-changed", onActionsChanged);
   cleanups.push(() => window.removeEventListener("ltk-actions-changed", onActionsChanged));
@@ -943,7 +949,10 @@ async function renderBoard(
       // re-renders itself (Ben, 2026-09-15: no whole-card reload)
       void import("../improvement/binding").then(async ({ makeInitiativeBinding }) => {
         charterBinding = (await makeInitiativeBinding(board.boardId, () => void paneHandle?.refresh())) ?? undefined;
+        // the tiles were mounted before the binding existed: mount them
+        // again so bound fields read the header, not the card's own copy
         renderTiles();
+        gridView.refreshLive();
       });
       void loadGateSnaps();
     }

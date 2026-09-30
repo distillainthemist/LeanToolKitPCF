@@ -170,6 +170,14 @@ export class BoardGridView {
     this.render();
   }
 
+  /** Mount every live tile again with what the host holds NOW. The
+   *  setters are no-ops when their input is unchanged, so a tile mounted
+   *  before the host's data arrived (a charter's binding, the actions
+   *  loaded after a save) stayed as first drawn (2026-10-01). */
+  refreshLive(): void {
+    if (this.live) this.render();
+  }
+
   /** Unmount every live card. Called before each re-render and on destroy —
    *  without it, re-rendering would leak an editor per tile per render. */
   private clearLive(): void {

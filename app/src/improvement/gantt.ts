@@ -96,6 +96,19 @@ function barState(a: LtkAction, today: string): BarState {
   return "ontrack";
 }
 
+/** What a row is called: the action itself (its description), else its
+ *  issue. On a meeting board the issue is the kanban's category
+ *  ("Safety"), so it must not stand in for the action (Ben, 2026-10-01). */
+function titleOf(a: LtkAction): string {
+  const d = a.description.trim();
+  return d !== "" ? d : a.issue.trim() !== "" ? a.issue : "(untitled)";
+}
+/** The issue as a tag when it is not what the title already says. */
+function issueTag(a: LtkAction): string {
+  const i = a.issue.trim();
+  return i !== "" && i !== titleOf(a) ? i : "";
+}
+
 export function mountGantt(opts: GanttOpts): () => void {
   const wrap = el("div", "app-gx");
   opts.host.appendChild(wrap);
@@ -373,9 +386,9 @@ export function mountGantt(opts: GanttOpts): () => void {
       const listRow = (a: LtkAction): HTMLElement => {
         const r = el("div", "app-gx-listrow");
         const main = el("div", "app-gx-listmain");
-        main.appendChild(el("div", "app-gx-label-title", a.issue || a.description.slice(0, 80) || "(untitled)"));
+        main.appendChild(el("div", "app-gx-label-title", titleOf(a).slice(0, 120)));
         const who = a.assignees.map((x) => x.who).filter((x) => x !== "").join(", ");
-        main.appendChild(el("div", "app-gx-label-meta", [who].filter((x) => x !== "").join(" · ")));
+        main.appendChild(el("div", "app-gx-label-meta", [issueTag(a), who].filter((x) => x !== "").join(" · ")));
         r.appendChild(main);
         const dates = el("div", "app-gx-listdates");
         const dueTxt = a.due !== "" ? dayLabel(a.due) : "no due date";
@@ -494,11 +507,11 @@ export function mountGantt(opts: GanttOpts): () => void {
     const actionRow = (a: LtkAction): HTMLElement => {
       const r = el("div", "app-gx-row");
       const label = el("div", "app-gx-label");
-      const t = el("div", "app-gx-label-title", a.issue || a.description.slice(0, 60) || "(untitled)");
-      t.title = a.issue;
+      const t = el("div", "app-gx-label-title", titleOf(a).slice(0, 90));
+      t.title = titleOf(a);
       label.appendChild(t);
       const who = a.assignees.map((x) => x.who).filter((x) => x !== "").join(", ");
-      label.appendChild(el("div", "app-gx-label-meta", [who, a.due !== "" ? `due ${dayLabel(a.due)}` : "no due date"].filter((x) => x !== "").join(" · ")));
+      label.appendChild(el("div", "app-gx-label-meta", [issueTag(a), who, a.due !== "" ? `due ${dayLabel(a.due)}` : "no due date"].filter((x) => x !== "").join(" · ")));
       r.appendChild(label);
       const tl = timelineCell();
       r.appendChild(tl);
@@ -513,7 +526,7 @@ export function mountGantt(opts: GanttOpts): () => void {
           const dia = el("div", "app-gx-diamond");
           dia.style.left = `${x + dayW / 2}px`;
           dia.style.background = col;
-          dia.title = `${a.issue} — no start date. Set one to show this as a bar.`;
+          dia.title = `${titleOf(a)} — no start date. Set one to show this as a bar.`;
           if (opts.canEdit) {
             dia.style.cursor = "pointer";
             dia.addEventListener("click", () => setDatesDialog(a));
@@ -539,7 +552,7 @@ export function mountGantt(opts: GanttOpts): () => void {
         barEl.style.boxSizing = "border-box";
       } else barEl.style.background = col;
       if (state === "done") barEl.style.opacity = "0.55";
-      barEl.title = `${a.issue}\n${dayLabel(a.start)} → ${dayLabel(a.due)}${state === "hold" ? "\nOn hold" : ""}`;
+      barEl.title = `${titleOf(a)}\n${dayLabel(a.start)} → ${dayLabel(a.due)}${state === "hold" ? "\nOn hold" : ""}`;
       tl.appendChild(barEl);
 
       if (opts.canEdit && state !== "done") wireDrag(barEl, a, dayW);
@@ -747,10 +760,10 @@ export function mountGantt(opts: GanttOpts): () => void {
   };
 
   const exportCsv = () => {
-    const rows: string[][] = [["Initiative", "Action", "Assignees", "Start", "Due", "State"]];
+    const rows: string[][] = [["Initiative", "Action", "Issue", "Assignees", "Start", "Due", "State"]];
     for (const a of opts.actions.filter(visibleAction)) {
       const i = initOf(a);
-      rows.push([i?.title ?? "", a.issue, a.assignees.map((x) => x.who).join("; "), a.start, a.due, barState(a, today)]);
+      rows.push([i?.title ?? "", titleOf(a), issueTag(a), a.assignees.map((x) => x.who).join("; "), a.start, a.due, barState(a, today)]);
     }
     const csv = rows.map((r) => r.map((c) => `"${c.replace(/"/g, '""')}"`).join(",")).join("\n");
     const url = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
