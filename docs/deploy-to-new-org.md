@@ -189,6 +189,6 @@ someone does the portal Add-existing step there.
 | v0.53.0 | `ben_confidential`, `ben_createdby`, `ben_visiblejson` on `ben_ltkaction` | confidential actions; the Office 365 Users connection is used for the manager lookup — its connection reference must be satisfied at import |
 | v0.54.0 | `ben_alsoorgsjson` on `ben_ltkinitiative` | initiatives listed under several departments |
 
-v0.52.0 and v0.55.0 through v0.59.0 were app-only. After a solution import, existing
+v0.52.0 and v0.55.0 through v0.60.0 were app-only. After a solution import, existing
 action rows are healed (initiative ids) automatically on the first
 open of the Improvement or Priorities tab — nothing to run.

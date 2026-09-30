@@ -1282,6 +1282,9 @@ reschedule/cancel history with a reason picklist.
   start AND landing and `memoRead` never keeps a read that overlaps a
   write; every store writer routed through it; `saveInitiative`
   tracked so the board mount waits for it. Tests 730. App-only.
+- **2026-10-01 — released as v0.60.0** (app-only): the read cache is
+  write-aware, so linked charter fields show their last edit on the
+  overview.
 - **Where things stand (2026-09-24).** Released: v0.51.0 (2026-09-14,
   solution-carrying — value driver tree, grid entry, Metrics card,
   meeting-board driver links, rituals in several orgs, driver popup,
