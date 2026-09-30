@@ -39,6 +39,7 @@ import { isActionSurface } from "../store/policies";
 import { cardLabel } from "../../../controls/CardSettings/registry";
 import { catalogSvgByType } from "../store/catalog";
 import { rowsForBoard, toLite } from "../store/cards";
+import { whenSettled } from "../store/inflight";
 import { actionsForBoard } from "../store/actions";
 import { actionsForTile, otherSurfaceBoards } from "../tileActions";
 import { mountTile } from "../cardRegistry";
@@ -74,6 +75,9 @@ export function mountBoard(
     const stopLoading = showLoading(parent);
     cleanups.push(stopLoading);
     const hosted = await detectHost();
+    // a write from the screen just left — a card's save, a charter field's
+    // header write — lands before anything here is read (2026-10-01)
+    await whenSettled();
     if (!hosted) {
       stopLoading();
       parent.appendChild(

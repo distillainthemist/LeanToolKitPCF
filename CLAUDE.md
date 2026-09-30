@@ -173,6 +173,11 @@ Version lives in the tag alone — nothing is stamped into files.
   `import { currentViewer } from "./runtime"` moved 7 kB into the
   shell chunk (2026-09-30). Read the chunk report's `index` line after
   touching `main.ts`, not only its OK.
+- **A screen that reads what the last screen wrote waits for the
+  write** (`app/src/store/inflight.ts`: writers `track`, readers
+  `whenSettled`). Debounced saves are flushed when their screen is
+  left. Never `whenSettled` inside a function a tracked write calls —
+  it would wait for itself (2026-10-01).
 - **Store reads are cached** (`app/src/store/changes.ts`, 60 s, by
   topic): every new writer of initiatives / boards / drivers /
   palettes / people must `bumpChange(topic)`; every new reader goes

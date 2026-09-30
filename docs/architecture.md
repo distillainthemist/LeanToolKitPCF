@@ -434,6 +434,22 @@ model section) — the canvas/PCF sections there are historical.
   action straight into it (a status, or an issue when the board
   groups by issue; the dialog opens on the matching PDCA state).
 
+- **Writes in flight** (`app/src/store/inflight.ts`, 2026-10-01). A
+  card's document saves through the shared `saver` on a 400 ms
+  debounce, rescheduled when its snapshot lands (~800 ms after the
+  last edit); leaving the focused view never flushed it, and the
+  board mounted and read its rows while the save was still travelling
+  — so the overview showed the card one edit behind (any card type;
+  the charter was where Ben saw it). Now: leaving the card view
+  flushes every waiting save (`flushPendingSaves`) and the action
+  flush; those writes, and the charter's bound-field header writes,
+  are `track`ed; every card and action reader in the store, and the
+  board mount, `await whenSettled()` before reading. Rule: a reader
+  called from INSIDE a tracked write must not wait (it would wait for
+  itself) — the store's action readers are never called by
+  `upsertActions`, and `listInitiatives` is deliberately not wrapped
+  because `upsertActions` calls it.
+
 ### 3.5 Store read cache & change signals
 
 `store/changes.ts` keeps a 60-second read cache keyed by topic

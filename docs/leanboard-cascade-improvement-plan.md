@@ -1238,6 +1238,18 @@ reschedule/cancel history with a reason picklist.
   tile shows the board's actions, an action raised on it belongs to
   the board as a whole, the embed card's chips, and the actions
   card's columns, column add, view switch and shared Gantt.
+- **2026-10-01 — the overview showed a card one edit behind.** Ben:
+  the charter canvas card (and others) on an initiative board's
+  overview did not show the last edit. Cause: the card's document
+  save is debounced (~800 ms after the last edit including the
+  snapshot reschedule), nothing flushed it on leaving the focused
+  view, and the board mounted and read its rows before the write
+  landed. Actions had been given a flush in v0.55.0; documents never
+  were. Fixed for every card type: leaving the card view flushes the
+  waiting save; card saves, action saves and the charter's header
+  writes are tracked (`store/inflight.ts`); every card and action
+  reader in the store and the board mount wait for travelling writes
+  before reading. Tests 716. App-only.
 - **Where things stand (2026-09-24).** Released: v0.51.0 (2026-09-14,
   solution-carrying — value driver tree, grid entry, Metrics card,
   meeting-board driver links, rituals in several orgs, driver popup,
