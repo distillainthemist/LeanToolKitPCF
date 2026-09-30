@@ -1259,6 +1259,15 @@ reschedule/cancel history with a reason picklist.
   the board opening the matched record by id (the exact-time match
   would have started a second record). No schema change — the
   ritual's settings JSON carries it. Tests below. App-only.
+- **2026-10-01 — session labels; On hold after Closed.** Ben: each
+  session (the meeting, each check-in) takes its own label, and the
+  calendar names an occurrence "meeting name: time label"; On hold
+  sits after Closed in the PDCA states. Built: `config.checkIns`
+  ([{time, label}], replacing the unreleased `extraTimes`) and
+  `config.timeLabel`; `label` on every occurrence; `occurrenceTitle`
+  for the calendar and My day; the scheduler row's label pill; the
+  wizard's label field and per-check-in label. PDCA order changed in
+  one place (`ACTION_PDCA`). App-only.
 - **Where things stand (2026-09-24).** Released: v0.51.0 (2026-09-14,
   solution-carrying — value driver tree, grid entry, Metrics card,
   meeting-board driver links, rituals in several orgs, driver popup,

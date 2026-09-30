@@ -217,11 +217,15 @@ model section) — the canvas/PCF sections there are historical.
 
 - **Check-in times on a daily ritual** (2026-10-01, Ben: a core
   meeting in the morning and a check-in with the SAME board in the
-  afternoon). `config.extraTimes` (HH:MM list, daily only — shiftly's
-  two sessions are its two shifts) makes `generateInstances` emit a
-  further occurrence per time on each day, `session` 1.. (0 = the
-  meeting), all matched to the day's ONE record (matching is by date,
-  as before). The scheduler row and the hub say "check-in"; the board
+  afternoon). `config.checkIns` ([{time, label}], daily only —
+  shiftly's two sessions are its two shifts) and `config.timeLabel`
+  (the day's own session's label) make `generateInstances` emit a
+  further occurrence per session on each day, `session` 1.. (0 = the
+  meeting), each with its `label`, all matched to the day's ONE
+  record (matching is by date, as before). The calendar and My day
+  name an occurrence `occurrenceTitle` = "meeting: label" (the
+  meeting alone without one); the scheduler row wears the label as a
+  pill, or "check-in" when it has none. The board
   opens the record the scheduler matched by its id — it used to match
   the exact date and time, which would have started a second record
   for the afternoon. Closing the meeting archives the day, so the

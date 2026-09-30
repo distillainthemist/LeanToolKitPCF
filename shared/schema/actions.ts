@@ -16,10 +16,11 @@ export type ActionStatus = "open" | "in-progress" | "verify" | "done" | "cancell
  *  done/cancelled; new actions start at Do. */
 /** "hold" (Ben, 2026-09-30): ON HOLD — paused, not abandoned. It sits
  *  beside the cycle rather than on it (a pause glyph, no quadrants): the
- *  action stays open, and while it is held it is not overdue. */
+ *  action stays open, and while it is held it is not overdue. Listed
+ *  after Closed (Ben, 2026-10-01). */
 export type ActionPdca = "plan" | "do" | "check" | "act" | "hold" | "closed";
 
-export const ACTION_PDCA: ActionPdca[] = ["plan", "do", "check", "act", "hold", "closed"];
+export const ACTION_PDCA: ActionPdca[] = ["plan", "do", "check", "act", "closed", "hold"];
 
 export const PDCA_LABELS: Record<ActionPdca, string> = {
   plan: "Plan",

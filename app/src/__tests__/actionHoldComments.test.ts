@@ -8,8 +8,8 @@ import { ragInputsFor } from "../improvement/initiativeModel";
 const act = (over: Record<string, unknown> = {}) => ({ ...newAction({ source: "card", sourceId: "" }), due: "2026-09-01", ...over });
 
 describe("On hold", () => {
-  it("is a PDCA state, between Act and Closed", () => {
-    expect(ACTION_PDCA).toEqual(["plan", "do", "check", "act", "hold", "closed"]);
+  it("is a PDCA state, listed after Closed", () => {
+    expect(ACTION_PDCA).toEqual(["plan", "do", "check", "act", "closed", "hold"]);
     expect(PDCA_LABELS.hold).toBe("On hold");
   });
   it("shows as held while open; done or cancelled reads as closed", () => {

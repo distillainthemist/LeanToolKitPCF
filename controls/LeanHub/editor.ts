@@ -19,7 +19,7 @@ import { parsePrompts, Prompts, renderGhost, renderTitleBar } from "../../shared
 import { pdcaOf, isOnHold, isOverdue, LtkAction, newAction } from "../../shared/schema/actions";
 import { Person } from "../../shared/schema/people";
 import { openActionDialog, pdcaDisc, confidentialGlyph, commentGlyph, endorseGlyph } from "../../shared/ui/actionUi";
-import { DAY_LABELS, MONTH_LABELS, isoLocal, startOfDay } from "../../shared/schema/recurrence";
+import { DAY_LABELS, MONTH_LABELS, isoLocal, occurrenceTitle, startOfDay } from "../../shared/schema/recurrence";
 import { OrgSite } from "../../shared/schema/meeting";
 import {
   defaultPrefs,
@@ -666,14 +666,14 @@ export class LeanHubView {
           // explicit meeting theme wins; ritual-category colour is the default
           const accent = inst.barColor !== "" ? inst.barColor : (this.boardColors[inst.boardId] ?? "");
           if (accent !== "") chip.style.borderLeftColor = accent;
-          const line1 = el("div", "ltk-lh-chip-title", inst.title);
+          const line1 = el("div", "ltk-lh-chip-title", occurrenceTitle(inst.title, inst.label));
           const meta: string[] = [inst.time];
-          if (inst.session > 0) meta.push("Check-in");
+          if (inst.session > 0 && inst.label === "") meta.push("Check-in");
           if (inst.shift !== "") meta.push(inst.shift === "day" ? "Day" : "Night");
           if (inst.crew !== "") meta.push(`Crew ${inst.crew}`);
           if (inst.topic !== "") meta.push(inst.topic);
           chip.append(line1, el("div", "ltk-lh-chip-meta", meta.join(" · ")));
-          chip.title = `${inst.title} — ${meta.join(" · ")}`;
+          chip.title = `${occurrenceTitle(inst.title, inst.label)} — ${meta.join(" · ")}`;
           chip.addEventListener("click", () => this.cb.onSelectMeeting(inst));
           col.appendChild(chip);
         });
@@ -722,11 +722,11 @@ export class LeanHubView {
         inst.barColor !== "" ? inst.barColor : (this.boardColors[inst.boardId] ?? "");
       if (accent !== "") row.style.borderLeftColor = accent;
       const main = el("div", "ltk-lh-agenda-main");
-      main.appendChild(el("div", "ltk-lh-agenda-name", inst.title));
+      main.appendChild(el("div", "ltk-lh-agenda-name", occurrenceTitle(inst.title, inst.label)));
       const meta: string[] = [];
       const dept = byId.get(inst.boardId)?.info?.org.department ?? "";
       if (dept !== "") meta.push(dept);
-      if (inst.session > 0) meta.push("Check-in");
+      if (inst.session > 0 && inst.label === "") meta.push("Check-in");
       if (inst.shift !== "") meta.push(inst.shift === "day" ? "Day" : "Night");
       if (inst.crew !== "") meta.push(`Crew ${inst.crew}`);
       if (inst.topic !== "") meta.push(inst.topic);

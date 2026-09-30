@@ -56,11 +56,20 @@ export interface SchedulerConfig {
    *  Optional; "" = timeOfDay. A per-day override wins over a per-week one
    *  (Ben, 2026-08-19). */
   weekTimes?: string[];
-  /** FURTHER times on each day (Ben, 2026-10-01): a core meeting in the
-   *  morning and a check-in on the SAME board in the afternoon. Every
-   *  session on a day shares the day's one record. Daily only; not
-   *  shiftly (its two sessions are the two shifts). */
-  extraTimes?: string[];
+  /** FURTHER sessions on each day (Ben, 2026-10-01): a core meeting in
+   *  the morning and a check-in on the SAME board in the afternoon, each
+   *  with its own label. Every session on a day shares the day's one
+   *  record. Daily only; not shiftly (its two sessions are the two
+   *  shifts). */
+  checkIns?: DaySession[];
+  /** What the day's own (first) session is called, "" = nothing. */
+  timeLabel?: string;
+}
+
+/** A further session on a day: when, and what it is called. */
+export interface DaySession {
+  time: string; // HH:MM
+  label: string; // "" = none
 }
 
 /** A per-meeting text column (topic, chair, notetaker…), maker-configured. */
@@ -98,8 +107,11 @@ export interface MeetingInstance {
   /** The rotation topic for this occurrence ("" = none configured). */
   topic: string;
   /** Which of the day's sessions: 0 = the meeting, 1.. = a check-in at a
-   *  further time (extraTimes). Sessions share the day's record. */
+   *  further time (checkIns). Sessions share the day's record. */
   session: number;
+  /** The session's label ("Morning huddle", "Afternoon check-in"); "" =
+   *  none. The calendar says "meeting: label". */
+  label: string;
   recordId: string; // "" when no record exists yet
   rescheduledTo: string;
   status: InstanceStatus;
@@ -319,10 +331,11 @@ export function parseDayTimes(raw: string | null | undefined): Record<number, st
   return out;
 }
 
-/** extraTimes input — further times on each day: JSON array or CSV of
- *  HH:MM. Cleaned, deduplicated, sorted; a time equal to the day's own is
- *  dropped when it is applied (see generateInstances). */
-export function parseExtraTimes(raw: string | null | undefined): string[] {
+/** checkIns input — further sessions on each day: a JSON array of
+ *  {time, label} (or bare "HH:MM" strings), or a CSV of times. Cleaned,
+ *  deduplicated by time (the first label wins), sorted by time; a session
+ *  at the day's own time is dropped when applied (see generateInstances). */
+export function parseCheckIns(raw: string | null | undefined): DaySession[] {
   const t = String(raw ?? "").trim();
   if (t === "") return [];
   let parts: unknown[] = [];
@@ -334,12 +347,14 @@ export function parseExtraTimes(raw: string | null | undefined): string[] {
       parts = [];
     }
   } else parts = t.split(",");
-  const out = new Set<string>();
+  const out = new Map<string, string>();
   for (const v of parts) {
-    const time = cleanTime(v);
-    if (time !== "") out.add(time);
+    const o = v !== null && typeof v === "object" ? (v as { time?: unknown; label?: unknown }) : null;
+    const time = cleanTime(o ? o.time : v);
+    if (time === "" || out.has(time)) continue;
+    out.set(time, o && typeof o.label === "string" ? o.label.trim() : "");
   }
-  return [...out].sort();
+  return [...out.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1)).map(([time, label]) => ({ time, label }));
 }
 
 /** weekTimes input — per-week-of-month times [1st..5th]: JSON array or CSV;
@@ -654,7 +669,7 @@ export function generateInstances(
   const topicFor = (date: Date): string => topicForCfg(cfg, date);
 
   const out: MeetingInstance[] = [];
-  const push = (date: Date, time: string, shift: "" | "day" | "night", crew: string, session = 0) => {
+  const push = (date: Date, time: string, shift: "" | "day" | "night", crew: string, session = 0, label = "") => {
     const dIso = isoLocal(date);
     const rec = matchRecord(existing.filter((e) => !e.adhoc), dIso, shift);
     const iso = `${dIso}T${time}`;
@@ -668,6 +683,7 @@ export function generateInstances(
       shift,
       topic: topicFor(date),
       session,
+      label,
       adhoc: false,
       closed: rec?.closed ?? false,
       recordId: rec?.recordId ?? "",
@@ -689,13 +705,13 @@ export function generateInstances(
         hasRoster && (cfg.category === "daily")
           ? crewOnShift(cfg.roster, cfg.crews, cfg.baseStart, date, "D")
           : "";
-      push(date, time, "", crew);
+      push(date, time, "", crew, 0, cfg.category === "daily" ? (cfg.timeLabel ?? "") : "");
       // the day's further sessions — the same record, another time
       if (cfg.category === "daily") {
         let session = 0;
-        for (const extra of cfg.extraTimes ?? []) {
-          if (extra === time) continue;
-          push(date, extra, "", crew, ++session);
+        for (const extra of cfg.checkIns ?? []) {
+          if (extra.time === time) continue;
+          push(date, extra.time, "", crew, ++session, extra.label);
         }
       }
     }
@@ -725,6 +741,7 @@ export function generateInstances(
       shift: "",
       topic: "",
       session: 0,
+      label: "",
       adhoc: true,
       closed: e.closed,
       recordId: e.recordId,
@@ -821,8 +838,15 @@ export function cadenceFromConfig(
       config.dayTimes && typeof config.dayTimes === "object" ? JSON.stringify(config.dayTimes) : s("dayTimes")
     ),
     weekTimes: parseWeekTimes(Array.isArray(config.weekTimes) ? JSON.stringify(config.weekTimes) : s("weekTimes")),
-    extraTimes: parseExtraTimes(Array.isArray(config.extraTimes) ? JSON.stringify(config.extraTimes) : s("extraTimes")),
+    checkIns: parseCheckIns(Array.isArray(config.checkIns) ? JSON.stringify(config.checkIns) : s("checkIns")),
+    timeLabel: s("timeLabel").trim(),
   };
+}
+
+/** What the calendar calls an occurrence: "meeting: label", or the
+ *  meeting alone when the session has no label. */
+export function occurrenceTitle(meetingTitle: string, label: string): string {
+  return label.trim() !== "" ? `${meetingTitle}: ${label.trim()}` : meetingTitle;
 }
 
 function rotationConfig(

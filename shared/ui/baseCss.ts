@@ -45,7 +45,7 @@ export const LTK_BASE_CSS = `
 .ltk-pdca-disc { display: inline-block; flex: none; }
 .ltk-action-descline { display: flex; align-items: baseline; gap: 7px; }
 .ltk-action-descline .ltk-pdca-disc { align-self: center; }
-/* six states, three to a row: the cycle's four, then On hold and Closed
+/* six states, three to a row: the cycle's four, then Closed and On hold
    (one row of six does not fit a dialog; a ragged wrap read as a fault).
    The 1px gaps over the grey ground draw the dividers. */
 .ltk-pdca-seg {

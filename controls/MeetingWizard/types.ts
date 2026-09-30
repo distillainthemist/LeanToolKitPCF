@@ -97,9 +97,11 @@ export interface WizardDraft {
   dayTimes: Record<string, string>;
   /** Weekly per-week-of-month time overrides [1st..5th]; "" = default. */
   weekTimes: string[];
-  /** Daily: further times on each day — check-ins on the same board and
-   *  the same day's record (Ben, 2026-10-01). HH:MM each. */
-  extraTimes: string[];
+  /** Daily: what the day's own session is called ("Morning huddle"). */
+  timeLabel: string;
+  /** Daily: further sessions on each day — check-ins on the same board and
+   *  the same day's record (Ben, 2026-10-01), each with its label. */
+  checkIns: { time: string; label: string }[];
   participants: MeetingPerson[];
   /** Unmanaged top-level keys (theme, prompts, board, …), kept verbatim. */
   extraTop: Record<string, unknown>;
@@ -130,7 +132,8 @@ export function emptyDraft(): WizardDraft {
     dayTopics: {},
     dayTimes: {},
     weekTimes: [],
-    extraTimes: [],
+    timeLabel: "",
+    checkIns: [],
     participants: [],
     extraTop: {},
     extraConfig: {},
@@ -199,10 +202,11 @@ export function parseWizardDraft(raw: string | null | undefined): WizardDraft {
         if (day && s(v) !== "") draft.dayTopics[day] = s(v);
       }
     }
-    if (Array.isArray(config.extraTimes)) {
-      draft.extraTimes = config.extraTimes.map((v) => s(v)).filter((v) => /^\d{2}:\d{2}$/.test(v));
-    } else if (s(config.extraTimes) !== "") {
-      draft.extraTimes = s(config.extraTimes).split(",").map((v) => v.trim()).filter((v) => /^\d{2}:\d{2}$/.test(v));
+    draft.timeLabel = s(config.timeLabel).trim();
+    if (Array.isArray(config.checkIns)) {
+      draft.checkIns = config.checkIns
+        .map((v) => (v !== null && typeof v === "object" ? { time: s((v as { time?: unknown }).time), label: s((v as { label?: unknown }).label).trim() } : { time: s(v), label: "" }))
+        .filter((v) => /^\d{2}:\d{2}$/.test(v.time));
     }
     if (config.dayTimes && typeof config.dayTimes === "object" && !Array.isArray(config.dayTimes)) {
       for (const [k, v] of Object.entries(config.dayTimes as Record<string, unknown>)) {
@@ -246,9 +250,14 @@ export function serializeWizardDraft(draft: WizardDraft): string {
   }
   if (draft.timeOfDay !== "") config.timeOfDay = draft.timeOfDay;
   if (draft.category === "daily") {
-    // sorted, deduplicated, never the day's own time
-    const extra = [...new Set(draft.extraTimes.map((t) => t.trim()).filter((t) => /^\d{2}:\d{2}$/.test(t) && t !== draft.timeOfDay))].sort();
-    if (extra.length > 0) config.extraTimes = extra;
+    if (draft.timeLabel.trim() !== "") config.timeLabel = draft.timeLabel.trim();
+    // sorted by time, one per time, never the day's own time
+    const seen = new Set<string>();
+    const sessions = draft.checkIns
+      .map((c) => ({ time: c.time.trim(), label: c.label.trim() }))
+      .filter((c) => /^\d{2}:\d{2}$/.test(c.time) && c.time !== draft.timeOfDay && !seen.has(c.time) && seen.add(c.time))
+      .sort((a, b) => (a.time < b.time ? -1 : 1));
+    if (sessions.length > 0) config.checkIns = sessions;
   }
   if (draft.daysPrior !== "" && Number.isFinite(Number(draft.daysPrior))) {
     config.daysPrior = Math.max(1, Math.round(Number(draft.daysPrior)));
