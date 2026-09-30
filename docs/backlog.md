@@ -227,6 +227,15 @@ when written):
   spreadsheet process outside the app.
 - AI assistant (FR-AI-*): a future project iteration.
 
+## Actions card — open items (2026-09-30)
+
+- The view a person chooses (List | Kanban | Gantt) is kept for the
+  session only. To follow the person across sessions and devices:
+  store it in their prefs row, by card.
+- "Download PNG / SVG" from the card's menu draws the control's own
+  styles; with the app's Gantt in the Gantt view the download is not
+  styled. Use the Gantt's own Export CSV, or switch view to download.
+
 ## Initiative stages — open items (2026-09-29)
 
 - A revert needs no approval (Ben's call). If sign-off being undone by

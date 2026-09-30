@@ -1222,6 +1222,18 @@ reschedule/cancel history with a reason picklist.
   were absolutely positioned one by one and "Actions" overlapped
   "Present in its own window"; they are one flex row now. Harness
   page `embed.html`. Tests 710. App-only.
+- **2026-09-30 — the actions card: columns, column add, view switch,
+  one Gantt.** Ben: a long kanban column did not extend to hold its
+  actions; add straight to a column; let the person switch views; the
+  card's Gantt should match the priority popup's. Cause of the first:
+  the kanban shrank to the card body's height, so cards ran out past
+  their column's background. Built: the kanban takes its tallest
+  column's height; `＋` per column; the `List | Kanban | Gantt`
+  switch (the configured view is the default; the choice is kept by
+  card for the session, not across sessions); the card's Gantt view
+  IS the priority popup's component (`mountGantt`, new flat `"board"`
+  scope; stage bands on an initiative board). Harness page
+  `actionboard.html`. App-only.
 - **Where things stand (2026-09-24).** Released: v0.51.0 (2026-09-14,
   solution-carrying — value driver tree, grid entry, Metrics card,
   meeting-board driver links, rituals in several orgs, driver popup,

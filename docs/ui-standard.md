@@ -115,6 +115,12 @@ the same commit.
   the field's own box), the card's own picker for the rest. Never a
   one-line prompt. The field wears its TARGET's type; the builder's
   bind select names that type beside each header field.
+- **The actions card** carries a `List | Kanban | Gantt` switch at
+  the top LEFT of its body (an untitled card floats its menu top
+  right); the card's configured view wears "This card's default
+  view". Kanban columns are as tall as the tallest and never clip;
+  each has a `＋` beside its count. There is ONE Gantt in the app —
+  the priority popup's — wherever a Gantt appears.
 - **Chips over a card's body sit in ONE flex row** (the embed card's
   `.ltk-em-chips`: Actions · present in its own window · open in a
   tab · refresh). Never one absolute offset per chip: each offset

@@ -19,13 +19,17 @@ export const ACTIONBOARD_CSS = `
 }
 
 /* ---- kanban view ---- */
+/* The board takes the height its TALLEST column needs and never shrinks
+   below it (flex 1 0 auto): the card's body scrolls, the columns do not.
+   It used to shrink to the body (flex: 1; min-height: 0), so a long
+   column's cards ran out past the bottom of its own background. Stretch
+   keeps every column as tall as the tallest. */
 .ltk-ab-kanban {
-  flex: 1;
+  flex: 1 0 auto;
   display: flex;
   align-items: stretch;
   gap: 12px;
   overflow-x: auto;
-  min-height: 0;
 }
 .ltk-ab-col {
   flex: 1 0 200px;
@@ -48,6 +52,33 @@ export const ACTIONBOARD_CSS = `
   justify-content: space-between;
   align-items: center;
 }
+.ltk-ab-col-name { flex: 1; min-width: 0; overflow-wrap: anywhere; text-align: left; }
+.ltk-ab-col-title { gap: 6px; }
+.ltk-ab-col-add {
+  flex: none; width: 28px; height: 28px; padding: 0; border-radius: 6px;
+  border: 1px solid transparent; background: var(--ltk-bg); color: var(--ltk-muted);
+  font: inherit; font-size: 15px; line-height: 1; cursor: pointer;
+}
+.ltk-ab-col-add:hover, .ltk-ab-col-add:focus-visible { border-color: var(--ltk-accent); color: var(--ltk-accent); outline: none; }
+.ltk-tile .ltk-ab-col-add { display: none; }
+
+/* the person's view switch: List | Kanban | Gantt */
+/* on the LEFT: an untitled card floats its kebab at the top right */
+.ltk-ab-views {
+  align-self: flex-start; display: inline-flex; flex: none;
+  border: 1px solid var(--ltk-hairline); border-radius: 8px; overflow: hidden;
+}
+.ltk-ab-viewbtn {
+  border: none; background: var(--ltk-bg); color: var(--ltk-muted);
+  font: inherit; font-size: 12.5px; padding: 6px 12px; min-height: 32px; cursor: pointer;
+}
+.ltk-ab-viewbtn + .ltk-ab-viewbtn { border-left: 1px solid var(--ltk-hairline); }
+.ltk-ab-viewbtn:hover { color: var(--ltk-fg); }
+.ltk-ab-viewbtn-on, .ltk-ab-viewbtn-on:hover { background: var(--ltk-accent); color: #fff; font-weight: 600; }
+.ltk-tile .ltk-ab-views { display: none; }
+/* the host's Gantt inside the card */
+.ltk-ab-ganttx { flex: 1 0 auto; min-height: 0; display: flex; flex-direction: column; }
+
 .ltk-ab-col-count {
   border-radius: 999px;
   background: var(--ltk-bg);

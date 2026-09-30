@@ -1,7 +1,9 @@
-// Actions Gantt (design spec §2, P8). ONE component, two scopes:
-// "initiative" (stage bands behind the bars, no group rows) and "org"
+// Actions Gantt (design spec §2, P8). ONE component, three scopes:
+// "initiative" (stage bands behind the bars, no group rows), "org"
 // (group row per initiative — caret · status edge · name · stage chip ·
-// count; collapsed shows one summary bar). Toolbar: scope · assignee ·
+// count; collapsed shows one summary bar) and "board" (2026-09-30: the
+// actions card on ANY board — the actions it is given, flat, whether or
+// not they belong to an initiative). Toolbar: scope · assignee ·
 // status · window presets 2w/4w/8w/13w · ⋮ (show completed · export CSV).
 // Bar states carry a SHAPE as well as a colour (§2.2): on-track solid
 // accent · overdue solid red · awaiting-verification hatched amber ·
@@ -32,7 +34,7 @@ export const RESCHEDULE_REASONS = [
 export interface GanttOpts {
   host: HTMLElement;
   /** Which scopes the segmented control offers; the first is initial. */
-  scopes: { key: "initiative" | "org"; label: string }[];
+  scopes: { key: "initiative" | "org" | "board"; label: string }[];
   /** Initiative scope: the one initiative (stage bands come from it). */
   initiative?: Initiative;
   /** Org scope: every initiative in view (group rows). */
@@ -276,7 +278,7 @@ export function mountGantt(opts: GanttOpts): () => void {
       }
       bar.appendChild(seg);
     }
-    if (scope === "org") {
+    if (scope === "org" || scope === "board") {
       const people = new Map<string, string>();
       for (const a of opts.actions) for (const x of a.assignees) if (x.whoId !== "") people.set(x.whoId, x.who);
       if (people.size > 0) {
@@ -392,7 +394,11 @@ export function mountGantt(opts: GanttOpts): () => void {
         return r;
       };
       const sortRows = (rows: LtkAction[]) => rows.sort((a, b) => ((a.due || "9999") < (b.due || "9999") ? -1 : 1));
-      if (scope === "initiative" && opts.initiative) {
+      if (scope === "board") {
+        const rows = sortRows(opts.actions.filter(visibleAction));
+        if (rows.length === 0) listBox.appendChild(el("div", "app-gx-empty", "No open actions."));
+        for (const a of rows) listBox.appendChild(listRow(a));
+      } else if (scope === "initiative" && opts.initiative) {
         const rows = sortRows(byInitiative(opts.initiative).filter(visibleAction));
         if (rows.length === 0) listBox.appendChild(el("div", "app-gx-empty", "No actions on this initiative yet. Add one from the Action plan card."));
         for (const a of rows) listBox.appendChild(listRow(a));
@@ -611,7 +617,12 @@ export function mountGantt(opts: GanttOpts): () => void {
     }
 
     // ---- body ----
-    if (scope === "initiative" && opts.initiative) {
+    if (scope === "board") {
+      // the actions card: what it was given, flat — no groups, no bands
+      const rows = opts.actions.filter(visibleAction).sort((a, b) => ((a.due || "9999") < (b.due || "9999") ? -1 : 1));
+      if (rows.length === 0) grid.appendChild(el("div", "app-gx-empty", "No open actions in this window. Try 8 or 13 weeks."));
+      for (const a of rows) grid.appendChild(actionRow(a));
+    } else if (scope === "initiative" && opts.initiative) {
       const i = opts.initiative;
       const rows = byInitiative(i).filter(visibleAction).sort((a, b) => (a.due || "9999") < (b.due || "9999") ? -1 : 1);
       const bandsRow = el("div", "app-gx-row app-gx-bandsrow");

@@ -4008,3 +4008,6 @@ textarea.app-cp-statement { font-size: 14px; font-weight: 500; }
 .app-er-btns { display: flex; gap: 8px; justify-content: flex-end; align-items: center; flex-wrap: wrap; }
 .app-er-outcome { font-size: 12.5px; font-weight: 600; margin-right: auto; }
 .app-er-reason { width: 100%; box-sizing: border-box; }
+/* the actions card's Gantt on the overview: a tile is for reading — the
+   filters and window presets belong to the opened card */
+.ltk-tile .app-gx-bar { display: none; }

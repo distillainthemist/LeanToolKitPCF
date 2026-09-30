@@ -384,6 +384,11 @@ function pal(opts: CardMount): Record<string, string> {
 }
 
 /** New actions get this card's identity; escalated imports keep theirs. */
+/** The view a person chose on an actions card (List | Kanban | Gantt),
+ *  by the card's key, for the session. The card's configured view is its
+ *  default; this is what they switched to. */
+const chosenActionView = new Map<string, "list" | "kanban" | "gantt">();
+
 /** The board a surface is configured to roll up ("" = its own). */
 function linkSourceBoard(settings: Record<string, unknown>): string {
   const b = (settings.board ?? {}) as Record<string, unknown>;
@@ -1363,7 +1368,52 @@ const REGISTRY: Record<string, CardMounter> = {
     const home = boardChannelKey(surfaceBoard(linkSourceBoard(opts.settings), opts.boardId));
     editor.setLinkTargets([{ key: home, label: "The board as a whole" }, ...opts.sources.map((s) => ({ key: s.instanceId, label: s.label }))], home);
     editor.setActions(opts.actions);
-    return () => opts.host.replaceChildren();
+    // the view the person chose on this card, for the session — the
+    // overview's tile and the opened card agree
+    editor.setUserView(chosenActionView.get(opts.instanceKey) ?? null, (v) => chosenActionView.set(opts.instanceKey, v));
+    // ONE Gantt: the card's Gantt view is the component the priority
+    // popup and the initiative's Gantt use (2026-09-30). An initiative
+    // board shows its stage bands; any other board a flat chart.
+    editor.setGanttRenderer((host, g) => {
+      let dead = false;
+      let teardown: () => void = () => undefined;
+      host.appendChild(el("div", "app-cp-muted", "Loading…"));
+      void (async () => {
+        const src = surfaceBoard(linkSourceBoard(opts.settings), opts.boardId);
+        const [{ mountGantt }, initiative] = await Promise.all([
+          import("./improvement/gantt"),
+          src.startsWith("init-")
+            ? import("./store/initiatives").then(async (m) => (await m.listInitiatives().catch(() => [])).find((i) => i.boardId === src) ?? null)
+            : Promise.resolve(null),
+        ]);
+        if (dead) return;
+        host.replaceChildren();
+        teardown = mountGantt({
+          host,
+          scopes: [{ key: initiative ? "initiative" : "board", label: "" }],
+          initiative: initiative ?? undefined,
+          initiatives: initiative ? [initiative] : [],
+          actions: g.actions,
+          palette: pal(opts),
+          canEdit: !g.readOnly && g.actor.whoId !== "",
+          actor: g.actor,
+          onChanged: g.onChanged,
+          centerIso: opts.instanceWhen !== "" ? opts.instanceWhen.slice(0, 10) : undefined,
+          // the card carries the List | Kanban | Gantt switch itself
+          hideViewSwitch: true,
+        });
+      })().catch(() => {
+        if (!dead) host.replaceChildren(el("div", "app-cp-muted", "The Gantt could not load."));
+      });
+      return () => {
+        dead = true;
+        teardown();
+      };
+    });
+    return () => {
+      editor.destroy();
+      opts.host.replaceChildren();
+    };
   },
   EscalationViewer: (opts) => {
     const editor = new EscalationViewerEditor(opts.host, {

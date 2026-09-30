@@ -54,7 +54,8 @@ app/            the code app (vanilla TypeScript, Vite, no framework)
   harness/           Vite pages that mount controls with stubbed stores
                      for screenshots (grid, kpi, vdt, wizard, pdca, actiondlg,
                      charter, walk, band, prompts,
-                     agenda, embed) —
+                     agenda, embed,
+                     actionboard) —
                      served by the `pdca-harness` launch config
 shared/         UI kit + tokens shared with the (retired) PCF controls
 controls/       retired PCF controls — kept for shared model code
@@ -417,6 +418,21 @@ model section) — the canvas/PCF sections there are historical.
   (`<board>:board`) unless the dialog says otherwise; it used to
   attach, silently, to whichever card the "Linked card" list named
   first.
+
+- **The actions card's views** (2026-09-30). The configured view is the
+  card's DEFAULT; a `List | Kanban | Gantt` switch on the card lets
+  each person choose another, remembered by card for the session
+  (`chosenActionView` in `cardRegistry.ts` — the tile and the opened
+  card agree). **One Gantt**: in the app the card's Gantt view is
+  `improvement/gantt.ts` `mountGantt`, the component the priority
+  popup and the initiative's Gantt use, handed to the control through
+  `setGanttRenderer` — an initiative board charts with its stage
+  bands, any other board through the flat `"board"` scope. The
+  control's own Gantt remains for a standalone control only. The
+  kanban takes the height of its tallest column (the card's body
+  scrolls, the columns never clip), and `＋` on a column raises an
+  action straight into it (a status, or an issue when the board
+  groups by issue; the dialog opens on the matching PDCA state).
 
 ### 3.5 Store read cache & change signals
 

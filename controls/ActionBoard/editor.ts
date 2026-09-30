@@ -83,6 +83,12 @@ export interface ActionBoardCallbacks {
   onSnapshot?: (svgMarkup: string) => void;
 }
 
+/** The host's Gantt: mount into `host`, return the teardown. */
+export type GanttRenderer = (
+  host: HTMLElement,
+  ctx: { actions: LtkAction[]; readOnly: boolean; actor: { whoId: string; who: string }; onChanged: () => void }
+) => () => void;
+
 export class ActionBoardEditor {
   private readonly root: HTMLElement;
   private actions: LtkAction[] = [];
@@ -98,6 +104,14 @@ export class ActionBoardEditor {
   private verifyColumn = false;
   /** Where an action raised here lands unless the dialog says otherwise. */
   private defaultLink = "";
+  /** The view the PERSON chose on the card's own switch; null = the
+   *  card's configured default (2026-09-30). */
+  private userView: BoardView | null = null;
+  private onViewChosen: ((view: BoardView) => void) | null = null;
+  /** The host's Gantt (the app's — one Gantt everywhere); absent, the
+   *  card draws its own. */
+  private ganttRenderer: GanttRenderer | null = null;
+  private ganttTeardown: (() => void) | null = null;
   private rescheduleReasons = false;
   /** The signed-in viewer — stamps verifications ("" = unknown). */
   private actor: { whoId: string; who: string } = { whoId: "", who: "" };
@@ -167,6 +181,26 @@ export class ActionBoardEditor {
 
   /** Board cards an action may be (re)linked to (Ben, 2026-08-31) —
    *  handed to the raise/edit dialogs as the "Linked card" select. */
+  /** The view the person last chose for this card, and where to tell the
+   *  host when they choose another. */
+  setUserView(view: BoardView | null, onChosen?: (view: BoardView) => void): void {
+    this.onViewChosen = onChosen ?? null;
+    if (this.userView === view) return;
+    if (view === "gantt") this.ganttAutoFit = true;
+    this.userView = view;
+    this.render();
+  }
+
+  /** Hand the Gantt view to the host's own Gantt component. */
+  setGanttRenderer(renderer: GanttRenderer | null): void {
+    this.ganttRenderer = renderer;
+    if (this.currentView() === "gantt") this.render();
+  }
+
+  private currentView(): BoardView {
+    return this.userView ?? this.view;
+  }
+
   setLinkTargets(targets: { key: string; label: string }[], defaultKey = ""): void {
     this.linkTargets = targets;
     this.defaultLink = defaultKey;
@@ -218,6 +252,8 @@ export class ActionBoardEditor {
 
   destroy(): void {
     this.snapshots.cancel();
+    this.ganttTeardown?.();
+    this.ganttTeardown = null;
     this.root.remove();
   }
 
@@ -270,6 +306,9 @@ export class ActionBoardEditor {
   }
 
   private renderBody(): void {
+    // the host's Gantt owns listeners of its own — let it go first
+    this.ganttTeardown?.();
+    this.ganttTeardown = null;
     clear(this.root);
     this.dropZones = [];
     applyThemeVars(this.root, this.theme);
@@ -300,10 +339,45 @@ export class ActionBoardEditor {
       return;
     }
 
-    if (this.view === "kanban") {
+    // the person's own switch between the three views; the card's
+    // configured view is where it starts
+    const view = this.currentView();
+    const views = el("div", "ltk-ab-views");
+    views.setAttribute("role", "group");
+    views.setAttribute("aria-label", "View");
+    for (const [v, label] of [["list", "List"], ["kanban", "Kanban"], ["gantt", "Gantt"]] as [BoardView, string][]) {
+      const b = el("button", "ltk-ab-viewbtn" + (v === view ? " ltk-ab-viewbtn-on" : ""), label) as HTMLButtonElement;
+      b.type = "button";
+      b.setAttribute("aria-pressed", v === view ? "true" : "false");
+      if (v === this.view) b.title = "This card's default view";
+      b.addEventListener("click", () => {
+        if (v === this.currentView()) return;
+        if (v === "gantt") this.ganttAutoFit = true;
+        this.userView = v;
+        this.onViewChosen?.(v);
+        this.render();
+      });
+      views.appendChild(b);
+    }
+    body.appendChild(views);
+
+    if (view === "kanban") {
       body.appendChild(this.renderKanban(visible));
-    } else if (this.view === "gantt") {
-      body.appendChild(this.renderGantt(visible));
+    } else if (view === "gantt") {
+      if (this.ganttRenderer) {
+        const host = el("div", "ltk-ab-ganttx");
+        body.appendChild(host);
+        this.ganttTeardown = this.ganttRenderer(host, {
+          actions: this.actions,
+          readOnly: this.readOnly,
+          actor: this.actor,
+          // the host's Gantt writes a date change itself — nothing to
+          // re-send; the shared objects already carry the new dates
+          onChanged: () => undefined,
+        });
+      } else {
+        body.appendChild(this.renderGantt(visible));
+      }
     } else {
       body.appendChild(this.renderList(visible));
     }
@@ -395,8 +469,17 @@ export class ActionBoardEditor {
     for (const col of this.columns(visible)) {
       const colEl = el("div", "ltk-ab-col");
       const title = el("div", "ltk-ab-col-title");
-      title.appendChild(el("span", undefined, col.label));
+      title.appendChild(el("span", "ltk-ab-col-name", col.label));
       title.appendChild(el("span", "ltk-ab-col-count", String(col.items.length)));
+      if (!this.readOnly) {
+        // straight into THIS column (2026-09-30)
+        const add = el("button", "ltk-ab-col-add", "＋") as HTMLButtonElement;
+        add.type = "button";
+        add.title = `Add an action to ${col.label}`;
+        add.setAttribute("aria-label", add.title);
+        add.addEventListener("click", () => this.addAction(col.key));
+        title.appendChild(add);
+      }
       colEl.appendChild(title);
       const cards = el("div", "ltk-ab-cards");
       for (const a of this.sorted(col.items)) {
@@ -799,8 +882,21 @@ export class ActionBoardEditor {
     this.snapshots.schedule();
   }
 
-  private addAction(): void {
+  /** Raise an action; `columnKey` starts it in that kanban column (a
+   *  status, or an issue when the board groups by issue). */
+  private addAction(columnKey?: string): void {
     const action = newAction({ source: "actionboard", sourceId: "" });
+    if (columnKey !== undefined && columnKey !== "") {
+      if (this.groupBy === "status") {
+        const status = columnKey as ActionStatus;
+        action.status = status;
+        // the PDCA state the dialog opens on follows the column
+        action.pdca = status === "done" || status === "verify" ? "closed" : status === "in-progress" ? "do" : "plan";
+        if (status === "done" || status === "verify") for (const x of action.assignees) x.done = true;
+      } else {
+        action.issue = columnKey;
+      }
+    }
     openActionDialog({
       host: this.root,
       action,
