@@ -2,7 +2,7 @@
 // rows → the orgJSON the wizard and hub share), protected times, and
 // per-user preferences.
 
-import { bumpChange, memoRead } from "./changes";
+import { memoRead, writing } from "./changes";
 import { Ben_ltksitesettingsesService } from "../generated/services/Ben_ltksitesettingsesService";
 import { Ben_ltkuserprefsesService } from "../generated/services/Ben_ltkuserprefsesService";
 import { parseHubTabs, serializeHubTabs } from "../../../shared/schema/hubTabs";
@@ -99,7 +99,7 @@ export async function branding(): Promise<Branding> {
 }
 
 export async function saveBranding(b: Branding): Promise<void> {
-  await upsertWhere(
+  await writing("palettes", upsertWhere(
     Ben_ltksitesettingsesService,
     eq("ben_site", APP_ROW),
     (row) => row.ben_ltksitesettingsid,
@@ -110,7 +110,7 @@ export async function saveBranding(b: Branding): Promise<void> {
       ben_logo: b.logo,
       ben_accent: b.accent,
     }
-  );
+  ));
 }
 
 /**
@@ -570,8 +570,7 @@ async function appPalettesUncached(): Promise<{
 }
 
 export async function saveAppPalettes(states: string, titles: string): Promise<void> {
-  bumpChange("palettes");
-  await upsertWhere(
+  await writing("palettes", upsertWhere(
     Ben_ltksitesettingsesService,
     eq("ben_site", APP_ROW),
     (row) => row.ben_ltksitesettingsid,
@@ -581,7 +580,7 @@ export async function saveAppPalettes(states: string, titles: string): Promise<v
       ben_statepalette: states,
       ben_titlepalette: titles,
     }
-  );
+  ));
 }
 
 export interface SiteRosterPattern {

@@ -5,7 +5,8 @@
 // current and its mandatory cards created"); optional cards are offered
 // later from the template (P6's ＋ Add card from template).
 
-import { bumpChange, memoRead } from "./changes";
+import { bumpChange, memoRead, writing } from "./changes";
+import { track } from "./inflight";
 import { firstFreePos, metricsCardSlot, slotsFromTemplate } from "../improvement/boardLayout";
 export { firstFreePos, metricsCardSlot, slotsFromTemplate };
 import { Ben_ltkinitiativesService } from "../generated/services/Ben_ltkinitiativesService";
@@ -85,8 +86,11 @@ export async function unlinkPriorityEverywhere(priorityId: string): Promise<numb
 }
 
 export async function saveInitiative(i: Initiative): Promise<string> {
-  bumpChange("initiatives");
-  return upsertWhere(
+  // tracked: a screen mounting next waits for it (store/inflight.ts)
+  return track(
+    writing(
+      "initiatives",
+      upsertWhere(
     Ben_ltkinitiativesService,
     eq("ben_initiativeid", i.id),
     (row: Ben_ltkinitiatives) => row.ben_ltkinitiativeid,
@@ -118,7 +122,7 @@ export async function saveInitiative(i: Initiative): Promise<string> {
       ben_stagetargetsjson: JSON.stringify(i.stageTargets),
       ben_alsoorgsjson: JSON.stringify(i.alsoOrgs ?? []),
     }
-  );
+  )));
 }
 
 export async function appendInitiativeEvent(
@@ -202,8 +206,7 @@ export async function createInitiative(
       const manifest = parseManifest(tplBoard.manifestRaw);
       const boardId = `init-${i.id}`;
       const slots = slotsFromTemplate(manifest);
-      bumpChange("boards");
-      await upsertWhere(
+      await writing("boards", upsertWhere(
         Ben_ltkboardsService,
         eq("ben_boardid", boardId),
         (row) => row.ben_ltkboardid,
@@ -219,7 +222,7 @@ export async function createInitiative(
             slots,
           }),
         }
-      );
+      ));
       i.boardId = boardId;
     }
   }

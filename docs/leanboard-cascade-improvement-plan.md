@@ -1272,6 +1272,16 @@ reschedule/cancel history with a reason picklist.
   the last edit (writes in flight), daily rituals' labelled check-ins
   sharing the day's record, "meeting: label" on the calendar, On hold
   after Closed.
+- **2026-10-01 — linked charter fields still one edit behind.** Ben,
+  after v0.59.0: a charter with linked fields did not show its edit
+  on the overview. Cause: a linked field reads the INITIATIVE, which
+  is memoised; every writer bumped the topic before its write, so a
+  read that started mid-write was cached stale for a minute (card
+  rows are not memoised, which is why the earlier fix helped plain
+  fields only). Fixed at the cache: `writing()` drops the cache at
+  start AND landing and `memoRead` never keeps a read that overlaps a
+  write; every store writer routed through it; `saveInitiative`
+  tracked so the board mount waits for it. Tests 730. App-only.
 - **Where things stand (2026-09-24).** Released: v0.51.0 (2026-09-14,
   solution-carrying — value driver tree, grid entry, Metrics card,
   meeting-board driver links, rituals in several orgs, driver popup,

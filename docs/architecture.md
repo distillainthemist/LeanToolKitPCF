@@ -450,6 +450,17 @@ model section) — the canvas/PCF sections there are historical.
   action straight into it (a status, or an issue when the board
   groups by issue; the dialog opens on the matching PDCA state).
 
+- **The read cache and writes** (`store/changes.ts`, 2026-10-01).
+  Every store writer used to bump its topic BEFORE the write; a read
+  that started after the bump and before the write landed was kept
+  for a minute with the row as it was. A charter's LINKED fields read
+  the initiative through that cache (card rows are never memoised),
+  so the overview showed them one edit behind even after the
+  in-flight fix below. Now every writer goes through `writing(topic,
+  promise)`: the cache is dropped as the write starts and as it
+  lands, and `memoRead` never keeps a read that starts while a write
+  on its topic is travelling (nor one that a write overtook).
+  `saveInitiative` is also tracked, so the board mount waits for it.
 - **Writes in flight** (`app/src/store/inflight.ts`, 2026-10-01). A
   card's document saves through the shared `saver` on a 400 ms
   debounce, rescheduled when its snapshot lands (~800 ms after the
