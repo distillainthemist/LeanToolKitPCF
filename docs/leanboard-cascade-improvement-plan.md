@@ -1234,6 +1234,10 @@ reschedule/cancel history with a reason picklist.
   IS the priority popup's component (`mountGantt`, new flat `"board"`
   scope; stage bands on an initiative board). Harness page
   `actionboard.html`. App-only.
+- **2026-09-30 — released as v0.58.0** (app-only): the actions card's
+  tile shows the board's actions, an action raised on it belongs to
+  the board as a whole, the embed card's chips, and the actions
+  card's columns, column add, view switch and shared Gantt.
 - **Where things stand (2026-09-24).** Released: v0.51.0 (2026-09-14,
   solution-carrying — value driver tree, grid entry, Metrics card,
   meeting-board driver links, rituals in several orgs, driver popup,
