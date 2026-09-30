@@ -217,7 +217,7 @@ Version lives in the tag alone — nothing is stamped into files.
   (`improvement/boardLayout.ts`, 2026-09-17).
 - **Solution-carrying releases** since v0.50: v0.51 (value drivers,
   scenarios, sourceurl, tracking, pdca), v0.53 (confidential action
-  columns), v0.54 (alsoorgs). Everything from v0.55.0 to v0.60.0 was
+  columns), v0.54 (alsoorgs). Everything from v0.55.0 to v0.61.0 was
   app-only. Prod imports the managed solution FIRST.
 - **One rule, applied everywhere it matters.** A rule that must hold
   for every action or every card lives in ONE pure function and is

@@ -1298,7 +1298,8 @@ reschedule/cancel history with a reason picklist.
   re-mounts live tiles on demand; the board calls it when the binding
   lands, on `ltk-actions-changed` and after the live action refresh.
   Harness-verified for the Gantt; the tile is Ben's hosted check.
-  Unreleased.
+- **2026-10-01 — released as v0.61.0** (app-only): Gantt rows name
+  the action; live tiles re-mount when their data lands.
 - **Where things stand (2026-10-01).** Released since the entry
   below, all app-only (the schema is unchanged since v0.54.0):
   v0.56.0 (2026-09-24 — initiative relink, quick add to the open
