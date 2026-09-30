@@ -5,7 +5,8 @@
 // full emitted set goes to onActions (new actions stamped with this
 // card's instanceKey), the current set from the central table feeds in.
 
-import { LtkAction } from "../../shared/schema/actions";
+import { boardChannelKey, LtkAction } from "../../shared/schema/actions";
+import { surfaceBoard } from "./tileActions";
 import { Person } from "../../shared/schema/people";
 import { openActionManager } from "../../shared/ui/actionUi";
 import {
@@ -383,6 +384,13 @@ function pal(opts: CardMount): Record<string, string> {
 }
 
 /** New actions get this card's identity; escalated imports keep theirs. */
+/** The board a surface is configured to roll up ("" = its own). */
+function linkSourceBoard(settings: Record<string, unknown>): string {
+  const b = (settings.board ?? {}) as Record<string, unknown>;
+  const source = (b.source ?? {}) as Record<string, unknown>;
+  return typeof source.boardId === "string" ? source.boardId : "";
+}
+
 function stamped(opts: CardMount, actions: LtkAction[]): LtkAction[] {
   return actions.map((a) =>
     a.instanceId === "" ? { ...a, instanceId: opts.instanceKey } : a
@@ -1348,7 +1356,12 @@ const REGISTRY: Record<string, CardMounter> = {
       rescheduleReasons: config(opts).rescheduleReasons === true,
     });
     editor.setActor(opts.viewer);
-    editor.setLinkTargets(opts.sources.map((s) => ({ key: s.instanceId, label: s.label })));
+    // an action raised HERE belongs to the board as a whole unless someone
+    // says otherwise (2026-09-30: it used to attach, silently, to whichever
+    // card the list named first). On a card set to show another board's
+    // actions, that board.
+    const home = boardChannelKey(surfaceBoard(linkSourceBoard(opts.settings), opts.boardId));
+    editor.setLinkTargets([{ key: home, label: "The board as a whole" }, ...opts.sources.map((s) => ({ key: s.instanceId, label: s.label }))], home);
     editor.setActions(opts.actions);
     return () => opts.host.replaceChildren();
   },
@@ -1585,7 +1598,9 @@ export type TileMount = Pick<
   | "instanceWhen"
   | "actions"
 > &
-  Pick<CardMount, "onEmbedFrame" | "embedPreload" | "palette" | "instanceTopic" | "binding">;
+  Pick<CardMount, "onEmbedFrame" | "embedPreload" | "palette" | "instanceTopic" | "binding"> &
+  // an action surface's tile names where each action came from
+  Partial<Pick<CardMount, "sources">>;
 
 /**
  * Mount a card as a BOARD TILE: the same editor, rendering the same data,
@@ -1612,7 +1627,7 @@ export function mountTile(cardType: string, opts: TileMount): (() => void) | nul
     ...titleWithSubtitle(opts),
     people: [],
     readOnly: true,
-    sources: [],
+    sources: opts.sources ?? [],
     viewer: { whoId: "", who: "" },
     onSave: () => undefined,
     onTile: () => undefined,

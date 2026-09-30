@@ -128,7 +128,6 @@ export class EmbedView {
     this.refreshBtn.type = "button";
     this.refreshBtn.title = "Refresh";
     this.refreshBtn.addEventListener("click", () => this.refresh());
-    this.root.appendChild(this.refreshBtn);
 
     // many pages forbid framing (X-Frame-Options / frame-ancestors) — the
     // frame then shows the browser's refusal. This always-there escape
@@ -138,7 +137,6 @@ export class EmbedView {
     this.openBtn.rel = "noopener noreferrer";
     this.openBtn.title = "Open in a new tab";
     this.openBtn.style.display = "none";
-    this.root.appendChild(this.openBtn);
 
     // present-in-window: a chip left of open-in-tab pops the report into
     // its own top-level window on demand (the fallback where the embedded
@@ -148,7 +146,6 @@ export class EmbedView {
     this.popBtn.title = "Present in its own window";
     this.popBtn.style.display = "none";
     this.popBtn.addEventListener("click", () => this.presentNow());
-    this.root.appendChild(this.popBtn);
 
     // present mode's body: the launch panel (built once, painted on state)
     this.presentPanel = el("div", "ltk-em-present");
@@ -162,7 +159,14 @@ export class EmbedView {
     this.actionsChip.title = "Actions on this card";
     this.actionsChip.style.display = "none";
     this.actionsChip.addEventListener("click", () => this.manageActions());
-    this.root.appendChild(this.actionsChip);
+
+    // ONE row for the four chips, laid out by the browser (2026-09-30):
+    // each had its own absolute offset, tuned for the others being there,
+    // so "Actions" and "Present in its own window" sat on top of one
+    // another. A hidden chip now simply takes no room.
+    const chips = el("div", "ltk-em-chips");
+    chips.append(this.actionsChip, this.popBtn, this.openBtn, this.refreshBtn);
+    this.root.appendChild(chips);
 
     applyThemeVars(this.root, this.theme);
     this.paintGhost();

@@ -61,12 +61,24 @@ export const EMBED_CSS = `
 .ltk-tile .ltk-em-refresh { display: none !important; }
 .ltk-em-noacts { font-size: 12.5px; color: var(--ltk-muted); }
 
-/* actions chip (no-pane mode): sits left of the open/refresh chips */
-.ltk-em-actchip {
+/* the chips: ONE row, top right, clear of the kebab slot. The browser
+   lays them out — a hidden chip takes no room, a wider label pushes its
+   neighbours along, and nothing can sit on top of anything else. Left to
+   right: Actions · present in its own window · open in a tab · refresh. */
+.ltk-em-chips {
   position: absolute;
   top: 8px;
-  right: 108px;
+  right: 34px;
   z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.ltk-em-notitle .ltk-em-chips { right: 8px; opacity: 0.85; }
+.ltk-em-chips > * { flex: none; }
+
+/* actions chip (no-pane mode) */
+.ltk-em-actchip {
   font: inherit;
   font-size: 12.5px;
   border: 1px solid var(--ltk-hairline);
@@ -78,7 +90,6 @@ export const EMBED_CSS = `
   cursor: pointer;
 }
 .ltk-em-actchip:hover { color: var(--ltk-accent); border-color: var(--ltk-accent); }
-.ltk-em-notitle .ltk-em-actchip { right: 82px; opacity: 0.85; }
 .ltk-em-frame {
   flex: 1;
   width: 100%;
@@ -89,10 +100,6 @@ export const EMBED_CSS = `
 
 /* refresh: pinned top-right; translucent chip when floating over the frame */
 .ltk-em-refresh {
-  position: absolute;
-  top: 8px;
-  right: 34px; /* clear of the kebab slot */
-  z-index: 3;
   border: 1px solid var(--ltk-hairline);
   background: var(--ltk-bg);
   color: var(--ltk-muted);
@@ -103,15 +110,10 @@ export const EMBED_CSS = `
   cursor: pointer;
 }
 .ltk-em-refresh:hover { color: var(--ltk-accent); border-color: var(--ltk-accent); }
-.ltk-em-notitle .ltk-em-refresh { right: 8px; opacity: 0.85; }
 .ltk-em-refresh:disabled { opacity: 0.4; cursor: default; }
 
 /* open-in-new-tab: sits just left of refresh, same chip styling */
 .ltk-em-open {
-  position: absolute;
-  top: 8px;
-  right: 68px; /* left of the refresh chip */
-  z-index: 3;
   border: 1px solid var(--ltk-hairline);
   background: var(--ltk-bg);
   color: var(--ltk-muted);
@@ -123,14 +125,9 @@ export const EMBED_CSS = `
   text-decoration: none;
 }
 .ltk-em-open:hover { color: var(--ltk-accent); border-color: var(--ltk-accent); }
-.ltk-em-notitle .ltk-em-open { right: 42px; opacity: 0.85; }
 
 /* present-in-window chip: left of open-in-tab, same chip styling */
 .ltk-em-pop {
-  position: absolute;
-  top: 8px;
-  right: 102px; /* left of the open chip */
-  z-index: 3;
   border: 1px solid var(--ltk-hairline);
   background: var(--ltk-bg);
   color: var(--ltk-muted);
@@ -141,7 +138,6 @@ export const EMBED_CSS = `
   cursor: pointer;
 }
 .ltk-em-pop:hover { color: var(--ltk-accent); border-color: var(--ltk-accent); }
-.ltk-em-notitle .ltk-em-pop { right: 76px; opacity: 0.85; }
 .ltk-tile .ltk-em-pop { display: none !important; }
 
 /* present mode: the body is a launch panel, never a frame */

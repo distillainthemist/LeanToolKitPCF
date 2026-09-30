@@ -54,7 +54,7 @@ app/            the code app (vanilla TypeScript, Vite, no framework)
   harness/           Vite pages that mount controls with stubbed stores
                      for screenshots (grid, kpi, vdt, wizard, pdca, actiondlg,
                      charter, walk, band, prompts,
-                     agenda) —
+                     agenda, embed) —
                      served by the `pdca-harness` launch config
 shared/         UI kit + tokens shared with the (retired) PCF controls
 controls/       retired PCF controls — kept for shared model code
@@ -405,6 +405,18 @@ model section) — the canvas/PCF sections there are historical.
   2026-09-30: a row edited in a person's or an organisation's scope
   sent the viewer's own list to the store, never the row itself.
   `emitFor` sends the row when it is not one of the viewer's.
+
+- **What a board tile shows** (`app/src/tileActions.ts`, pure): a card
+  shows the actions that hang off it; an ACTION SURFACE (the actions
+  card, the escalation viewer) shows the whole board's — or the board
+  it is set to roll up — exactly as it does when opened. From the
+  first live tiles (2026-07-25) until 2026-09-30 the overview gave
+  every tile its own card's actions only, so the actions card's tile
+  read "No actions yet" whatever the board held. An action raised ON
+  the actions card now belongs to the board as a whole
+  (`<board>:board`) unless the dialog says otherwise; it used to
+  attach, silently, to whichever card the "Linked card" list named
+  first.
 
 ### 3.5 Store read cache & change signals
 

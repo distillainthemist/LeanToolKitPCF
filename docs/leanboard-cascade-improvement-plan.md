@@ -1209,6 +1209,19 @@ reschedule/cancel history with a reason picklist.
   initiative titles no longer show in the action dialog's list, and
   edits made in the hub's Actions tab to another person's or an
   organisation's actions are now saved (they were not, from v0.55.0).
+- **2026-09-30 — the actions card's tile; the embed card's chips.**
+  Ben, first live meeting: the actions card on the overview still
+  read "No actions yet". Cause: the overview filtered every tile to
+  its own card's actions — right for a card, wrong for an action
+  surface (since live tiles, 2026-07-25; not a first-run effect).
+  Built: `tileActions.ts` (the surface gets the board's, or the
+  board it rolls up), the escalation viewer's tile likewise (with the
+  card names for its groups), and an action raised on the actions
+  card defaults to "The board as a whole". Nothing to repair in the
+  data — existing actions show at once. Embed card: the four chips
+  were absolutely positioned one by one and "Actions" overlapped
+  "Present in its own window"; they are one flex row now. Harness
+  page `embed.html`. Tests 710. App-only.
 - **Where things stand (2026-09-24).** Released: v0.51.0 (2026-09-14,
   solution-carrying — value driver tree, grid entry, Metrics card,
   meeting-board driver links, rituals in several orgs, driver popup,

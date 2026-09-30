@@ -34,10 +34,13 @@ import {
   STALE_MS,
 } from "../relock";
 import { viewerPerson } from "../store/people";
-import { BoardSummary, parseManifest } from "../store/mappers";
+import { BoardSummary, parseManifest, slotLinkSource } from "../store/mappers";
+import { isActionSurface } from "../store/policies";
+import { cardLabel } from "../../../controls/CardSettings/registry";
 import { catalogSvgByType } from "../store/catalog";
 import { rowsForBoard, toLite } from "../store/cards";
 import { actionsForBoard } from "../store/actions";
+import { actionsForTile, otherSurfaceBoards } from "../tileActions";
 import { mountTile } from "../cardRegistry";
 import { acquireFrame, frameKey, parkAllFrames, placeFrame } from "../embedFrames";
 import { LtkAction } from "../../../shared/schema/actions";
@@ -248,6 +251,8 @@ async function renderBoard(
   // slot for settings, the joined card row for the document. Actions are the
   // one extra read, and only when live is on — phase 3 batches it.
   let boardActions: LtkAction[] = [];
+  // boards a surface here is set to roll up instead of its own
+  const otherBoardActions = new Map<string, LtkAction[]>();
   const liveRenderer = (host: HTMLElement, tile: BoardTile): (() => void) => {
     const slot = activeManifest().slots.find((s) => s.cardId === tile.cardId);
     if (!slot) return () => undefined;
@@ -289,7 +294,18 @@ async function renderBoard(
       instanceWhen: current?.when ?? "",
       instanceTopic: current ? topicForDate(board.occurrenceSettingsRaw, current.when) : "",
       binding: tile.cardType === "CanvasCard" ? charterBinding : undefined,
-      actions: boardActions.filter((a) => a.instanceId === instanceKey),
+      // a card shows its own actions; an action surface shows the board's
+      // (its job, and what it shows when opened) — tileActions.ts
+      actions: actionsForTile(
+        { surface: isActionSurface(slot), configuredSource: slotLinkSource(slot).boardId, instanceKey },
+        { boardId: board.boardId, boardActions, otherBoards: otherBoardActions }
+      ),
+      // the escalation viewer names each group by the card it came from
+      sources: isActionSurface(slot)
+        ? activeManifest()
+            .slots.filter((sl) => !isActionSurface(sl))
+            .map((sl) => ({ instanceId: `${board.boardId}:${sl.cardId}`, label: sl.title || cardLabel(sl.cardType) }))
+        : undefined,
       // an embed tile uses the persistent frame, so opening the card is
       // instant instead of a cold cross-origin load mid-meeting
       embedPreload: preload,
@@ -473,6 +489,17 @@ async function renderBoard(
       console.warn("live tiles: board actions unavailable", err);
       boardActions = [];
     }
+    const others = otherSurfaceBoards(
+      activeManifest()
+        .slots.filter((sl) => isActionSurface(sl))
+        .map((sl) => ({ configuredSource: slotLinkSource(sl).boardId })),
+      board.boardId
+    );
+    await Promise.all(
+      others.map(async (b) => {
+        otherBoardActions.set(b, await actionsForBoard(b).catch(() => []));
+      })
+    );
   }
 
   // BEFORE any tile is drawn: the live renderer reads boardActions as it

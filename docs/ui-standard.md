@@ -115,6 +115,11 @@ the same commit.
   the field's own box), the card's own picker for the rest. Never a
   one-line prompt. The field wears its TARGET's type; the builder's
   bind select names that type beside each header field.
+- **Chips over a card's body sit in ONE flex row** (the embed card's
+  `.ltk-em-chips`: Actions · present in its own window · open in a
+  tab · refresh). Never one absolute offset per chip: each offset
+  assumes the others' widths and presence, and two of them ended up
+  on top of one another.
 - **Who pickers** open on the board's OWN people — a ritual's owner
   and participants, an initiative's role-holders — as chips, capped
   at 20, with everyone else behind `Search everyone…`. ONE function

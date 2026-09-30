@@ -96,6 +96,8 @@ export class ActionBoardEditor {
   private view: BoardView = "list";
   private groupBy: KanbanGroupBy = "status";
   private verifyColumn = false;
+  /** Where an action raised here lands unless the dialog says otherwise. */
+  private defaultLink = "";
   private rescheduleReasons = false;
   /** The signed-in viewer — stamps verifications ("" = unknown). */
   private actor: { whoId: string; who: string } = { whoId: "", who: "" };
@@ -165,8 +167,9 @@ export class ActionBoardEditor {
 
   /** Board cards an action may be (re)linked to (Ben, 2026-08-31) —
    *  handed to the raise/edit dialogs as the "Linked card" select. */
-  setLinkTargets(targets: { key: string; label: string }[]): void {
+  setLinkTargets(targets: { key: string; label: string }[], defaultKey = ""): void {
     this.linkTargets = targets;
+    this.defaultLink = defaultKey;
   }
 
   setActor(actor: { whoId: string; who: string }): void {
@@ -804,6 +807,7 @@ export class ActionBoardEditor {
       people: this.people,
       isNew: true,
       linkTargets: this.linkTargets,
+      linkTarget: this.defaultLink !== "" ? this.defaultLink : undefined,
       onCommit: () => {
         this.actions.push(action);
         this.commit();
