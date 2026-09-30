@@ -3,6 +3,7 @@
 // tile svg in one update).
 
 import type { Ben_ltkcarddatas } from "../generated/models/Ben_ltkcarddatasModel";
+import { whenSettled } from "./inflight";
 import { Ben_ltkcarddatasService } from "../generated/services/Ben_ltkcarddatasService";
 import { allWhere, eq, firstWhere } from "./dv";
 import { CardRowLite } from "./tiles";
@@ -31,6 +32,7 @@ export function toLite(rows: CardRow[]): CardRowLite[] {
 
 /** Every row for a board — instance rows AND live rows — in one query. */
 export async function rowsForBoard(boardId: string): Promise<CardRow[]> {
+  await whenSettled(); // a card's save from the screen just left lands first
   const rows = await allWhere(Ben_ltkcarddatasService.getAll, eq("ben_boardid", boardId));
   return rows.map(fromRow);
 }
@@ -38,6 +40,7 @@ export async function rowsForBoard(boardId: string): Promise<CardRow[]> {
 /** Live rows across every initiative board (P6c metric rollup) —
  *  one query; the caller joins them to manifests. */
 export async function rowsForInitiativeBoards(): Promise<(CardRow & { boardId: string })[]> {
+  await whenSettled();
   const rows = await allWhere(Ben_ltkcarddatasService.getAll, "startswith(ben_boardid,'init-')");
   return rows.map((r) => ({ ...fromRow(r), boardId: r.ben_boardid ?? "" })).filter((r) => r.instanceId === "");
 }
@@ -46,6 +49,7 @@ export async function instanceRow(
   instanceGuid: string,
   cardId: string
 ): Promise<CardRow | null> {
+  await whenSettled();
   const row = await firstWhere(
     Ben_ltkcarddatasService.getAll,
     `_ben_instance_value eq ${instanceGuid} and ${eq("ben_cardid", cardId)}`
@@ -54,6 +58,7 @@ export async function instanceRow(
 }
 
 export async function liveRow(boardId: string, cardId: string): Promise<CardRow | null> {
+  await whenSettled();
   const row = await firstWhere(
     Ben_ltkcarddatasService.getAll,
     `_ben_instance_value eq null and ${eq("ben_boardid", boardId)} and ${eq("ben_cardid", cardId)}`
@@ -97,6 +102,7 @@ export async function ensureLiveRow(
 
 /** One row by its GUID — the rollup write-back's fresh read. null = gone. */
 export async function cardRowById(rowGuid: string): Promise<CardRow | null> {
+  await whenSettled();
   const result = await Ben_ltkcarddatasService.get(rowGuid);
   if (result.success === false) {
     throw new Error(`Dataverse read failed: ${result.error?.message ?? "unknown error"}`);

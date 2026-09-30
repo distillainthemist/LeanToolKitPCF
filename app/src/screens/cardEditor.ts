@@ -24,6 +24,8 @@ import { setTitleBarExtras } from "../../../shared/ui/chrome";
 import { el } from "../../../shared/ui/dom";
 import { statusChip } from "../../../shared/ui/format";
 import { cardMounter, supportedCardTypes } from "../cardRegistry";
+import { flushPendingSaves } from "../saver";
+import { track } from "../store/inflight";
 import { appTheme, editorHost } from "../cardHost";
 import { currentViewer, detectHost } from "../runtime";
 import { actionsForBoard, actionsForInstance, upsertActions } from "../store/actions";
@@ -373,7 +375,7 @@ export function mountCardEditor(
       pendingSet = null;
       if (set) {
         inflight = inflight.then(() =>
-          upsertActions(set, sourceBoardId).then(() => {
+          track(upsertActions(set, sourceBoardId)).then(() => {
             saved.textContent = `saved ${new Date().toLocaleTimeString()}`;
             window.dispatchEvent(new CustomEvent("ltk-actions-changed"));
           })
@@ -382,8 +384,14 @@ export function mountCardEditor(
       return inflight;
     };
     // leaving the view FLUSHES a pending save (it used to cancel it —
-    // the last edit was lost, and the board mounted before the write)
-    cleanups.push(() => void flushActions());
+    // the last edit was lost, and the board mounted before the write).
+    // The DOCUMENT's debounced save too (2026-10-01): every card type
+    // saves through the shared saver, and the overview read its rows
+    // while that save was still on its timer — a card one edit behind
+    cleanups.push(() => {
+      flushPendingSaves();
+      void flushActions();
+    });
     // an action linked elsewhere in the dialog has left this card: save,
     // then re-mount in place so the list it left no longer shows it
     const onMoved = () => {
@@ -674,7 +682,8 @@ export function mountCardEditor(
         },
         onSave: (outputJson, tileSvg) => {
           if (rowGuid === "") return; // action surfaces have no document row
-          void saveCard(rowGuid, outputJson, tileSvg).then(() => {
+          // tracked: the board mounting after this view waits for it
+          void track(saveCard(rowGuid, outputJson, tileSvg)).then(() => {
             saved.textContent = `saved ${new Date().toLocaleTimeString()}`;
           });
         },

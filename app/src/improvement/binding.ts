@@ -11,6 +11,7 @@ import { canvasFieldFor, decodeFieldValue, encodeFieldValue, plainFieldValue } f
 import { promptText } from "../prompts";
 import { listPeople } from "../store/people";
 import { listInitiatives, saveInitiative } from "../store/initiatives";
+import { track } from "../store/inflight";
 import { pickOwner, pickPeople } from "../priorities/dialogs";
 import { getTemplate, listTemplates } from "../store/templates";
 import { improvementSettingsJson } from "../store/config";
@@ -188,7 +189,7 @@ export async function makeInitiativeBinding(boardId: string, onChanged: () => vo
       const key = bound.slice(6);
       const def = fieldDef.get(key);
       i.fieldValues[key] = def ? encodeFieldValue(def.kind, next) : typeof next === "string" ? next.trim() : "";
-      await saveInitiative(i);
+      await track(saveInitiative(i));
       onChanged();
       return;
     }
@@ -207,7 +208,7 @@ export async function makeInitiativeBinding(boardId: string, onChanged: () => vo
     else if (bound === "method") i.method = v;
     else if (bound.startsWith("field:")) i.fieldValues[bound.slice(6)] = v;
     else return;
-    await saveInitiative(i);
+    await track(saveInitiative(i));
     onChanged();
   };
 
@@ -238,7 +239,7 @@ export async function makeInitiativeBinding(boardId: string, onChanged: () => vo
         else if (bound === "method") i.method = v.trim();
         else if (bound.startsWith("field:")) i.fieldValues[bound.slice(6)] = v.trim();
       }
-      await saveInitiative(i);
+      await track(saveInitiative(i));
       onChanged();
     })();
   };

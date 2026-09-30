@@ -7,6 +7,7 @@ import { applyEndorsementRule } from "../../../shared/schema/actionEndorsement";
 import { ACTION_RULED_EVENT } from "../../../shared/ui/actionLinkProvider";
 import { homeBoardOf, homeCardOf } from "../../../shared/schema/actionLinks";
 import { bumpChange } from "./changes";
+import { whenSettled } from "./inflight";
 import { Ben_ltkactionsService } from "../generated/services/Ben_ltkactionsService";
 import { allWhere, eq, firstWhere, odata, upsertWhere } from "./dv";
 import { actionFromRow, actionToRow, parseManifest } from "./mappers";
@@ -36,11 +37,13 @@ async function visible(actions: LtkAction[]): Promise<LtkAction[]> {
 }
 
 export async function actionsForInstance(instanceId: string): Promise<LtkAction[]> {
+  await whenSettled();
   const rows = await allWhere(Ben_ltkactionsService.getAll, eq("ben_instanceid", instanceId));
   return visible(rows.map(actionFromRow));
 }
 
 export async function actionsForBoard(boardId: string): Promise<LtkAction[]> {
+  await whenSettled();
   const rows = await allWhere(Ben_ltkactionsService.getAll, eq("ben_boardid", boardId));
   return visible(rows.map(actionFromRow));
 }
@@ -90,6 +93,7 @@ async function healInitiativeIds(actions: LtkAction[]): Promise<void> {
  *  (2026-09-23) anything living on an initiative board, healing the id
  *  onto rows that predate the stamp. */
 export async function actionsForInitiatives(): Promise<LtkAction[]> {
+  await whenSettled();
   const rows = await allWhere(
     Ben_ltkactionsService.getAll,
     "(ben_initiativeid ne null and ben_initiativeid ne '') or startswith(ben_boardid,'init-') or startswith(ben_instanceid,'init-')"
@@ -104,6 +108,7 @@ export async function actionsForInitiatives(): Promise<LtkAction[]> {
 
 /** The viewer's rollup for LeanHub — their whoId appears in assignees. */
 export async function actionsForViewer(whoId: string): Promise<LtkAction[]> {
+  await whenSettled();
   const rows = await allWhere(
     Ben_ltkactionsService.getAll,
     `contains(ben_assigneesjson, '${odata(`"whoId":"${whoId}"`)}')`
@@ -114,6 +119,7 @@ export async function actionsForViewer(whoId: string): Promise<LtkAction[]> {
 /** Every open action (not done / cancelled) — the Actions tab's
  *  organisation scope filters these by assignee placement. */
 export async function openActions(): Promise<LtkAction[]> {
+  await whenSettled();
   const rows = await allWhere(Ben_ltkactionsService.getAll, "ben_status ne 'done' and ben_status ne 'cancelled'");
   return visible(rows.map(actionFromRow));
 }

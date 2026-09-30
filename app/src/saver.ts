@@ -5,6 +5,17 @@
 // document instead. Lives in its own module (not cardRegistry) so tests
 // can import it without dragging the Power Apps SDK into node.
 
+/** Savers with a save waiting on their debounce. The focused card view
+ *  flushes them all as it is left, so the last edit is written at once
+ *  rather than after the timer — and the board mounting next waits for
+ *  that write (store/inflight.ts) before it reads. */
+const pending = new Set<() => void>();
+
+/** Fire every waiting save now. */
+export function flushPendingSaves(): void {
+  for (const fire of [...pending]) fire();
+}
+
 export function saver(opts: {
   onSave: (outputJson: string, tileSvg: string) => void;
   /** Every fresh snapshot, even without an edit — the board editor uses
@@ -16,11 +27,15 @@ export function saver(opts: {
   let latestJson: string | null = null;
   let timer: ReturnType<typeof setTimeout> | null = null;
   const fire = () => {
+    if (timer) clearTimeout(timer);
+    timer = null;
+    pending.delete(fire);
     if (latestJson !== null) opts.onSave(latestJson, svg);
   };
   const schedule = () => {
     if (timer) clearTimeout(timer);
     timer = setTimeout(fire, 400);
+    pending.add(fire);
   };
   return {
     onSnapshot: (svgMarkup: string) => {
@@ -34,5 +49,7 @@ export function saver(opts: {
       latestJson = outputJson;
       schedule();
     },
+    /** Write now if a save is waiting. */
+    flush: fire,
   };
 }
