@@ -45,18 +45,24 @@ app/            the code app (vanilla TypeScript, Vite, no framework)
   src/priorities/    cascaded priorities (model, screen, overlay, dialogs)
   src/improvement/   initiatives, templates, metrics, boards; vdt/ = the
                      value driver tree, grid entry, KPI card links
-  src/actions/       the top-bar ＋ Add action (quick capture)
+  src/actions/       ＋ Add action (quick capture), link targets and the
+                     endorsement lookup the action dialog reads
   src/issues/        report dialog + admin triage tab
+  src/saver.ts       the debounced card save every card type uses
+                     (flushed when its screen is left)
+  src/tileActions.ts what a board tile shows: its card's actions, or
+                     the whole board's for an action surface
   src/store/         Dataverse data layer (typed helpers over services);
-                     changes.ts = read cache + change signals (§3.5)
+                     changes.ts = read cache + writing() (§3.5);
+                     inflight.ts = writes a mounting screen waits for
   src/generated/     pac-generated connector/table services (do not edit)
-  tools/             import-gate, chunk-report (build-time checks)
+  tools/             import-gate, native-dialog-gate, chunk-report
+                     (build-time checks, all in CI)
   harness/           Vite pages that mount controls with stubbed stores
-                     for screenshots (grid, kpi, vdt, wizard, pdca, actiondlg,
-                     charter, walk, band, prompts,
-                     agenda, embed,
-                     actionboard) —
-                     served by the `pdca-harness` launch config
+                     for screenshots: grid, kpi, vdt, wizard, pdca,
+                     actiondlg, charter, walk, band, prompts, agenda,
+                     embed, actionboard — served by the `pdca-harness`
+                     launch config
 shared/         UI kit + tokens shared with the (retired) PCF controls
 controls/       retired PCF controls — kept for shared model code
 data/           declarative Dataverse schema + admin scripting tools
@@ -378,10 +384,10 @@ model section) — the canvas/PCF sections there are historical.
   top-bar **＋ Add action** (assignee defaults to the viewer; starts
   linked to the OPEN board — ritual or initiative — else personal),
   the Actions tab's composer (assigns to the scoped person). Every
-  dialog carries the "Linked to" field; Cancel action and taking an
-  action off its card confirm inline. The focused card view flushes a pending save on
-  leave and fires `ltk-actions-changed`; boards and the hub refresh on
-  that signal.
+  dialog carries the "Linked to" field and a Comments section; Cancel
+  action and taking an action off its card confirm inline. The focused
+  card view flushes pending saves on leave and fires
+  `ltk-actions-changed`; boards and the hub refresh on that signal.
 
 - **Comments on any action** (2026-09-30): `comments` was always in
   the model and the row (`ben_commentsjson`), with a UI only on the
@@ -450,42 +456,36 @@ model section) — the canvas/PCF sections there are historical.
   action straight into it (a status, or an issue when the board
   groups by issue; the dialog opens on the matching PDCA state).
 
-- **The read cache and writes** (`store/changes.ts`, 2026-10-01).
-  Every store writer used to bump its topic BEFORE the write; a read
-  that started after the bump and before the write landed was kept
-  for a minute with the row as it was. A charter's LINKED fields read
-  the initiative through that cache (card rows are never memoised),
-  so the overview showed them one edit behind even after the
-  in-flight fix below. Now every writer goes through `writing(topic,
-  promise)`: the cache is dropped as the write starts and as it
-  lands, and `memoRead` never keeps a read that starts while a write
-  on its topic is travelling (nor one that a write overtook).
-  `saveInitiative` is also tracked, so the board mount waits for it.
-- **Writes in flight** (`app/src/store/inflight.ts`, 2026-10-01). A
-  card's document saves through the shared `saver` on a 400 ms
-  debounce, rescheduled when its snapshot lands (~800 ms after the
-  last edit); leaving the focused view never flushed it, and the
-  board mounted and read its rows while the save was still travelling
-  — so the overview showed the card one edit behind (any card type;
-  the charter was where Ben saw it). Now: leaving the card view
-  flushes every waiting save (`flushPendingSaves`) and the action
-  flush; those writes, and the charter's bound-field header writes,
-  are `track`ed; every card and action reader in the store, and the
-  board mount, `await whenSettled()` before reading. Rule: a reader
-  called from INSIDE a tracked write must not wait (it would wait for
-  itself) — the store's action readers are never called by
-  `upsertActions`, and `listInitiatives` is deliberately not wrapped
-  because `upsertActions` calls it.
+### 3.5 Store read cache, writes in flight & change signals
 
-### 3.5 Store read cache & change signals
-
-`store/changes.ts` keeps a 60-second read cache keyed by topic
-(`memoRead`) that writers invalidate (`bumpChange`): initiatives,
-boards, drivers, palettes, people roles, managers. Any new reader of
-those tables goes through the cached function; any new writer bumps
-the topic in the same call. The Priorities screen's boot memo checks
-the same versions. `ltk-actions-changed` is the DOM-level signal for
-action saves.
+- **The read cache** (`store/changes.ts` `memoRead`, 60 s, by topic:
+  initiatives, boards, drivers, palettes, people roles, managers).
+  Every new reader of those tables goes through the cached function.
+- **Every store write goes through `writing(topic, promise)`** (never
+  a bare `bumpChange` before the write): the cache is dropped as the
+  write starts AND as it lands, and no read that starts while a write
+  on its topic is travelling is kept (nor one a write overtook).
+  Before 2026-10-01 writers bumped once, before the write, and a read
+  that landed mid-write was kept stale for a minute — a charter's
+  LINKED fields read the initiative through such an entry (card rows
+  are never memoised), so the overview showed them one edit behind.
+- **Writes in flight** (`store/inflight.ts`): writers `track` their
+  promise — every card save, action save and initiative save — and a
+  mounting screen `await whenSettled()` before it reads (the board
+  mount, and every card and action reader in the store). A card's
+  document saves through `saver.ts` on a 400 ms debounce, rescheduled
+  when its snapshot lands; leaving the focused view now flushes every
+  waiting save (`flushPendingSaves`) and the action flush, so the
+  last edit is written at once and the next screen waits for it.
+  Rule: a reader called from INSIDE a tracked write must not wait
+  (it would wait for itself) — `listInitiatives` is deliberately not
+  wrapped because `upsertActions` calls it.
+- **Change signals**: the Priorities screen's boot memo checks the
+  topic versions; `ltk-actions-changed` is the DOM-level signal for
+  action saves (boards, the hub and the initiative band refresh on
+  it); `ltk-action-moved` and `ltk-action-ruled` make the focused
+  card view re-mount when a save moved an action elsewhere or the
+  endorsement rule changed it at the write.
 
 ## 4. The document management system
 
@@ -598,14 +598,18 @@ Operating instructions of record: [../CLAUDE.md](../CLAUDE.md) (agent),
 [deploy-to-new-org.md](deploy-to-new-org.md) (new-environment runbook),
 [deployment-cookbook.md](deployment-cookbook.md) (operational recipes).
 
-- **Gates before any push**: `tsc --noEmit`, the import gate, vitest
-  (~620 tests), `npm run build`, chunk report — plus repo-root
+- **Gates before any push**: `tsc --noEmit`, the import gate, the
+  native-dialog gate, vitest (~730 tests), `npm run build`, chunk
+  report — plus repo-root
   typecheck when `shared/`/`controls/` change. Check the test COUNT
   line, not just exit codes, when chaining, and `set -o pipefail`
   (`tsc | tail` reports tail's exit). The chunk report's ceiling on
   `cardRegistry` is a LEAK detector: a mounter that needs a pure helper
   from a settings module must import a UI-free module (the
-  `CanvasCard/draft.ts` precedent), never the settings editors.
+  `CanvasCard/draft.ts` precedent), never the settings editors. Read
+  the report's `index` line too: `main.ts` must import nothing heavy
+  statically (`./runtime` carries the host SDK behind a dynamic
+  import).
 - **Dev deploys**: `pac code push` from `app/` (authenticated as the
   maker; the player caches bundles — close/reopen after every push).
   `pac code add-data-source -a dataverse -t <logical name>` wires new

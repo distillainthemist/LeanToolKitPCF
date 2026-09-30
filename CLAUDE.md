@@ -184,10 +184,11 @@ Version lives in the tag alone — nothing is stamped into files.
   left. Never `whenSettled` inside a function a tracked write calls —
   it would wait for itself (2026-10-01).
 - **Store reads are cached** (`app/src/store/changes.ts`, 60 s, by
-  topic): every new writer of initiatives / boards / drivers /
-  palettes / people must `bumpChange(topic)`; every new reader goes
-  through the cached function. Action saves also fire the DOM event
-  `ltk-actions-changed`; boards and the hub refresh on it.
+  topic): every new reader of initiatives / boards / drivers /
+  palettes / people goes through the cached function; every writer
+  goes through `writing()` (above). Action saves also fire the DOM
+  event `ltk-actions-changed`; boards, the hub and the initiative
+  band refresh on it.
 - **One write path, one read path.** Anything that must hold for EVERY
   action (initiative id, confidentiality, board id) lives in
   `store/actions.ts` — `upsertActions` and the `visible()` filter on
@@ -211,7 +212,15 @@ Version lives in the tag alone — nothing is stamped into files.
   (`improvement/boardLayout.ts`, 2026-09-17).
 - **Solution-carrying releases** since v0.50: v0.51 (value drivers,
   scenarios, sourceurl, tracking, pdca), v0.53 (confidential action
-  columns), v0.54 (alsoorgs). Prod imports the managed solution FIRST.
+  columns), v0.54 (alsoorgs). Everything from v0.55.0 to v0.60.0 was
+  app-only. Prod imports the managed solution FIRST.
+- **One rule, applied everywhere it matters.** A rule that must hold
+  for every action or every card lives in ONE pure function and is
+  applied at the screen for an honest picture AND at the store's
+  write as the backstop (`actionEndorsement.ts`, `actionLinks.ts`,
+  `tileActions.ts`, `splitWho`); surfaces never carry their own copy
+  (2026-09-30: the present view's metric cell, the actions tile and
+  three who-pickers had each drifted from the main rule).
 
 ## Key docs
 

@@ -235,6 +235,13 @@ when written):
 - "Download PNG / SVG" from the card's menu draws the control's own
   styles; with the app's Gantt in the Gantt view the download is not
   styled. Use the Gantt's own Export CSV, or switch view to download.
+- The kanban column is still named "Verify" (it is also used on
+  meeting boards without endorsement) while everything else says
+  "endorsement".
+- Tile pictures (used when a board is switched away from Live) can
+  lag one edit when a card is left within ~½ s of typing: the
+  picture is drawn on a delay and the flushed save carries whatever
+  picture it has. Live boards, the default, are unaffected.
 
 ## Initiative stages — open items (2026-09-29)
 
@@ -253,9 +260,9 @@ deferrals still open (details in leanboard-cascade-improvement-plan.md).
 - **Simulate** — parked 2026-09-09 (button hidden, code kept). Reviving
   it needs a home for BASELINE again (its entry surface went with the
   period tiles).
-- **Endorsement** — built 2026-09-30. Open: the kanban column is
-  still named "Verify" while everything else says "endorsement"; the
-  endorser is not messaged (a count in the app only, Ben's call).
+- **Endorsement** — built 2026-09-30 (see "Actions card" above for the
+  Verify column's name). The endorser is not messaged — a count in
+  the app only, Ben's call.
 - **Evidence attach on actions** — table exists (`ben_ltkactionfile`),
   no UI.
 - **Confidential actions, hardened** — a separately secured table with

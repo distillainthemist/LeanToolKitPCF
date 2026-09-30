@@ -1285,6 +1285,25 @@ reschedule/cancel history with a reason picklist.
 - **2026-10-01 — released as v0.60.0** (app-only): the read cache is
   write-aware, so linked charter fields show their last edit on the
   overview.
+- **Where things stand (2026-10-01).** Released since the entry
+  below, all app-only (the schema is unchanged since v0.54.0):
+  v0.56.0 (2026-09-24 — initiative relink, quick add to the open
+  board, Priorities grid wraps), v0.57.0 (2026-09-30 — the "Linked to"
+  search with the confidentiality fix, header field types and
+  in-place charter editing, the present view aligned with rails and
+  a named exit, the initiative status band with editable commentary
+  and the details handle, no browser-native dialogs plus the gate,
+  withdraw / revert / reopen, the initiative permalink and notification
+  links, endorsement moved to details, action comments and On hold,
+  action endorsement, who-pickers, the hub's scoped-edit save fix),
+  v0.58.0 (2026-09-30 — the actions card's tile shows the board's
+  actions, board-as-a-whole default, embed chips, kanban columns and
+  column add, the view switch, one Gantt), v0.59.0 (2026-10-01 — the
+  overview shows the last edit via writes in flight, labelled
+  check-ins on daily rituals, "meeting: label", On hold after Closed),
+  v0.60.0 (2026-10-01 — the write-aware read cache). Open items:
+  backlog.md → "Actions card", "Initiative stages", "Improvement /
+  KPI tranche".
 - **Where things stand (2026-09-24).** Released: v0.51.0 (2026-09-14,
   solution-carrying — value driver tree, grid entry, Metrics card,
   meeting-board driver links, rituals in several orgs, driver popup,

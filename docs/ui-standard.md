@@ -72,8 +72,8 @@ the same commit.
   over rituals AND initiatives ("Search rituals and initiatives…",
   results grouped by kind, five each, a muted second line of
   organisation · owner; NOTHING is listed until something is typed —
-  a suggested list cost the dialog too much height). ONE link at most: a ritual or an initiative,
-  never both. An existing linked action always opens on its chip. A
+  a suggested list cost the dialog too much height). ONE link at
+  most: a ritual or an initiative, never both. An existing linked action always opens on its chip. A
   target the viewer may not see reads "not available to you" — never
   its title. Never a full list: it would not scale.
 - **Initiative board**: a status band above the cards (stage and
