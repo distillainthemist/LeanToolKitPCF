@@ -115,6 +115,10 @@ the same commit.
   the field's own box), the card's own picker for the rest. Never a
   one-line prompt. The field wears its TARGET's type; the builder's
   bind select names that type beside each header field.
+- **A ritual's check-ins** are the same meeting later in the day: the
+  scheduler row and the hub's chips wear a small `check-in` pill (the
+  ad-hoc pill's style) beside the time; nothing else about the row
+  differs, because nothing else does — it is the day's one record.
 - **The actions card** carries a `List | Kanban | Gantt` switch at
   the top LEFT of its body (an untitled card floats its menu top
   right); the card's configured view wears "This card's default

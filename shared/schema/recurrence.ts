@@ -56,6 +56,11 @@ export interface SchedulerConfig {
    *  Optional; "" = timeOfDay. A per-day override wins over a per-week one
    *  (Ben, 2026-08-19). */
   weekTimes?: string[];
+  /** FURTHER times on each day (Ben, 2026-10-01): a core meeting in the
+   *  morning and a check-in on the SAME board in the afternoon. Every
+   *  session on a day shares the day's one record. Daily only; not
+   *  shiftly (its two sessions are the two shifts). */
+  extraTimes?: string[];
 }
 
 /** A per-meeting text column (topic, chair, notetaker…), maker-configured. */
@@ -92,6 +97,9 @@ export interface MeetingInstance {
   closed: boolean;
   /** The rotation topic for this occurrence ("" = none configured). */
   topic: string;
+  /** Which of the day's sessions: 0 = the meeting, 1.. = a check-in at a
+   *  further time (extraTimes). Sessions share the day's record. */
+  session: number;
   recordId: string; // "" when no record exists yet
   rescheduledTo: string;
   status: InstanceStatus;
@@ -309,6 +317,29 @@ export function parseDayTimes(raw: string | null | undefined): Record<number, st
     if (idx >= 0 && time !== "") out[idx] = time;
   }
   return out;
+}
+
+/** extraTimes input — further times on each day: JSON array or CSV of
+ *  HH:MM. Cleaned, deduplicated, sorted; a time equal to the day's own is
+ *  dropped when it is applied (see generateInstances). */
+export function parseExtraTimes(raw: string | null | undefined): string[] {
+  const t = String(raw ?? "").trim();
+  if (t === "") return [];
+  let parts: unknown[] = [];
+  if (t.startsWith("[")) {
+    try {
+      const arr = JSON.parse(t) as unknown;
+      parts = Array.isArray(arr) ? arr : [];
+    } catch {
+      parts = [];
+    }
+  } else parts = t.split(",");
+  const out = new Set<string>();
+  for (const v of parts) {
+    const time = cleanTime(v);
+    if (time !== "") out.add(time);
+  }
+  return [...out].sort();
 }
 
 /** weekTimes input — per-week-of-month times [1st..5th]: JSON array or CSV;
@@ -623,7 +654,7 @@ export function generateInstances(
   const topicFor = (date: Date): string => topicForCfg(cfg, date);
 
   const out: MeetingInstance[] = [];
-  const push = (date: Date, time: string, shift: "" | "day" | "night", crew: string) => {
+  const push = (date: Date, time: string, shift: "" | "day" | "night", crew: string, session = 0) => {
     const dIso = isoLocal(date);
     const rec = matchRecord(existing.filter((e) => !e.adhoc), dIso, shift);
     const iso = `${dIso}T${time}`;
@@ -636,6 +667,7 @@ export function generateInstances(
       crew,
       shift,
       topic: topicFor(date),
+      session,
       adhoc: false,
       closed: rec?.closed ?? false,
       recordId: rec?.recordId ?? "",
@@ -658,6 +690,14 @@ export function generateInstances(
           ? crewOnShift(cfg.roster, cfg.crews, cfg.baseStart, date, "D")
           : "";
       push(date, time, "", crew);
+      // the day's further sessions — the same record, another time
+      if (cfg.category === "daily") {
+        let session = 0;
+        for (const extra of cfg.extraTimes ?? []) {
+          if (extra === time) continue;
+          push(date, extra, "", crew, ++session);
+        }
+      }
     }
   }
 
@@ -684,6 +724,7 @@ export function generateInstances(
       crew: "",
       shift: "",
       topic: "",
+      session: 0,
       adhoc: true,
       closed: e.closed,
       recordId: e.recordId,
@@ -780,6 +821,7 @@ export function cadenceFromConfig(
       config.dayTimes && typeof config.dayTimes === "object" ? JSON.stringify(config.dayTimes) : s("dayTimes")
     ),
     weekTimes: parseWeekTimes(Array.isArray(config.weekTimes) ? JSON.stringify(config.weekTimes) : s("weekTimes")),
+    extraTimes: parseExtraTimes(Array.isArray(config.extraTimes) ? JSON.stringify(config.extraTimes) : s("extraTimes")),
   };
 }
 

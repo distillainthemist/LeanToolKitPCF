@@ -516,6 +516,7 @@ export class MeetingSchedulerView {
     if (rel !== "") dateCell.appendChild(el("span", "ltk-ms-row-rel", rel));
     main.append(dateCell, el("span", "ltk-ms-row-time", inst.time));
     if (inst.adhoc) main.appendChild(el("span", "ltk-ms-adhoc", "ad-hoc"));
+    if (inst.session > 0) main.appendChild(el("span", "ltk-ms-adhoc ltk-ms-session", "check-in"));
 
     if (inst.shift !== "") {
       main.appendChild(

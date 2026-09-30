@@ -668,6 +668,7 @@ export class LeanHubView {
           if (accent !== "") chip.style.borderLeftColor = accent;
           const line1 = el("div", "ltk-lh-chip-title", inst.title);
           const meta: string[] = [inst.time];
+          if (inst.session > 0) meta.push("Check-in");
           if (inst.shift !== "") meta.push(inst.shift === "day" ? "Day" : "Night");
           if (inst.crew !== "") meta.push(`Crew ${inst.crew}`);
           if (inst.topic !== "") meta.push(inst.topic);
@@ -725,6 +726,7 @@ export class LeanHubView {
       const meta: string[] = [];
       const dept = byId.get(inst.boardId)?.info?.org.department ?? "";
       if (dept !== "") meta.push(dept);
+      if (inst.session > 0) meta.push("Check-in");
       if (inst.shift !== "") meta.push(inst.shift === "day" ? "Day" : "Night");
       if (inst.crew !== "") meta.push(`Crew ${inst.crew}`);
       if (inst.topic !== "") meta.push(inst.topic);

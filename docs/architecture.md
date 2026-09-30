@@ -215,6 +215,18 @@ model section) — the canvas/PCF sections there are historical.
   (`store/rollup.ts`).
 
 
+- **Check-in times on a daily ritual** (2026-10-01, Ben: a core
+  meeting in the morning and a check-in with the SAME board in the
+  afternoon). `config.extraTimes` (HH:MM list, daily only — shiftly's
+  two sessions are its two shifts) makes `generateInstances` emit a
+  further occurrence per time on each day, `session` 1.. (0 = the
+  meeting), all matched to the day's ONE record (matching is by date,
+  as before). The scheduler row and the hub say "check-in"; the board
+  opens the record the scheduler matched by its id — it used to match
+  the exact date and time, which would have started a second record
+  for the afternoon. Closing the meeting archives the day, so the
+  wizard says to close after the last check-in.
+
 ### 3.3 Improvement, priorities, value drivers & KPIs
 
 - **Initiatives** are created from templates (stages with gates and

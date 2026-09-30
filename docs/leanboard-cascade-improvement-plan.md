@@ -1250,6 +1250,15 @@ reschedule/cancel history with a reason picklist.
   writes are tracked (`store/inflight.ts`); every card and action
   reader in the store and the board mount wait for travelling writes
   before reading. Tests 716. App-only.
+- **2026-10-01 — check-in times on a daily ritual.** Ben: a daily
+  meeting needs several times — a morning meeting and an afternoon
+  check-in on the same board. Built: `extraTimes` in the ritual's
+  config, a "Check-in times" list on the wizard's schedule step
+  (daily only), the engine's `session` per occurrence sharing the
+  day's one record, "check-in" tags on the scheduler and the hub, and
+  the board opening the matched record by id (the exact-time match
+  would have started a second record). No schema change — the
+  ritual's settings JSON carries it. Tests below. App-only.
 - **Where things stand (2026-09-24).** Released: v0.51.0 (2026-09-14,
   solution-carrying — value driver tree, grid entry, Metrics card,
   meeting-board driver links, rituals in several orgs, driver popup,

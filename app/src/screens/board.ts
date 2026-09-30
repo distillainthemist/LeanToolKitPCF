@@ -768,7 +768,11 @@ async function renderBoard(
       }
     },
     onSelect: (inst) => {
-      const existing = instances.find((i) => i.when.startsWith(inst.iso));
+      // the record the scheduler matched (a check-in shares the day's) —
+      // by id, so a session at another time never starts a second record
+      const existing =
+        (inst.recordId !== "" ? instances.find((i) => i.id === inst.recordId) : undefined) ??
+        instances.find((i) => i.when.startsWith(inst.iso));
       if (existing) {
         current = existing;
         rememberSelection();

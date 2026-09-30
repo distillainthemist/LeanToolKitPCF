@@ -97,6 +97,9 @@ export interface WizardDraft {
   dayTimes: Record<string, string>;
   /** Weekly per-week-of-month time overrides [1st..5th]; "" = default. */
   weekTimes: string[];
+  /** Daily: further times on each day — check-ins on the same board and
+   *  the same day's record (Ben, 2026-10-01). HH:MM each. */
+  extraTimes: string[];
   participants: MeetingPerson[];
   /** Unmanaged top-level keys (theme, prompts, board, …), kept verbatim. */
   extraTop: Record<string, unknown>;
@@ -127,6 +130,7 @@ export function emptyDraft(): WizardDraft {
     dayTopics: {},
     dayTimes: {},
     weekTimes: [],
+    extraTimes: [],
     participants: [],
     extraTop: {},
     extraConfig: {},
@@ -195,6 +199,11 @@ export function parseWizardDraft(raw: string | null | undefined): WizardDraft {
         if (day && s(v) !== "") draft.dayTopics[day] = s(v);
       }
     }
+    if (Array.isArray(config.extraTimes)) {
+      draft.extraTimes = config.extraTimes.map((v) => s(v)).filter((v) => /^\d{2}:\d{2}$/.test(v));
+    } else if (s(config.extraTimes) !== "") {
+      draft.extraTimes = s(config.extraTimes).split(",").map((v) => v.trim()).filter((v) => /^\d{2}:\d{2}$/.test(v));
+    }
     if (config.dayTimes && typeof config.dayTimes === "object" && !Array.isArray(config.dayTimes)) {
       for (const [k, v] of Object.entries(config.dayTimes as Record<string, unknown>)) {
         const day = WEEKDAYS.find((d) => k.trim().toLowerCase().startsWith(d.toLowerCase()));
@@ -236,6 +245,11 @@ export function serializeWizardDraft(draft: WizardDraft): string {
     config.daysOfWeek = draft.daysOfWeek;
   }
   if (draft.timeOfDay !== "") config.timeOfDay = draft.timeOfDay;
+  if (draft.category === "daily") {
+    // sorted, deduplicated, never the day's own time
+    const extra = [...new Set(draft.extraTimes.map((t) => t.trim()).filter((t) => /^\d{2}:\d{2}$/.test(t) && t !== draft.timeOfDay))].sort();
+    if (extra.length > 0) config.extraTimes = extra;
+  }
   if (draft.daysPrior !== "" && Number.isFinite(Number(draft.daysPrior))) {
     config.daysPrior = Math.max(1, Math.round(Number(draft.daysPrior)));
   }

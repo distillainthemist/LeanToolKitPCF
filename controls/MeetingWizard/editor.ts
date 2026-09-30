@@ -860,6 +860,58 @@ export class MeetingWizardView {
             : undefined
       )
     );
+    if (d.category === "daily") {
+      // further sessions on the same day — the same board, the same
+      // record: a core meeting in the morning, a check-in later
+      const list = el("div", "ltk-mw-people");
+      const paintExtra = () => {
+        while (list.firstChild) list.removeChild(list.firstChild);
+        d.extraTimes.forEach((t, i) => {
+          const row = el("div", "ltk-mw-person ltk-mw-rotrow");
+          row.appendChild(el("span", "ltk-mw-topic-ordinal", `Check-in ${i + 1}`));
+          const input = el("input", "ltk-mw-input ltk-mw-time") as HTMLInputElement;
+          input.type = "time";
+          input.value = t;
+          input.disabled = this.readOnly;
+          input.addEventListener("change", () => {
+            d.extraTimes[i] = input.value.trim();
+            this.commit();
+          });
+          row.appendChild(input);
+          if (!this.readOnly) {
+            const x = el("button", "ltk-mw-chip-x", "×") as HTMLButtonElement;
+            x.type = "button";
+            x.title = "Remove this check-in";
+            x.setAttribute("aria-label", `Remove check-in ${i + 1}`);
+            x.addEventListener("click", () => {
+              d.extraTimes.splice(i, 1);
+              this.commit();
+              paintExtra();
+            });
+            row.appendChild(x);
+          }
+          list.appendChild(row);
+        });
+        if (!this.readOnly) {
+          const add = el("button", "ltk-mw-btn", "＋ Add a check-in time") as HTMLButtonElement;
+          add.type = "button";
+          add.addEventListener("click", () => {
+            d.extraTimes.push("");
+            paintExtra();
+            (list.querySelectorAll<HTMLInputElement>("input[type=time]")[d.extraTimes.length - 1] ?? null)?.focus();
+          });
+          list.appendChild(add);
+        }
+      };
+      paintExtra();
+      body.appendChild(
+        this.row(
+          "Check-in times",
+          list,
+          "Further times on the same day — the team meets at the default time and checks in with the same board later. Every check-in works on that day's one record; close the meeting after the last check-in."
+        )
+      );
+    }
     body.appendChild(
       this.row(
         "Past days shown",
@@ -1278,6 +1330,8 @@ export class MeetingWizardView {
       const weekBits = d.category === "weekly" ? d.weekTimes.map((t, i) => (t ? `${ords[i]} wk ${t}` : "")).filter((v) => v !== "") : [];
       const extra = [...dayBits, ...weekBits];
       add("Time", extra.length > 0 ? `${d.timeOfDay} (${extra.join(" · ")})` : d.timeOfDay);
+      const checkins = d.category === "daily" ? d.extraTimes.filter((t) => t.trim() !== "") : [];
+      if (checkins.length > 0) add("Check-ins", checkins.join(" · "));
     }
     if (isRostered(d.category)) {
       add("Crews", d.crewList);
