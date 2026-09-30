@@ -1268,6 +1268,10 @@ reschedule/cancel history with a reason picklist.
   for the calendar and My day; the scheduler row's label pill; the
   wizard's label field and per-check-in label. PDCA order changed in
   one place (`ACTION_PDCA`). App-only.
+- **2026-10-01 — released as v0.59.0** (app-only): the overview shows
+  the last edit (writes in flight), daily rituals' labelled check-ins
+  sharing the day's record, "meeting: label" on the calendar, On hold
+  after Closed.
 - **Where things stand (2026-09-24).** Released: v0.51.0 (2026-09-14,
   solution-carrying — value driver tree, grid entry, Metrics card,
   meeting-board driver links, rituals in several orgs, driver popup,
