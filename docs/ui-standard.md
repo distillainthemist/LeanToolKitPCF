@@ -111,6 +111,12 @@ the same commit.
   dialog's anatomy: what happens in words, the choice, a required
   reason, removable recipient chips, send by Teams or email, the
   outcome reported in place.
+- **The top bar** (2026-10-02): Report and Settings are outline
+  buttons (`.app-btn.app-btn-bar`, 40px, white) at Add action's size;
+  Add action is the bar's one solid primary. Order from the hub:
+  Report · Settings · Add action. Off the hub the context button
+  (Home, or ‹ Back on an initiative board) sits on the FAR RIGHT after
+  Add action.
 - **Priorities period picker is a lens** (2026-10-02): it lists every
   period a span touches and shows what was LIVE in the viewed year;
   a priority card past its planned end wears the amber flag "⟳ Past

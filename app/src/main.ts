@@ -57,7 +57,9 @@ const nav = el("nav", "app-nav");
 const gap = el("span", "app-bar-gap");
 // report a problem or idea (issues plan I1) \u2014 one affordance for every
 // surface; the dialog module loads on demand, keeping the shell lean
-const reportLink = el("a", "app-link app-link-report") as HTMLAnchorElement;
+// Report / Settings / Home are proper outline buttons beside the solid
+// Add action (Ben, 2026-10-02); Home / Back sits on the far right
+const reportLink = el("a", "app-btn app-btn-bar app-link-report") as HTMLAnchorElement;
 reportLink.append(el("span", "app-mode-icon", "\u2690"), el("span", "", "Report"));
 reportLink.href = "#";
 reportLink.title = "Report a problem or share an idea";
@@ -78,7 +80,7 @@ addActionLink.addEventListener("click", (e) => {
   void import("./actions/quickAdd").then(({ openQuickAction }) => openQuickAction());
 });
 // one context button: Settings from the hub, Home everywhere else
-const modeLink = el("a", "app-link app-link-cog") as HTMLAnchorElement;
+const modeLink = el("a", "app-btn app-btn-bar app-link-cog") as HTMLAnchorElement;
 const modeIcon = el("span", "app-mode-icon", "\u2699");
 const modeText = el("span", "", "Settings");
 modeLink.append(modeIcon, modeText);
@@ -231,6 +233,9 @@ function route(): void {
     modeText.textContent = showHome ? "Home" : "Settings";
     modeLink.href = showHome ? "#/" : "#/settings";
   }
+  // Settings reads before Add action; Home / Back goes after it, far right
+  if (showHome || initBoard) nav.append(addActionLink, modeLink);
+  else nav.append(modeLink, addActionLink);
   // the focused meeting view runs full-bleed — its own title row carries
   // the meeting name and Back; the document KIOSK (5I) is chrome-free by
   // design (a scanned code reads a procedure, nothing else)
