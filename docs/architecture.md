@@ -287,6 +287,25 @@ model section) — the canvas/PCF sections there are historical.
   the Priorities screen's Objectives row (every starred metric:
   "Name: objective" over Plan / Actual with a traffic light). The
   primary leads the overlay's Initiatives tab in its own section.
+- **Priorities span years** (2026-10-02, `priorities/model.ts`
+  "spans"). A priority runs from a START period (`period`) until it
+  closes; the END (`toPeriod`) is stamped from the closing date and
+  cleared on reopen, never typed; `plannedEnd` is optional. Pillars
+  carry `fromPeriod` / `toPeriod`; initiatives an end stamped on
+  completion or archive. The period picker is a LENS: `priorityLiveIn`
+  / `pillarsLiveIn` decide what the viewed year shows, `periodsOnOffer`
+  lists every period a span touches, `effectiveEnd` reads a row closed
+  before ends were stamped as ending in its start (no migration).
+  Custom periods compare by the ordered label list in Settings. Nothing
+  is copied at a boundary — the carry-forward copy, bulk flow and close
+  reason are gone; `reviewDue` flags an open priority past its planned
+  end instead. **Re-parenting** (`store/priorities.ts` `relinkParent`,
+  rules `canBeParent`): a junior org's own priority is linked under one
+  above or beside it from the Cascade tab — parent id, an accepted
+  assignment naming the child as the customised row, the old record
+  removed, `linked` / `unlinked` events on both rows. Clearing a lookup
+  on update sends `null` (undefined is stripped and the old reference
+  stays).
 
 - **Header fields and the charter card are one datum** (2026-09-29).
   A header field (Settings → Improvement standard fields, or a
@@ -310,9 +329,12 @@ model section) — the canvas/PCF sections there are historical.
 
 - **The initiative board's status band** (2026-09-29,
   `improvement/statusBand.ts`): above the cards, always in view — the
-  current stage and its gate (with the button that applies to the
-  viewer: Request gate, Approve / Decline, Move to…) and the latest
-  commentary. It collapses to one line, remembered per person
+  STAGE BAR (2026-10-01: one labelled segment per stage with its
+  single-quadrant PDCA glyph `pdcaQuadrant`; done full colour, current
+  tinted and outlined, future grey; names ellipsise, below ~90px a
+  segment keeps glyph + number, the current always named), the gate
+  and its buttons on one row beneath (Request gate, Approve / Decline,
+  Move to…, right-aligned) and the latest commentary. It collapses to one line, remembered per person
   (`initiativeBand` in the prefs JSON). The full stage rail and the
   whole trail stay in the details pane, which opens from a handle on
   the board's right edge. **Commentary** is one event kind

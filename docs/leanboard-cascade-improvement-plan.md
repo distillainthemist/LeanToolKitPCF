@@ -252,7 +252,8 @@ reschedule/cancel history with a reason picklist.
   cascade-on, Hold / Reject with reason dialogs; a quiet ⏸ chip when only
   parked items remain); close dialog "Why is this closing?" with the four
   reasons — Carried to next period creates the copy (`carryForwardCopy`,
-  no lineage, events on both); bulk carry-forward from ⋮ view options;
+  no lineage, events on both; SUPERSEDED 2026-10-02 by spans, design
+  §16); bulk carry-forward from ⋮ view options (gone with it);
   sender's-view flags on the card (✕ declined / ⏸ parked with reason,
   ▲ Parent completed). Objectives row now shows at every density (Ben).
   Design as specified — overlay
@@ -1336,6 +1337,18 @@ reschedule/cancel history with a reason picklist.
   "Surname, Given (Org)" → drop bracketed suffixes, read a comma as
   surname-first. Tests 734. Harness band.html gains an 8D case.
   Unreleased.
+- **Where things stand (2026-10-02).** Released since the 2026-10-01
+  entry: v0.61.0 (2026-10-01, app-only — Gantt rows name the action,
+  live tiles re-mount when their data lands) and v0.62.0 (2026-10-02,
+  SOLUTION-CARRYING — the status band's stage bar with the gate row
+  beneath and the renamed pane links, initials that read "Surname,
+  Given (Org)", priorities that SPAN years with the period picker as
+  a lens and the review flag in place of carry-forward, pillar and
+  initiative spans, ordered custom period labels, re-parenting from
+  the Cascade tab, the top bar's outline buttons with Home on the far
+  right). Prod imports the managed solution first. Open items:
+  backlog.md → "Priorities — open items (2026-10-02)" and the sections
+  below it.
 - **Where things stand (2026-10-01).** Released since the entry
   below, all app-only (the schema is unchanged since v0.54.0):
   v0.56.0 (2026-09-24 — initiative relink, quick add to the open

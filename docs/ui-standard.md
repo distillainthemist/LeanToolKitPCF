@@ -48,6 +48,8 @@ the same commit.
   filters popover (below).
 - **Chips**: pill radius 999px. Filter/tag chips outline `#d9d3c8`,
   selected = dark fill `#26241f` white text. People = initials circles
+  (`initialsFor`: given + surname; "Surname, Given (Org)" read in that
+  order with the bracket dropped, 2026-10-01)
   (`.app-ib-avatar` / owner chips). Status chips tinted bg + strong fg.
 - **Toggles**: `.app-tw-toggle` (self-updating). Segmented controls:
   `.app-docs-seg` / `.app-docs-segbtn(-on)` — rounded 8px frame, active

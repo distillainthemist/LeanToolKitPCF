@@ -243,6 +243,21 @@ when written):
   picture is drawn on a delay and the flushed save carries whatever
   picture it has. Live boards, the default, are unaffected.
 
+## Priorities — open items (2026-10-02)
+
+- **Forgotten open priorities.** A priority with no planned end never
+  flags. Offered, not built: flag "open for more than a year with no
+  planned end" alongside the planned-end review flag (Ben: start
+  without it).
+- **An initiative's span is label-based.** Its start is the period
+  label on its details; the end is stamped on completion / archive.
+  An initiative whose label was never set shows in every year.
+- **Re-parenting is single-level.** Linking a child under a parent
+  does not re-send the child's own cascades; the child's children keep
+  their links. A re-parented priority keeps its owner and order.
+- **Custom periods** need their ordered label list kept current in
+  Settings → Priorities; a label missing from the list sorts last.
+
 ## Initiative stages — open items (2026-09-29)
 
 - A revert needs no approval (Ben's call). If sign-off being undone by
