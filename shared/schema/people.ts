@@ -15,8 +15,19 @@ export interface Person {
   secondary?: boolean;
 }
 
+/** Two initials from a display name. Directory names arrive in several
+ *  shapes — "Ben O'Brien", "O'Brien, Ben (Pechey Distilling)" — so a
+ *  bracketed suffix is dropped and "Surname, Given" is read in that
+ *  order (2026-10-01: the old first-word/last-word rule gave the
+ *  surname's initial and an opening bracket). */
 export function initialsFor(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
+  const bare = name.replace(/\([^)]*\)|\[[^\]]*\]/g, " ").trim();
+  const comma = bare.indexOf(",");
+  const ordered = comma >= 0 ? `${bare.slice(comma + 1)} ${bare.slice(0, comma)}` : bare;
+  const parts = ordered
+    .split(/\s+/)
+    .map((w) => w.replace(/^[^\p{L}\p{N}]+/u, ""))
+    .filter((w) => w !== "");
   if (parts.length === 0) return "?";
   if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();

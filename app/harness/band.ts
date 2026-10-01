@@ -16,7 +16,19 @@ let events = [
 ];
 const log: string[] = [];
 (window as unknown as { log: string[] }).log = log;
-const stage = { name: "Analyse", position: 2, count: 5, colours: ["#1d6fb8", "#1d6fb8", "#1f7a3f", "#8a4b12", "#6b3fa0"], fg: "#1d6fb8", bg: "#e3effa", target: "2026-09-26", overdueDays: 3 };
+const T = { plan: ["#7a4d00", "#fff3d6"], do: ["#1d4ed8", "#dbe7ff"], check: ["#1f7a3f", "#dcf3e3"], act: ["#6b21a8", "#ecdcfb"] } as const;
+const seg = (name: string, k: keyof typeof T) => ({ name, cycle: ["plan", "do", "check", "act"].indexOf(k), cycleLabel: k[0].toUpperCase() + k.slice(1), fg: T[k][0], bg: T[k][1] });
+const stageSets = {
+  dmaic: [seg("Define", "plan"), seg("Measure", "plan"), seg("Analyse", "plan"), seg("Improve", "do"), seg("Control", "check")],
+  d8: [seg("Team & describe", "plan"), seg("Contain", "do"), seg("Root cause", "plan"), seg("Corrective action", "do"), seg("Verify", "check"), seg("Prevent", "act")],
+};
+let stageSet: keyof typeof stageSets = "dmaic";
+const stageOf = () => {
+  const stages = stageSets[stageSet];
+  const position = stageSet === "dmaic" ? 3 : 4;
+  const cur = stages[position - 1];
+  return { name: cur.name, position, count: stages.length, stages, fg: cur.fg, bg: cur.bg, target: "2026-09-26", overdueDays: 3 };
+};
 const gates: Record<string, BandGate | null> = {
   waiting: { tone: "wait", text: "⚑ Gate to Improve · waiting on Sponsor", approvals: [{ label: "Owner", state: "ok" }, { label: "Sponsor", state: "wait" }], actions: [{ label: "Approve", kind: "primary", onClick: () => log.push("approve") }, { label: "Decline", kind: "danger", onClick: () => log.push("decline") }] },
   request: { tone: "muted", text: "⚑ Gate to Improve · not yet requested", approvals: [{ label: "Owner", state: "wait" }, { label: "Sponsor", state: "wait" }], actions: [{ label: "Request gate", kind: "primary", onClick: () => log.push("request") }] },
@@ -100,7 +112,7 @@ function paint(): void {
       state.collapsed = !state.collapsed;
       paint();
     },
-    stage,
+    stage: stageOf(),
     completed: state.completed,
     revert: state.reverted && !state.completed ? { from: "Improve", to: "Analyse", who: "Jane Smith", at: "2026-09-27T09:00:00Z", reason: "The trial data covered one shift only" } : null,
     gate: state.completed ? gates.done : gates[state.gate],
@@ -129,6 +141,7 @@ const cases: [string, () => void][] = [
   ["No commentary", () => (state = { ...state, none: !state.none })],
   ["Viewer not on team", () => (state = { ...state, canComment: !state.canComment })],
   ["Completed", () => (state = { ...state, completed: !state.completed })],
+  ["Six stages (8D)", () => (stageSet = stageSet === "dmaic" ? "d8" : "dmaic")],
 ];
 const bar = document.getElementById("cases")!;
 for (const [label, fn] of cases) {

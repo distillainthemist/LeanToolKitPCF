@@ -36,7 +36,7 @@ import { BandGate, BandStage, renderStatusBand } from "./statusBand";
 import { actionBelongsTo, LtkAction } from "../../../shared/schema/actions";
 import { endorsementOn, endorserIds } from "./endorsers";
 import { applyRevert, gateDeclined, mayRevert, mayWithdraw, revertTargets, standingRevert, StageViewer, undoneApproverRoles } from "./stageRevert";
-import { HealthQuestion, parseImprovementSettings, PDCA_TOKENS, roleFillersAt } from "./templateModel";
+import { HealthQuestion, parseImprovementSettings, PDCA_TOKENS, roleFillersAt, PDCA_ORDER } from "./templateModel";
 
 const btn = (label: string, cls = "app-btn"): HTMLButtonElement => {
   const b = el("button", cls, label) as HTMLButtonElement;
@@ -656,7 +656,13 @@ export function mountInitiativePane(o: InitiativePaneOpts): InitiativePaneHandle
         name: cur.name,
         position: idx + 1,
         count: stages.length,
-        colours: stages.map((st) => PDCA_TOKENS[st.pdca].fg),
+        stages: stages.map((st) => ({
+          name: st.name,
+          cycle: PDCA_ORDER.indexOf(st.pdca),
+          cycleLabel: PDCA_TOKENS[st.pdca].label,
+          fg: PDCA_TOKENS[st.pdca].fg,
+          bg: PDCA_TOKENS[st.pdca].bg,
+        })),
         fg: PDCA_TOKENS[cur.pdca].fg,
         bg: PDCA_TOKENS[cur.pdca].bg,
         target,

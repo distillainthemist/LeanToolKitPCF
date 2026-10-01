@@ -220,28 +220,54 @@ export interface ActionRowOptions {
  * by the kanban / gantt board views so completing an action looks identical
  * everywhere.
  */
-/** The four-quadrant PDCA disc: quarters fill top-left → bottom-left →
- *  bottom-right → top-right (plan 0 … closed 4). */
-export function pdcaDisc(state: ActionPdca, size = 16, fill = "#26241f"): SVGSVGElement {
+/** Quadrant wedges of the PDCA disc, counter-clockwise from top-left. */
+const DISC_R = 8.6;
+const QUADS: [number, number, number, number][] = [
+  [0, -DISC_R, -DISC_R, 0], // top-left
+  [-DISC_R, 0, 0, DISC_R], // bottom-left
+  [0, DISC_R, DISC_R, 0], // bottom-right
+  [DISC_R, 0, 0, -DISC_R], // top-right
+];
+const discShell = (size: number, fill: string): SVGSVGElement => {
   const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
   svg.setAttribute("width", String(size));
   svg.setAttribute("height", String(size));
   svg.setAttribute("viewBox", "-10 -10 20 20");
   svg.classList.add("ltk-pdca-disc");
-  const r = 8.6;
   const ring = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-  ring.setAttribute("r", String(r));
+  ring.setAttribute("r", String(DISC_R));
   ring.style.fill = "none";
   ring.style.stroke = fill;
   ring.style.strokeWidth = "1.6";
   svg.appendChild(ring);
-  // quadrant wedges, counter-clockwise from top-left
-  const QUADS: [number, number, number, number][] = [
-    [0, -r, -r, 0], // top-left
-    [-r, 0, 0, r], // bottom-left
-    [0, r, r, 0], // bottom-right
-    [r, 0, 0, -r], // top-right
-  ];
+  return svg;
+};
+const wedge = (i: number, fill: string): SVGPathElement => {
+  const [x1, y1, x2, y2] = QUADS[i];
+  const w = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  w.setAttribute("d", `M 0 0 L ${x1} ${y1} A ${DISC_R} ${DISC_R} 0 0 0 ${x2} ${y2} Z`);
+  w.style.fill = fill;
+  return w;
+};
+
+/** ONE quadrant of the disc lit — a stage's place in the cycle (plan 0,
+ *  do 1, check 2, act 3), never progress: the cumulative disc below
+ *  would read as how far an action has gone (2026-10-01). */
+export function pdcaQuadrant(index: number, size = 14, fill = "currentColor", label = ""): SVGSVGElement {
+  const svg = discShell(size, fill);
+  svg.appendChild(wedge(Math.max(0, Math.min(3, index)), fill));
+  if (label !== "") {
+    const title = document.createElementNS("http://www.w3.org/2000/svg", "title");
+    title.textContent = label;
+    svg.appendChild(title);
+  }
+  return svg;
+}
+
+/** The four-quadrant PDCA disc: quarters fill top-left → bottom-left →
+ *  bottom-right → top-right (plan 0 … closed 4). */
+export function pdcaDisc(state: ActionPdca, size = 16, fill = "#26241f"): SVGSVGElement {
+  const svg = discShell(size, fill);
   if (state === "hold") {
     // on hold: a pause glyph inside the ring — beside the cycle, not on it
     for (const x of [-3.6, 1.2]) {
@@ -255,13 +281,7 @@ export function pdcaDisc(state: ActionPdca, size = 16, fill = "#26241f"): SVGSVG
       svg.appendChild(bar);
     }
   }
-  for (let i = 0; i < PDCA_QUARTERS[state]; i++) {
-    const [x1, y1, x2, y2] = QUADS[i];
-    const wedge = document.createElementNS("http://www.w3.org/2000/svg", "path");
-    wedge.setAttribute("d", `M 0 0 L ${x1} ${y1} A ${r} ${r} 0 0 0 ${x2} ${y2} Z`);
-    wedge.style.fill = fill;
-    svg.appendChild(wedge);
-  }
+  for (let i = 0; i < PDCA_QUARTERS[state]; i++) svg.appendChild(wedge(i, fill));
   const title = document.createElementNS("http://www.w3.org/2000/svg", "title");
   title.textContent = PDCA_LABELS[state];
   svg.appendChild(title);

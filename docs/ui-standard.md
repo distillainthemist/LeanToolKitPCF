@@ -79,7 +79,20 @@ the same commit.
 - **Initiative board**: a status band above the cards (stage and
   gate left, latest update right; cards `#fff` on the `#faf8f4`
   strip, uppercase 11px block heads, `.app-btn` / `.app-btn-primary`
-  at 34px, `.app-cp-ov-link` for the quiet links). The details pane
+  at 34px, `.app-cp-ov-link` for the quiet links — "View all stage
+  details", "View all updates · n"). The STAGE BAR (2026-10-01) is
+  one 34px segment per stage, 6px radius, 4px gap: done = the
+  stage's PDCA colour filled with white text and a ✓, current = the
+  PDCA tint with strong text, the 2px ink outline and 1.6× the width,
+  future = `#f4f1ea` with faint text. Each segment leads with the
+  single-quadrant disc (`pdcaQuadrant`: the stage's PLACE in the
+  cycle, never the cumulative action disc, which reads as progress).
+  Names ellipsise with the full name in the tooltip; below ~90px a
+  done or future segment keeps only glyph + number, the current one
+  always names itself. Head caption "Stage n of m · due … · k days
+  over"; the gate in words and its buttons share ONE row under the
+  bar, buttons right-aligned. The band's one solid button is the gate
+  decision — "＋ Add update" is outline. The details pane
   opens from a full-height handle on the board's right edge (glyph +
   vertical caption, the card-walk rail's look), not a toolbar button.
   What a team must see every visit lives on the band; reference

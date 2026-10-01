@@ -1300,6 +1300,24 @@ reschedule/cancel history with a reason picklist.
   Harness-verified for the Gantt; the tile is Ben's hosted check.
 - **2026-10-01 — released as v0.61.0** (app-only): Gantt rows name
   the action; live tiles re-mount when their data lands.
+- **2026-10-01 — the stage bar; initials.** Ben: fold the stage
+  label and its PDCA symbol into the bar as thick labelled segments
+  (done full colour, current outlined, future grey), bring the gate
+  and its button up under the bar, rename the two pane links, and ask
+  why avatar circles showed a surname initial and a bracket. Review
+  against the UI standard accepted the bar and adjusted three things:
+  the gate line stays BELOW the bar on one row with the buttons
+  right-aligned (where → what next → do, rather than inverted), long
+  names get a rule (ellipsis + tooltip; below ~90px glyph + number,
+  the current stage always named, 1.6× wide), and the PDCA symbol is
+  a single-quadrant disc (`pdcaQuadrant`) — the cumulative action
+  disc would read as progress. Flagged and taken: two solid primaries
+  on one band → "Add update" outline. Links: "View all stage
+  details", "View all updates · n". Initials: `initialsFor` read
+  first word + last word, and the tenant's directory names are
+  "Surname, Given (Org)" → drop bracketed suffixes, read a comma as
+  surname-first. Tests 734. Harness band.html gains an 8D case.
+  Unreleased.
 - **Where things stand (2026-10-01).** Released since the entry
   below, all app-only (the schema is unchanged since v0.54.0):
   v0.56.0 (2026-09-24 — initiative relink, quick add to the open

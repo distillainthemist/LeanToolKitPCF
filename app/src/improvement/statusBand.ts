@@ -1,11 +1,16 @@
 // The initiative board's STATUS BAND (2026-09-29): above the cards, always
 // in view — the current stage and its gate on the left (with the button
 // that applies to the viewer), the latest commentary on the right. It
-// collapses to one line, remembered per person. The full stage rail and
+// collapses to one line, remembered per person. The stage bar carries
+// every stage as a labelled segment with its PDCA quadrant (2026-10-01:
+// done full colour, current tinted + outlined, future grey; names
+// ellipsise, and below ~90px a segment keeps only glyph + number — the
+// current one always names itself). The full stage rail and
 // the whole commentary trail stay in the details pane; the band is the
 // part nobody should have to open a pane to see. Data in, callbacks out.
 
 import { el } from "../../../shared/ui/dom";
+import { pdcaQuadrant } from "../../../shared/ui/actionUi";
 import { dayLabel } from "../linkTitle";
 import { renderUpdateBody, updateMeta } from "./commentary";
 import { ageLabel, Update, UPDATE_LABELS } from "./commentaryModel";
@@ -17,13 +22,23 @@ const btn = (label: string, cls = "app-btn"): HTMLButtonElement => {
   return b;
 };
 
+/** One segment of the stage bar. `cycle` = the stage's place in the
+ *  PDCA cycle (plan 0 · do 1 · check 2 · act 3), `cycleLabel` its word. */
+export interface BandStageSeg {
+  name: string;
+  cycle: number;
+  cycleLabel: string;
+  fg: string;
+  bg: string;
+}
+
 export interface BandStage {
   name: string;
   /** 1-based position and the number of stages. */
   position: number;
   count: number;
-  /** Every stage's PDCA colour, in order — the progress strip. */
-  colours: string[];
+  /** Every stage in order — the labelled bar. */
+  stages: BandStageSeg[];
   fg: string;
   bg: string;
   /** The current stage's target date (ISO) or "". */
@@ -118,61 +133,71 @@ export function renderStatusBand(o: BandOpts): HTMLElement {
   }
 
   // ---- left: stage and gate ---------------------------------------------------
+  // Head: block title · "Stage n of m · due …" · the quiet link to the
+  // rail. Then the labelled bar (done = full colour, current = tinted
+  // and outlined, future = grey). Then the gate in words with its
+  // buttons on the same row, right-aligned under the bar (2026-10-01).
   const left = el("div", "app-sb-block app-sb-stage");
   const lhead = el("div", "app-sb-head");
   lhead.appendChild(el("span", "app-sb-h", "Stage and gate"));
+  if (o.stage && !o.completed) {
+    const cap = el("span", "app-sb-caption", `Stage ${o.stage.position} of ${o.stage.count}`);
+    if (o.stage.target !== "") {
+      cap.textContent += ` · due ${dayLabel(o.stage.target)}`;
+      if (o.stage.overdueDays !== null) {
+        const over = el("span", "app-sb-caption-over", ` · ${o.stage.overdueDays} day${o.stage.overdueDays === 1 ? "" : "s"} over`);
+        cap.appendChild(over);
+      }
+    }
+    lhead.appendChild(cap);
+  } else if (o.stage && o.completed) {
+    lhead.appendChild(el("span", "app-sb-caption", "All stages complete"));
+  }
   lhead.appendChild(el("span", "app-bar-gap"));
-  const rail = btn("All stages", "app-cp-ov-link");
+  const rail = btn("View all stage details", "app-cp-ov-link");
   rail.title = "Open the details pane at the stages";
   rail.addEventListener("click", o.onOpenStages);
   lhead.appendChild(rail);
   left.appendChild(lhead);
-  const nameRow = el("div", "app-sb-stagerow");
-  nameRow.appendChild(stagePill(o));
-  if (o.stage && !o.completed) nameRow.appendChild(el("span", "app-sb-of", `Stage ${o.stage.position} of ${o.stage.count}`));
-  left.appendChild(nameRow);
   if (o.stage) {
-    const strip = el("div", "app-sb-strip");
-    strip.setAttribute("role", "img");
-    strip.setAttribute("aria-label", o.completed ? "All stages complete" : `Stage ${o.stage.position} of ${o.stage.count}`);
-    o.stage.colours.forEach((c, idx) => {
-      const seg = el("span", "app-sb-seg");
+    const bar = el("div", "app-sb-bar");
+    bar.setAttribute("role", "list");
+    bar.dataset.count = String(o.stage.stages.length);
+    bar.setAttribute("aria-label", o.completed ? "All stages complete" : `Stage ${o.stage.position} of ${o.stage.count}`);
+    o.stage.stages.forEach((st, idx) => {
       const at = idx + 1;
-      if (o.completed || at < o.stage!.position) seg.style.background = c;
-      else if (at === o.stage!.position) {
-        seg.style.background = c;
-        seg.classList.add("app-sb-seg-on");
+      const state = o.completed || at < o.stage!.position ? "done" : at === o.stage!.position ? "on" : "future";
+      const seg = el("span", `app-sb-seg app-sb-seg-${state}`);
+      seg.setAttribute("role", "listitem");
+      if (state === "done") {
+        seg.style.background = st.fg;
+        seg.style.color = "#fff";
+      } else if (state === "on") {
+        seg.style.background = st.bg;
+        seg.style.color = st.fg;
       }
-      strip.appendChild(seg);
+      seg.appendChild(pdcaQuadrant(st.cycle, 14, "currentColor", st.cycleLabel));
+      seg.appendChild(el("span", "app-sb-segname", `${state === "done" ? "✓ " : ""}${st.name}`));
+      seg.appendChild(el("span", "app-sb-segnum", String(at)));
+      const says = state === "done" ? "complete" : state === "on" ? "current stage" : "to come";
+      seg.title = `${at}. ${st.name} · ${st.cycleLabel} · ${says}`;
+      seg.setAttribute("aria-label", seg.title);
+      bar.appendChild(seg);
     });
-    left.appendChild(strip);
-    if (!o.completed && o.stage.target !== "") {
-      const due = el("div", "app-sb-due", `Due ${dayLabel(o.stage.target)}`);
-      if (o.stage.overdueDays !== null) {
-        due.classList.add("app-sb-due-over");
-        due.textContent = `Due ${dayLabel(o.stage.target)} · ${o.stage.overdueDays} day${o.stage.overdueDays === 1 ? "" : "s"} over`;
-      }
-      left.appendChild(due);
-    }
-  }
-  if (o.revert) {
-    const note = el("div", "app-sb-revert", `↩ Reverted from ${o.revert.from} by ${o.revert.who} · ${ageLabel(o.revert.at, o.today)}`);
-    if (o.revert.reason !== "") note.title = o.revert.reason;
-    left.appendChild(note);
-    if (o.revert.reason !== "") left.appendChild(el("div", "app-sb-revertwhy", `“${o.revert.reason}”`));
+    left.appendChild(bar);
+  } else {
+    const nameRow = el("div", "app-sb-stagerow");
+    nameRow.appendChild(stagePill(o));
+    left.appendChild(nameRow);
   }
   if (o.gate) {
-    const g = el("div", "app-sb-gate app-sb-gate-" + o.gate.tone);
-    g.appendChild(el("div", "app-sb-gatetext", o.gate.text));
-    if (o.gate.approvals.length > 0) {
-      const row = el("div", "app-sb-apprs");
-      for (const a of o.gate.approvals) {
-        row.appendChild(el("span", `app-ib-appr app-ib-appr-${a.state}`, `${a.state === "ok" ? "✓" : a.state === "no" ? "✕" : "◐"} ${a.label}`));
-      }
-      g.appendChild(row);
+    const g = el("div", "app-sb-gaterow app-sb-gate-" + o.gate.tone);
+    g.appendChild(el("span", "app-sb-gatetext", o.gate.text));
+    for (const a of o.gate.approvals) {
+      g.appendChild(el("span", `app-ib-appr app-ib-appr-${a.state}`, `${a.state === "ok" ? "✓" : a.state === "no" ? "✕" : "◐"} ${a.label}`));
     }
     if (o.gate.actions.length > 0) {
-      const acts = el("div", "app-ib-gatebtns");
+      const acts = el("div", "app-ib-gatebtns app-sb-gatebtns");
       for (const a of o.gate.actions) {
         const b = btn(a.label, "app-btn app-ib-gatebtn" + (a.kind === "primary" ? " app-btn-primary" : a.kind === "danger" ? " app-btn-danger" : ""));
         b.addEventListener("click", a.onClick);
@@ -181,6 +206,12 @@ export function renderStatusBand(o: BandOpts): HTMLElement {
       g.appendChild(acts);
     }
     left.appendChild(g);
+  }
+  if (o.revert) {
+    const note = el("div", "app-sb-revert", `↩ Reverted from ${o.revert.from} by ${o.revert.who} · ${ageLabel(o.revert.at, o.today)}`);
+    if (o.revert.reason !== "") note.title = o.revert.reason;
+    left.appendChild(note);
+    if (o.revert.reason !== "") left.appendChild(el("div", "app-sb-revertwhy", `“${o.revert.reason}”`));
   }
   if (o.endorse && o.endorse.count > 0) {
     const e = el("div", "app-sb-endorse");
@@ -208,7 +239,8 @@ export function renderStatusBand(o: BandOpts): HTMLElement {
       edit.addEventListener("click", () => o.onEdit(o.latest!));
       rhead.appendChild(edit);
     }
-    const add = btn("＋ Add update", "app-btn app-btn-primary app-sb-btn");
+    // outline, not primary: the band's one solid button is the gate decision
+    const add = btn("＋ Add update", "app-btn app-sb-btn");
     add.addEventListener("click", o.onAdd);
     rhead.appendChild(add);
   }
@@ -217,7 +249,7 @@ export function renderStatusBand(o: BandOpts): HTMLElement {
   if (o.latest) right.appendChild(renderUpdateBody(o.latest, true));
   else right.appendChild(el("div", "app-cp-muted app-sb-none", o.canComment ? "No commentary yet. Add the first update: what went well, what hurt, what happens next." : "No commentary yet."));
   if (o.updateCount > 1) {
-    const all = btn(`All updates · ${o.updateCount}`, "app-cp-ov-link app-sb-all");
+    const all = btn(`View all updates · ${o.updateCount}`, "app-cp-ov-link app-sb-all");
     all.title = "Open the details pane at the commentary";
     all.addEventListener("click", o.onAllUpdates);
     right.appendChild(all);
