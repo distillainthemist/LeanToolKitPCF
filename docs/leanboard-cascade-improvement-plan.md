@@ -1343,6 +1343,14 @@ reschedule/cancel history with a reason picklist.
   road is ADMINS ONLY (siteadmin / superadmin — the Users register's
   rule, Ben's call the same day); others see the suggested set and
   the roster. Unreleased.
+- **2026-10-02 — Organisation page: a site admin sees only their
+  site; sites and departments collapse.** Ben: the page was a long
+  scroll. A site admin's page lists their site alone (its company
+  head, no other companies, no archived list); a superadmin's lists
+  every site collapsed to its head (name, "n departments · m areas",
+  rename, owner, archive) and expands one with the ▸ toggle; a site
+  admin's departments start collapsed the same way ("n areas").
+  Toggle state lives for the visit; redraws keep it. Unreleased.
 - **2026-10-01 — the stage bar; initials.** Ben: fold the stage
   label and its PDCA symbol into the bar as thick labelled segments
   (done full colour, current outlined, future grey), bring the gate

@@ -1929,6 +1929,21 @@ async function renderOrg(
   const coOwners = await companyOwners();
   for (const s of sites) ownersBySite[s] ??= { departments: {}, areas: {} };
   const editableSites = isSuper ? sites : sites.filter((s) => s === me.site);
+  // a site admin sees ONLY their site (Ben, 2026-10-02); a superadmin
+  // sees every site collapsed to its head, a site admin every
+  // department collapsed — the page was a long scroll otherwise
+  const visibleSites = isSuper ? sites : editableSites;
+  const collapsedSites = new Set<string>(isSuper ? sites : []);
+  const collapsedDepts = new Set<string>();
+  if (!isSuper) for (const t of tree) for (const d of t.departments) collapsedDepts.add(`${t.site}|${d.department}`);
+  const toggleBtn = (open: boolean, what: string, onToggle: () => void): HTMLButtonElement => {
+    const b = el("button", "app-org-toggle", open ? "▾" : "▸") as HTMLButtonElement;
+    b.type = "button";
+    b.title = open ? `Collapse ${what}` : `Expand ${what}`;
+    b.setAttribute("aria-expanded", open ? "true" : "false");
+    b.addEventListener("click", onToggle);
+    return b;
+  };
 
   const touched = new Set<string>();
   let coOwnersTouched = false;
@@ -1952,8 +1967,9 @@ async function renderOrg(
     el(
       "div",
       "app-settings-note",
-      "The whole organisation, top to bottom \u2014 every level can carry an owner." +
-        (isSuper ? "" : " You can edit your own site; the rest is view only.")
+      isSuper
+        ? "The whole organisation, top to bottom \u2014 every level can carry an owner. Sites open on their heads; expand one to work in it."
+        : "Your site, top to bottom \u2014 departments and areas, each able to carry an owner. Expand a department to work in it."
     )
   );
   const treeBox = el("div", "app-org-tree");
@@ -2132,6 +2148,7 @@ async function renderOrg(
     const owners = ownersBySite[site];
     const card = el("div", "app-site-card");
     const head = el("div", "app-site-head");
+    const siteOpen = !collapsedSites.has(site);
     if (isSuper) {
       card.draggable = true;
       card.title = "Drag to another company to move";
@@ -2186,7 +2203,19 @@ async function renderOrg(
         })();
       });
     }
+    head.appendChild(
+      toggleBtn(siteOpen, site, () => {
+        if (siteOpen) collapsedSites.add(site);
+        else collapsedSites.delete(site);
+        draw();
+      })
+    );
     head.appendChild(el("span", "app-site-name", site));
+    if (!siteOpen) {
+      const nd = node.departments.length;
+      const na = node.departments.reduce((n, d) => n + d.areas.length, 0);
+      head.appendChild(el("span", "app-org-summary", `${nd} department${nd === 1 ? "" : "s"} · ${na} area${na === 1 ? "" : "s"}`));
+    }
     if (isSuper) head.appendChild(editBtn("Rename site", () => renameSite(site)));
     head.appendChild(
       ownerChip(owners.site, canEdit, (p) => {
@@ -2217,6 +2246,7 @@ async function renderOrg(
       head.appendChild(arch);
     }
     card.appendChild(head);
+    if (!siteOpen) return card;
 
     // which main hub tabs this site's people see (Ben, 2026-08-19)
     const tabsRow = el("div", "app-site-tabs");
@@ -2251,13 +2281,23 @@ async function renderOrg(
     node.departments.forEach((d, di) => {
       const dc = el("div", "app-dept-card");
       const dh = el("div", "app-dept-head");
+      const deptKey = `${site}|${d.department}`;
+      const deptOpen = !collapsedDepts.has(deptKey);
       if (canEdit) {
         const handle = el("span", "app-drag-handle", "⠿");
         handle.title = "Drag to reorder";
         dh.appendChild(handle);
         draggableRow(dc, handle, `dept-${site}`, di, node.departments, redraw);
       }
+      dh.appendChild(
+        toggleBtn(deptOpen, d.department, () => {
+          if (deptOpen) collapsedDepts.add(deptKey);
+          else collapsedDepts.delete(deptKey);
+          draw();
+        })
+      );
       dh.appendChild(el("span", "app-dept-name", d.department));
+      if (!deptOpen) dh.appendChild(el("span", "app-org-summary", `${d.areas.length} area${d.areas.length === 1 ? "" : "s"}`));
       if (canEdit) dh.appendChild(editBtn("Rename department", () => renameDept(site, node, d, redraw)));
       dh.appendChild(
         ownerChip(owners.departments[d.department], canEdit, (p) => {
@@ -2279,6 +2319,10 @@ async function renderOrg(
         );
       }
       dc.appendChild(dh);
+      if (!deptOpen) {
+        deptList.appendChild(dc);
+        return;
+      }
       const areaBox = el("div", "app-area-list");
       dc.appendChild(areaBox);
       d.areas.forEach((a, ai) => {
@@ -2339,7 +2383,7 @@ async function renderOrg(
       sites: [],
     }));
     const unassigned: string[] = [];
-    for (const site of sites) {
+    for (const site of visibleSites) {
       const g = groups.find((x) => x.company === (siteCompany[site] ?? ""));
       if (g) g.sites.push(site);
       else unassigned.push(site);
@@ -2348,6 +2392,7 @@ async function renderOrg(
       groups.push({ company: "", sites: unassigned });
     }
     for (const g of groups) {
+      if (!isSuper && g.sites.length === 0) continue; // a site admin sees only their own company
       const co = el("div", "app-co-card");
       const coHead = el("div", "app-co-head");
       coHead.appendChild(
@@ -2409,7 +2454,7 @@ async function renderOrg(
       addCo.addEventListener("click", addCompanyFlow);
       treeBox.appendChild(addCo);
     }
-    if (archived.length > 0) {
+    if (isSuper && archived.length > 0) {
       const box = el("details", "app-org-archived") as HTMLDetailsElement;
       box.appendChild(el("summary", undefined, `Archived sites (${archived.length})`));
       for (const site of archived) {

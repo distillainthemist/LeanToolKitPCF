@@ -119,6 +119,12 @@ the same commit.
   Report · Settings · Add action. Off the hub the context button
   (Home, or ‹ Back on an initiative board) sits on the FAR RIGHT after
   Add action.
+- **Collapsible tree rows** (Organisation page, 2026-10-02): a 26px
+  borderless chevron button (`.app-org-toggle`, ▸ / ▾, aria-expanded)
+  leads the row; a collapsed row keeps its name, actions and owner
+  chip and adds a muted count (`.app-org-summary`, "3 departments ·
+  7 areas"). Superadmins open on collapsed sites, site admins on
+  collapsed departments.
 - **The owner picker** (priorities, 2026-10-02): a Suggested section
   (small-caps head, the org's owner and its teams' owners) with a
   quiet "Search everyone on the roster" link beneath; typing searches

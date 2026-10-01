@@ -675,6 +675,13 @@ input[type="color"].app-cat-swatch {
   flex-wrap: wrap;
 }
 .app-site-name { font-size: 14px; font-weight: 700; }
+/* collapsible sites / departments on the Organisation page (2026-10-02) */
+.app-org-toggle {
+  font: inherit; font-size: 12px; line-height: 1; color: #6d675c; background: none; border: none;
+  width: 26px; height: 26px; border-radius: 6px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center;
+}
+.app-org-toggle:hover { background: #f1efec; color: #26241f; }
+.app-org-summary { font-size: 12px; color: #6d675c; }
 .app-owner {
   font: inherit;
   font-size: 11.5px;
