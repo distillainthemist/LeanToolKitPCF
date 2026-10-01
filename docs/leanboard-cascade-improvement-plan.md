@@ -1339,7 +1339,10 @@ reschedule/cancel history with a reason picklist.
   `upsertPerson` the Users register uses, access-group sync included)
   and selects them in one step. Offered wherever a priority's owner
   is chosen (add, edit, Accept & customise); other callers of
-  `pickOwner` are unchanged. Harness page owner.html. Unreleased.
+  `pickOwner` are unchanged. Harness page owner.html. The directory
+  road is ADMINS ONLY (siteadmin / superadmin — the Users register's
+  rule, Ben's call the same day); others see the suggested set and
+  the roster. Unreleased.
 - **2026-10-01 — the stage bar; initials.** Ben: fold the stage
   label and its PDCA symbol into the bar as thick labelled segments
   (done full colour, current outlined, future grey), bring the gate

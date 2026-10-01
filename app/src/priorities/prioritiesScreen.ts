@@ -372,9 +372,12 @@ export function mountPriorities(parent: HTMLElement, opts: PrioritiesMountOpts =
      *  roster behind a search, and the directory behind that — a
      *  person found there is added to the app (site and department
      *  from the org) and chosen in one step. */
+    // the directory road (adding a person to the app) is for admins
+    // only — the Users register's rule (Ben, 2026-10-02)
+    const isAdmin = viewer.role === "superadmin" || viewer.role === "siteadmin";
     const ownerPickerFor = (o: OrgRef) => ({
       suggested: [ownerFor(o), ...childOrgs(tree, o).map(ownerFor)].filter((p): p is { whoId: string; who: string } => p !== null),
-      directory: {
+      directory: !isAdmin ? undefined : {
         search: searchEntra,
         add: async (hit: { objectId: string; displayName: string; mail: string }) => {
           const person = {
