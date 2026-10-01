@@ -41,6 +41,7 @@ export interface Ben_ltkinitiativesBase {
   ben_stagetargetsjson?: string;
   ben_status?: string;
   ben_templateid?: string;
+  ben_toperiod?: string;
   importsequencenumber?: number;
   overriddencreatedon?: string;
   statecode: Ben_ltkinitiativesstatecode;

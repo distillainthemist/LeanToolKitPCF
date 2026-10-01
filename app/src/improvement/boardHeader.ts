@@ -22,6 +22,7 @@ import { currentViewer } from "../runtime";
 import { promptConfirm, promptText } from "../prompts";
 import { listPeople } from "../store/people";
 import { improvementSettingsJson } from "../store/config";
+import { currentPeriodNow } from "../store/priorities";
 import { appendInitiativeEvent, listInitiativeEvents, listInitiatives, saveInitiative } from "../store/initiatives";
 import { InitiativeEvent } from "../store/initiatives";
 import { dayLabel } from "../linkTitle";
@@ -529,6 +530,7 @@ export function mountInitiativePane(o: InitiativePaneOpts): InitiativePaneHandle
       const from = i.snapshot.stages.find((s) => s.id === i.stageId)?.name ?? i.stageId;
       if (toStageId === "") {
         i.status = "completed";
+        i.toPeriod = await currentPeriodNow();
         await appendInitiativeEvent(i, "stagemove", { from, to: "Complete", comment }, actor());
       } else {
         i.stageId = toStageId;
@@ -881,6 +883,7 @@ export function mountInitiativePane(o: InitiativePaneOpts): InitiativePaneHandle
       item(i.status === "archived" ? "Restore" : "Archive", () => {
         void (async () => {
           i.status = i.status === "archived" ? "active" : "archived";
+          i.toPeriod = i.status === "archived" ? await currentPeriodNow() : "";
           await persist();
           await appendInitiativeEvent(i, i.status === "archived" ? "archived" : "reopened", {}, actor());
           render();

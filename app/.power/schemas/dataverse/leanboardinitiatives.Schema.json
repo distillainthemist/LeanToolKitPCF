@@ -299,6 +299,14 @@
           "x-ms-schema-name": "ben_templateid",
           "maxLength": 40
         },
+        "ben_toperiod": {
+          "type": "string",
+          "title": "End period",
+          "x-ms-dataverse-attribute": "ben_toperiod",
+          "x-ms-dataverse-type": "StringType",
+          "x-ms-schema-name": "ben_toperiod",
+          "maxLength": 40
+        },
         "createdby": {
           "type": "string",
           "title": "Created By",

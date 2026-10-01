@@ -27,7 +27,7 @@ import { buildMetricState, loadMetricLasts } from "./metricValues";
 import { newAction } from "../../../shared/schema/actions";
 import { promptConfirm } from "../prompts";
 import { parseOrgTree } from "../../../shared/schema/meeting";
-import { groupPrioritiesForPicker, isDescendant, orgName, OrgRef, orgRef, orgLevel, orgPath, periodFor, parsePrioritySettings, ragPaletteKey, sameOrg } from "../priorities/model";
+import { effectiveEnd, groupPrioritiesForPicker, isDescendant, orgName, OrgRef, orgRef, orgLevel, orgPath, periodFor, periodsOnOffer, parsePrioritySettings, ragPaletteKey, sameOrg, spanLiveIn } from "../priorities/model";
 import { paletteMap } from "../../../shared/palette";
 import { appPalettes } from "../store/config";
 import { todayIso } from "../../../shared/schema/id";
@@ -119,7 +119,12 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
       (scope.site === "" || o.site === scope.site) &&
       (scope.department === "" || o.department === scope.department) &&
       (scope.area === "" || o.area === scope.area);
-    const currentPeriod = periodFor(parsePrioritySettings(prSettingsRaw).period, todayIso());
+    const prSettings = parsePrioritySettings(prSettingsRaw);
+    const currentPeriod = periodFor(prSettings.period, todayIso()) || prSettings.period.currentPeriod;
+    /** An initiative's span: its start label to the period it completed in
+     *  (a row closed before ends were stamped ends in its start). */
+    const liveIn = (i: Initiative, year: string) =>
+      spanLiveIn(prSettings.period, { start: i.period, end: effectiveEnd({ status: i.status, period: i.period, toPeriod: i.toPeriod }) }, year);
     const ownedOrgKeys = Object.entries(owners)
       .filter(([, people]) => people.some((p) => p.whoId === (who?.objectId ?? "")))
       .map(([key]) => key);
@@ -164,7 +169,7 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
     const visible = (i: Initiative): boolean =>
       (search === "" || i.title.toLowerCase().includes(search.toLowerCase())) &&
       orgsOf(i).some(inScope) &&
-      (f.period === "" || i.period === f.period) &&
+      liveIn(i, f.period) &&
       (f.status === "all" || i.status === f.status) &&
       (!f.flagOnly || i.flag !== "") &&
       (f.method === "" || i.method === f.method) &&
@@ -460,7 +465,7 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
         exclusive("Stage", [["plan", "Plan"], ["do", "Do"], ["check", "Check"], ["act", "Act"]], f.pdca, "", (v) => {
           f.pdca = v;
         });
-        const periods = [...new Set([currentPeriod, ...list.map((i) => i.period)])].filter((p) => p !== "").sort();
+        const periods = periodsOnOffer(prSettings.period, currentPeriod, list.map((i) => ({ start: i.period, end: i.toPeriod })));
         exclusive("Period", periods.map((p) => [p, p] as [string, string]), f.period, "", (v) => {
           f.period = v;
         });
@@ -767,6 +772,7 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
 
     const archive = async (i: Initiative) => {
       i.status = i.status === "archived" ? "active" : "archived";
+      i.toPeriod = i.status === "archived" ? currentPeriod : "";
       await saveInitiative(i);
       await appendInitiativeEvent(i, i.status === "archived" ? "archived" : "reopened", {}, actor());
       render();
@@ -1074,6 +1080,7 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
               flagNote: "",
               endorsement: endorseCb.checked,
               period: f.period !== "" ? f.period : currentPeriod,
+              toPeriod: "",
               roles: rolePeople,
               priorities: links.map((l) => ({ priorityId: l.priorityId, primary: l.primary })),
               fieldValues,

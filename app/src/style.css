@@ -2810,6 +2810,7 @@ button.app-doclist-hsort:hover { color: var(--app-accent, #2563eb); }
 .app-pr-arrow:disabled { opacity: 0.25; cursor: default; }
 .app-pr-co { flex: 0 0 180px !important; }
 .app-pr-short { max-width: 140px; }
+.app-pr-span { flex: 0 0 132px !important; font-size: 12.5px; }
 .app-pr-org { padding: 10px 0 12px; border-top: 1px dashed #e4dfd6; }
 .app-pr-org-co { border-top: none; }
 .app-pr-orgname { font-weight: 700; font-size: 14px; margin-bottom: 4px; }
@@ -3270,6 +3271,9 @@ textarea.app-cp-statement { font-size: 14px; font-weight: 500; }
 .app-org-archived-row { display: flex; align-items: center; gap: 10px; padding: 6px 0; }
 .app-cp-cascade-prior { font-size: 12px; }
 .app-cp-ov-resend { margin-left: 8px; font-weight: 600; }
+/* re-parenting after the fact (2026-10-02): the Cascade tab's link row + the parent picker */
+.app-cp-ov-relink { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
+.app-cp-parentopt { display: block; width: 100%; text-align: left; white-space: normal; line-height: 1.35; }
 .app-pr-floor-row { display: flex; align-items: center; gap: 12px; }
 .app-pr-floor-site { font-weight: 600; min-width: 180px; }
 .app-cp-review-note { font-size: 12px; margin-top: 4px; }

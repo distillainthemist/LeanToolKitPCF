@@ -17,12 +17,14 @@ export interface Ben_ltkpillarsBase {
   ben_active?: boolean;
   ben_color?: string;
   ben_company?: string;
+  ben_fromperiod?: string;
   ben_level?: number;
   ben_ltkpillarid: string;
   ben_name?: string;
   ben_order?: number;
   "ben_ParentPillar@odata.bind"?: string;
   ben_pillarid: string;
+  ben_toperiod?: string;
   importsequencenumber?: number;
   overriddencreatedon?: string;
   statecode: Ben_ltkpillarsstatecode;

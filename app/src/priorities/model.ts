@@ -124,6 +124,10 @@ export interface Pillar {
   order: number;
   active: boolean;
   company: string;
+  /** The span the pillar is in force (2026-10-02): "" = open at that end.
+   *  The year picker shows the pillars live in the viewed year. */
+  fromPeriod: string;
+  toPeriod: string;
 }
 
 /** Level-2 pillars in display order, optionally under one L1. */
@@ -180,7 +184,13 @@ export interface Priority {
   pillarId: string;
   ownerId: string;
   ownerName: string;
+  /** The span's START (2026-10-02; was the one period a priority belonged to). */
   period: string;
+  /** Stamped at close from the closing date; "" while it runs. Old closed
+   *  rows have none — `effectiveEnd` reads them as ending in their start. */
+  toPeriod: string;
+  /** Optional: past it while still open = the review flag. */
+  plannedEnd: string;
   status: PriorityStatus;
   statusReason: string;
   parentId: string; // "" = originated here
@@ -218,6 +228,8 @@ export type PriorityEventKind =
   | "archived"
   | "retired"
   | "carriedForward"
+  | "linked"
+  | "unlinked"
   | "reopened"
   | "reordered";
 
@@ -396,6 +408,8 @@ export interface PeriodSettings {
   prefix: string;
   /** custom mode: the current label; other modes derive it. */
   currentPeriod: string;
+  /** custom mode: every label in order — spans need comparing (2026-10-02). */
+  labels: string[];
 }
 
 export interface PrioritySettings {
@@ -405,7 +419,7 @@ export interface PrioritySettings {
 
 export const DEFAULT_PRIORITY_SETTINGS: PrioritySettings = {
   ragRatioPct: 30,
-  period: { mode: "fy", startMonth: 7, prefix: "FY", currentPeriod: "" },
+  period: { mode: "fy", startMonth: 7, prefix: "FY", currentPeriod: "", labels: [] },
 };
 
 export function parsePrioritySettings(raw: string | null | undefined): PrioritySettings {
@@ -427,6 +441,7 @@ export function parsePrioritySettings(raw: string | null | undefined): PriorityS
         startMonth: Math.max(1, Math.min(12, sm)),
         prefix: typeof p.prefix === "string" ? p.prefix : d.period.prefix,
         currentPeriod: typeof p.currentPeriod === "string" ? p.currentPeriod : "",
+        labels: Array.isArray(p.labels) ? p.labels.filter((l): l is string => typeof l === "string" && l.trim() !== "").map((l) => l.trim()) : [],
       },
     };
   } catch {
@@ -456,7 +471,10 @@ export function periodFor(settings: PeriodSettings, dateIso: string): string {
 
 /** The label after `period` (carry-forward target). Custom → "" (admin sets). */
 export function nextPeriod(settings: PeriodSettings, period: string): string {
-  if (settings.mode === "custom") return "";
+  if (settings.mode === "custom") {
+    const i = settings.labels.indexOf(period);
+    return i >= 0 && i + 1 < settings.labels.length ? settings.labels[i + 1] : "";
+  }
   const digits = period.replace(/\D/g, "");
   if (digits === "") return "";
   const n = Number(digits);
@@ -466,7 +484,10 @@ export function nextPeriod(settings: PeriodSettings, period: string): string {
 
 /** The label before `period`. Custom → "" (admin sets). */
 export function prevPeriod(settings: PeriodSettings, period: string): string {
-  if (settings.mode === "custom") return "";
+  if (settings.mode === "custom") {
+    const i = settings.labels.indexOf(period);
+    return i > 0 ? settings.labels[i - 1] : "";
+  }
   const digits = period.replace(/\D/g, "");
   if (digits === "") return "";
   const n = Number(digits);
@@ -491,6 +512,126 @@ export function periodWindow(settings: PeriodSettings, period: string): { from: 
   const endMonth = sm - 1;
   const lastDay = new Date(year, endMonth, 0).getDate(); // day 0 of the next month = last day of endMonth
   return { from, to: `${year}-${p(endMonth)}-${p(lastDay)}` };
+}
+
+// ---- spans (2026-10-02) ---------------------------------------------------------
+// A priority runs from a START period to an END; the year picker is a lens
+// over what was live in that year, not a container. Pillars carry the same
+// two fields. "" at either end = open. Nothing is copied at a boundary.
+
+/** Compare two period labels: FY / calendar by their year, custom by the
+ *  ordered label list (unknown labels fall back to text order). */
+export function comparePeriods(settings: PeriodSettings, a: string, b: string): number {
+  if (settings.mode === "custom") {
+    const ia = settings.labels.indexOf(a);
+    const ib = settings.labels.indexOf(b);
+    if (ia >= 0 && ib >= 0) return ia - ib;
+    if (ia >= 0 || ib >= 0) return ia >= 0 ? -1 : 1;
+    return a.localeCompare(b);
+  }
+  const year = (p: string): number => {
+    const digits = p.replace(/\D/g, "");
+    if (digits === "") return Number.NaN;
+    const n = Number(digits);
+    return digits.length <= 2 ? 2000 + n : n;
+  };
+  const ya = year(a);
+  const yb = year(b);
+  if (Number.isNaN(ya) || Number.isNaN(yb)) return a.localeCompare(b);
+  return ya - yb;
+}
+
+/** The period something ended in: its stamped end, else — for a row closed
+ *  before ends were stamped — the period it started in. "" = still open. */
+export function effectiveEnd(x: { status: string; period: string; toPeriod: string }): string {
+  if (x.toPeriod !== "") return x.toPeriod;
+  return x.status === "active" ? "" : x.period;
+}
+
+/** Live in `year`: started by then (or no start) and not ended before it. */
+export function spanLiveIn(settings: PeriodSettings, span: { start: string; end: string }, year: string): boolean {
+  if (year === "") return true;
+  if (span.start !== "" && comparePeriods(settings, span.start, year) > 0) return false;
+  if (span.end !== "" && comparePeriods(settings, span.end, year) < 0) return false;
+  return true;
+}
+
+export function priorityLiveIn(settings: PeriodSettings, p: Priority, year: string): boolean {
+  return spanLiveIn(settings, { start: p.period, end: effectiveEnd(p) }, year);
+}
+
+export function pillarLiveIn(settings: PeriodSettings, pillar: Pillar, year: string): boolean {
+  return pillar.active && spanLiveIn(settings, { start: pillar.fromPeriod, end: pillar.toPeriod }, year);
+}
+
+/** The pillars in force in `year` — what the chips and columns are built
+ *  from. A sub-pillar also needs its pillar live (a retired pillar takes
+ *  its columns with it, as `objectiveColumns` already assumes). */
+export function pillarsLiveIn(settings: PeriodSettings, pillars: Pillar[], year: string): Pillar[] {
+  const live = pillars.filter((p) => pillarLiveIn(settings, p, year));
+  const tops = new Set(live.filter((p) => p.level === 1).map((p) => p.id));
+  return live.filter((p) => p.level === 1 || p.parentId === "" || tops.has(p.parentId));
+}
+
+/** Still open past its planned end, as seen from `year` — the review flag
+ *  that replaces the yearly carry-forward. */
+export function reviewDue(settings: PeriodSettings, p: Priority, year: string): boolean {
+  if (p.status !== "active" || p.plannedEnd === "") return false;
+  return comparePeriods(settings, p.plannedEnd, year) < 0;
+}
+
+/** Every period the picker offers: from the earliest start in the data to
+ *  the later of the next period and the latest end or planned end. FY /
+ *  calendar step through the years; custom lists the ordered labels plus
+ *  any the data holds. */
+export function periodsOnOffer(
+  settings: PeriodSettings,
+  current: string,
+  spans: { start: string; end: string; planned?: string }[]
+): string[] {
+  const seen = new Set<string>();
+  for (const sp of spans) for (const l of [sp.start, sp.end, sp.planned ?? ""]) if (l !== "") seen.add(l);
+  if (current !== "") seen.add(current);
+  const next = nextPeriod(settings, current);
+  if (next !== "") seen.add(next);
+  const cmp = (a: string, b: string) => comparePeriods(settings, a, b);
+  if (settings.mode === "custom") {
+    const out = settings.labels.slice();
+    for (const l of [...seen].sort(cmp)) if (!out.includes(l)) out.push(l);
+    return out;
+  }
+  const sorted = [...seen].sort(cmp);
+  if (sorted.length === 0) return [];
+  const out: string[] = [];
+  let cur = sorted[0];
+  const last = sorted[sorted.length - 1];
+  for (let n = 0; n < 40 && cur !== ""; n++) {
+    out.push(cur);
+    if (cmp(cur, last) >= 0) break;
+    cur = nextPeriod(settings, cur);
+  }
+  for (const l of sorted) if (!out.includes(l)) out.push(l);
+  return out.sort(cmp);
+}
+
+// ---- re-parenting (2026-10-02) -------------------------------------------------------
+// A priority set at a junior org that turns out to serve a senior one gets
+// linked after the fact. The parent must sit above the child's org or
+// beside it (a peer), be active, and not already hang beneath the child.
+
+export function canBeParent(child: Priority, candidate: Priority, all: Priority[]): boolean {
+  if (candidate.id === child.id || candidate.status !== "active") return false;
+  if (sameOrg(candidate.org, child.org)) return false;
+  const above = isDescendant(child.org, candidate.org);
+  const pc = orgParent(child.org);
+  const pp = orgParent(candidate.org);
+  const peer = pc !== null && pp !== null && sameOrg(pc, pp);
+  if (!above && !peer) return false;
+  return !descendantPriorities(child, all).some((d) => d.id === candidate.id);
+}
+
+export function parentCandidates(child: Priority, all: Priority[]): Priority[] {
+  return all.filter((c) => canBeParent(child, c, all));
 }
 
 // ---- permissions (decision 7) ---------------------------------------------
@@ -611,25 +752,11 @@ export function lineageWords(l: LineageSummary, unit = "org"): string[] {
 
 // ---- lifecycle (P2) ----------------------------------------------------------------
 
-/** "Why is this closing?" — the design's fixed picklist (§10). */
-export const CLOSE_REASONS = ["Achieved", "Superseded", "No longer relevant", "Carried to next period"] as const;
+/** "Why is this closing?" — the design's fixed picklist (§10). "Carried to
+ *  next period" left with the carry-forward copies (2026-10-02): a
+ *  priority now spans years instead. */
+export const CLOSE_REASONS = ["Achieved", "Superseded", "No longer relevant"] as const;
 export type CloseReason = (typeof CLOSE_REASONS)[number];
-
-/** A carry-forward copy: same statement, pillar, owner, org and order in
- *  the next period, linked back by `carriedFromId` in the caller's event.
- *  The copy has no parent — cascades are re-sent in the new period. */
-export function carryForwardCopy(p: Priority, nextPeriodName: string, newId: string): Priority {
-  return {
-    ...p,
-    rowId: undefined,
-    id: newId,
-    period: nextPeriodName,
-    status: "active",
-    statusReason: "",
-    parentId: "",
-    primaryInitiativeId: "",
-  };
-}
 
 /** Children still active under a parent that has closed — the ones the
  *  "parent completed" prompt is for (§10). */

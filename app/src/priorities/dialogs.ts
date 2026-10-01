@@ -448,7 +448,8 @@ export function priorityDialog(o: PriorityDialogOpts): Promise<PriorityDialogRes
     paintOwner();
     ownerRow.append(ownerName, ownerBtn);
 
-    // period
+    // the span (2026-10-02): a START period, an optional PLANNED end; the
+    // real end is stamped when the priority closes, never typed
     const period = el("select", "app-input") as HTMLSelectElement;
     const periods = o.periods.includes(p.period) || p.period === "" ? o.periods : [p.period, ...o.periods];
     for (const per of periods) {
@@ -456,6 +457,16 @@ export function priorityDialog(o: PriorityDialogOpts): Promise<PriorityDialogRes
       opt.value = per;
       if (per === p.period) opt.selected = true;
       period.appendChild(opt);
+    }
+    const planned = el("select", "app-input") as HTMLSelectElement;
+    const noPlanned = el("option", "", "No planned end") as HTMLOptionElement;
+    noPlanned.value = "";
+    planned.appendChild(noPlanned);
+    for (const per of periods.includes(p.plannedEnd) || p.plannedEnd === "" ? periods : [...periods, p.plannedEnd]) {
+      const opt = el("option", "", per) as HTMLOptionElement;
+      opt.value = per;
+      if (per === p.plannedEnd) opt.selected = true;
+      planned.appendChild(opt);
     }
 
     // primary initiative (initiatives arrive with P5)
@@ -479,7 +490,8 @@ export function priorityDialog(o: PriorityDialogOpts): Promise<PriorityDialogRes
       field("Statement", statement),
       field("Sub-pillar", pillar),
       field("Owner", ownerRow),
-      field("Period", period),
+      field("Start period", period),
+      field("Planned end", planned, "Optional. Still open past it, the priority asks for a review — it never closes on its own."),
       field("Primary initiative", primary),
       field("Cascade to", cascadeBox, "Child orgs and peers. Each receives it as a request to accept."),
       confirm,
@@ -515,6 +527,7 @@ export function priorityDialog(o: PriorityDialogOpts): Promise<PriorityDialogRes
       p.ownerId = owner?.whoId ?? "";
       p.ownerName = owner?.who ?? "";
       p.period = period.value;
+      p.plannedEnd = planned.value;
       p.notes = notes.value.trim();
       done({
         priority: p,

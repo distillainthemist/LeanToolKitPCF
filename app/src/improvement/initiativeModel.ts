@@ -57,6 +57,8 @@ export interface Initiative {
   flagNote: string;
   endorsement: boolean;
   period: string;
+  /** Stamped when the initiative completes (2026-10-02); "" while it runs. */
+  toPeriod: string;
   boardId: string;
   snapshot: InitiativeSnapshot;
   roles: Record<string, RolePerson[]>;

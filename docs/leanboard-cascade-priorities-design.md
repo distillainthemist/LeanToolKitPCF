@@ -197,7 +197,8 @@ for acceptance."
 - Parent completed prompt: "Pacific completed the parent of this
   priority. Complete yours, or keep it and note why."
 - Complete/archive dialog: "Why is this closing?" — Achieved ·
-  Superseded · No longer relevant · Carried to next period
+  Superseded · No longer relevant (the carry-forward reason left with
+  the copies — §16)
 - Cascade confirm: "This will send the priority to n orgs for
   acceptance."
 - Other strip: "Other — n initiatives not linked to an open priority"
@@ -229,7 +230,7 @@ Owner adds priority ──> (optionally) cascade to child/peer orgs
   parent completed/revised ──> child sees "parent completed" prompt
         │
         ▼
-  complete with reason ──> carry forward to next period or archive
+  complete with reason ──> the span ends in that period (§16)
 ```
 
 ## 12. Component decisions
@@ -323,3 +324,44 @@ Rules:
 - No hover-only content anywhere in walk mode.
 - The embedded ritual card's focused editor opens in walk mode at
   step 1; its tile snapshot shows the displayed matrix.
+
+## 16. Amendment — spans, not periods (2026-10-02)
+
+A priority no longer BELONGS to a period; it RUNS from a start period
+until it closes, and the period picker is a lens over what was live in
+the viewed year. Nothing is copied at a boundary, so lineage, the
+primary initiative and the cascade records stay on the one row across
+years. Pillars carry the same span, so a strategy refresh adds the new
+pillars and ends the old ones without losing either view.
+
+- **Fields**: `ben_period` is the START; `ben_toperiod` is stamped at
+  close from the closing date (never typed) and cleared on reopen;
+  `ben_plannedend` is optional. Pillars: `ben_fromperiod` /
+  `ben_toperiod`. Initiatives: `ben_toperiod` stamped on completion or
+  archive. No migration: a row closed before ends were stamped reads
+  as ending in its start (`effectiveEnd`).
+- **Live rule** (`priorityLiveIn` / `pillarLiveIn`): start empty or at
+  most the year, end empty or at least the year. A future start hides
+  the priority until its year. The status filter still narrows to
+  active only. Custom period labels compare by the ordered label list
+  in Settings → Priorities; FY and calendar by their year.
+- **Picker**: every period from the earliest start in the data to the
+  later of the next period and the latest end or planned end.
+- **Review flag**: open past its planned end, as seen from the viewed
+  year, a card reads "⟳ Past its planned end (FY27) — review". It never
+  closes on its own; this replaces the yearly carry-forward.
+- **Gone**: the carry-forward copy, the bulk "Carry forward … to next
+  period" flow and the close reason. Old `carriedForward` events still
+  read in History.
+- **Re-parenting after the fact**: on the Cascade tab, "Link to a
+  parent priority…" (or "Change parent…" / "Unlink") for anyone who
+  manages the child's org. Candidates are active priorities at orgs
+  above the child or peers at its level, never beneath it; a parent
+  not live in the child's start period is offered with a note. The
+  write (`relinkParent`) sets the parent, records an accepted
+  assignment on the parent naming the child as its customised row,
+  removes the old parent's record for that child, and writes a
+  `linked` / `unlinked` event on both rows. The dialog offers to take
+  the parent's sub-pillar when they differ (ticked by default when the
+  child has none).
+

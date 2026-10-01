@@ -1300,6 +1300,21 @@ reschedule/cancel history with a reason picklist.
   Harness-verified for the Gantt; the tile is Ben's hosted check.
 - **2026-10-01 — released as v0.61.0** (app-only): Gantt rows name
   the action; live tiles re-mount when their data lands.
+- **2026-10-02 — priorities span years; re-parenting.** Ben asked how
+  rollover worked (manual, per org, copy-and-sever), then what a
+  period-as-a-lens model would mean, then "bring me the plan", with
+  the ability to link a junior org's priority to a parent after the
+  fact. Built as design §16: start / stamped end / planned end on
+  priorities, from / to on pillars, an end on initiatives; the picker
+  and the Improvement tab filter by `liveIn`; the review flag replaces
+  carry-forward (copy, bulk flow and reason removed); custom periods
+  get an ordered label list; "Link to a parent priority…" / "Change
+  parent…" / "Unlink" on the Cascade tab through ONE store write
+  (`relinkParent`), which also fixed `savePriority` never clearing a
+  parent lookup (an update must send null — undefined is stripped).
+  SCHEMA-CARRYING. Tests 741. Hosted checks Ben's: the picker across
+  a boundary, a pillar with an end, a re-parented priority seen from
+  both orgs. Unreleased.
 - **2026-10-01 — the stage bar; initials.** Ben: fold the stage
   label and its PDCA symbol into the bar as thick labelled segments
   (done full colour, current outlined, future grey), bring the gate

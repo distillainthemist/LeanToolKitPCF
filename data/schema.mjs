@@ -468,6 +468,10 @@ export const TABLES = [
       ben_order: { kind: "int", display: "Order" },
       ben_active: { kind: "bool", display: "Active", default: true },
       ben_company: { ...text(100), display: "Company" },
+      // the span a pillar is in force (2026-10-02): the year picker shows
+      // the pillars live in the viewed year; blank = open at that end
+      ben_fromperiod: { ...text(40), display: "From period" },
+      ben_toperiod: { ...text(40), display: "To period" },
     },
     key: ["ben_pillarid"],
     role: { delete: true },
@@ -491,7 +495,9 @@ export const TABLES = [
       ben_area: { ...text(100), display: "Area" },
       ben_ownerid: { ...text(120), display: "Owner (whoId)" },
       ben_ownername: { ...text(200), display: "Owner name" },
-      ben_period: { ...text(40), display: "Period" },
+      ben_period: { ...text(40), display: "Start period" }, // the span's start (2026-10-02; was the one period)
+      ben_toperiod: { ...text(40), display: "End period" }, // stamped at close from the closing date; "" = open
+      ben_plannedend: { ...text(40), display: "Planned end" }, // optional; past it while open = review flag
       ben_status: { ...text(20), display: "Status" },
       ben_statusreason: { ...memo(2000), display: "Status reason" },
       ben_order: { kind: "int", display: "Order" },
@@ -610,7 +616,8 @@ export const TABLES = [
       ben_flag: { ...text(20), display: "Flag" }, // "" | flag | escalated
       ben_flagnote: { ...text(400), display: "Flag note" },
       ben_endorsement: { kind: "bool", display: "Owner endorses completions", default: false },
-      ben_period: { ...text(40), display: "Period" },
+      ben_period: { ...text(40), display: "Start period" }, // the span's start (2026-10-02)
+      ben_toperiod: { ...text(40), display: "End period" }, // stamped when the initiative completes; "" = open
       ben_boardid: { ...text(80), display: "Board Id" },
       // the initiative's RESOLVED copy of stages/gates/mandatory/metrics at
       // creation (design 1.7's model note) — only propagating fields read

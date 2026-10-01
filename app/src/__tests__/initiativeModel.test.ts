@@ -27,6 +27,7 @@ function init(over: Partial<Initiative> = {}): Initiative {
     org: { company: "Pechey", site: "Mine", department: "", area: "" },
     stageId: t.stages[0].id,
     status: "active",
+    toPeriod: "",
     confidential: false,
     flag: "",
     flagNote: "",

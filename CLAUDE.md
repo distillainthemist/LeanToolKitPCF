@@ -183,6 +183,10 @@ Version lives in the tag alone — nothing is stamped into files.
   `whenSettled`). Debounced saves are flushed when their screen is
   left. Never `whenSettled` inside a function a tracked write calls —
   it would wait for itself (2026-10-01).
+- **Clearing a Dataverse lookup on update sends `null`** for the
+  `@odata.bind` property; `undefined` is stripped by the SDK and the
+  old reference stays (`savePriority` never un-parented a priority
+  until 2026-10-02).
 - **`BoardGrid.setTiles` is a no-op on unchanged input.** A tile
   mounted before its data existed (the charter binding loads after
   the first paint) keeps its first picture until
@@ -218,7 +222,9 @@ Version lives in the tag alone — nothing is stamped into files.
 - **Solution-carrying releases** since v0.50: v0.51 (value drivers,
   scenarios, sourceurl, tracking, pdca), v0.53 (confidential action
   columns), v0.54 (alsoorgs). Everything from v0.55.0 to v0.61.0 was
-  app-only. Prod imports the managed solution FIRST.
+  app-only; the NEXT release is schema-carrying (priority / pillar /
+  initiative span columns, 2026-10-02). Prod imports the managed
+  solution FIRST.
 - **One rule, applied everywhere it matters.** A rule that must hold
   for every action or every card lives in ONE pure function and is
   applied at the screen for an honest picture AND at the store's

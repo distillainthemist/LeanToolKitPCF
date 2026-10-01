@@ -124,6 +124,14 @@
           "x-ms-read-only": true,
           "maxLength": 200
         },
+        "ben_plannedend": {
+          "type": "string",
+          "title": "Planned end",
+          "x-ms-dataverse-attribute": "ben_plannedend",
+          "x-ms-dataverse-type": "StringType",
+          "x-ms-schema-name": "ben_plannedend",
+          "maxLength": 40
+        },
         "ben_primaryinitiativeid": {
           "type": "string",
           "title": "Primary initiative Id",
@@ -172,6 +180,14 @@
           "x-ms-dataverse-type": "MemoType",
           "x-ms-schema-name": "ben_statusreason",
           "maxLength": 2000
+        },
+        "ben_toperiod": {
+          "type": "string",
+          "title": "End period",
+          "x-ms-dataverse-attribute": "ben_toperiod",
+          "x-ms-dataverse-type": "StringType",
+          "x-ms-schema-name": "ben_toperiod",
+          "maxLength": 40
         },
         "createdby": {
           "type": "string",

@@ -111,6 +111,14 @@ the same commit.
   dialog's anatomy: what happens in words, the choice, a required
   reason, removable recipient chips, send by Teams or email, the
   outcome reported in place.
+- **Priorities period picker is a lens** (2026-10-02): it lists every
+  period a span touches and shows what was LIVE in the viewed year;
+  a priority card past its planned end wears the amber flag "⟳ Past
+  its planned end (FY27) — review". The Cascade tab's quiet links
+  "Link to a parent priority…" / "Change parent…" / "Unlink" use
+  `.app-cp-ov-link`; the parent picker lists candidates as full-width
+  `.app-cp-reason` rows grouped by org, orgs above first, peers
+  marked "· peer".
 - **Priority popup tabs**, in this order: Initiatives, Actions,
   Commentary, Metrics, Cascade, Charter, History.
 - **Present view (cascaded priorities)**: a full-height PREV / NEXT

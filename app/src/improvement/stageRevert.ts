@@ -8,7 +8,7 @@
 
 import type { Initiative } from "./initiativeModel";
 
-type StageI = Pick<Initiative, "snapshot" | "stageId" | "status" | "singleAction" | "gate" | "stageTargets">;
+type StageI = Pick<Initiative, "snapshot" | "stageId" | "status" | "singleAction" | "gate" | "stageTargets" | "toPeriod">;
 
 export interface RevertTarget {
   id: string;
@@ -86,6 +86,7 @@ export function applyRevert(i: StageI, toStageId: string, newTarget: string): { 
   if (!target) return null;
   const from = i.status === "completed" ? "Complete" : (i.snapshot.stages.find((s) => s.id === i.stageId)?.name ?? i.stageId);
   i.status = "active";
+  i.toPeriod = ""; // the span opens again
   i.stageId = target.id;
   i.gate = null;
   if (/^\d{4}-\d{2}-\d{2}$/.test(newTarget)) i.stageTargets = { ...i.stageTargets, [target.id]: newTarget };

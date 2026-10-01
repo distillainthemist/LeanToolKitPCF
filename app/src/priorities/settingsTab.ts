@@ -39,6 +39,8 @@ import {
   Pillar,
   serializePrioritySettings,
   serializeSiteCascadeSettings,
+  periodsOnOffer,
+  prevPeriod,
 } from "./model";
 import { newId, todayIso } from "../../../shared/schema/id";
 
@@ -170,11 +172,25 @@ async function renderCascadeFloor(body: HTMLElement, me: RosterPerson, ctx: Dirt
 async function renderPillars(body: HTMLElement, ctx: DirtyCtx, saves: (() => Promise<void>)[]) {
   const box = sectionTitle(
     "Strategic pillars",
-    "Pillars appear as filter chips above the priorities matrix; their sub-pillars are the matrix columns. Company-wide; typically change every few years. Order here is the order on screen."
+    "Pillars appear as filter chips above the priorities matrix; their sub-pillars are the matrix columns. Company-wide; typically change every few years. Order here is the order on screen. From / to set the periods a pillar is in force — the year picker shows the pillars live in the viewed year, so a strategy refresh adds the new ones and ends the old without losing either."
   );
   body.appendChild(box);
   const companyList = await companies();
   const pillars = await listPillars();
+  // the periods a from / to select offers: three back from today's, through
+  // to the next, plus whatever the pillars already hold
+  const periodSettings = parsePrioritySettings(await prioritySettingsJson()).period;
+  const periodChoices = (): string[] => {
+    const cur = periodFor(periodSettings, todayIso()) || periodSettings.currentPeriod;
+    const back: string[] = [];
+    let b = cur;
+    for (let n = 0; n < 3; n++) {
+      b = prevPeriod(periodSettings, b);
+      if (b === "") break;
+      back.push(b);
+    }
+    return periodsOnOffer(periodSettings, cur, [...back.map((x) => ({ start: x, end: "" })), ...pillars.map((p) => ({ start: p.fromPeriod, end: p.toPeriod }))]);
+  };
   const removed: Pillar[] = [];
   let dirtyPillars = false;
 
@@ -224,6 +240,8 @@ async function renderPillars(body: HTMLElement, ctx: DirtyCtx, saves: (() => Pro
           order: children.length + 1,
           active: true,
           company: l1.company,
+          fromPeriod: l1.fromPeriod,
+          toPeriod: l1.toPeriod,
         });
         touch();
         paint();
@@ -244,6 +262,8 @@ async function renderPillars(body: HTMLElement, ctx: DirtyCtx, saves: (() => Pro
         order: l1s.length + 1,
         active: true,
         company: companyList[0] ?? "",
+        fromPeriod: "",
+        toPeriod: "",
       });
       touch();
       paint();
@@ -292,6 +312,26 @@ async function renderPillars(body: HTMLElement, ctx: DirtyCtx, saves: (() => Pro
       touch();
     });
     active.append(box, document.createTextNode(" Active"));
+    const span = (key: "fromPeriod" | "toPeriod", blank: string): HTMLSelectElement => {
+      const sel = el("select", "app-input app-pr-span") as HTMLSelectElement;
+      sel.title = key === "fromPeriod" ? "In force from this period (blank = always)" : "In force up to this period (blank = still in force)";
+      const none = el("option", "", blank) as HTMLOptionElement;
+      none.value = "";
+      sel.appendChild(none);
+      for (const per of periodChoices()) {
+        const o = el("option", "", per) as HTMLOptionElement;
+        o.value = per;
+        if (per === p[key]) o.selected = true;
+        sel.appendChild(o);
+      }
+      sel.addEventListener("change", () => {
+        p[key] = sel.value;
+        touch();
+      });
+      return sel;
+    };
+    const from = span("fromPeriod", "From: always");
+    const to = span("toPeriod", "To: open");
     const x = el("button", "app-btn app-palette-x", "×") as HTMLButtonElement;
     x.type = "button";
     x.title = parent ? "Remove sub-pillar" : "Remove pillar (and its sub-pillars)";
@@ -319,9 +359,9 @@ async function renderPillars(body: HTMLElement, ctx: DirtyCtx, saves: (() => Pro
         for (const c of pillars) if (c.parentId === p.id) c.company = co.value;
         touch();
       });
-      row.append(arrows, swatch, name, co, active, x);
+      row.append(arrows, swatch, name, co, from, to, active, x);
     } else {
-      row.append(arrows, swatch, name, active, x);
+      row.append(arrows, swatch, name, from, to, active, x);
     }
     return row;
   };
@@ -348,7 +388,7 @@ async function renderPillars(body: HTMLElement, ctx: DirtyCtx, saves: (() => Pro
 async function renderPeriod(body: HTMLElement, ctx: DirtyCtx, saves: (() => Promise<void>)[]) {
   const box = sectionTitle(
     "Period & roll-up rule",
-    "Every priority belongs to a period; views default to the current one. The ratio rule turns a priority red when more than X% of its initiatives are red (the strict rule — any red — is the other toggle on the view)."
+    "A priority runs from a start period until it closes; the year picker on the views shows what was live in that year and defaults to the current one. The ratio rule turns a priority red when more than X% of its initiatives are red (the strict rule — any red — is the other toggle on the view)."
   );
   body.appendChild(box);
   const s = parsePrioritySettings(await prioritySettingsJson());
@@ -379,6 +419,12 @@ async function renderPeriod(body: HTMLElement, ctx: DirtyCtx, saves: (() => Prom
   const custom = el("input", "app-input app-pr-short") as HTMLInputElement;
   custom.value = s.period.currentPeriod;
   custom.placeholder = "e.g. H2 2026";
+  // custom labels have no natural order — the list IS the order (spans
+  // compare by it, 2026-10-02)
+  const labels = el("textarea", "app-input") as HTMLTextAreaElement;
+  labels.rows = 4;
+  labels.value = s.period.labels.join("\n");
+  labels.placeholder = "H1 2026\nH2 2026\nH1 2027";
   const ratio = el("input", "app-input app-pr-short") as HTMLInputElement;
   ratio.type = "number";
   ratio.min = "0";
@@ -391,13 +437,15 @@ async function renderPeriod(body: HTMLElement, ctx: DirtyCtx, saves: (() => Prom
     s.period.startMonth = Number(start.value) || 7;
     s.period.prefix = prefix.value;
     s.period.currentPeriod = custom.value;
+    s.period.labels = labels.value.split(/\r?\n/).map((l) => l.trim()).filter((l) => l !== "");
     s.ragRatioPct = Math.max(0, Math.min(100, Number(ratio.value) || 0));
     startField.style.display = s.period.mode === "fy" ? "" : "none";
     customField.style.display = s.period.mode === "custom" ? "" : "none";
+    labelsField.style.display = s.period.mode === "custom" ? "" : "none";
     prefixField.style.display = s.period.mode === "custom" ? "none" : "";
     preview.textContent = `Today falls in “${periodFor(s.period, todayIso())}”`;
   };
-  for (const c of [mode, start, prefix, custom, ratio]) {
+  for (const c of [mode, start, prefix, custom, labels, ratio]) {
     c.addEventListener("input", () => {
       sync();
       dirty = true;
@@ -412,9 +460,11 @@ async function renderPeriod(body: HTMLElement, ctx: DirtyCtx, saves: (() => Prom
   const startField = field("Financial year starts in", start);
   const prefixField = field("Label prefix", prefix, "FY → “FY26”; blank → “2026”");
   const customField = field("Current period label", custom);
+  const labelsField = field("Period labels, in order", labels, "One per line, earliest first — the picker and every span follow this order.");
   const row = el("div", "app-settings-row");
   row.append(field("Period", mode), startField, prefixField, customField, preview);
   box.appendChild(row);
+  box.appendChild(labelsField);
   box.appendChild(field("Ratio rule — red above (%)", ratio, `Default ${DEFAULT_PRIORITY_SETTINGS.ragRatioPct}%.`));
   sync();
 

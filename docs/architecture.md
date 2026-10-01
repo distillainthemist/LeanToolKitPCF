@@ -107,15 +107,20 @@ model section) — the canvas/PCF sections there are historical.
   improvement settings (methods · standard roles with per-site fillers
   · standard fields · the value-driver editor role) and the priorities
   settings (period definition, RAG ratio).
-  **Cascaded priorities:** `ben_ltkpillar`, `ben_ltkpriority` (owned by
-  its originating org by NAME; `ben_primaryinitiativeid` = the ★
-  primary initiative whose charter / metrics headline it),
-  `ben_ltkpriorityassignment`, `ben_ltkpriorityevent`.
+  **Cascaded priorities:** `ben_ltkpillar` (with `ben_fromperiod` /
+  `ben_toperiod` = the span it is in force), `ben_ltkpriority` (owned
+  by its originating org by NAME; `ben_period` = START of its span,
+  `ben_toperiod` stamped at close, `ben_plannedend` optional — the
+  period picker is a lens over spans, nothing is copied at a year end
+  (2026-10-02); `ben_primaryinitiativeid` = the ★ primary initiative
+  whose charter / metrics headline it), `ben_ltkpriorityassignment`,
+  `ben_ltkpriorityevent`.
   **Improvement:** `ben_ltkinitiativetemplate` (stages / gates / roles
   incl. hidden standard roles / fields / metric rule + a template
   board), `ben_ltkinitiative` (header + snapshot / roles / priority
   links / metrics / gate / stage-target JSON columns;
-  `ben_alsoorgsjson` = further departments it is listed under),
+  `ben_alsoorgsjson` = further departments it is listed under;
+  `ben_toperiod` = the period it completed in),
   `ben_ltkinitiativeevent`, `ben_ltkactionfile`.
   **Value drivers:** `ben_ltkvaluedriver` (per-site tree nodes:
   formula, cadence, aggregate, format incl. grid rows, `ben_sourceurl`,

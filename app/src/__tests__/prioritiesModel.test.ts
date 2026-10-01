@@ -4,6 +4,7 @@
 
 import { describe, expect, it } from "vitest";
 import {
+  CLOSE_REASONS,
   canManageOrg,
   descendantPriorities,
   initiativeRag,
@@ -44,6 +45,8 @@ function pr(id: string, org = site, over: Partial<Priority> = {}): Priority {
     ownerId: "",
     ownerName: "",
     period: "FY26",
+    toPeriod: "",
+    plannedEnd: "",
     status: "active",
     statusReason: "",
     parentId: "",
@@ -95,11 +98,11 @@ describe("org refs", () => {
 
 describe("pillars", () => {
   const pillars = [
-    { id: "s1", name: "Reliable supply", level: 1 as const, parentId: "", color: "", order: 2, active: true, company: "" },
-    { id: "s0", name: "Safety & people", level: 1 as const, parentId: "", color: "", order: 1, active: true, company: "" },
-    { id: "o1", name: "Operational excellence", level: 2 as const, parentId: "s1", color: "", order: 2, active: true, company: "" },
-    { id: "o0", name: "People and safety first", level: 2 as const, parentId: "s0", color: "", order: 1, active: true, company: "" },
-    { id: "ox", name: "Retired", level: 2 as const, parentId: "s0", color: "", order: 0, active: false, company: "" },
+    { id: "s1", name: "Reliable supply", level: 1 as const, parentId: "", color: "", order: 2, active: true, company: "", fromPeriod: "", toPeriod: "" },
+    { id: "s0", name: "Safety & people", level: 1 as const, parentId: "", color: "", order: 1, active: true, company: "", fromPeriod: "", toPeriod: "" },
+    { id: "o1", name: "Operational excellence", level: 2 as const, parentId: "s1", color: "", order: 2, active: true, company: "", fromPeriod: "", toPeriod: "" },
+    { id: "o0", name: "People and safety first", level: 2 as const, parentId: "s0", color: "", order: 1, active: true, company: "", fromPeriod: "", toPeriod: "" },
+    { id: "ox", name: "Retired", level: 2 as const, parentId: "s0", color: "", order: 0, active: false, company: "", fromPeriod: "", toPeriod: "" },
   ];
   it("chips and columns in order; inactive hidden; L1 filter narrows", () => {
     expect(strategyChips(pillars).map((p) => p.id)).toEqual(["s0", "s1"]);
@@ -178,15 +181,15 @@ describe("tallies and roll-up (decision 9)", () => {
 describe("periods (decision 10)", () => {
   it("settings parse with defaults and clamps", () => {
     const s = parsePrioritySettings("");
-    expect(s).toEqual({ ragRatioPct: 30, period: { mode: "fy", startMonth: 7, prefix: "FY", currentPeriod: "" } });
-    expect(parsePrioritySettings('{"ragRatioPct":140,"period":{"mode":"calendar","startMonth":99}}')).toEqual({
+    expect(s).toEqual({ ragRatioPct: 30, period: { mode: "fy", startMonth: 7, prefix: "FY", currentPeriod: "", labels: [] } });
+    expect(parsePrioritySettings('{"ragRatioPct":140,"period":{"mode":"calendar","startMonth":99,"labels":["H1"," H2 ",""]}}')).toEqual({
       ragRatioPct: 100,
-      period: { mode: "calendar", startMonth: 12, prefix: "FY", currentPeriod: "" },
+      period: { mode: "calendar", startMonth: 12, prefix: "FY", currentPeriod: "", labels: ["H1", "H2"] },
     });
   });
 
   it("FY names the year it ends in; calendar/custom behave", () => {
-    const fy = { mode: "fy" as const, startMonth: 7, prefix: "FY", currentPeriod: "" };
+    const fy = { mode: "fy" as const, startMonth: 7, prefix: "FY", currentPeriod: "", labels: [] };
     expect(periodFor(fy, "2025-08-15")).toBe("FY26");
     expect(periodFor(fy, "2026-06-30")).toBe("FY26");
     expect(periodFor(fy, "2026-07-01")).toBe("FY27");
@@ -195,8 +198,85 @@ describe("periods (decision 10)", () => {
     expect(nextPeriod(fy, "FY26")).toBe("FY27");
     expect(nextPeriod({ ...fy, prefix: "" }, "2026")).toBe("2027");
     expect(nextPeriod({ ...fy, mode: "custom" }, "H2 2026")).toBe("");
+    expect(nextPeriod({ ...fy, mode: "custom", labels: ["H1 2026", "H2 2026", "H1 2027"] }, "H2 2026")).toBe("H1 2027");
+    expect(nextPeriod({ ...fy, mode: "custom", labels: ["H1 2026", "H2 2026"] }, "H2 2026")).toBe("");
   });
 });
+
+describe("spans (2026-10-02)", () => {
+  const fy = { mode: "fy" as const, startMonth: 7, prefix: "FY", currentPeriod: "", labels: [] };
+  const custom = { ...fy, mode: "custom" as const, labels: ["H1 2026", "H2 2026", "H1 2027"] };
+  it("compares FY / calendar by year and custom by the ordered labels", async () => {
+    const m = await import("../priorities/model");
+    expect(m.comparePeriods(fy, "FY26", "FY27")).toBeLessThan(0);
+    expect(m.comparePeriods(fy, "FY27", "FY27")).toBe(0);
+    expect(m.comparePeriods({ ...fy, prefix: "" }, "2027", "2026")).toBeGreaterThan(0);
+    expect(m.comparePeriods(fy, "FY26", "2026")).toBe(0); // two- and four-digit years agree
+    expect(m.comparePeriods(custom, "H1 2026", "H1 2027")).toBeLessThan(0);
+    expect(m.comparePeriods(custom, "H1 2027", "Unknown")).toBeLessThan(0); // known labels first
+  });
+  it("an old closed row ends in its start; an open one has no end", async () => {
+    const m = await import("../priorities/model");
+    expect(m.effectiveEnd(pr("A", site, { status: "completed" }))).toBe("FY26");
+    expect(m.effectiveEnd(pr("A", site, { status: "completed", toPeriod: "FY28" }))).toBe("FY28");
+    expect(m.effectiveEnd(pr("A"))).toBe("");
+  });
+  it("live in a year = started by then and not ended before it", async () => {
+    const m = await import("../priorities/model");
+    const open = pr("A", site, { period: "FY26" });
+    expect(m.priorityLiveIn(fy, open, "FY25")).toBe(false);
+    expect(m.priorityLiveIn(fy, open, "FY26")).toBe(true);
+    expect(m.priorityLiveIn(fy, open, "FY29")).toBe(true);
+    expect(m.priorityLiveIn(fy, open, "")).toBe(true);
+    const closed = pr("B", site, { period: "FY26", status: "completed", toPeriod: "FY27" });
+    expect(m.priorityLiveIn(fy, closed, "FY27")).toBe(true);
+    expect(m.priorityLiveIn(fy, closed, "FY28")).toBe(false);
+    const future = pr("C", site, { period: "FY28" });
+    expect(m.priorityLiveIn(fy, future, "FY27")).toBe(false);
+    expect(m.priorityLiveIn(fy, pr("D", site, { period: "" }), "FY20")).toBe(true);
+  });
+  it("pillars follow their span and their active flag; a sub-pillar needs its pillar", async () => {
+    const m = await import("../priorities/model");
+    const P = (id: string, level: 1 | 2, parentId: string, fromPeriod: string, toPeriod: string, active = true) =>
+      ({ id, name: id, level, parentId, color: "", order: 1, active, company: "", fromPeriod, toPeriod }) as const;
+    const pillars = [P("old", 1, "", "", "FY26"), P("old-sub", 2, "old", "", ""), P("new", 1, "", "FY27", ""), P("new-sub", 2, "new", "", ""), P("off", 1, "", "", "", false)];
+    expect(m.pillarsLiveIn(fy, pillars, "FY26").map((p) => p.id)).toEqual(["old", "old-sub"]);
+    expect(m.pillarsLiveIn(fy, pillars, "FY27").map((p) => p.id)).toEqual(["new", "new-sub"]);
+    expect(m.pillarsLiveIn(fy, pillars, "").map((p) => p.id)).toEqual(["old", "old-sub", "new", "new-sub"]);
+  });
+  it("review is due once the viewed year passes the planned end of an open priority", async () => {
+    const m = await import("../priorities/model");
+    expect(m.reviewDue(fy, pr("A", site, { plannedEnd: "FY27" }), "FY27")).toBe(false);
+    expect(m.reviewDue(fy, pr("A", site, { plannedEnd: "FY27" }), "FY28")).toBe(true);
+    expect(m.reviewDue(fy, pr("A", site, { plannedEnd: "FY27", status: "completed" }), "FY28")).toBe(false);
+    expect(m.reviewDue(fy, pr("A"), "FY40")).toBe(false);
+  });
+  it("the picker runs from the earliest start to the later of next and the latest end", async () => {
+    const m = await import("../priorities/model");
+    expect(m.periodsOnOffer(fy, "FY27", [])).toEqual(["FY27", "FY28"]);
+    expect(m.periodsOnOffer(fy, "FY27", [{ start: "FY24", end: "FY25" }, { start: "FY27", end: "", planned: "FY30" }])).toEqual(["FY24", "FY25", "FY26", "FY27", "FY28", "FY29", "FY30"]);
+    expect(m.periodsOnOffer(custom, "H2 2026", [{ start: "Odd", end: "" }])).toEqual(["H1 2026", "H2 2026", "H1 2027", "Odd"]);
+  });
+  it("close reasons no longer carry forward", () => {
+    expect([...CLOSE_REASONS_EXPORT()]).toEqual(["Achieved", "Superseded", "No longer relevant"]);
+  });
+});
+
+describe("re-parenting (2026-10-02)", () => {
+  const company = orgRef("Pechey");
+  const otherDept = orgRef("Pechey", "Bendigo", "Warehouse");
+  const otherSite = orgRef("Pechey", "Melbourne");
+  it("a parent sits above or beside the child's org, is active, and is not beneath the child", async () => {
+    const m = await import("../priorities/model");
+    const child = pr("C", dept);
+    const all = [child, pr("S", site), pr("Co", company), pr("Peer", otherDept), pr("Far", otherSite), pr("Same", dept), pr("Closed", site, { status: "completed" }), pr("Kid", area, { parentId: "C" }), pr("Grandkid", area, { parentId: "Kid" })];
+    expect(m.parentCandidates(child, all).map((p) => p.id).sort()).toEqual(["Co", "Peer", "S"]);
+    expect(m.canBeParent(child, pr("Grandkid", area, { parentId: "Kid" }), all)).toBe(false);
+    expect(m.canBeParent(child, child, all)).toBe(false);
+  });
+});
+
+const CLOSE_REASONS_EXPORT = () => CLOSE_REASONS;
 
 describe("permissions (decision 7)", () => {
   const owners = {
@@ -223,8 +303,8 @@ describe("matrix helpers", () => {
   it("groups by column and parks unplaced", async () => {
     const m = await import("../priorities/model");
     const cols = [
-      { id: "o1", name: "A", level: 2 as const, parentId: "s", color: "", order: 1, active: true, company: "" },
-      { id: "o2", name: "B", level: 2 as const, parentId: "s", color: "", order: 2, active: true, company: "" },
+      { id: "o1", name: "A", level: 2 as const, parentId: "s", color: "", order: 1, active: true, company: "", fromPeriod: "", toPeriod: "" },
+      { id: "o2", name: "B", level: 2 as const, parentId: "s", color: "", order: 2, active: true, company: "", fromPeriod: "", toPeriod: "" },
     ];
     const ps = [pr("x", site, { pillarId: "o1" }), pr("y", site, { pillarId: "o2" }), pr("z", site, { pillarId: "gone" })];
     const { byColumn, unplaced } = m.groupByColumn(cols, ps);
@@ -243,7 +323,7 @@ describe("matrix helpers", () => {
 
 describe("pillar order and spans", () => {
   const P = (id: string, level: 1 | 2, order: number, parentId = "", active = true) => ({
-    id, name: id, level, parentId, color: "", order, active, company: "",
+    id, name: id, level, parentId, color: "", order, active, company: "", fromPeriod: "", toPeriod: "",
   });
   const pillars = [P("s2", 1, 2), P("s1", 1, 1), P("s2b", 2, 1, "s2"), P("s1b", 2, 2, "s1"), P("s1a", 2, 1, "s1"), P("orphan", 2, 1, "gone")];
   it("columns walk pillars in settings order, sub-pillars within; orphans trail", async () => {
@@ -256,13 +336,6 @@ describe("pillar order and spans", () => {
 });
 
 describe("lifecycle (P2)", () => {
-  it("carry-forward copies into the next period without lineage", async () => {
-    const m = await import("../priorities/model");
-    const src = pr("A", dept, { parentId: "P", primaryInitiativeId: "i1", status: "active", order: 3 });
-    const copy = m.carryForwardCopy(src, "FY27", "B");
-    expect(copy).toMatchObject({ id: "B", period: "FY27", parentId: "", primaryInitiativeId: "", status: "active", order: 3, org: dept });
-    expect(copy.rowId).toBeUndefined();
-  });
   it("parent-closed prompt only for active children of closed parents", async () => {
     const m = await import("../priorities/model");
     const parent = pr("P", site, { status: "completed" });
@@ -295,7 +368,7 @@ describe("priority prefs (P3)", () => {
 });
 
 describe("rotation focus (P4)", () => {
-  const P = (id: string, level: 1 | 2, order: number, parentId = "") => ({ id, name: id, level, parentId, color: "", order, active: true, company: "" });
+  const P = (id: string, level: 1 | 2, order: number, parentId = "") => ({ id, name: id, level, parentId, color: "", order, active: true, company: "", fromPeriod: "", toPeriod: "" });
   const pillars = [P("s1", 1, 1), P("s2", 1, 2), P("s1a", 2, 1, "s1"), P("s1b", 2, 2, "s1"), P("s2a", 2, 1, "s2")];
   it("a focus set keeps a pillar's sub-pillars and named sub-pillars", async () => {
     const m = await import("../priorities/model");
@@ -354,8 +427,8 @@ describe("groupPrioritiesForPicker (link picker shape)", () => {
 });
 
 describe("period pager helpers (value drivers)", () => {
-  const fy = { mode: "fy" as const, startMonth: 7, prefix: "FY", currentPeriod: "" };
-  const cal = { mode: "calendar" as const, startMonth: 1, prefix: "", currentPeriod: "" };
+  const fy = { mode: "fy" as const, startMonth: 7, prefix: "FY", currentPeriod: "", labels: [] };
+  const cal = { mode: "calendar" as const, startMonth: 1, prefix: "", currentPeriod: "", labels: [] };
   it("prevPeriod steps back and stops at zero", () => {
     expect(prevPeriod(fy, "FY26")).toBe("FY25");
     expect(prevPeriod(cal, "2026")).toBe("2025");

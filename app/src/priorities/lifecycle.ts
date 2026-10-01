@@ -1,6 +1,6 @@
 // Cascaded priorities — the lifecycle UI (build item 2 / design §3, §6,
 // §10, §11): the cascade review list behind the toolbar chip, the reason
-// dialogs (hold / reject / close), the period carry-forward flow, and the
+// dialogs (hold / reject / close), re-parenting after the fact, and the
 // priority detail overlay with its right rail. Pure decisions live in
 // model.ts; writes go through store/priorities.ts.
 //
@@ -18,17 +18,20 @@ import {
   saveAssignment,
   savePriority,
   newPriority,
+  relinkParent,
 } from "../store/priorities";
 import { modal, field, OrgTree, childOrgs, priorityDialog, cascadeTargetList, CascadeTarget } from "./dialogs";
 import { rememberBoardOrigin } from "../improvement/boardOrigin";
 import { promptConfirm } from "../prompts";
 import {
-  carryForwardCopy,
   CLOSE_REASONS,
   CloseReason,
   lineageFor,
-  nextPeriod,
   OrgRef,
+  orgLevel,
+  orgPath,
+  parentCandidates,
+  priorityLiveIn,
   orgKey,
   orgName,
   orgParent,
@@ -133,9 +136,8 @@ export function reasonDialog(host: HTMLElement, title: string, note: string, pla
 export function closeDialog(
   host: HTMLElement,
   p: Priority,
-  mode: "complete" | "archive",
-  nextPeriodName: string
-): Promise<{ reason: CloseReason; note: string; carry: boolean } | null> {
+  mode: "complete" | "archive"
+): Promise<{ reason: CloseReason; note: string } | null> {
   return new Promise((resolve) => {
     const m = modal(host, mode === "complete" ? "Complete priority" : "Archive priority", `“${p.statement.slice(0, 120)}”`);
     m.body.appendChild(el("div", "app-cp-q", "Why is this closing?"));
@@ -143,7 +145,6 @@ export function closeDialog(
     let chosen: CloseReason | null = null;
     const paint = () => {
       list.querySelectorAll(".app-cp-reason").forEach((b) => b.classList.toggle("app-cp-reason-on", b.textContent === chosen));
-      carryRow.style.display = chosen === "Carried to next period" ? "" : "none";
     };
     for (const r of CLOSE_REASONS) {
       const b = btn(r, "app-cp-reason");
@@ -154,20 +155,13 @@ export function closeDialog(
       list.appendChild(b);
     }
     m.body.appendChild(list);
-    const carryRow = el("div", "app-cp-muted");
-    carryRow.textContent =
-      nextPeriodName !== ""
-        ? `A copy will be created in ${nextPeriodName} — same statement, pillar, owner and org. Cascades are re-sent from there.`
-        : "No next period is defined (custom periods) — set the next period name in Settings → Priorities first; nothing will be copied.";
-    carryRow.style.display = "none";
-    m.body.appendChild(carryRow);
     const note = el("textarea", "app-input") as HTMLTextAreaElement;
     note.rows = 2;
     note.placeholder = "Optional note";
     m.body.appendChild(field("Note", note));
     const err = el("div", "app-cp-err", "");
     m.body.appendChild(err);
-    const done = (v: { reason: CloseReason; note: string; carry: boolean } | null) => {
+    const done = (v: { reason: CloseReason; note: string } | null) => {
       m.close();
       resolve(v);
     };
@@ -179,7 +173,7 @@ export function closeDialog(
         err.textContent = "Pick a reason.";
         return;
       }
-      done({ reason: chosen, note: note.value.trim(), carry: chosen === "Carried to next period" && nextPeriodName !== "" });
+      done({ reason: chosen, note: note.value.trim() });
     });
     m.footer.append(cancel, ok);
   });
@@ -191,28 +185,20 @@ export async function closePriority(
   ctx: LifecycleCtx,
   p: Priority,
   mode: "complete" | "archive",
-  r: { reason: CloseReason; note: string; carry: boolean }
+  r: { reason: CloseReason; note: string }
 ): Promise<void> {
   const data = ctx.data();
   p.status = mode === "complete" ? "completed" : "archived";
   p.statusReason = r.note !== "" ? `${r.reason} — ${r.note}` : r.reason;
+  // the span's END: the period this closes in (2026-10-02)
+  p.toPeriod = ctx.currentPeriod;
   await savePriority(p, data);
   await appendEvent(p, mode === "complete" ? "completed" : "archived", { reason: r.reason, note: r.note }, ctx.actor());
-  if (r.carry) {
-    const next = nextPeriod(ctx.settings.period, p.period);
-    if (next !== "") {
-      const copy = carryForwardCopy(p, next, newPriority(p.org, next).id);
-      copy.rowId = await savePriority(copy, data);
-      data.priorities.push(copy);
-      await appendEvent(copy, "carriedForward", { from: p.id, fromPeriod: p.period }, ctx.actor());
-      await appendEvent(p, "carriedForward", { to: copy.id, toPeriod: next }, ctx.actor());
-    }
-  }
   await ctx.changed();
 }
 
-/** Set a completed / archived priority back to active. A carry-forward
- *  copy, if one was made, is left in place — History shows both. */
+/** Set a completed / archived priority back to active — its span opens
+ *  again (the stamped end clears). */
 /** The primary initiative's charter (its Canvas card, bound fields
  *  included) or its Metrics card — one per tab (Ben, 2026-09-14) —
  *  mounted read-only from the initiative board with the board's own
@@ -379,6 +365,7 @@ export async function reopenPriority(ctx: LifecycleCtx, p: Priority): Promise<vo
   const was = p.status;
   p.status = "active";
   p.statusReason = "";
+  p.toPeriod = "";
   await savePriority(p, ctx.data());
   await appendEvent(p, "reopened", { from: was }, ctx.actor());
   await ctx.changed();
@@ -407,48 +394,6 @@ export async function sendCascade(ctx: LifecycleCtx, p: Priority, targets: OrgRe
   }
   if (sent.length > 0) await appendEvent(p, "cascaded", { to: sent }, ctx.actor());
   if (resent.length > 0) await appendEvent(p, "cascaded", { to: resent, resent: true }, ctx.actor());
-}
-
-/** Bulk carry-forward at period end (toolbar ⋮): pick which active
- *  priorities of the current period roll into the next. */
-export function carryForwardFlow(ctx: LifecycleCtx, org: OrgRef, period: string, candidates: Priority[]): void {
-  const next = nextPeriod(ctx.settings.period, period);
-  const m = modal(
-    ctx.host,
-    `Carry forward to ${next || "the next period"}`,
-    next !== ""
-      ? `Tick the ${orgName(org)} priorities from ${period} that continue. Each is completed as “Carried to next period” and copied into ${next}.`
-      : "Custom periods have no automatic successor — set the next period name in Settings → Priorities first.",
-    true
-  );
-  const picked = new Set<string>(candidates.map((p) => p.id));
-  const list = el("div", "app-cp-cascade");
-  for (const p of candidates) {
-    const lab = el("label", "app-cp-cascade-row") as HTMLLabelElement;
-    const cb = el("input") as HTMLInputElement;
-    cb.type = "checkbox";
-    cb.checked = true;
-    cb.addEventListener("change", () => (cb.checked ? picked.add(p.id) : picked.delete(p.id)));
-    lab.append(cb, el("span", "app-cp-cascade-org", p.statement));
-    list.appendChild(lab);
-  }
-  if (candidates.length === 0) list.appendChild(el("div", "app-cp-muted", `No active priorities for ${period} in this org.`));
-  m.body.appendChild(list);
-  const cancel = btn("Cancel", "app-link");
-  cancel.addEventListener("click", () => m.close());
-  const ok = btn("Carry forward", "app-btn app-btn-primary");
-  ok.disabled = next === "" || candidates.length === 0;
-  ok.addEventListener("click", () => {
-    ok.disabled = true;
-    m.close();
-    void (async () => {
-      for (const p of candidates.filter((x) => picked.has(x.id))) {
-        await closePriority({ ...ctx, changed: async () => undefined }, p, "complete", { reason: "Carried to next period", note: "", carry: true });
-      }
-      await ctx.changed();
-    })();
-  });
-  m.footer.append(cancel, ok);
 }
 
 /** Cascade-only dialog (overlay rail): tick child/peer orgs. */
@@ -947,6 +892,45 @@ export function openPriorityOverlay(ctx: LifecycleCtx, p: Priority, onEdit: (p: 
       } else {
         ln.appendChild(el("div", "app-cp-muted", "Set here — not cascaded from above."));
       }
+      // re-parenting after the fact (2026-10-02): a junior org's own
+      // priority that turns out to serve a senior or peer one
+      if (can && live.status === "active") {
+        const cands = parentCandidates(live, data.priorities);
+        const row = el("div", "app-cp-ov-relink");
+        const pick = btn(parent ? "Change parent…" : "Link to a parent priority…", "app-cp-ov-link");
+        pick.disabled = cands.length === 0;
+        pick.title = cands.length === 0 ? "No active priority above or beside this org to link to" : "Make this priority part of one set above or beside this org";
+        pick.addEventListener("click", () => {
+          void pickParent(ctx, live, cands, parent ?? null).then(async (r) => {
+            if (r === null) return;
+            if (r.takePillar) live.pillarId = r.parent.pillarId;
+            await relinkParent(live, r.parent, ctx.data(), ctx.actor());
+            await ctx.changed();
+            events = null;
+            if (scrim.isConnected) paint();
+          });
+        });
+        row.appendChild(pick);
+        if (parent) {
+          const un = btn("Unlink", "app-cp-ov-link");
+          un.title = `Stand alone again — no longer part of ${orgName(parent.org)}'s priority`;
+          un.addEventListener("click", () => {
+            void promptConfirm({
+              title: "Unlink from the parent priority?",
+              note: `“${live.statement.slice(0, 80)}” stops counting under ${orgName(parent.org)}'s “${parent.statement.slice(0, 60)}”. History keeps the link.`,
+              confirmLabel: "Unlink",
+            }).then(async (yes) => {
+              if (!yes) return;
+              await relinkParent(live, null, ctx.data(), ctx.actor());
+              await ctx.changed();
+              events = null;
+              if (scrim.isConnected) paint();
+            });
+          });
+          row.appendChild(un);
+        }
+        ln.appendChild(row);
+      }
       const mine = data.assignments.filter((a) => a.priorityId === live.id);
       if (mine.length > 0) {
         const ul = el("div", "app-cp-ov-children");
@@ -1016,7 +1000,7 @@ export function openPriorityOverlay(ctx: LifecycleCtx, p: Priority, onEdit: (p: 
   };
 
   const doClose = async (live: Priority, mode: "complete" | "archive") => {
-    const r = await closeDialog(ctx.host, live, mode, nextPeriod(ctx.settings.period, live.period));
+    const r = await closeDialog(ctx.host, live, mode);
     if (!r) return;
     await closePriority(ctx, live, mode, r);
     events = null;
@@ -1025,6 +1009,79 @@ export function openPriorityOverlay(ctx: LifecycleCtx, p: Priority, onEdit: (p: 
 
   paint();
   return close;
+}
+
+/** Choose the parent for a priority: candidates grouped by org, the
+ *  orgs above first (top down) then peers; a parent not live in the
+ *  child's start period is offered with a note, not refused. */
+function pickParent(
+  ctx: LifecycleCtx,
+  child: Priority,
+  cands: Priority[],
+  current: Priority | null
+): Promise<{ parent: Priority; takePillar: boolean } | null> {
+  return new Promise((resolve) => {
+    const m = modal(ctx.host, current ? "Change parent priority" : "Link to a parent priority", `“${child.statement.slice(0, 100)}” becomes part of the priority you choose — it counts in that priority's roll-up and shows under it on the Cascade tab.`, true);
+    const chain = orgPath(child.org).map(orgKey);
+    const groups = new Map<string, Priority[]>();
+    for (const c of cands) {
+      const k = orgKey(c.org);
+      if (!groups.has(k)) groups.set(k, []);
+      groups.get(k)!.push(c);
+    }
+    const keys = [...groups.keys()].sort((a, b) => {
+      const ia = chain.indexOf(a);
+      const ib = chain.indexOf(b);
+      if (ia >= 0 && ib >= 0) return ia - ib;
+      if (ia >= 0 || ib >= 0) return ia >= 0 ? -1 : 1;
+      return a.localeCompare(b);
+    });
+    let chosen: Priority | null = null;
+    const list = el("div", "app-cp-cascade");
+    const rows: { b: HTMLButtonElement; p: Priority }[] = [];
+    const paint = () => {
+      for (const r of rows) r.b.classList.toggle("app-cp-reason-on", chosen?.id === r.p.id);
+      pillarRow.style.display = chosen && chosen.pillarId !== child.pillarId ? "" : "none";
+      ok.disabled = chosen === null || chosen.id === current?.id;
+    };
+    for (const k of keys) {
+      const items = groups.get(k)!;
+      const org = items[0].org;
+      const isPeer = chain.indexOf(k) < 0;
+      list.appendChild(el("div", "app-cp-menu-h", `${orgName(org)}${orgLevel(org) === "company" ? " (company)" : ""}${isPeer ? " · peer" : ""}`));
+      for (const p of items.sort((a, b) => a.statement.localeCompare(b.statement))) {
+        const b = btn(p.statement.slice(0, 110), "app-cp-reason app-cp-parentopt");
+        if (!priorityLiveIn(ctx.settings.period, p, child.period)) b.textContent += ` · not live in ${child.period}`;
+        if (p.id === current?.id) b.textContent += " · current parent";
+        b.addEventListener("click", () => {
+          chosen = p;
+          paint();
+        });
+        rows.push({ b, p });
+        list.appendChild(b);
+      }
+    }
+    m.body.appendChild(list);
+    const pillarRow = el("label", "app-check") as HTMLLabelElement;
+    const takePillar = el("input") as HTMLInputElement;
+    takePillar.type = "checkbox";
+    takePillar.checked = child.pillarId === "";
+    pillarRow.append(takePillar, document.createTextNode(" Also take the parent's sub-pillar (moves this priority to that column)"));
+    m.body.appendChild(pillarRow);
+    const done = (v: { parent: Priority; takePillar: boolean } | null) => {
+      m.close();
+      resolve(v);
+    };
+    const cancel = btn("Cancel", "app-link");
+    cancel.addEventListener("click", () => done(null));
+    const ok = btn("Link", "app-btn app-btn-primary");
+    ok.addEventListener("click", () => {
+      if (chosen === null) return;
+      done({ parent: chosen, takePillar: takePillar.checked });
+    });
+    m.footer.append(cancel, ok);
+    paint();
+  });
 }
 
 function eventWords(e: PriorityEvent): string {
@@ -1050,6 +1107,10 @@ function eventWords(e: PriorityEvent): string {
       return `${str("reason")}${str("note") !== "" ? " — " + str("note") : ""}`;
     case "carriedForward":
       return str("toPeriod") !== "" ? `carried to ${str("toPeriod")}` : `carried from ${str("fromPeriod")}`;
+    case "linked":
+      return str("child") !== "" ? `${str("org")} linked “${str("statement")}” under this priority` : `linked under ${str("org")}'s “${str("statement")}”`;
+    case "unlinked":
+      return str("child") !== "" ? `${str("org")}'s priority unlinked from this one` : `unlinked from ${str("org")}'s priority`;
     case "reopened":
       return `reopened (was ${str("from")})`;
     case "reordered":

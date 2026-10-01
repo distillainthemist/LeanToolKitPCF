@@ -26,12 +26,14 @@ export interface Ben_ltkprioritiesBase {
   "ben_ParentPriority@odata.bind"?: string;
   ben_period?: string;
   "ben_Pillar@odata.bind"?: string;
+  ben_plannedend?: string;
   ben_primaryinitiativeid?: string;
   ben_priorityid: string;
   ben_site?: string;
   ben_statement?: string;
   ben_status?: string;
   ben_statusreason?: string;
+  ben_toperiod?: string;
   importsequencenumber?: number;
   overriddencreatedon?: string;
   statecode: Ben_ltkprioritiesstatecode;

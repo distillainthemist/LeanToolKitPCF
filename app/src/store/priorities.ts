@@ -24,6 +24,10 @@ import {
   PriorityAssignment,
   PriorityEvent,
   PriorityEventKind,
+  orgKey,
+  orgName,
+  parsePrioritySettings,
+  periodFor,
 } from "../priorities/model";
 import { allWhere, eq } from "./dv";
 
@@ -66,6 +70,8 @@ function pillarFromRow(row: Ben_ltkpillars, guidToId: Map<string, string>): Pill
     order: typeof row.ben_order === "number" ? row.ben_order : 0,
     active: row.ben_active !== false,
     company: row.ben_company ?? "",
+    fromPeriod: row.ben_fromperiod ?? "",
+    toPeriod: row.ben_toperiod ?? "",
   };
 }
 
@@ -87,6 +93,8 @@ export async function savePillar(p: Pillar, all: Pillar[]): Promise<string> {
     ben_order: p.order,
     ben_active: p.active,
     ben_company: p.company,
+    ben_fromperiod: p.fromPeriod,
+    ben_toperiod: p.toPeriod,
     "ben_ParentPillar@odata.bind": parent?.rowId ? `/ben_ltkpillars(${parent.rowId})` : undefined,
   } as never;
   if (p.rowId) {
@@ -117,6 +125,8 @@ function priorityFromRow(
     ownerId: row.ben_ownerid ?? "",
     ownerName: row.ben_ownername ?? "",
     period: row.ben_period ?? "",
+    toPeriod: row.ben_toperiod ?? "",
+    plannedEnd: row.ben_plannedend ?? "",
     status: isPriorityStatus(row.ben_status) ? row.ben_status : "active",
     statusReason: row.ben_statusreason ?? "",
     parentId: priorityGuidToId.get(row._ben_parentpriority_value ?? "") ?? "",
@@ -198,15 +208,17 @@ export async function savePriority(p: Priority, data: CascadeData): Promise<stri
     ben_ownerid: p.ownerId,
     ben_ownername: p.ownerName,
     ben_period: p.period,
+    ben_toperiod: p.toPeriod,
+    ben_plannedend: p.plannedEnd,
     ben_status: p.status,
     ben_statusreason: p.statusReason,
     ben_order: p.order,
     ben_primaryinitiativeid: p.primaryInitiativeId,
     ben_notes: p.notes,
     "ben_Pillar@odata.bind": pillar?.rowId ? `/ben_ltkpillars(${pillar.rowId})` : undefined,
-    "ben_ParentPriority@odata.bind": parent?.rowId
-      ? `/ben_ltkpriorities(${parent.rowId})`
-      : undefined,
+    // an UPDATE without a parent sends null — that is how the Web API
+    // clears a lookup; undefined would be stripped and the old parent kept
+    "ben_ParentPriority@odata.bind": parent?.rowId ? `/ben_ltkpriorities(${parent.rowId})` : p.rowId ? null : undefined,
   } as never;
   if (p.rowId) {
     settle(await Ben_ltkprioritiesService.update(p.rowId, fields), "priority update");
@@ -214,6 +226,65 @@ export async function savePriority(p: Priority, data: CascadeData): Promise<stri
   }
   const r = settle(await Ben_ltkprioritiesService.create(fields), "priority create");
   return r.data?.ben_ltkpriorityid ?? "";
+}
+
+/**
+ * Re-parent a priority after the fact (2026-10-02): a junior org's own
+ * priority now serves a senior (or peer) one. ONE write path so lineage,
+ * roll-ups and both Cascade tabs agree: the child's parent id; an
+ * accepted assignment on the new parent for the child's org naming the
+ * child as its customised row; the old parent's record for this child
+ * removed; an event on both rows. `parent` null = unlink.
+ */
+export async function relinkParent(
+  child: Priority,
+  parent: Priority | null,
+  data: CascadeData,
+  actor: { whoId: string; who: string }
+): Promise<void> {
+  const from = child.parentId !== "" ? data.priorities.find((x) => x.id === child.parentId) : undefined;
+  for (const a of data.assignments.filter((x) => x.childPriorityId === child.id)) {
+    if (a.id !== "") await deleteAssignment(a.id);
+    data.assignments.splice(data.assignments.indexOf(a), 1);
+  }
+  child.parentId = parent?.id ?? "";
+  await savePriority(child, data);
+  if (parent) {
+    const existing = data.assignments.find((a) => a.priorityId === parent.id && orgKey(a.org) === orgKey(child.org));
+    const a: PriorityAssignment = existing ?? {
+      id: "",
+      priorityId: parent.id,
+      org: { ...child.org },
+      status: "accepted",
+      reason: "",
+      decidedById: "",
+      decidedByName: "",
+      decidedAt: "",
+      childPriorityId: "",
+    };
+    a.status = "accepted";
+    a.childPriorityId = child.id;
+    a.reason = "Linked after the fact";
+    a.decidedById = actor.whoId;
+    a.decidedByName = actor.who;
+    a.decidedAt = nowIso();
+    a.id = await saveAssignment(a, data);
+    if (!existing) data.assignments.push(a);
+    await appendEvent(child, "linked", { to: parent.id, org: orgName(parent.org), statement: parent.statement, from: from?.id ?? "" }, actor);
+    await appendEvent(parent, "linked", { child: child.id, org: orgName(child.org), statement: child.statement }, actor);
+  } else {
+    await appendEvent(child, "unlinked", { from: from?.id ?? "", org: from ? orgName(from.org) : "" }, actor);
+    if (from) await appendEvent(from, "unlinked", { child: child.id, org: orgName(child.org) }, actor);
+  }
+}
+
+/** Today's period under the site's period settings — what a close
+ *  stamps as the END of a priority's or an initiative's span. */
+export async function currentPeriodNow(): Promise<string> {
+  const { prioritySettingsJson } = await import("./config");
+  const { todayIso } = await import("../../../shared/schema/id");
+  const s = parsePrioritySettings(await prioritySettingsJson());
+  return periodFor(s.period, todayIso()) || s.period.currentPeriod;
 }
 
 /** A fresh priority object (id minted here; rowId assigned on save). */
@@ -226,6 +297,8 @@ export function newPriority(org: OrgRef, period: string): Priority {
     ownerId: "",
     ownerName: "",
     period,
+    toPeriod: "",
+    plannedEnd: "",
     status: "active",
     statusReason: "",
     parentId: "",
