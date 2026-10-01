@@ -358,10 +358,15 @@ export function mountPriorities(parent: HTMLElement, opts: PrioritiesMountOpts =
     /** The pillars in force in the viewed period — chips and columns. */
     const livePillars = () => pillarsLiveIn(settings.period, data.pillars, state.period);
 
-    const ownerNameFor = (o: OrgRef) => {
+    /** The org's first owner from organisation settings (an area is
+     *  governed by its department) — the default owner of a new
+     *  priority there (Ben, 2026-10-02); null when none is set. */
+    const ownerFor = (o: OrgRef): { whoId: string; who: string } | null => {
       const govern = orgLevel(o) === "area" ? { ...o, area: "" } : o;
-      return owners[orgKey(govern)]?.[0]?.who ?? "";
+      const first = owners[orgKey(govern)]?.[0];
+      return first && first.whoId !== "" ? { whoId: first.whoId, who: first.who } : null;
     };
+    const ownerNameFor = (o: OrgRef) => ownerFor(o)?.who ?? "";
     const actorRef = () => ({ whoId: viewer.whoId, who: me?.who ?? who?.name ?? "" });
     const ctx: LifecycleCtx = {
       host: wrap,
@@ -375,6 +380,7 @@ export function mountPriorities(parent: HTMLElement, opts: PrioritiesMountOpts =
       canManage: (o) => canManageOrg(viewer, o, owners),
       canCustomise: (o) => canCustomiseAt(o, parseSiteCascadeSettings(siteCascade[o.site] ?? "").customiseLevel),
       ownerNameFor,
+      ownerFor,
       periodsOnOffer: () => periodsOnOffer(),
       currentPeriod,
       ragsFor,
@@ -1148,9 +1154,11 @@ export function mountPriorities(parent: HTMLElement, opts: PrioritiesMountOpts =
 
     const addPriority = async () => {
       const draft = newPriority(state.org, state.period !== "" ? state.period : currentPeriod);
-      if (me) {
-        draft.ownerId = me.whoId;
-        draft.ownerName = me.who;
+      // the org's owner by default; the person adding it when none is set
+      const defaultOwner = ownerFor(state.org) ?? (me ? { whoId: me.whoId, who: me.who } : null);
+      if (defaultOwner) {
+        draft.ownerId = defaultOwner.whoId;
+        draft.ownerName = defaultOwner.who;
       }
       const inColumn = visibleFor(state.org).filter((x) => x.pillarId === (state.lastColumn || ""));
       draft.order = inColumn.length + 1;

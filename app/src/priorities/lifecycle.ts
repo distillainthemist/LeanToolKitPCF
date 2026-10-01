@@ -62,6 +62,8 @@ export interface LifecycleCtx {
   /** Site setting: may this org "Accept & customise" (vs adopt as-is)? */
   canCustomise: (org: OrgRef) => boolean;
   ownerNameFor: (org: OrgRef) => string;
+  /** The org's owner from organisation settings, or null. */
+  ownerFor: (org: OrgRef) => { whoId: string; who: string } | null;
   periodsOnOffer: () => string[];
   currentPeriod: string;
   ragsFor: (p: Priority) => Rag[];
@@ -523,8 +525,10 @@ export function renderReviewList(ctx: LifecycleCtx, org: OrgRef, list: HTMLEleme
     draft.statement = p.statement;
     draft.pillarId = p.pillarId;
     draft.parentId = p.id;
-    draft.ownerId = ctx.actor().whoId;
-    draft.ownerName = ctx.actor().who;
+    // the receiving org's owner by default, else whoever accepts
+    const owner = ctx.ownerFor(org) ?? ctx.actor();
+    draft.ownerId = owner.whoId;
+    draft.ownerName = owner.who;
     draft.order = data.priorities.filter((x) => orgKey(x.org) === orgKey(org) && x.pillarId === p.pillarId).length + 1;
     const r = await priorityDialog({
       host: ctx.host,

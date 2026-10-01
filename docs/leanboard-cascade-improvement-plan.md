@@ -1319,6 +1319,13 @@ reschedule/cancel history with a reason picklist.
 - **2026-10-02 — released as v0.62.0** (SOLUTION-CARRYING): spans and
   re-parenting, the top bar's outline buttons. Prod imports the
   managed solution first.
+- **2026-10-02 — a new priority's owner defaults to the org's owner.**
+  Ben: the owner from organisation settings, not the person adding
+  it. `ownerFor(org)` on the screen (an area is governed by its
+  department; the first owner listed); the person adding it only when
+  none is set. The same default on Accept & customise, where the
+  receiving org's owner now leads rather than whoever accepts.
+  Unreleased.
 - **2026-10-01 — the stage bar; initials.** Ben: fold the stage
   label and its PDCA symbol into the bar as thick labelled segments
   (done full colour, current outlined, future grey), bring the gate
