@@ -211,48 +211,144 @@ export function editVision(host: HTMLElement, org: OrgRef, current: string): Pro
 
 // ---- pick a person (owner) ---------------------------------------------------
 
-export function pickOwner(host: HTMLElement, roster: RosterPerson[], current: PersonRef | null, roleLabel = "owner"): Promise<PersonRef | null | "clear"> {
+/** What the owner picker offers beyond the roster (Ben, 2026-10-02). */
+export interface OwnerPickerExtras {
+  /** Shown first, before any search: the org's owner and the owners of
+   *  its immediate children. */
+  suggested?: PersonRef[];
+  /** When set, a name not on the roster can be found in the directory
+   *  and added to the app from here. */
+  directory?: {
+    search: (q: string) => Promise<{ objectId: string; displayName: string; mail: string }[]>;
+    add: (hit: { objectId: string; displayName: string; mail: string }) => Promise<PersonRef>;
+  };
+}
+
+export function pickOwner(
+  host: HTMLElement,
+  roster: RosterPerson[],
+  current: PersonRef | null,
+  roleLabel = "owner",
+  extra: OwnerPickerExtras = {}
+): Promise<PersonRef | null | "clear"> {
   return new Promise((resolve) => {
     const m = modal(host, `Choose the ${roleLabel.toLowerCase()}`, roleLabel === "owner" ? "The person accountable for this priority." : `The person holding the ${roleLabel} role.`);
     const filter = el("input", "app-input") as HTMLInputElement;
     filter.type = "search";
-    filter.placeholder = "Filter people…";
+    filter.placeholder = extra.suggested && extra.suggested.length > 0 ? "Search the app roster…" : "Filter people…";
     const list = el("div", "app-cp-people");
+    const done = (v: PersonRef | null | "clear") => {
+      m.close();
+      resolve(v);
+    };
+    const personBtn = (p: PersonRef, note = ""): HTMLButtonElement => {
+      const b = el("button", "app-cp-person" + (current?.whoId === p.whoId ? " app-cp-person-on" : "")) as HTMLButtonElement;
+      b.type = "button";
+      b.textContent = p.who;
+      if (note !== "") b.appendChild(el("span", "app-cp-person-note", note));
+      b.addEventListener("click", () => done({ whoId: p.whoId, who: p.who }));
+      return b;
+    };
+    // the suggested set shows until the person searches or asks for everyone
+    let browsing = false;
+    let dirHits: { objectId: string; displayName: string; mail: string }[] | null = null;
+    let dirBusy = false;
+    let dirErr = "";
+    let dirSeq = 0;
+    const suggested = (extra.suggested ?? []).filter((p, i, all) => p.whoId !== "" && all.findIndex((x) => x.whoId === p.whoId) === i);
     const paint = () => {
       clear(list);
       const q = filter.value.trim().toLowerCase();
+      if (q === "" && !browsing && suggested.length > 0) {
+        list.appendChild(el("div", "app-cp-menu-h", "Suggested — the org's owner and its teams' owners"));
+        for (const p of suggested) list.appendChild(personBtn(p));
+        const all = el("button", "app-link app-cp-person-more", "Search everyone on the roster") as HTMLButtonElement;
+        all.type = "button";
+        all.addEventListener("click", () => {
+          browsing = true;
+          paint();
+          filter.focus();
+        });
+        list.appendChild(all);
+        return;
+      }
       const hits = roster
         .filter((p) => p.active !== false && (q === "" || p.who.toLowerCase().includes(q)))
         .slice(0, 40);
-      for (const p of hits) {
-        const b = el("button", "app-cp-person" + (current?.whoId === p.whoId ? " app-cp-person-on" : "")) as HTMLButtonElement;
-        b.type = "button";
-        b.textContent = p.who;
-        b.addEventListener("click", () => {
-          m.close();
-          resolve({ whoId: p.whoId, who: p.who });
-        });
-        list.appendChild(b);
+      for (const p of hits) list.appendChild(personBtn({ whoId: p.whoId, who: p.who }));
+      if (hits.length === 0) list.appendChild(el("div", "app-settings-note", q === "" ? "No one on the roster yet." : "No one on the roster matches."));
+      if (extra.directory && q.length >= 2) {
+        // the directory road: find the person in Entra and add them to the app
+        if (dirHits === null) {
+          const find = el("button", "app-btn app-cp-person-dir", dirBusy ? "Searching the directory…" : `Search the directory for “${filter.value.trim()}”`) as HTMLButtonElement;
+          find.type = "button";
+          find.disabled = dirBusy;
+          find.addEventListener("click", () => {
+            const seq = ++dirSeq;
+            dirBusy = true;
+            dirErr = "";
+            paint();
+            void extra.directory!.search(filter.value.trim()).then(
+              (found) => {
+                if (seq !== dirSeq) return;
+                dirBusy = false;
+                dirHits = found;
+                paint();
+              },
+              (err) => {
+                if (seq !== dirSeq) return;
+                dirBusy = false;
+                dirErr = `Directory search failed: ${err instanceof Error ? err.message : String(err)}`;
+                paint();
+              }
+            );
+          });
+          list.appendChild(find);
+          if (dirErr !== "") list.appendChild(el("div", "app-cp-err", dirErr));
+        } else {
+          list.appendChild(el("div", "app-cp-menu-h", "In the directory — not yet in the app"));
+          const onRoster = new Set(roster.map((p) => p.whoId));
+          const fresh = dirHits.filter((h) => !onRoster.has(h.objectId));
+          if (fresh.length === 0) list.appendChild(el("div", "app-settings-note", "No one else in the directory matches."));
+          for (const h of fresh) {
+            const b = el("button", "app-cp-person") as HTMLButtonElement;
+            b.type = "button";
+            b.textContent = h.displayName;
+            b.appendChild(el("span", "app-cp-person-note", `${h.mail || "no email"} · ＋ add to the app and choose`));
+            b.addEventListener("click", () => {
+              b.disabled = true;
+              b.textContent = `Adding ${h.displayName}…`;
+              void extra.directory!.add(h).then(
+                (p) => done(p),
+                (err) => {
+                  dirErr = `Could not add them: ${err instanceof Error ? err.message : String(err)}`;
+                  paint();
+                }
+              );
+            });
+            list.appendChild(b);
+          }
+          if (dirErr !== "") list.appendChild(el("div", "app-cp-err", dirErr));
+        }
       }
-      if (hits.length === 0) list.appendChild(el("div", "app-settings-note", "No one matches."));
     };
-    filter.addEventListener("input", paint);
+    filter.addEventListener("input", () => {
+      dirHits = null;
+      dirErr = "";
+      dirSeq++;
+      dirBusy = false;
+      paint();
+    });
     paint();
     m.body.append(filter, list);
     const cancel = el("button", "app-link", "Cancel") as HTMLButtonElement;
     cancel.type = "button";
-    cancel.addEventListener("click", () => {
-      m.close();
-      resolve(null);
-    });
+    cancel.addEventListener("click", () => done(null));
     m.footer.appendChild(cancel);
     if (current) {
       const clr = el("button", "app-btn", `Clear ${roleLabel.toLowerCase()}`) as HTMLButtonElement;
       clr.type = "button";
-      clr.addEventListener("click", () => {
-        m.close();
-        resolve("clear");
-      });
+      clr.addEventListener("click", () => done("clear"));
       m.footer.appendChild(clr);
     }
     filter.focus();
@@ -392,6 +488,8 @@ export interface PriorityDialogOpts {
    *  locked; declined / parked ones can be ticked again to re-send. */
   alreadyCascaded: { org: OrgRef; status: string; reason: string }[];
   primaryInitiativeLabel: string; // "" = none yet
+  /** The owner picker's suggested people and directory road. */
+  ownerPicker?: OwnerPickerExtras;
 }
 
 export interface PriorityDialogResult {
@@ -439,7 +537,7 @@ export function priorityDialog(o: PriorityDialogOpts): Promise<PriorityDialogRes
       ownerName.classList.toggle("app-cp-muted", !owner);
     };
     ownerBtn.addEventListener("click", () => {
-      void pickOwner(o.host, o.roster, owner).then((r) => {
+      void pickOwner(o.host, o.roster, owner, "owner", o.ownerPicker).then((r) => {
         if (r === null) return;
         owner = r === "clear" ? null : r;
         paintOwner();

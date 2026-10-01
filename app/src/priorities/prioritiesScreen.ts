@@ -35,7 +35,7 @@ import {
   saveOrgVision,
   siteCompanies,
 } from "../store/config";
-import { listPeople } from "../store/people";
+import { listPeople, searchEntra, upsertPerson } from "../store/people";
 import type { RosterPerson } from "../store/mappers";
 import {
   appendEvent,
@@ -367,6 +367,32 @@ export function mountPriorities(parent: HTMLElement, opts: PrioritiesMountOpts =
       return first && first.whoId !== "" ? { whoId: first.whoId, who: first.who } : null;
     };
     const ownerNameFor = (o: OrgRef) => ownerFor(o)?.who ?? "";
+    /** The owner picker for a priority at `o` (Ben, 2026-10-02): the
+     *  org's owner and its immediate children's owners first, the
+     *  roster behind a search, and the directory behind that — a
+     *  person found there is added to the app (site and department
+     *  from the org) and chosen in one step. */
+    const ownerPickerFor = (o: OrgRef) => ({
+      suggested: [ownerFor(o), ...childOrgs(tree, o).map(ownerFor)].filter((p): p is { whoId: string; who: string } => p !== null),
+      directory: {
+        search: searchEntra,
+        add: async (hit: { objectId: string; displayName: string; mail: string }) => {
+          const person = {
+            whoId: hit.objectId,
+            who: hit.displayName,
+            email: hit.mail,
+            site: o.site,
+            department: o.department,
+            area: "",
+            role: "user",
+            active: true,
+          };
+          await upsertPerson(person);
+          if (!roster.some((p) => p.whoId === person.whoId)) roster.push(person);
+          return { whoId: person.whoId, who: person.who };
+        },
+      },
+    });
     const actorRef = () => ({ whoId: viewer.whoId, who: me?.who ?? who?.name ?? "" });
     const ctx: LifecycleCtx = {
       host: wrap,
@@ -381,6 +407,7 @@ export function mountPriorities(parent: HTMLElement, opts: PrioritiesMountOpts =
       canCustomise: (o) => canCustomiseAt(o, parseSiteCascadeSettings(siteCascade[o.site] ?? "").customiseLevel),
       ownerNameFor,
       ownerFor,
+      ownerPickerFor,
       periodsOnOffer: () => periodsOnOffer(),
       currentPeriod,
       ragsFor,
@@ -1173,6 +1200,7 @@ export function mountPriorities(parent: HTMLElement, opts: PrioritiesMountOpts =
         cascadeTargets: cascadeTargetsFor(null),
         alreadyCascaded: [],
         primaryInitiativeLabel: "",
+        ownerPicker: ownerPickerFor(state.org),
       });
       if (!r) return;
       r.priority.rowId = await savePriority(r.priority, data);
@@ -1195,6 +1223,7 @@ export function mountPriorities(parent: HTMLElement, opts: PrioritiesMountOpts =
         cascadeTargets: cascadeTargetsFor(p),
         alreadyCascaded: already,
         primaryInitiativeLabel: initiativeList.find((x) => x.id === p.primaryInitiativeId)?.title ?? "",
+        ownerPicker: ownerPickerFor(p.org),
       });
       if (!r) return;
       const before = p.statement;

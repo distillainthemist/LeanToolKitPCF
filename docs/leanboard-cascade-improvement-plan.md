@@ -1326,6 +1326,20 @@ reschedule/cancel history with a reason picklist.
   none is set. The same default on Accept & customise, where the
   receiving org's owner now leads rather than whoever accepts.
   Unreleased.
+- **2026-10-02 — the owner picker: suggested first, roster behind a
+  search, the directory behind that.** Ben: limit the default list to
+  the org's owner and the owners of its immediate children, with the
+  roster searchable and a person not yet in the app addable from
+  here. `pickOwner` gains `OwnerPickerExtras` (suggested people; a
+  directory road = Entra search + add): the Suggested section shows
+  until the person types or asks for everyone; typing searches the
+  roster; with two or more characters "Search the directory for …"
+  lists Entra hits not yet on the roster, and choosing one adds them
+  to the app (site and department from the org, role user — the same
+  `upsertPerson` the Users register uses, access-group sync included)
+  and selects them in one step. Offered wherever a priority's owner
+  is chosen (add, edit, Accept & customise); other callers of
+  `pickOwner` are unchanged. Harness page owner.html. Unreleased.
 - **2026-10-01 — the stage bar; initials.** Ben: fold the stage
   label and its PDCA symbol into the bar as thick labelled segments
   (done full colour, current outlined, future grey), bring the gate

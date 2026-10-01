@@ -119,6 +119,12 @@ the same commit.
   Report · Settings · Add action. Off the hub the context button
   (Home, or ‹ Back on an initiative board) sits on the FAR RIGHT after
   Add action.
+- **The owner picker** (priorities, 2026-10-02): a Suggested section
+  (small-caps head, the org's owner and its teams' owners) with a
+  quiet "Search everyone on the roster" link beneath; typing searches
+  the roster; an outline "Search the directory for “…”" button leads
+  to Entra hits as person rows with a muted note line ("email · ＋ add
+  to the app and choose"). Errors in `.app-cp-err` under the list.
 - **Priorities period picker is a lens** (2026-10-02): it lists every
   period a span touches and shows what was LIVE in the viewed year;
   a priority card past its planned end wears the amber flag "⟳ Past

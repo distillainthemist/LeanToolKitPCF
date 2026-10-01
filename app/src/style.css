@@ -3027,6 +3027,10 @@ textarea.app-cp-statement { font-size: 14px; font-weight: 500; }
 .app-cp-person { border: none; background: none; text-align: left; font: inherit; font-size: 13.5px; padding: 8px 10px; border-radius: 5px; cursor: pointer; color: #26241f; min-height: 36px; }
 .app-cp-person:hover { background: #f4f1ea; }
 .app-cp-person-on { font-weight: 700; background: #ece8e0; }
+.app-cp-person-note { display: block; font-size: 12px; color: #6d675c; font-weight: 400; margin-top: 2px; }
+.app-cp-person-more { align-self: flex-start; margin: 6px 10px; font-size: 13px; }
+.app-cp-person-dir { align-self: flex-start; margin: 8px 10px 4px; font-size: 12.5px; }
+.app-cp-people .app-cp-menu-h { padding: 8px 10px 2px; }
 /* lifecycle (P2): review list, reason chips, detail overlay */
 .app-cp-cascadechip-quiet { background: #f4f1ea; border-color: #d9d3c8; color: #6d675c; }
 .app-cp-flag-red { color: #b3261e; }

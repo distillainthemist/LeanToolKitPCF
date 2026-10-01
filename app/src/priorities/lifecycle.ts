@@ -64,6 +64,8 @@ export interface LifecycleCtx {
   ownerNameFor: (org: OrgRef) => string;
   /** The org's owner from organisation settings, or null. */
   ownerFor: (org: OrgRef) => { whoId: string; who: string } | null;
+  /** The owner picker's suggested people + directory road for an org. */
+  ownerPickerFor: (org: OrgRef) => import("./dialogs").OwnerPickerExtras;
   periodsOnOffer: () => string[];
   currentPeriod: string;
   ragsFor: (p: Priority) => Rag[];
@@ -540,6 +542,7 @@ export function renderReviewList(ctx: LifecycleCtx, org: OrgRef, list: HTMLEleme
       cascadeTargets: childOrgs(ctx.tree, org).map((o) => ({ org: o, ownerName: ctx.ownerNameFor(o), kind: "child" as const })),
       alreadyCascaded: [],
       primaryInitiativeLabel: "",
+      ownerPicker: ctx.ownerPickerFor(org),
     });
     if (!r) return;
     r.priority.rowId = await savePriority(r.priority, data);
