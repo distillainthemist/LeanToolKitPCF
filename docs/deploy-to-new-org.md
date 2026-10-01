@@ -188,7 +188,7 @@ someone does the portal Add-existing step there.
 | v0.51.0 | `ben_ltkvaluedriver` (+ `ben_sourceurl`, `ben_trackingjson`), `ben_ltkvdtscenario`; `ben_pdca` on `ben_ltkaction` | value driver tree, KPI grid entry, PDCA on actions |
 | v0.53.0 | `ben_confidential`, `ben_createdby`, `ben_visiblejson` on `ben_ltkaction` | confidential actions; the Office 365 Users connection is used for the manager lookup — its connection reference must be satisfied at import |
 | v0.54.0 | `ben_alsoorgsjson` on `ben_ltkinitiative` | initiatives listed under several departments |
-| next (after v0.61.0) | `ben_toperiod`, `ben_plannedend` on `ben_ltkpriority`; `ben_fromperiod`, `ben_toperiod` on `ben_ltkpillar`; `ben_toperiod` on `ben_ltkinitiative` | priorities span years (no migration — a row closed before ends were stamped reads as ending in its start period); re-parenting |
+| v0.62.0 | `ben_toperiod`, `ben_plannedend` on `ben_ltkpriority`; `ben_fromperiod`, `ben_toperiod` on `ben_ltkpillar`; `ben_toperiod` on `ben_ltkinitiative` | priorities span years (no migration — a row closed before ends were stamped reads as ending in its start period); re-parenting |
 
 v0.52.0 and v0.55.0 through v0.61.0 were app-only. After a solution import, existing
 action rows are healed (initiative ids) automatically on the first

@@ -1314,7 +1314,10 @@ reschedule/cancel history with a reason picklist.
   parent lookup (an update must send null — undefined is stripped).
   SCHEMA-CARRYING. Tests 741. Hosted checks Ben's: the picker across
   a boundary, a pillar with an end, a re-parented priority seen from
-  both orgs. Unreleased.
+  both orgs.
+- **2026-10-02 — released as v0.62.0** (SOLUTION-CARRYING): spans and
+  re-parenting, the top bar's outline buttons. Prod imports the
+  managed solution first.
 - **2026-10-01 — the stage bar; initials.** Ben: fold the stage
   label and its PDCA symbol into the bar as thick labelled segments
   (done full colour, current outlined, future grey), bring the gate
