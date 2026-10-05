@@ -1390,6 +1390,17 @@ reschedule/cancel history with a reason picklist.
   tick (both ways) and at the store's write (the closing half only —
   a reopen stays the person's explicit act, so the dialog's Do and a
   kanban drop are never undone). Tests 749. Unreleased.
+- **2026-10-06 — sanity check of every closing road.** Ben asked
+  whether the action card and the dialog close actions correctly.
+  Traced: the list's circle (status · PDCA · every part · endorsement
+  rule — right), the kanban drop (status · parts · endorsement — right,
+  but the stored PDCA stayed "do" on a Done drop; now Closed, and
+  back to Do / Plan on a drop out), the dialog's Closed / Do (status
+  and the endorsement rule — right; the who-form wrote the part as NOT
+  done for an action awaiting endorsement, so the hub showed it
+  unticked; now a waiting action's part stays done), Cancel action,
+  Endorse and Send back (right). The Gantt has no closing road.
+  Unreleased.
 - **2026-10-01 — the stage bar; initials.** Ben: fold the stage
   label and its PDCA symbol into the bar as thick labelled segments
   (done full colour, current outlined, future grey), bring the gate

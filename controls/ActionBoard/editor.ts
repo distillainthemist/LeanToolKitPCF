@@ -861,6 +861,10 @@ export class ActionBoardEditor {
       // stamps who verified (decision 6's endorsement)
       const done = a.status === "done" || a.status === "verify";
       for (const x of a.assignees) x.done = done;
+      // the stored PDCA follows the column too (the display derives it,
+      // the row should say the same — 2026-10-06)
+      if (done) a.pdca = "closed";
+      else if (a.pdca === "closed" || a.pdca === undefined) a.pdca = a.status === "in-progress" ? "do" : "plan";
       if (a.status === "done" && wasVerify && this.actor.whoId !== "") {
         a.verified = { whoId: this.actor.whoId, who: this.actor.who, when: new Date().toISOString().slice(0, 10) };
       }

@@ -153,7 +153,8 @@ export function buildActionForm(
       action.description = desc.value.trim();
       action.start = start.value;
       action.due = due.value;
-      const done = action.status === "done";
+      // waiting for an endorser = the work IS done (the part stays ticked)
+      const done = action.status === "done" || action.status === "verify";
       const picked = checks.find((c) => c.box.checked);
       if (picked) {
         action.assignees = [
