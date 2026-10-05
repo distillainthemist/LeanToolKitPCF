@@ -139,8 +139,9 @@ the same commit.
   export being the one solid primary, disabled at zero.
 - **The Gantt bar's "Show completed"** (2026-10-05): a standing
   `.app-tw-toggle` with its label (`.app-gx-toggle`) after the state
-  select, remembered per person; completed bars stay muted grey with
-  the "Done" chip. The ⋮ menu holds export only — a filter that
+  assignee select, remembered per person; completed bars stay muted
+  grey with the "Done" chip. There is no state filter: the state is
+  on every bar and chip. The ⋮ menu holds export only — a filter that
   changes what is on screen is never hidden in a menu.
 - **Priorities period picker is a lens** (2026-10-02): it lists every
   period a span touches and shows what was LIVE in the viewed year;

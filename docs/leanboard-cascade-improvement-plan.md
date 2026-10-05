@@ -1372,6 +1372,12 @@ reschedule/cancel history with a reason picklist.
   dependency-free PDF writer (`issues/pdf.ts`, pure, tested) and the
   exporter (`issues/exportPdf.ts`); checkboxes + selection bar on the
   Issues tab. Unreleased.
+- **2026-10-06 — Gantt bar: the state filter goes; group labels
+  left-aligned.** Ben: the state select was redundant beside the
+  completed toggle (every bar and chip already shows its state), and
+  the initiative group rows carried a stray indent — the label
+  column's `justify-content: center` turned horizontal once the group
+  label became a row. Both fixed. Unreleased.
 - **2026-10-01 — the stage bar; initials.** Ben: fold the stage
   label and its PDCA symbol into the bar as thick labelled segments
   (done full colour, current outlined, future grey), bring the gate

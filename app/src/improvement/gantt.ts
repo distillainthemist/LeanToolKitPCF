@@ -4,7 +4,9 @@
 // count; collapsed shows one summary bar) and "board" (2026-09-30: the
 // actions card on ANY board — the actions it is given, flat, whether or
 // not they belong to an initiative). Toolbar: scope · assignee ·
-// status · window presets 2w/4w/8w/13w · ⋮ (show completed · export CSV).
+// Show completed toggle · window presets 2w/4w/8w/13w · ⋮ (export CSV).
+// No state filter: every bar and chip already says its state (Ben,
+// 2026-10-06).
 // Bar states carry a SHAPE as well as a colour (§2.2): on-track solid
 // accent · overdue solid red · awaiting-verification hatched amber ·
 // completed flat grey; no start date = a diamond on the due date. Editing
@@ -145,7 +147,6 @@ export function mountGantt(opts: GanttOpts): () => void {
     });
   }
   let assignee = "";
-  let status = "";
   const expanded = new Set<string>(); // initiative ids (org scope)
   const uncapped = new Set<string>(); // groups past the 3-row cap
   let selected: string | null = null; // touch selection (action id)
@@ -165,9 +166,9 @@ export function mountGantt(opts: GanttOpts): () => void {
   const initOf = (a: LtkAction): Initiative | null => opts.initiatives.find((i) => owns(i, a)) ?? null;
 
   const visibleAction = (a: LtkAction): boolean => {
-    // the state filter set to Completed shows them whatever the toggle says
-    if (!showCompleted && status !== "done" && (a.status === "done" || a.status === "cancelled")) return false;
-    if (status !== "" && barState(a, today) !== status) return false;
+    // the state is on every bar and chip — the only filter is completed
+    // or not (Ben, 2026-10-06; the state select was redundant)
+    if (!showCompleted && (a.status === "done" || a.status === "cancelled")) return false;
     if (assignee !== "" && !a.assignees.some((x) => x.whoId === assignee)) return false;
     return true;
   };
@@ -336,18 +337,6 @@ export function mountGantt(opts: GanttOpts): () => void {
         });
         bar.appendChild(sel);
       }
-      const st = el("select", "app-input app-gx-sel") as HTMLSelectElement;
-      for (const [v, l] of [["", "All states"], ["ontrack", "On track"], ["overdue", "Overdue"], ["verify", "Awaiting endorsement"], ["hold", "On hold"], ["done", "Completed"]] as const) {
-        const o = el("option", "", l) as HTMLOptionElement;
-        o.value = v;
-        if (v === status) o.selected = true;
-        st.appendChild(o);
-      }
-      st.addEventListener("change", () => {
-        status = st.value;
-        render();
-      });
-      bar.appendChild(st);
     }
     // show completed: a standing toggle on the bar (was a hidden ⋮ item)
     const tog = el("label", "app-gx-toggle");
