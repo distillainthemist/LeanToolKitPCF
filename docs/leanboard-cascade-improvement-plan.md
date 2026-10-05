@@ -1365,6 +1365,13 @@ reschedule/cancel history with a reason picklist.
 - **2026-10-06 — released as v0.63.0** (app-only): the owner default
   and picker, the Organisation page's scoping and collapsing, the
   Gantt's Show completed toggle.
+- **2026-10-06 — Issues → one PDF.** Ben: multi-select issues and
+  export a single PDF, a section per issue with every detail and the
+  screenshots, to hand to the assistant for bugs found in a
+  production deployment it cannot open. Built as issues plan I4: a
+  dependency-free PDF writer (`issues/pdf.ts`, pure, tested) and the
+  exporter (`issues/exportPdf.ts`); checkboxes + selection bar on the
+  Issues tab. Unreleased.
 - **2026-10-01 — the stage bar; initials.** Ben: fold the stage
   label and its PDCA symbol into the bar as thick labelled segments
   (done full colour, current outlined, future grey), bring the gate

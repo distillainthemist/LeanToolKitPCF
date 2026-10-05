@@ -132,6 +132,11 @@ the same commit.
   to Entra hits as person rows with a muted note line ("email · ＋ add
   to the app and choose"); the directory road shows for admins only.
   Errors in `.app-cp-err` under the list.
+- **Multi-select on a register** (Issues, 2026-10-06): a 16px
+  accent-coloured checkbox (`.app-issad-check`) leads each row outside
+  the row's own button; a selection bar above the list reads "n
+  selected · Select all shown · Clear … status · Export to PDF", the
+  export being the one solid primary, disabled at zero.
 - **The Gantt bar's "Show completed"** (2026-10-05): a standing
   `.app-tw-toggle` with its label (`.app-gx-toggle`) after the state
   select, remembered per person; completed bars stay muted grey with

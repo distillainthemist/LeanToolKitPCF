@@ -79,6 +79,7 @@ export async function renderIssuesAdmin(body: HTMLElement): Promise<void> {
   const myEmail = (me?.email ?? "").toLowerCase();
   const myName = me?.name ?? "";
   const note = (text: string) => el("div", "app-settings-note", text);
+  const say = (e: unknown) => String(e instanceof Error ? e.message : e).slice(0, 200);
 
   body.appendChild(el("div", "app-section", "Issues"));
   body.appendChild(
@@ -125,12 +126,62 @@ export async function renderIssuesAdmin(body: HTMLElement): Promise<void> {
   filters.append(statusSel, kindSel, areaSel);
   body.appendChild(filters);
 
+  // ---- selection → export to PDF (2026-10-06) ----------------------------
+  // Tick reports, export one PDF with a section per issue — the hand-off
+  // for fixing a deployment the fixer cannot open. Selection survives a
+  // filter change; "Select all shown" takes the current list.
+  const selected = new Map<string, Issue>();
+  let shown: Issue[] = [];
+  const selBar = el("div", "app-issad-selbar");
+  const selCount = el("span", "app-issad-selcount", "");
+  const selAll = el("button", "app-link", "Select all shown") as HTMLButtonElement;
+  selAll.type = "button";
+  const selClear = el("button", "app-link", "Clear") as HTMLButtonElement;
+  selClear.type = "button";
+  const exportBtn = el("button", "app-btn app-btn-primary", "Export to PDF") as HTMLButtonElement;
+  exportBtn.type = "button";
+  exportBtn.title = "One PDF: a section per ticked issue with its details, thread and screenshots";
+  const exportStatus = el("span", "app-docs-addstatus app-issad-selstatus", "");
+  selBar.append(selCount, selAll, selClear, el("span", "app-bar-gap"), exportStatus, exportBtn);
+  body.appendChild(selBar);
+  const paintSel = () => {
+    const n = selected.size;
+    selCount.textContent = n === 0 ? "Tick issues to export them together" : `${n} selected`;
+    selClear.style.display = n === 0 ? "none" : "";
+    exportBtn.disabled = n === 0;
+    listHost.querySelectorAll<HTMLInputElement>(".app-issad-check").forEach((cb) => {
+      cb.checked = selected.has(cb.dataset.id ?? "");
+    });
+  };
+  selAll.addEventListener("click", () => {
+    for (const i of shown) selected.set(i.ben_ltkissueid, i);
+    paintSel();
+  });
+  selClear.addEventListener("click", () => {
+    selected.clear();
+    paintSel();
+  });
+  exportBtn.addEventListener("click", () => {
+    if (selected.size === 0) return;
+    exportBtn.disabled = true;
+    exportStatus.classList.remove("app-docs-addstatus-warn");
+    // the ticked issues in the queue's order where shown, the rest after
+    const order = new Map(shown.map((i, n) => [i.ben_ltkissueid, n]));
+    const list = [...selected.values()].sort((a, b) => (order.get(a.ben_ltkissueid) ?? 1e9) - (order.get(b.ben_ltkissueid) ?? 1e9));
+    void import("./exportPdf")
+      .then(({ exportIssuesPdf }) => exportIssuesPdf(list, (t) => (exportStatus.textContent = t)))
+      .catch((e) => {
+        exportStatus.textContent = `Export failed: ${say(e)}`;
+        exportStatus.classList.add("app-docs-addstatus-warn");
+      })
+      .finally(() => (exportBtn.disabled = selected.size === 0));
+  });
+
   const listHost = el("div", "app-issad-list");
   body.appendChild(listHost);
 
   // ---- data helpers ------------------------------------------------------
   const authorLine = () => ({ ben_authoremail: myEmail, ben_authorname: myName });
-  const say = (e: unknown) => String(e instanceof Error ? e.message : e).slice(0, 200);
 
   const writeMessage = async (
     issueId: string,
@@ -218,11 +269,14 @@ export async function renderIssuesAdmin(body: HTMLElement): Promise<void> {
       if (pa !== pb) return pa - pb;
       return Date.parse(a.createdon ?? "") - Date.parse(b.createdon ?? "");
     });
+    shown = rows;
     if (rows.length === 0) {
       listHost.appendChild(note("Nothing here — adjust the filters, or enjoy the silence."));
+      paintSel();
       return;
     }
     for (const issue of rows) listHost.appendChild(issueRow(issue));
+    paintSel();
   };
   statusSel.addEventListener("change", () => void paint());
   kindSel.addEventListener("change", () => void paint());
@@ -231,6 +285,17 @@ export async function renderIssuesAdmin(body: HTMLElement): Promise<void> {
   // ---- one row + its expanding detail -------------------------------------
   const issueRow = (issue: Issue): HTMLElement => {
     const wrap = el("div", "app-issad-item");
+    const head = el("div", "app-issad-head");
+    const check = el("input", "app-issad-check") as HTMLInputElement;
+    check.type = "checkbox";
+    check.dataset.id = issue.ben_ltkissueid;
+    check.title = "Tick to include in an export";
+    check.checked = selected.has(issue.ben_ltkissueid);
+    check.addEventListener("change", () => {
+      if (check.checked) selected.set(issue.ben_ltkissueid, issue);
+      else selected.delete(issue.ben_ltkissueid);
+      paintSel();
+    });
     const row = el("button", "app-issad-row") as HTMLButtonElement;
     const pill = el(
       "span",
@@ -264,7 +329,8 @@ export async function renderIssuesAdmin(body: HTMLElement): Promise<void> {
       )
     );
     row.append(pill, text, right);
-    wrap.appendChild(row);
+    head.append(check, row);
+    wrap.appendChild(head);
 
     let detail: HTMLElement | null = null;
     row.addEventListener("click", () => {

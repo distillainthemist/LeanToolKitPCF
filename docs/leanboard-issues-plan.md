@@ -158,3 +158,29 @@ Users):
    required reporter-facing message box (prefilled courteously, the
    admin edits before sending); no silent declines, no robotic
    auto-lines.
+
+## I4 — Export to PDF (built 2026-10-06)
+
+The triage desk ticks reports and exports ONE PDF, a section per issue,
+for fixing a production deployment the fixer cannot open (Ben's
+intent: hand the file to the assistant). `src/issues/exportPdf.ts`
+gathers each issue's files, thread, watchers and merges; attachments are
+re-encoded as JPEG through a canvas (long edge 1400px, white behind
+transparency); `src/issues/pdf.ts` is a dependency-free PDF writer —
+Helvetica / Helvetica-Bold / Courier in WinAnsi (typographic marks
+mapped, symbols given readable stand-ins, never boxes), JPEG XObjects
+via DCTDecode, A4 flowed from blocks (title · h1 · h2 · p · meta · mono
+· key-value · image · rule · page break), a page counter footer, and an
+xref the tests verify offset by offset. Text is written as text, so
+the file is searchable and extractable. Per issue: id (the Dataverse
+row id), kind, area, status + priority, reporter, reported / last
+changed, merged into / includes, following; Description; Context
+captured by the app (version, route, host, viewport, when, userAgent);
+Resolution; the Thread with audience; Attachments as images with their
+file name and caption. A cover page carries the count, export time,
+app version, host and a contents list. Selection: a checkbox per row,
+"Select all shown", "Clear", the count, and "Export to PDF" with a
+progress line; selection survives filter changes; the export orders
+issues as the queue shows them. Downloaded through a blob URL as
+`leanboard-issues-<date>.pdf`. Harness page issuespdf.html.
+

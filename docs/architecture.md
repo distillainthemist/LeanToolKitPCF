@@ -47,7 +47,7 @@ app/            the code app (vanilla TypeScript, Vite, no framework)
                      value driver tree, grid entry, KPI card links
   src/actions/       ＋ Add action (quick capture), link targets and the
                      endorsement lookup the action dialog reads
-  src/issues/        report dialog + admin triage tab
+  src/issues/        report dialog + admin triage tab + the PDF export (pdf.ts writer, exportPdf.ts)
   src/saver.ts       the debounced card save every card type uses
                      (flushed when its screen is left)
   src/tileActions.ts what a board tile shows: its card's actions, or

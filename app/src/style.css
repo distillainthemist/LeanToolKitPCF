@@ -2646,6 +2646,13 @@ button.app-doclist-hsort:hover { color: var(--app-accent, #2563eb); }
 .app-issad-filters .app-input { width: auto; }
 .app-issad-list { display: flex; flex-direction: column; gap: 6px; }
 .app-issad-item { border: 1px solid #e3e0d9; border-radius: 8px; background: #fff; }
+.app-issad-head { display: flex; align-items: center; }
+.app-issad-check { flex: none; width: 16px; height: 16px; margin: 0 0 0 12px; cursor: pointer; accent-color: var(--app-accent, #2563eb); }
+.app-issad-head .app-issad-row { flex: 1; min-width: 0; }
+/* the selection bar: count · select all · clear · … · status · Export to PDF (2026-10-06) */
+.app-issad-selbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 0 0 10px; min-height: 36px; font-size: 12.5px; }
+.app-issad-selcount { color: #6d675c; }
+.app-issad-selstatus { margin: 0; }
 .app-issad-row {
   display: flex; align-items: center; gap: 10px; width: 100%;
   border: none; background: none; cursor: pointer; text-align: left;
