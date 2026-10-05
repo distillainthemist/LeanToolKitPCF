@@ -16,7 +16,9 @@ import { LTK_BASE_CSS } from "../../shared/ui/baseCss";
 import { copyText } from "../../shared/ui/clipboard";
 import { clear, el, ensureStylesheet } from "../../shared/ui/dom";
 import { parsePrompts, Prompts, renderGhost, renderTitleBar } from "../../shared/ui/chrome";
-import { pdcaOf, isOnHold, isOverdue, LtkAction, newAction } from "../../shared/schema/actions";
+import { pdcaOf, isOnHold, isOverdue, LtkAction, newAction, settleFromParts } from "../../shared/schema/actions";
+import { actionViewer, endorsementFor } from "../../shared/ui/actionLinkProvider";
+import { applyEndorsementRule } from "../../shared/schema/actionEndorsement";
 import { Person } from "../../shared/schema/people";
 import { openActionDialog, pdcaDisc, confidentialGlyph, commentGlyph, endorseGlyph } from "../../shared/ui/actionUi";
 import { DAY_LABELS, MONTH_LABELS, isoLocal, occurrenceTitle, startOfDay } from "../../shared/schema/recurrence";
@@ -1059,7 +1061,14 @@ export class LeanHubView {
       tick.disabled = this.readOnly;
       tick.addEventListener("click", (e) => e.stopPropagation());
       tick.addEventListener("change", () => {
+        const prior = action.status;
         action.assignees[my.idx].done = tick.checked;
+        // the last part done closes the action; a part undone reopens it
+        // — the same rule the boards' circle applies, endorsement included
+        if (settleFromParts(action, { reopen: true })) {
+          const who = actionViewer();
+          if (who !== null) applyEndorsementRule(action, prior, endorsementFor(action), who, new Date().toISOString());
+        }
         this.emitFor(action);
         this.render();
       });

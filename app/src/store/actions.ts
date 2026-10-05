@@ -2,7 +2,7 @@
 // cards, boards and the viewer; upsert by action id (the alternate key's
 // purpose, emulated through the generated client).
 
-import { actionBelongsTo, actionVisibleTo, LtkAction, visibleSetFor } from "../../../shared/schema/actions";
+import { actionBelongsTo, actionVisibleTo, LtkAction, visibleSetFor, settleFromParts } from "../../../shared/schema/actions";
 import { applyEndorsementRule } from "../../../shared/schema/actionEndorsement";
 import { ACTION_RULED_EVENT } from "../../../shared/ui/actionLinkProvider";
 import { homeBoardOf, homeCardOf } from "../../../shared/schema/actionLinks";
@@ -172,6 +172,9 @@ export async function upsertActions(
     // the key decides when it names a channel (a link made in the dialog
     // moved the action — even from a card editor that passes ITS board)
     const stamped = stampedBoard(action.instanceId, boardId);
+    // every part done = done, the BACKSTOP (2026-10-06) — a road that
+    // marks parts without the rule still writes a closed action
+    settleFromParts(action, { reopen: false });
     // endorsement, the BACKSTOP (2026-09-30): the dialog and the tick
     // apply the rule themselves; a road that could not (a kanban drop, a
     // screen opened before the rule was known) is put right here, against

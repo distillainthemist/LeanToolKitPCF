@@ -1378,6 +1378,18 @@ reschedule/cancel history with a reason picklist.
   the initiative group rows carried a stray indent — the label
   column's `justify-content: center` turned horizontal once the group
   label became a row. Both fixed. Unreleased.
+- **2026-10-06 — a tick on the Actions page now completes the
+  action.** Ben: ticked done on the hub, the dialog still said Do and
+  the initiative board / priorities popup showed it open. Cause: the
+  hub's tick is "my part is done" and only ever marked the assignee's
+  part — the action's status never moved, so the hub struck it
+  through while every other surface read it as open (and overdue).
+  One pure rule, `settleFromParts` (shared/schema/actions.ts): every
+  part done → done / Closed, with the endorsement rule applied as the
+  boards' circle does; a part undone → open / Do. Applied at the hub
+  tick (both ways) and at the store's write (the closing half only —
+  a reopen stays the person's explicit act, so the dialog's Do and a
+  kanban drop are never undone). Tests 749. Unreleased.
 - **2026-10-01 — the stage bar; initials.** Ben: fold the stage
   label and its PDCA symbol into the bar as thick labelled segments
   (done full colour, current outlined, future grey), bring the gate

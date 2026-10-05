@@ -47,6 +47,33 @@ export function isOnHold(a: { status: string; pdca?: string }): boolean {
   return a.pdca === "hold" && a.status !== "done" && a.status !== "cancelled";
 }
 
+/**
+ * The parts and the whole agree (2026-10-06). Every assignee's part done
+ * → the action is done (Closed); with `reopen`, a part undone on a done
+ * or waiting action → open (Do). Returns true when the status changed.
+ * The hub's "my part is done" tick only ever marked the part, so an
+ * action with one assignee stayed open on every board while the hub
+ * struck it through. Screens apply it where a part changes; the store
+ * applies the closing half as the backstop (a reopen stays the person's
+ * explicit act — the dialog's Do, the circle's second tick).
+ */
+export function settleFromParts(a: LtkAction, opts: { reopen: boolean }): boolean {
+  if (a.assignees.length === 0 || a.status === "cancelled") return false;
+  const allDone = a.assignees.every((x) => x.done);
+  if (allDone && a.status !== "done" && a.status !== "verify") {
+    a.status = "done";
+    a.pdca = "closed";
+    return true;
+  }
+  if (opts.reopen && !allDone && (a.status === "done" || a.status === "verify")) {
+    a.status = "open";
+    a.pdca = "do";
+    a.verified = undefined;
+    return true;
+  }
+  return false;
+}
+
 /** The state to DISPLAY: a done/cancelled action is closed regardless of
  *  what was stored; a stored "closed" on a live action falls back to Do
  *  (the two are kept in step by the dialog, this covers older writes). */
