@@ -243,6 +243,18 @@ when written):
   picture is drawn on a delay and the flushed save carries whatever
   picture it has. Live boards, the default, are unaffected.
 
+## Issues — open items (2026-10-06)
+
+- **Non-image attachments** in the PDF export are noted by name and
+  size, not embedded (the writer speaks JPEG only). A PDF or text
+  attachment would need its own road.
+- **The export is unpaged by size.** Fifty issues with screenshots
+  make one large file; split-by-count is a one-line change if it is
+  ever needed.
+- **The hub's "my part" tick on a multi-assignee action** completes
+  the action only when the last part is ticked; there is no "mark the
+  whole action done" on the hub — that is the dialog's Closed.
+
 ## Priorities — open items (2026-10-02)
 
 - **Forgotten open priorities.** A priority with no planned end never

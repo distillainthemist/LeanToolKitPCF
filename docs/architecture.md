@@ -306,6 +306,15 @@ model section) — the canvas/PCF sections there are historical.
   removed, `linked` / `unlinked` events on both rows. Clearing a lookup
   on update sends `null` (undefined is stripped and the old reference
   stays).
+- **A priority's owner** (2026-10-02): a new priority defaults to the
+  org's owner from organisation settings (an area takes its
+  department's; the first listed), the person adding it only when none
+  is set — also on Accept & customise. The owner picker opens on the
+  org's owner and its immediate children's owners, searches the roster
+  behind "Search everyone", and for admins only reaches the directory:
+  an Entra hit is added to the app (site and department from the org,
+  role user, the Users register's `upsertPerson`) and chosen in one
+  step.
 
 - **Header fields and the charter card are one datum** (2026-09-29).
   A header field (Settings → Improvement standard fields, or a
@@ -482,6 +491,22 @@ model section) — the canvas/PCF sections there are historical.
   scrolls, the columns never clip), and `＋` on a column raises an
   action straight into it (a status, or an issue when the board
   groups by issue; the dialog opens on the matching PDCA state).
+- **Closing an action is one rule on every road** (2026-10-06).
+  `settleFromParts` (`shared/schema/actions.ts`): every assignee's part
+  done → the action is done / Closed, the endorsement rule applied as
+  the list's circle applies it; a part undone → open / Do. The hub's
+  "my part is done" tick applies it both ways (before, it only marked
+  the part and the action stayed open everywhere else); the store's
+  `upsertActions` applies the closing half as the backstop, never a
+  reopen (the dialog's Do and a kanban drop are explicit acts). A
+  kanban drop stores the PDCA its column implies; the dialog keeps a
+  waiting (awaiting endorsement) part ticked.
+- **The Gantt bar** (2026-10-05/06): List | Gantt · scope · assignee ·
+  a standing "Show completed" toggle (the person's `ganttShowCompleted`
+  pref, cached for the session, so it holds across the priority popup,
+  the actions card and the Improvement tab) · window presets · ⋮
+  export. No state filter — every bar and chip already shows its
+  state.
 
 ### 3.5 Store read cache, writes in flight & change signals
 
@@ -675,6 +700,18 @@ Operating instructions of record: [../CLAUDE.md](../CLAUDE.md) (agent),
   managed LeanToolKitData solution from dev, attach both to a GitHub
   Release. Version lives in the tag alone; the build stamps
   `__APP_VERSION__` from `git describe` (issue reports carry it).
+- **Issues → one PDF** (2026-10-06): the triage desk ticks reports and
+  exports a single PDF, a section per issue (id, kind, area, status,
+  reporter, times, merges, following, description, captured context,
+  resolution, thread with audience, attachments as images).
+  `issues/pdf.ts` is a dependency-free writer (Helvetica / Courier in
+  WinAnsi, JPEG XObjects, A4 flowed from blocks, text written as text
+  so it extracts); `issues/exportPdf.ts` reads the four tables and
+  re-encodes attachments as JPEG through a canvas. The hand-off for
+  bugs found in a deployment the fixer cannot open.
+- **Settings → Organisation** (2026-10-02): a site admin sees only
+  their site; a superadmin's sites open collapsed to their heads, a
+  site admin's departments likewise, with a chevron per row.
 
 ## 7. Security, authentication & data-loss prevention
 

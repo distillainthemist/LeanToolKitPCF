@@ -1421,6 +1421,19 @@ reschedule/cancel history with a reason picklist.
   "Surname, Given (Org)" → drop bracketed suffixes, read a comma as
   surname-first. Tests 734. Harness band.html gains an 8D case.
   Unreleased.
+- **Where things stand (2026-10-06).** Released since the 2026-10-02
+  entry, both app-only: v0.63.0 (2026-10-06 — a new priority's owner
+  defaults to the org's owner; the owner picker opens on the org's
+  owner and its teams' owners with the roster behind a search and,
+  for admins, the directory with add-to-the-app in one step; the
+  Organisation page scoped to a site admin's site with sites and
+  departments collapsing; the Gantt's standing "Show completed"
+  toggle) and v0.64.0 (2026-10-06 — Issues → one PDF; the Gantt bar
+  without its state filter and with flush group labels; the parts
+  rule `settleFromParts` so a hub tick closes the action; the kanban
+  drop's stored PDCA; the dialog keeping a waiting part ticked). Open
+  items: backlog.md → "Priorities — open items (2026-10-02)",
+  "Issues — open items (2026-10-06)" and the sections below them.
 - **Where things stand (2026-10-02).** Released since the 2026-10-01
   entry: v0.61.0 (2026-10-01, app-only — Gantt rows name the action,
   live tiles re-mount when their data lands) and v0.62.0 (2026-10-02,
