@@ -1362,7 +1362,9 @@ reschedule/cancel history with a reason picklist.
   overlay, the actions card and the Improvement tab; the state select
   gains "Completed" (shows them whatever the toggle says); the ⋮ menu
   keeps Export CSV only. Harness-verified on actionboard.html.
-  Unreleased.
+- **2026-10-06 — released as v0.63.0** (app-only): the owner default
+  and picker, the Organisation page's scoping and collapsing, the
+  Gantt's Show completed toggle.
 - **2026-10-01 — the stage bar; initials.** Ben: fold the stage
   label and its PDCA symbol into the bar as thick labelled segments
   (done full colour, current outlined, future grey), bring the gate
