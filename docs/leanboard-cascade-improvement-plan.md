@@ -1351,6 +1351,18 @@ reschedule/cancel history with a reason picklist.
   rename, owner, archive) and expands one with the ▸ toggle; a site
   admin's departments start collapsed the same way ("n areas").
   Toggle state lives for the visit; redraws keep it. Unreleased.
+- **2026-10-05 — completed actions in the Priorities view.** Ben asked
+  for a toggle and a proposal for where. Actions show in ONE place on
+  that screen, the overlay's Actions tab, which mounts the shared
+  Gantt; "Show completed" was already there but hidden in the ⋮ menu,
+  off by default and forgotten on every mount. Built as proposed: a
+  standing "Show completed" toggle on the Gantt bar (after the state
+  select, every scope), remembered per person (`ganttShowCompleted`
+  in user prefs, cached for the session) so it holds across the
+  overlay, the actions card and the Improvement tab; the state select
+  gains "Completed" (shows them whatever the toggle says); the ⋮ menu
+  keeps Export CSV only. Harness-verified on actionboard.html.
+  Unreleased.
 - **2026-10-01 — the stage bar; initials.** Ben: fold the stage
   label and its PDCA symbol into the bar as thick labelled segments
   (done full colour, current outlined, future grey), bring the gate

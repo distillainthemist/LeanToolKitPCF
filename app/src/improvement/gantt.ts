@@ -20,6 +20,7 @@ import { LtkAction, ActionHistoryEntry } from "../../../shared/schema/actions";
 import { todayIso } from "../../../shared/schema/id";
 import { dayLabel } from "../linkTitle";
 import { upsertActions } from "../store/actions";
+import { mergeUserPrefs, userPrefsJson } from "../store/config";
 import { modal, field } from "../priorities/dialogs";
 import { Initiative } from "./initiativeModel";
 import { PDCA_TOKENS } from "./templateModel";
@@ -109,6 +110,21 @@ function issueTag(a: LtkAction): string {
   return i !== "" && i !== titleOf(a) ? i : "";
 }
 
+/** "Show completed" is the person's standing choice (Ben, 2026-10-05):
+ *  read once per session from their prefs (`ganttShowCompleted`), kept
+ *  here so later mounts open on it without a round trip. */
+let completedPref: boolean | null = null;
+async function loadCompletedPref(whoId: string): Promise<boolean> {
+  if (completedPref !== null) return completedPref;
+  try {
+    const prefs = JSON.parse((whoId !== "" ? await userPrefsJson(whoId) : "") || "{}") as { ganttShowCompleted?: unknown };
+    completedPref = prefs.ganttShowCompleted === true;
+  } catch {
+    completedPref = false;
+  }
+  return completedPref;
+}
+
 export function mountGantt(opts: GanttOpts): () => void {
   const wrap = el("div", "app-gx");
   opts.host.appendChild(wrap);
@@ -119,7 +135,15 @@ export function mountGantt(opts: GanttOpts): () => void {
   // Ben, 2026-08-25: every Gantt surface switches to a plain action list
   let view: "gantt" | "list" = "gantt";
   let weeks = PRESETS.some((p) => p.weeks === opts.windowWeeks) ? (opts.windowWeeks as number) : 4;
-  let showCompleted = false;
+  let showCompleted = completedPref === true;
+  if (completedPref === null) {
+    void loadCompletedPref(opts.actor.whoId).then((v) => {
+      if (v !== showCompleted && wrap.isConnected) {
+        showCompleted = v;
+        render();
+      }
+    });
+  }
   let assignee = "";
   let status = "";
   const expanded = new Set<string>(); // initiative ids (org scope)
@@ -141,7 +165,8 @@ export function mountGantt(opts: GanttOpts): () => void {
   const initOf = (a: LtkAction): Initiative | null => opts.initiatives.find((i) => owns(i, a)) ?? null;
 
   const visibleAction = (a: LtkAction): boolean => {
-    if (!showCompleted && (a.status === "done" || a.status === "cancelled")) return false;
+    // the state filter set to Completed shows them whatever the toggle says
+    if (!showCompleted && status !== "done" && (a.status === "done" || a.status === "cancelled")) return false;
     if (status !== "" && barState(a, today) !== status) return false;
     if (assignee !== "" && !a.assignees.some((x) => x.whoId === assignee)) return false;
     return true;
@@ -312,7 +337,7 @@ export function mountGantt(opts: GanttOpts): () => void {
         bar.appendChild(sel);
       }
       const st = el("select", "app-input app-gx-sel") as HTMLSelectElement;
-      for (const [v, l] of [["", "All states"], ["ontrack", "On track"], ["overdue", "Overdue"], ["verify", "Awaiting endorsement"], ["hold", "On hold"]] as const) {
+      for (const [v, l] of [["", "All states"], ["ontrack", "On track"], ["overdue", "Overdue"], ["verify", "Awaiting endorsement"], ["hold", "On hold"], ["done", "Completed"]] as const) {
         const o = el("option", "", l) as HTMLOptionElement;
         o.value = v;
         if (v === status) o.selected = true;
@@ -324,6 +349,22 @@ export function mountGantt(opts: GanttOpts): () => void {
       });
       bar.appendChild(st);
     }
+    // show completed: a standing toggle on the bar (was a hidden ⋮ item)
+    const tog = el("label", "app-gx-toggle");
+    const sw = el("button", "app-tw-toggle" + (showCompleted ? " app-tw-toggle-on" : "")) as HTMLButtonElement;
+    sw.type = "button";
+    sw.setAttribute("role", "switch");
+    sw.setAttribute("aria-checked", String(showCompleted));
+    sw.title = showCompleted ? "Hide completed and cancelled actions" : "Show completed and cancelled actions too";
+    sw.appendChild(el("span", "app-tw-toggle-knob"));
+    sw.addEventListener("click", () => {
+      showCompleted = !showCompleted;
+      completedPref = showCompleted;
+      if (opts.actor.whoId !== "") void mergeUserPrefs(opts.actor.whoId, { ganttShowCompleted: showCompleted }).catch(() => undefined);
+      render();
+    });
+    tog.append(sw, el("span", undefined, "Show completed"));
+    bar.appendChild(tog);
     bar.appendChild(el("span", "app-bar-gap"));
     if (view === "gantt") {
       const win = el("div", "app-docs-seg");
@@ -340,7 +381,7 @@ export function mountGantt(opts: GanttOpts): () => void {
     }
     const more = el("button", "app-btn app-gx-more", "⋮") as HTMLButtonElement;
     more.type = "button";
-    more.title = "Show completed · export";
+    more.title = "Export";
     more.addEventListener("click", () => {
       const menu = el("div", "app-cp-menu");
       const item = (label: string, run: () => void) => {
@@ -352,10 +393,6 @@ export function mountGantt(opts: GanttOpts): () => void {
         });
         menu.appendChild(b);
       };
-      item(showCompleted ? "● Show completed" : "○ Show completed", () => {
-        showCompleted = !showCompleted;
-        render();
-      });
       item("Export CSV", () => exportCsv());
       const r = more.getBoundingClientRect();
       menu.style.top = `${r.bottom + 4}px`;
