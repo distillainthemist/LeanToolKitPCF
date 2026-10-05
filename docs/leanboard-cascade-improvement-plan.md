@@ -1400,7 +1400,9 @@ reschedule/cancel history with a reason picklist.
   done for an action awaiting endorsement, so the hub showed it
   unticked; now a waiting action's part stays done), Cancel action,
   Endorse and Send back (right). The Gantt has no closing road.
-  Unreleased.
+- **2026-10-06 — released as v0.64.0** (app-only): the issues PDF
+  export, the Gantt bar without its state filter, the parts rule and
+  the closing-road fixes.
 - **2026-10-01 — the stage bar; initials.** Ben: fold the stage
   label and its PDCA symbol into the bar as thick labelled segments
   (done full colour, current outlined, future grey), bring the gate
