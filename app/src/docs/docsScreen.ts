@@ -2433,17 +2433,10 @@ export function mountDocs(
     // crumb, cleared with ×; "Update" in the views menu saves over it
     const viewChip = el("span", "app-docs-viewchip");
     const paintViewChip = () => {
+      // the view's name is the TITLE now (paintTitle); nothing to chip
       clear(viewChip);
-      viewChip.style.display = activeViewName === "" ? "none" : "";
-      if (activeViewName === "") return;
-      viewChip.appendChild(document.createTextNode(`View · ${activeViewName}`));
-      const x = el("button", "app-docs-orgchip-x", "×") as HTMLButtonElement;
-      x.title = "Stop treating this as the saved view (nothing is deleted)";
-      x.addEventListener("click", () => {
-        activeViewName = "";
-        paintViewChip();
-      });
-      viewChip.appendChild(x);
+      viewChip.style.display = "none";
+      paintTitle();
     };
     titleBlock.append(h1, crumb, viewChip);
     const filtersBtn = el("button", "app-btn app-docs-filtersbtn", "Filters") as HTMLButtonElement;
@@ -2529,11 +2522,20 @@ export function mountDocs(
               .join(" & ");
     const paintTitle = () => {
       const f = filterFor(groupBy) ?? filters[0] ?? null;
-      h1.textContent = f
+      const scopeTitle = f
         ? `${f.node.labels[f.node.labels.length - 1]} — ${libNames}`
         : libNames;
-      crumb.textContent = f ? f.node.labels.join(" › ") : "";
-      crumb.style.display = f ? "" : "none";
+      // B4 (Ben, 2026-10-06): a saved view IS the title; the scope it
+      // sits on becomes the crumb. Leaving the view is in the Views menu.
+      if (activeViewName !== "") {
+        h1.textContent = activeViewName;
+        crumb.textContent = `${scopeTitle}${f ? ` · ${f.node.labels.join(" › ")}` : ""}`;
+        crumb.style.display = "";
+      } else {
+        h1.textContent = scopeTitle;
+        crumb.textContent = f ? f.node.labels.join(" › ") : "";
+        crumb.style.display = f ? "" : "none";
+      }
       // the organisation is not counted: the Folders pane IS that
       // selection and shows it, so "Filters · 1" for a picked folder
       // pointed at a pane that had nothing set in it (Ben, 2026-08-03)
@@ -4495,6 +4497,14 @@ export function mountDocs(
             });
           });
           menu!.appendChild(upd);
+          const leave = el("button", "app-docs-menuitem", `Close “${activeViewName}”`) as HTMLButtonElement;
+          leave.title = "Back to the plain register title — the filters stay, nothing is deleted";
+          leave.addEventListener("click", () => {
+            activeViewName = "";
+            paintTitle();
+            closeMenu();
+          });
+          menu!.appendChild(leave);
         }
         if (savedViews.length > 0) menu!.appendChild(el("div", "app-docs-menusep", ""));
         for (const v of savedViews) {

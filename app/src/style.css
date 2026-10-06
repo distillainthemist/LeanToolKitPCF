@@ -2167,7 +2167,7 @@ button.app-docs-navterm.app-docs-navterm-on {
 }
 @keyframes app-docs-shimmer { to { background-position: -200% 0; } }
 .app-docs-filterbar:empty { display: none; }
-.app-docs-filterbar { margin-bottom: 6px; }
+.app-docs-filterbar { margin-bottom: 6px; display: flex; flex-wrap: wrap; gap: 8px; }
 .app-docs-orgchip {
   display: inline-flex; align-items: center; gap: 2px;
   background: #eef2ff; border: 1px solid #c7d2fe; border-radius: 999px;
