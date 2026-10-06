@@ -4686,11 +4686,12 @@ export function mountDocs(
         pendingView = { ...currentView(), columns: [] };
         remount();
       });
-      actions.append(apply, reset);
+      const cancel = el("button", "app-link", "Cancel") as HTMLButtonElement;
+      cancel.addEventListener("click", () => scrim.remove());
+      actions.append(apply, reset, cancel);
       dialog.appendChild(actions);
-      scrim.addEventListener("pointerdown", (e) => {
-        if (e.target === scrim) scrim.remove();
-      });
+      // ticks and a dragged order are never lost to a click outside
+      // (Ben, 2026-10-07): Apply or Reset is the way out — and Escape
       document.body.appendChild(scrim);
     };
 

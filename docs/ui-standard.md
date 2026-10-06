@@ -132,6 +132,12 @@ the same commit.
   to Entra hits as person rows with a muted note line ("email · ＋ add
   to the app and choose"); the directory road shows for admins only.
   Errors in `.app-cp-err` under the list.
+- **A form never closes on a click outside it** (2026-10-07): any
+  modal with inputs (Edit details, Create initiative, the priority
+  dialogs, prompts, the column chooser, escalation) is left only by
+  its buttons or Escape — an edit must never be lost to a stray click.
+  Pickers and viewers (card picker, people picker, the document
+  overlay) may still dismiss on the scrim.
 - **Multi-select on a register** (Issues, 2026-10-06): a 16px
   accent-coloured checkbox (`.app-issad-check`) leads each row outside
   the row's own button; a selection bar above the list reads "n

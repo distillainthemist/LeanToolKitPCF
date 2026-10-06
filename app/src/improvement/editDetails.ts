@@ -46,9 +46,9 @@ export function openEditDetails(o: EditDetailsOpts): void {
   overlay.appendChild(box);
   o.host.appendChild(overlay);
   const close = () => overlay.remove();
-  overlay.addEventListener("click", (e) => {
-    if (e.target === overlay) close();
-  });
+  // a FORM never closes on a stray click outside it — Cancel or Save is
+  // the way out (Ben, 2026-10-07: an edit lost to a click off the box)
+
   box.appendChild(el("div", "app-modal-title", "Edit details"));
   const body = el("div", "app-cp-modal-body");
   box.appendChild(body);

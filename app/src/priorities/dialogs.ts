@@ -136,9 +136,8 @@ export function modal(host: HTMLElement, title: string, note?: string, wide = fa
     document.removeEventListener("keydown", onKey, true);
   };
   document.addEventListener("keydown", onKey, true);
-  overlay.addEventListener("click", (e) => {
-    if (e.target === overlay) close();
-  });
+  // every modal built here is a form — a click outside never closes it
+  // (Ben, 2026-10-07); Escape and the buttons do
   return { overlay, box, body, footer, close };
 }
 

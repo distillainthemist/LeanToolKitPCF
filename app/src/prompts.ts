@@ -115,9 +115,7 @@ export function promptText(opts: {
     });
     cancel.addEventListener("click", () => done(null));
     ok.addEventListener("click", submit);
-    overlay.addEventListener("click", (e) => {
-      if (e.target === overlay) done(null);
-    });
+    // typed text is never lost to a click outside (Ben, 2026-10-07)
     overlay.appendChild(box);
     document.body.appendChild(overlay);
     document.addEventListener("keydown", onKey, true);

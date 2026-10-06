@@ -786,9 +786,7 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
       scrim.appendChild(box);
       wrap.appendChild(scrim);
       const close = () => scrim.remove();
-      scrim.addEventListener("click", (e) => {
-        if (e.target === scrim) close();
-      });
+      // a form never closes on a click outside it (Ben, 2026-10-07)
       let chosen: InitiativeTemplate | null = null;
 
       const paintPicker = () => {

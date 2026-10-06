@@ -33,9 +33,7 @@ export function openEscalateDialog(o: EscalateDialogOpts): void {
   overlay.appendChild(box);
   o.host.appendChild(overlay);
   const close = () => overlay.remove();
-  overlay.addEventListener("click", (e) => {
-    if (e.target === overlay) close();
-  });
+  // a form never closes on a click outside it (Ben, 2026-10-07)
 
   box.appendChild(el("div", "app-modal-title", "Escalate to sponsor"));
   box.appendChild(el("div", "app-modal-note", "This marks the initiative escalated (red) and notifies the sponsor. Say what you need."));
