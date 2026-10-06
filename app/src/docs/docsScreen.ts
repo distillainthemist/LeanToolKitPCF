@@ -2648,11 +2648,15 @@ export function mountDocs(
     // (a pick includes its subtree — the shipped semantics), AND across
     // columns. Counts stay honest: they ride the chips/tree, loaded-rows
     // only.
+    /** The typed text per filter column (tags, big sets) — lives while
+     *  the popover is open. */
+    const termQuery = new Map<string, string>();
     filtersBtn.addEventListener("click", () => {
       if (menu) {
         closeMenu();
         return;
       }
+      termQuery.clear();
       menu = el("div", "app-docs-menu app-docs-filterpop");
       const body = el("div", "app-docs-filterpop-body");
       menu.appendChild(body);
@@ -2700,7 +2704,34 @@ export function mountDocs(
             const shallow = nodes.filter((n) => n.labels.length <= 2);
             const deepPick = (active?.nodes ?? []).filter((p) => !shallow.some((n) => n.id === p.id));
             const CAP = 14;
-            let shown = [...deepPick, ...shallow];
+            // a big vocabulary (tags, or any set past the cap) is SEARCHED,
+            // not scrolled (Ben, 2026-10-06): the picked terms stay as
+            // pills, the typed text narrows what else shows
+            const isTags = dictBy.get(col)?.role === "tags";
+            const q = (termQuery.get(col) ?? "").trim().toLowerCase();
+            if (isTags || nodes.length > CAP) {
+              const find = el("input", "app-input app-docs-fperson") as HTMLInputElement;
+              find.type = "search";
+              find.placeholder = `Search ${nodes.length} ${isTags ? "tags" : "terms"}…`;
+              find.value = termQuery.get(col) ?? "";
+              find.setAttribute("aria-label", `Search ${colLabel(col)}`);
+              find.addEventListener("input", () => {
+                termQuery.set(col, find.value);
+                paintPop();
+                const again = menu?.querySelector<HTMLInputElement>(`input[aria-label="Search ${colLabel(col)}"]`);
+                if (again) {
+                  again.focus();
+                  again.setSelectionRange(again.value.length, again.value.length);
+                }
+              });
+              pills.before(find);
+            }
+            const pickedIds = new Set((active?.nodes ?? []).map((n) => n.id));
+            const matches = (n: TermNode) => q === "" || n.labels.some((l) => l.toLowerCase().includes(q));
+            let shown =
+              q !== "" || isTags || nodes.length > CAP
+                ? [...(active?.nodes ?? []), ...nodes.filter((n) => !pickedIds.has(n.id) && (q !== "" ? matches(n) : n.labels.length <= 2))]
+                : [...deepPick, ...shallow];
             const capped = shown.length > CAP;
             if (capped) shown = shown.slice(0, CAP);
             for (const n of shown) {
@@ -2721,7 +2752,7 @@ export function mountDocs(
             }
             if (capped) {
               pills.appendChild(
-                el("span", "app-field-hint", "Deeper terms live in the Browse-by tree")
+                el("span", "app-field-hint", isTags || nodes.length > CAP ? "Type to find the rest" : "Deeper terms live in the Browse-by tree")
               );
             }
           });
