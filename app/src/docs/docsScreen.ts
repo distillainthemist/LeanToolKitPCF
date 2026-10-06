@@ -2772,31 +2772,57 @@ export function mountDocs(
         );
         for (const pc of peopleCols) {
           const g = group(pc.label !== "" ? pc.label : pc.internal);
-          const row = el("div", "app-docs-fdates");
-          const inp = el("input", "app-input app-docs-fperson") as HTMLInputElement;
-          inp.type = "search";
-          inp.placeholder = "Name contains…";
-          inp.value = personFilters.find((p) => p.col === pc.internal)?.text ?? "";
-          inp.setAttribute("aria-label", `${pc.label || pc.internal} contains`);
-          const go = el("button", "app-docs-fpill", "Apply") as HTMLButtonElement;
-          const push = () => {
-            setPersonFilter(pc.internal, inp.value);
-            paintPop();
-          };
-          go.addEventListener("click", push);
-          inp.addEventListener("keydown", (e) => {
-            if (e.key === "Enter") push();
-          });
-          row.append(inp, go);
-          if (inp.value !== "") {
-            const clr = el("button", "app-docs-fpill", "Clear") as HTMLButtonElement;
-            clr.addEventListener("click", () => {
+          const cur = personFilters.find((p) => p.col === pc.internal)?.text ?? "";
+          if (cur !== "") {
+            // the picked person as a pill; × clears
+            const row = el("div", "app-docs-fpills");
+            const on = el("button", "app-docs-fpill app-docs-fpill-on", cur) as HTMLButtonElement;
+            on.title = "Clear this person";
+            on.addEventListener("click", () => {
               setPersonFilter(pc.internal, "");
               paintPop();
             });
-            row.appendChild(clr);
+            row.appendChild(on);
+            g.appendChild(row);
+            continue;
           }
-          g.appendChild(row);
+          // a directory search, not free text (Ben, 2026-10-06): the
+          // owners & approvers group lists first, Office 365 users behind
+          const box = el("div", "app-docs-ppl");
+          const inp = el("input", "app-input app-docs-fperson") as HTMLInputElement;
+          inp.type = "search";
+          inp.placeholder = "Search people…";
+          inp.setAttribute("aria-label", `${pc.label || pc.internal} — search people`);
+          const hits = el("div", "app-docs-pplhits");
+          box.append(inp, hits);
+          let seq = 0;
+          let timer: ReturnType<typeof setTimeout> | null = null;
+          inp.addEventListener("input", () => {
+            if (timer !== null) clearTimeout(timer);
+            timer = setTimeout(() => {
+              const mine = ++seq;
+              void import("./accessGates").then(({ reviewerPeopleSource }) =>
+                reviewerPeopleSource().then((src) =>
+                  src.search(inp.value).then((found) => {
+                    if (mine !== seq || !menu) return;
+                    clear(hits);
+                    for (const h of found.slice(0, 8)) {
+                      const hit = el("button", "app-docs-pplhit") as HTMLButtonElement;
+                      hit.type = "button";
+                      hit.append(el("span", "app-docs-pplhitname", h.displayName), el("span", "app-field-hint", h.mail));
+                      hit.addEventListener("click", () => {
+                        setPersonFilter(pc.internal, h.displayName);
+                        paintPop();
+                      });
+                      hits.appendChild(hit);
+                    }
+                    if (found.length === 0 && inp.value.trim() !== "") hits.appendChild(el("div", "app-field-hint", "No one matches."));
+                  })
+                )
+              );
+            }, 300);
+          });
+          g.appendChild(box);
         }
         // B6: presence — linked documents, tags (report 17's "how do I
         // see what is linked or tagged")

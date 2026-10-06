@@ -61,9 +61,9 @@ Reports in brackets are the export's section numbers.
 14. **Hide the panel (49)** — "« Hide panel" at the top of the left
     panel. A slim rail labelled "Libraries & folders" brings it back.
     Reload: the choice is remembered.
-15. **People and Has filters (17, 46)** — Filters → Owner: type part of
-    an owner's name, Apply. Only their documents show; the chip reads
-    "Owner: <text>". Filters → Has → Linked documents / Tags. Register
+15. **People and Has filters (17, 46)** — Filters → Owner: search
+    people (the group lists first, then Office 365 users), pick one.
+    Only their documents show; the chip reads "Owner: <name>". Filters → Has → Linked documents / Tags. Register
     ⋮ → Export CSV with the owner filter on: the file is their list.
 16. **Default columns (44)** — Settings → Documents → Document columns:
     ★ a column for the standard type. A new user's register (or Reset
