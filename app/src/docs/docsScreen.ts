@@ -843,6 +843,7 @@ export function mountDocs(
           row,
           lib,
           dictBy,
+          guidance: siteDict.guidance,
           host: dialogHost,
           heldByMe: isMine(row),
           // a quick edit on a reader-facing document publishes under
@@ -2477,6 +2478,7 @@ export function mountDocs(
           targets: libraries.filter(canAddTo),
           templates: libraries.filter((l) => l.libType === "template"),
           dictBy,
+          guidance: siteDict.guidance,
           // Part II S2: the chosen target's type picks the sections
           sectionsFor:
             siteDict.columns.length > 0
@@ -4745,6 +4747,10 @@ export function mountDocs(
               openControlHealth({
                 site: app.siteUrl,
                 libraries: healthLibs,
+                // C1 (feedback round 1): the document admin may replace a
+                // person across the scanned documents from the report
+                canReassign: docAdmin(),
+                onReassigned: () => void load(true),
                 roles: {
                   owner: ownerInternal,
                   status: statusInternal,

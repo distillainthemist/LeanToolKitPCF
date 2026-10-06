@@ -920,6 +920,8 @@ export function openDocViewer(opts: ViewerOpts): () => void {
       verHeadRow.appendChild(tog);
     }
     propsBox.appendChild(verHeadRow);
+    // C5 (feedback round 1): "why are three drafts listed?" — say it once
+    if (!auditOn) propsBox.appendChild(el("div", "app-field-hint app-docs-verhint", "Every save while a document is checked out is a draft (minor) version; approval publishes a major one."));
     const vres =
       details.id > 0 && row.listId !== ""
         ? await itemVersions(site, row.listId, details.id)

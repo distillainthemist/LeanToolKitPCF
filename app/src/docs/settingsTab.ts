@@ -66,6 +66,8 @@ import {
   fetchTermSets,
   fetchTermsInSet,
   invalidateTermPaths,
+  patchTermLabels,
+  fetchTermStoreLanguage,
 } from "./sp";
 import {
   DocLibrary,
@@ -1137,6 +1139,71 @@ export async function renderDocsSettings(body: HTMLElement, ctx: Ctx): Promise<v
       cadenceBox.appendChild(grid);
     })();
   };
+  // ---- Guidance (C4, feedback round 1) ---------------------------------
+  // A naming note on the add form and a definition per document type,
+  // shown under the type as it is picked — governance the forms carry
+  // rather than a document nobody reads.
+  body.appendChild(section("Guidance"));
+  body.appendChild(
+    note(
+      "What the forms say: a naming note at the top of Add document (e.g. avoid accents, dots and " +
+        "equipment numbers; say what the document is for), and a one-line definition per document " +
+        "type under the type picker — so Quick reference and Quick reference guide stop both existing."
+    )
+  );
+  const guideBox = el("div", "");
+  body.appendChild(guideBox);
+  const paintGuidance = () => {
+    void (async () => {
+      clear(guideBox);
+      const dict = dictionary();
+      const g = () => (dict.guidance ??= { naming: "", typeNotes: {} });
+      const naming = el("textarea", "app-input") as HTMLTextAreaElement;
+      naming.rows = 3;
+      naming.value = dict.guidance?.naming ?? "";
+      naming.placeholder = "e.g. Name the document for what it does, in plain words — no accents, dots or equipment numbers.";
+      naming.addEventListener("input", () => {
+        g().naming = naming.value;
+        ctx.markDirty();
+      });
+      const nf = el("div", "app-field");
+      nf.append(el("span", "app-field-label", "Naming note (shown on Add document)"), naming);
+      guideBox.appendChild(nf);
+      const typeCol = dict.columns.find((c) => c.role === "docType" && c.termSetId !== "");
+      if (typeCol === undefined) {
+        guideBox.appendChild(note("Map a managed-metadata column to the Document type role to write a definition per type."));
+        return;
+      }
+      guideBox.appendChild(el("div", "app-loading-line", "Reading the document types…"));
+      const walk = await fetchTermPaths(app.siteUrl, typeCol.termSetId);
+      guideBox.querySelector(".app-loading-line")?.remove();
+      if (walk.error !== "" || walk.nodes.length === 0) {
+        guideBox.appendChild(note(`Could not read the document type set: ${walk.error || "no terms"}`));
+        return;
+      }
+      const grid = el("div", "app-docs-cadgrid app-docs-typegrid");
+      for (const n of walk.nodes) {
+        const label = n.labels.join(" › ");
+        grid.appendChild(el("span", "app-docs-colname", label));
+        const def = el("input", "app-input") as HTMLInputElement;
+        const key = n.id.toLowerCase();
+        def.value = dict.guidance?.typeNotes[key] ?? "";
+        def.placeholder = "One line: what this type is for";
+        def.addEventListener("input", () => {
+          const notes = { ...g().typeNotes };
+          if (def.value.trim() !== "") notes[key] = def.value.trim();
+          else delete notes[key];
+          g().typeNotes = notes;
+          ctx.markDirty();
+        });
+        grid.appendChild(def);
+        grid.appendChild(el("span", "app-field-hint", ""));
+      }
+      guideBox.appendChild(grid);
+    })();
+  };
+  paintGuidance();
+
   /** Fed into Health by paintHealth — recomputed whenever the mapping
    *  changes, because an unmapped term is a command that cannot run. */
   let lifecycleFindings: HealthFinding[] = [];
@@ -1555,13 +1622,65 @@ export async function renderDocsSettings(body: HTMLElement, ctx: Ctx): Promise<v
         return;
       }
       tagBox.appendChild(el("div", "app-loading-line", "Reading the proposal queue…"));
-      const { listProposals, approveProposal, declineProposal } = await import("./tagProposals");
-      const pending = await listProposals("pending");
+      const { listProposals, approveProposal, declineProposal, mintTag } = await import("./tagProposals");
+      const [pending, walk] = await Promise.all([listProposals("pending"), fetchTermPaths(app.siteUrl, tagCol.termSetId)]);
       clear(tagBox);
       const fail = (m: string) => {
         const w = el("div", "app-docs-addstatus app-docs-addstatus-warn", m);
         tagBox.prepend(w);
       };
+      // C3 (feedback round 1): the tags in use — add one directly, rename
+      // in place (the GUID stays, so every tagged document follows)
+      const inUse = el("div", "app-docs-tagsinuse");
+      inUse.appendChild(el("div", "app-field-label", `Tags in use (${walk.nodes.length})`));
+      if (walk.error !== "") inUse.appendChild(note(`Could not read the tag set: ${walk.error}`));
+      const chips = el("div", "app-docs-fpills");
+      for (const n of [...walk.nodes].sort((a, b) => a.labels[a.labels.length - 1].localeCompare(b.labels[b.labels.length - 1]))) {
+        const label = n.labels[n.labels.length - 1];
+        const chip = el("button", "app-docs-fpill", label) as HTMLButtonElement;
+        chip.title = "Rename this tag (every document tagged with it follows)";
+        chip.addEventListener("click", () => {
+          void (async () => {
+            const { promptText } = await import("../prompts");
+            const next = await promptText({ title: `Rename “${label}”`, initial: label, required: "A name is needed.", confirmLabel: "Rename" });
+            if (next === null || next.trim() === "" || next.trim() === label) return;
+            const langRes = await fetchTermStoreLanguage(app.siteUrl);
+            const lang = ((langRes.data ?? {}) as { defaultLanguageTag?: string }).defaultLanguageTag ?? "en-US";
+            const r = await patchTermLabels(app.siteUrl, tagCol.termSetId, n.id, [{ languageTag: lang, name: next.trim(), isDefault: true }]);
+            if (!r.ok) fail(`Could not rename “${label}”: ${r.status.slice(0, 160)}`);
+            else {
+              invalidateTermPaths();
+              paintTags();
+            }
+          })();
+        });
+        chips.appendChild(chip);
+      }
+      if (walk.nodes.length === 0 && walk.error === "") chips.appendChild(el("span", "app-field-hint", "No tags yet."));
+      inUse.appendChild(chips);
+      const addRow = el("div", "app-docs-fdates");
+      const addIn = el("input", "app-input app-docs-fperson") as HTMLInputElement;
+      addIn.placeholder = "New tag, e.g. Crane Ops";
+      const addBtn = el("button", "app-btn", "＋ Add tag") as HTMLButtonElement;
+      addBtn.addEventListener("click", () => {
+        void (async () => {
+          addBtn.disabled = true;
+          const made = await mintTag(app.siteUrl, tagCol.termSetId, addIn.value);
+          addBtn.disabled = false;
+          if (made.error !== "") fail(`Could not add “${addIn.value.trim()}”: ${made.error}`);
+          else {
+            addIn.value = "";
+            paintTags();
+          }
+        })();
+      });
+      addIn.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") addBtn.click();
+      });
+      addRow.append(addIn, addBtn);
+      inUse.appendChild(addRow);
+      tagBox.appendChild(inUse);
+      tagBox.appendChild(el("div", "app-field-label", `Proposals waiting (${pending.length})`));
       if (pending.length === 0) {
         tagBox.appendChild(el("div", "app-field-hint", "No proposals waiting."));
       }

@@ -362,6 +362,7 @@ describe("controlHealth", () => {
     itemId: 1,
     name: "SOP.pdf",
     libName: "Standards",
+    people: [],
     controlled: true,
     owner: "Ben Pechey",
     stage: "approved",

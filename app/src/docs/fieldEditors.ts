@@ -17,7 +17,8 @@ import {
   sortByDictionary,
   tagLabelProblems,
 } from "./model";
-import { POOL_ROLES, PeopleSource, poolPeopleSource } from "./accessGates";
+import { POOL_ROLES, PeopleSource, poolPeopleSource, reviewerPeopleSource, viewerIsController } from "./accessGates";
+import { currentViewer } from "../runtime";
 import { fetchTermPaths } from "./sp";
 
 /** Columns SharePoint manages itself — fine in a VIEW, nonsense in a
@@ -82,6 +83,9 @@ export interface FieldEditorOpts {
    *  renders as a titled section, in the manager's order; a column
    *  the library does not carry is skipped as always. */
   sections?: { heading: string; columns: string[] }[];
+  /** C4 (feedback round 1): a definition per document type (term id,
+   *  lowercased) — shown under the type select as it is picked. */
+  typeNotes?: Record<string, string>;
 }
 
 export function buildFieldEditors(opts: FieldEditorOpts): BuiltEditor[] {
@@ -184,6 +188,24 @@ export function buildFieldEditors(opts: FieldEditorOpts): BuiltEditor[] {
         }
       });
       sel.addEventListener("change", sync);
+      // C4 (feedback round 1): the document type's definition, under the
+      // select, as it is picked
+      const typeNotes = opts.typeNotes ?? {};
+      const typeNote = el("div", "app-field-hint app-docs-typenote");
+      const paintTypeNote = () => {
+        let id = "";
+        try {
+          id = sel.value !== "" ? String((JSON.parse(sel.value) as { termId?: string }).termId ?? "").toLowerCase() : "";
+        } catch {
+          id = "";
+        }
+        typeNote.textContent = id !== "" ? (typeNotes[id] ?? "") : "";
+        typeNote.style.display = typeNote.textContent === "" ? "none" : "";
+      };
+      if (dictBy.get(f.internal)?.role === "docType" && Object.keys(typeNotes).length > 0) {
+        sel.addEventListener("change", paintTypeNote);
+        setTimeout(paintTypeNote, 0);
+      }
       // A9 (feedback round 1): a MULTI column (tags) keeps every term —
       // chips for what the document carries, the select ADDS one; the
       // single select used to replace the lot and prefill only the first
@@ -227,7 +249,9 @@ export function buildFieldEditors(opts: FieldEditorOpts): BuiltEditor[] {
         stack.append(chipBox, sel);
         box.appendChild(fieldRow(labelOf(f) + star, stack));
       } else {
-        box.appendChild(fieldRow(labelOf(f) + star, sel));
+        const stack = el("div", "app-docs-termstack");
+        stack.append(sel, typeNote);
+        box.appendChild(fieldRow(labelOf(f) + star, stack));
       }
       // H1: the hashtags column invites PROPOSALS — the vocabulary is
       // closed (controllers mint terms), but anyone may ask
@@ -248,6 +272,16 @@ export function buildFieldEditors(opts: FieldEditorOpts): BuiltEditor[] {
         send.type = "button";
         const st = el("div", "app-field-hint");
         form.append(lbl, why, send, st);
+        // C3 (feedback round 1): a document CONTROLLER mints the tag on
+        // the spot and it lands on the document — no proposal round
+        let mintDirect = false;
+        void viewerIsController(currentViewer()?.objectId ?? "").then((isC) => {
+          if (!isC) return;
+          mintDirect = true;
+          proposeBtn.textContent = "Add a new tag…";
+          send.textContent = "Add tag";
+          why.style.display = "none";
+        });
         proposeBtn.addEventListener("click", () => {
           form.style.display = form.style.display === "none" ? "" : "none";
           if (form.style.display === "") lbl.focus();
@@ -259,6 +293,28 @@ export function buildFieldEditors(opts: FieldEditorOpts): BuiltEditor[] {
         send.addEventListener("click", () => {
           void (async () => {
             send.disabled = true;
+            if (mintDirect) {
+              st.textContent = "Adding…";
+              const { mintTag } = await import("./tagProposals");
+              const made = await mintTag(opts.site, setId, lbl.value);
+              if (made.error !== "") {
+                st.textContent = `⚠ ${made.error}`;
+              } else {
+                const label = lbl.value.trim().replace(/^#/, "");
+                const o = el("option", "", label) as HTMLOptionElement;
+                o.value = JSON.stringify({ label, termId: made.termId });
+                sel.appendChild(o);
+                if (multi) {
+                  picked.push({ label, termId: made.termId });
+                  paintChips();
+                } else sel.value = o.value;
+                sync();
+                st.textContent = `Added “${label}” — it is on this document now.`;
+                lbl.value = "";
+              }
+              send.disabled = false;
+              return;
+            }
             st.textContent = "Sending…";
             const { submitTagProposal } = await import("./tagProposals");
             const err = await submitTagProposal(lbl.value, why.value);
@@ -318,9 +374,14 @@ export function buildFieldEditors(opts: FieldEditorOpts): BuiltEditor[] {
       // guard. Role-bound columns (owner/approvers/reviewers) search
       // the OWNERS & APPROVERS pool, falling back to Entra with a hint.
       const multi = f.type === "UserMulti";
-      const poolBound = POOL_ROLES.has(dictBy.get(f.internal)?.role ?? "");
+      const roleKey = dictBy.get(f.internal)?.role ?? "";
+      const poolBound = POOL_ROLES.has(roleKey);
+      // C2 (feedback round 1): reviewers may be anyone — the pool first,
+      // the directory behind it; owners and approvers stay pool-bound
       const source: Promise<PeopleSource> = poolBound
-        ? poolPeopleSource()
+        ? roleKey === "reviewers"
+          ? reviewerPeopleSource()
+          : poolPeopleSource()
         : Promise.resolve({
             restricted: false,
             hint: "",

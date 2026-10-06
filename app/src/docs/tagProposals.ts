@@ -78,20 +78,31 @@ export async function listProposals(status: string): Promise<TagProposal[]> {
 
 /** Approve: mint the term at the set root, record the decision.
  *  "" = done; otherwise the refusal (the proposal stays pending). */
+/** Mint a tag term directly (C3, feedback round 1): document controllers
+ *  do this from Settings → Documents → Tags and from the tag editor;
+ *  approving a proposal rides the same road. */
+export async function mintTag(site: string, setId: string, label: string): Promise<{ error: string; termId: string }> {
+  const t = label.trim().replace(/^#/, "");
+  const problems = tagLabelProblems(t);
+  if (problems.length > 0) return { error: `cannot mint: ${problems.join("; ")}`, termId: "" };
+  const langRes = await fetchTermStoreLanguage(site);
+  const lang =
+    ((langRes.data ?? {}) as { defaultLanguageTag?: string }).defaultLanguageTag ?? "en-US";
+  const made = await createTerm(site, setId, "", t, lang);
+  if (!made.ok) return { error: `the term store refused it: ${made.status.slice(0, 200)}`, termId: "" };
+  const termId = String(((made.data ?? {}) as { id?: unknown }).id ?? "");
+  invalidateTermPaths(); // pickers must see the new term without a reload
+  return { error: "", termId };
+}
+
 export async function approveProposal(
   p: TagProposal,
   site: string,
   setId: string
 ): Promise<string> {
-  const problems = tagLabelProblems(p.label);
-  if (problems.length > 0) return `cannot mint: ${problems.join("; ")}`;
-  const langRes = await fetchTermStoreLanguage(site);
-  const lang =
-    ((langRes.data ?? {}) as { defaultLanguageTag?: string }).defaultLanguageTag ?? "en-US";
-  const made = await createTerm(site, setId, "", p.label, lang);
-  if (!made.ok) return `the term store refused it: ${made.status.slice(0, 200)}`;
-  const termId = String(((made.data ?? {}) as { id?: unknown }).id ?? "");
-  invalidateTermPaths(); // pickers must see the new term without a reload
+  const minted = await mintTag(site, setId, p.label);
+  if (minted.error !== "") return minted.error;
+  const termId = minted.termId;
   const upd = await Ben_ltktagproposalsService.update(p.id, {
     ben_status: "approved",
     ben_termid: termId,

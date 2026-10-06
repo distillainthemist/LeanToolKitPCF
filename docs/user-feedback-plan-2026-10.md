@@ -87,7 +87,36 @@ panel rail, Update on a saved view.
 | B6 | 17, 46 | Owner / relationship visibility: an Owner filter and "documents by owner" CSV; linked / tagged documents reachable from a filter. |
 | B7 | 44 | Default columns per site: confirm the column manager already answers it (Organisation, Document Type, Standard); document how. |
 
-## Tranche C — governance and roles
+## Tranche C — governance and roles — BUILT 2026-10-06, unreleased
+
+Status per item: C1 ✓ (the health report scans owner / approver /
+reviewer names AND emails; two directory-backed findings arrive after
+the pure report — "Named owner or approver is not in the owners &
+approvers group" and "Named person is no longer in the directory
+(left or disabled)", each row naming who; "Replace a person…" for
+document admins: one person out, one in from the pool, roles ticked,
+preview count, per-document check-out → claims write → minor check-in,
+published on a moderated library when approved, failures listed per
+document) · C2 ✓ (reviewers may be anyone: the pool lists first, the
+directory fills in — picker and the submit-for-review adder alike;
+owners and approvers stay pool-bound) · C3 ✓ (Settings → Documents →
+Tags shows the tags in use with rename-in-place and ＋ Add tag; a
+controller's tag editor says "Add a new tag…" and mints on the spot,
+the term landing on the document; everyone else still proposes;
+`mintTag` is the one road, approval rides it) · C4 ✓ (Settings →
+Documents → Guidance: a naming note shown at the top of Add document
+and a one-line definition per document type shown under the type
+picker as it is picked; stored on the site dictionary) · C5 ✓ (submit
+for review with no reviewer named stays open and says so: "Sent for
+review — nobody was messaged: add reviewers or tell them yourself";
+the version history pane explains that every save while checked out
+is a draft) · C6 ✓ cookbook Recipe 3 (configuration: the MOC column).
+Hosted checks: the two people findings on the pilot site (the pool
+read and the directory lookup by email), a replace run on two test
+documents including an approved one on the moderated library, a
+reviewer picked from outside the pool, a tag minted by a controller
+from the editor, the naming note and a type definition on Add
+document.
 
 | # | Report | Fix |
 |---|---|---|

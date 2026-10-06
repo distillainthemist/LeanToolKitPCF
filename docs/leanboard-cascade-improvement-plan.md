@@ -1424,6 +1424,14 @@ reschedule/cancel history with a reason picklist.
   `navHidden`), People filters (CAML `Contains` on person columns) and
   "Has" presence filters (`IsNotNull`) in the popover, saved views and
   the export. B7 is configuration. Unreleased.
+- **2026-10-06 — feedback round 1, Tranche C.** Governance and roles:
+  roles health (people per document from the email twins; pool and
+  directory findings appended to the pure report; `roleReassign.ts`
+  replaces a person across documents through the edit-properties
+  bracket), reviewers from anyone (`reviewerPeopleSource`), tag
+  management + controller minting (`mintTag`), guidance on the
+  dictionary (naming note, type definitions), the review-submit
+  confirmation and the drafts hint, cookbook Recipe 3. Unreleased.
 - **2026-10-01 — the stage bar; initials.** Ben: fold the stage
   label and its PDCA symbol into the bar as thick labelled segments
   (done full colour, current outlined, future grey), bring the gate

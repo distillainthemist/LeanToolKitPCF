@@ -14,6 +14,7 @@
 import { clear, el } from "../../../shared/ui/dom";
 import { openDialog } from "../../../shared/ui/dialog";
 import {
+  ControlIssue,
   ControlDoc,
   ControlHealthReport,
   ControlRoles,
@@ -51,6 +52,10 @@ export interface ControlHealthOpts {
   host: HTMLElement;
   /** Open a document from the report (the dialog closes first). */
   onOpenDoc: (row: DocRow) => void;
+  /** C1 (feedback round 1): offer "Replace a person…" (document admins). */
+  canReassign?: boolean;
+  /** After a replace run touched documents — the register re-reads. */
+  onReassigned?: () => void;
 }
 
 /** Rows read per library before the report admits it is showing a
@@ -128,6 +133,8 @@ export function openControlHealth(opts: ControlHealthOpts): void {
         links: libRole("linkedDocuments", opts.roles.links),
         regulator: libRole("regulatorApproved", opts.roles.regulator),
       };
+      const approversCol = libRole("approvers", "");
+      const reviewersCol = libRole("reviewers", "");
       const wanted = [
         roles.owner,
         roles.status,
@@ -137,7 +144,15 @@ export function openControlHealth(opts: ControlHealthOpts): void {
         roles.review,
         roles.links,
         roles.regulator,
+        approversCol,
+        reviewersCol,
       ].filter((f) => f !== "" && carried.has(f));
+      const peopleOf = (row: DocRow, role: "owner" | "approvers" | "reviewers", col: string) => {
+        if (col === "" || !carried.has(col)) return null;
+        const names = (row.values[col] ?? "").split(";").map((x) => x.trim()).filter((x) => x !== "");
+        const emails = (row.values[`${col}#email`] ?? "").split(";").map((x) => x.trim().toLowerCase()).filter((x) => x !== "");
+        return names.length === 0 && emails.length === 0 ? null : { role, col, names, emails };
+      };
       const viewXml = buildRenderViewXml({
         fields: [...wanted, "CheckoutUser"],
         rowLimit: 100,
@@ -163,6 +178,11 @@ export function openControlHealth(opts: ControlHealthOpts): void {
             libName,
             controlled: lib.libType === "standard",
             owner: roles.owner !== "" ? (row.values[roles.owner] ?? "") : "",
+            people: [
+              peopleOf(row, "owner", roles.owner),
+              peopleOf(row, "approvers", approversCol),
+              peopleOf(row, "reviewers", reviewersCol),
+            ].filter((p): p is NonNullable<typeof p> => p !== null),
             stage: opts.stageOf(row),
             org: orgCol !== "" ? (row.values[orgCol] ?? "") : "",
             docType: roles.docType !== "" ? (row.values[roles.docType] ?? "") : "",
@@ -188,8 +208,105 @@ export function openControlHealth(opts: ControlHealthOpts): void {
     return out;
   };
 
-  const paint = (docs: ControlDoc[]) => {
+  /** C1: which people a flagged document carries, per finding key —
+   *  painted on the row ("owner Jane Doe not in the group"). */
+  const flaggedPeople = new Map<string, string[]>();
+  const docKey = (d: ControlDoc) => `${d.listId.toLowerCase()}:${d.itemId}`;
+
+  /** C1 (feedback round 1): the roles checks that need the directory —
+   *  named people outside the owners & approvers group, and named
+   *  people the directory no longer has (left, or disabled). Async,
+   *  appended to the pure report; a lookup that fails skips its check
+   *  and says so. */
+  const peopleIssues = async (docs: ControlDoc[]): Promise<{ issues: ControlIssue[]; skipped: string[] }> => {
+    const issues: ControlIssue[] = [];
+    const skipped: string[] = [];
+    const withPeople = docs.filter((d) => d.people.length > 0);
+    if (withPeople.length === 0) return { issues, skipped };
+    // the pool: owners and approvers must be in the group (reviewers may be anyone — C2)
+    try {
+      const { poolState } = await import("./accessGates");
+      const pool = await poolState();
+      if (pool.configured && pool.members !== null) {
+        const inPool = new Set(pool.members.map((m) => m.email.toLowerCase()).filter((e) => e !== ""));
+        const hits: ControlDoc[] = [];
+        for (const d of withPeople) {
+          const names: string[] = [];
+          for (const p of d.people) {
+            if (p.role === "reviewers") continue;
+            p.emails.forEach((e, i) => {
+              if (!inPool.has(e)) names.push(`${p.role === "owner" ? "owner" : "approver"} ${p.names[i] ?? e}`);
+            });
+          }
+          if (names.length > 0) {
+            hits.push(d);
+            flaggedPeople.set(`notInPool|${docKey(d)}`, names);
+          }
+        }
+        if (hits.length > 0) {
+          issues.push({
+            key: "notInPool",
+            level: "warn",
+            title: "Named owner or approver is not in the owners & approvers group",
+            detail:
+              "The person is named on the document but not in the group that grants the right to approve — " +
+              "their approvals will be refused. Add them to the group, or replace them (Replace a person…).",
+            docs: hits,
+          });
+        }
+      } else if (pool.configured) skipped.push("The owners & approvers group could not be read — the group check did not run.");
+    } catch {
+      skipped.push("The owners & approvers group could not be read — the group check did not run.");
+    }
+    // the directory: every named email, looked up once (capped)
+    try {
+      const { directoryProfile } = await import("../store/people");
+      const emails = [...new Set(withPeople.flatMap((d) => d.people.flatMap((p) => p.emails)))].slice(0, 300);
+      const gone = new Set<string>();
+      let at = 0;
+      const worker = async () => {
+        while (at < emails.length) {
+          const e = emails[at++];
+          const prof = await directoryProfile(e);
+          if (!prof.found || !prof.accountEnabled) gone.add(e);
+        }
+      };
+      await Promise.all(Array.from({ length: Math.min(6, emails.length) }, worker));
+      const hits: ControlDoc[] = [];
+      for (const d of withPeople) {
+        const names: string[] = [];
+        for (const p of d.people) p.emails.forEach((e, i) => gone.has(e) && names.push(`${p.role === "owner" ? "owner" : p.role === "approvers" ? "approver" : "reviewer"} ${p.names[i] ?? e}`));
+        if (names.length > 0) {
+          hits.push(d);
+          flaggedPeople.set(`leftDirectory|${docKey(d)}`, names);
+        }
+      }
+      if (hits.length > 0) {
+        issues.push({
+          key: "leftDirectory",
+          level: "warn",
+          title: "Named person is no longer in the directory",
+          detail:
+            "The account has left or is disabled, so nobody holds that role in practice. " +
+            "Replace them (Replace a person…) — the document keeps its history.",
+          docs: hits,
+        });
+      }
+      if (emails.length === 300) skipped.push("Directory check capped at 300 people.");
+    } catch {
+      skipped.push("The directory could not be read — the left-the-business check did not run.");
+    }
+    return { issues, skipped };
+  };
+
+  const paint = (docs: ControlDoc[], extra?: { issues: ControlIssue[]; skipped: string[] }) => {
     const r = controlHealth(docs, roleFlags(opts.roles), Date.now(), opts.site);
+    if (extra !== undefined) {
+      r.issues.push(...extra.issues);
+      r.skipped.push(...extra.skipped);
+      const warned = new Set(r.issues.filter((i) => i.level === "warn").flatMap((i) => i.docs.map(docKey)));
+      r.clean = r.scanned - warned.size;
+    }
     report = r;
     if (exportBtn) exportBtn.disabled = r.issues.length === 0;
     clear(body);
@@ -223,6 +340,34 @@ export function openControlHealth(opts: ControlHealthOpts): void {
       );
     }
     for (const s of r.skipped) body.appendChild(el("div", "app-field-hint", `Not checked: ${s}`));
+    if (opts.canReassign === true) {
+      const tools = el("div", "app-docs-hrtools");
+      const rep = el("button", "app-btn", "Replace a person…") as HTMLButtonElement;
+      rep.title = "Swap one named owner, approver or reviewer for another across the scanned documents";
+      rep.addEventListener("click", () => {
+        void import("./roleReassign").then(({ openReplacePerson }) => {
+          openReplacePerson({
+            host: opts.host,
+            site: opts.site,
+            docs: docs
+              .filter((d) => d.people.length > 0)
+              .map((d) => {
+                const live = rowsById.get(docKey(d));
+                return { listId: d.listId, itemId: d.itemId, name: d.name, libName: d.libName, serverUrl: live?.serverUrl ?? "", readerFacing: d.stage === "approved", people: d.people };
+              })
+              .filter((d) => d.serverUrl !== ""),
+            onDone: (changed) => {
+              if (changed > 0) {
+                opts.onReassigned?.();
+                dlg.close();
+              }
+            },
+          });
+        });
+      });
+      tools.appendChild(rep);
+      body.appendChild(tools);
+    }
 
     if (r.issues.length === 0) {
       body.appendChild(
@@ -279,6 +424,8 @@ export function openControlHealth(opts: ControlHealthOpts): void {
         if (issue.key === "inRevision" && d.checkedOutTo !== "") {
           meta.push(`held by ${d.checkedOutTo}`);
         }
+        const flagged = flaggedPeople.get(`${issue.key}|${docKey(d)}`);
+        if (flagged !== undefined) meta.push(flagged.join(", "));
         row.append(
           el("span", "app-docs-hrdocname", d.name),
           el("span", "app-field-hint", meta.join(" · "))
@@ -320,6 +467,11 @@ export function openControlHealth(opts: ControlHealthOpts): void {
     (docs) => {
       if (!body.isConnected) return;
       paint(docs);
+      // C1: the directory-backed checks arrive after the pure report
+      void peopleIssues(docs).then((extra) => {
+        if (!body.isConnected) return;
+        paint(docs, extra);
+      });
     },
     (e: unknown) => {
       if (!body.isConnected) return;

@@ -183,6 +183,10 @@ Version lives in the tag alone — nothing is stamped into files.
   `whenSettled`). Debounced saves are flushed when their screen is
   left. Never `whenSettled` inside a function a tracked write calls —
   it would wait for itself (2026-10-01).
+- **A finding that needs the directory is appended, never awaited.**
+  The health report paints the pure `controlHealth` result at once
+  and the pool / directory checks (`peopleIssues`) arrive after it,
+  with "Not checked" lines when a lookup fails (2026-10-06).
 - **A multi-value taxonomy column needs a multi-value editor.** The
   tags editor was a single select for a `TaxonomyFieldTypeMulti`
   column: it replaced every tag and prefilled only the first, which

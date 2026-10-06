@@ -9,6 +9,7 @@
 //     stay open on "unknown" — SharePoint is the hard gate there, and a
 //     transient Graph failure must not strand a legitimate user.
 
+import { searchEntra } from "../store/people";
 import { GroupMember, groupMembers, isGroupMember } from "../store/accessGroup";
 import { appDocsConfig } from "./docsStore";
 
@@ -102,6 +103,35 @@ export async function poolPeopleSource(): Promise<PeopleSource> {
 
 /** The dictionary roles whose pickers select from the pool. */
 export const POOL_ROLES = new Set(["owner", "approvers", "reviewers"]);
+
+/** C2 (feedback round 1): a REVIEWER may be anyone in the directory —
+ *  document controllers included. The pool's members list first, the
+ *  directory fills in behind them; nothing is refused. */
+export async function reviewerPeopleSource(): Promise<PeopleSource> {
+  const pool = await poolState().catch(() => ({ configured: false, members: null }) as PoolState);
+  const members = (pool.members ?? [])
+    .filter((m) => m.email !== "")
+    .map((m) => ({ mail: m.email, displayName: m.name }));
+  const matches = (p: { mail: string; displayName: string }, l: string) =>
+    l === "" || p.displayName.toLowerCase().includes(l) || p.mail.toLowerCase().includes(l);
+  return {
+    restricted: false,
+    hint: members.length > 0 ? "Reviewers may be anyone — the owners & approvers group lists first." : "",
+    search: async (q) => {
+      const l = q.trim().toLowerCase();
+      const first = members.filter((p) => matches(p, l));
+      if (l.length < 2) return first;
+      let rest: { mail: string; displayName: string }[] = [];
+      try {
+        rest = (await searchEntra(q)).map((h) => ({ mail: h.mail, displayName: h.displayName }));
+      } catch {
+        rest = [];
+      }
+      const seen = new Set(first.map((p) => p.mail.toLowerCase()));
+      return [...first, ...rest.filter((p) => p.mail !== "" && !seen.has(p.mail.toLowerCase()))];
+    },
+  };
+}
 
 /** Controllers-group membership, merged into the admin gates BESIDE the
  *  Dataverse role. Strictly false on any failure — fail closed. */

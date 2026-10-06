@@ -44,6 +44,8 @@ export interface EditPropertiesOpts {
   row: DocRow;
   lib: DocLibrary;
   dictBy: Map<string, SiteColumn>;
+  /** C4: a definition per document type (term id → text). */
+  guidance?: { naming: string; typeNotes: Record<string, string> };
   host: HTMLElement;
   /** true = ride the held check-out (no check-in); false = bracket. */
   heldByMe: boolean;
@@ -210,6 +212,7 @@ export function openEditProperties(opts: EditPropertiesOpts): void {
       fields,
       columns: opts.lib.config.columns,
       dictBy: opts.dictBy,
+      typeNotes: opts.guidance?.typeNotes,
       onChange: sync,
       initial,
       sections: opts.sections,

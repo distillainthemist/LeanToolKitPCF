@@ -139,6 +139,27 @@ headed (informational — the app's own handoff performs the move to the
 target). What the flow must never do: write anywhere but staging, or
 touch rows whose status it did not set.
 
+## Recipe 3 — a management-of-change reference column (configuration)
+
+Feedback round 1 (report 32, 2026-10-06): "a metadata column to capture
+the management-of-change record number or link". No code — the
+register, the forms and the filters follow the site dictionary:
+
+1. In SharePoint, add a column to the standards library (and the
+   revision library, which mirrors it): **Hyperlink or Picture** when
+   the MOC system has a URL per record, else **Single line of text**
+   for the record number. Internal name e.g. `DMSChangeRecord`.
+2. Settings → Documents → **Document columns**: the column appears in
+   the dictionary on the next read. Give it a label ("MOC record"), a
+   group (Status), and set it ✓ available (or ★ default) for the
+   standard type. Tick *filterable* if controllers will search by it.
+3. The add and edit forms now carry the field; the details pane shows
+   it under its group; the chooser offers it as a column; a hyperlink
+   value renders as a link.
+
+Rename or regroup at any time in the column manager — the dictionary is
+the one source of order and wording.
+
 ## Prerequisite — Power BI embeds on boards (browser policy)
 
 Diagnosed 2026-08-17 (Ben, prod). Embed cards load Power BI's **secure

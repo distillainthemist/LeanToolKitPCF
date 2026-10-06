@@ -9,7 +9,7 @@
 
 import { clear, el } from "../../../shared/ui/dom";
 import { openDialog } from "../../../shared/ui/dialog";
-import { poolPeopleSource } from "./accessGates";
+import { reviewerPeopleSource } from "./accessGates";
 import {
   DEFAULT_CADENCE_MONTHS,
   LifecycleCommandDef,
@@ -171,7 +171,7 @@ export function openLifecycleCommand(opts: LifecycleRunOpts): void {
   // when the pool is readable, all of Entra (with a hint) otherwise.
   const added: { email: string; name: string }[] = [];
   if (opts.reviewersPicker !== undefined) {
-    const source = poolPeopleSource();
+    const source = reviewerPeopleSource();
     const existing = opts.reviewersPicker.existing;
     if (existing.length > 0) {
       dlg.body.appendChild(
@@ -548,8 +548,20 @@ export function openLifecycleCommand(opts: LifecycleRunOpts): void {
 
     opts.onDone();
     // the notify panel keeps the dialog open when there is someone to
-    // tell — otherwise close as always
-    if (!showNotifyPanel()) dlg.close();
+    // tell — otherwise close as always. Submit-for-review with nobody to
+    // tell stays open to SAY so (C5, feedback round 1: "no clear
+    // confirmation that it had gone somewhere").
+    if (!showNotifyPanel()) {
+      if (command.key === "submitReview") {
+        const closeBtn = dlg.root.querySelector(".ltk-btn-secondary") as HTMLButtonElement | null;
+        if (closeBtn !== null) closeBtn.textContent = "Close";
+        goBtn.style.display = "none";
+        running = false;
+        status.textContent = "✓ Sent for review — the status has moved. No reviewer is named on this document, so nobody was messaged: add reviewers, or tell them yourself.";
+        return;
+      }
+      dlg.close();
+    }
   };
 }
 
