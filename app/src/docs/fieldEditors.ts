@@ -59,6 +59,8 @@ export interface EditorInitial {
   text?: string;
   people?: { email: string; name: string }[];
   term?: { label: string; termId: string };
+  /** every term of a multi-value taxonomy column (A9) */
+  terms?: { label: string; termId: string }[];
 }
 
 export interface FieldEditorOpts {
@@ -164,7 +166,7 @@ export function buildFieldEditors(opts: FieldEditorOpts): BuiltEditor[] {
         }
         // prefill lands AFTER the options exist — matched by TERM ID,
         // so a renamed term still preselects
-        if (init?.term !== undefined && init.term.termId !== "") {
+        if (f.type !== "TaxonomyFieldTypeMulti" && init?.term !== undefined && init.term.termId !== "") {
           const want = init.term.termId.toLowerCase();
           for (const o of Array.from(sel.options)) {
             if (o.value === "") continue;
@@ -182,7 +184,51 @@ export function buildFieldEditors(opts: FieldEditorOpts): BuiltEditor[] {
         }
       });
       sel.addEventListener("change", sync);
-      box.appendChild(fieldRow(labelOf(f) + star, sel));
+      // A9 (feedback round 1): a MULTI column (tags) keeps every term —
+      // chips for what the document carries, the select ADDS one; the
+      // single select used to replace the lot and prefill only the first
+      const multi = f.type === "TaxonomyFieldTypeMulti";
+      const picked: { label: string; termId: string }[] = multi ? [...(init?.terms ?? [])] : [];
+      const chipBox = el("div", "app-docs-termchips");
+      const paintChips = () => {
+        clear(chipBox);
+        for (const t of picked) {
+          const chip = el("span", "app-docs-termchip");
+          chip.appendChild(el("span", "", t.label));
+          const rm = el("button", "app-link app-docs-termchip-x", "✕") as HTMLButtonElement;
+          rm.type = "button";
+          rm.title = `Remove ${t.label}`;
+          rm.addEventListener("click", () => {
+            picked.splice(picked.indexOf(t), 1);
+            paintChips();
+            sync();
+          });
+          chip.appendChild(rm);
+          chipBox.appendChild(chip);
+        }
+        if (picked.length === 0) chipBox.appendChild(el("span", "app-field-hint", "No tags yet"));
+      };
+      if (multi) {
+        placeholder(sel, "＋ Add a tag…");
+        sel.addEventListener("change", () => {
+          if (sel.value === "") return;
+          try {
+            const v = JSON.parse(sel.value) as { label: string; termId: string };
+            if (!picked.some((t) => t.termId.toLowerCase() === v.termId.toLowerCase())) picked.push(v);
+          } catch {
+            /* not our JSON */
+          }
+          sel.value = "";
+          paintChips();
+          sync();
+        });
+        paintChips();
+        const stack = el("div", "app-docs-termstack");
+        stack.append(chipBox, sel);
+        box.appendChild(fieldRow(labelOf(f) + star, stack));
+      } else {
+        box.appendChild(fieldRow(labelOf(f) + star, sel));
+      }
       // H1: the hashtags column invites PROPOSALS — the vocabulary is
       // closed (controllers mint terms), but anyone may ask
       if (dictBy.get(f.internal)?.role === "tags") {
@@ -234,6 +280,16 @@ export function buildFieldEditors(opts: FieldEditorOpts): BuiltEditor[] {
         field: f,
         kind,
         read: () => {
+          if (multi) {
+            return {
+              internal: f.internal,
+              kind: "taxonomy",
+              label: picked[0]?.label ?? "",
+              termId: picked[0]?.termId ?? "",
+              multi: true,
+              terms: [...picked],
+            };
+          }
           let v = { label: "", termId: "" };
           if (sel.value !== "") {
             // defensive twin of the placeholder fix — a value that is
@@ -252,7 +308,7 @@ export function buildFieldEditors(opts: FieldEditorOpts): BuiltEditor[] {
             multi: f.type === "TaxonomyFieldTypeMulti",
           };
         },
-        isEmpty: () => sel.value === "",
+        isEmpty: () => (multi ? picked.length === 0 : sel.value === ""),
       });
       continue;
     }

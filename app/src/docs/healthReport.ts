@@ -109,11 +109,25 @@ export function openControlHealth(opts: ControlHealthOpts): void {
   };
 
   const scan = async (): Promise<ControlDoc[]> => {
-    const { roles } = opts;
     const out: ControlDoc[] = [];
     for (const lib of opts.libraries) {
       const carried = new Set(lib.config.columns.map((c) => c.internal));
-      const orgCol = roles.org.find((c) => carried.has(c)) ?? "";
+      const orgCol = opts.roles.org.find((c) => carried.has(c)) ?? "";
+      // A8 (feedback round 1): a library's own column mapping comes
+      // first — a review column under another internal name read as
+      // "no next review date" when only the site-level name was tried
+      const libRole = (role: string, fallback: string): string =>
+        lib.config.columns.find((c) => c.role === role)?.internal ?? fallback;
+      const roles = {
+        ...opts.roles,
+        owner: libRole("owner", opts.roles.owner),
+        status: libRole("status", opts.roles.status),
+        docType: libRole("docType", opts.roles.docType),
+        documentId: libRole("documentId", opts.roles.documentId),
+        review: libRole("review", opts.roles.review),
+        links: libRole("linkedDocuments", opts.roles.links),
+        regulator: libRole("regulatorApproved", opts.roles.regulator),
+      };
       const wanted = [
         roles.owner,
         roles.status,

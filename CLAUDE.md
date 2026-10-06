@@ -183,6 +183,16 @@ Version lives in the tag alone — nothing is stamped into files.
   `whenSettled`). Debounced saves are flushed when their screen is
   left. Never `whenSettled` inside a function a tracked write calls —
   it would wait for itself (2026-10-01).
+- **A multi-value taxonomy column needs a multi-value editor.** The
+  tags editor was a single select for a `TaxonomyFieldTypeMulti`
+  column: it replaced every tag and prefilled only the first, which
+  read to a controller as "couldn't add a tag" (feedback round 1,
+  2026-10-06). `PrefillValue.terms` / `AddFieldValue.terms` carry the
+  list; `taxonomyTermsOf` is the one reader.
+- **A chosen column order is the person's.** `buildRegisterColumns`
+  sorts by the dictionary only for DEFAULT sets; a view's own set
+  (`keepOrder`) keeps the chooser's drag order (2026-10-06 — the
+  chooser had promised it since 2026-07-30).
 - **A part done is not the action done — until every part is.**
   `settleFromParts` (shared/schema/actions.ts) is the one rule: the
   hub's "my part" tick applies it both ways, the store's write

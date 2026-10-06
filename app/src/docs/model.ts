@@ -1935,6 +1935,8 @@ export function dictionaryHealth(input: HealthInput): HealthFinding[] {
 export interface PrefillValue {
   text?: string;
   term?: { label: string; termId: string };
+  /** A multi-value taxonomy column's EVERY term (A9, feedback round 1). */
+  terms?: { label: string; termId: string }[];
 }
 
 /**
@@ -1953,18 +1955,28 @@ export function prefillFromItem(
     const raw = item[f.internal];
     if (raw == null) continue;
     if (f.isTaxonomy) {
-      const one = Array.isArray(raw) ? (raw as unknown[])[0] : raw;
-      if (one && typeof one === "object") {
-        const o = one as { Label?: unknown; TermGuid?: unknown };
-        const label = typeof o.Label === "string" ? o.Label : "";
-        const termId = typeof o.TermGuid === "string" ? o.TermGuid : "";
-        if (termId !== "") out.set(f.internal, { term: { label, termId } });
-      }
+      const list = (Array.isArray(raw) ? (raw as unknown[]) : [raw])
+        .filter((x): x is { Label?: unknown; TermGuid?: unknown } => !!x && typeof x === "object")
+        .map((o) => ({
+          label: typeof o.Label === "string" ? o.Label : "",
+          termId: typeof o.TermGuid === "string" ? o.TermGuid : "",
+        }))
+        .filter((t) => t.termId !== "");
+      if (list.length > 0) out.set(f.internal, { term: list[0], terms: list });
       continue;
     }
     if (f.type === "DateTime") {
       if (typeof raw === "string" && raw.length >= 10) {
-        out.set(f.internal, { text: raw.slice(0, 10) });
+        // a date-only column arrives as the SITE's midnight in UTC
+        // ("2026-08-18T14:00:00Z" for 19 Aug in Australia) — cutting the
+        // string gave the day before (feedback round 1, A3); local date
+        // parts give the day the site meant (the R6 lesson)
+        const t = Date.parse(raw);
+        const d = Number.isNaN(t) ? null : new Date(t);
+        const p = (v: number) => String(v).padStart(2, "0");
+        out.set(f.internal, {
+          text: d === null ? raw.slice(0, 10) : `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`,
+        });
       }
       continue;
     }
@@ -2398,10 +2410,20 @@ export interface AddFieldValue {
   /** taxonomy payload. */
   label?: string;
   termId?: string;
-  /** taxonomy only: a multi-value column takes an ARRAY of one. */
+  /** taxonomy only: a multi-value column takes an ARRAY. */
   multi?: boolean;
+  /** multi-value taxonomy: every term to write (A9); label/termId then
+   *  carry the first for callers that read one. */
+  terms?: { label: string; termId: string }[];
   /** person payload — emails resolve through the claims key. */
   people?: { email: string; name: string }[];
+}
+
+/** The terms a taxonomy value carries: the list for a multi column,
+ *  else the one label/termId pair; empties dropped. */
+export function taxonomyTermsOf(v: AddFieldValue): { label: string; termId: string }[] {
+  const list = v.terms !== undefined ? v.terms : (v.label ?? "") !== "" && (v.termId ?? "") !== "" ? [{ label: v.label ?? "", termId: v.termId ?? "" }] : [];
+  return list.filter((t) => t.label !== "" && t.termId !== "");
 }
 
 export function splitAddWrites(values: AddFieldValue[]): {
@@ -2412,9 +2434,10 @@ export function splitAddWrites(values: AddFieldValue[]): {
   const patch: Record<string, unknown> = {};
   for (const v of values) {
     if (v.kind === "taxonomy") {
-      if ((v.label ?? "") === "" || (v.termId ?? "") === "") continue;
-      const term = { Value: v.label, TermGuid: v.termId, WssId: -1 };
-      patch[v.internal] = v.multi === true ? [term] : term;
+      const terms = taxonomyTermsOf(v);
+      if (terms.length === 0) continue;
+      const shaped = terms.map((t) => ({ Value: t.label, TermGuid: t.termId, WssId: -1 }));
+      patch[v.internal] = v.multi === true ? shaped : shaped[0];
       continue;
     }
     if (v.kind === "person") {
@@ -2511,11 +2534,13 @@ export function newDocumentWrites(
         FieldValue: formatDateForLocale((v.text ?? "").trim(), localeId),
       });
     }
-    if (v.kind === "taxonomy" && (v.label ?? "") !== "" && (v.termId ?? "") !== "") {
+    if (v.kind === "taxonomy" && taxonomyTermsOf(v).length > 0) {
+      const terms = taxonomyTermsOf(v);
       taxInternals.push(v.internal);
-      formValues.push({ FieldName: v.internal, FieldValue: `${v.label}|${v.termId}` });
-      const term = { Value: v.label, TermGuid: v.termId, WssId: -1 };
-      patch[v.internal] = v.multi === true ? [term] : term;
+      // the forms engine's multi format: terms joined with ";"
+      formValues.push({ FieldName: v.internal, FieldValue: terms.map((t) => `${t.label}|${t.termId}`).join(";") });
+      const shaped = terms.map((t) => ({ Value: t.label, TermGuid: t.termId, WssId: -1 }));
+      patch[v.internal] = v.multi === true ? shaped : shaped[0];
     }
   }
   return { formValues, taxInternals, patch };

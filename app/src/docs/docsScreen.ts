@@ -1048,6 +1048,7 @@ export function mountDocs(
       depth.addEventListener("click", () => {
         closeMenu();
         searchContents = !searchContents;
+        depthBox.checked = searchContents;
         void load(true);
       });
       menu.appendChild(depth);
@@ -1651,7 +1652,7 @@ export function mountDocs(
                 el(
                   "span",
                   "app-field-hint",
-                  `${req.who.name} · granted ${req.granted?.when.slice(0, 10) ?? ""}`
+                  `${req.who.name} · granted ${formatDayMonthYear(req.granted?.when ?? "")}`
                 )
               );
               if (rt.row !== null && revEditorsInternal !== "") {
@@ -1741,7 +1742,20 @@ export function mountDocs(
     // export the register) live behind one kebab — the app's convention
     const topKebab = el("button", "app-kebab app-docs-topkebab", "⋮") as HTMLButtonElement;
     topKebab.title = "More actions";
-    top.append(searchWrap, scopeBtn, actionNeeded);
+    // A6 (feedback round 1): three testers never found "Match contents"
+    // in the scope menu — it is a labelled toggle beside the box too
+    const depthToggle = el("label", "app-docs-check app-docs-depthtoggle") as HTMLLabelElement;
+    const depthBox = el("input", "") as HTMLInputElement;
+    depthBox.type = "checkbox";
+    depthBox.checked = searchContents;
+    depthBox.disabled = favMode;
+    depthToggle.append(depthBox, document.createTextNode(" Match contents & every field"));
+    depthToggle.title = "Off, search matches document names and titles. On, it also matches what the index reads inside each document — more results, never fewer.";
+    depthBox.addEventListener("change", () => {
+      searchContents = depthBox.checked;
+      void load(true);
+    });
+    top.append(searchWrap, depthToggle, scopeBtn, actionNeeded);
     if (favMode) {
       scopeBtn.style.display = "none";
       actionNeeded.style.display = "none";
@@ -1790,11 +1804,12 @@ export function mountDocs(
       el("span", "app-docs-favnavlabel", "Favourites"),
       favNavCount
     );
-    favNav.title = "The documents you have starred, across every library";
+    favNav.title = favMode ? "Back to the libraries" : "The documents you have starred, across every library";
     favNav.setAttribute("aria-pressed", String(favMode));
     favNav.addEventListener("click", () => {
-      if (favMode) return; // already here — the libraries below lead out
-      pendingFav = true;
+      // a second click leaves favourites (feedback round 1, A7 — three
+      // testers expected the button to toggle)
+      pendingFav = !favMode;
       remount();
     });
     if (whoId !== "") nav.appendChild(favNav);
@@ -2745,6 +2760,36 @@ export function mountDocs(
       },
     };
 
+    // A7 (feedback round 1): a star on every row — one click to
+    // favourite, no kebab; signed-in only (favourites are per person)
+    const starCol: ListColumn<DocRow> = {
+      key: "star",
+      label: "",
+      width: "30px",
+      render: (row) => {
+        const isFav = () => favs.some((f) => f.uniqueId === row.uniqueId);
+        const b = el("button", "app-link app-docs-rowstar", isFav() ? "★" : "☆") as HTMLButtonElement;
+        b.type = "button";
+        const paint = () => {
+          b.textContent = isFav() ? "★" : "☆";
+          b.classList.toggle("app-docs-rowstar-on", isFav());
+          b.title = isFav() ? "Favourited — click to remove" : "Add to favourites";
+          b.setAttribute("aria-label", b.title);
+          b.setAttribute("aria-pressed", String(isFav()));
+        };
+        paint();
+        b.addEventListener("click", (e) => {
+          e.stopPropagation();
+          b.disabled = true;
+          void favToggleFor(row)().then(() => {
+            b.disabled = false;
+            paint();
+          });
+        });
+        return b;
+      },
+    };
+
     // the view's own column set beats the library default (Phase 3a —
     // carried by saved views and shared links; [] = default)
     const chosenColumns = bootView?.columns ?? [];
@@ -2769,6 +2814,8 @@ export function mountDocs(
                 dictBy.has("Modified") ? [] : ["Modified"]
               ),
         bucket,
+        // a chosen column set carries its own order (the chooser's drag)
+        keepOrder: chosenColumns.length > 0,
         // more than one library in view: say which one each row came from
         libraryLabel:
           viewLibs().length > 1
@@ -2777,7 +2824,7 @@ export function mountDocs(
                 return lib ? lib.config.title || lib.name : "";
               }
             : undefined,
-        trailing: [kebabCol],
+        trailing: whoId !== "" ? [starCol, kebabCol] : [kebabCol],
       });
 
     /** Favourite wiring shared by the overlay and the row kebab. */
@@ -2984,7 +3031,20 @@ export function mountDocs(
         const libStatusCol = lib?.config.columns.find((c) => c.role === "status") ?? null;
         // a previous overlay's repaint must not outlive it
         viewerRepaints.clear();
+        // A5 (feedback round 1): closing the preview sent the register
+        // back to the top — remember every scroll offset in play and put
+        // it back once the overlay is gone
+        const scrolled: { el: Element | Window; top: number }[] = [{ el: window, top: window.scrollY }];
+        for (const e of Array.from(wrap.querySelectorAll<HTMLElement>("*"))) if (e.scrollTop > 0) scrolled.push({ el: e, top: e.scrollTop });
         closeViewer = openDocViewer({
+          onClose: () => {
+            requestAnimationFrame(() => {
+              for (const s of scrolled) {
+                if (s.el === window) window.scrollTo({ top: s.top });
+                else (s.el as HTMLElement).scrollTop = s.top;
+              }
+            });
+          },
           site: app.siteUrl,
           row,
           driveId,

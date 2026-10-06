@@ -71,7 +71,7 @@ as the signed-in user):
 | *(site)* DMSDocumentOwners | SharePoint site group | none | Holds ownership of the editors site group. Members: the two Entra groups above. |
 | *(site)* DMSDocumentEditors | SharePoint site group | **Contribute on the standards library ONLY** (no site-level grant) | Grant approvals seat people here — membership takes effect **immediately** (measured 2026-08-06; the Entra route below propagates in minutes-to-an-hour). Settings: owner = DMSDocumentOwners, membership editable by *Group Owner*, viewable by *Everyone* (the app reads it). |
 | Temporary Document Editors | Entra security | Contribute on the standards library | FALLBACK seat for tenants without the site group. Pool members must be seeded as its Entra OWNERS to execute grants. |
-| General users | (the app access group) | Read on standards, templates and records; write on working libraries | Working libraries MUST stay writable — the working-document flows depend on it. |
+| General users | (the app access group) | Read on standards, templates and records **with View Versions** (a custom Read level, or the built-in Read which carries it); write on working libraries | Working libraries MUST stay writable — the working-document flows depend on it. Without View Versions the viewer's version history pane reads "needs the View Versions permission" (feedback round 1, 2026-10-06). |
 
 Name the site editors group in **Settings → Access control → SharePoint
 editors site group**; link the three Entra groups on the same tab. The

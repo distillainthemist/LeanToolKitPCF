@@ -103,6 +103,8 @@ interface ViewerOpts {
    *  link in the field. No close button, no escape-away, no
    *  scrim-click dismissal: there is nowhere else to go. */
   solo?: boolean;
+  /** After the overlay closes (the screen restores its scroll, A5). */
+  onClose?: () => void;
   /** Share this document (5I) — the screen owns the dialog (permalink +
    *  QR); the viewer only offers the button. */
   share?: () => void;
@@ -269,6 +271,7 @@ export function openDocViewer(opts: ViewerOpts): () => void {
     row.name,
     () => {
       if (blobUrl !== "") URL.revokeObjectURL(blobUrl);
+      opts.onClose?.();
     },
     true,
     opts.solo === true
@@ -297,7 +300,18 @@ export function openDocViewer(opts: ViewerOpts): () => void {
   // collapsed by default (5I): the document speaks first, the details
   // pane is a click away — and a share-link open IS this default
   let detailsOpen = opts.detailsOpen === true;
+  const paintHooks: (() => void)[] = [];
   if (opts.solo !== true) {
+    // the pane's door, in the head where eyes land first — the rail on
+    // the edge stays, but three testers never found it (A10)
+    const detailsBtn = el("button", "app-btn app-docs-headdetails", "Details ›") as HTMLButtonElement;
+    detailsBtn.title = "Show the document's details";
+    detailsBtn.addEventListener("click", () => {
+      detailsOpen = true;
+      paintDetails();
+    });
+    head.appendChild(detailsBtn);
+    paintHooks.push(() => (detailsBtn.style.display = detailsOpen ? "none" : ""));
     head.appendChild(linkBtn("Open in new tab ↗", pdfUrl, false));
     // R4: ONE close control — ✕ alone; the details door lives on the
     // pane itself
@@ -339,6 +353,7 @@ export function openDocViewer(opts: ViewerOpts): () => void {
     aside.style.display = detailsOpen ? "" : "none";
     edge.style.display = detailsOpen ? "none" : "";
     edge.setAttribute("aria-expanded", String(detailsOpen));
+    for (const h of paintHooks) h();
   };
   hideBtn.addEventListener("click", () => {
     detailsOpen = false;
@@ -368,13 +383,13 @@ export function openDocViewer(opts: ViewerOpts): () => void {
   const chips = el("div", "app-docs-detailchips");
   const paintChips = () => {
     clear(chips);
-    const dt = roleValue("docType").split(";")[0].trim();
-    if (dt !== "") chips.appendChild(el("span", "app-docs-chip", dt));
     const docId = roleValue("documentId");
     if (docId !== "") chips.appendChild(el("span", "app-docs-detaildocid", docId));
+    // the status chip stays only while the document has no id to show —
+    // the pane's Status section carries the status row itself
     const sv =
       typeof opts.statusValue === "function" ? opts.statusValue() : (opts.statusValue ?? "");
-    if (sv !== "" && opts.statusChipFor) chips.appendChild(opts.statusChipFor(sv));
+    if (docId === "" && sv !== "" && opts.statusChipFor) chips.appendChild(opts.statusChipFor(sv));
   };
   paintChips();
   aside.appendChild(chips);
@@ -602,6 +617,10 @@ export function openDocViewer(opts: ViewerOpts): () => void {
     for (const a of (lc?.actions() ?? []).filter((x) => !x.primary && !inCard.has(x.key))) {
       item(a.label, () => lc?.run(a.key));
     }
+    // A4 (feedback round 1): the browser's own save from the embedded
+    // PDF viewer names the file "pdf" — these name it after the document
+    item(row.ext === "pdf" ? "Download PDF" : "Download as PDF", () => void downloadNamed("pdf"));
+    if (row.ext !== "pdf") item(`Download original (.${row.ext})`, () => void downloadNamed("original"));
     if (menu.childElementCount === 0) {
       menu.appendChild(el("div", "app-field-hint", "No further actions."));
     }
@@ -679,7 +698,10 @@ export function openDocViewer(opts: ViewerOpts): () => void {
     // O2: the roles the pane renders ELSEWHERE leave the grid — the
     // identity line (docType · documentId · status) and the statement
     // chips (ackRequired, regulatorApproved) below it
-    const ELSEWHERE = new Set(["docType", "documentId", "status", "ackRequired", "regulatorApproved"]);
+    // A10 (feedback round 1): the type and the status read inside their
+    // own sections (Categorisation, Status) rather than floating above
+    // the pane — the document id and the statement chips stay up top
+    const ELSEWHERE = new Set(["documentId", "ackRequired", "regulatorApproved"]);
     const dropped = new Set(
       Object.keys(rolesMap).filter((k) => ELSEWHERE.has(rolesMap[k]))
     );
@@ -904,7 +926,18 @@ export function openDocViewer(opts: ViewerOpts): () => void {
         : { versions: [], error: "item id unknown" };
     if (!propsBox.isConnected || gen !== detailsGen) return;
     if (vres.error !== "") {
-      propsBox.appendChild(el("div", "app-field-hint", `History unavailable: ${vres.error}`));
+      // a reader whose permission level lacks View Versions gets a 403
+      // here — say so in words, never the JSON (feedback round 1, A1)
+      const refused = /403|unauthori[sz]ed|access denied|-2147024891/i.test(vres.error);
+      propsBox.appendChild(
+        el(
+          "div",
+          "app-field-hint",
+          refused
+            ? "Version history needs the View Versions permission on this site — ask the site owner to add it to the readers' permission level."
+            : `History unavailable: ${vres.error.slice(0, 160)}`
+        )
+      );
       return;
     }
     if (vres.versions.length === 0) {
@@ -1113,6 +1146,29 @@ export function openDocViewer(opts: ViewerOpts): () => void {
   // one item lookup, started on first need
   let presignedOnce: ReturnType<typeof presignedUrls> | null = null;
   const presigned = () => (presignedOnce ??= presignedUrls(site, opts.driveId, row));
+
+  /** Save the document under ITS name (A4): the PDF rendition or the
+   *  original bytes, fetched to a blob so the download attribute holds;
+   *  a tenant whose policy refuses the fetch gets the URL in a new tab. */
+  const downloadNamed = async (what: "pdf" | "original"): Promise<void> => {
+    const p = await presigned();
+    const base = row.name.replace(/\.[^.]+$/, "");
+    const url = what === "original" || row.ext === "pdf" ? p.downloadUrl : transformPdfUrl(p.thumbUrl, row.ext);
+    const name = what === "original" ? row.name : `${base}.pdf`;
+    if (url === "") return;
+    try {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(String(res.status));
+      const blob = await res.blob();
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = name;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    } catch {
+      window.open(url, "_blank", "noopener");
+    }
+  };
 
   /** The frame src the browser can always load: a presigned transform
    *  URL for office files, fetched-to-blob bytes for a PDF (its

@@ -169,6 +169,11 @@ export interface RegisterColumnOpts {
   libraryLabel?: (row: DocRow) => string;
   /** Appended after Modified (the screen's kebab; cards pass none). */
   trailing?: ListColumn<DocRow>[];
+  /** True when `wanted` carries an order the person SET (the chooser's
+   *  drag, a saved view): keep it. Otherwise the dictionary orders. The
+   *  chooser promised "drag to set their order" while this re-sorted
+   *  every time (feedback round 1, A2). */
+  keepOrder?: boolean;
 }
 
 /**
@@ -210,7 +215,7 @@ export function buildRegisterColumns(
   // ORDER, so columns sit in the same relative sequence whatever is
   // hidden (Ben, 2026-08-04). Modified is unknown to the dictionary,
   // so it lands last.
-  const wanted = sortByDictionary(opts.wanted, [...dictBy.keys()]);
+  const wanted = opts.keepOrder === true ? [...opts.wanted] : sortByDictionary(opts.wanted, [...dictBy.keys()]);
   const libraryLabel = opts.libraryLabel;
   if (libraryLabel !== undefined && opts.bucket !== "narrow") {
     columns.push({

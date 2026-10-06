@@ -20,7 +20,26 @@ are in the export. Everything below is app-only unless marked.
 - Report 12 (lost view) → treated as fixed by named views; ask Ellen to
   confirm on v0.63+.
 
-## Tranche A — quick wins and clear bugs (first release)
+## Tranche A — quick wins and clear bugs (first release) — BUILT 2026-10-06, unreleased
+
+Status per item: A1 fallback + site step ✓ · A2 ✓ (the register now
+honours a chosen column order; the dictionary orders only the
+defaults — this reverses the 2026-08-04 "dictionary orders" rule for
+views that carry their own order) · A3 ✓ (date-only prefill from the
+site's midnight; the access-request "granted" date too) · A4 ✓
+("Download as PDF" / "Download original" in the pane's ⋯, fetched to a
+blob so the name holds; a refused fetch opens the URL instead) · A5 ✓
+(every scroll offset restored after the overlay closes) · A6 ✓ (the
+toggle beside the search box, in step with the scope menu) · A7 ✓
+(the nav entry toggles off; a ☆ column on every row for signed-in
+people) · A8 ✓ (roles resolved per library) · A9 ✓ (the real fault:
+the tags editor was a SINGLE select on a multi-value column — it
+replaced every tag and prefilled only the first; now chips + an adder,
+every term written) · A10 ✓ (type and status rows inside their
+sections, the id chip stays; a "Details ›" button in the head).
+Hosted checks: the version history line on prod, a tag added beside
+existing ones, the PDF download's name, the scroll after closing a
+preview, the health report's review dates on the library that failed.
 
 | # | Report | Fix |
 |---|---|---|

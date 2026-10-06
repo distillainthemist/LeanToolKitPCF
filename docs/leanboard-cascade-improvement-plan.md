@@ -1403,6 +1403,18 @@ reschedule/cancel history with a reason picklist.
 - **2026-10-06 — released as v0.64.0** (app-only): the issues PDF
   export, the Gantt bar without its state filter, the parts rule and
   the closing-road fixes.
+- **2026-10-06 — user feedback round 1, Tranche A.** Ben handed over
+  the 2026-10-05 issues export (50 pilot reports); reviewed, eight
+  clarifications answered, the plan written to
+  docs/user-feedback-plan-2026-10.md. Tranche A built: ten fixes in
+  the Documents module (version-history 403 in words + the View
+  Versions site step; the chooser's column order honoured; date-only
+  prefill from the site's day; named PDF / original downloads; scroll
+  restored after the preview; the contents toggle beside search;
+  favourites toggle-off + a row star; health report roles per
+  library; multi-value tags as chips — the "couldn't add a tag" fault;
+  type and status inside their pane sections + a head Details
+  button). Tests 754. Unreleased.
 - **2026-10-01 — the stage bar; initials.** Ben: fold the stage
   label and its PDCA symbol into the bar as thick labelled segments
   (done full colour, current outlined, future grey), bring the gate

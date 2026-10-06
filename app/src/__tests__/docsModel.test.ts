@@ -1494,8 +1494,12 @@ describe("edit-properties prefill (5H1)", () => {
       },
       fields as never
     );
-    expect(got.get("DMSDocumentType")).toEqual({ term: { label: "Procedure", termId: "t-1" } });
-    expect(got.get("DMSTags")).toEqual({ term: { label: "Safety", termId: "t-2" } });
+    expect(got.get("DMSDocumentType")).toEqual({ term: { label: "Procedure", termId: "t-1" }, terms: [{ label: "Procedure", termId: "t-1" }] });
+    // multi taxonomy: EVERY term prefills (A9, 2026-10-06); the first is the single twin
+    expect(got.get("DMSTags")).toEqual({
+      term: { label: "Safety", termId: "t-2" },
+      terms: [{ label: "Safety", termId: "t-2" }, { label: "Ops", termId: "t-3" }],
+    });
     expect(got.get("DMSEffectiveDate")).toEqual({ text: "2026-08-07" });
     expect(got.get("Title")).toEqual({ text: "Metal Despatch" });
     // a number is stringified — but a person id is still a number, and
