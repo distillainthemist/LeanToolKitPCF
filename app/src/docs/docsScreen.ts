@@ -4469,6 +4469,11 @@ export function mountDocs(
           void saveDocView(whoId, { ...currentView(), name }).then((list) => {
             if (dead) return;
             savedViews = list;
+            // the view just saved IS the active one — the chip shows it and
+            // Update becomes available at once (Ben, 2026-10-06)
+            activeViewName = name;
+            paintViewChip();
+            nameIn.value = "";
             paint();
           });
         };
