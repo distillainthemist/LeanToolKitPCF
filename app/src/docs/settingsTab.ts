@@ -1757,8 +1757,8 @@ export async function renderDocsSettings(body: HTMLElement, ctx: Ctx): Promise<v
         "corporate/functional sites ticked here — sites only, never departments; the " +
         "pane's expansion handles the levels below. Only their OWN site is filtered by " +
         "default; the rest sit collapsed, and Show-other-sites reveals everything else. " +
-        "Site names must match the site on user records; an unmapped site falls back to " +
-        "name-matching its org branch."
+        "Pick the site from the organisation's defined sites; an unmapped site falls back " +
+        "to name-matching its org branch."
     )
   );
   const dofBox = el("div", "");
@@ -1771,8 +1771,11 @@ export async function renderDocsSettings(body: HTMLElement, ctx: Ctx): Promise<v
         return;
       }
       dofBox.appendChild(el("div", "app-loading-line", "Reading the organisation tree…"));
-      // live walk — an admin mapping branches must see fresh terms
-      const walk = await fetchTermPaths(app.siteUrl, app.orgSetId);
+      // live walk — an admin mapping branches must see fresh terms; the
+      // SITE list comes from the organisation settings, not typed (Ben,
+      // 2026-10-07)
+      const [walk, orgRaw] = await Promise.all([fetchTermPaths(app.siteUrl, app.orgSetId), orgJson().catch(() => "")]);
+      const orgSites = parseOrgTree(orgRaw).map((n) => n.site).filter((x) => x !== "");
       clear(dofBox);
       if (walk.error !== "") {
         dofBox.appendChild(note(`Term walk failed: ${walk.error}`));
@@ -1782,8 +1785,18 @@ export async function renderDocsSettings(body: HTMLElement, ctx: Ctx): Promise<v
         walk.nodes.find((n) => n.id.toLowerCase() === id.toLowerCase())?.labels.join(" › ") ??
         `(missing term ${id.slice(0, 8)}…)`;
 
-      const siteIn = el("input", "app-input") as HTMLInputElement;
-      siteIn.placeholder = "Site name (as on user records), e.g. Kwinana";
+      const siteIn = el("select", "app-input") as HTMLSelectElement;
+      {
+        const none = el("option", "", "Choose a site…") as HTMLOptionElement;
+        none.value = "";
+        siteIn.appendChild(none);
+        for (const name of orgSites) {
+          const o = el("option", "", name) as HTMLOptionElement;
+          o.value = name;
+          siteIn.appendChild(o);
+        }
+      }
+      if (orgSites.length === 0) dofBox.appendChild(note("No sites are defined under Settings → Organisation yet."));
       const boxes = new Map<string, HTMLInputElement>();
       const tree = el("div", "app-docs-doftree");
       // SITES only (Ben, 2026-08-14): depth 1, or depth 2 under a
@@ -1814,7 +1827,7 @@ export async function renderDocsSettings(body: HTMLElement, ctx: Ctx): Promise<v
           );
           const key = siteTerm !== undefined ? siteTerm.id.toLowerCase() : typed;
           if (typed === "") {
-            st.textContent = "Name the site first.";
+            st.textContent = "Choose the site first.";
             st.classList.add("app-docs-addstatus-warn");
             return;
           }
@@ -1851,6 +1864,12 @@ export async function renderDocsSettings(body: HTMLElement, ctx: Ctx): Promise<v
         );
         const edit = el("button", "app-btn", "Edit") as HTMLButtonElement;
         edit.addEventListener("click", () => {
+          // a mapping for a site that no longer exists in the org still edits
+          if (![...siteIn.options].some((o) => o.value === siteName)) {
+            const o = el("option", "", siteName) as HTMLOptionElement;
+            o.value = siteName;
+            siteIn.appendChild(o);
+          }
           siteIn.value = siteName;
           for (const [id, cb] of boxes) {
             cb.checked = ids.some((x) => x.toLowerCase() === id.toLowerCase());
