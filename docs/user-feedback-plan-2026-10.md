@@ -58,6 +58,10 @@ preview, the health report's review dates on the library that failed.
 ## Tranche B — register features — BUILT 2026-10-06, unreleased
 
 Status per item: B1 ✓ (several terms per column, OR'd — pills toggle,
+the register opens with a VISIBLE "Approval status: Approved" filter
+in place of the kebab's hidden "Show only Approved" — Ben's call while
+testing, 2026-10-06; `seedApprovedFilter` after the vocabulary read,
+`nonCurrent` on a view now means "no status filter";
 the chip reads "Type: Policy, Standard", saved views and links carry
 every pick; hierarchy = a pick still includes its subtree, as before) ·
 B2 ✓ (every column header sorts: name and Modified on the server, any

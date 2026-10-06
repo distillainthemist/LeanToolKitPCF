@@ -1689,8 +1689,8 @@ export function mountDocs(
                 const k = r.listId.toLowerCase();
                 map.set(k, [...(map.get(k) ?? []), r.id]);
               }
-              approvedBeforeTaskFilter = onlyApproved;
-              onlyApproved = false; // task documents are mid-workflow by nature
+              // task documents are mid-workflow by nature — the status
+              // filter (the approved default included) steps aside
               // "show ALL my tasks" means all of them: any standing
               // query, column filter, folder pick or date window would
               // intersect tasks away (Ben, 2026-08-08)
@@ -1721,7 +1721,17 @@ export function mountDocs(
      * its inverse so links and saved views written before this keep
      * meaning what they meant.
      */
-    let onlyApproved = !(bootView?.nonCurrent ?? false);
+    // B1 follow-up (Ben, 2026-10-06): "Show only Approved" is no longer
+    // a hidden kebab toggle — the register OPENS with a visible Status
+    // filter on the approved terms (chip, pills, × to clear), seeded by
+    // seedApprovedFilter once the status vocabulary is read. The old
+    // flag stays false; links and views written before carry
+    // `nonCurrent` and still mean what they meant.
+    const onlyApproved = false;
+    const wantsApprovedDefault =
+      !(bootView?.nonCurrent ?? false) &&
+      statusInternal !== "" &&
+      !(bootView?.filters ?? []).some((f) => f.col === statusInternal);
     let modifiedDays = bootView?.modifiedDays ?? 0;
     /** R5 footer filter: the task panel's documents shown AS a register
      *  scope (listId → item ids, CAML idIn). "Show only Approved" is
@@ -1729,7 +1739,6 @@ export function mountDocs(
      *  nature — and restored when the chip clears. */
     let taskFilter: Map<string, number[]> | null = null;
     let taskFilterN = 0;
-    let approvedBeforeTaskFilter = true;
     // declared HERE, not in the data-flow section: the register's empty
     // state reads it during the initial mount, and a later `let` would be
     // a temporal-dead-zone crash that kills the whole screen
@@ -2553,9 +2562,9 @@ export function mountDocs(
         x.title = "Show the whole register again";
         x.addEventListener("click", () => {
           taskFilter = null;
-          onlyApproved = approvedBeforeTaskFilter;
           paintChips();
-          void load(true);
+          // the approved default returns with the whole register
+          if (!seedApprovedFilter()) void load(true);
         });
         chip.appendChild(x);
         filterBar.appendChild(chip);
@@ -2668,10 +2677,7 @@ export function mountDocs(
         if (app.orgSetId !== "" && orgProps.length > 0 && orgFilterable) cols.push("");
         cols.push(
           ...[...taxCols.keys()].filter(
-            (c) =>
-              filterable.has(c) &&
-              // "Show only Approved" IS the status filter while it is on
-              !(onlyApproved && c === statusInternal)
+            (c) => filterable.has(c)
           )
         );
         for (const col of cols) {
@@ -2873,6 +2879,22 @@ export function mountDocs(
     const labelToId = new Map<string, string>();
     /** Read the status vocabulary once: it gives the palette its ids AND
      *  tells "Show only Approved" which values count as approved. */
+    /** Seed the Status filter with this site's approved terms (the
+     *  lifecycle mapping; else every label that is not draft / in review
+     *  / superseded / obsolete). Returns true when it loaded. */
+    const seedApprovedFilter = (): boolean => {
+      if (statusInternal === "" || statusTermList.length === 0 || filterFor(statusInternal) !== null) return false;
+      const mapped = new Set(termsForStage(siteDict, "approved").map((id) => id.toLowerCase()));
+      const nodes: TermNode[] = statusTermList.map((t) => ({ id: t.id, labels: [t.label] }));
+      const picked = nodes.filter((n) => (mapped.size > 0 ? mapped.has(n.id.toLowerCase()) : !isNonCurrentStatus(n.labels[0])));
+      if (picked.length === 0) return false;
+      filters.push(filterFromPicks(statusInternal, picked, nodes));
+      paintTreeSelection();
+      paintChips();
+      void load(true);
+      return true;
+    };
+
     const readStatusTerms = async (): Promise<void> => {
       if (statusCol === null || statusCol.termSetId === "") return;
       const r = await fetchTermsInSet(app.siteUrl, statusCol.termSetId);
@@ -4404,7 +4426,9 @@ export function mountDocs(
         listId: current?.listId ?? "",
         query: query.trim(),
         contents: searchContents,
-        nonCurrent: !onlyApproved,
+        // no status filter at all = show every status; a view with one
+        // carries it in `filters` (the approved default included)
+        nonCurrent: statusInternal === "" || filterFor(statusInternal) === null,
         modifiedDays,
         // the organisation keeps its own slot so pre-3a links stay valid
         orgTermId: org?.node.id ?? "",
@@ -4686,25 +4710,6 @@ export function mountDocs(
           }
         );
       }
-      item(
-        `${onlyApproved ? "✓ " : ""}Show only Approved`,
-        statusCol
-          ? "On, the register answers with the approved copy only, and " +
-            "Approval status drops out of Filters — it is already set."
-          : "Map a column to the Approval status role in Settings → Documents first",
-        statusCol
-          ? () => {
-              onlyApproved = !onlyApproved;
-              // turning it on subsumes any status filter someone set by
-              // hand; leaving it there would filter twice, invisibly
-              if (onlyApproved && statusInternal !== "") {
-                filters = filters.filter((f) => f.col !== statusInternal);
-                paintChips();
-              }
-              void load(true);
-            }
-          : null
-      );
       if (whoId !== "") {
         item(
           "Saved views…",
@@ -4824,7 +4829,7 @@ export function mountDocs(
       // and obsolete standards (Ben, 2026-08-08: 13 at launch, 9 on
       // opening the panel). One vocabulary, one number.
       refreshTasksBadge();
-      void load(true);
+      if (!(wantsApprovedDefault && seedApprovedFilter())) void load(true);
       if (workDoc !== "") void openWorkDoc(workDoc);
     });
   })();

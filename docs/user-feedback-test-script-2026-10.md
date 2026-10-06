@@ -46,6 +46,10 @@ Reports in brackets are the export's section numbers.
 11. **Several terms per filter (9, 14, 36)** — Filters → Status: tick
     Approved AND Awaiting approval. The chip reads "Status: Approved,
     Awaiting approval" and the list shows both. Untick one.
+    **Approved by default (Ben, 2026-10-06)**: the register OPENS with
+    "Approval status: Approved" as a visible chip; × on it shows every
+    status; the kebab's "Show only Approved" is gone. A saved view or
+    link opens exactly as it was saved.
 12. **Sort by any header (1)** — Click the Owner or Document Type
     header. Rows reorder; while more pages remain the status line says
     "sorted by Owner within the loaded documents". Click Document or
