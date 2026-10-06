@@ -1432,6 +1432,15 @@ reschedule/cancel history with a reason picklist.
   management + controller minting (`mintTag`), guidance on the
   dictionary (naming note, type definitions), the review-submit
   confirmation and the drafts hint, cookbook Recipe 3. Unreleased.
+- **2026-10-06 — walkthrough of Tranches A–C with Ben** (the test
+  script's outcome table). Changes made on the way: "Download
+  original" dropped; the register opens with a visible Approved status
+  filter in place of the hidden toggle; a saved view is active on save
+  and its name is the register title; people filters are a directory
+  search; chips use dictionary labels; the CSV export follows the
+  filters (it never had); tags and big term sets are searched in the
+  popover; Guidance (C4) removed pending Holly. Parked for end users:
+  A1, A3, A8, A9, B7, C3 minting, C5. Unreleased.
 - **2026-10-01 — the stage bar; initials.** Ben: fold the stage
   label and its PDCA symbol into the bar as thick labelled segments
   (done full colour, current outlined, future grey), bring the gate

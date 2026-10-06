@@ -104,3 +104,34 @@ Reports in brackets are the export's section numbers.
 24. **MOC column (32)** — docs/deployment-cookbook.md Recipe 3; a
     configuration step, nothing to test in the app until the column
     exists.
+
+## Walkthrough outcome (Ben, 2026-10-06, dev build 01541e6)
+
+| Item | Result |
+|---|---|
+| A1 versions 403 | End-user testing (prod reader without View Versions) |
+| A2 column order | Good |
+| A3 date a day out | End-user testing (Australian-zone user) |
+| A4 download name | Good — "Download original" dropped (nobody asked for it) |
+| A5 scroll position | Good |
+| A6 search scope toggle | Good |
+| A7 favourites | Good |
+| A8 health review dates | End-user testing (the pilot library) |
+| A9 tags editor | End-user testing (Ellen) |
+| A10 details pane | Good |
+| B1 several terms per filter | Good — and the register now OPENS with a visible "Approval status: Approved" filter; the kebab toggle is gone |
+| B2 sort by header | Good |
+| B4 named views | Good after two changes: a saved view is the active one at once; its name is the TITLE (scope in the crumb, "Close" in the Views menu) |
+| B5 hide the panel | Good |
+| B6 people / Has filters | Good after three changes: people filters are a directory search (group first); chips use the dictionary labels; Export CSV follows every filter (it never had) |
+| B6 follow-up | Tags (and any big term set) are searched in the Filters popover |
+| B7 default columns | End-user testing (Christelle) |
+| C1 roles health | Good |
+| C1 replace a person | Good — controllers only, confirmed |
+| C2 reviewers from anyone | Good |
+| C3 tags in settings | Good |
+| C3 controller mints | End-user testing (needs a non-controller account) |
+| C4 guidance | REMOVED pending clarification with Holly |
+| C5 review confirmation | End-user testing |
+| C6 MOC recipe | Configuration — nothing to test |
+
