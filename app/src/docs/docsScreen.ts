@@ -843,7 +843,6 @@ export function mountDocs(
           row,
           lib,
           dictBy,
-          guidance: siteDict.guidance,
           host: dialogHost,
           heldByMe: isMine(row),
           // a quick edit on a reader-facing document publishes under
@@ -2480,7 +2479,6 @@ export function mountDocs(
           targets: libraries.filter(canAddTo),
           templates: libraries.filter((l) => l.libType === "template"),
           dictBy,
-          guidance: siteDict.guidance,
           // Part II S2: the chosen target's type picks the sections
           sectionsFor:
             siteDict.columns.length > 0

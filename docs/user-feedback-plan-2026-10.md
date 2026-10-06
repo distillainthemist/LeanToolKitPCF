@@ -108,10 +108,11 @@ owners and approvers stay pool-bound) · C3 ✓ (Settings → Documents →
 Tags shows the tags in use with rename-in-place and ＋ Add tag; a
 controller's tag editor says "Add a new tag…" and mints on the spot,
 the term landing on the document; everyone else still proposes;
-`mintTag` is the one road, approval rides it) · C4 ✓ (Settings →
-Documents → Guidance: a naming note shown at the top of Add document
-and a one-line definition per document type shown under the type
-picker as it is picked; stored on the site dictionary) · C5 ✓ (submit
+`mintTag` is the one road, approval rides it) · C4 BUILT THEN
+REMOVED (2026-10-06, Ben: needs clarification with Holly first — the
+naming note on Add document and the per-type definitions came out
+again before release; the restriction half of 23 already holds, types
+are a managed term set) · C5 ✓ (submit
 for review with no reviewer named stays open and says so: "Sent for
 review — nobody was messaged: add reviewers or tell them yourself";
 the version history pane explains that every save while checked out

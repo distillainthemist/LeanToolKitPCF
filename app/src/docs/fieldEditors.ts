@@ -83,9 +83,6 @@ export interface FieldEditorOpts {
    *  renders as a titled section, in the manager's order; a column
    *  the library does not carry is skipped as always. */
   sections?: { heading: string; columns: string[] }[];
-  /** C4 (feedback round 1): a definition per document type (term id,
-   *  lowercased) — shown under the type select as it is picked. */
-  typeNotes?: Record<string, string>;
 }
 
 export function buildFieldEditors(opts: FieldEditorOpts): BuiltEditor[] {
@@ -188,24 +185,6 @@ export function buildFieldEditors(opts: FieldEditorOpts): BuiltEditor[] {
         }
       });
       sel.addEventListener("change", sync);
-      // C4 (feedback round 1): the document type's definition, under the
-      // select, as it is picked
-      const typeNotes = opts.typeNotes ?? {};
-      const typeNote = el("div", "app-field-hint app-docs-typenote");
-      const paintTypeNote = () => {
-        let id = "";
-        try {
-          id = sel.value !== "" ? String((JSON.parse(sel.value) as { termId?: string }).termId ?? "").toLowerCase() : "";
-        } catch {
-          id = "";
-        }
-        typeNote.textContent = id !== "" ? (typeNotes[id] ?? "") : "";
-        typeNote.style.display = typeNote.textContent === "" ? "none" : "";
-      };
-      if (dictBy.get(f.internal)?.role === "docType" && Object.keys(typeNotes).length > 0) {
-        sel.addEventListener("change", paintTypeNote);
-        setTimeout(paintTypeNote, 0);
-      }
       // A9 (feedback round 1): a MULTI column (tags) keeps every term —
       // chips for what the document carries, the select ADDS one; the
       // single select used to replace the lot and prefill only the first
@@ -249,9 +228,7 @@ export function buildFieldEditors(opts: FieldEditorOpts): BuiltEditor[] {
         stack.append(chipBox, sel);
         box.appendChild(fieldRow(labelOf(f) + star, stack));
       } else {
-        const stack = el("div", "app-docs-termstack");
-        stack.append(sel, typeNote);
-        box.appendChild(fieldRow(labelOf(f) + star, stack));
+        box.appendChild(fieldRow(labelOf(f) + star, sel));
       }
       // H1: the hashtags column invites PROPOSALS — the vocabulary is
       // closed (controllers mint terms), but anyone may ask

@@ -94,10 +94,8 @@ Reports in brackets are the export's section numbers.
     properties → Tags → "Add a new tag…" → type a name → Add tag. The
     tag lands on the document at once. As an ordinary user the same
     control reads "Propose a new tag…".
-22. **Guidance (23, 24)** — Settings → Documents → Guidance: write a
-    naming note and a definition for one document type. Save. Add
-    document shows the note at the top; picking that type shows its
-    definition under the picker. Edit properties shows it too.
+22. **Guidance (23, 24)** — REMOVED before release (Ben, 2026-10-06):
+    to be clarified with Holly first. Nothing to test.
 23. **Review request confirmation (19)** — On a draft with NO reviewers
     named, Submit for review without adding any: the dialog stays open
     with "Sent for review … nobody was messaged". With reviewers: the

@@ -199,9 +199,6 @@ export interface SiteDictionary {
    *  always effective + cadence. Keyed by term ID like the lifecycle
    *  mapping, so a rename cannot detach it. */
   cadence?: Record<string, number>;
-  /** C4 (feedback round 1): guidance the forms show — a naming note on
-   *  upload, and a definition per document type (keyed by term id). */
-  guidance?: { naming: string; typeNotes: Record<string, string> };
   /** Status term id → lifecycle stage (Phase 5A). Explicit — the stored
    *  mapping is the law, name suggestions only prefill it — and keyed
    *  by term ID so a rename cannot detach a stage. Optional so the many
@@ -1059,17 +1056,7 @@ function parseSiteDictionary(o: Record<string, unknown>): SiteDictionary {
     }
     if (Object.keys(cadence).length > 0) dict.cadence = cadence;
   }
-  if (o.guidance && typeof o.guidance === "object") {
-    const g = o.guidance as Record<string, unknown>;
-    const typeNotes: Record<string, string> = {};
-    if (g.typeNotes && typeof g.typeNotes === "object") {
-      for (const [id, note] of Object.entries(g.typeNotes as Record<string, unknown>)) {
-        if (typeof note === "string" && note.trim() !== "") typeNotes[id.toLowerCase()] = note.trim();
-      }
-    }
-    const naming = typeof g.naming === "string" ? g.naming.trim() : "";
-    if (naming !== "" || Object.keys(typeNotes).length > 0) dict.guidance = { naming, typeNotes };
-  }
+
   return dict;
 }
 
@@ -1104,9 +1091,6 @@ function serializeSiteDictionary(dict: SiteDictionary): Record<string, unknown> 
   if (Object.keys(templates).length > 0) o.templates = templates;
   if (dict.lifecycle !== undefined && Object.keys(dict.lifecycle).length > 0) {
     o.lifecycle = dict.lifecycle;
-  }
-  if (dict.guidance !== undefined && (dict.guidance.naming !== "" || Object.keys(dict.guidance.typeNotes).length > 0)) {
-    o.guidance = dict.guidance;
   }
   if (dict.cadence !== undefined && Object.keys(dict.cadence).length > 0) {
     o.cadence = dict.cadence;

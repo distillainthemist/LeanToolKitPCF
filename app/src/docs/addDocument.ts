@@ -45,9 +45,6 @@ export interface AddDocumentOpts {
   templates: DocLibrary[];
   /** The site dictionary by internal name (labels, term sets). */
   dictBy: Map<string, SiteColumn>;
-  /** C4 (feedback round 1): the site's guidance — a naming note shown
-   *  at the top of the form, a definition per document type. */
-  guidance?: { naming: string; typeNotes: Record<string, string> };
   /** The manager's sub-headings per library type (Part II S2) — the
    *  metadata form renders them as sections for the chosen target. */
   sectionsFor?: (libType: string) => { heading: string; columns: string[] }[];
@@ -108,9 +105,6 @@ export function openAddDocument(opts: AddDocumentOpts): void {
 
   const body = dlg.body;
   body.classList.add("app-docs-addbody");
-  if ((opts.guidance?.naming ?? "") !== "") {
-    body.appendChild(el("div", "app-docs-namingnote", opts.guidance?.naming ?? ""));
-  }
 
   /** A placeholder option MUST carry an explicit empty value: an
    *  <option> without one returns its TEXT as its value, and the "—"
@@ -302,7 +296,6 @@ export function openAddDocument(opts: AddDocumentOpts): void {
       fields,
       columns: lib.config.columns,
       dictBy: opts.dictBy,
-      typeNotes: opts.guidance?.typeNotes,
       onChange: sync,
       // the target picks the type, the type picks the sections
       sections: opts.sectionsFor?.(lib.libType),
