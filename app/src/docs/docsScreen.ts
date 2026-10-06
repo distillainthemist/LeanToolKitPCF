@@ -1965,7 +1965,7 @@ export function mountDocs(
 
     /** col "" = the organisation (its own slot in links). */
     const colLabel = (col: string): string =>
-      col === "" ? "Organisation" : (taxCols.get(col)?.label ?? col);
+      col === "" ? "Organisation" : (taxCols.get(col)?.label ?? dictBy.get(col)?.label ?? col);
     const setFor = (col: string): string =>
       col === "" ? app.orgSetId : (taxCols.get(col)?.setId ?? "");
     const propsFor = (col: string): string[] =>
@@ -2629,7 +2629,7 @@ export function mountDocs(
       }
       for (const col of presentCols) {
         const chip = el("span", "app-docs-orgchip");
-        chip.appendChild(document.createTextNode(`Has ${colLabel(col).toLowerCase()}`));
+        chip.appendChild(document.createTextNode(`Has ${(dictBy.get(col)?.label || colLabel(col)).toLowerCase()}`));
         const x = el("button", "app-docs-orgchip-x", "×") as HTMLButtonElement;
         x.title = "Clear this filter";
         x.addEventListener("click", () => togglePresent(col));
@@ -4587,9 +4587,23 @@ export function mountDocs(
         // projection, so the old export could differ from the screen
         for (const lib of scopeLibs) {
           const carried = new Set(lib.config.columns.map((c) => c.internal));
+          // the export answers the SAME question the register shows
+          // (Ben, 2026-10-06: it had ignored every filter) — search
+          // words, the status / term filters, dates, people, presence,
+          // the modified window; the task scope's ids too
           const viewXml = buildRenderViewXml({
             sortName: sort.key === "name",
             asc: sort.asc,
+            modifiedAfterIso: modifiedIso(),
+            nameWords: query.trim() === "" ? undefined : query.trim().split(/\s+/),
+            idIn: taskFilter?.get(lib.listId.toLowerCase()) ?? [],
+            termFilters: [
+              ...filters.map((f) => ({ cols: f.col === "" ? [...orgCols] : [f.col], labels: [...f.labels] })),
+              ...approvedFilterFor(),
+            ],
+            dateRanges: dateFilters.filter((d) => carried.has(d.col)),
+            personFilters: personFilters.filter((p) => carried.has(p.col)),
+            presentCols: presentCols.filter((c) => carried.has(c)),
             fields: cols.map((c) => c.internal).filter((i) => carried.has(i)),
             rowLimit: 100,
           });
