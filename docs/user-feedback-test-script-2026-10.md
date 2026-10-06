@@ -18,8 +18,8 @@ Reports in brackets are the export's section numbers.
    properties on a document with an Effective or Review date. The
    prefilled date matches what the pane shows (not the day before).
 4. **Download name (7)** — Open a .docx. Details ⋯ → "Download as PDF":
-   the file saves as `<document name>.pdf`. "Download original (.docx)"
-   saves the source under its own name.
+   the file saves as `<document name>.pdf`. (The original-file download
+   was dropped on 2026-10-06 — nobody asked for it.)
 5. **Scroll position (16)** — Scroll the register well down, open a
    document, close the preview. You are where you were.
 6. **Search scope (3, 5, 37)** — Beside the search box: the "Match

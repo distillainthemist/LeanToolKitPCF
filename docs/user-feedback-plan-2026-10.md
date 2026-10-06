@@ -27,8 +27,9 @@ honours a chosen column order; the dictionary orders only the
 defaults — this reverses the 2026-08-04 "dictionary orders" rule for
 views that carry their own order) · A3 ✓ (date-only prefill from the
 site's midnight; the access-request "granted" date too) · A4 ✓
-("Download as PDF" / "Download original" in the pane's ⋯, fetched to a
-blob so the name holds; a refused fetch opens the URL instead) · A5 ✓
+("Download as PDF" in the pane's ⋯, fetched to a blob so the name
+holds; a refused fetch opens the URL instead; "Download original" was
+built and then dropped the same day — nobody had asked for it) · A5 ✓
 (every scroll offset restored after the overlay closes) · A6 ✓ (the
 toggle beside the search box, in step with the scope menu) · A7 ✓
 (the nav entry toggles off; a ☆ column on every row for signed-in

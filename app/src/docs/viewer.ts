@@ -619,8 +619,9 @@ export function openDocViewer(opts: ViewerOpts): () => void {
     }
     // A4 (feedback round 1): the browser's own save from the embedded
     // PDF viewer names the file "pdf" — these name it after the document
+    // the PDF rendition only (Ben, 2026-10-06): nobody asked for the
+    // editable source, and editors have Edit source and check-out
     item(row.ext === "pdf" ? "Download PDF" : "Download as PDF", () => void downloadNamed("pdf"));
-    if (row.ext !== "pdf") item(`Download original (.${row.ext})`, () => void downloadNamed("original"));
     if (menu.childElementCount === 0) {
       menu.appendChild(el("div", "app-field-hint", "No further actions."));
     }
@@ -1152,11 +1153,11 @@ export function openDocViewer(opts: ViewerOpts): () => void {
   /** Save the document under ITS name (A4): the PDF rendition or the
    *  original bytes, fetched to a blob so the download attribute holds;
    *  a tenant whose policy refuses the fetch gets the URL in a new tab. */
-  const downloadNamed = async (what: "pdf" | "original"): Promise<void> => {
+  const downloadNamed = async (_what: "pdf"): Promise<void> => {
     const p = await presigned();
     const base = row.name.replace(/\.[^.]+$/, "");
-    const url = what === "original" || row.ext === "pdf" ? p.downloadUrl : transformPdfUrl(p.thumbUrl, row.ext);
-    const name = what === "original" ? row.name : `${base}.pdf`;
+    const url = row.ext === "pdf" ? p.downloadUrl : transformPdfUrl(p.thumbUrl, row.ext);
+    const name = `${base}.pdf`;
     if (url === "") return;
     try {
       const res = await fetch(url);
