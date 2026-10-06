@@ -1181,7 +1181,7 @@ export async function renderDocsSettings(body: HTMLElement, ctx: Ctx): Promise<v
         guideBox.appendChild(note(`Could not read the document type set: ${walk.error || "no terms"}`));
         return;
       }
-      const grid = el("div", "app-docs-cadgrid app-docs-typegrid");
+      const grid = el("div", "app-docs-typegrid");
       for (const n of walk.nodes) {
         const label = n.labels.join(" › ");
         grid.appendChild(el("span", "app-docs-colname", label));
@@ -1197,7 +1197,6 @@ export async function renderDocsSettings(body: HTMLElement, ctx: Ctx): Promise<v
           ctx.markDirty();
         });
         grid.appendChild(def);
-        grid.appendChild(el("span", "app-field-hint", ""));
       }
       guideBox.appendChild(grid);
     })();

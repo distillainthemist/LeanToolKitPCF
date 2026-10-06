@@ -1654,7 +1654,9 @@ input[type="color"].app-color:disabled { opacity: 0.4; cursor: default; }
 .app-docs-verhint { margin: 2px 0 6px; }
 .app-docs-hrtools { display: flex; gap: 8px; margin: 6px 0 10px; }
 .app-docs-tagsinuse { display: flex; flex-direction: column; gap: 8px; margin: 4px 0 14px; }
-.app-docs-typegrid { grid-template-columns: minmax(140px, 1fr) minmax(220px, 2fr) 0; }
+.app-docs-typegrid { display: grid; grid-template-columns: minmax(200px, 340px) minmax(260px, 1fr); gap: 6px 12px; align-items: center; max-width: 820px; }
+.app-docs-typegrid .app-input { width: 100%; box-sizing: border-box; }
+.app-docs-typegrid .app-docs-colname { padding: 0; }
 .app-docs-viewchip { display: inline-flex; align-items: center; gap: 6px; margin-left: 10px; padding: 2px 8px; border-radius: 999px; background: #fff; border: 1px solid #d9d3c8; font-size: 12px; color: #57534a; vertical-align: middle; }
 .app-docs-navhide { align-self: flex-end; font-size: 12px; margin: 2px 6px 4px; }
 .app-docs-navrail {
