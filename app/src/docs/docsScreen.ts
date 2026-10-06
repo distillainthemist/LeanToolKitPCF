@@ -991,72 +991,11 @@ export function mountDocs(
     // NEVER the wider SharePoint (the app's standing corpus rule; the
     // Vault's "Everything (all sites)" option is deliberately not built).
     // Depth widens matching from names/titles to contents & every field.
-    let scopeAll = false;
+    const scopeAll = false;
     let searchContents = bootView?.contents ?? false;
-    const scopeBtn = el("button", "app-btn app-docs-scopebtn") as HTMLButtonElement;
-    scopeBtn.title =
-      "What to search: the libraries you have ticked, or every library " +
-      "this site exposes — never the wider SharePoint.";
-    const scopeLabel = (): string =>
-      scopeAll || allSelected
-        ? "All libraries"
-        : current
-          ? "This library"
-          : "Selected libraries";
-    const paintScopeBtn = () => {
-      scopeBtn.textContent = `${scopeLabel()} ▾`;
-    };
-    paintScopeBtn();
-    scopeBtn.addEventListener("click", () => {
-      if (menu) {
-        closeMenu();
-        return;
-      }
-      menu = el("div", "app-docs-menu");
-      const pick = (label: string, on: boolean, onPick: () => void) => {
-        const b = el("button", "app-docs-menuitem", `${on ? "✓ " : ""}${label}`) as HTMLButtonElement;
-        b.setAttribute("aria-pressed", String(on));
-        b.addEventListener("click", () => {
-          closeMenu();
-          onPick();
-        });
-        menu!.appendChild(b);
-      };
-      if (!allSelected) {
-        pick(current ? "This library" : "Selected libraries", !scopeAll, () => {
-          scopeAll = false;
-          paintScopeBtn();
-          void load(true);
-        });
-      }
-      pick("All libraries", scopeAll || allSelected, () => {
-        scopeAll = true;
-        paintScopeBtn();
-        void load(true);
-      });
-      menu.appendChild(el("div", "app-docs-menusep", ""));
-      const depth = el(
-        "button",
-        "app-docs-menuitem",
-        `${searchContents ? "✓ " : ""}Match contents & every field`
-      ) as HTMLButtonElement;
-      depth.title =
-        "Off, search matches document names and titles — how you look for " +
-        "something you know exists. On, it ALSO matches what the index " +
-        "reads inside each document, so it can only add results, never " +
-        "take them away.";
-      depth.addEventListener("click", () => {
-        closeMenu();
-        searchContents = !searchContents;
-        depthBox.checked = searchContents;
-        void load(true);
-      });
-      menu.appendChild(depth);
-      const r = scopeBtn.getBoundingClientRect();
-      menu.style.top = `${r.bottom + 4}px`;
-      menu.style.left = `${Math.max(8, r.right - 240)}px`;
-      document.body.appendChild(menu);
-    });
+    // the scope dropdown is gone (Ben, 2026-10-07): the left pane picks
+    // the libraries and the toggle beside the box picks the depth;
+    // `scopeAll` stays false — the ticked set IS the scope
 
     // ---- My tasks (Phase 4D) -------------------------------------------
     // The V2 "Action needed" placeholder, live. A QUERY, not a store:
@@ -1764,9 +1703,8 @@ export function mountDocs(
       searchContents = depthBox.checked;
       void load(true);
     });
-    top.append(searchWrap, depthToggle, scopeBtn, actionNeeded);
+    top.append(searchWrap, depthToggle, actionNeeded);
     if (favMode) {
-      scopeBtn.style.display = "none";
       actionNeeded.style.display = "none";
     }
     // the toolbar rides the REGISTER pane, not the whole screen (Ben,
