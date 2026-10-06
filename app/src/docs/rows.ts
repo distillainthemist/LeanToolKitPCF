@@ -126,6 +126,11 @@ export interface RenderQueryOpts {
    *  window. `to` is inclusive of the whole day: a date column holding
    *  midnight would otherwise drop documents dated ON the end date. */
   dateRanges?: { col: string; from: string; to: string }[];
+  /** Person columns whose display name CONTAINS the text (B6, feedback
+   *  round 1): "the documents Sam owns". Filters AND together. */
+  personFilters?: { col: string; text: string }[];
+  /** Columns that must hold a value (B6): linked documents, tags. */
+  presentCols?: string[];
   /** DMS internals to return beyond the core file fields. */
   fields?: string[];
   rowLimit?: number;
@@ -182,6 +187,16 @@ export function buildRenderViewXml(opts: RenderQueryOpts = {}): string {
       `<Value Type="DateTime" IncludeTimeValue="TRUE" StorageTZ="TRUE">${xmlEsc(iso)}</Value></${op}>`;
     if (dr.from.trim() !== "") clauses.push(bound("Geq", `${dr.from.trim()}T00:00:00Z`));
     if (dr.to.trim() !== "") clauses.push(bound("Leq", `${dr.to.trim()}T23:59:59Z`));
+  }
+  for (const pf of opts.personFilters ?? []) {
+    const col = pf.col.trim();
+    const text = pf.text.trim();
+    if (col === "" || text === "") continue;
+    clauses.push(`<Contains><FieldRef Name="${xmlEsc(col)}"/><Value Type="User">${xmlEsc(text)}</Value></Contains>`);
+  }
+  for (const col of opts.presentCols ?? []) {
+    if (col.trim() === "") continue;
+    clauses.push(`<IsNotNull><FieldRef Name="${xmlEsc(col.trim())}"/></IsNotNull>`);
   }
   for (const tf of opts.termFilters ?? []) {
     const eqs = tf.cols.flatMap((col) =>

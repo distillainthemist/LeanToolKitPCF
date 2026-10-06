@@ -1415,6 +1415,15 @@ reschedule/cancel history with a reason picklist.
   library; multi-value tags as chips — the "couldn't add a tag" fault;
   type and status inside their pane sections + a head Details
   button). Tests 754. Unreleased.
+- **2026-10-06 — feedback round 1, Tranche B.** Register features:
+  several terms per filter column (OR'd; `filterFromPicks` /
+  `toggleFilter`, views carry every pick), every column header sorts
+  (server for name / Modified, client within the loaded rows with a
+  status note), the active view's name as a chip + "Update" in the
+  views menu, the left panel hides to a rail (per-person pref
+  `navHidden`), People filters (CAML `Contains` on person columns) and
+  "Has" presence filters (`IsNotNull`) in the popover, saved views and
+  the export. B7 is configuration. Unreleased.
 - **2026-10-01 — the stage bar; initials.** Ben: fold the stage
   label and its PDCA symbol into the bar as thick labelled segments
   (done full colour, current outlined, future grey), bring the gate

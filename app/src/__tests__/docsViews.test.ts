@@ -29,9 +29,14 @@ describe("view link payload", () => {
       groupBy: "DMSProcess",
       modifiedDays: 30,
       dates: [{ col: "DMSEffectiveDate", from: "2025-01-01", to: "2025-03-31" }],
+      // B1 (several terms per column), B6 (people + presence) — 2026-10-06
+      people: [{ col: "DMSOwner", text: "Sam" }],
+      present: ["DMSLinkedDocuments"],
     };
     const back = decodeDocView(encodeDocView(v));
     expect(back).toEqual({ ...v, name: "" });
+    const two = decodeDocView(encodeDocView({ ...v, filters: [...v.filters, { col: "DMSProcess", termId: "p4", path: ["Casting", "Baking"] }] }));
+    expect(two.filters.map((f) => f.termId)).toEqual(["p3", "p4"]);
   });
 
   it("a pre-3a payload keeps opening — new fields default empty", () => {
@@ -141,6 +146,7 @@ describe("DocUiPrefs (Vault V1, ben_docuijson)", () => {
       viewMode: "tiles",
       density: "compact",
       collapsed: { "set-1": ["Brisbane", "Brisbane Packaging"] },
+      navHidden: true,
     };
     expect(parseDocUiPrefs(serializeDocUiPrefs(ui))).toEqual(ui);
   });

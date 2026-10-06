@@ -1769,6 +1769,33 @@ export function mountDocs(
     // ---- left nav ------------------------------------------------------
     const nav = el("nav", "app-docs-nav");
     bodyRow.appendChild(nav);
+    // B5 (feedback round 1): the panel hides and comes back, remembered
+    // per person — a slim rail stands in for it while hidden
+    let navHidden = uiState.navHidden;
+    const navRail = el("button", "app-docs-navrail") as HTMLButtonElement;
+    navRail.type = "button";
+    navRail.append(el("span", "app-docs-navrail-glyph", "»"), el("span", "app-docs-navrail-cap", "Libraries & folders"));
+    navRail.title = "Show the libraries and folders panel";
+    bodyRow.appendChild(navRail);
+    const navHideBtn = el("button", "app-link app-docs-navhide", "« Hide panel") as HTMLButtonElement;
+    navHideBtn.type = "button";
+    navHideBtn.title = "Hide the libraries and folders panel";
+    nav.appendChild(navHideBtn);
+    const paintNav = () => {
+      nav.style.display = navHidden ? "none" : "";
+      navRail.style.display = navHidden ? "" : "none";
+    };
+    navHideBtn.addEventListener("click", () => {
+      navHidden = true;
+      paintNav();
+      persistUi({ navHidden });
+    });
+    navRail.addEventListener("click", () => {
+      navHidden = false;
+      paintNav();
+      persistUi({ navHidden });
+    });
+    paintNav();
 
     /** Re-mount in place with a stashed boot state (both modes — the
      *  embedded pattern; the hash stays put). */
@@ -1943,6 +1970,10 @@ export function mountDocs(
       /** F2: a DEFAULT filter unions several branches — every root id,
        *  so the tree highlights all of them (absent = [node.id]). */
       roots?: string[];
+      /** B1 (feedback round 1): the terms PICKED on this column — several
+       *  at once, OR'd; `node` is the first, kept for the tree and for
+       *  callers that read one. */
+      nodes: TermNode[];
     }
     let filters: ActiveFilter[] = [];
     const filterFor = (col: string): ActiveFilter | null =>
@@ -1957,6 +1988,23 @@ export function mountDocs(
       to: string;
     }
     let dateFilters: DateFilter[] = (bootView?.dates ?? []).map((d) => ({ ...d }));
+    // B6 (feedback round 1): "the documents Sam owns" and "has linked
+    // documents / has tags" — server-side, so paging and counts hold
+    let personFilters: { col: string; text: string }[] = (bootView?.people ?? []).map((p) => ({ ...p }));
+    let presentCols: string[] = [...(bootView?.present ?? [])];
+    const setPersonFilter = (col: string, text: string) => {
+      personFilters = personFilters.filter((p) => p.col !== col);
+      if (text.trim() !== "") personFilters.push({ col, text: text.trim() });
+      paintChips();
+      void load(true);
+    };
+    const togglePresent = (col: string) => {
+      presentCols = presentCols.includes(col) ? presentCols.filter((c) => c !== col) : [...presentCols, col];
+      paintChips();
+      void load(true);
+    };
+    // B4: the saved view this register was opened as ("" = none)
+    let activeViewName = bootView?.name ?? "";
     const dateFor = (col: string): DateFilter | null =>
       dateFilters.find((d) => d.col === col) ?? null;
     const setDateFilter = (col: string, from: string, to: string) => {
@@ -1973,21 +2021,35 @@ export function mountDocs(
           (n.labels.length > node.labels.length &&
             node.labels.every((l, i) => n.labels[i] === l))
       );
+    /** One column's filter from the terms picked on it: every pick's
+     *  subtree, ids and labels unioned (OR within the column). */
+    const filterFromPicks = (col: string, picked: TermNode[], nodes: TermNode[]): ActiveFilter => {
+      const ids = new Set<string>();
+      const labels = new Set<string>();
+      for (const pick of picked) {
+        const subtree = subtreeIn(nodes, pick);
+        for (const n of subtree) ids.add(n.id);
+        // the picked node itself even when the walk missed it
+        for (const n of [pick, ...subtree]) labels.add(n.labels[n.labels.length - 1].toLowerCase());
+      }
+      return { col, node: picked[0], nodes: picked, ids: [...ids], labels, roots: picked.map((n) => n.id) };
+    };
     /** Set/replace (node) or clear (null) the filter on one column. */
     const applyFilter = (col: string, node: TermNode | null, nodes: TermNode[]) => {
       filters = filters.filter((f) => f.col !== col);
-      if (node !== null) {
-        const subtree = subtreeIn(nodes, node);
-        filters.push({
-          col,
-          node,
-          ids: subtree.map((n) => n.id),
-          labels: new Set(
-            // the picked node itself even when the walk missed it
-            [node, ...subtree].map((n) => n.labels[n.labels.length - 1].toLowerCase())
-          ),
-        });
-      }
+      if (node !== null) filters.push(filterFromPicks(col, [node], nodes));
+      paintTreeSelection();
+      paintChips();
+      void load(true);
+    };
+    /** B1: add a term to the column's filter, or take it off again. */
+    const toggleFilter = (col: string, node: TermNode, nodes: TermNode[]) => {
+      const cur = filterFor(col);
+      const kept = (cur?.nodes ?? []).filter((n) => n.id !== node.id);
+      const wasOn = cur !== null && kept.length !== cur.nodes.length;
+      const picked = wasOn ? kept : [...kept, node];
+      filters = filters.filter((f) => f.col !== col);
+      if (picked.length > 0) filters.push(filterFromPicks(col, picked, nodes));
       paintTreeSelection();
       paintChips();
       void load(true);
@@ -2040,7 +2102,7 @@ export function mountDocs(
         ids.push(...subtree.map((n) => n.id));
         for (const n of [r, ...subtree]) labels.add(n.labels[n.labels.length - 1].toLowerCase());
       }
-      filters.push({ col: "", node: roots[0], ids, labels, roots: roots.map((r) => r.id) });
+      filters.push({ col: "", node: roots[0], nodes: roots, ids, labels, roots: roots.map((r) => r.id) });
       paintTreeSelection();
       paintChips();
       void load(true);
@@ -2327,13 +2389,22 @@ export function mountDocs(
 
     // boot: filters a shared/saved view carries beyond the organisation —
     // each needs its own set's walk for subtree ids
-    for (const f of bootView?.filters ?? []) {
-      const setId = setFor(f.col);
-      if (setId === "" || filterFor(f.col) !== null) continue;
+    // B1: a view may carry several terms per column — one walk per
+    // column, every pick applied at once
+    const bootByCol = new Map<string, string[]>();
+    for (const f of bootView?.filters ?? []) bootByCol.set(f.col, [...(bootByCol.get(f.col) ?? []), f.termId]);
+    for (const [col, termIds] of bootByCol) {
+      const setId = setFor(col);
+      if (setId === "" || filterFor(col) !== null) continue;
       void cachedTermPaths(app.siteUrl, setId, 4, 60).then(({ nodes }) => {
         if (dead) return;
-        const match = nodes.find((n) => n.id === f.termId);
-        if (match && filterFor(f.col) === null) applyFilter(f.col, match, nodes);
+        const picks = termIds.map((id) => nodes.find((n) => n.id === id)).filter((n): n is TermNode => n !== undefined);
+        if (picks.length > 0 && filterFor(col) === null) {
+          filters.push(filterFromPicks(col, picks, nodes));
+          paintTreeSelection();
+          paintChips();
+          void load(true);
+        }
       });
     }
 
@@ -2348,7 +2419,23 @@ export function mountDocs(
     const titleBlock = el("div", "app-docs-titleblock");
     const h1 = el("h2", "app-docs-h1", "");
     const crumb = el("div", "app-docs-crumb", "");
-    titleBlock.append(h1, crumb);
+    // B4 (feedback round 1): which saved view this is — a chip after the
+    // crumb, cleared with ×; "Update" in the views menu saves over it
+    const viewChip = el("span", "app-docs-viewchip");
+    const paintViewChip = () => {
+      clear(viewChip);
+      viewChip.style.display = activeViewName === "" ? "none" : "";
+      if (activeViewName === "") return;
+      viewChip.appendChild(document.createTextNode(`View · ${activeViewName}`));
+      const x = el("button", "app-docs-orgchip-x", "×") as HTMLButtonElement;
+      x.title = "Stop treating this as the saved view (nothing is deleted)";
+      x.addEventListener("click", () => {
+        activeViewName = "";
+        paintViewChip();
+      });
+      viewChip.appendChild(x);
+    };
+    titleBlock.append(h1, crumb, viewChip);
     const filtersBtn = el("button", "app-btn app-docs-filtersbtn", "Filters") as HTMLButtonElement;
     filtersBtn.title = "Filter the register by its configured columns";
     const seg = el("div", "app-docs-seg");
@@ -2442,6 +2529,8 @@ export function mountDocs(
       const active =
         filters.filter((f) => f.col !== "").length +
         dateFilters.length +
+        personFilters.length +
+        presentCols.length +
         (modifiedDays > 0 ? 1 : 0);
       filtersBtn.textContent = active > 0 ? `Filters · ${active}` : "Filters";
       filtersBtn.classList.toggle("app-docs-filtersbtn-on", active > 0);
@@ -2489,7 +2578,9 @@ export function mountDocs(
         if (f.col === "") continue;
         const chip = el("span", "app-docs-orgchip");
         chip.appendChild(
-          document.createTextNode(`${colLabel(f.col)}: ${f.node.labels.join(" › ")}`)
+          document.createTextNode(
+            `${colLabel(f.col)}: ${f.nodes.length === 1 ? f.node.labels.join(" › ") : f.nodes.map((n) => n.labels[n.labels.length - 1]).join(", ")}`
+          )
         );
         const x = el("button", "app-docs-orgchip-x", "×") as HTMLButtonElement;
         x.title = `Clear the ${colLabel(f.col)} filter`;
@@ -2514,6 +2605,25 @@ export function mountDocs(
         chip.appendChild(x);
         filterBar.appendChild(chip);
       }
+      for (const pf of personFilters) {
+        const chip = el("span", "app-docs-orgchip");
+        chip.appendChild(document.createTextNode(`${colLabel(pf.col)}: ${pf.text}`));
+        const x = el("button", "app-docs-orgchip-x", "×") as HTMLButtonElement;
+        x.title = `Clear the ${colLabel(pf.col)} filter`;
+        x.addEventListener("click", () => setPersonFilter(pf.col, ""));
+        chip.appendChild(x);
+        filterBar.appendChild(chip);
+      }
+      for (const col of presentCols) {
+        const chip = el("span", "app-docs-orgchip");
+        chip.appendChild(document.createTextNode(`Has ${colLabel(col).toLowerCase()}`));
+        const x = el("button", "app-docs-orgchip-x", "×") as HTMLButtonElement;
+        x.title = "Clear this filter";
+        x.addEventListener("click", () => togglePresent(col));
+        chip.appendChild(x);
+        filterBar.appendChild(chip);
+      }
+      paintViewChip();
       // adding filters lives in the Filters popover (Vault V3); the chip
       // row only shows what is applied
     };
@@ -2576,27 +2686,25 @@ export function mountDocs(
               return;
             }
             const active = filterFor(col);
-            // top two levels as pills; a deeper active pick still shows
+            // top two levels as pills; deeper active picks still show
             const shallow = nodes.filter((n) => n.labels.length <= 2);
-            const deepPick =
-              active && !shallow.some((n) => n.id === active.node.id)
-                ? [active.node]
-                : [];
+            const deepPick = (active?.nodes ?? []).filter((p) => !shallow.some((n) => n.id === p.id));
             const CAP = 14;
             let shown = [...deepPick, ...shallow];
             const capped = shown.length > CAP;
             if (capped) shown = shown.slice(0, CAP);
             for (const n of shown) {
-              const on = active?.node.id === n.id;
+              const on = (active?.nodes ?? []).some((p) => p.id === n.id);
               const pb = el(
                 "button",
                 `app-docs-fpill${on ? " app-docs-fpill-on" : ""}`,
                 n.labels[n.labels.length - 1]
               ) as HTMLButtonElement;
-              pb.title = n.labels.join(" › ");
+              pb.title = `${n.labels.join(" › ")} — tick several to match any of them`;
               pb.setAttribute("aria-pressed", String(on));
               pb.addEventListener("click", () => {
-                applyFilter(col, on ? null : n, nodes);
+                // B1: several per column, OR'd — a second pick adds
+                toggleFilter(col, n, nodes);
                 paintPop();
               });
               pills.appendChild(pb);
@@ -2646,6 +2754,62 @@ export function mountDocs(
           g.appendChild(row);
         }
 
+        // B6: people — a name fragment per person-role column the site
+        // offers to filter (owner, reviewers, approvers)
+        const PEOPLE_ROLES = new Set(["owner", "reviewers", "approvers"]);
+        const peopleCols = siteDict.columns.filter(
+          (c) => PEOPLE_ROLES.has(c.role) && columnOffered(c) && c.filterable
+        );
+        for (const pc of peopleCols) {
+          const g = group(pc.label !== "" ? pc.label : pc.internal);
+          const row = el("div", "app-docs-fdates");
+          const inp = el("input", "app-input app-docs-fperson") as HTMLInputElement;
+          inp.type = "search";
+          inp.placeholder = "Name contains…";
+          inp.value = personFilters.find((p) => p.col === pc.internal)?.text ?? "";
+          inp.setAttribute("aria-label", `${pc.label || pc.internal} contains`);
+          const go = el("button", "app-docs-fpill", "Apply") as HTMLButtonElement;
+          const push = () => {
+            setPersonFilter(pc.internal, inp.value);
+            paintPop();
+          };
+          go.addEventListener("click", push);
+          inp.addEventListener("keydown", (e) => {
+            if (e.key === "Enter") push();
+          });
+          row.append(inp, go);
+          if (inp.value !== "") {
+            const clr = el("button", "app-docs-fpill", "Clear") as HTMLButtonElement;
+            clr.addEventListener("click", () => {
+              setPersonFilter(pc.internal, "");
+              paintPop();
+            });
+            row.appendChild(clr);
+          }
+          g.appendChild(row);
+        }
+        // B6: presence — linked documents, tags (report 17's "how do I
+        // see what is linked or tagged")
+        const presenceCols = siteDict.columns.filter(
+          (c) => (c.role === "linkedDocuments" || c.role === "tags") && columnOffered(c)
+        );
+        if (presenceCols.length > 0) {
+          const hg = group("Has");
+          const hp = el("div", "app-docs-fpills");
+          hg.appendChild(hp);
+          for (const pc of presenceCols) {
+            const on = presentCols.includes(pc.internal);
+            const pb = el("button", `app-docs-fpill${on ? " app-docs-fpill-on" : ""}`, pc.label !== "" ? pc.label : pc.internal) as HTMLButtonElement;
+            pb.title = `Only documents with ${(pc.label || pc.internal).toLowerCase()}`;
+            pb.setAttribute("aria-pressed", String(on));
+            pb.addEventListener("click", () => {
+              togglePresent(pc.internal);
+              paintPop();
+            });
+            hp.appendChild(pb);
+          }
+        }
+
         const mg = group("Modified");
         const mp = el("div", "app-docs-fpills");
         mg.appendChild(mp);
@@ -2675,6 +2839,8 @@ export function mountDocs(
         clearAll.addEventListener("click", () => {
           filters = [];
           dateFilters = [];
+          personFilters = [];
+          presentCols = [];
           modifiedDays = 0;
           paintTreeSelection();
           paintChips();
@@ -3223,6 +3389,24 @@ export function mountDocs(
     // every row is rendered by the browse feed, so the chosen sort always
     // applies — there is no relevance order left to preserve
     let sort: { key: string; asc: boolean } = { key: "modified", asc: false };
+    const serverSorted = () => sort.key === "name" || sort.key === "modified";
+    /** B2: order the loaded rows by a dictionary column — the ISO twin
+     *  for dates, the display text otherwise; blanks last. */
+    const clientSorted = (rows: DocRow[]): DocRow[] => {
+      if (serverSorted()) return rows;
+      const key = sort.key;
+      const val = (r: DocRow) => (r.values[`${key}.`] ?? r.values[key] ?? "").trim();
+      const dir = sort.asc ? 1 : -1;
+      return [...rows].sort((a, b) => {
+        const va = val(a);
+        const vb = val(b);
+        if (va === "" && vb === "") return 0;
+        if (va === "") return 1;
+        if (vb === "") return -1;
+        return va.localeCompare(vb, undefined, { numeric: true, sensitivity: "base" }) * dir;
+      });
+    };
+    let lastTotal: number | null = null;
     let viewMode: "list" | "tiles" = uiState.viewMode === "tiles" ? "tiles" : "list";
     let density: "comfortable" | "compact" =
       uiState.density === "compact" ? "compact" : "comfortable";
@@ -3271,9 +3455,15 @@ export function mountDocs(
               emptyExtra,
               sort,
               onSort: (key) => {
-                sort = sort.key === key ? { key, asc: !sort.asc } : { key, asc: key === "name" };
+                sort = sort.key === key ? { key, asc: !sort.asc } : { key, asc: key !== "modified" };
                 buildRegister();
-                void load(true);
+                // B2: name and Modified sort on the server (a reload);
+                // any other column sorts what is loaded, in place
+                if (serverSorted()) void load(true);
+                else {
+                  list.setRows(clientSorted(list.rows()));
+                  paintStatus(lastTotal, "");
+                }
               },
               density,
             });
@@ -3776,6 +3966,7 @@ export function mountDocs(
     };
 
     const paintStatus = (total: number | null, error: string) => {
+      lastTotal = total;
       if (error !== "") {
         status.textContent = `Something refused: ${error}`;
         return;
@@ -3793,7 +3984,9 @@ export function mountDocs(
       // plain browsing shows the LIBRARY total up front (ItemCount), so
       // the number does not creep up as pages load (Ben, 2026-08-02)
       const plainBrowse =
-        query.trim() === "" && filters.length === 0 && dateFilters.length === 0;
+        query.trim() === "" && filters.length === 0 && dateFilters.length === 0 && personFilters.length === 0 && presentCols.length === 0;
+      // B2: a client-side sort orders only what has loaded
+      const sortNote = !serverSorted() && !done ? ` · sorted by ${colLabel(sort.key)} within the loaded documents` : "";
       const note =
         contentsNote === "capped"
           ? ` · top ${CONTENT_HITS} content matches`
@@ -3861,6 +4054,8 @@ export function mountDocs(
                 ...approvedFilterFor(),
               ],
               dateRanges: dateFilters.filter((d) => carried.has(d.col)),
+              personFilters: personFilters.filter((p) => carried.has(p.col)),
+              presentCols: presentCols.filter((c) => carried.has(c)),
               // the status column only, and only to feed applyNonCurrent's
               // fallback — everything else the count needs is core
               fields:
@@ -3940,6 +4135,8 @@ export function mountDocs(
           approved: onlyApproved,
           cols: chosenColumns,
           f: filters.map((f) => `${f.col}:${(f.roots ?? [f.node.id]).sort().join("+")}`).sort(),
+          pp: personFilters.map((p) => `${p.col}:${p.text}`).sort(),
+          pr: [...presentCols].sort(),
         });
       let paintedFromCache = false;
       if (reset) {
@@ -4126,6 +4323,8 @@ export function mountDocs(
               ],
               // only bind a date column the library actually carries
               dateRanges: dateFilters.filter((d) => carried.has(d.col)),
+              personFilters: personFilters.filter((p) => carried.has(p.col)),
+              presentCols: presentCols.filter((c) => carried.has(c)),
               fields: fieldsFor(),
               rowLimit: PAGE,
             });
@@ -4161,8 +4360,11 @@ export function mountDocs(
           if (i < 0) break;
           rowsOut.push(feeds[i].buf.shift()!);
         }
-        if (paintedFromCache) list.setRows(applyNonCurrent(rowsOut));
-        else list.append(applyNonCurrent(rowsOut));
+        if (paintedFromCache) list.setRows(clientSorted(applyNonCurrent(rowsOut)));
+        else {
+          list.append(applyNonCurrent(rowsOut));
+          if (!serverSorted()) list.setRows(clientSorted(list.rows()));
+        }
         done = feeds.every((f) => f.done && f.buf.length === 0);
         paintStatus(knownTotal, feedError);
         if (reset) {
@@ -4207,7 +4409,10 @@ export function mountDocs(
         orgPath: org?.node.labels ?? [],
         filters: filters
           .filter((f) => f.col !== "")
-          .map((f) => ({ col: f.col, termId: f.node.id, path: f.node.labels })),
+          .flatMap((f) => f.nodes.map((n) => ({ col: f.col, termId: n.id, path: n.labels }))),
+        people: personFilters.map((p) => ({ ...p })),
+        present: [...presentCols],
+        name: activeViewName,
         columns: chosenColumns,
         groupBy,
         dates: dateFilters.map((d) => ({ ...d })),
@@ -4247,6 +4452,19 @@ export function mountDocs(
         });
         saveRow.append(nameIn, saveB);
         menu!.appendChild(saveRow);
+        if (activeViewName !== "" && savedViews.some((v) => v.name === activeViewName)) {
+          const upd = el("button", "app-docs-menuitem", `Update “${activeViewName}” with the current view`) as HTMLButtonElement;
+          upd.title = "Save what you see now over the saved view of that name";
+          upd.addEventListener("click", () => {
+            void saveDocView(whoId, { ...currentView(), name: activeViewName }).then((list) => {
+              if (dead) return;
+              savedViews = list;
+              status.textContent = `View “${activeViewName}” updated ✓`;
+              closeMenu();
+            });
+          });
+          menu!.appendChild(upd);
+        }
         if (savedViews.length > 0) menu!.appendChild(el("div", "app-docs-menusep", ""));
         for (const v of savedViews) {
           const row = el("div", "app-docs-viewrow");

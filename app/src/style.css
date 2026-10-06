@@ -1646,6 +1646,17 @@ input[type="color"].app-color:disabled { opacity: 0.4; cursor: default; }
 .app-docs-colrole { font-size: 12.5px; color: #6d675c; }
 /* a date column's from/to filter row */
 .app-docs-fdates { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+/* feedback round 1, Tranche B (2026-10-06): people filter input, the view chip, the panel rail */
+.app-docs-fperson { width: 180px; font-size: 12.5px; }
+.app-docs-viewchip { display: inline-flex; align-items: center; gap: 6px; margin-left: 10px; padding: 2px 8px; border-radius: 999px; background: #fff; border: 1px solid #d9d3c8; font-size: 12px; color: #57534a; vertical-align: middle; }
+.app-docs-navhide { align-self: flex-end; font-size: 12px; margin: 2px 6px 4px; }
+.app-docs-navrail {
+  flex: none; width: 30px; display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 10px 0;
+  background: #faf8f4; border: 1px solid #ece8e0; border-radius: 10px; color: #6d675c; cursor: pointer; font: inherit;
+}
+.app-docs-navrail:hover, .app-docs-navrail:focus-visible { color: var(--app-accent); outline: none; }
+.app-docs-navrail-glyph { font-size: 18px; line-height: 1; }
+.app-docs-navrail-cap { writing-mode: vertical-rl; font-size: 10px; font-weight: 700; letter-spacing: 0.08em; }
 .app-docs-fdate { width: 148px; min-height: 34px; }
 /* term set palettes (C2): one collapsible card per set */
 .app-docs-palcard { border: 1px solid #e5e5e5; border-radius: 6px; margin-bottom: 8px; background: #fff; }

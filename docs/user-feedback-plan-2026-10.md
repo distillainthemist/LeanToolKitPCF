@@ -54,7 +54,28 @@ preview, the health report's review dates on the library that failed.
 | A9 | 13 | Reproduce the controller's failed tag add on dev; fix what it finds (likely the proposal road wrongly engaged for a controller). |
 | A10 | 15, 39 | Details pane: a stronger "Details" affordance; the type and status chips move under Categorisation; section order follows the filter order. |
 
-## Tranche B — register features
+## Tranche B — register features — BUILT 2026-10-06, unreleased
+
+Status per item: B1 ✓ (several terms per column, OR'd — pills toggle,
+the chip reads "Type: Policy, Standard", saved views and links carry
+every pick; hierarchy = a pick still includes its subtree, as before) ·
+B2 ✓ (every column header sorts: name and Modified on the server, any
+other column within the loaded documents, said so in the status line
+while pages remain) · B3 ✓ by A7 (the ☆ column on every row for
+signed-in people — not a chooser entry; it is always there) · B4 ✓
+("View · Name" chip on the register head with ×; the views menu offers
+"Update “Name” with the current view") · B5 ✓ ("« Hide panel" at the
+top of the panel; a slim rail brings it back; remembered per person) ·
+B6 ✓ (People filters on the owner / reviewer / approver columns the
+site marks filterable — "Name contains…", server-side CAML on the
+person column; a "Has" group for linked documents and tags; both in
+saved views and the CSV export, which already follows the filters) ·
+B7 = configuration: Settings → Documents → Document columns, the ★ per
+library type IS the default column set (report 44: star Organisation,
+Document Type and the standard column for that type).
+Hosted checks: two pills on Status, a person filter on Owner against
+a real library (CAML `Contains` on a User field), the sort note, the
+panel rail, Update on a saved view.
 
 | # | Report | Fix |
 |---|---|---|

@@ -40,6 +40,10 @@ export interface DocView {
   /** From/to bounds on date columns (Ben, 2026-08-03). A saved view that
    *  dropped its date window would open showing more than it promised. */
   dates: DocDateFilter[];
+  /** Person columns matched by name (B6: "documents owned by …"). */
+  people: DocPersonFilter[];
+  /** Columns that must be non-empty (B6: "has linked documents", "has tags"). */
+  present: string[];
 }
 
 export interface DocDateFilter {
@@ -47,6 +51,12 @@ export interface DocDateFilter {
   /** yyyy-mm-dd; "" = unbounded at that end. */
   from: string;
   to: string;
+}
+
+/** A person column whose display name contains `text` (feedback round 1, B6). */
+export interface DocPersonFilter {
+  col: string;
+  text: string;
 }
 
 export function emptyDocView(): DocView {
@@ -63,6 +73,8 @@ export function emptyDocView(): DocView {
     groupBy: "",
     modifiedDays: 0,
     dates: [],
+    people: [],
+    present: [],
   };
 }
 
@@ -86,6 +98,8 @@ function viewToJson(v: DocView): Record<string, unknown> {
   if (v.dates.length > 0) {
     o.dt = v.dates.map((d) => ({ c: d.col, f: d.from, t: d.to }));
   }
+  if (v.people.length > 0) o.pp = v.people.map((p) => ({ c: p.col, t: p.text }));
+  if (v.present.length > 0) o.pr = v.present;
   return o;
 }
 
@@ -129,6 +143,16 @@ function viewFromJson(raw: unknown): DocView {
       out.dates.push({ col, from, to });
     }
   }
+  if (Array.isArray(o.pp)) {
+    for (const item of o.pp as unknown[]) {
+      if (!item || typeof item !== "object") continue;
+      const p = item as Record<string, unknown>;
+      const col = asStr(p.c);
+      const text = asStr(p.t);
+      if (col !== "" && text !== "") out.people.push({ col, text });
+    }
+  }
+  out.present = asStrings(o.pr);
   return out;
 }
 
@@ -250,10 +274,12 @@ export interface DocUiPrefs {
   density: string;
   /** Collapsed tree keys per term-set id. */
   collapsed: Record<string, string[]>;
+  /** The left (libraries / folders) panel hidden (B5, feedback round 1). */
+  navHidden: boolean;
 }
 
 export function emptyDocUiPrefs(): DocUiPrefs {
-  return { libraries: [], viewMode: "", density: "", collapsed: {} };
+  return { libraries: [], viewMode: "", density: "", collapsed: {}, navHidden: false };
 }
 
 export function parseDocUiPrefs(raw: string | null | undefined): DocUiPrefs {
@@ -267,6 +293,7 @@ export function parseDocUiPrefs(raw: string | null | undefined): DocUiPrefs {
     out.libraries = asStrings(r.libs);
     out.viewMode = asStr(r.view);
     out.density = asStr(r.density);
+    out.navHidden = r.nav === 1 || r.nav === true;
     if (r.collapsed && typeof r.collapsed === "object" && !Array.isArray(r.collapsed)) {
       for (const [k, v] of Object.entries(r.collapsed as Record<string, unknown>)) {
         const keys = asStrings(v);
@@ -285,6 +312,7 @@ export function serializeDocUiPrefs(ui: DocUiPrefs): string {
   if (ui.viewMode !== "") o.view = ui.viewMode;
   if (ui.density !== "") o.density = ui.density;
   if (Object.keys(ui.collapsed).length > 0) o.collapsed = ui.collapsed;
+  if (ui.navHidden) o.nav = 1;
   return JSON.stringify(o);
 }
 

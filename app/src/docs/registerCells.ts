@@ -236,6 +236,9 @@ export function buildRegisterColumns(
     columns.push({
       key: internal,
       label: labelOf(internal),
+      // B2 (feedback round 1): every column's header sorts — name and
+      // Modified server-side, the rest within the loaded documents
+      sortKey: internal,
       render: (row) => {
         const v = row.values[internal] ?? "";
         if (v === "") return "";
