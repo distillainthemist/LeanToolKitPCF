@@ -10,8 +10,10 @@
 
 import { el, clear } from "../../shared/ui/dom";
 
-/** Fewer sections than this: no strip (a row for two pills is noise). */
-export const STRIP_MIN_SECTIONS = 3;
+/** Fewer sections than this: no strip. Two since 2026-10-08 (Ben asked
+ *  for the chips on Priorities, which has pillars and the period rule);
+ *  a one-section tab still shows none. */
+export const STRIP_MIN_SECTIONS = 2;
 
 /** Which section is "in view": the LAST head whose top is at or above
  *  the threshold (the strip's bottom edge plus a little), else the first.

@@ -457,7 +457,9 @@ dividers. No priority statement here — the card above names it.
   smaller row of section pills between the unsaved-changes bar and the
   body, DERIVED from the tab's `h3.app-pr-h3` heads after each render
   (and on repaints, via a MutationObserver) — nothing listed by hand.
-  Shown from three sections (`STRIP_MIN_SECTIONS`). Sticky at the top
+  Shown from two sections (`STRIP_MIN_SECTIONS`; three until
+  2026-10-08, when Ben asked for the chips on the two-section
+  Priorities tab). Sticky at the top
   of the window scroll (the settings card is `overflow: clip`, not
   `hidden` — hidden would make the card the scroll container and the
   strip would stick to it). Pills are the register's filter-pill look

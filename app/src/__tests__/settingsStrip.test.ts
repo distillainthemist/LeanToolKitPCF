@@ -30,7 +30,7 @@ describe("currentSectionIndex", () => {
   it("is -1 with no heads", () => {
     expect(currentSectionIndex([], 80)).toBe(-1);
   });
-  it("needs three sections before a strip is worth a row", () => {
-    expect(STRIP_MIN_SECTIONS).toBe(3);
+  it("needs two sections before a strip is worth a row", () => {
+    expect(STRIP_MIN_SECTIONS).toBe(2);
   });
 });
