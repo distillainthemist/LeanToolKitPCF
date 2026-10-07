@@ -159,7 +159,7 @@ Documents tab at a phone width shows the four selects and no folders
 pane; the Library select solos one library and "All libraries" brings
 every one back; picking an organisation narrows the list and shows the chip;
 the status select opens on "Approved · Current" (the seeded default)
-and "Any approval status" clears it; tapping a row opens the preview
+and "Any status" clears it; tapping a row opens the preview
 full-screen with "Details ›" and "Open in new tab ↗" reachable; a
 desktop window narrowed under 600px behaves the same (it is the
 pane's width, not the device).

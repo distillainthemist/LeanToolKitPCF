@@ -272,7 +272,8 @@ the same commit.
    wrap — the pane, never the window, because the hub can split the
    screen) `.app-docs-phone` turns the page into: search box (full
    width) + the depth toggle, the title, four native `<select
-   class="app-input">`s stacked (library — "All libraries" or one,
+   class="app-input">`s in a two-by-two grid, 8px gaps, 12px between
+   blocks (library — "All libraries" or one,
    templates for controllers only; then organisation, document type,
    status — the site's filterable columns only, one pick each,
    hierarchy shown by indent), the applied-filter chips, the count line, a ONE-column
