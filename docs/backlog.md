@@ -257,9 +257,11 @@ user-feedback-test-script-2026-10.md. Released v0.65.0 / v0.65.1.
 - **Guidance (C4, reports 23 / 24)**: built, then removed before
   release — Ben to clarify with Holly what governance she wants
   before anything is shown on the forms.
-- **Tranche D — the limited phone register**: not started. Search,
-  basic filters, a single-column list, open in the viewer; folders and
-  the full column set stay desktop.
+- **Tranche D — the limited phone register**: BUILT 2026-10-07 (search,
+  three selects, one-column list, full-bleed viewer; folders and the
+  column set stay desktop) — on the dev app, not yet released; Ben's
+  check on a real phone (Power Apps mobile and the browser) pending,
+  then the pilot users who raised 43 / 20.
 - **Hierarchy in filters** (report 36): a parent term such as SMELTER
   including every term beneath it when ticked — logged, not built
   (B1 kept "a pick includes its subtree" as before).

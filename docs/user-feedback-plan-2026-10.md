@@ -11,7 +11,9 @@ Tranches A–C built 2026-10-06, walked through with Ben the same day
 (outcome table in user-feedback-test-script-2026-10.md), released as
 v0.65.0 on 2026-10-07 with the walkthrough changes; v0.65.1 fixed the
 Priorities view link's double-mount race. C4 (Guidance) was removed
-before release. Tranche D (the limited phone register) is not started.
+before release. Tranche D (the limited phone register) was built on
+2026-10-07 after the compaction and awaits Ben's phone check and its
+own release.
 Items parked for the pilot users are listed in backlog.md →
 "Feedback round 1 — open items".
 
@@ -143,7 +145,22 @@ document.
 | C5 | 19 | Reviewer request: a confirmation in place and the same Teams message the owner request sends; version history explains "each save is a draft". |
 | C6 | 32 | MOC record / link as a configured column (SharePoint column + column manager) — configuration, with a cookbook recipe. |
 
-## Tranche D — mobile (its own release)
+## Tranche D — mobile (its own release) — BUILT 2026-10-07, not yet released
+
+What was built: under 600px of register width the register becomes
+search + three native selects (organisation, document type, status)
++ chips + a one-column list + the viewer full-bleed with the details
+under the preview; folders, Document tasks, Add, Filters, tiles, the
+kebab and row actions stay desktop. A pick on a select goes through
+the same `applyFilter` as the popover, so a saved view or a shared
+link reads it as any other pick. Checks for Ben's phone: the hub's
+Documents tab at a phone width shows the three selects and no folders
+pane; picking an organisation narrows the list and shows the chip;
+the status select opens on "Approved · Current" (the seeded default)
+and "Any approval status" clears it; tapping a row opens the preview
+full-screen with "Details ›" and "Open in new tab ↗" reachable; a
+desktop window narrowed under 600px behaves the same (it is the
+pane's width, not the device).
 
 | # | Report | Fix |
 |---|---|---|

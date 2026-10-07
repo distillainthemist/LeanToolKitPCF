@@ -16,7 +16,8 @@ import { showLoading } from "../loading";
 import { detectHost } from "../runtime";
 import { paletteMap } from "../../../shared/palette";
 import { appPalettes } from "../store/config";
-import { RegisterCellCtx, buildRegisterColumns, makeStatusChip } from "./registerCells";
+import { RegisterCellCtx, WidthBucket, buildRegisterColumns, makeStatusChip } from "./registerCells";
+import { PHONE_SEVERAL, isPhoneWidth, phoneOptions, phoneSelectState } from "./phoneRegister";
 import {
   driveIdFor,
   listItemCount,
@@ -2485,6 +2486,79 @@ export function mountDocs(
       filtersBtn.classList.toggle("app-docs-filtersbtn-on", active > 0);
     };
 
+    // ---- the phone's basic filters (feedback round 1, Tranche D) --------
+    // Under PHONE_MAX_WIDTH of register width the pane is a phone's:
+    // the folders pane, the Filters popover, tiles, Add, the kebab and
+    // the row actions all hide (CSS on .app-docs-phone), and three
+    // native selects stand in for the basic filters — organisation,
+    // type, status. Each is one pick on its column through the SAME
+    // applyFilter the popover uses, so the chips, the query and a saved
+    // view read it exactly as a desktop pick. A filter the select cannot
+    // express (several picks — the approved default — or a deeper term)
+    // shows as a named option rather than lying "Any".
+    let phone = false;
+    /** The columns the site lets the register filter by: the
+     *  organisation (when it has a set and the site left it filterable)
+     *  then every taxonomy column ticked filterable — the popover's
+     *  groups and the phone's selects read ONE list. */
+    const filterColumns = (): string[] => {
+      // the site says which columns filter (Ben, 2026-08-03)
+      const filterable = new Set(
+        siteDict.columns.filter((c) => columnOffered(c) && c.filterable).map((c) => c.internal)
+      );
+      // …and the organisation obeys that too. It used to be exempt
+      // because the Folders pane drives it, which meant unticking it
+      // in Settings changed nothing (Ben's screenshot). Unknown to the
+      // dictionary = still shown, so a site that has never opened the
+      // new settings keeps the pane it had.
+      const orgCol = siteDict.columns.find((c) => orgCols.has(c.internal));
+      const orgFilterable = orgCol === undefined || (orgCol.available && orgCol.filterable);
+      const cols: string[] = [];
+      if (app.orgSetId !== "" && orgProps.length > 0 && orgFilterable) cols.push("");
+      cols.push(...[...taxCols.keys()].filter((c) => filterable.has(c)));
+      return cols;
+    };
+    const phoneFilters = el("div", "app-docs-phonefilters");
+    main.appendChild(phoneFilters);
+    /** The vocabularies behind the selects, read once per column (the
+     *  same cached walk the tree and the popover use). */
+    const phoneNodes = new Map<string, TermNode[]>();
+    const paintPhoneFilters = () => {
+      clear(phoneFilters);
+      if (!phone) return;
+      const typeCol = internalForRole("docType");
+      const want = filterColumns().filter((c) => c === "" || c === typeCol || c === statusInternal);
+      for (const col of want) {
+        if (!phoneNodes.has(col)) {
+          phoneNodes.set(col, []);
+          void cachedTermPaths(app.siteUrl, setFor(col), 4, 60).then(({ nodes }) => {
+            if (dead || nodes.length === 0) return;
+            phoneNodes.set(col, nodes);
+            paintPhoneFilters();
+          });
+        }
+        const nodes = phoneNodes.get(col) ?? [];
+        const sel = el("select", "app-input app-docs-phonesel") as HTMLSelectElement;
+        sel.setAttribute("aria-label", colLabel(col));
+        sel.title = `Filter by ${colLabel(col).toLowerCase()}`;
+        const options = phoneOptions(nodes);
+        const state = phoneSelectState(filterFor(col)?.nodes ?? [], options);
+        sel.appendChild(new Option(`Any ${colLabel(col).toLowerCase()}`, ""));
+        if (state.value === PHONE_SEVERAL) sel.appendChild(new Option(state.severalLabel, PHONE_SEVERAL));
+        for (const o of options) sel.appendChild(new Option(o.label, o.id));
+        sel.value = state.value;
+        // the vocabulary has not answered yet: the select shows what is
+        // on (Any, or the named picks) and waits
+        sel.disabled = nodes.length === 0;
+        sel.addEventListener("change", () => {
+          if (sel.value === PHONE_SEVERAL) return;
+          const node = nodes.find((n) => n.id === sel.value) ?? null;
+          applyFilter(col, node, nodes);
+        });
+        phoneFilters.appendChild(sel);
+      }
+    };
+
     const filterBar = el("div", "app-docs-filterbar");
     main.appendChild(filterBar);
     const status = el("div", "app-docs-status");
@@ -2573,6 +2647,8 @@ export function mountDocs(
         filterBar.appendChild(chip);
       }
       paintViewChip();
+      // the phone's selects show the same picks (Tranche D)
+      paintPhoneFilters();
       // adding filters lives in the Filters popover (Vault V3); the chip
       // row only shows what is applied
     };
@@ -2604,24 +2680,9 @@ export function mountDocs(
           body.appendChild(g);
           return g;
         };
-        // the site says which columns filter (Ben, 2026-08-03)
-        const filterable = new Set(
-          siteDict.columns.filter((c) => columnOffered(c) && c.filterable).map((c) => c.internal)
-        );
-        // …and the organisation obeys that too. It used to be exempt
-        // because the Folders pane drives it, which meant unticking it
-        // in Settings changed nothing (Ben's screenshot). Unknown to the
-        // dictionary = still shown, so a site that has never opened the
-        // new settings keeps the pane it had.
-        const orgCol = siteDict.columns.find((c) => orgCols.has(c.internal));
-        const orgFilterable = orgCol === undefined || (orgCol.available && orgCol.filterable);
-        const cols: string[] = [];
-        if (app.orgSetId !== "" && orgProps.length > 0 && orgFilterable) cols.push("");
-        cols.push(
-          ...[...taxCols.keys()].filter(
-            (c) => filterable.has(c)
-          )
-        );
+        // the columns the site lets the register filter by — the one
+        // list the phone's selects read too (Tranche D)
+        const cols = filterColumns();
         for (const col of cols) {
           const g = group(colLabel(col));
           const pills = el("div", "app-docs-fpills");
@@ -3429,7 +3490,7 @@ export function mountDocs(
     let viewMode: "list" | "tiles" = uiState.viewMode === "tiles" ? "tiles" : "list";
     let density: "comfortable" | "compact" =
       uiState.density === "compact" ? "compact" : "comfortable";
-    let bucket: "full" | "mid" | "narrow" = "full";
+    let bucket: WidthBucket = "full";
 
     const emptyExtra = (): HTMLElement | null => {
       if (filters.length === 0 && modifiedDays === 0 && query.trim() === "") return null;
@@ -3450,8 +3511,9 @@ export function mountDocs(
     const buildRegister = () => {
       const prev: DocRow[] = list !== undefined ? list.rows() : [];
       list?.destroy();
+      // a phone is always the list (Tranche D): tiles need width
       list =
-        viewMode === "tiles"
+        viewMode === "tiles" && bucket !== "phone"
           ? mountDocTiles(listHost, {
               onRow: onRowOpen,
               onNearEnd: () => void loadMore(),
@@ -3513,18 +3575,34 @@ export function mountDocs(
       buildRegister();
     });
 
-    // width buckets: the pane, not the window — the hub splits the screen
-    const bucketFor = (w: number): "full" | "mid" | "narrow" =>
+    // width buckets: the pane, not the window — the hub splits the screen.
+    // The PHONE call reads the whole register (wrap); the column buckets
+    // read the list pane (main), which the folders pane narrows. One
+    // relayout reads both: hiding the folders pane on the phone call
+    // changes main's width, and a pane that was already hidden (the B5
+    // pref) would otherwise never re-fire for main.
+    const bucketFor = (w: number): WidthBucket =>
       w < 380 ? "narrow" : w < 560 ? "mid" : "full";
-    const ro = new ResizeObserver((entries) => {
-      const w = entries[0]?.contentRect.width ?? 0;
-      if (w === 0) return;
-      const b = bucketFor(w);
-      if (b !== bucket) {
-        bucket = b;
-        if (viewMode === "list") buildRegister();
+    const relayout = () => {
+      const ww = wrap.clientWidth;
+      const mw = main.clientWidth;
+      if (ww === 0 && mw === 0) return;
+      const p = isPhoneWidth(ww);
+      if (p !== phone) {
+        phone = p;
+        wrap.classList.toggle("app-docs-phone", phone);
+        paintPhoneFilters();
       }
-    });
+      const b: WidthBucket = phone ? "phone" : bucketFor(mw);
+      if (b !== bucket) {
+        const wasPhone = bucket === "phone";
+        bucket = b;
+        // tiles ignore the column buckets — but the phone forces the list
+        if (viewMode === "list" || wasPhone || phone) buildRegister();
+      }
+    };
+    const ro = new ResizeObserver(() => relayout());
+    ro.observe(wrap);
     ro.observe(main);
     innerCleanups.push(() => ro.disconnect());
 

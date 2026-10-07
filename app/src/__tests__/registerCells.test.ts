@@ -32,6 +32,17 @@ function ctx(): RegisterCellCtx {
 const keys = (cols: { key: string }[]): string[] => cols.map((c) => c.key);
 
 describe("buildRegisterColumns", () => {
+  it("phone (Tranche D): one stacked column, sortable by name, no library, no trailing columns", () => {
+    const cols = buildRegisterColumns(ctx(), {
+      wanted: ["DocType", "DocStatus", "EffDate", "Modified"],
+      bucket: "phone",
+      libraryLabel: () => "Standards",
+      trailing: [{ key: "kebab", label: "", render: () => "" }],
+    });
+    expect(keys(cols)).toEqual(["doc"]);
+    expect(cols[0].sortKey).toBe("name");
+    expect(cols[0].label).toBe("Document");
+  });
   it("orders by the dictionary whatever order is asked for, Modified last", () => {
     const cols = buildRegisterColumns(ctx(), {
       wanted: ["EffDate", "Modified", "DocStatus", "DocType"],

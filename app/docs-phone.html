@@ -1,0 +1,89 @@
+<!doctype html>
+<!-- Dev harness: the LIMITED PHONE register (feedback round 1, Tranche D)
+     at a phone's width. Drives the REAL cells (src/docs/registerCells.ts,
+     bucket "phone") through the real list renderer with synthetic rows,
+     under the real stylesheet, inside a 375px frame — the filter strip is
+     static markup wearing the production classes. Vite builds index.html
+     alone, so this never reaches dist/. -->
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Docs register: phone layout</title>
+  <link rel="stylesheet" href="/src/style.css" />
+  <style>
+    body { font: 14px system-ui; margin: 16px; background: #e9e7e2; }
+    .frame { width: 375px; height: 720px; background: #fff; border: 1px solid #bbb; border-radius: 18px; overflow: hidden; display: flex; flex-direction: column; }
+    .frame .app-docs-wrap { flex: 1; min-height: 0; }
+    pre { background: #111; color: #0f0; padding: 12px; border-radius: 8px; white-space: pre-wrap; max-width: 375px; }
+  </style>
+</head>
+<body>
+  <h1 style="font-size:16px">Documents register — phone (375 × 720)</h1>
+  <div class="frame"><div id="host" class="app-docs-wrap app-docs-phone"></div></div>
+  <pre id="out">running…</pre>
+  <script type="module">
+    import { mountDocList } from "./src/docs/listView.ts";
+    import { buildRegisterColumns } from "./src/docs/registerCells.ts";
+    import { emptySiteDictionary } from "./src/docs/model.ts";
+
+    const host = document.getElementById("host");
+    const top = document.createElement("div");
+    top.className = "app-docs-top";
+    top.innerHTML = `<div class="app-docs-searchwrap"><input class="app-input app-docs-search" type="search" placeholder="Search all documents…"></div>
+      <label class="app-docs-check app-docs-depthtoggle"><input type="checkbox"> Match contents &amp; every field</label>`;
+    host.appendChild(top);
+    const main = document.createElement("div");
+    main.className = "app-docs-main";
+    host.appendChild(main);
+    main.innerHTML = `<div class="app-docs-titlerow"><div class="app-docs-titleblock"><h2 class="app-docs-h1">All libraries</h2></div></div>
+      <div class="app-docs-phonefilters">
+        <select class="app-input app-docs-phonesel" aria-label="Organisation"><option>Any organisation</option><option>Bell Bay</option><option>&nbsp;&nbsp;&nbsp;Casting</option><option>&nbsp;&nbsp;&nbsp;Rodding</option></select>
+        <select class="app-input app-docs-phonesel" aria-label="Document type"><option>Any document type</option><option>Procedure</option><option>Work instruction</option></select>
+        <select class="app-input app-docs-phonesel" aria-label="Approval status"><option>Approved · Current</option><option>Any approval status</option><option>Draft</option></select>
+      </div>
+      <div class="app-docs-filterbar"><span class="app-docs-orgchip">Approval status: Approved, Current<button class="app-docs-orgchip-x">×</button></span></div>
+      <div class="app-docs-status">120 documents</div>`;
+    const listHost = document.createElement("div");
+    listHost.style.cssText = "flex:1;min-height:0;display:flex;flex-direction:column";
+    main.appendChild(listHost);
+
+    const dict = emptySiteDictionary();
+    dict.columns = [
+      { internal: "DMSStatus", label: "Approval status", role: "status", available: true, termSetId: "" },
+    ];
+    const ctx = { dict, states: {}, labelToId: new Map(), statusCol: { internal: "DMSStatus", termSetId: "" }, myEmail: "ben@pecheydistilling.com" };
+    const EXTS = ["docx", "xlsx", "pdf", "pptx"];
+    const STATUSES = ["Approved", "Draft", "Superseded", "Approved", "Approved"];
+    const LIBS = ["Standards", "Working"];
+    const row = (i) => ({
+      id: i, uniqueId: `u-${i}`,
+      name: `SOP-${String(i).padStart(4, "0")} Standard operating procedure for the casting line ${i}.${EXTS[i % 4]}`,
+      ext: EXTS[i % 4], serverUrl: `/sites/Dev/Docs/SOP-${i}`, listId: LIBS[i % 2],
+      modified: new Date(2026, 0, 1 + (i % 200)).toISOString(),
+      checkoutName: i % 7 === 0 ? "Sam Reviewer" : "",
+      values: { DMSStatus: STATUSES[i % 5] },
+    });
+    const rows = Array.from({ length: 40 }, (_, i) => row(i + 1));
+    let opened = "";
+    const list = mountDocList(listHost, {
+      columns: buildRegisterColumns(ctx, { wanted: ["DMSStatus", "Modified"], bucket: "phone", libraryLabel: (r) => r.listId }),
+      onRow: (r) => { opened = r.name; },
+      onNearEnd: () => undefined,
+      emptyText: "No documents here yet.",
+      sort: { key: "name", asc: true },
+      onSort: () => undefined,
+    });
+    list.setRows(rows);
+    const lines = [];
+    const cells = listHost.querySelectorAll(".app-doclist-row .app-doclist-cell");
+    lines.push(`${cells.length === 40 ? "PASS" : "FAIL"}  one cell per row — ${cells.length}`);
+    const w = listHost.querySelector(".app-doclist-row").getBoundingClientRect().width;
+    lines.push(`${w <= 375 ? "PASS" : "FAIL"}  row fits the frame — ${Math.round(w)}px`);
+    const meta = listHost.querySelector(".app-docs-phonemeta");
+    lines.push(`${meta && meta.textContent.includes("Working") && meta.textContent.includes("Draft") ? "PASS" : "FAIL"}  meta carries status · library · date — "${meta ? meta.textContent : ""}"`);
+    listHost.querySelector(".app-doclist-row").click();
+    lines.push(`${opened !== "" ? "PASS" : "FAIL"}  a row click opens — ${opened.slice(0, 30)}`);
+    document.getElementById("out").textContent = lines.join("\n");
+  </script>
+</body>
+</html>

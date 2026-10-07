@@ -189,6 +189,12 @@ Version lives in the tag alone — nothing is stamped into files.
   one-shot read left the second mount with nothing (Priorities view
   link, 2026-10-07). `takePendingPrioritiesView` reads inside a 20 s
   grace window instead.
+- **Layout by the pane's width, not the window's.** The register's
+  phone layout (Tranche D, 2026-10-07) reads its own wrap through a
+  ResizeObserver — the hub can split the screen — and the observer
+  watches both the wrap and the list pane, because hiding the folders
+  pane changes the pane's width and a pane the B5 pref already hid
+  would never re-fire by itself.
 - **A form never closes on a click outside it.** Edit details, Create
   initiative, the priority dialogs, prompts, escalation, the column
   chooser — buttons or Escape only (Ben, 2026-10-07: an edit lost to

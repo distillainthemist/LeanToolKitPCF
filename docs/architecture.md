@@ -662,6 +662,27 @@ Key concepts (details: [leanboard-standard-documents-plan.md](leanboard-standard
   status read inside their pane sections; a date-only column prefills
   as the SITE's day, not the UTC day. Default filters pick the site
   from the organisation's defined sites.
+- **The phone register** (Tranche D, 2026-10-07; reports 43 and 20).
+  Not a second screen: the same `mountDocs` with a `phone` flag that
+  `relayout` sets from the register's OWN width (under
+  `PHONE_MAX_WIDTH` = 600px of the wrap — the hub can split the
+  screen, so the window is the wrong measure) and that CSS on
+  `.app-docs-phone` turns into the limited layout. The folders pane,
+  Document tasks, Add, Filters, tiles, the kebab and the row actions
+  hide; three native selects (`paintPhoneFilters`: organisation,
+  document type, status — from `filterColumns()`, the ONE list the
+  Filters popover also reads) set one pick per column through the
+  same `applyFilter`, so chips, the query, exports and saved views
+  read a phone pick exactly as a desktop one; the list is the `phone`
+  width bucket of `buildRegisterColumns` — one stacked cell
+  (`makePhoneCell`: Document cell, then status chip · library · date).
+  The pure rules (`phoneOptions` indents a walk by depth, parents
+  first; `phoneSelectState` names several picks or a deeper pick as a
+  synthetic option rather than claiming "Any") live in
+  `src/docs/phoneRegister.ts`. One ResizeObserver watches BOTH the
+  wrap and the list pane: hiding the folders pane changes the pane's
+  width, and a pane already hidden by the B5 pref would never re-fire
+  on its own. `app/docs-phone.html` renders the real cells at 375px.
 
 ## 5. SharePoint interfacing (the connector roads)
 

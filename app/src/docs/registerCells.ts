@@ -120,6 +120,28 @@ export function ownerCell(v: string): HTMLElement {
 const isMine = (ctx: RegisterCellCtx, row: DocRow): boolean =>
   ctx.myEmail !== "" && (row.checkoutEmail ?? "") === ctx.myEmail;
 
+/** The phone's one cell (Tranche D): the Document cell on top; under
+ *  it the status chip, the library (when several are in view) and the
+ *  modified date — what the desktop's columns said, stacked. */
+export function makePhoneCell(
+  ctx: RegisterCellCtx,
+  libraryLabel?: (row: DocRow) => string
+): (row: DocRow) => HTMLElement {
+  const nameCell = makeNameCell(ctx);
+  const statusChip = makeStatusChip(ctx);
+  return (row: DocRow): HTMLElement => {
+    const cell = el("div", "app-docs-phonecell");
+    cell.appendChild(nameCell(row));
+    const meta = el("div", "app-docs-phonemeta");
+    const status = ctx.statusCol !== null ? (row.values[ctx.statusCol.internal] ?? "") : "";
+    if (status !== "") meta.appendChild(statusChip(status));
+    const when = [libraryLabel?.(row) ?? "", formatWhen(row.modified)].filter((s) => s !== "");
+    if (when.length > 0) meta.appendChild(el("span", "app-docs-phonewhen", when.join(" · ")));
+    if (meta.childElementCount > 0) cell.appendChild(meta);
+    return cell;
+  };
+}
+
 /** The Document cell: file-type chip + name stem + the checkout lock. */
 export function makeNameCell(ctx: RegisterCellCtx): (row: DocRow) => HTMLElement {
   return (row: DocRow): HTMLElement => {
@@ -149,7 +171,9 @@ export function makeNameCell(ctx: RegisterCellCtx): (row: DocRow) => HTMLElement
   };
 }
 
-export type WidthBucket = "full" | "mid" | "narrow";
+/** "phone" (Tranche D): the register's whole width is a phone's — one
+ *  stacked column, nothing else. */
+export type WidthBucket = "full" | "mid" | "narrow" | "phone";
 
 export interface RegisterColumnOpts {
   /** Column internals to show (already availability-filtered by the
@@ -209,6 +233,21 @@ export function buildRegisterColumns(
     sortKey: "modified",
     render: (row) => formatWhen(row.modified),
   };
+
+  // the phone (Tranche D): ONE column, the stacked cell — no library
+  // column, no configured columns, no trailing star or kebab; the
+  // header still sorts by name
+  if (opts.bucket === "phone") {
+    return [
+      {
+        key: "doc",
+        label: "Document",
+        width: "minmax(0, 1fr)",
+        sortKey: "name",
+        render: makePhoneCell(ctx, opts.libraryLabel),
+      },
+    ];
+  }
 
   const columns: ListColumn<DocRow>[] = [nameCol];
   // the caller decides WHICH columns show; the dictionary decides their

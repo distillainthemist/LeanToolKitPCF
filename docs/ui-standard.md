@@ -267,6 +267,24 @@ the same commit.
 5. **Group heads**: quiet 14–15px bold labels with counts; the divider
    belongs to the column-header row beneath, not a heavy rule.
 
+6. **The phone register** (feedback round 1, Tranche D, 2026-10-07).
+   Under 600px of the REGISTER's own width (`isPhoneWidth` on the
+   wrap — the pane, never the window, because the hub can split the
+   screen) `.app-docs-phone` turns the page into: search box (full
+   width) + the depth toggle, the title, three native `<select
+   class="app-input">`s stacked (organisation, document type, status —
+   the site's filterable columns only, one pick each, hierarchy shown
+   by indent), the applied-filter chips, the count line, a ONE-column
+   list (`.app-docs-phonecell`: the Document cell, then status chip ·
+   library · date on a meta line; no header row), the viewer. Hidden:
+   the folders pane and its rail, Document tasks, Add, Filters, List |
+   Tiles, the kebab, the star and row kebab — a phone is for finding
+   and opening, not managing. A filter the select cannot express (the
+   approved default is several terms) shows as a named option, never
+   as "Any". The viewer under 720px of WINDOW width is full-bleed with
+   the details pane under the preview. Native selects are right here
+   (rule 3's ban is on a tinted row of selects in a desktop page).
+
 ## 4. Overlays, dialogs, wizards
 
 - **Detail overlays** (Documents/Priorities pattern): scrim
