@@ -1441,6 +1441,15 @@ reschedule/cancel history with a reason picklist.
   filters (it never had); tags and big term sets are searched in the
   popover; Guidance (C4) removed pending Holly. Parked for end users:
   A1, A3, A8, A9, B7, C3 minting, C5. Unreleased.
+- **2026-10-07 — small asks from Ben's testing.** Default filters pick
+  the site from the organisation's defined sites (no typing); the
+  Documents scope dropdown is gone (the left pane picks libraries, the
+  toggle picks depth); forms never close on a click outside (Edit
+  details, Create initiative, the priority dialogs, prompts,
+  escalation, the column chooser + Cancel); the Priorities kebab's
+  "🔗 Copy link to this view" (`priorities/viewLink.ts`, `prview=` on
+  the player URL, the hub fronts Priorities and the mount consumes it;
+  org · period · status · view · pillar · rule · toggles). Unreleased.
 - **2026-10-01 — the stage bar; initials.** Ben: fold the stage
   label and its PDCA symbol into the bar as thick labelled segments
   (done full colour, current outlined, future grey), bring the gate

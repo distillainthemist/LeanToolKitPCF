@@ -99,6 +99,12 @@ the same commit.
   vertical caption, the card-walk rail's look), not a toolbar button.
   What a team must see every visit lives on the band; reference
   detail lives in the pane.
+- **A Priorities view travels as a link** (2026-10-07): the kebab's
+  Share → "🔗 Copy link to this view" carries org, period, status,
+  view, pillar filter, rule and toggles on the player URL (`prview=`);
+  the item stays to say "✓ Link copied", and hands over the URL in a
+  prompt when the host refuses the clipboard — the Documents view link
+  and the initiative permalink's road.
 - **A link to paste elsewhere is the PLAYER's URL** (`boardUrl`),
   never the page's own: inside Power Apps the page is an embedded
   frame on another domain, and its URL opens nothing. The initiative

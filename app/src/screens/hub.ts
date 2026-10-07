@@ -15,7 +15,7 @@ import { effectiveTabs } from "../../../shared/schema/hubTabs";
 import { parseOrgTree } from "../../../shared/schema/meeting";
 import { parsePeople } from "../../../shared/schema/people";
 import { appTheme, editorHost } from "../cardHost";
-import { boardHash, boardUrl, hasPendingDocView, hasPendingWorkDoc } from "../links";
+import { boardHash, boardUrl, hasPendingDocView, hasPendingPrioritiesView, hasPendingWorkDoc } from "../links";
 import { currentViewer, detectHost } from "../runtime";
 import { readTaskCount } from "../taskBadge";
 import { actionsForViewer, openActions, upsertActions } from "../store/actions";
@@ -368,6 +368,8 @@ export function mountHub(parent: HTMLElement): () => void {
       window.location.hash.startsWith("#/docs")
     ) {
       view.selectTab("documents");
+    } else if (hasPendingPrioritiesView()) {
+      view.selectTab("priorities"); // a shared Priorities view (2026-10-07)
     } else {
       // any "#/<tab>" fronts its tab (priorities, improvement,
       // calendar, actions) — selectTab ignores unknown keys

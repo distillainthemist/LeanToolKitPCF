@@ -43,6 +43,31 @@ export const LAUNCH_PARAM = "ritual";
 export const DOCVIEW_PARAM = "docview";
 let pendingDocView = "";
 
+/** Player query parameter carrying a shared PRIORITIES view (Ben,
+ *  2026-10-07): org, period, status, view mode and the toggles —
+ *  `priorities/viewLink.ts` encodes it. */
+export const PRVIEW_PARAM = "prview";
+let pendingPrView = "";
+export function takePendingPrioritiesView(): string {
+  const v = pendingPrView;
+  pendingPrView = "";
+  return v;
+}
+export function hasPendingPrioritiesView(): boolean {
+  return pendingPrView !== "";
+}
+/** The absolute player URL for a Priorities view. */
+export function prioritiesViewUrl(encoded: string): string {
+  if (!host || host.appId === "" || host.environmentId === "") {
+    const base = window.location.href.split("#")[0].split("?")[0];
+    return `${base}?${PRVIEW_PARAM}=${encodeURIComponent(encoded)}#/priorities`;
+  }
+  const q = new URLSearchParams();
+  if (host.tenantId !== "") q.set("tenantId", host.tenantId);
+  q.set(PRVIEW_PARAM, encoded);
+  return `${PLAYER}/e/${host.environmentId}/app/${host.appId}?${q.toString()}`;
+}
+
 /** The docview payload the launch delivered — consumed once, by the
  *  Documents screen when it mounts. */
 export function takePendingDocView(): string {
@@ -281,6 +306,11 @@ export function launchTarget(): string {
     // land on the hub — its Documents tab fronts itself and consumes the
     // payload (the standalone #/docs page has no app chrome around it)
     return "#/";
+  }
+  const pv = param(PRVIEW_PARAM);
+  if (pv !== "") {
+    pendingPrView = pv;
+    return "#/priorities"; // the hub fronts Priorities; its mount consumes it
   }
   const doc = param(DOC_PARAM);
   if (doc !== "") {

@@ -57,6 +57,8 @@ import {
 import { loadPriorityPrefs, savePriorityPrefs, ViewMode } from "./prefs";
 import { mountWalk } from "./walk";
 import { initialsFor } from "../../../shared/schema/people";
+import { prioritiesViewUrl, takePendingPrioritiesView } from "../links";
+import { decodePrioritiesView, encodePrioritiesView } from "./viewLink";
 import { cascadeDialog, cascadeReview, closeDialog, closePriority, LifecycleCtx, openPriorityOverlay, reopenPriority, sendCascade } from "./lifecycle";
 import { Initiative, initiativesByPriority, ragInputsFor } from "../improvement/initiativeModel";
 import { REOPEN_PRIORITY_KEY } from "../improvement/boardOrigin";
@@ -291,7 +293,10 @@ export function mountPriorities(parent: HTMLElement, opts: PrioritiesMountOpts =
       const company = card.org?.company ?? (site !== "" ? (siteCo[site] ?? "") : (mySite?.company ?? companyList[0] ?? ""));
       return orgRef(company, site, card.org?.department ?? "", card.org?.area ?? "");
     };
-    const startOrg = cardOrg() ?? (prefs.lastOrg !== "" ? orgFromKey(prefs.lastOrg) : (mySite ?? firstSite));
+    // a shared view link (Ben, 2026-10-07) sets the opening state once
+    const linkView = card ? null : decodePrioritiesView(takePendingPrioritiesView());
+    const linkOrg = linkView && linkView.org !== "" ? orgFromKey(linkView.org) : null;
+    const startOrg = cardOrg() ?? linkOrg ?? (prefs.lastOrg !== "" ? orgFromKey(prefs.lastOrg) : (mySite ?? firstSite));
     const cardL1 = card?.pillarName ? (data0Pillars: Pillar[]) => data0Pillars.find((x) => x.level === 1 && x.name.toLowerCase() === card.pillarName!.toLowerCase())?.id ?? null : null;
     const state: ScreenState = {
       org: startOrg,
@@ -306,6 +311,16 @@ export function mountPriorities(parent: HTMLElement, opts: PrioritiesMountOpts =
       view: card?.view ?? (prefs.viewByOrg[orgKey(startOrg)] ?? "simple"),
     };
     if (card?.periodDate) state.period = periodFor(settings.period, card.periodDate) || currentPeriod;
+    if (linkView) {
+      if (linkView.period !== "") state.period = linkView.period;
+      if (linkView.status !== "") state.status = linkView.status;
+      if (linkView.view !== "") state.view = linkView.view;
+      if (linkView.l1 !== "") state.l1 = linkView.l1;
+      if (linkView.focus.length > 0) state.focus = linkView.focus;
+      if (linkView.rule !== "") state.rule = linkView.rule;
+      if (linkView.showOther !== null) state.showOther = linkView.showOther;
+      if (linkView.groupByPillar !== null) state.groupByPillar = linkView.groupByPillar;
+    }
     const persist = () => {
       if (card) return; // card mounts never touch the person's prefs
       prefs.lastOrg = orgKey(state.org);
@@ -797,6 +812,38 @@ export function mountPriorities(parent: HTMLElement, opts: PrioritiesMountOpts =
         state.groupByPillar = !state.groupByPillar;
         render();
       });
+      // a permalink to THIS view (Ben, 2026-10-07): org, period, status,
+      // view, pillar filter, rule, toggles — the player's URL, never the
+      // page's own; the menu stays open to say it copied
+      menu.appendChild(el("div", "app-cp-menu-h", "Share"));
+      const link = el("button", "app-cp-menu-item", "🔗 Copy link to this view") as HTMLButtonElement;
+      link.type = "button";
+      link.addEventListener("click", () => {
+        const url = prioritiesViewUrl(
+          encodePrioritiesView({
+            org: orgKey(state.org),
+            period: state.period,
+            status: state.status,
+            view: state.view,
+            l1: state.l1 ?? "",
+            focus: state.focus ?? [],
+            rule: state.rule,
+            showOther: state.showOther,
+            groupByPillar: state.groupByPillar,
+          })
+        );
+        navigator.clipboard.writeText(url).then(
+          () => {
+            link.textContent = "✓ Link copied";
+            setTimeout(() => menu.remove(), 1200);
+          },
+          () => {
+            menu.remove();
+            void import("../prompts").then(({ promptText }) => promptText({ title: "Copy this link", note: "The host refused the clipboard — copy it from here.", initial: url, confirmLabel: "Done" }));
+          }
+        );
+      });
+      menu.appendChild(link);
       const r = anchor.getBoundingClientRect();
       menu.style.top = `${r.bottom + 4}px`;
       menu.style.right = `${Math.max(8, window.innerWidth - r.right)}px`;
