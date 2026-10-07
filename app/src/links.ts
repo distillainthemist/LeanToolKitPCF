@@ -48,13 +48,24 @@ let pendingDocView = "";
  *  `priorities/viewLink.ts` encodes it. */
 export const PRVIEW_PARAM = "prview";
 let pendingPrView = "";
+let pendingPrViewAt = 0;
+/** How long a launched view stays readable (ms). The hub that boots on
+ *  the landing route can front Priorities from the last-tab preference
+ *  and read the view BEFORE the launch re-routes and mounts the hub
+ *  again — a one-shot read left the second mount with nothing, and the
+ *  screen fell back to prefs (Ben, 2026-10-07). Every mount inside the
+ *  window applies it; after the window it is gone. */
+const PRVIEW_GRACE_MS = 20_000;
 export function takePendingPrioritiesView(): string {
-  const v = pendingPrView;
-  pendingPrView = "";
-  return v;
+  if (pendingPrView === "") return "";
+  if (Date.now() - pendingPrViewAt > PRVIEW_GRACE_MS) {
+    pendingPrView = "";
+    return "";
+  }
+  return pendingPrView;
 }
 export function hasPendingPrioritiesView(): boolean {
-  return pendingPrView !== "";
+  return pendingPrView !== "" && Date.now() - pendingPrViewAt <= PRVIEW_GRACE_MS;
 }
 /** The absolute player URL for a Priorities view. */
 export function prioritiesViewUrl(encoded: string): string {
@@ -310,7 +321,8 @@ export function launchTarget(): string {
   const pv = param(PRVIEW_PARAM);
   if (pv !== "") {
     pendingPrView = pv;
-    return "#/priorities"; // the hub fronts Priorities; its mount consumes it
+    pendingPrViewAt = Date.now();
+    return "#/priorities"; // the hub fronts Priorities; its mount reads it
   }
   const doc = param(DOC_PARAM);
   if (doc !== "") {
