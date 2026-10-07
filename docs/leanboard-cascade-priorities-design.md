@@ -379,3 +379,24 @@ shared view link (`prview`) mean the same thing on both; a card mount
 of the screen keeps its own tile / focused modes. `renderPhone()` in
 `prioritiesScreen.ts`; `mountWalk({ inline: true })` in `walk.ts`;
 `orgSelectOptions` in `dialogs.ts` (pure, tested).
+
+## 18. Amendment — the poster (2026-10-08)
+
+The tab's ⋮ offers "Download PDF version": the CURRENT view — org,
+period, status, pillar filter — as an A3 landscape PDF with no
+controls, for a wall or a deck. `priorities/pdfPoster.ts` is pure:
+a `PosterDoc` (title, org chain, vision, columns with their pillar and
+colour, one `PosterPriority` each — statement, owner, roll-up colour,
+R/A/G counts, starred objectives with plan and actual, flags) in,
+pages of PDF operators out, drawn on the issues export's writer
+(`issues/pdf.ts`, now with a size-agnostic `buildPagesPdf`; the single
+guillemets joined its WinAnsi map). The page: title and subtitle, the
+vision as a dark band, pillar spans merged over consecutive
+sub-pillar columns, colour-filled column heads, cards with a 4pt
+roll-up edge, coloured tally dots (the screen's ✓ ! ✕ are not WinAnsi
+glyphs), and the objectives under a hairline. More than eight columns
+go to further pages; a column whose cards overrun continues on the
+next page under repeated heads, marked "continued". The screen
+gathers the doc from the same selectors the matrix paints from, so the
+poster never shows a priority the screen would not. Vector text
+throughout: print-sharp and extractable.

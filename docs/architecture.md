@@ -381,6 +381,12 @@ model section) — the canvas/PCF sections there are historical.
   the next move forward (`standingRevert`, derived from the events).
   No schema change.
 
+**The priorities poster** (2026-10-08). The Priorities tab's ⋮ offers
+"Download PDF version": the current view as an A3 landscape PDF with
+no controls (`src/priorities/pdfPoster.ts`, pure and tested, on the
+issues export's writer with a size-agnostic `buildPagesPdf`).
+Priorities design §18 has the page anatomy and the paging rules.
+
 ### 3.4 Actions
 
 - One central table on the standard channel: every card raises actions

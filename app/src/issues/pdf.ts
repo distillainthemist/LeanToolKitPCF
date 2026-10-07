@@ -43,7 +43,7 @@ const HELV: number[] = [
   1015, 667, 667, 722, 722, 667, 611, 778, 722, 278, 500, 667, 556, 833, 722, 778, 667, 778, 722, 667, 611, 722, 667, 944, 667, 667, 611, 278, 278, 278, 469, 556,
   333, 556, 556, 500, 556, 556, 278, 556, 556, 222, 222, 500, 222, 833, 556, 556, 556, 556, 333, 500, 278, 556, 500, 722, 500, 500, 500, 334, 260, 334, 584,
 ];
-const HELV_HIGH: Record<number, number> = { 0x80: 556, 0x85: 1000, 0x91: 222, 0x92: 222, 0x93: 333, 0x94: 333, 0x95: 350, 0x96: 556, 0x97: 1000, 0x99: 1000, 0xa0: 278, 0xb7: 278 };
+const HELV_HIGH: Record<number, number> = { 0x80: 556, 0x85: 1000, 0x8b: 333, 0x91: 222, 0x92: 222, 0x93: 333, 0x94: 333, 0x95: 350, 0x96: 556, 0x97: 1000, 0x99: 1000, 0x9b: 333, 0xa0: 278, 0xb7: 278 };
 
 type Font = "F1" | "F2" | "F3";
 
@@ -58,7 +58,7 @@ function glyphWidth(code: number, font: Font): number {
 /** Text → WinAnsi bytes. Latin-1 maps straight across; the common
  *  typographic marks map to their WinAnsi slots; everything else becomes
  *  a readable stand-in rather than a box. */
-const MARKS: Record<string, number> = { "€": 0x80, "…": 0x85, "‘": 0x91, "’": 0x92, "“": 0x93, "”": 0x94, "•": 0x95, "–": 0x96, "—": 0x97, "™": 0x99, " ": 0xa0 };
+const MARKS: Record<string, number> = { "€": 0x80, "…": 0x85, "‹": 0x8b, "‘": 0x91, "’": 0x92, "“": 0x93, "”": 0x94, "•": 0x95, "–": 0x96, "—": 0x97, "™": 0x99, "›": 0x9b, " ": 0xa0 };
 const STAND_INS: Record<string, string> = { "→": "->", "←": "<-", "↑": "^", "↓": "v", "✓": "[ok]", "✕": "[x]", "⚐": "[flag]", "⚑": "[flag]", "★": "*", "☆": "*", "▲": "^", "▼": "v", "◐": "(half)", "⏸": "||", "⌂": "home", "⚙": "settings", "＋": "+", "×": "x", "\t": "    " };
 export function winAnsiBytes(text: string): number[] {
   const out: number[] = [];
@@ -127,7 +127,7 @@ export function wrapText(text: string, font: Font, size: number, maxW: number): 
 
 // ---- layout -----------------------------------------------------------------
 
-interface Page {
+export interface Page {
   ops: string[];
   /** image index → resource name on this page */
   images: Map<number, string>;
@@ -142,7 +142,7 @@ const STYLE: Record<"title" | "h1" | "h2" | "p" | "meta" | "mono", { font: Font;
   mono: { font: "F3", size: 8.5, grey: 0.3, before: 0, after: 4 },
 };
 
-function pdfString(bytes: number[]): string {
+export function pdfString(bytes: number[]): string {
   let s = "(";
   for (const b of bytes) {
     if (b === 0x28 || b === 0x29 || b === 0x5c) s += "\\" + String.fromCharCode(b);
@@ -275,6 +275,27 @@ export function buildPdf(doc: PdfDocument): Uint8Array {
     const w = textWidth(text, "F1", 8);
     pages[i].ops.push(`BT /F1 8 Tf 0.5 g 1 0 0 1 ${n2(PAGE_W - MARGIN - w)} ${n2(MARGIN / 2)} Tm ${pdfString(text)} Tj ET`);
   }
+  return assemblePdf(pages, images, { title: doc.title, author: doc.author }, PAGE_W, PAGE_H);
+}
+
+/** Pages drawn by a caller (the priorities poster, 2026-10-08) at a
+ *  size of its own — the same fonts, the same assembly. */
+export function buildPagesPdf(
+  pages: Page[],
+  meta: { title: string; author?: string },
+  pageW: number,
+  pageH: number
+): Uint8Array {
+  return assemblePdf(pages, [], meta, pageW, pageH);
+}
+
+function assemblePdf(
+  pages: Page[],
+  images: PdfImage[],
+  doc: { title: string; author?: string },
+  pageW: number,
+  pageH: number
+): Uint8Array {
 
   // object ids: 1 catalog, 2 pages, 3-5 fonts, 6.. images, then content+page pairs
   const imageBase = 6;
@@ -306,7 +327,7 @@ export function buildPdf(doc: PdfDocument): Uint8Array {
     const xobjects = [...p.images.entries()].map(([idx, name]) => `/${name} ${imageBase + idx} 0 R`).join(" ");
     obj(
       pageId(i),
-      `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${n2(PAGE_W)} ${n2(PAGE_H)}] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >>${xobjects !== "" ? ` /XObject << ${xobjects} >>` : ""} >> /Contents ${contentId(i)} 0 R >>`
+      `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${n2(pageW)} ${n2(pageH)}] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >>${xobjects !== "" ? ` /XObject << ${xobjects} >>` : ""} >> /Contents ${contentId(i)} 0 R >>`
     );
   });
   const infoId = objects.length;

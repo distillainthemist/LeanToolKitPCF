@@ -871,6 +871,70 @@ export function mountPriorities(parent: HTMLElement, opts: PrioritiesMountOpts =
       return row;
     };
 
+    /** Gather this view as a PosterDoc and download the A3 PDF. The
+     *  same selectors the matrix paints from, so the poster never shows
+     *  a priority the screen would not. */
+    const downloadPoster = async () => {
+      const [{ layoutPoster, A3_W, A3_H }, { buildPagesPdf }] = await Promise.all([
+        import("./pdfPoster"),
+        import("../issues/pdf"),
+      ]);
+      const columns = objectiveColumns(livePillars(), state.focus ?? state.l1);
+      const visible = visibleFor(state.org);
+      const { byColumn } = groupByColumn(columns, visible);
+      const ragHex = (r: Rag): string => palette[ragPaletteKey(r)] ?? "";
+      const posterColumns = columns.map((col) => {
+        const l1 = data.pillars.find((x) => x.id === col.parentId);
+        return {
+          name: col.name,
+          color: col.color || "",
+          pillarName: l1?.name ?? "",
+          pillarColor: l1?.color ?? "",
+          priorities: (byColumn.get(col.id) ?? []).map((p) => {
+            const t = tally(ragsFor(p));
+            const starred = p.primaryInitiativeId !== "" ? (metricState.get(p.primaryInitiativeId)?.values ?? []).filter((v) => v.starred) : [];
+            const flags: string[] = [];
+            if (parentClosed(p, data.priorities)) flags.push("Parent completed");
+            if (p.status !== "active") flags.push(p.status === "completed" ? "Completed" : p.status === "archived" ? "Archived" : "Retired");
+            return {
+              statement: p.statement,
+              owner: p.ownerName,
+              color: ragHex(rollup(t, state.rule, settings.ragRatioPct)),
+              tallies: tallyLine(t).map((x) => ({ glyph: x.glyph, count: x.count, color: ragHex(x.rag) })),
+              total: t.total,
+              objectives: starred.map((mv) => ({
+                name: mv.name,
+                objective: mv.objective,
+                plan: mv.target !== null ? `${mv.target}${mv.unit}` : "—",
+                actual: mv.display !== "" ? mv.display : "—",
+                color: mv.rag ? ragHex(mv.rag) : "",
+              })),
+              flags,
+            };
+          }),
+        };
+      });
+      const statusWords = state.status === "active" ? "Active priorities" : state.status === "completed" ? "Completed priorities" : "All priorities";
+      const l1Name = state.l1 !== null ? (data.pillars.find((x) => x.id === state.l1)?.name ?? "") : "";
+      const when = new Date().toLocaleDateString(undefined, { day: "numeric", month: "long", year: "numeric" });
+      const doc = {
+        title: `${state.period} Cascaded Priorities`,
+        subtitle: [orgPath(state.org).map(orgName).join(" › "), statusWords, l1Name !== "" ? `Pillar: ${l1Name}` : ""].filter((x) => x !== "").join("  ·  "),
+        vision: visions[orgKey(state.org)] ?? "",
+        columns: posterColumns,
+        footer: `LeanBoard · ${orgName(state.org)} · ${when}`,
+      };
+      const bytes = buildPagesPdf(layoutPoster(doc), { title: doc.title, author: "LeanBoard" }, A3_W, A3_H);
+      const buf = new ArrayBuffer(bytes.byteLength);
+      new Uint8Array(buf).set(bytes);
+      const blob = new Blob([buf], { type: "application/pdf" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `priorities-${orgName(state.org).replace(/[^A-Za-z0-9]+/g, "-").toLowerCase()}-${state.period.replace(/[^A-Za-z0-9]+/g, "")}.pdf`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    };
+
     const openViewOptions = (anchor: HTMLElement) => {
       document.querySelectorAll(".app-cp-menu").forEach((m) => m.remove());
       const menu = el("div", "app-cp-menu");
@@ -960,6 +1024,16 @@ export function mountPriorities(parent: HTMLElement, opts: PrioritiesMountOpts =
         );
       });
       menu.appendChild(link);
+      // the poster (Ben, 2026-10-08): this view — org, period, filters —
+      // as a clean A3 PDF, no controls; the layout is pure (pdfPoster.ts)
+      const pdf = el("button", "app-cp-menu-item", "⬇ Download PDF version") as HTMLButtonElement;
+      pdf.type = "button";
+      pdf.title = "An A3 landscape PDF of this view for a wall or a deck";
+      pdf.addEventListener("click", () => {
+        menu.remove();
+        void downloadPoster();
+      });
+      menu.appendChild(pdf);
       const r = anchor.getBoundingClientRect();
       menu.style.top = `${r.bottom + 4}px`;
       menu.style.right = `${Math.max(8, window.innerWidth - r.right)}px`;
