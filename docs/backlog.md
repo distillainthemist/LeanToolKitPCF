@@ -262,6 +262,11 @@ user-feedback-test-script-2026-10.md. Released v0.65.0 / v0.65.1.
   column set stay desktop) — on the dev app, not yet released; Ben's
   check on a real phone (Power Apps mobile and the browser) pending,
   then the pilot users who raised 43 / 20.
+- **Phone layout of the other tabs**: reviewed 2026-10-07
+  (docs/mobile-review-2026-10.md) — M1 frame (top bar, tab strip,
+  action rows), M2 ritual board, M3 priorities walk, M4 initiative
+  screen, M5 cadence day view; value drivers / settings desktop-only.
+  Not started; Ben's phone pass on the hosted app first.
 - **Hierarchy in filters** (report 36): a parent term such as SMELTER
   including every term beneath it when ticked — logged, not built
   (B1 kept "a pick includes its subtree" as before).
