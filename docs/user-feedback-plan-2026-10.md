@@ -148,14 +148,16 @@ document.
 ## Tranche D — mobile (its own release) — BUILT 2026-10-07, not yet released
 
 What was built: under 600px of register width the register becomes
-search + three native selects (organisation, document type, status)
+search + four native selects (library, organisation, document type,
+status)
 + chips + a one-column list + the viewer full-bleed with the details
 under the preview; folders, Document tasks, Add, Filters, tiles, the
 kebab and row actions stay desktop. A pick on a select goes through
 the same `applyFilter` as the popover, so a saved view or a shared
 link reads it as any other pick. Checks for Ben's phone: the hub's
-Documents tab at a phone width shows the three selects and no folders
-pane; picking an organisation narrows the list and shows the chip;
+Documents tab at a phone width shows the four selects and no folders
+pane; the Library select solos one library and "All libraries" brings
+every one back; picking an organisation narrows the list and shows the chip;
 the status select opens on "Approved · Current" (the seeded default)
 and "Any approval status" clears it; tapping a row opens the preview
 full-screen with "Details ›" and "Open in new tab ↗" reachable; a

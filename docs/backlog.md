@@ -258,7 +258,7 @@ user-feedback-test-script-2026-10.md. Released v0.65.0 / v0.65.1.
   release — Ben to clarify with Holly what governance she wants
   before anything is shown on the forms.
 - **Tranche D — the limited phone register**: BUILT 2026-10-07 (search,
-  three selects, one-column list, full-bleed viewer; folders and the
+  four selects incl. library, one-column list, full-bleed viewer; folders and the
   column set stay desktop) — on the dev app, not yet released; Ben's
   check on a real phone (Power Apps mobile and the browser) pending,
   then the pilot users who raised 43 / 20.

@@ -271,10 +271,11 @@ the same commit.
    Under 600px of the REGISTER's own width (`isPhoneWidth` on the
    wrap — the pane, never the window, because the hub can split the
    screen) `.app-docs-phone` turns the page into: search box (full
-   width) + the depth toggle, the title, three native `<select
-   class="app-input">`s stacked (organisation, document type, status —
-   the site's filterable columns only, one pick each, hierarchy shown
-   by indent), the applied-filter chips, the count line, a ONE-column
+   width) + the depth toggle, the title, four native `<select
+   class="app-input">`s stacked (library — "All libraries" or one,
+   templates for controllers only; then organisation, document type,
+   status — the site's filterable columns only, one pick each,
+   hierarchy shown by indent), the applied-filter chips, the count line, a ONE-column
    list (`.app-docs-phonecell`: the Document cell, then status chip ·
    library · date on a meta line; no header row), the viewer. Hidden:
    the folders pane and its rail, Document tasks, Add, Filters, List |

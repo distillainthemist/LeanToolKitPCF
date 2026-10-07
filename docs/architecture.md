@@ -669,10 +669,13 @@ Key concepts (details: [leanboard-standard-documents-plan.md](leanboard-standard
   screen, so the window is the wrong measure) and that CSS on
   `.app-docs-phone` turns into the limited layout. The folders pane,
   Document tasks, Add, Filters, tiles, the kebab and the row actions
-  hide; three native selects (`paintPhoneFilters`: organisation,
-  document type, status — from `filterColumns()`, the ONE list the
-  Filters popover also reads) set one pick per column through the
-  same `applyFilter`, so chips, the query, exports and saved views
+  hide; four native selects (`paintPhoneFilters`): Library first —
+  "All libraries" or one of them through the Libraries card's own
+  `switchTo` (a remount), the desktop's ticked subset named until a
+  pick replaces it (`phoneLibraryState`); then organisation, document
+  type, status — from `filterColumns()`, the ONE list the Filters
+  popover also reads — one pick per column through the same
+  `applyFilter`, so chips, the query, exports and saved views
   read a phone pick exactly as a desktop one; the list is the `phone`
   width bucket of `buildRegisterColumns` — one stacked cell
   (`makePhoneCell`: Document cell, then status chip · library · date).

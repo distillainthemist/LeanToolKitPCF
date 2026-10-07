@@ -17,7 +17,7 @@ import { detectHost } from "../runtime";
 import { paletteMap } from "../../../shared/palette";
 import { appPalettes } from "../store/config";
 import { RegisterCellCtx, WidthBucket, buildRegisterColumns, makeStatusChip } from "./registerCells";
-import { PHONE_SEVERAL, isPhoneWidth, phoneOptions, phoneSelectState } from "./phoneRegister";
+import { PHONE_ALL_LIBRARIES, PHONE_SEVERAL, isPhoneWidth, phoneLibraryState, phoneOptions, phoneSelectState } from "./phoneRegister";
 import {
   driveIdFor,
   listItemCount,
@@ -2526,6 +2526,27 @@ export function mountDocs(
     const paintPhoneFilters = () => {
       clear(phoneFilters);
       if (!phone) return;
+      // the library first (Ben, 2026-10-07): the folders pane's
+      // Libraries card, as one pick — "All libraries" or one of them
+      // (templates for controllers only, as the card); the desktop's
+      // ticked subset shows by name until a pick replaces it
+      if (!favMode) {
+        const offered = libraries.filter((l) => l.libType !== "template" || docAdmin());
+        const sel = el("select", "app-input app-docs-phonesel") as HTMLSelectElement;
+        sel.setAttribute("aria-label", "Library");
+        sel.title = "Which library to show";
+        const chosen = offered.filter((l) => isSelected(l.listId)).map((l) => ({ id: l.listId, label: l.config.title || l.name }));
+        const state = phoneLibraryState(chosen, offered.length);
+        sel.appendChild(new Option("All libraries", PHONE_ALL_LIBRARIES));
+        if (state.value === PHONE_SEVERAL) sel.appendChild(new Option(state.severalLabel, PHONE_SEVERAL));
+        for (const l of offered) sel.appendChild(new Option(l.config.title || l.name, l.listId));
+        sel.value = state.value;
+        sel.addEventListener("change", () => {
+          if (sel.value === PHONE_SEVERAL) return;
+          switchTo(sel.value === PHONE_ALL_LIBRARIES ? allListIds : [sel.value]);
+        });
+        phoneFilters.appendChild(sel);
+      }
       const typeCol = internalForRole("docType");
       const want = filterColumns().filter((c) => c === "" || c === typeCol || c === statusInternal);
       for (const col of want) {
@@ -2558,6 +2579,12 @@ export function mountDocs(
         phoneFilters.appendChild(sel);
       }
     };
+
+    // a controller's template libraries join the Library select once the
+    // admin answer lands (the card does the same)
+    void adminReady.then(() => {
+      if (!dead && phone) paintPhoneFilters();
+    });
 
     const filterBar = el("div", "app-docs-filterbar");
     main.appendChild(filterBar);

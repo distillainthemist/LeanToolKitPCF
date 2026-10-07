@@ -4,8 +4,10 @@
 
 import { describe, expect, it } from "vitest";
 import {
+  PHONE_ALL_LIBRARIES,
   PHONE_MAX_WIDTH,
   PHONE_SEVERAL,
+  phoneLibraryState,
   isPhoneWidth,
   phoneOptions,
   phoneSelectState,
@@ -66,5 +68,19 @@ describe("phoneSelectState", () => {
   });
   it("names a pick deeper than the options go", () => {
     expect(phoneSelectState([walk[5]], opts)).toEqual({ value: PHONE_SEVERAL, severalLabel: "Bay 2" });
+  });
+});
+
+describe("phoneLibraryState", () => {
+  const libs = [{ id: "a", label: "Standards" }, { id: "b", label: "Working" }];
+  it("is All when every library (or none) is in view", () => {
+    expect(phoneLibraryState(libs, 2).value).toBe(PHONE_ALL_LIBRARIES);
+    expect(phoneLibraryState([], 2).value).toBe(PHONE_ALL_LIBRARIES);
+  });
+  it("is the one library when one is", () => {
+    expect(phoneLibraryState([libs[1]], 2)).toEqual({ value: "b", severalLabel: "" });
+  });
+  it("names a ticked subset rather than claiming All", () => {
+    expect(phoneLibraryState(libs, 3)).toEqual({ value: PHONE_SEVERAL, severalLabel: "Standards · Working" });
   });
 });

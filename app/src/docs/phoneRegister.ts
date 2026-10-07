@@ -84,3 +84,18 @@ export function phoneSelectState(
     severalLabel: picked.map((n) => n.labels[n.labels.length - 1]).join(" · "),
   };
 }
+
+/**
+ * What the phone's Library select shows: "*" when every library is in
+ * view, the one library's id when one is, else PHONE_SEVERAL with the
+ * names — the desktop's ticked subset is seen, not misreported.
+ */
+export const PHONE_ALL_LIBRARIES = "*";
+export function phoneLibraryState(
+  selected: { id: string; label: string }[],
+  total: number
+): { value: string; severalLabel: string } {
+  if (selected.length === 0 || selected.length >= total) return { value: PHONE_ALL_LIBRARIES, severalLabel: "" };
+  if (selected.length === 1) return { value: selected[0].id, severalLabel: "" };
+  return { value: PHONE_SEVERAL, severalLabel: selected.map((l) => l.label).join(" · ") };
+}
