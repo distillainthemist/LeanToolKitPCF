@@ -288,6 +288,19 @@ the same commit.
    the details pane under the preview. Native selects are right here
    (rule 3's ban is on a tinted row of selects in a desktop page).
 
+7. **The phone frame** (mobile review M1, 2026-10-07). The frame
+   reads the WINDOW (`@media (max-width: 599px)`), because the bar and
+   the hub's tab strip are never split; panes that can be split (the
+   register, a board) read their own width (rule 6). Under 600px: the
+   bar's buttons are icon-only 44px squares (⚑ ⚙ and the one solid ＋;
+   words stay in `title` / `aria-label`); the hub tab strip scrolls
+   sideways, no wrap, scrollbar hidden, the open tab scrolled into
+   view, the half-visible next tab the cue; an action row is two lines
+   (tick · disc · title wrapping in full, then with · due · flags); the
+   Actions head stacks with the add field full width and the state
+   chips in one scrolling row; Settings shows "best on a desktop"
+   (`.app-phone-only`). Harness and dev pages carry the viewport meta.
+
 ## 4. Overlays, dialogs, wizards
 
 - **Detail overlays** (Documents/Priorities pattern): scrim

@@ -63,6 +63,7 @@ const reportLink = el("a", "app-btn app-btn-bar app-link-report") as HTMLAnchorE
 reportLink.append(el("span", "app-mode-icon", "\u2690"), el("span", "", "Report"));
 reportLink.href = "#";
 reportLink.title = "Report a problem or share an idea";
+reportLink.setAttribute("aria-label", "Report a problem or share an idea");
 reportLink.addEventListener("click", (e) => {
   e.preventDefault();
   void import("./issues/report").then(({ openReportDialog }) =>
@@ -75,6 +76,7 @@ const addActionLink = el("a", "app-btn app-btn-primary app-btn-addaction") as HT
 addActionLink.append(el("span", "app-btn-addaction-plus", "\uFF0B"), el("span", "", "Add action"));
 addActionLink.href = "#";
 addActionLink.title = "Capture an action and assign it — yours unless you link it to a board";
+addActionLink.setAttribute("aria-label", "Add action");
 addActionLink.addEventListener("click", (e) => {
   e.preventDefault();
   void import("./actions/quickAdd").then(({ openQuickAction }) => openQuickAction());
@@ -85,6 +87,7 @@ const modeIcon = el("span", "app-mode-icon", "\u2699");
 const modeText = el("span", "", "Settings");
 modeLink.append(modeIcon, modeText);
 modeLink.href = "#/settings";
+modeLink.setAttribute("aria-label", "Settings");
 nav.appendChild(gap);
 nav.appendChild(reportLink);
 nav.appendChild(modeLink);

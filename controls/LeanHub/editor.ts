@@ -392,6 +392,11 @@ export class LeanHubView {
       tabs.appendChild(btn);
     }
     this.root.appendChild(tabs);
+    // the strip scrolls on a phone (M1): the open tab is always in view
+    const onTab = tabs.querySelector<HTMLElement>(".ltk-lh-tab-on");
+    if (onTab && typeof onTab.scrollIntoView === "function" && tabs.scrollWidth > tabs.clientWidth) {
+      onTab.scrollIntoView({ inline: "nearest", block: "nearest" });
+    }
 
     const body = el("div", "ltk-lh-body");
     this.root.appendChild(body);

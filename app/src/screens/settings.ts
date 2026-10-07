@@ -150,6 +150,11 @@ export function mountSettings(parent: HTMLElement, initialTab = ""): () => void 
 
     const wrap = el("div", "app-settings");
     parent.appendChild(wrap);
+    // admin pages are desktop surfaces (mobile review, 2026-10-07): say
+    // so on a phone rather than reflow seven-column grids
+    wrap.appendChild(
+      el("div", "app-settings-note app-phone-only", "Settings is best on a desktop — some pages here are wider than a phone.")
+    );
     const tabsRow = el("div", "app-settings-tabsrow");
     const tabsBar = el("div", "app-settings-tabs");
     tabsRow.appendChild(tabsBar);

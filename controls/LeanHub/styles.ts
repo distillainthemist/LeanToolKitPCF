@@ -28,7 +28,13 @@ export const LEANHUB_CSS = `
   padding: 0 12px;
   border-bottom: 1px solid var(--ltk-hairline);
   flex: 0 0 auto;
+  /* the strip SCROLLS when it cannot fit (mobile review M1): seven tabs
+     on a phone used to clip Actions and Documents with no sign of them */
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
 }
+.ltk-lh-tabs::-webkit-scrollbar { display: none; }
 .ltk-lh-tab {
   font: inherit;
   font-size: 15.5px;
@@ -39,6 +45,8 @@ export const LEANHUB_CSS = `
   padding: 12px 16px 10px;
   border-bottom: 2px solid transparent;
   cursor: pointer;
+  flex: none;
+  white-space: nowrap; /* "My day" wrapped to two lines on a phone */
   /* flex, not inline-block children: a count chip is smaller than the
      label, and on the shared BASELINE it sits visibly low against the
      word (Ben, 2026-08-08). Centred against the label instead. */
@@ -415,4 +423,32 @@ export const LEANHUB_CSS = `
 .ltk-lh-fchips-row { align-items: center; }
 .ltk-lh-groupby { margin: 0; flex-wrap: nowrap; }
 .ltk-lh-compose-for { align-self: center; font-size: 12.5px; color: var(--ltk-muted); white-space: nowrap; }
+
+/* ---- the phone frame (mobile review M1, 2026-10-07) ----------------
+   Under 600px: the tab strip scrolls (the open tab kept in view);
+   an action row is TWO lines — tick · disc · title (wrapping in full),
+   then with · due · flags; the Actions head stacks (kind select beside
+   the person field, the add field full width, the state chips in one
+   scrolling row). */
+@media (max-width: 599px) {
+  /* no edge fade: it clipped the last tab's letters; the half-visible
+     next tab is the scroll cue */
+  .ltk-lh-tabs { padding: 0 8px; }
+  .ltk-lh-tab { padding: 12px 12px 10px; font-size: 15px; }
+  .ltk-lh-action { flex-wrap: wrap; row-gap: 6px; padding: 10px; }
+  .ltk-lh-action-main { min-width: 55%; }
+  .ltk-lh-action-with { white-space: nowrap; }
+  .ltk-lh-actions { padding: 8px 10px 12px; }
+  .ltk-lh-bar { padding: 8px 10px; gap: 8px; }
+  .ltk-lh-bar .ltk-lh-person-pick { flex: 1 1 160px; display: flex; }
+  .ltk-lh-bar .ltk-lh-person-input { flex: 1; width: auto; min-width: 0; }
+  .ltk-lh-compose { flex-wrap: wrap; }
+  .ltk-lh-compose-issue { flex: 1 1 100%; }
+  .ltk-lh-compose-due { flex: 1 1 auto; width: auto; min-width: 0; }
+  .ltk-lh-fchips-row { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
+  .ltk-lh-fchips-row::-webkit-scrollbar { display: none; }
+  .ltk-lh-fchips-row .ltk-lh-bar-gap { display: none; }
+  .ltk-lh-fchip { flex: none; white-space: nowrap; }
+  .ltk-lh-groupby { margin-left: 8px; padding-left: 8px; border-left: 1px solid var(--ltk-hairline); }
+}
 `;

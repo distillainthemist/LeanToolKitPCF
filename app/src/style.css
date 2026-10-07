@@ -3989,6 +3989,28 @@ textarea.app-cp-statement { font-size: 14px; font-weight: 500; }
 /* the top bar's ＋ Add action: far right, the accent primary, always there */
 .app-btn-addaction { margin-left: 8px; min-height: 40px; padding: 0 16px; font-size: 14px; gap: 6px; text-decoration: none; white-space: nowrap; }
 .app-btn-addaction-plus { font-size: 16px; line-height: 1; }
+/* ---- the phone frame (mobile review M1, 2026-10-07) ----------------
+   The FRAME reads the window (a media query): the bar and the hub's
+   tab strip are never split. Panes that can be split (the register, a
+   board) read their own width instead (ui-standard §3.6). Under 600px
+   the bar's buttons are icon-only 44px squares — the words live in
+   each button's title and aria-label — so "＋ Add action" is never
+   pushed off the edge. */
+.app-phone-only { display: none; }
+@media (max-width: 599px) {
+  .app-phone-only { display: block; }
+  .app-bar { gap: 8px; padding: 0 12px; }
+  .app-nav { gap: 6px; }
+  .app-logo { max-width: 90px; }
+  .app-btn-bar, .app-btn-addaction {
+    min-width: 44px; min-height: 44px; padding: 0 10px; margin-left: 0;
+    justify-content: center;
+  }
+  .app-btn-bar > span:not(.app-mode-icon),
+  .app-btn-addaction > span:not(.app-btn-addaction-plus) { display: none; }
+  .app-btn-bar .app-mode-icon { font-size: 20px; width: auto; height: auto; }
+  .app-btn-addaction-plus { font-size: 22px; }
+}
 .app-quickadd-host { position: fixed; inset: 0; width: 0; height: 0; overflow: visible; z-index: 60; }
 .app-quickadd-host .ltk-dialog-overlay { position: fixed; }
 /* hub tabs that mount app screens scroll inside the tab (the register was

@@ -198,6 +198,17 @@ still used). First phone pass: open each from the dev app and note.
   55px top bar plus a 48px tab strip plus the player's bar is a quarter
   of a 812px screen before content. The phone frame should be one bar.
 
+## Status
+
+- **M1 Frame — built 2026-10-07** (on dev, unreleased): icon-only top
+  bar under 600px; the hub tab strip scrolls with the open tab kept in
+  view; two-line action rows; the Actions head stacked with the add
+  field full width and chips in one scrolling row; the Settings note;
+  viewport meta on every harness and dev page. Verified in demo mode at
+  375px; Ben's phone check pending — in particular whether the
+  Documents tab now shows for the report-20 reporter.
+- M2–M5: not started.
+
 ## Recommended order (each its own release, phone-only CSS where it can be)
 
 | Tranche | Scope | Size | Why first |
