@@ -299,7 +299,14 @@ the same commit.
    (tick · disc · title wrapping in full, then with · due · flags); the
    Actions head stacks with the add field full width and the state
    chips in one scrolling row; Settings shows "best on a desktop"
-   (`.app-phone-only`). Harness and dev pages carry the viewport meta.
+   (`.app-phone-only`) on every tab except My profile and Users, the
+   two a phone is for (Ben, 2026-10-07): the unsaved-changes bar wraps
+   with its buttons on their own line; Users opens with the add-person
+   card already open, the search full width, the filter selects gone
+   and each person's six controls behind an Edit ▾ toggle
+   (`.app-user-edittoggle`, `.app-user-row-open`). Rituals and the
+   admin tabs stay desktop. Harness and dev pages carry the viewport
+   meta.
 
 8. **Boards and the card walk on a phone** (mobile review M2,
    2026-10-07). The BoardGrid turns into a LIST by its own width

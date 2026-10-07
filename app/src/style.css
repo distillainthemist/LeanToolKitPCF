@@ -4097,6 +4097,32 @@ textarea.app-cp-statement { font-size: 14px; font-weight: 500; }
   .app-docs-filterpop { width: calc(100vw - 16px); left: 8px !important; }
   .app-ib-titlebits, .app-ib-controls { flex-wrap: wrap; }
 }
+/* ---- Settings on a phone: My profile and Users (2026-10-07) ----------
+   The unsaved-changes bar wraps with its buttons on their own line (the
+   profile note says "save from the bar above"). Users: the search full
+   width, the filter selects gone, ＋ Add person full width, directory
+   hits wrapping, and each person's six controls behind an Edit toggle
+   so the list reads as names first. */
+.app-user-edittoggle { display: none; }
+@media (max-width: 599px) {
+  .app-save-bar { flex-wrap: wrap; }
+  .app-save-bar-msg { flex: 1 1 100%; }
+  .app-save-bar .app-bar-gap { display: none; }
+  .app-users-filters select { display: none; }
+  .app-users-filters input[type="search"] { flex: 1 1 100%; min-width: 0; }
+  .app-users-filters .app-btn { flex: 1 1 100%; }
+  .app-group-row { flex-wrap: wrap; }
+  .app-group-row .app-user-email { flex: 1 1 100%; }
+  .app-user-row { gap: 10px; padding: 10px 12px; }
+  .app-user-main { min-width: 0; width: 100%; }
+  .app-user-ident { flex: 1; }
+  .app-user-edittoggle { display: inline-flex; flex: none; align-self: flex-start; min-height: 36px; font-size: 13px; }
+  .app-user-row .app-user-controls { display: none; width: 100%; gap: 8px; }
+  .app-user-row-open .app-user-controls { display: flex; }
+  .app-user-row .app-user-field { flex: 1 1 45%; min-width: 0; }
+  .app-user-row .app-user-field .app-input { width: 100%; min-width: 0; }
+  .app-user-row .app-user-field .app-btn { width: 100%; }
+}
 .app-quickadd-host { position: fixed; inset: 0; width: 0; height: 0; overflow: visible; z-index: 60; }
 .app-quickadd-host .ltk-dialog-overlay { position: fixed; }
 /* hub tabs that mount app screens scroll inside the tab (the register was

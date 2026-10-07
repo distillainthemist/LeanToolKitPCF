@@ -240,8 +240,16 @@ still used). First phone pass: open each from the dev app and note.
   one-day grid drops the 640px minimum. Verified in demo mode at
   375px (Day selected, one full-width column, chips readable).
 
-All five tranches are on the dev app awaiting Ben's phone pass and
-one release.
+- **Settings (2026-10-07, after Ben's question)**: My profile was
+  already a stacked form and fits; the "best on a desktop" note now
+  shows only on the other tabs; the unsaved-changes bar wraps under
+  600px; Users (admins adding someone on the fly) opens with the add
+  card, a full-width search and no filter selects, directory hits
+  wrapping, and each person's controls behind an Edit toggle. Rituals
+  is not needed on a phone (Ben).
+
+All five tranches and the settings pass are on the dev app awaiting
+Ben's phone pass and one release.
 
 ## Recommended order (each its own release, phone-only CSS where it can be)
 

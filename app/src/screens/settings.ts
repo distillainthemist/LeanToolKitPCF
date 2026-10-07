@@ -12,6 +12,7 @@ import {
   parsePalette,
   serializePalette,
 } from "../../../shared/palette";
+import { isPhoneWindow } from "../phone";
 import { copyText } from "../../../shared/ui/clipboard";
 import { openDialog } from "../../../shared/ui/dialog";
 import { clear, el } from "../../../shared/ui/dom";
@@ -151,10 +152,12 @@ export function mountSettings(parent: HTMLElement, initialTab = ""): () => void 
     const wrap = el("div", "app-settings");
     parent.appendChild(wrap);
     // admin pages are desktop surfaces (mobile review, 2026-10-07): say
-    // so on a phone rather than reflow seven-column grids
-    wrap.appendChild(
-      el("div", "app-settings-note app-phone-only", "Settings is best on a desktop — some pages here are wider than a phone.")
-    );
+    // so on a phone rather than reflow seven-column grids — except the
+    // two tabs a phone is FOR: My profile, and Users for an admin adding
+    // someone on the fly (Ben, 2026-10-07)
+    const phoneNote = el("div", "app-settings-note app-phone-only", "Settings is best on a desktop — some pages here are wider than a phone.");
+    wrap.appendChild(phoneNote);
+    const PHONE_TABS = new Set(["profile", "users"]);
     const tabsRow = el("div", "app-settings-tabsrow");
     const tabsBar = el("div", "app-settings-tabs");
     tabsRow.appendChild(tabsBar);
@@ -347,6 +350,8 @@ export function mountSettings(parent: HTMLElement, initialTab = ""): () => void 
       await tabByKey(key).render();
     };
     const renderTabs = () => {
+      // inline "" lets the phone media rule show it; none hides it there too
+      phoneNote.style.display = PHONE_TABS.has(current) ? "none" : "";
       clear(tabsBar);
       for (const t of tabs) {
         const btn = el("button", "app-settings-tab", t.label) as HTMLButtonElement;
@@ -1380,6 +1385,12 @@ async function renderUsers(body: HTMLElement, me: RosterPerson): Promise<void> {
       addBtn.setAttribute("aria-expanded", String(open));
       if (open) addCard.querySelector("input")?.focus();
     });
+    // a phone opens the tab to ADD someone (Ben, 2026-10-07): the card is
+    // open from the start, the search its first field
+    if (isPhoneWindow()) {
+      addCard.style.display = "";
+      addBtn.setAttribute("aria-expanded", "true");
+    }
   } else {
     body.appendChild(bar);
   }
@@ -1699,6 +1710,17 @@ function userRow(
     controls.append(el("span", "app-user-field"));
   }
 
+  // a phone (mobile review, 2026-10-07): the six controls hide behind
+  // one Edit toggle per row, so the list reads as names first
+  const edit = el("button", "app-link app-user-edittoggle", "Edit ▾") as HTMLButtonElement;
+  edit.type = "button";
+  edit.setAttribute("aria-expanded", "false");
+  edit.addEventListener("click", () => {
+    const open = r.classList.toggle("app-user-row-open");
+    edit.textContent = open ? "Done ▴" : "Edit ▾";
+    edit.setAttribute("aria-expanded", String(open));
+  });
+  main.appendChild(edit);
   r.appendChild(controls);
   return r;
 }
