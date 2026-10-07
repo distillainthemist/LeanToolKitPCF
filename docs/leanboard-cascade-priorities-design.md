@@ -365,3 +365,17 @@ pillars and ends the old ones without losing either view.
   the parent's sub-pillar when they differ (ticked by default when the
   child has none).
 
+## 17. Amendment — the phone view is the walk (2026-10-07, v0.66.0)
+
+Under 600px of window width the matrix (126px label + one column per
+sub-pillar) gives each column ~50px, so the tab renders the walk of
+§15 inline instead: a stacked head of native selects (organisation —
+the tree in order, indented; period; status; pillar when several), the
+vision band, then one objective per screen with the PREV / NEXT rails
+and swipe, rows opening the overlay (already stacked under 720px). No
+fixed layer, no fullscreen, no Exit — there is nothing to exit to. The
+state is the desktop's `ScreenState`, so the person's prefs and a
+shared view link (`prview`) mean the same thing on both; a card mount
+of the screen keeps its own tile / focused modes. `renderPhone()` in
+`prioritiesScreen.ts`; `mountWalk({ inline: true })` in `walk.ts`;
+`orgSelectOptions` in `dialogs.ts` (pure, tested).

@@ -12,8 +12,9 @@ Tranches A–C built 2026-10-06, walked through with Ben the same day
 v0.65.0 on 2026-10-07 with the walkthrough changes; v0.65.1 fixed the
 Priorities view link's double-mount race. C4 (Guidance) was removed
 before release. Tranche D (the limited phone register) was built on
-2026-10-07 after the compaction and awaits Ben's phone check and its
-own release.
+2026-10-07 and released the same day in v0.66.0, together with the
+phone layouts of the other tabs (docs/mobile-review-2026-10.md);
+Ben's phone pass on the hosted app follows.
 Items parked for the pilot users are listed in backlog.md →
 "Feedback round 1 — open items".
 
@@ -145,7 +146,7 @@ document.
 | C5 | 19 | Reviewer request: a confirmation in place and the same Teams message the owner request sends; version history explains "each save is a draft". |
 | C6 | 32 | MOC record / link as a configured column (SharePoint column + column manager) — configuration, with a cookbook recipe. |
 
-## Tranche D — mobile (its own release) — BUILT 2026-10-07, not yet released
+## Tranche D — mobile — BUILT 2026-10-07, RELEASED in v0.66.0
 
 What was built: under 600px of register width the register becomes
 search + four native selects (library, organisation, document type,

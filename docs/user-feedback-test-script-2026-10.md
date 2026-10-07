@@ -135,3 +135,42 @@ Reports in brackets are the export's section numbers.
 | C5 review confirmation | End-user testing |
 | C6 MOC recipe | Configuration — nothing to test |
 
+## Phone pass — v0.66.0 (2026-10-07)
+
+On a phone, in the Power Apps mobile app AND a phone browser; close
+and reopen the player first. Each line is one screen.
+
+1. **The frame** — the bar shows ⚑ ⚙ ＋ as squares and nothing is cut
+   off; the tab strip scrolls sideways to Actions and Documents and the
+   open tab is in view when you land.
+2. **My day / Actions** — action rows are two lines (title in full,
+   then with · due · flags); the Actions head stacks with the add field
+   full width and the state chips in one scrolling row; a tick closes
+   a part.
+3. **Documents** — the register is search, Library / Organisation /
+   Type / Status selects, chips, a one-column list with titles wrapping;
+   a row opens the viewer full-screen with Details › and Open in new
+   tab ↗ reachable. (Report 20's reporter: is the Documents tab there?)
+4. **A ritual board** — tiles as a full-width list in reading order,
+   live cards readable; Details opens the sheet, picking an occurrence
+   closes it; a tile opens the card with PREV above and NEXT below.
+5. **Priorities** — the select strip, the vision band, the walk inline;
+   swipe or the rails step objectives; a row opens the overlay; ＋
+   Priority and the ⋮ share link work.
+6. **An initiative** — the stacked band and cards; Details from the
+   sheet button; the actions card shows its list with the one-line
+   note; the Improvement tab lists initiatives as tiles.
+7. **Cadence** — opens in Day view, one full-width column; ‹ Today ›
+   step days; picking Week sticks for the session.
+8. **Settings** — My profile has no desktop note; a changed Site shows
+   a save bar whose buttons sit on their own line; Users opens on the
+   add card, a directory search adds someone, Edit ▾ opens their
+   controls; the other tabs say "best on a desktop".
+9. **Settings on a desktop** — Documents, Priorities, Site cadence,
+   Branding and My profile show the section strip under the tabs; it
+   sticks while scrolling, the pill follows the section, a click lands
+   its heading under the strip; Branding carries Ritual categories.
+
+| Item | Outcome |
+|---|---|
+| 1–9 | _Ben's pass pending_ |

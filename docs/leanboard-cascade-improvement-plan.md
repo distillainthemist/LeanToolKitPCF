@@ -1455,6 +1455,16 @@ reschedule/cancel history with a reason picklist.
   the view before the launch re-route mounted the hub again, so the
   second mount saw nothing. The pending view now lives for a 20 s
   grace window instead of one read.
+- **2026-10-07 — released as v0.66.0** (app-only): the phone work of
+  the day — the limited Documents register (feedback Tranche D), the
+  five mobile tranches (frame, ritual boards as a list with a details
+  sheet and stacked card walk, Priorities as the inline walk, the
+  initiative screen with action boards falling back to their list and
+  the Gantt's label narrowed, Cadence opening in Day view), Settings on
+  a phone (My profile, Users), the settings section strip over one
+  section-heading helper, and Ritual categories moved to Branding.
+  architecture.md §3.6 and docs/mobile-review-2026-10.md carry the
+  detail; Ben's phone pass on the hosted app follows the release.
 - **2026-10-07 — released as v0.65.1** (app-only): the Priorities view
   link's grace window.
 - **2026-10-07 — released as v0.65.0** (app-only): feedback round 1

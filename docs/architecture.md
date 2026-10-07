@@ -556,6 +556,82 @@ model section) — the canvas/PCF sections there are historical.
   card view re-mount when a save moved an action elsewhere or the
   endorsement rule changed it at the write.
 
+### 3.6 Phone layouts (2026-10-07, v0.66.0)
+
+The app had one phone surface before 2026-10-07 — the hub's two
+columns stacked. A review of every main tab at 375px
+([mobile-review-2026-10.md](mobile-review-2026-10.md)) found the frame
+clipping tabs, action rows collapsing to a word a line, and three
+screens (the priorities matrix, ritual boards, the initiative screen)
+with no usable form at all. Five tranches followed in one day, all
+CSS and layout, no model change:
+
+- **Two width rules, deliberately.** The FRAME reads the window
+  (`@media (max-width: 599px)` in `style.css`, and `isPhoneWindow()` in
+  `src/phone.ts` for the few places JS must know): the top bar, the
+  hub's tab strip, the board screen, the card walk, Priorities,
+  Cadence and Settings are never split. A PANE that can be split reads
+  its own width through a ResizeObserver: the Documents register
+  (`PHONE_MAX_WIDTH`, §4), the BoardGrid (`LIST_MAX_WIDTH`) and the
+  ActionBoard (`ACTIONBOARD_NARROW_MAX`, 480 — a tile is narrow on a
+  desktop too). Both are 600px except the card's 480.
+- **M1 — the frame.** Icon-only 44px bar buttons (the words stay in
+  `title` / `aria-label`); the hub tab strip scrolls sideways with the
+  open tab `scrollIntoView`'d (it used to clip Actions and Documents —
+  the likely cause of pilot report 20); two-line action rows
+  (`.ltk-lh-action`, and the shared `.ltk-action-row` in M4); the
+  Actions head stacked; Settings says "best on a desktop" on the tabs
+  that are; every harness and dev page carries the viewport meta.
+- **M2 — ritual boards.** `BoardGridView` has a list mode
+  (`listMode`, `measure()` on its ResizeObserver): one tile per row in
+  reading order (`listOrder`, pure and tested), 4:3, the body
+  scrolling, no empty cells; a live card is mounted at the slot's
+  NATURAL size (the 640px stage scaled to a phone is 7px text), so
+  each card's own tile layout reflows. The board screen's details &
+  schedule pane becomes a fixed bottom sheet with a scrim, opened from
+  a phone-only Details button (`.app-phone-only`) and closed by a pick;
+  the initiative handle hides. The card walk (`cardEditor`) stacks
+  PREV above and NEXT below the card, each naming its card. Four card
+  tile layouts still want narrowing per card (SQDPC, RiskMatrix, RACI,
+  Fishbone — backlog).
+- **M3 — Priorities.** `prioritiesScreen` renders `renderPhone()`:
+  native selects for organisation (`orgSelectOptions`, the tree in
+  order, tested), period, status and pillar; the vision band; then the
+  existing walk mounted inline (`mountWalk({ inline: true })` — no
+  Exit, no Esc, no fullscreen). One objective per screen, swipe or
+  rails; the matrix stays desktop. Same state as the desktop, so prefs
+  and view links mean the same thing on both.
+- **M4 — the initiative screen.** The board is M2's list and sheet.
+  The ActionBoard renders its list under 480px of its own width, drops
+  the view switch and says "Board and Gantt views open on a desktop"
+  (`viewFor`, pure and tested; a tile stays silent; the person's
+  chosen view is kept for the desktop); the Gantt's label column
+  narrows to 150px; the Improvement tab shows tiles where List was
+  picked.
+- **M5 — Cadence.** The week default becomes Day under 600px until the
+  person picks a view (`viewTouched`); a one-day grid drops the week's
+  640px minimum.
+- **Settings.** My profile was already a stacked form; Users opens
+  with the add-person card, a full-width search and each person's
+  controls behind an Edit toggle (admins adding someone on the fly);
+  the unsaved-changes bar wraps; Rituals and the admin tabs stay
+  desktop by Ben's call.
+
+**The settings section strip** (same release; proposal and status in
+[settings-nav-proposal-2026-10.md](settings-nav-proposal-2026-10.md)).
+Every settings module builds its page sections through ONE helper,
+`settingsSection(title, note?)` (`src/settingsSection.ts`: `h3.app-pr-h3`
+with an id, a hairline above — the small-caps `.app-section` divider is
+now only for card titles inside a section). `src/settingsStrip.ts`
+derives a row of section pills from those heads after each render and
+on repaints (MutationObserver), shown from three sections, sticky at
+the top of the window scroll (the settings card is `overflow: clip`,
+because `hidden` makes it the scroll container), scroll-spy by
+`currentSectionIndex` (pure, tested), a click scrolling by the strip's
+live height, the hash never written. A rail was considered and
+rejected: the app's page navigation is horizontal. Ritual categories
+moved from the Rituals tab to Branding the same day (brand colours).
+
 ## 4. The document management system
 
 The DMS treats **SharePoint as the source of truth** — documents,
@@ -908,6 +984,8 @@ no ad-hoc credential handling.
 | Links, audit view, tags | [leanboard-relationships-plan.md](leanboard-relationships-plan.md) |
 | Issues/reporting | [leanboard-issues-plan.md](leanboard-issues-plan.md) |
 | Pilot feedback round 1 — plan, status, test script | [user-feedback-plan-2026-10.md](user-feedback-plan-2026-10.md), [user-feedback-test-script-2026-10.md](user-feedback-test-script-2026-10.md) |
+| Phone layouts — the review, tranches M1–M5, card follow-ups | [mobile-review-2026-10.md](mobile-review-2026-10.md) |
+| Settings in-page navigation — options and the built strip | [settings-nav-proposal-2026-10.md](settings-nav-proposal-2026-10.md) |
 | Capture rollup (Flag column, cross-board capture rows) | [leanboard-capture-rollup-plan.md](leanboard-capture-rollup-plan.md) |
 | Canvas card, design mode, Canvas rollup | [leanboard-canvas-card-plan.md](leanboard-canvas-card-plan.md) |
 | Power BI embed prerequisites (browser policy) | [deployment-cookbook.md](deployment-cookbook.md) |
