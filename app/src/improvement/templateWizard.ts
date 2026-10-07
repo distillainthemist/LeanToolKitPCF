@@ -796,14 +796,16 @@ export function mountTemplateWizard(parent: HTMLElement, templateId: string): ()
 
 export async function renderImprovementSettings(body: HTMLElement, isSuper: boolean): Promise<void> {
   clear(body);
-  body.appendChild(
-    el("div", "app-settings-note", "Initiative templates are the gate on everything in Improvement — method, stages and gates, roles, fields, mandatory metrics and the board an initiative starts from. Super admins author them; everyone picks from them when creating an initiative.")
-  );
 
   // the templates lead (Ben, 2026-10-08): the list everyone uses comes
   // first; the app-level lists (methods, standard fields, health-check
   // questions) follow it, gathered here and appended at the end
-  const templatesHead = settingsSection("Initiative templates");
+  // the explanation is the section's own note, under its heading (Ben,
+  // 2026-10-08), not a loose line in a card of its own above
+  const templatesHead = settingsSection(
+    "Initiative templates",
+    "Initiative templates are the gate on everything in Improvement — method, stages and gates, roles, fields, mandatory metrics and the board an initiative starts from. Super admins author them; everyone picks from them when creating an initiative."
+  );
   templatesHead.classList.add("app-tw-templates-h");
   body.appendChild(templatesHead);
   const listsHost = document.createDocumentFragment();
