@@ -344,6 +344,13 @@ the same commit.
     search, and the filter popover fits the window. The initiative
     board itself is rule 8: M2's list and sheet.
 
+11. **Cadence on a phone** (mobile review M5, 2026-10-07). Under 600px
+    of window width the week default becomes the Day view (seven 90px
+    columns are unreadable) until the person picks a view themselves
+    (`viewTouched`); a one-day grid drops the week's 640px minimum
+    (`.ltk-lh-grid-day`) so the column takes the pane. ‹ Today › step
+    by the day. Week stays in the select.
+
 ## 4. Overlays, dialogs, wizards
 
 - **Detail overlays** (Documents/Priorities pattern): scrim

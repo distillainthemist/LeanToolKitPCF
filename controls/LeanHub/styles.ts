@@ -121,6 +121,8 @@ export const LEANHUB_CSS = `
   grid-auto-rows: min-content;
   min-width: 640px;
 }
+/* one day needs no week's width: the column takes the pane (M5) */
+.ltk-lh-grid-day { min-width: 0; }
 .ltk-lh-corner { position: sticky; top: 0; z-index: 3; background: var(--ltk-bg); }
 .ltk-lh-dayhead {
   position: sticky;

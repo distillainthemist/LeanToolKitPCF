@@ -142,6 +142,9 @@ export class LeanHubView {
   private scopeTouched = false;
   /** Cadence view: day/week time grids, or the rituals directory. */
   private view: "day" | "week" | "boards" = "week";
+  /** The person picked a view this session — the phone's day default
+   *  (mobile review M5) stands aside once they have. */
+  private viewTouched = false;
   /** Supplied org tree; empty = derive from the meetings at render. */
   private orgTree: OrgSite[] = [];
 
@@ -500,11 +503,24 @@ export class LeanHubView {
     if (this.boards !== null) opts.push({ value: "boards", label: this.boardsLabel });
     return this.select(this.view, opts, (v) => {
       this.view = v as "day" | "week" | "boards";
+      this.viewTouched = true;
       this.render();
     });
   }
 
+  /** The phone frame's window test (mobile review M5): a week of seven
+   *  90px columns is unreadable there, so the week default becomes the
+   *  day — until the person picks a view themselves. */
+  private static phoneWindow(): boolean {
+    return (
+      typeof window !== "undefined" &&
+      typeof window.matchMedia === "function" &&
+      window.matchMedia("(max-width: 599px)").matches
+    );
+  }
+
   private renderCalendar(body: HTMLElement): void {
+    if (this.view === "week" && !this.viewTouched && LeanHubView.phoneWindow()) this.view = "day";
     const days = this.visibleDays();
     const from = days[0];
     const to = days[days.length - 1];
@@ -595,7 +611,7 @@ export class LeanHubView {
   private buildGrid(days: Date[], instances: HubInstance[]): HTMLElement {
     const { dayStart, dayEnd } = this.prefs;
     const gridH = (dayEnd - dayStart) * HOUR_PX;
-    const grid = el("div", "ltk-lh-grid");
+    const grid = el("div", `ltk-lh-grid${days.length === 1 ? " ltk-lh-grid-day" : ""}`);
     grid.style.gridTemplateColumns = `56px repeat(${days.length}, 1fr)`;
 
     // header row

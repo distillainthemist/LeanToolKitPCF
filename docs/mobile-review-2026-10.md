@@ -235,7 +235,13 @@ still used). First phone pass: open each from the dev app and note.
   search stacked and the filter popover fitting the window. Verified
   on the action-card harness at 375px (note shown, list rows two
   lines); the initiative screen itself is Ben's phone check.
-- M5: not started.
+- **M5 Cadence — built 2026-10-07** (on dev, unreleased): the week
+  default becomes Day under 600px until the person picks a view; the
+  one-day grid drops the 640px minimum. Verified in demo mode at
+  375px (Day selected, one full-width column, chips readable).
+
+All five tranches are on the dev app awaiting Ben's phone pass and
+one release.
 
 ## Recommended order (each its own release, phone-only CSS where it can be)
 
