@@ -441,6 +441,18 @@ dividers. No priority statement here — the card above names it.
   `.app-settings-note` intro line — a heading with a hairline ABOVE
   (2026-10-07; the small-caps `.app-section` divider is now only for
   card titles inside a section, such as an access card's "Add people").
+- **Section cards** (2026-10-08, Ben: "hard to delineate the
+  sections"). The settings body is the quiet warm ground (`#faf9f7`)
+  and each section is a white card with a hairline and 8px radius
+  (`.app-settings-sectioncard`) — the access cards' and nav cards'
+  idiom — its head flush at the top; content before the first head
+  gets a leading card without a heading. `groupSections` in
+  `settingsStrip.ts` folds each head and its following siblings into a
+  card after a render and on repaints, idempotently, so the tabs never
+  change and a late append lands in the last card. A card that lived
+  inside a section (`.app-access-card`) drops its box for a top
+  divider — never a box in a box. The strip's pills map one to one
+  onto cards.
 - **The section strip** (`settingsStrip.ts`, 2026-10-07): a second,
   smaller row of section pills between the unsaved-changes bar and the
   body, DERIVED from the tab's `h3.app-pr-h3` heads after each render

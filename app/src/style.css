@@ -785,6 +785,25 @@ input[type="color"].app-cat-swatch {
   .app-settings-pill { flex: none; }
 }
 .app-settings-card .app-settings-body { box-shadow: none; border-radius: 0; }
+/* ---- section cards (Ben, 2026-10-08) ------------------------------
+   The body is the quiet warm ground; each section is a white card with
+   a hairline — the access cards' and nav cards' idiom — so the strip's
+   pills map one to one onto boxes. Inside a card, heads keep the
+   hairline rhythm; the card's own head sits flush at its top. A card
+   that already lived inside a section (an access card) loses its box
+   and keeps a divider, so there is never a box in a box. */
+.app-settings-card .app-settings-body { background: #faf9f7; gap: 12px; padding: 12px 16px 16px; }
+.app-settings-sectioncard {
+  display: flex; flex-direction: column; gap: 10px;
+  background: #fff; border: 1px solid #eceae5; border-radius: 8px; padding: 12px 16px 14px;
+}
+.app-settings-sectioncard > .app-pr-section { margin-top: 0; padding-top: 0; border-top: none; }
+.app-settings-sectioncard .app-access-card { border: none; border-top: 1px solid #eceae5; border-radius: 0; padding: 12px 0 0; }
+.app-settings-sectioncard .app-access-card:first-child { border-top: none; padding-top: 0; }
+@media (max-width: 599px) {
+  .app-settings-card .app-settings-body { padding: 10px; gap: 10px; }
+  .app-settings-sectioncard { padding: 10px 12px 12px; }
+}
 .app-settings-card .app-save-bar { border-radius: 0; border-right: none; border-top: none; }
 .app-viewas { display: flex; align-items: center; gap: 7px; margin-left: auto; }
 .app-viewas-select { padding: 5px 8px; font-size: 12.5px; min-height: 44px; }

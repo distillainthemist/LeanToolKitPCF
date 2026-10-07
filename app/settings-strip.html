@@ -21,6 +21,9 @@
     import { settingsSection } from "./src/settingsSection.ts";
     import { mountSectionStrip } from "./src/settingsStrip.ts";
     const body = document.getElementById("body");
+    // content before the first head: a leading card without a heading
+    const lead = document.createElement("div"); lead.className = "app-settings-note"; lead.textContent = "Applies to everyone; changes take effect after a reload."; body.appendChild(lead);
+    const f = document.createElement("div"); f.className = "app-field"; f.innerHTML = '<span class="app-field-label">App name</span><input class="app-input" value="LeanBoard">'; body.appendChild(f);
     const filler = (n) => { const d = document.createElement("div"); d.className = "app-settings-note"; d.textContent = "Lorem ipsum dolor sit amet, consectetur adipiscing elit. ".repeat(n); return d; };
     for (const [t, note] of [["SharePoint connection", "Where the libraries live."], ["Document columns", ""], ["Term sets & colours", "Each status term's colour and glyph."], ["Libraries", ""], ["Lifecycle", "Which terms mean draft, in review, approved."], ["Review cadence", ""], ["Health", ""], ["Tags", ""], ["Default filters", ""], ["Write access", ""]]) {
       body.appendChild(settingsSection(t, note || undefined));
@@ -28,6 +31,8 @@
     }
     const strip = mountSectionStrip(document.getElementById("strip"), body);
     strip.refresh();
+    // a late append (a tab repainting) must land in the last card
+    setTimeout(() => { const late = document.createElement("div"); late.className = "app-settings-note"; late.textContent = "Appended 400ms later — should sit inside the Write access card."; body.appendChild(late); }, 400);
     window.__strip = strip;
   </script>
 </body>

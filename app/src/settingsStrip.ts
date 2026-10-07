@@ -23,6 +23,36 @@ export function currentSectionIndex(tops: number[], threshold: number): number {
   return current;
 }
 
+const CARD = "app-settings-sectioncard";
+
+/**
+ * Section cards (Ben, 2026-10-08 — "hard to delineate the sections"):
+ * each section head and the siblings that follow it, up to the next
+ * head, are folded into one white card on the body's tinted ground;
+ * content before the first head gets a leading card of its own. The
+ * tabs never change: this runs after a render and again on repaints,
+ * and is IDEMPOTENT — a child already in a card is left where it is,
+ * a child appended later lands in the last card.
+ */
+export function groupSections(body: HTMLElement): void {
+  let card: HTMLElement | null = null;
+  for (const child of Array.from(body.children) as HTMLElement[]) {
+    if (child.classList.contains(CARD)) {
+      card = child;
+      continue;
+    }
+    const isHead = child.classList.contains("app-pr-section");
+    if (isHead || card === null) {
+      const next = el("div", CARD + (isHead ? "" : ` ${CARD}-lead`));
+      body.insertBefore(next, child);
+      next.appendChild(child);
+      card = next;
+      continue;
+    }
+    card.appendChild(child);
+  }
+}
+
 export interface SectionStrip {
   /** Re-read the body's headings (a tab rendered, or repainted). */
   refresh: () => void;
@@ -62,6 +92,7 @@ export function mountSectionStrip(host: HTMLElement, body: HTMLElement): Section
   };
 
   const refresh = () => {
+    groupSections(body);
     heads = Array.from(body.querySelectorAll<HTMLElement>("h3.app-pr-h3"));
     const sig = heads.map((h) => h.textContent ?? "").join("\u0001");
     if (sig === signature && host.childElementCount === pills.length) return;
