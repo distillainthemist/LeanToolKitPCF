@@ -57,7 +57,11 @@ function groupWithin(host: HTMLElement): void {
     // a container with sections of its OWN (Site cadence's pane under
     // its site picker): the cards go inside it and the container stays
     // on the ground — never a card around a column of cards
-    if (!isHead && child.querySelector(":scope > .app-pr-section") !== null) {
+    // …and once grouped, its children are CARDS, not heads: the test
+    // must see both, or the next pass wraps the container, the pass
+    // after unwraps it, and every refresh moves the DOM under a focused
+    // field (Site cadence's inputs lost focus on click, 2026-10-08)
+    if (!isHead && child.querySelector(`:scope > .app-pr-section, :scope > .${CARD}`) !== null) {
       groupWithin(child);
       card = null;
       continue;
