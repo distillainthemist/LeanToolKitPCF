@@ -95,6 +95,37 @@ class Sheet {
     if (fill !== "") this.ops.push(`${fill} rg ${n2(x)} ${n2(y)} ${n2(w)} ${n2(h)} re f`);
     if (stroke !== undefined) this.ops.push(`${stroke} RG 0.6 w ${n2(x)} ${n2(y)} ${n2(w)} ${n2(h)} re S`);
   }
+  /** A rounded rectangle path (four béziers), left open for f / S / W n. */
+  private roundPath(x: number, y: number, w: number, h: number, r: number): string {
+    const k = 0.5523 * r;
+    const x1 = x + w;
+    const y1 = y + h;
+    return [
+      `${n2(x + r)} ${n2(y)} m`,
+      `${n2(x1 - r)} ${n2(y)} l ${n2(x1 - r + k)} ${n2(y)} ${n2(x1)} ${n2(y + r - k)} ${n2(x1)} ${n2(y + r)} c`,
+      `${n2(x1)} ${n2(y1 - r)} l ${n2(x1)} ${n2(y1 - r + k)} ${n2(x1 - r + k)} ${n2(y1)} ${n2(x1 - r)} ${n2(y1)} c`,
+      `${n2(x + r)} ${n2(y1)} l ${n2(x + r - k)} ${n2(y1)} ${n2(x)} ${n2(y1 - r + k)} ${n2(x)} ${n2(y1 - r)} c`,
+      `${n2(x)} ${n2(y + r)} l ${n2(x)} ${n2(y + r - k)} ${n2(x + r - k)} ${n2(y)} ${n2(x + r)} ${n2(y)} c h`,
+    ].join(" ");
+  }
+  roundRect(x: number, y: number, w: number, h: number, r: number, fill: string, stroke?: string): void {
+    const path = this.roundPath(x, y, w, h, Math.min(r, w / 2, h / 2));
+    if (fill !== "") this.ops.push(`${fill} rg ${path} f`);
+    if (stroke !== undefined) this.ops.push(`${stroke} RG 0.6 w ${path} S`);
+  }
+  /** Fill a rect clipped to a rounded rect (a card's left edge). */
+  clippedRect(clip: { x: number; y: number; w: number; h: number; r: number }, x: number, y: number, w: number, h: number, fill: string): void {
+    this.ops.push(`q ${this.roundPath(clip.x, clip.y, clip.w, clip.h, clip.r)} W n ${fill} rg ${n2(x)} ${n2(y)} ${n2(w)} ${n2(h)} re f Q`);
+  }
+  /** The screen's small-caps row label: uppercase, letter-spaced, muted. */
+  railLabel(x: number, top: number, w: number, text: string): void {
+    const lines = wrapText(text.toUpperCase(), "F2", 8.5, w);
+    lines.forEach((b, i) => {
+      // q … Q: character spacing (Tc) is graphics state and would
+      // otherwise persist into every later text object on the page
+      this.ops.push(`q BT /F2 8.5 Tf 0.9 Tc ${MUTED} rg 1 0 0 1 ${n2(x)} ${n2(top - (i + 1) * 11.5 + 2.5)} Tm ${pdfString(b)} Tj ET Q`);
+    });
+  }
   text(x: number, baseline: number, bytes: number[], font: "F1" | "F2", size: number, color: string): void {
     this.ops.push(`BT /${font} ${n2(size)} Tf ${color} rg 1 0 0 1 ${n2(x)} ${n2(baseline)} Tm ${pdfString(bytes)} Tj ET`);
   }
@@ -125,6 +156,9 @@ const HAIR = rgb("#e4dfd6");
 const WHITE = "1 1 1";
 const CARD_PAD = 8;
 const GAP = 8;
+const CARD_R = 6;
+/** The screen's 126px label rail — VISION · STRATEGIC PILLARS · PRIORITIES. */
+const RAIL_W = 84;
 
 /** Measure a card at a column width: the height the drawing needs. */
 export function cardHeight(p: PosterPriority, colW: number): number {
@@ -140,8 +174,8 @@ export function cardHeight(p: PosterPriority, colW: number): number {
 /** Draw one card with its top-left at (x, top); returns its height. */
 function drawCard(s: Sheet, p: PosterPriority, x: number, top: number, colW: number): number {
   const h = cardHeight(p, colW);
-  s.rect(x, top - h, colW, h, WHITE, HAIR);
-  s.rect(x, top - h, 4, h, p.color !== "" ? rgb(p.color) : MUTED);
+  s.roundRect(x, top - h, colW, h, CARD_R, WHITE, HAIR);
+  s.clippedRect({ x, y: top - h, w: colW, h, r: CARD_R }, x, top - h, 4, h, p.color !== "" ? rgb(p.color) : MUTED);
   const innerX = x + 4 + CARD_PAD;
   const innerW = colW - 2 * CARD_PAD - 4;
   let y = top - CARD_PAD;
@@ -190,7 +224,9 @@ function drawCard(s: Sheet, p: PosterPriority, x: number, top: number, colW: num
  */
 export function layoutPoster(doc: PosterDoc): Page[] {
   const pages: Page[] = [];
-  const contentW = A3_W - 2 * MARGIN;
+  // the label rail on the left (Ben, 2026-10-08), the matrix beside it
+  const contentX = MARGIN + RAIL_W + GAP;
+  const contentW = A3_W - MARGIN - contentX;
   for (const group of columnPages(doc.columns)) {
     const colW = group.length > 0 ? (contentW - GAP * (group.length - 1)) / group.length : contentW;
     const remaining = group.map((c) => [...c.priorities]);
@@ -215,17 +251,19 @@ export function layoutPoster(doc: PosterDoc): Page[] {
       if (doc.vision !== "") {
         const lines = wrapText(doc.vision, "F2", 12, contentW - 24);
         const bandH = lines.length * 15.6 + 16;
-        s.rect(MARGIN, y - bandH, contentW, bandH, INK);
-        lines.forEach((b, i) => s.text(MARGIN + 12, y - 8 - (i + 1) * 15.6 + 12 * 0.3, b, "F2", 12, WHITE));
+        s.railLabel(MARGIN, y - 4, RAIL_W, "Vision");
+        s.roundRect(contentX, y - bandH, contentW, bandH, CARD_R, INK);
+        lines.forEach((b, i) => s.text(contentX + 12, y - 8 - (i + 1) * 15.6 + 12 * 0.3, b, "F2", 12, WHITE));
         y -= bandH + 10;
       }
       // pillar spans
       if (group.length > 0) {
+        s.railLabel(MARGIN, y - 4, RAIL_W, "Strategic pillars");
         for (const sp of pillarSpansOf(group)) {
-          const x = MARGIN + sp.from * (colW + GAP);
+          const x = contentX + sp.from * (colW + GAP);
           const w = sp.count * colW + (sp.count - 1) * GAP;
           const fill = sp.color !== "" ? rgb(sp.color) : rgb("#9a948a");
-          s.rect(x, y - 22, w, 22, fill);
+          s.roundRect(x, y - 22, w, 22, 5, fill);
           const bytes = winAnsiBytes(sp.name !== "" ? sp.name : "—");
           const tw = textWidth(bytes, "F2", 10);
           s.text(x + Math.max(6, (w - tw) / 2), y - 15, bytes, "F2", 10, WHITE);
@@ -233,22 +271,23 @@ export function layoutPoster(doc: PosterDoc): Page[] {
         y -= 22 + 4;
         // column heads
         group.forEach((c, i) => {
-          const x = MARGIN + i * (colW + GAP);
+          const x = contentX + i * (colW + GAP);
           const fill = c.color !== "" ? rgb(c.color) : c.pillarColor !== "" ? rgb(c.pillarColor) : rgb("#9a948a");
-          s.rect(x, y - 26, colW, 26, fill);
+          s.roundRect(x, y - 26, colW, 26, 5, fill);
           const lines = wrapText(c.name, "F2", 9.5, colW - 12);
           const b = lines[0] ?? [];
           s.text(x + 6, y - 16.5, b, "F2", 9.5, WHITE);
         });
         y -= 26 + GAP;
+        s.railLabel(MARGIN, y - 2, RAIL_W, "Priorities");
       } else {
-        s.text(MARGIN, y - 12, winAnsiBytes("No sub-pillars are visible with the current filters."), "F1", 11, MUTED);
+        s.text(contentX, y - 12, winAnsiBytes("No sub-pillars are visible with the current filters."), "F1", 11, MUTED);
       }
       // cards, column by column, as many as fit on this page
       const bottom = MARGIN + 14;
       let anyLeft = false;
       group.forEach((_, i) => {
-        const x = MARGIN + i * (colW + GAP);
+        const x = contentX + i * (colW + GAP);
         let cy = y;
         const queue = remaining[i];
         while (queue.length > 0) {
