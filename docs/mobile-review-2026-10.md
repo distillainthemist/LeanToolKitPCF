@@ -248,8 +248,9 @@ still used). First phone pass: open each from the dev app and note.
   wrapping, and each person's controls behind an Edit toggle. Rituals
   is not needed on a phone (Ben).
 
-All five tranches and the settings pass are on the dev app awaiting
-Ben's phone pass and one release.
+Released as v0.66.0 on 2026-10-07 with the phone register, the
+settings phone pass and the section strip. Ben's phone pass on the
+hosted app follows the release.
 
 ## Recommended order (each its own release, phone-only CSS where it can be)
 

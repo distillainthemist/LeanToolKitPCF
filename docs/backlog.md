@@ -257,18 +257,17 @@ user-feedback-test-script-2026-10.md. Released v0.65.0 / v0.65.1.
 - **Guidance (C4, reports 23 / 24)**: built, then removed before
   release — Ben to clarify with Holly what governance she wants
   before anything is shown on the forms.
-- **Tranche D — the limited phone register**: BUILT 2026-10-07 (search,
-  four selects incl. library, one-column list, full-bleed viewer; folders and the
-  column set stay desktop) — on the dev app, not yet released; Ben's
-  check on a real phone (Power Apps mobile and the browser) pending,
-  then the pilot users who raised 43 / 20.
+- **Tranche D — the limited phone register**: RELEASED in v0.66.0
+  (2026-10-07; search, four selects incl. library, one-column list,
+  full-bleed viewer; folders and the column set stay desktop) — Ben's
+  check on a real phone pending, then the pilot users who raised 43 / 20.
 - **Phone layout of the other tabs**: reviewed 2026-10-07
   (docs/mobile-review-2026-10.md) — M1 frame (top bar, tab strip,
   action rows), M2 ritual board, M3 priorities walk, M4 initiative
   screen, M5 cadence day view; value drivers / settings desktop-only.
-  M1–M5 ALL BUILT 2026-10-07 (unreleased; M2 leaves four card tile
-  layouts to narrow per card: SQDPC, RiskMatrix, RACI, Fishbone) —
-  Ben's phone pass on the hosted app, then one release.
+  M1–M5 ALL BUILT and RELEASED in v0.66.0 (2026-10-07; M2 leaves four
+  card tile layouts to narrow per card: SQDPC, RiskMatrix, RACI,
+  Fishbone) — Ben's phone pass on the hosted app follows.
 - **Hierarchy in filters** (report 36): a parent term such as SMELTER
   including every term beneath it when ticked — logged, not built
   (B1 kept "a pick includes its subtree" as before).

@@ -74,7 +74,7 @@ option that uses only grammar the app already has at the top of a page.
 muscle memory on every tab and hides the state the pages exist to
 show. Rejected.
 
-## Status — BUILT 2026-10-07 (on dev, unreleased)
+## Status — BUILT 2026-10-07, RELEASED in v0.66.0
 
 `app/src/settingsSection.ts` (the one head; `sectionId` tested),
 `app/src/settingsStrip.ts` (derived strip, scroll-spy
