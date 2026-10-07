@@ -242,8 +242,8 @@ Version lives in the tag alone — nothing is stamped into files.
   scenarios, sourceurl, tracking, pdca), v0.53 (confidential action
   columns), v0.54 (alsoorgs). Everything from v0.55.0 to v0.61.0 was
   app-only; v0.62 (2026-10-02) carries the priority / pillar /
-  initiative span columns; v0.63, v0.64 (2026-10-06) and v0.65
-  (2026-10-07) are app-only. Prod imports the managed solution FIRST.
+  initiative span columns; v0.63, v0.64 (2026-10-06), v0.65 and
+  v0.65.1 (2026-10-07) are app-only. Prod imports the managed solution FIRST.
 - **One rule, applied everywhere it matters.** A rule that must hold
   for every action or every card lives in ONE pure function and is
   applied at the screen for an honest picture AND at the store's

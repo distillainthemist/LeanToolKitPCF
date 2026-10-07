@@ -1455,6 +1455,8 @@ reschedule/cancel history with a reason picklist.
   the view before the launch re-route mounted the hub again, so the
   second mount saw nothing. The pending view now lives for a 20 s
   grace window instead of one read.
+- **2026-10-07 — released as v0.65.1** (app-only): the Priorities view
+  link's grace window.
 - **2026-10-07 — released as v0.65.0** (app-only): feedback round 1
   Tranches A–C as walked through with Ben (C4 removed), the approved
   default filter, the view-as-title, directory people filters, the
