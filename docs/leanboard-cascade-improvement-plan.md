@@ -282,7 +282,7 @@ reschedule/cancel history with a reason picklist.
   statement, 22px metric + 96×40 sparkline with target line, owner chip,
   tallies + count); per-user-per-org persistence.
 - **CASCADE CUSTOMISATION FLOOR (Ben, 2026-08-19)**: per-site setting
-  (Settings → Priorities → "Cascade customisation"; superadmin any site,
+  (Settings → Organisation → the site card's "Cascade customisation", moved there from Settings → Priorities on 2026-10-08; superadmin any site,
   siteadmin their own) = the deepest org level that may "Accept &
   customise" a cascade — Site only / Down to department / Down to team
   (area, the default). Below the floor the review list offers Accept /

@@ -74,7 +74,10 @@ import {
   saveSiteHubTabs,
   saveSiteOrder,
   setSiteArchived,
+  allSitePrioritySettings,
+  saveSitePrioritySettingsJson,
 } from "../store/config";
+import { CustomiseLevel, parseSiteCascadeSettings, serializeSiteCascadeSettings } from "../priorities/model";
 import { parseMeetingInfo, parseOrgTree } from "../../../shared/schema/meeting";
 import { effectiveTabs, HUB_TABS } from "../../../shared/schema/hubTabs";
 import {
@@ -2063,6 +2066,9 @@ async function renderOrg(
   const tree = parseOrgTree(await orgJson(true)) as OrgSiteNode[];
   const archived = await archivedSites();
   const hubTabsBySite = await allSiteHubTabs();
+  // the per-site cascade floor lives here too (Ben, 2026-10-08 — moved
+  // from Settings → Priorities: a site setting sits with the site)
+  const cascadeBySite = await allSitePrioritySettings();
   // archived sites keep their rows but leave the live tree; they list at
   // the bottom with Restore (Ben, 2026-08-19)
   const sites = tree.map((s) => s.site).filter((s) => !archived.includes(s));
@@ -2413,6 +2419,34 @@ async function renderOrg(
       tabsRow.appendChild(chip);
     }
     card.appendChild(tabsRow);
+
+    // cascade customisation: the deepest level that may accept a cascaded
+    // priority with its own wording (Accept & customise); below it,
+    // cascades are adopted as-is — saved on change, like the hub tabs
+    const cascRow = el("div", "app-site-tabs app-site-cascade");
+    cascRow.appendChild(el("span", "app-site-tabs-label", "Cascade customisation"));
+    const cascSel = el("select", "app-input app-site-cascade-sel") as HTMLSelectElement;
+    const cascCur = parseSiteCascadeSettings(cascadeBySite[site] ?? "").customiseLevel;
+    for (const [v, l] of [
+      ["site", "Site only"],
+      ["department", "Down to department"],
+      ["area", "Down to team (area)"],
+    ] as const) {
+      const o = el("option", "", l) as HTMLOptionElement;
+      o.value = v;
+      if (v === cascCur) o.selected = true;
+      cascSel.appendChild(o);
+    }
+    cascSel.disabled = !canEdit;
+    cascSel.title =
+      "The deepest level that may accept a cascaded priority with its own wording (Accept & customise). Below it, cascades are adopted as-is.";
+    cascSel.addEventListener("change", () => {
+      const json = serializeSiteCascadeSettings({ customiseLevel: cascSel.value as CustomiseLevel });
+      cascadeBySite[site] = json;
+      void saveSitePrioritySettingsJson(site, json);
+    });
+    cascRow.appendChild(cascSel);
+    card.appendChild(cascRow);
 
     const deptList = el("div", "app-dept-list");
     card.appendChild(deptList);

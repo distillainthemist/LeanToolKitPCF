@@ -632,7 +632,7 @@ export function mountPriorities(parent: HTMLElement, opts: PrioritiesMountOpts =
         bar.appendChild(add);
       } else if (canManage()) {
         const note = el("span", "app-cp-floor-note", "Adopts priorities from above");
-        note.title = "This site's cascade setting keeps priorities at a higher level — this org accepts what cascades down rather than writing its own (Settings → Priorities → Cascade customisation).";
+        note.title = "This site's cascade setting keeps priorities at a higher level — this org accepts what cascades down rather than writing its own (Settings → Organisation → the site's Cascade customisation).";
         bar.appendChild(note);
       }
       const more = el("button", "app-btn app-cp-more app-cp-tvbtn", "⋮") as HTMLButtonElement;
