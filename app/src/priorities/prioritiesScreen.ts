@@ -875,7 +875,7 @@ export function mountPriorities(parent: HTMLElement, opts: PrioritiesMountOpts =
      *  same selectors the matrix paints from, so the poster never shows
      *  a priority the screen would not. */
     const downloadPoster = async () => {
-      const [{ layoutPoster, A3_W, A3_H }, { buildPagesPdf }] = await Promise.all([
+      const [{ layoutPoster, exportDateLabel, A3_W, A3_H }, { buildPagesPdf }] = await Promise.all([
         import("./pdfPoster"),
         import("../issues/pdf"),
       ]);
@@ -914,15 +914,14 @@ export function mountPriorities(parent: HTMLElement, opts: PrioritiesMountOpts =
           }),
         };
       });
-      const statusWords = state.status === "active" ? "Active priorities" : state.status === "completed" ? "Completed priorities" : "All priorities";
-      const l1Name = state.l1 !== null ? (data.pillars.find((x) => x.id === state.l1)?.name ?? "") : "";
-      const when = new Date().toLocaleDateString(undefined, { day: "numeric", month: "long", year: "numeric" });
+      // the title carries the org chain as the screen's header does; no
+      // status subtitle; the footer is the export date (Ben, 2026-10-08)
       const doc = {
-        title: `${state.period} Cascaded Priorities`,
-        subtitle: [orgPath(state.org).map(orgName).join(" › "), statusWords, l1Name !== "" ? `Pillar: ${l1Name}` : ""].filter((x) => x !== "").join("  ·  "),
+        title: `${state.period} Cascaded Priorities | ${orgPath(state.org).map(orgName).join(" › ")}`,
+        subtitle: "",
         vision: visions[orgKey(state.org)] ?? "",
         columns: posterColumns,
-        footer: `LeanBoard · ${orgName(state.org)} · ${when}`,
+        footer: `Export date ${exportDateLabel(new Date())}`,
       };
       const bytes = buildPagesPdf(layoutPoster(doc), { title: doc.title, author: "LeanBoard" }, A3_W, A3_H);
       const buf = new ArrayBuffer(bytes.byteLength);

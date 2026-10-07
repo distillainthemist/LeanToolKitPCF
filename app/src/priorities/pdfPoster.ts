@@ -54,6 +54,12 @@ export const MAX_COLUMNS_PER_PAGE = 8;
 
 const n2 = (n: number) => (Math.round(n * 100) / 100).toString();
 
+/** The footer's date, dd-MMM-yyyy (Ben, 2026-10-08): "08-Oct-2026". */
+export function exportDateLabel(d: Date): string {
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  return `${String(d.getDate()).padStart(2, "0")}-${months[d.getMonth()]}-${d.getFullYear()}`;
+}
+
 /** "#1f7a3f" → "0.12 0.48 0.25"; anything unreadable → a mid grey. */
 export function rgb(hex: string): string {
   const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
@@ -191,16 +197,20 @@ export function layoutPoster(doc: PosterDoc): Page[] {
     let first = true;
     do {
       const s = new Sheet();
-      // header
+      // header: the title carries the org chain (Ben, 2026-10-08); a
+      // subtitle is optional and the header shrinks without one
       let y = A3_H - MARGIN;
       s.text(MARGIN, y - 18, winAnsiBytes(doc.title), "F2", 22, INK);
-      const sub = winAnsiBytes(doc.subtitle);
-      s.text(MARGIN, y - 34, sub, "F1", 11, MUTED);
       if (!first) {
         const cont = winAnsiBytes("continued");
-        s.text(A3_W - MARGIN - textWidth(cont, "F1", 11), y - 34, cont, "F1", 11, MUTED);
+        s.text(A3_W - MARGIN - textWidth(cont, "F1", 11), y - 18, cont, "F1", 11, MUTED);
       }
-      y -= 46;
+      if (doc.subtitle !== "") {
+        s.text(MARGIN, y - 34, winAnsiBytes(doc.subtitle), "F1", 11, MUTED);
+        y -= 46;
+      } else {
+        y -= 32;
+      }
       // vision band
       if (doc.vision !== "") {
         const lines = wrapText(doc.vision, "F2", 12, contentW - 24);

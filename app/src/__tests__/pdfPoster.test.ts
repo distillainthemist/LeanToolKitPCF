@@ -12,6 +12,7 @@ import {
   PosterPriority,
   cardHeight,
   columnPages,
+  exportDateLabel,
   layoutPoster,
   pillarSpansOf,
   rgb,
@@ -28,6 +29,13 @@ const prio = (n: number, statement = `Priority ${n}`): PosterPriority => ({
 });
 const col = (name: string, pillar: string, priorities: PosterPriority[] = []): PosterColumn => ({
   name, color: "", pillarName: pillar, pillarColor: "#2563eb", priorities,
+});
+
+describe("exportDateLabel", () => {
+  it("is dd-MMM-yyyy", () => {
+    expect(exportDateLabel(new Date(2026, 9, 8))).toBe("08-Oct-2026");
+    expect(exportDateLabel(new Date(2026, 0, 31))).toBe("31-Jan-2026");
+  });
 });
 
 describe("rgb", () => {
