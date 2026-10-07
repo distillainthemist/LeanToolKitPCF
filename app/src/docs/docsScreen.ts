@@ -2564,8 +2564,7 @@ export function mountDocs(
         sel.title = `Filter by ${colLabel(col).toLowerCase()}`;
         const options = phoneOptions(nodes);
         const state = phoneSelectState(filterFor(col)?.nodes ?? [], options);
-        // short "Any" labels: the selects sit two to a row
-        const anyLabel = col === "" ? "Any organisation" : col === typeCol ? "Any type" : "Any status";
+        const anyLabel = `Any ${colLabel(col).toLowerCase()}`;
         sel.appendChild(new Option(anyLabel, ""));
         if (state.value === PHONE_SEVERAL) sel.appendChild(new Option(state.severalLabel, PHONE_SEVERAL));
         for (const o of options) sel.appendChild(new Option(o.label, o.id));

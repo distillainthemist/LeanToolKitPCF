@@ -272,12 +272,13 @@ the same commit.
    wrap — the pane, never the window, because the hub can split the
    screen) `.app-docs-phone` turns the page into: search box (full
    width) + the depth toggle, the title, four native `<select
-   class="app-input">`s in a two-by-two grid, 8px gaps, 12px between
+   class="app-input">`s stacked full width, 8px apart, 12px between
    blocks (library — "All libraries" or one,
    templates for controllers only; then organisation, document type,
    status — the site's filterable columns only, one pick each,
    hierarchy shown by indent), the applied-filter chips, the count line, a ONE-column
-   list (`.app-docs-phonecell`: the Document cell, then status chip ·
+   list (`.app-docs-phonecell`: the Document cell with the title
+   WRAPPING to its full length — the row grows — then status chip ·
    library · date on a meta line; no header row), the viewer. Hidden:
    the folders pane and its rail, Document tasks, Add, Filters, List |
    Tiles, the kebab, the star and row kebab — a phone is for finding

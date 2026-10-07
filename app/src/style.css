@@ -2809,9 +2809,9 @@ button.app-doclist-hsort:hover { color: var(--app-accent, #2563eb); }
 .app-docs-phone .app-docs-h1 { font-size: 17px; }
 .app-docs-phone .app-docs-crumb { margin-top: 3px; }
 .app-docs-phonefilters { display: none; }
-/* two by two: library · organisation / type · status — four stacked
-   44px selects ate the screen before a single row showed */
-.app-docs-phone .app-docs-phonefilters { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-bottom: 12px; }
+/* stacked, full width (Ben, 2026-10-07: a two-by-two grid clipped the
+   labels and did not read as one set of filters) */
+.app-docs-phone .app-docs-phonefilters { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
 .app-docs-phonefilters:empty { display: none; }
 .app-docs-phonesel { width: 100%; max-width: 100%; min-width: 0; min-height: 42px; padding: 6px 28px 6px 10px; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .app-docs-phone .app-docs-filterbar { margin-bottom: 12px; gap: 8px; }
@@ -2819,8 +2819,12 @@ button.app-doclist-hsort:hover { color: var(--app-accent, #2563eb); }
 .app-docs-phone .app-doclist-head { display: none; } /* one column: the label says nothing the list does not */
 .app-docs-phone .app-doclist-row { padding: 12px 4px; }
 .app-docs-phonecell { display: flex; flex-direction: column; gap: 7px; min-width: 0; white-space: normal; }
-.app-docs-phonecell .app-docs-namecell { display: flex; width: 100%; gap: 10px; }
-.app-docs-phonecell .app-docs-name { flex: 1; white-space: nowrap; font-size: 14px; }
+/* the whole title shows, however many lines it takes (Ben, 2026-10-07):
+   the row grows; the type chip and the lock sit on the first line */
+.app-docs-phonecell .app-docs-namecell { display: flex; align-items: flex-start; width: 100%; gap: 10px; }
+.app-docs-phonecell .app-docs-name { flex: 1; white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; font-size: 14px; line-height: 1.35; }
+.app-docs-phonecell .app-docs-namecell > :not(.app-docs-name) { margin-top: 1px; }
+.app-docs-phonecell .app-docs-namestem { white-space: normal; overflow: visible; text-overflow: clip; }
 .app-docs-phonemeta { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 12px; font-size: 12.5px; color: #6d675c; }
 .app-docs-phonemeta .app-docs-chip { padding: 2px 9px; font-size: 11.5px; }
 /* the viewer on a phone: the overlay IS the screen; the details pane
