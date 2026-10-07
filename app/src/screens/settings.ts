@@ -3130,6 +3130,9 @@ async function renderBranding(body: HTMLElement, ctx: DirtyCtx): Promise<void> {
     ),
     titlePal.box
   );
+  // ritual categories: brand colours too (moved from Rituals, 2026-10-07);
+  // Branding is a super-admin tab, so the list is editable here
+  await renderCategoriesSection(body, true);
 }
 
 // ---- Boards & meetings (admins): categories, create, edit, replicate ----
@@ -3163,58 +3166,63 @@ function cadenceSummary(blobRaw: string): string {
   }
 }
 
+/** Ritual categories — each has a colour used to code rituals in the
+ *  calendar and lists. On the Branding tab (Ben, 2026-10-07): colours
+ *  are brand, so they sit with the palettes; the Rituals tab reads them. */
+async function renderCategoriesSection(body: HTMLElement, isSuper: boolean): Promise<void> {
+  let cats = await meetingCategories();
+  body.appendChild(sectionTitle("Ritual categories"));
+  const catBox = el("div", "app-org-tree");
+  body.appendChild(catBox);
+  const drawCats = () => {
+    clear(catBox);
+    const rowEl = el("div", "app-org-row");
+    for (const c of cats) {
+      const chip = el("span", "app-btn app-cat-chip");
+      const swatch = el("input", "app-color app-cat-swatch") as HTMLInputElement;
+      swatch.type = "color";
+      swatch.value = /^#[0-9a-fA-F]{6}$/.test(c.color) ? c.color : "#8a847a";
+      swatch.disabled = !isSuper;
+      swatch.title = "Category colour";
+      swatch.addEventListener("input", () => {
+        c.color = swatch.value;
+        void saveMeetingCategories(cats);
+      });
+      chip.append(swatch, document.createTextNode(c.name));
+      if (isSuper) {
+        const x = removeBtn(() => {
+          cats = cats.filter((v) => v !== c);
+          void saveMeetingCategories(cats).then(drawCats);
+        });
+        chip.appendChild(x);
+      }
+      rowEl.appendChild(chip);
+    }
+    catBox.appendChild(rowEl);
+    if (isSuper) {
+      catBox.appendChild(
+        adder("Add category", (v) => {
+          if (!cats.some((c) => c.name === v)) {
+            cats.push({ name: v, color: CATEGORY_PALETTE[cats.length % CATEGORY_PALETTE.length] });
+            void saveMeetingCategories(cats).then(drawCats);
+          }
+        })
+      );
+    } else if (cats.length === 0) {
+      catBox.appendChild(el("div", "app-settings-note", "No categories defined yet."));
+    }
+  };
+  drawCats();
+}
+
 async function renderBoardsAdmin(body: HTMLElement, me: RosterPerson): Promise<void> {
   clear(body);
   const isSuper = me.role === "superadmin";
   const isAdmin = isSuper || me.role === "siteadmin";
 
-  // ritual categories (admins see them; super admins manage) \u2014 each has
-  // a colour used to code rituals in the calendar and lists
-  let cats = await meetingCategories();
-  if (isAdmin) {
-    body.appendChild(sectionTitle("Ritual categories"));
-    const catBox = el("div", "app-org-tree");
-    body.appendChild(catBox);
-    const drawCats = () => {
-      clear(catBox);
-      const rowEl = el("div", "app-org-row");
-      for (const c of cats) {
-        const chip = el("span", "app-btn app-cat-chip");
-        const swatch = el("input", "app-color app-cat-swatch") as HTMLInputElement;
-        swatch.type = "color";
-        swatch.value = /^#[0-9a-fA-F]{6}$/.test(c.color) ? c.color : "#8a847a";
-        swatch.disabled = !isSuper;
-        swatch.title = "Category colour";
-        swatch.addEventListener("input", () => {
-          c.color = swatch.value;
-          void saveMeetingCategories(cats);
-        });
-        chip.append(swatch, document.createTextNode(c.name));
-        if (isSuper) {
-          const x = removeBtn(() => {
-            cats = cats.filter((v) => v !== c);
-            void saveMeetingCategories(cats).then(drawCats);
-          });
-          chip.appendChild(x);
-        }
-        rowEl.appendChild(chip);
-      }
-      catBox.appendChild(rowEl);
-      if (isSuper) {
-        catBox.appendChild(
-          adder("Add category", (v) => {
-            if (!cats.some((c) => c.name === v)) {
-              cats.push({ name: v, color: CATEGORY_PALETTE[cats.length % CATEGORY_PALETTE.length] });
-              void saveMeetingCategories(cats).then(drawCats);
-            }
-          })
-        );
-      } else if (cats.length === 0) {
-        catBox.appendChild(el("div", "app-settings-note", "No categories defined yet."));
-      }
-    };
-    drawCats();
-  }
+  // the categories live on the Branding tab now (2026-10-07); the rows
+  // below still read them for their colour and the category select
+  const cats = await meetingCategories();
 
   // ---- rituals, scoped by role ----
   body.appendChild(sectionTitle("Rituals"));

@@ -18,8 +18,8 @@ switches. Sub-headings per tab, counted from the code:
 | Priorities | 4 (pillars, period & RAG, owners, vision — each with a note) | `h3.app-pr-h3` + note |
 | Site cadence | 3 — Site settings · Shift roster patterns · Protected times | `.app-section` |
 | My profile | 3 — the profile fields · Access diagnostics · Notification probe | `.app-section` |
-| Rituals | 2 — Ritual categories · Rituals | `.app-section` |
-| Branding | 2 named + the name / logo / accent block above | `.app-section` |
+| Rituals | 1 — Rituals (Ritual categories moved to Branding, 2026-10-07) | `.app-section` |
+| Branding | 3 — State palette · Title strip palette · Ritual categories (+ the name / logo / accent block above) | `.app-section` |
 | Access control | 2 — app access group · Document control groups | `.app-section` |
 | Improvement, Value drivers, Issues | 1 each | `h3.app-pr-h3` / `.app-section` |
 | Organisation | none — its own company → site rail and an editor pane | `.app-org-split` |
