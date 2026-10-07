@@ -22,11 +22,8 @@ import type { RosterPerson } from "../store/mappers";
 import {
   companies,
   orgJson,
-  orgVisions,
   prioritySettingsJson,
-  saveOrgVision,
   savePrioritySettingsJson,
-  siteCompanies,
 } from "../store/config";
 import { deletePillar, listPillars, savePillar } from "../store/priorities";
 import {
@@ -48,39 +45,7 @@ interface DirtyCtx {
   saveCurrent: () => Promise<void>;
 }
 
-interface OrgSiteNode {
-  site: string;
-  departments?: { name: string }[];
-}
 
-function parseOrgTree(raw: string): OrgSiteNode[] {
-  try {
-    const arr = JSON.parse(raw) as unknown;
-    if (!Array.isArray(arr)) return [];
-    return arr
-      .filter((s) => s && typeof s === "object" && typeof (s as OrgSiteNode).site === "string")
-      .map((s) => {
-        const o = s as { site: string; departments?: unknown };
-        const departments = Array.isArray(o.departments)
-          ? o.departments
-              .map((d) => {
-                if (typeof d === "string") return { name: d };
-                if (!d || typeof d !== "object") return null;
-                // the site-settings shape is {department, areas}; accept
-                // {name} too for hand-authored data
-                const o = d as { department?: unknown; name?: unknown };
-                const name =
-                  typeof o.department === "string" ? o.department : typeof o.name === "string" ? o.name : "";
-                return name !== "" ? { name } : null;
-              })
-              .filter((d): d is { name: string } => d !== null)
-          : [];
-        return { site: o.site, departments };
-      });
-  } catch {
-    return [];
-  }
-}
 
 function field(label: string, control: HTMLElement, hint?: string): HTMLElement {
   const f = el("div", "app-field");
@@ -106,11 +71,12 @@ export async function renderPrioritiesSettings(
     await renderPrioritiesSettings(body, me, ctx);
   });
 
+  // vision statements are edited where they are read — the band's ⋮ on
+  // the Priorities tab (Ben, 2026-10-08; the settings list was removed)
   if (isSuper) {
     await renderPillars(body, ctx, saves);
     await renderPeriod(body, ctx, saves);
   }
-  await renderVisions(body, me, ctx, saves);
 }
 
 async function renderPillars(body: HTMLElement, ctx: DirtyCtx, saves: (() => Promise<void>)[]) {
@@ -420,71 +386,3 @@ async function renderPeriod(body: HTMLElement, ctx: DirtyCtx, saves: (() => Prom
 }
 
 // ---- vision per company / site / department ---------------------------------
-
-async function renderVisions(
-  body: HTMLElement,
-  me: RosterPerson,
-  ctx: DirtyCtx,
-  saves: (() => Promise<void>)[]
-) {
-  const isSuper = me.role === "superadmin";
-  const box = sectionTitle(
-    "Vision statements",
-    "One per org, shown as the band across the top of its priorities matrix. Who may edit an org's priorities is the org's owner — set on the Organisation tab."
-  );
-  body.appendChild(box);
-
-  const [tree, coList, siteCo, visions] = await Promise.all([
-    orgJson().then(parseOrgTree),
-    companies(),
-    siteCompanies(),
-    orgVisions(),
-  ]);
-  const sites = isSuper ? tree : tree.filter((s) => s.site === me.site);
-  const visionEdits: Record<string, string> = {}; // orgKey → text
-
-  const visionField = (key: string, placeholder: string): HTMLElement => {
-    const ta = el("textarea", "app-input app-pr-vision") as HTMLTextAreaElement;
-    ta.value = visions[key] ?? "";
-    ta.placeholder = placeholder;
-    ta.rows = 2;
-    ta.addEventListener("input", () => {
-      visionEdits[key] = ta.value;
-      ctx.markDirty();
-    });
-    return ta;
-  };
-
-  if (isSuper) {
-    for (const co of coList) {
-      const block = el("div", "app-pr-org app-pr-org-co");
-      block.appendChild(el("div", "app-pr-orgname", co));
-      block.appendChild(visionField(`${co}|||`, "The company's vision statement…"));
-      box.appendChild(block);
-    }
-  }
-  for (const s of sites) {
-    const co = siteCo[s.site] ?? "";
-    const block = el("div", "app-pr-org");
-    block.appendChild(el("div", "app-pr-orgname", s.site));
-    block.appendChild(visionField(`${co}|${s.site}||`, "This site's vision statement…"));
-    for (const d of s.departments ?? []) {
-      const dep = el("div", "app-pr-dept");
-      dep.appendChild(el("div", "app-pr-deptname", d.name));
-      dep.appendChild(visionField(`${co}|${s.site}|${d.name}|`, "This department's vision (optional)…"));
-      block.appendChild(dep);
-    }
-    box.appendChild(block);
-  }
-  if (sites.length === 0) {
-    box.appendChild(el("div", "app-settings-note", "No sites in the organisation yet — add them on the Organisation tab."));
-  }
-
-  saves.push(async () => {
-    for (const [key, text] of Object.entries(visionEdits)) {
-      const [company = "", site = "", department = ""] = key.split("|");
-      await saveOrgVision({ company, site, department }, text.trim());
-    }
-    for (const k of Object.keys(visionEdits)) delete visionEdits[k];
-  });
-}

@@ -281,8 +281,10 @@ export function mountSettings(parent: HTMLElement, initialTab = ""): () => void 
         label: "Site cadence",
         render: () => renderSiteCadence(body, me, ctx),
       });
-      // cascaded priorities (plan P0): pillars + period/RAG (superadmin),
-      // owners + vision per site/department (site admins for their site)
+    }
+    if (me.role === "superadmin") {
+      // cascaded priorities: pillars + period / roll-up rule — super admin
+      // only since the vision list left for the band (2026-10-08)
       tabs.push({
         key: "priorities",
         label: "Priorities",
@@ -291,8 +293,6 @@ export function mountSettings(parent: HTMLElement, initialTab = ""): () => void 
           await renderPrioritiesSettings(body, me, ctx);
         },
       });
-    }
-    if (me.role === "superadmin") {
       tabs.push({
         key: "improvement",
         label: "Improvement",
