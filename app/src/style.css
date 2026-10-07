@@ -4011,6 +4011,48 @@ textarea.app-cp-statement { font-size: 14px; font-weight: 500; }
   .app-btn-bar .app-mode-icon { font-size: 20px; width: auto; height: auto; }
   .app-btn-addaction-plus { font-size: 22px; }
 }
+/* ---- the board and the card walk on a phone (mobile review M2) -------
+   The split is one column; the details & schedule pane is a bottom
+   SHEET (fixed, scrim behind, its own ✕) opened from a short Details
+   button; the initiative handle and the desktop toggle hide. The grid
+   itself turns into a list by ITS width (BoardGrid, LIST_MAX_WIDTH).
+   The walk stacks PREV above and NEXT below the card, each naming its
+   card, and drops Present (the player refuses fullscreen anyway). */
+.app-board-sheethead { display: none; }
+.app-board-sheetscrim { display: none; }
+.app-card-arrow-name { display: none; }
+@media (max-width: 599px) {
+  .app-outlet { padding: 8px; }
+  .app-board-toolbar { gap: 8px; }
+  .app-board-title { font-size: 17px; }
+  .app-board-split, .app-board-hashandle, .app-board-hashandle.app-board-solo { grid-template-columns: minmax(0, 1fr); }
+  .app-ib-handle, .app-board-schedbtn { display: none; }
+  .app-board-left {
+    position: fixed; left: 0; right: 0; bottom: 0; top: auto;
+    max-height: 82vh; max-height: 82dvh; z-index: 58;
+    border-radius: 14px 14px 0 0; box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.28);
+  }
+  .app-board-sheethead {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    padding: 8px 8px 8px 14px; border-bottom: 1px solid #ece8e0; flex: none;
+  }
+  .app-board-sheetcap { font-size: 13px; font-weight: 700; }
+  .app-board-sheetscrim { display: block; position: fixed; inset: 0; z-index: 57; background: rgba(20, 20, 20, 0.45); }
+  .app-board-solo .app-board-sheetscrim { display: none; }
+  /* the walk */
+  .app-card-titlerow { padding: 0; gap: 8px; }
+  .app-card-meeting { font-size: 16px; }
+  .app-card-present { display: none; }
+  .app-card-head { padding: 0; }
+  .app-card-tab { max-width: 150px; }
+  .app-card-row { flex-direction: column; gap: 6px; }
+  .app-card-arrow {
+    flex: 0 0 44px; flex-direction: row; justify-content: center; gap: 8px;
+    background: #fff; border: 1px solid #e4dfd6; border-radius: 8px; text-decoration: none;
+  }
+  .app-card-arrow-off { display: none; }
+  .app-card-arrow-name { display: inline; font-size: 13px; font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+}
 .app-quickadd-host { position: fixed; inset: 0; width: 0; height: 0; overflow: visible; z-index: 60; }
 .app-quickadd-host .ltk-dialog-overlay { position: fixed; }
 /* hub tabs that mount app screens scroll inside the tab (the register was

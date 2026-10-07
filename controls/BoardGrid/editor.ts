@@ -24,10 +24,12 @@ import {
   cellPos,
   isImageUri,
   layoutBoard,
+  LIST_MAX_WIDTH,
   LIVE_TILE_H,
   LIVE_TILE_W,
   LiveTileRenderer,
   PlacedTile,
+  listOrder,
   sanitizeSvg,
 } from "./types";
 import { BOARDGRID_CSS } from "./styles";
@@ -76,6 +78,9 @@ export class BoardGridView {
   private live: LiveTileRenderer | null = null;
   private liveTeardowns: (() => void)[] = [];
   private resizeObserver: ResizeObserver | null = null;
+  /** The phone list (M2): set from the grid's own width, read mode only —
+   *  a layout is edited on a desktop. */
+  private listMode = false;
 
   constructor(
     host: HTMLElement,
@@ -87,7 +92,7 @@ export class BoardGridView {
     host.appendChild(this.root);
     // refit every scaled snapshot whenever the grid resizes
     if (typeof ResizeObserver !== "undefined") {
-      this.resizeObserver = new ResizeObserver(() => this.refit());
+      this.resizeObserver = new ResizeObserver(() => this.measure());
       this.resizeObserver.observe(this.root);
     }
     this.render();
@@ -95,6 +100,25 @@ export class BoardGridView {
 
   private refit(): void {
     for (const fit of this.fitters) fit();
+  }
+
+  /** The width call, then the fit: the list flips on the grid's OWN
+   *  width (the pane rule), and a flip is a re-render; otherwise every
+   *  scaled snapshot refits. */
+  private measure(): void {
+    const w = this.root.clientWidth;
+    const want = w > 0 && w < LIST_MAX_WIDTH;
+    if (want !== this.listMode) {
+      this.listMode = want;
+      this.render();
+      return;
+    }
+    this.refit();
+  }
+
+  /** Read mode on a phone-wide pane: one tile per row, reading order. */
+  private isList(): boolean {
+    return this.listMode && !(this.editMode && !this.readOnly);
   }
 
   // ---- host-facing API (setters no-op when unchanged) ----
@@ -232,7 +256,10 @@ export class BoardGridView {
     // read mode shows them only when set; edit mode always offers the
     // fields so headings can be added to an unheaded board
     const canEdit = this.editMode && !this.readOnly;
-    if (canEdit || this.colTitles.some((t) => t !== "")) {
+    const list = this.isList();
+    this.root.classList.toggle("ltk-bg-islist", list);
+    // the list has no columns to head
+    if (!list && (canEdit || this.colTitles.some((t) => t !== ""))) {
       const heads = el("div", "ltk-bg-colheads");
       heads.style.gridTemplateColumns = `repeat(${lay.cols}, 1fr)`;
       for (let c = 0; c < lay.cols; c++) {
@@ -257,7 +284,21 @@ export class BoardGridView {
       body.appendChild(heads);
     }
 
-    const grid = el("div", "ltk-bg-grid");
+    const grid = el("div", `ltk-bg-grid${list ? " ltk-bg-list" : ""}`);
+    if (list) {
+      // one column in reading order; rows size to the tiles, the body
+      // scrolls — no empty cells, nothing to place
+      grid.style.gridTemplateColumns = "minmax(0, 1fr)";
+      body.appendChild(grid);
+      for (const placed of listOrder(lay.placed)) {
+        const slot = this.renderTile(placed, grid);
+        slot.style.gridColumn = "";
+        slot.style.gridRow = "";
+        grid.appendChild(slot);
+      }
+      setTimeout(() => this.refit(), 0);
+      return;
+    }
     grid.style.gridTemplateColumns = `repeat(${lay.cols}, 1fr)`;
     grid.style.gridTemplateRows = `repeat(${lay.rows}, 1fr)`;
     body.appendChild(grid);
@@ -327,10 +368,22 @@ export class BoardGridView {
     const teardown = this.live!(stage, tile);
     this.liveTeardowns.push(teardown);
 
+    const list = this.isList();
     const fit = () => {
       const w = snap.clientWidth;
       const h = snap.clientHeight;
       if (w <= 0 || h <= 0) return;
+      if (list) {
+        // the phone list (M2): the card at the slot's NATURAL size, no
+        // scale — a 640px stage shrunk to a phone's width is 7px text;
+        // the cards' own tile layouts reflow to the width instead
+        stage.style.width = `${w}px`;
+        stage.style.height = `${h}px`;
+        stage.style.transform = "";
+        stage.style.left = "0px";
+        stage.style.top = "0px";
+        return;
+      }
       const k = Math.min(w / LIVE_TILE_W, h / LIVE_TILE_H);
       stage.style.transform = `scale(${k})`;
       stage.style.left = `${Math.max(0, (w - LIVE_TILE_W * k) / 2)}px`;

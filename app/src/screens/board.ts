@@ -5,6 +5,7 @@
 // server shows a banner.
 
 import { BoardGridView } from "../../../controls/BoardGrid/editor";
+import { isPhoneWindow } from "../phone";
 import { BoardTile, parseColumns } from "../../../controls/BoardGrid/types";
 import { MeetingSchedulerView } from "../../../controls/MeetingScheduler/editor";
 import {
@@ -168,7 +169,11 @@ async function renderBoard(
   const bar = el("div", "app-board-toolbar");
   const title = el("span", "app-board-title", board.name);
   const status = el("span", "app-board-status", "");
-  const scheduleBtn = el("button", "app-btn", "Hide details & schedule") as HTMLButtonElement;
+  const scheduleBtn = el("button", "app-btn app-board-schedbtn", "Hide details & schedule") as HTMLButtonElement;
+  // the phone (M2): the pane is a bottom sheet opened from one short
+  // button; the desktop's long toggle and the initiative handle hide
+  const sheetBtn = el("button", "app-btn app-phone-only app-board-sheetbtn", "Details") as HTMLButtonElement;
+  sheetBtn.type = "button";
   // standard-board design lives in Settings → Rituals / the wizard's
   // step 2; the operational board only offers per-meeting adjustment
   // (and only when the ritual's toggle allows it)
@@ -182,7 +187,7 @@ async function renderBoard(
   const titleBits = el("span", "app-ib-titlebits");
   const paneControls = el("span", "app-ib-controls");
   const paneKebab = el("span", "app-ib-controls"); // ⋮ is the right-most control (Ben, 2026-09-03)
-  bar.append(title, titleBits, status, el("span", "app-bar-gap"), paneControls, liveBtn, scheduleBtn, paneKebab);
+  bar.append(title, titleBits, status, el("span", "app-bar-gap"), paneControls, liveBtn, scheduleBtn, sheetBtn, paneKebab);
   parent.appendChild(bar);
 
   const split = el("div", "app-board-split");
@@ -191,6 +196,14 @@ async function renderBoard(
   const rightHost = el("div", "app-board-right");
   // board first, the details & schedule pane on the right
   split.append(rightHost, leftHost);
+  // the sheet's own head and the scrim behind it — phone only (CSS)
+  const sheetHead = el("div", "app-board-sheethead");
+  const sheetClose = el("button", "app-btn app-board-sheetclose", "✕ Close") as HTMLButtonElement;
+  sheetClose.type = "button";
+  sheetHead.append(el("span", "app-board-sheetcap", ""), sheetClose);
+  leftHost.appendChild(sheetHead);
+  const sheetScrim = el("div", "app-board-sheetscrim");
+  split.insertBefore(sheetScrim, leftHost);
 
   // collapse the scheduler so the board takes the full width. Arriving
   // with a pre-selected occurrence (My day / Cadence deep link) starts
@@ -225,12 +238,24 @@ async function renderBoard(
       : on
         ? "Show details & schedule"
         : "Hide details & schedule";
+    const cap = initBoard ? "Details" : "Details & schedule";
+    sheetBtn.textContent = cap;
+    sheetBtn.setAttribute("aria-expanded", String(!on));
+    (sheetHead.firstChild as HTMLElement).textContent = cap;
   };
   setScheduleHidden(scheduleHidden);
   scheduleBtn.addEventListener("click", () => {
     reHideAfterCreate = false; // the viewer is driving the pane now
     setScheduleHidden(!scheduleHidden);
   });
+  sheetBtn.addEventListener("click", () => {
+    reHideAfterCreate = false;
+    setScheduleHidden(!scheduleHidden);
+    if (!scheduleHidden) setTimeout(() => paneHandle?.revealActive(), 60);
+  });
+  // a sheet is a picker: closing it is never a lost edit
+  sheetClose.addEventListener("click", () => setScheduleHidden(true));
+  sheetScrim.addEventListener("click", () => setScheduleHidden(true));
 
   const gridView = new BoardGridView(rightHost, {
     onSelect: (e) => {
@@ -783,6 +808,8 @@ async function renderBoard(
         current = existing;
         rememberSelection();
         renderTiles();
+        // on a phone the sheet covered the board to pick this: let it go
+        if (isPhoneWindow()) setScheduleHidden(true);
         return;
       }
       // no record yet: confirm before creating (accidental taps were a

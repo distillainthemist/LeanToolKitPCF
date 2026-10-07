@@ -301,6 +301,22 @@ the same commit.
    chips in one scrolling row; Settings shows "best on a desktop"
    (`.app-phone-only`). Harness and dev pages carry the viewport meta.
 
+8. **Boards and the card walk on a phone** (mobile review M2,
+   2026-10-07). The BoardGrid turns into a LIST by its own width
+   (`LIST_MAX_WIDTH` 600, read mode only): one tile per row in reading
+   order (`listOrder`: row by row, left to right), 4:3, the body
+   scrolling, no column heads or empty cells; a live card is mounted at
+   the slot's natural size — never the 640px stage scaled down, which
+   is 7px text — so each card's own tile layout reflows. Tapping a tile
+   opens the card as on the desktop. The board screen under 600px of
+   window width: one column; the details & schedule pane is a bottom
+   SHEET (fixed, 82vh max, scrim behind, its own "✕ Close") opened from
+   a short "Details" / "Details & schedule" button (`.app-phone-only`);
+   the desktop toggle and the initiative handle hide; picking an
+   occurrence closes the sheet. The walk stacks PREV above and NEXT
+   below the card as 44px bars naming their card, hides an absent rail
+   and the Present button, and keeps the windowed tabs at 150px each.
+
 ## 4. Overlays, dialogs, wizards
 
 - **Detail overlays** (Documents/Priorities pattern): scrim

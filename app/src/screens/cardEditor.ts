@@ -425,6 +425,9 @@ export function mountCardEditor(
           const label = slot.title || cardLabel(slot.cardType);
           arrow.href = editHref(slot);
           arrow.title = label;
+          // the phone stacks the rails above and below the card (M2) and
+          // has room to say where each one goes; desktop hides this
+          arrow.appendChild(el("span", "app-card-arrow-name", label));
           arrow.setAttribute(
             "aria-label",
             `${dir === "prev" ? "Previous" : "Next"} card: ${label}`

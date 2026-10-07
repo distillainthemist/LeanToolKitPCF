@@ -59,6 +59,17 @@ export interface PlacedTile {
   h: number;
 }
 
+/** Below this many CSS pixels of the grid's OWN width (the pane, not the
+ *  window) the wall renders as a LIST: one tile per row in reading
+ *  order, each at full width (mobile review M2, 2026-10-07). */
+export const LIST_MAX_WIDTH = 600;
+
+/** The wall's tiles in reading order — row by row, left to right — the
+ *  order the phone list shows them in. */
+export function listOrder(placed: PlacedTile[]): PlacedTile[] {
+  return [...placed].sort((a, b) => a.row - b.row || a.col - b.col);
+}
+
 export interface BoardLayout {
   cols: number;
   rows: number;

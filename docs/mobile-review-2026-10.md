@@ -207,7 +207,19 @@ still used). First phone pass: open each from the dev app and note.
   viewport meta on every harness and dev page. Verified in demo mode at
   375px; Ben's phone check pending — in particular whether the
   Documents tab now shows for the report-20 reporter.
-- M2–M5: not started.
+- **M2 Ritual board — built 2026-10-07** (on dev, unreleased): the
+  BoardGrid's list mode by its own width (one tile per row in reading
+  order, live cards at natural size, `listOrder` tested); the board
+  screen's details & schedule pane as a bottom sheet from a phone-only
+  Details button, closing on a pick; the card walk with PREV / NEXT
+  stacked above and below the card. Verified on `app/board-live.html`
+  at 375px (list order, natural-size stages); the board screen and the
+  walk need the host — Ben's phone check. **Card follow-ups seen at
+  ~330px**: SQDPC's month grid wraps under its legend; RiskMatrix and
+  RACI overflow sideways (scrollable); Fishbone shows a corner of its
+  canvas. Each is that card's tile layout, not the list — fix per card
+  under a container query when Ben's pass confirms which boards matter.
+- M3–M5: not started.
 
 ## Recommended order (each its own release, phone-only CSS where it can be)
 

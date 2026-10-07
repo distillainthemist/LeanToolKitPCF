@@ -240,6 +240,13 @@ export const BOARDGRID_CSS = `
   -webkit-user-select: none;
 }
 
+/* ---- the phone list (mobile review M2, 2026-10-07) ----
+   One tile per row at full width, 4:3, the body scrolling; the grid
+   stops stretching to the pane so rows keep their height. */
+.ltk-bg-list { flex: none; gap: 10px; }
+.ltk-bg-list .ltk-bg-slot { min-height: 180px; aspect-ratio: 4 / 3; }
+.ltk-bg-islist .ltk-bg-body { padding: 8px 8px 12px; }
+
 .ltk-bg-stagechip { font-size: 10px; font-weight: 700; padding: 1px 7px; border-radius: 999px; margin-left: 6px; white-space: nowrap; }
 .ltk-bg-tile-ring { outline: 2px solid var(--ltk-accent); outline-offset: -1px; }
 `;
