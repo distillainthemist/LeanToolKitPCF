@@ -20,7 +20,7 @@ are in the export. Everything below is app-only unless marked.
 - Report 12 (lost view) → treated as fixed by named views; ask Ellen to
   confirm on v0.63+.
 
-## Tranche A — quick wins and clear bugs (first release) — BUILT 2026-10-06, unreleased
+## Tranche A — quick wins and clear bugs (first release) — BUILT 2026-10-06, RELEASED v0.65.0 (2026-10-07)
 
 Status per item: A1 fallback + site step ✓ · A2 ✓ (the register now
 honours a chosen column order; the dictionary orders only the
@@ -55,7 +55,7 @@ preview, the health report's review dates on the library that failed.
 | A9 | 13 | Reproduce the controller's failed tag add on dev; fix what it finds (likely the proposal road wrongly engaged for a controller). |
 | A10 | 15, 39 | Details pane: a stronger "Details" affordance; the type and status chips move under Categorisation; section order follows the filter order. |
 
-## Tranche B — register features — BUILT 2026-10-06, unreleased
+## Tranche B — register features — BUILT 2026-10-06, RELEASED v0.65.0
 
 Status per item: B1 ✓ (several terms per column, OR'd — pills toggle,
 the register opens with a VISIBLE "Approval status: Approved" filter
@@ -92,7 +92,7 @@ panel rail, Update on a saved view.
 | B6 | 17, 46 | Owner / relationship visibility: an Owner filter and "documents by owner" CSV; linked / tagged documents reachable from a filter. |
 | B7 | 44 | Default columns per site: confirm the column manager already answers it (Organisation, Document Type, Standard); document how. |
 
-## Tranche C — governance and roles — BUILT 2026-10-06, unreleased
+## Tranche C — governance and roles — BUILT 2026-10-06, RELEASED v0.65.0 (C4 removed)
 
 Status per item: C1 ✓ (the health report scans owner / approver /
 reviewer names AND emails; two directory-backed findings arrive after

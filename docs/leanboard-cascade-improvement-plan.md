@@ -1450,6 +1450,11 @@ reschedule/cancel history with a reason picklist.
   "🔗 Copy link to this view" (`priorities/viewLink.ts`, `prview=` on
   the player URL, the hub fronts Priorities and the mount consumes it;
   org · period · status · view · pillar · rule · toggles). Unreleased.
+- **2026-10-07 — released as v0.65.0** (app-only): feedback round 1
+  Tranches A–C as walked through with Ben (C4 removed), the approved
+  default filter, the view-as-title, directory people filters, the
+  export that follows filters, searched tag filters, the day's asks
+  and the Priorities view link.
 - **2026-10-01 — the stage bar; initials.** Ben: fold the stage
   label and its PDCA symbol into the bar as thick labelled segments
   (done full colour, current outlined, future grey), bring the gate
