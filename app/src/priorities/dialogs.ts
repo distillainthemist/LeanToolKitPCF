@@ -7,13 +7,14 @@ import type { PersonRef } from "../store/config";
 import type { RosterPerson } from "../store/mappers";
 import {
   OrgRef,
+  Pillar,
+  Priority,
   orgKey,
   orgLevel,
   orgName,
   orgParent,
+  orgPath,
   orgRef,
-  Pillar,
-  Priority,
   strategyChips,
 } from "./model";
 
@@ -69,6 +70,17 @@ export function orgTreeNodes(tree: OrgTree): OrgRef[] {
     }
   }
   return out;
+}
+
+/** The phone's org select (mobile review M3): every node in tree
+ *  order, the leaf label indented by its depth so the hierarchy reads
+ *  inside a native select (which takes no markup). Pure. */
+export function orgSelectOptions(tree: OrgTree): { key: string; label: string; depth: number }[] {
+  const INDENT = "\u00a0\u00a0\u00a0";
+  return orgTreeNodes(tree).map((o) => {
+    const depth = orgPath(o).length - 1;
+    return { key: orgKey(o), label: `${INDENT.repeat(depth)}${orgName(o)}`, depth };
+  });
 }
 
 /** Children of a node in the tree. */

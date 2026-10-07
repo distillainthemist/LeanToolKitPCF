@@ -44,10 +44,12 @@ import {
   newPriority,
   savePriority,
 } from "../store/priorities";
+import { PHONE_WINDOW_QUERY, isPhoneWindow } from "../phone";
 import {
   buildTree,
   CascadeTarget,
   childOrgs,
+  orgSelectOptions,
   editVision,
   OrgTree,
   pickOrg,
@@ -500,9 +502,25 @@ export function mountPriorities(parent: HTMLElement, opts: PrioritiesMountOpts =
     let walkOpen = false;
     let walkStep = 0;
     let closeWalk: (() => void) | null = null;
+    // the phone (mobile review M3): the walk IS the view — the matrix
+    // gave five pillars 50px each. A card mount keeps its own modes.
+    const phone = () => card === null && isPhoneWindow();
+    if (card === null && typeof window !== "undefined" && typeof window.matchMedia === "function") {
+      const mq = window.matchMedia(PHONE_WINDOW_QUERY);
+      const onChange = () => {
+        if (!dead) render();
+      };
+      mq.addEventListener("change", onChange);
+      cleanups.push(() => mq.removeEventListener("change", onChange));
+    }
     const render = () => {
       clear(wrap);
       persist();
+      wrap.classList.toggle("app-cp-phone", phone());
+      if (phone()) {
+        renderPhone();
+        return;
+      }
       if (walkOpen) {
         renderWalk();
         return;
@@ -623,6 +641,104 @@ export function mountPriorities(parent: HTMLElement, opts: PrioritiesMountOpts =
       more.addEventListener("click", () => openViewOptions(more));
       bar.appendChild(more);
       return bar;
+    };
+
+    /** The phone (M3): a stacked head — the period lead, then org,
+     *  period, status and pillar as native selects, the cascade chip,
+     *  ＋ Priority and ⋮ — the vision band, and the walk inline: one
+     *  objective per screen, swipe or PREV / NEXT, tap a row for the
+     *  overlay. The same state the desktop reads, so a shared link and
+     *  the person's prefs mean the same thing on both. */
+    const renderPhone = () => {
+      const head = el("div", "app-cp-phonehead");
+      head.appendChild(el("div", "app-cp-phonehead-lead", `${state.period} Cascaded Priorities`));
+      const sel = (label: string, options: { value: string; label: string }[], value: string, onPick: (v: string) => void) => {
+        const s = el("select", "app-input app-cp-phonesel") as HTMLSelectElement;
+        s.setAttribute("aria-label", label);
+        s.title = label;
+        for (const o of options) s.appendChild(new Option(o.label, o.value));
+        s.value = value;
+        s.addEventListener("change", () => onPick(s.value));
+        head.appendChild(s);
+        return s;
+      };
+      sel("Organisation", orgSelectOptions(tree).map((o) => ({ value: o.key, label: o.label })), orgKey(state.org), (v) => void goTo(orgFromKey(v)));
+      sel("Period", periodsOnOffer().map((p) => ({ value: p, label: p })), state.period, (v) => {
+        state.period = v;
+        render();
+      });
+      sel(
+        "Status",
+        [
+          { value: "active", label: "Active priorities" },
+          { value: "completed", label: "Completed priorities" },
+          { value: "all", label: "All priorities" },
+        ],
+        state.status,
+        (v) => {
+          state.status = v as ScreenState["status"];
+          render();
+        }
+      );
+      const l1s = strategyChips(livePillars());
+      if (l1s.length > 1) {
+        sel(
+          "Pillar",
+          [{ value: "", label: "All pillars" }, ...l1s.map((p) => ({ value: p.id, label: p.name }))],
+          state.l1 ?? "",
+          (v) => {
+            state.l1 = v === "" ? null : v;
+            walkStep = 0;
+            render();
+          }
+        );
+      }
+      const acts = el("div", "app-cp-phoneacts");
+      const pending = pendingCascades(state.org, data.assignments).length;
+      if (pending > 0) {
+        const chip = el("button", "app-cp-cascadechip", `⇩ ${pending} cascade${pending === 1 ? "" : "s"} to accept`) as HTMLButtonElement;
+        chip.type = "button";
+        chip.addEventListener("click", () => cascadeReview(ctx, state.org));
+        acts.appendChild(chip);
+      }
+      if (canManage() && ctx.canCustomise(state.org)) {
+        const add = el("button", "app-btn app-btn-primary", "＋ Priority") as HTMLButtonElement;
+        add.type = "button";
+        add.addEventListener("click", () => void addPriority());
+        acts.appendChild(add);
+      }
+      const more = el("button", "app-btn app-cp-more", "⋮") as HTMLButtonElement;
+      more.type = "button";
+      more.title = "View · roll-up rule · share";
+      more.addEventListener("click", () => openViewOptions(more));
+      acts.appendChild(more);
+      head.appendChild(acts);
+      wrap.append(head, renderVision());
+      const columns = objectiveColumns(livePillars(), state.focus ?? state.l1);
+      const visible = visibleFor(state.org);
+      const { byColumn } = groupByColumn(columns, visible);
+      const adoptedIds = new Set(prioritiesForOrg(state.org, data.priorities, data.assignments).adopted.map((p) => p.id));
+      closeWalk?.();
+      closeWalk = mountWalk({
+        host: wrap,
+        ctx,
+        org: state.org,
+        period: state.period,
+        columns,
+        pillars: data.pillars,
+        byColumn,
+        adoptedIds,
+        objectiveLines: objectiveLinesFor,
+        startStep: walkStep,
+        className: "app-cp-walk-inline",
+        inline: true,
+        onStep: (i) => {
+          walkStep = i;
+        },
+        onExit: () => undefined,
+        onOpen: (p) => openOverlay(p),
+      });
+      cleanups.push(() => closeWalk?.());
     };
 
     /** The walk (§15): objectives visible under the current filters. */

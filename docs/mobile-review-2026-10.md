@@ -219,7 +219,14 @@ still used). First phone pass: open each from the dev app and note.
   RACI overflow sideways (scrollable); Fishbone shows a corner of its
   canvas. Each is that card's tile layout, not the list — fix per card
   under a container query when Ben's pass confirms which boards matter.
-- M3–M5: not started.
+- **M3 Priorities — built 2026-10-07** (on dev, unreleased): under
+  600px the tab renders a stacked head of native selects (organisation
+  from `orgSelectOptions`, tested; period; status; pillar when several),
+  the vision band, and the walk inline with no Exit — one objective
+  per screen, swipe or PREV / NEXT, rows opening the overlay. A window
+  crossing 600px re-renders. Needs the host: Ben's phone check (the
+  select strip, stepping, a row tap, ＋ Priority, the ⋮ share link).
+- M4–M5: not started.
 
 ## Recommended order (each its own release, phone-only CSS where it can be)
 

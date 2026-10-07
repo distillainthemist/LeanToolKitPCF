@@ -47,6 +47,9 @@ export interface WalkOpts {
   onStep?: (i: number) => void;
   /** Extra class on the walk root (e.g. "app-cp-walk-fixed"). */
   className?: string;
+  /** The phone (mobile review M3): the walk IS the page — no ✕ Exit, no
+   *  Esc, the page scrolls; ←/→, swipe and the rails still step. */
+  inline?: boolean;
 }
 
 const btn = (label: string, cls = "app-btn"): HTMLButtonElement => {
@@ -73,9 +76,11 @@ export function mountWalk(o: WalkOpts): () => void {
     const n = stepCount();
     if (n === 0) {
       root.appendChild(el("div", "app-cp-walk-empty", "Nothing to walk — no objectives are visible with the current filters."));
-      const back = btn("✕ Exit presentation");
-      back.addEventListener("click", o.onExit);
-      root.appendChild(back);
+      if (o.inline !== true) {
+        const back = btn("✕ Exit presentation");
+        back.addEventListener("click", o.onExit);
+        root.appendChild(back);
+      }
       return;
     }
     if (step >= n) step = n - 1;
@@ -106,10 +111,12 @@ export function mountWalk(o: WalkOpts): () => void {
     prog.appendChild(el("div", "app-cp-walk-count", `${step + 1} / ${n}`));
     // the way out: top right, beside the counter, named for what it does
     // (Ben, 2026-09-29 — "⊞ All pillars" in the footer did not read as it)
-    const exit = btn("✕ Exit presentation", "app-btn app-cp-walk-exit");
-    exit.title = "Leave the presentation and return to all pillars (Esc)";
-    exit.addEventListener("click", o.onExit);
-    prog.appendChild(exit);
+    if (o.inline !== true) {
+      const exit = btn("✕ Exit presentation", "app-btn app-cp-walk-exit");
+      exit.title = "Leave the presentation and return to all pillars (Esc)";
+      exit.addEventListener("click", o.onExit);
+      prog.appendChild(exit);
+    }
     head.appendChild(prog);
     root.appendChild(head);
 
@@ -219,7 +226,7 @@ export function mountWalk(o: WalkOpts): () => void {
     } else if (e.key === "ArrowRight") {
       e.preventDefault();
       go(step + 1);
-    } else if (e.key === "Escape") {
+    } else if (e.key === "Escape" && o.inline !== true) {
       e.preventDefault();
       o.onExit();
     }

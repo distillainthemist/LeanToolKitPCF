@@ -266,9 +266,9 @@ user-feedback-test-script-2026-10.md. Released v0.65.0 / v0.65.1.
   (docs/mobile-review-2026-10.md) — M1 frame (top bar, tab strip,
   action rows), M2 ritual board, M3 priorities walk, M4 initiative
   screen, M5 cadence day view; value drivers / settings desktop-only.
-  M1 and M2 BUILT 2026-10-07 (unreleased; M2 leaves four card tile
+  M1, M2 and M3 BUILT 2026-10-07 (unreleased; M2 leaves four card tile
   layouts to narrow per card: SQDPC, RiskMatrix, RACI, Fishbone);
-  M3–M5 not started — Ben's phone pass on the hosted app first.
+  M4–M5 not started — Ben's phone pass on the hosted app first.
 - **Hierarchy in filters** (report 36): a parent term such as SMELTER
   including every term beneath it when ticked — logged, not built
   (B1 kept "a pick includes its subtree" as before).

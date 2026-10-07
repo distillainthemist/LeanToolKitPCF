@@ -4053,6 +4053,37 @@ textarea.app-cp-statement { font-size: 14px; font-weight: 500; }
   .app-card-arrow-off { display: none; }
   .app-card-arrow-name { display: inline; font-size: 13px; font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 }
+/* ---- Priorities on a phone (mobile review M3) ----------------------
+   .app-cp-phone is set by the screen under 600px of window width: a
+   stacked head of native selects, the vision band, then the walk
+   INLINE — one objective per screen, the page scrolling, no fixed
+   layer, no Exit. The TV scale (1.4em) is reset: a phone is read at
+   arm's length, not across a room. */
+.app-cp-phonehead { display: flex; flex-direction: column; gap: 8px; }
+.app-cp-phonehead-lead { font-size: 15px; font-weight: 700; color: var(--app-accent); }
+.app-cp-phonesel { width: 100%; max-width: 100%; min-height: 42px; font-size: 13px; }
+.app-cp-phoneacts { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.app-cp-phoneacts:empty { display: none; }
+.app-cp-phone.app-cp-tv { font-size: 1em; padding: 8px 10px 16px; gap: 10px; }
+.app-cp-phone .app-cp-visionrow { grid-template-columns: 1fr; gap: 2px; }
+.app-cp-phone .app-cp-vision { font-size: 14px; padding: 10px 12px; }
+.app-cp-phone .app-cp-label { font-size: 11px; }
+.app-cp-walk-inline { min-height: 0; border: 1px solid #e4dfd6; border-radius: 10px; overflow: hidden; }
+.app-cp-walk-inline .app-cp-walk-head { padding: 10px 12px; gap: 8px; }
+.app-cp-walk-inline .app-cp-walk-title { font-size: 18px; }
+.app-cp-walk-inline .app-cp-walk-sub { font-size: 12.5px; }
+.app-cp-walk-inline .app-cp-walk-count { font-size: 13px; }
+.app-cp-walk-inline .app-cp-walk-stage { flex: none; min-height: 0; padding: 8px; gap: 6px; }
+.app-cp-walk-inline .app-cp-walk-body { overflow: visible; padding: 0; gap: 10px; }
+.app-cp-walk-inline .app-cp-walk-rail { flex: 0 0 40px; min-width: 40px; }
+.app-cp-walk-inline .app-cp-walk-rail-glyph { font-size: 28px; }
+.app-cp-walk-inline .app-cp-walk-row { gap: 10px; padding: 10px 12px; }
+.app-cp-walk-inline .app-cp-walk-statement { font-size: 16px; }
+.app-cp-walk-inline .app-cp-walk-owner { font-size: 13.5px; }
+.app-cp-walk-inline .app-cp-walk-tally-n { font-size: 24px; }
+.app-cp-walk-inline .app-cp-walk-metric .app-cp-objective-name { font-size: 14px; }
+.app-cp-walk-inline .app-cp-walk-foot { padding: 8px 10px; }
+.app-cp-walk-inline .app-cp-walk-nav { font-size: 14px; padding: 0 10px; max-width: 48%; }
 .app-quickadd-host { position: fixed; inset: 0; width: 0; height: 0; overflow: visible; z-index: 60; }
 .app-quickadd-host .ltk-dialog-overlay { position: fixed; }
 /* hub tabs that mount app screens scroll inside the tab (the register was

@@ -317,6 +317,20 @@ the same commit.
    below the card as 44px bars naming their card, hides an absent rail
    and the Present button, and keeps the windowed tabs at 150px each.
 
+9. **Priorities on a phone** (mobile review M3, 2026-10-07). Under
+   600px of window width (`isPhoneWindow`, a card mount excepted) the
+   tab is `.app-cp-phone`: the period lead, then organisation, period,
+   status and pillar as native selects (`orgSelectOptions`: the tree in
+   order, indented by depth), the cascade chip, ＋ Priority and ⋮, the
+   vision band stacked (label above), then the walk INLINE
+   (`mountWalk` with `inline: true`, `.app-cp-walk-inline`): one
+   objective per screen, 40px PREV / NEXT rails, swipe, the page
+   scrolling, no fixed layer, no ✕ Exit and no Esc (there is nothing
+   to exit to — the matrix is desktop). A row tap opens the overlay
+   (already stacked under 720px). The TV scale resets to 1em. The same
+   state as the desktop, so prefs and shared view links mean the same
+   thing on both.
+
 ## 4. Overlays, dialogs, wizards
 
 - **Detail overlays** (Documents/Priorities pattern): scrim
