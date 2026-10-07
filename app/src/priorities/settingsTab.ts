@@ -17,6 +17,7 @@
 // dirty/save contract.
 
 import { el, clear } from "../../../shared/ui/dom";
+import { settingsSection } from "../settingsSection";
 import type { RosterPerson } from "../store/mappers";
 import {
   allSitePrioritySettings,
@@ -93,12 +94,8 @@ function field(label: string, control: HTMLElement, hint?: string): HTMLElement 
   return f;
 }
 
-function sectionTitle(text: string, note?: string): HTMLElement {
-  const wrap = el("div", "app-pr-section");
-  wrap.appendChild(el("h3", "app-pr-h3", text));
-  if (note) wrap.appendChild(el("div", "app-settings-note", note));
-  return wrap;
-}
+// the ONE section head (ui-standard §6) — the strip reads it
+const sectionTitle = (text: string, note?: string): HTMLElement => settingsSection(text, note);
 
 export async function renderPrioritiesSettings(
   body: HTMLElement,

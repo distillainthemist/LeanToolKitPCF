@@ -1,0 +1,34 @@
+<!doctype html>
+<!-- Dev harness: the settings section strip (settings navigation,
+     2026-10-07) over a stubbed ten-section tab, under the real
+     stylesheet. Settings itself needs the host; this is the screenshot
+     road for the strip, its scroll-spy and the heading rhythm. -->
+<html>
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Settings: section strip</title>
+  <link rel="stylesheet" href="/src/style.css" />
+  <style> body { margin: 0; background: #f0efea; } #app { height: auto; } </style>
+</head>
+<body>
+  <div id="app"><main class="app-outlet"><div class="app-settings"><div class="app-settings-card" id="card">
+    <div class="app-settings-tabsrow"><div class="app-settings-tabs"><button class="app-settings-tab">My profile</button><button class="app-settings-tab app-settings-tab-on">Documents</button><button class="app-settings-tab">Priorities</button></div></div>
+    <div class="app-save-bar"></div>
+    <div id="strip"></div>
+    <div class="app-settings-body" id="body"></div>
+  </div></div></main></div>
+  <script type="module">
+    import { settingsSection } from "./src/settingsSection.ts";
+    import { mountSectionStrip } from "./src/settingsStrip.ts";
+    const body = document.getElementById("body");
+    const filler = (n) => { const d = document.createElement("div"); d.className = "app-settings-note"; d.textContent = "Lorem ipsum dolor sit amet, consectetur adipiscing elit. ".repeat(n); return d; };
+    for (const [t, note] of [["SharePoint connection", "Where the libraries live."], ["Document columns", ""], ["Term sets & colours", "Each status term's colour and glyph."], ["Libraries", ""], ["Lifecycle", "Which terms mean draft, in review, approved."], ["Review cadence", ""], ["Health", ""], ["Tags", ""], ["Default filters", ""], ["Write access", ""]]) {
+      body.appendChild(settingsSection(t, note || undefined));
+      body.appendChild(filler(t === "Document columns" ? 40 : 18));
+    }
+    const strip = mountSectionStrip(document.getElementById("strip"), body);
+    strip.refresh();
+    window.__strip = strip;
+  </script>
+</body>
+</html>

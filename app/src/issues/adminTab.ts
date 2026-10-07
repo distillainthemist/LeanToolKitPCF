@@ -12,6 +12,7 @@
 //    child's thread says where the conversation continues.
 
 import { el, clear } from "../../../shared/ui/dom";
+import { settingsSection } from "../settingsSection";
 import { openDialog } from "../../../shared/ui/dialog";
 import { currentViewer } from "../runtime";
 import { Ben_ltkissuesService } from "../generated/services/Ben_ltkissuesService";
@@ -81,7 +82,7 @@ export async function renderIssuesAdmin(body: HTMLElement): Promise<void> {
   const note = (text: string) => el("div", "app-settings-note", text);
   const say = (e: unknown) => String(e instanceof Error ? e.message : e).slice(0, 200);
 
-  body.appendChild(el("div", "app-section", "Issues"));
+  body.appendChild(settingsSection("Issues"));
   body.appendChild(
     note(
       "Reports and ideas from the ⚐ Report button. Status changes write themselves into " +

@@ -12,6 +12,8 @@ import {
   parsePalette,
   serializePalette,
 } from "../../../shared/palette";
+import { settingsSection } from "../settingsSection";
+import { mountSectionStrip } from "../settingsStrip";
 import { isPhoneWindow } from "../phone";
 import { copyText } from "../../../shared/ui/clipboard";
 import { openDialog } from "../../../shared/ui/dialog";
@@ -199,9 +201,13 @@ export function mountSettings(parent: HTMLElement, initialTab = ""): () => void 
     const saveBar = el("div", "app-save-bar");
     const body = el("div", "app-settings-body");
     // one card: tabs flush on top of the body (same look as the hub)
+    // the section strip (settingsStrip.ts): derived from the tab's
+    // headings after every render; sticky under the window scroll
+    const strip = el("div", "app-settings-strip");
     const card = el("div", "app-settings-card");
-    card.append(tabsRow, saveBar, body);
+    card.append(tabsRow, saveBar, strip, body);
     wrap.appendChild(card);
+    const sectionStrip = mountSectionStrip(strip, body);
 
     // ---- unsaved-changes tracking ----
     let dirty = false;
@@ -348,6 +354,7 @@ export function mountSettings(parent: HTMLElement, initialTab = ""): () => void 
       renderTabs();
       clear(body);
       await tabByKey(key).render();
+      sectionStrip.refresh();
     };
     const renderTabs = () => {
       // inline "" lets the phone media rule show it; none hides it there too
@@ -364,6 +371,7 @@ export function mountSettings(parent: HTMLElement, initialTab = ""): () => void 
     };
     renderTabs();
     await tabByKey(current).render();
+    sectionStrip.refresh();
 
     // leaving the whole Settings screen (header links, any route change)
     // goes through the same save/discard prompt as a tab switch
@@ -387,6 +395,7 @@ export function mountSettings(parent: HTMLElement, initialTab = ""): () => void 
     cleanup = () => {
       window.removeEventListener("beforeunload", onBeforeUnload);
       setLeaveGuard(null);
+      sectionStrip.destroy();
     };
   })().catch(bootFail(parent, "Settings"));
   return () => cleanup();
@@ -668,7 +677,7 @@ async function renderProfile(
   // Runnable by ANYONE — the interesting runs are a non-admin's, and a
   // user who can't see documents can self-diagnose here (the 2026-08-05
   // security-role incident would have named its cause in one click).
-  body.appendChild(el("div", "app-section", "Access diagnostics"));
+  body.appendChild(settingsSection("Access diagnostics"));
   const diagNote = el(
     "div",
     "app-settings-note",
@@ -704,7 +713,7 @@ async function renderProfile(
   // (docs/leanboard-notifications-plan.md). Email goes to YOURSELF; the
   // Teams leg only runs when a colleague is named, because it sends them
   // one real message — a probe that can never spam by default.
-  body.appendChild(el("div", "app-section", "Notification probe"));
+  body.appendChild(settingsSection("Notification probe"));
   const notifyNote = el(
     "div",
     "app-settings-note",
@@ -2878,7 +2887,7 @@ async function renderSiteCadence(
 }
 
 function sectionTitle(text: string): HTMLElement {
-  return el("div", "app-section", text);
+  return settingsSection(text); // the ONE section head (ui-standard §6)
 }
 
 function removeBtn(onClick: () => void): HTMLButtonElement {

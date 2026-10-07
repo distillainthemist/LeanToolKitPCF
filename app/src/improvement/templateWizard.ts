@@ -9,6 +9,7 @@
 // mandatory. Route: #/template/<id|new>; cancel → Settings → Improvement.
 
 import { el, clear } from "../../../shared/ui/dom";
+import { settingsSection } from "../settingsSection";
 import { draggableRow } from "../../../shared/ui/dragList";
 import { newId } from "../../../shared/schema/id";
 import { appTheme, editorHost } from "../cardHost";
@@ -1108,7 +1109,9 @@ export async function renderImprovementSettings(body: HTMLElement, isSuper: bool
     };
     paintHealth();
     hBox.appendChild(hList);
-    body.appendChild(el("h3", "app-pr-h3 app-tw-templates-h", "Initiative templates"));
+    const templatesHead = settingsSection("Initiative templates");
+    templatesHead.classList.add("app-tw-templates-h");
+    body.appendChild(templatesHead);
   }
   const all = await listTemplates();
   // retired last (design 1.1)

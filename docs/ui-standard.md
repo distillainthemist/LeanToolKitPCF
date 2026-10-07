@@ -435,8 +435,25 @@ dividers. No priority statement here — the card above names it.
 
 ## 6. Settings surfaces
 
-- Tabbed sections; `h3.app-pr-h3` section titles + `.app-settings-note`
-  intro line.
+- Tabbed sections; every page section head comes from ONE helper,
+  `settingsSection(title, note?)` (`app/src/settingsSection.ts`):
+  `.app-pr-section > h3.app-pr-h3` with an id, plus the
+  `.app-settings-note` intro line — a heading with a hairline ABOVE
+  (2026-10-07; the small-caps `.app-section` divider is now only for
+  card titles inside a section, such as an access card's "Add people").
+- **The section strip** (`settingsStrip.ts`, 2026-10-07): a second,
+  smaller row of section pills between the unsaved-changes bar and the
+  body, DERIVED from the tab's `h3.app-pr-h3` heads after each render
+  (and on repaints, via a MutationObserver) — nothing listed by hand.
+  Shown from three sections (`STRIP_MIN_SECTIONS`). Sticky at the top
+  of the window scroll (the settings card is `overflow: clip`, not
+  `hidden` — hidden would make the card the scroll container and the
+  strip would stick to it). Pills are the register's filter-pill look
+  (12px, 36px, tinted current via scroll-spy); a click scrolls the
+  window so the head lands under the strip's live height; the hash is
+  never written. Desktop wraps; under 600px it scrolls sideways with
+  the current pill kept in view. Users, Organisation and two-heading
+  tabs show no strip.
 - **The Users register is a fixed grid** whose header and rows share ONE
   column template (`.app-user-head` / `.app-user-row`, ≥1280px): person
   · Site · Department · Area · Crew · Role · Access. Adding a control to

@@ -7,6 +7,7 @@
 // sit directly beneath.
 
 import { el, clear } from "../../../../shared/ui/dom";
+import { settingsSection } from "../../settingsSection";
 import { currentViewer } from "../../runtime";
 import { promptConfirm } from "../../prompts";
 import { improvementSettingsJson, orgJson, saveImprovementSettingsJson } from "../../store/config";
@@ -64,7 +65,7 @@ export async function renderValueDriversSettings(body: HTMLElement): Promise<voi
   let site = sites.includes(me?.site ?? "") ? (me?.site ?? "") : (sites[0] ?? "");
   const actor = { whoId: viewer?.objectId ?? "", who: me?.who ?? viewer?.name ?? "" };
 
-  body.appendChild(el("h3", "app-pr-h3", "Value drivers"));
+  body.appendChild(settingsSection("Value drivers"));
   body.appendChild(
     el("div", "app-settings-note", "The site's value driver tree — top-level measures at the left, the drivers that move them to the right. Structure changes rarely; values live on the hub's Value drivers tab.")
   );

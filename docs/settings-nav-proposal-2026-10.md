@@ -74,6 +74,20 @@ option that uses only grammar the app already has at the top of a page.
 muscle memory on every tab and hides the state the pages exist to
 show. Rejected.
 
+## Status — BUILT 2026-10-07 (on dev, unreleased)
+
+`app/src/settingsSection.ts` (the one head; `sectionId` tested),
+`app/src/settingsStrip.ts` (derived strip, scroll-spy
+`currentSectionIndex` tested, MutationObserver repaint, live-height
+click offset), the heading pass over settings.ts, docs/settingsTab.ts,
+priorities/settingsTab.ts, vdt/settingsTab.ts, templateWizard.ts and
+issues/adminTab.ts, CSS (`.app-settings-strip`, `.app-settings-pill`,
+`.app-pr-section` as the one rhythm, the card `overflow: clip`), and
+`app/settings-strip.html` as the screenshot road. Verified there: ten
+pills over two rows, sticky at the top, the spy moving with the scroll,
+a click landing the head under the strip. The hosted tabs are Ben's
+check — Documents especially.
+
 ## Recommendation (revised 2026-10-07 — "it doesn't have to be a left column")
 
 **E — a sticky section strip under the tabs — built on one heading

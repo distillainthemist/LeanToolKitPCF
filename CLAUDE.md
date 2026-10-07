@@ -195,6 +195,11 @@ Version lives in the tag alone — nothing is stamped into files.
   watches both the wrap and the list pane, because hiding the folders
   pane changes the pane's width and a pane the B5 pref already hid
   would never re-fire by itself.
+- **Sticky inside a card needs `overflow: clip`, not `hidden`.**
+  `overflow: hidden` makes the ancestor a scroll container, so a
+  `position: sticky` child sticks to the card and scrolls away with
+  the window (the settings section strip, 2026-10-07). `clip` clips the
+  corners without creating a scroll container.
 - **A form never closes on a click outside it.** Edit details, Create
   initiative, the priority dialogs, prompts, escalation, the column
   chooser — buttons or Escape only (Ben, 2026-10-07: an edit lost to

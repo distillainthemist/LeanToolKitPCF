@@ -758,7 +758,31 @@ input[type="color"].app-cat-swatch {
   background: #fff;
   border-radius: 10px;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
-  overflow: hidden;
+  /* clip, not hidden: hidden makes the card a scroll container and the
+     sticky section strip would stick to IT, not the window */
+  overflow: clip;
+}
+/* ---- the section strip (settings navigation, 2026-10-07) ----------
+   Derived from the tab's h3.app-pr-h3 heads; shown from three sections.
+   Subordinate to the tabs by size and tint: 12px pills, the current one
+   in the accent TINT (the tab above owns the filled "you are here"). */
+.app-settings-strip { display: none; position: sticky; top: 0; z-index: 5; gap: 6px; flex-wrap: wrap; align-items: center; padding: 8px 12px; background: #fff; border-bottom: 1px solid #eceae5; }
+.app-settings-strip-on { display: flex; }
+.app-settings-pill {
+  border: 1px solid #d5d1c8; background: #fff; color: #444; border-radius: 999px;
+  font: inherit; font-size: 12px; padding: 0 12px; min-height: 36px; cursor: pointer; white-space: nowrap;
+}
+.app-settings-pill:hover { border-color: var(--app-accent, #2563eb); color: var(--app-accent, #2563eb); }
+.app-settings-pill-on {
+  background: color-mix(in srgb, var(--app-accent, #2563eb) 12%, #fff);
+  border-color: var(--app-accent, #2563eb);
+  color: color-mix(in srgb, var(--app-accent, #2563eb) 82%, #000);
+  font-weight: 600;
+}
+@media (max-width: 599px) {
+  .app-settings-strip-on { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding: 8px 10px; }
+  .app-settings-strip::-webkit-scrollbar { display: none; }
+  .app-settings-pill { flex: none; }
 }
 .app-settings-card .app-settings-body { box-shadow: none; border-radius: 0; }
 .app-settings-card .app-save-bar { border-radius: 0; border-right: none; border-top: none; }
@@ -2870,7 +2894,11 @@ button.app-doclist-hsort:hover { color: var(--app-accent, #2563eb); }
 .app-docs-dofsite { font-weight: 600; font-size: 13px; text-transform: capitalize; }
 
 /* ---- Settings → Priorities (cascade plan P0) ---- */
-.app-pr-section { padding: 14px 16px 6px; border-bottom: 1px solid #ece8e0; }
+/* the ONE settings section head (settingsSection, 2026-10-07): a
+   heading with a hairline ABOVE — the rhythm four of five settings
+   modules had as .app-section — not the priorities tab's padded box */
+.app-pr-section { padding: 14px 0 0; margin-top: 8px; border-top: 1px solid #eceae5; }
+.app-pr-section:first-child { margin-top: 0; padding-top: 0; border-top: none; }
 .app-pr-h3 { margin: 0 0 4px; font-size: 15px; font-weight: 700; }
 .app-pr-pillars { display: flex; flex-direction: column; gap: 6px; padding: 10px 0 12px; }
 .app-pr-pillar { display: flex; align-items: center; gap: 8px; }

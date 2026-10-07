@@ -12,6 +12,7 @@
 // SharePoint service from outside src/docs/.
 
 import { appPalettes } from "../store/config";
+import { settingsSection } from "../settingsSection";
 import { el, clear } from "../../../shared/ui/dom";
 import { statusGlyph } from "../../../shared/ui/format";
 import { draggableRow } from "../../../shared/ui/dragList";
@@ -91,7 +92,7 @@ interface Ctx {
 }
 
 const note = (text: string) => el("div", "app-settings-note", text);
-const section = (text: string) => el("div", "app-section", text);
+const section = (text: string) => settingsSection(text); // the ONE section head
 
 function field(label: string, control: HTMLElement, hint?: string): HTMLElement {
   const f = el("div", "app-field");
