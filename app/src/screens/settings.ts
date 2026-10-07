@@ -1012,68 +1012,143 @@ function accessControlCard(
  * need to wait for a meeting invite. New people land as active users
  * with no site; upsertPerson also syncs them into the access group.
  */
-function directoryAddCard(
-  getPeople: () => RosterPerson[],
-  onAdded: () => void
-): HTMLElement {
-  const card = el("div", "app-access-card");
-  card.appendChild(el("div", "app-section", "Add people"));
-  const row = el("div", "app-settings-row");
-  const query = el("input", "app-input") as HTMLInputElement;
-  query.type = "search";
-  query.placeholder = "Search the directory (name or email)…";
-  query.style.flex = "1";
-  const go = el("button", "app-btn", "Search") as HTMLButtonElement;
-  row.append(query, go);
-  const hits = el("div", "app-group-list");
-  const note = el("div", "app-field-hint", "");
-  card.append(row, hits, note);
+interface DirectoryAddOpts {
+  getPeople: () => RosterPerson[];
+  onAdded: (p: RosterPerson) => void;
+  orgTree: ReturnType<typeof parseOrgTree>;
+  sites: string[];
+  crewLib: Awaited<ReturnType<typeof rosterPatternLibrary>>;
+}
 
-  const runSearch = () => {
-    const q = query.value.trim();
+/**
+ * Directory matches for the roster's ONE search box (Ben, 2026-10-08:
+ * "search, find they are not added, click Add person, search again, add,
+ * search the roster, set their site" — five steps for one person). The
+ * card has no search of its own: `run(query)` takes the roster box's
+ * text. A hit's ＋ Add opens an inline placement row — site, department,
+ * area, crew, role — and "Add to roster" writes the person ONCE, placed.
+ */
+function directoryAddCard(o: DirectoryAddOpts): { card: HTMLElement; run: (q: string) => void; hide: () => void } {
+  const card = el("div", "app-access-card app-dir-card");
+  card.style.display = "none";
+  const head = el("div", "app-dir-head");
+  const title = el("div", "app-section", "Directory matches");
+  const closeBtn = el("button", "app-link app-dir-close", "✕ Close") as HTMLButtonElement;
+  closeBtn.type = "button";
+  head.append(title, closeBtn);
+  const hits = el("div", "app-group-list app-dir-hits");
+  const note = el("div", "app-field-hint", "");
+  card.append(head, hits, note);
+  const hide = () => {
+    card.style.display = "none";
+  };
+  closeBtn.addEventListener("click", hide);
+
+  const deptsOf = (site: string) => o.orgTree.find((x) => x.site === site)?.departments.map((d) => d.department) ?? [];
+  const areasOf = (site: string, d: string) => o.orgTree.find((x) => x.site === site)?.departments.find((x) => x.department === d)?.areas ?? [];
+
+  /** The inline placement row under a hit: the roster row's own fields. */
+  const placementRow = (hit: { objectId: string; displayName: string; mail: string }, row: HTMLElement, addBtn: HTMLButtonElement) => {
+    const form = el("div", "app-dir-place");
+    const site = select(o.sites, "");
+    const dept = select([], "");
+    const area = select([], "");
+    const crew = select([], "");
+    const role = roleSelect("user");
+    dept.disabled = area.disabled = crew.disabled = true;
+    site.addEventListener("change", () => {
+      rebuildSelect(dept, deptsOf(site.value));
+      rebuildSelect(area, []);
+      rebuildSelect(crew, crewsForSite(o.crewLib, site.value));
+      dept.disabled = site.value === "";
+      crew.disabled = site.value === "";
+      area.disabled = true;
+    });
+    dept.addEventListener("change", () => {
+      rebuildSelect(area, areasOf(site.value, dept.value));
+      area.disabled = dept.value === "";
+    });
+    const fields = el("div", "app-user-controls");
+    fields.append(
+      labelledControl("Site", site),
+      labelledControl("Department", dept),
+      labelledControl("Area", area),
+      labelledControl("Crew", crew),
+      labelledControl("Role", role)
+    );
+    const acts = el("div", "app-dir-placeacts");
+    const go = el("button", "app-btn app-btn-primary", "Add to roster") as HTMLButtonElement;
+    go.type = "button";
+    const cancel = el("button", "app-link", "Cancel") as HTMLButtonElement;
+    cancel.type = "button";
+    cancel.addEventListener("click", () => {
+      form.remove();
+      addBtn.disabled = false;
+    });
+    go.addEventListener("click", () => {
+      go.disabled = true;
+      go.textContent = "Adding…";
+      const person: RosterPerson = {
+        whoId: hit.objectId,
+        who: hit.displayName,
+        email: hit.mail,
+        site: site.value,
+        department: dept.value,
+        area: area.value,
+        crew: crew.value || undefined,
+        role: role.value || "user",
+        active: true,
+      };
+      void upsertPerson(person).then(
+        () => {
+          form.remove();
+          addBtn.replaceWith(el("span", "app-status-badge", "added"));
+          const where = [site.value, dept.value, area.value].filter((x) => x !== "").join(" · ");
+          note.textContent = `${hit.displayName} is on the roster${where !== "" ? ` — ${where}` : " — no site yet"}.`;
+          o.onAdded(person);
+        },
+        (err: unknown) => {
+          go.disabled = false;
+          go.textContent = "Add to roster";
+          note.textContent = `Could not add: ${err instanceof Error ? err.message : String(err)}`;
+        }
+      );
+    });
+    acts.append(go, cancel);
+    form.append(fields, acts);
+    row.appendChild(form);
+    site.focus();
+  };
+
+  const run = (q: string) => {
+    card.style.display = "";
+    clear(hits);
     if (q.length < 2) {
-      note.textContent = "Type at least two characters.";
+      note.textContent = "Type a name or email in the search box above, then search the directory.";
       return;
     }
-    note.textContent = "Searching…";
-    clear(hits);
+    note.textContent = `Searching the directory for “${q}”…`;
     void searchEntra(q)
       .then((found) => {
-        note.textContent = found.length === 0 ? "No directory matches." : "";
-        const known = new Set(getPeople().map((p) => p.whoId));
+        note.textContent = found.length === 0 ? `No one in the directory matches “${q}”.` : "";
+        const known = new Set(o.getPeople().map((p) => p.whoId));
         for (const hit of found) {
-          const r = el("div", "app-group-row");
-          r.appendChild(el("span", "app-people-name", hit.displayName));
-          r.appendChild(
-            el(
-              "span",
-              "app-user-email",
-              [hit.mail, hit.department].filter(Boolean).join(" · ")
-            )
-          );
+          const r = el("div", "app-group-row app-dir-hit");
+          const line = el("div", "app-dir-hitline");
+          line.appendChild(el("span", "app-people-name", hit.displayName));
+          line.appendChild(el("span", "app-user-email", [hit.mail, hit.department].filter(Boolean).join(" · ")));
+          r.appendChild(line);
           if (known.has(hit.objectId)) {
-            r.appendChild(el("span", "app-status-badge", "on the roster"));
+            line.appendChild(el("span", "app-status-badge", "on the roster"));
           } else {
-            const add = el("button", "app-btn", "＋ Add") as HTMLButtonElement;
+            const add = el("button", "app-btn", "＋ Add…") as HTMLButtonElement;
+            add.type = "button";
+            add.title = "Place them (site, department, crew, role) and add";
             add.addEventListener("click", () => {
               add.disabled = true;
-              add.textContent = "Adding…";
-              void upsertPerson({
-                whoId: hit.objectId,
-                who: hit.displayName,
-                email: hit.mail,
-                site: "",
-                department: "",
-                area: "",
-                role: "user",
-                active: true,
-              }).then(() => {
-                add.textContent = "Added";
-                note.textContent = `${hit.displayName} is on the roster — set their site and crew below.`;
-                onAdded();
-              });
+              placementRow(hit, r, add);
             });
-            r.appendChild(add);
+            line.appendChild(add);
           }
           hits.appendChild(r);
         }
@@ -1082,14 +1157,7 @@ function directoryAddCard(
         note.textContent = `Search failed: ${err instanceof Error ? err.message : String(err)}`;
       });
   };
-  go.addEventListener("click", runSearch);
-  query.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      runSearch();
-    }
-  });
-  return card;
+  return { card, run, hide };
 }
 
 /**
@@ -1380,26 +1448,33 @@ async function renderUsers(body: HTMLElement, me: RosterPerson): Promise<void> {
   // ONE search per intent (design review Phase 5.1): the filter bar
   // filters the roster; adding someone is an explicit button that opens
   // the directory search on demand
+  // ONE search box (Ben, 2026-10-08): the roster filters as you type; the
+  // button sends the same text to the directory, and a hit is placed as
+  // it is added — no second search, no re-find in the roster
+  let openDirectory: () => void = () => undefined;
   if (canEdit) {
-    const addBtn = el("button", "app-btn app-btn-primary", "＋ Add person") as HTMLButtonElement;
-    addBtn.setAttribute("aria-expanded", "false");
+    const addBtn = el("button", "app-btn app-btn-primary", "Search directory & add") as HTMLButtonElement;
+    addBtn.type = "button";
+    addBtn.title = "Search the directory for what is typed in the search box, then add and place them";
     bar.appendChild(addBtn);
     body.appendChild(bar);
-    const addCard = directoryAddCard(() => people, () => void reloadPeople());
-    addCard.style.display = "none";
-    body.appendChild(addCard);
-    addBtn.addEventListener("click", () => {
-      const open = addCard.style.display === "none";
-      addCard.style.display = open ? "" : "none";
-      addBtn.setAttribute("aria-expanded", String(open));
-      if (open) addCard.querySelector("input")?.focus();
+    const dir = directoryAddCard({
+      getPeople: () => people,
+      onAdded: () => void reloadPeople(),
+      orgTree,
+      sites,
+      crewLib,
     });
-    // a phone opens the tab to ADD someone (Ben, 2026-10-07): the card is
-    // open from the start, the search its first field
-    if (isPhoneWindow()) {
-      addCard.style.display = "";
-      addBtn.setAttribute("aria-expanded", "true");
-    }
+    body.appendChild(dir.card);
+    openDirectory = () => {
+      const q = search.value.trim();
+      dir.run(q);
+      if (q.length < 2) search.focus();
+    };
+    addBtn.addEventListener("click", openDirectory);
+    // a phone opens the tab to ADD someone (Ben, 2026-10-07): the search
+    // box is the first thing, the button beside it
+    if (isPhoneWindow()) search.focus();
   } else {
     body.appendChild(bar);
   }
@@ -1442,7 +1517,15 @@ async function renderUsers(body: HTMLElement, me: RosterPerson): Promise<void> {
       (revoked > 0 ? ` · ${revoked} revoked` : "");
     for (const p of shown) list.appendChild(userRow(p, sites, crewLib, canEdit, me, dir, draw, orgTree));
     if (shown.length === 0) {
-      list.appendChild(el("div", "app-settings-note", "No users match those filters."));
+      const empty = el("div", "app-settings-note app-users-empty", "No users match those filters.");
+      if (canEdit && query !== "") {
+        // the moment the roster has no one: the directory is one click
+        const toDir = el("button", "app-link", `Search the directory for “${search.value.trim()}”`) as HTMLButtonElement;
+        toDir.type = "button";
+        toDir.addEventListener("click", openDirectory);
+        empty.append(" ", toDir);
+      }
+      list.appendChild(empty);
     }
   };
   draw();

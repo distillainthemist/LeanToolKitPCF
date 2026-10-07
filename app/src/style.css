@@ -872,6 +872,24 @@ input[type="color"].app-color:disabled { opacity: 0.4; cursor: default; }
 .app-file { font-size: 12.5px; }
 
 .app-users-filters { gap: 8px; }
+/* Users: directory matches under the one search box; a hit's inline
+   placement row (site · department · area · crew · role) before it is added */
+.app-dir-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.app-dir-head .app-section { margin-top: 0; padding-top: 0; border-top: none; }
+.app-dir-hits { max-height: none; }
+.app-dir-hit { flex-direction: column; align-items: stretch; cursor: default; gap: 8px; }
+.app-dir-hit:hover { background: #fff; }
+.app-dir-hitline { display: flex; align-items: center; gap: 10px; }
+.app-dir-hitline .app-user-email { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.app-dir-place { display: flex; flex-direction: column; gap: 8px; padding: 8px 0 2px; border-top: 1px solid #eceae5; }
+.app-dir-place .app-user-field .app-input { min-width: 140px; }
+.app-dir-placeacts { display: flex; align-items: center; gap: 10px; }
+.app-users-empty { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+@media (max-width: 599px) {
+  .app-dir-place .app-user-field { flex: 1 1 45%; min-width: 0; }
+  .app-dir-place .app-user-field .app-input { width: 100%; min-width: 0; }
+  .app-users-filters .app-btn { flex: 1 1 100%; }
+}
 /* Request admin: the super admins to contact — plain rows, not pickers */
 .app-admin-list { max-height: none; margin-top: 0; }
 .app-admin-row { cursor: default; }

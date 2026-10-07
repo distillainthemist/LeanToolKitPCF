@@ -23,7 +23,7 @@ switches. Sub-headings per tab, counted from the code:
 | Access control | 2 — app access group · Document control groups | `.app-section` |
 | Improvement, Value drivers, Issues | 1 each | `h3.app-pr-h3` / `.app-section` |
 | Organisation | none — its own company → site rail and an editor pane | `.app-org-split` |
-| Users | none — the register | grid |
+| Users | none — the register (2026-10-08: one search box; "Search directory & add" opens directory matches with inline placement) | grid |
 
 Two findings before any navigation is added:
 

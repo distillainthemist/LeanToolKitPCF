@@ -454,6 +454,15 @@ dividers. No priority statement here — the card above names it.
   never written. Desktop wraps; under 600px it scrolls sideways with
   the current pill kept in view. Users, Organisation and two-heading
   tabs show no strip.
+- **Users has ONE search box** (2026-10-08). The roster filters as
+  you type; "Search directory & add" (the row's one solid primary)
+  sends the same text to the directory and opens a "Directory matches"
+  card under the row (`.app-dir-card`); an empty roster result offers
+  the directory search as a link. A hit's "＋ Add…" opens an inline
+  placement row — site · department · area · crew · role, the roster
+  row's own fields — and "Add to roster" writes the person once,
+  placed; the hit then wears an "added" badge. Never a second search
+  box, never add-then-find-then-place.
 - **The Users register is a fixed grid** whose header and rows share ONE
   column template (`.app-user-head` / `.app-user-row`, ≥1280px): person
   · Site · Department · Area · Crew · Role · Access. Adding a control to
