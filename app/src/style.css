@@ -701,7 +701,9 @@ input[type="color"].app-cat-swatch {
 .app-owner:disabled { cursor: default; opacity: 0.8; }
 .app-owner-none { border-style: dashed; color: #6d675c; }
 .app-owner-none:disabled { display: none; } /* nothing to show or do */
-.app-cadence-pane { display: flex; flex-direction: column; gap: 10px; }
+/* the pane is a holder the tab clears on a site change, not a box: its
+   section cards lay out as the body's own (Ben, 2026-10-08) */
+.app-cadence-pane { display: contents; }
 
 /* access-control group card + owned-group picker */
 .app-access-card {
@@ -809,6 +811,9 @@ input[type="color"].app-cat-swatch {
 .app-settings-sectioncard > .app-pr-section { margin-top: 0; padding-top: 0; border-top: none; }
 .app-settings-sectioncard .app-access-card { border: none; border-top: 1px solid #eceae5; border-radius: 0; padding: 12px 0 0; }
 .app-settings-sectioncard .app-access-card:first-child { border-top: none; padding-top: 0; }
+/* an editable-list card inside a section (a roster pattern, a department)
+   is the standard's tinted row, not a second white box */
+.app-settings-sectioncard .app-dept-card { background: #faf9f7; border-color: #f1efec; }
 @media (max-width: 599px) {
   .app-settings-card .app-settings-body { padding: 10px; gap: 10px; }
   .app-settings-sectioncard { padding: 10px 12px 12px; }
