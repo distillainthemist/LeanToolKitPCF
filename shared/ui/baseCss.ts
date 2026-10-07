@@ -331,6 +331,13 @@ export const LTK_BASE_CSS = `
 .ltk-action-who { font-size: 13px; font-weight: 600; color: var(--ltk-fg); }
 .ltk-action-due { font-size: 12px; font-weight: 600; color: var(--ltk-fg); }
 .ltk-action-overdue { color: #d13438; font-weight: 600; }
+/* a phone (mobile review M4, 2026-10-07): the row is two lines — circle
+   and text, then who · due underneath in a row — the hub's rule */
+@media (max-width: 599px) {
+  .ltk-action-row { flex-wrap: wrap; row-gap: 6px; }
+  .ltk-action-main { flex: 1 1 55%; min-width: 55%; }
+  .ltk-action-right { flex-direction: row; align-items: baseline; gap: 10px; text-align: left; flex-wrap: wrap; }
+}
 .ltk-action-flag { color: var(--ltk-accent); font-weight: 600; }
 .ltk-action-edit {
   border: none;

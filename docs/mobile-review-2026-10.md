@@ -226,7 +226,16 @@ still used). First phone pass: open each from the dev app and note.
   per screen, swipe or PREV / NEXT, rows opening the overlay. A window
   crossing 600px re-renders. Needs the host: Ben's phone check (the
   select strip, stepping, a row tap, ＋ Priority, the ⋮ share link).
-- M4–M5: not started.
+- **M4 Initiative screen — built 2026-10-07** (on dev, unreleased).
+  The board, band and details sheet came with M2; M4 adds: the
+  ActionBoard's list standing in for kanban and Gantt under 480px of
+  its own width with a one-line note (`viewFor` tested); the shared
+  action row as two lines under 600px; the Gantt's label column at
+  150px; the Improvement tab showing tiles for List on a phone with its
+  search stacked and the filter popover fitting the window. Verified
+  on the action-card harness at 375px (note shown, list rows two
+  lines); the initiative screen itself is Ben's phone check.
+- M5: not started.
 
 ## Recommended order (each its own release, phone-only CSS where it can be)
 

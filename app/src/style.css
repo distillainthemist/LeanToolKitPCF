@@ -4084,6 +4084,19 @@ textarea.app-cp-statement { font-size: 14px; font-weight: 500; }
 .app-cp-walk-inline .app-cp-walk-metric .app-cp-objective-name { font-size: 14px; }
 .app-cp-walk-inline .app-cp-walk-foot { padding: 8px 10px; }
 .app-cp-walk-inline .app-cp-walk-nav { font-size: 14px; padding: 0 10px; max-width: 48%; }
+/* ---- the initiative screen and the Improvement tab on a phone (M4) --
+   The board itself is M2's list and sheet; what is left: the Gantt's
+   label column narrows so the timeline keeps some room; the Improvement
+   head stacks its search; tiles stand in for the list (the seg hides
+   List); the filter popover fits the window. */
+@media (max-width: 599px) {
+  .app-gx-label { flex-basis: 150px; width: 150px; }
+  .app-im-head { gap: 8px; }
+  .app-im-search-input { flex: 1 1 100%; min-width: 0; }
+  .app-im-head .app-docs-segbtn[data-mode="list"] { display: none; }
+  .app-docs-filterpop { width: calc(100vw - 16px); left: 8px !important; }
+  .app-ib-titlebits, .app-ib-controls { flex-wrap: wrap; }
+}
 .app-quickadd-host { position: fixed; inset: 0; width: 0; height: 0; overflow: visible; z-index: 60; }
 .app-quickadd-host .ltk-dialog-overlay { position: fixed; }
 /* hub tabs that mount app screens scroll inside the tab (the register was

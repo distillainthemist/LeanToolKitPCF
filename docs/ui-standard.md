@@ -331,6 +331,19 @@ the same commit.
    state as the desktop, so prefs and shared view links mean the same
    thing on both.
 
+10. **Action boards, the Gantt and the Improvement tab on a phone**
+    (mobile review M4, 2026-10-07). The ActionBoard reads its OWN width
+    (`ACTIONBOARD_NARROW_MAX` 480, `viewFor`): under it the list stands
+    in for the kanban and the Gantt, the List | Kanban | Gantt switch
+    goes and one quiet line says "Board and Gantt views open on a
+    desktop" (a tile stays silent); the person's chosen view is kept
+    for the desktop. The shared action row (`.ltk-action-row`) is two
+    lines under 600px: circle and text, then who · due in a row. The
+    Gantt's label column narrows to 150px. The Improvement tab shows
+    tiles where List was picked (the seg hides List), stacks its
+    search, and the filter popover fits the window. The initiative
+    board itself is rule 8: M2's list and sheet.
+
 ## 4. Overlays, dialogs, wizards
 
 - **Detail overlays** (Documents/Priorities pattern): scrim

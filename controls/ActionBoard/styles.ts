@@ -76,6 +76,10 @@ export const ACTIONBOARD_CSS = `
 .ltk-ab-viewbtn:hover { color: var(--ltk-fg); }
 .ltk-ab-viewbtn-on, .ltk-ab-viewbtn-on:hover { background: var(--ltk-accent); color: #fff; font-weight: 600; }
 .ltk-tile .ltk-ab-views { display: none; }
+/* narrow (M4): the list stands in for the board and the Gantt — one
+   quiet line says where they live; a tile keeps its silence */
+.ltk-ab-narrownote { align-self: flex-start; font-size: 11.5px; color: var(--ltk-muted); padding: 2px 0 4px; }
+.ltk-tile .ltk-ab-narrownote { display: none; }
 /* the host's Gantt inside the card */
 .ltk-ab-ganttx { flex: 1 0 auto; min-height: 0; display: flex; flex-direction: column; }
 

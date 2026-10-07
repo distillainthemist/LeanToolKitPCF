@@ -8,6 +8,7 @@
 // header band arrive with P6 — the columns say so plainly.
 
 import { el, clear } from "../../../shared/ui/dom";
+import { isPhoneWindow } from "../phone";
 import { showLoading } from "../loading";
 import { currentViewer } from "../runtime";
 import { boardHash, boardUrl } from "../links";
@@ -222,7 +223,8 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
         if (groups.hiddenConfidential > 0) wrap.appendChild(note(`· ${groups.hiddenConfidential} confidential in this org`));
         return;
       }
-      if (viewMode === "tiles") {
+      // a phone (M4): the eight-column list has no room — tiles stand in
+      if (viewMode === "tiles" || (viewMode === "list" && isPhoneWindow())) {
         // wall view (design 1.2): tiles for at-distance reading
         const grid = el("div", "app-im-tiles");
         for (const i of groups.all) grid.appendChild(tileFor(i));
@@ -420,6 +422,7 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
       const seg = el("div", "app-docs-seg");
       for (const [v, l] of [["list", "List"], ["tiles", "Tiles"], ["gantt", "Gantt"]] as const) {
         const b = btn(l, "app-docs-segbtn" + (viewMode === v ? " app-docs-segbtn-on" : ""));
+        b.dataset.mode = v; // the phone hides List (CSS) — tiles stand in
         b.addEventListener("click", () => {
           viewMode = v;
           render();

@@ -18,6 +18,18 @@ import { Person } from "../../shared/schema/people";
 import { ACTIONBOARD_CSS } from "./styles";
 
 export type BoardView = "list" | "kanban" | "gantt";
+
+/** Below this many CSS pixels of the card's OWN width (the pane rule —
+ *  a tile, a phone, a split) the kanban and the Gantt have no room:
+ *  the card shows its list and says so (mobile review M4, 2026-10-07). */
+export const ACTIONBOARD_NARROW_MAX = 480;
+
+/** The view to render: the list when narrow, else the person's choice
+ *  over the card's configured default. Pure — the person's choice is
+ *  kept, so a desktop gets it back. */
+export function viewFor(narrow: boolean, userView: BoardView | null, configured: BoardView): BoardView {
+  return narrow ? "list" : (userView ?? configured);
+}
 export type KanbanGroupBy = "status" | "issue";
 
 /**
@@ -118,6 +130,9 @@ export class ActionBoardEditor {
   /** Configured "by issue" columns; empty = discovered from the actions. */
   private fixedColumns: string[] = [];
   private readonly snapshots: SnapshotScheduler;
+  /** Narrow (M4): the list, whatever was chosen — see viewFor. */
+  private narrow = false;
+  private resizeObserver: ResizeObserver | null = null;
 
   // gantt state (transient): zoom level and the scroll position to restore
   // after a zoom re-render
@@ -148,7 +163,21 @@ export class ActionBoardEditor {
     this.root = el("div", "ltk-root");
     host.appendChild(this.root);
     this.snapshots = new SnapshotScheduler(() => this.generateSnapshot());
+    if (typeof ResizeObserver !== "undefined") {
+      this.resizeObserver = new ResizeObserver(() => this.measure());
+      this.resizeObserver.observe(this.root);
+    }
     this.render();
+  }
+
+  /** The width call: a flip re-renders (the list in, the switch out). */
+  private measure(): void {
+    const w = this.root.clientWidth;
+    const want = w > 0 && w < ACTIONBOARD_NARROW_MAX;
+    if (want !== this.narrow) {
+      this.narrow = want;
+      this.render();
+    }
   }
 
   // ---- host-facing API (setters no-op when unchanged) ----
@@ -198,7 +227,7 @@ export class ActionBoardEditor {
   }
 
   private currentView(): BoardView {
-    return this.userView ?? this.view;
+    return viewFor(this.narrow, this.userView, this.view);
   }
 
   setLinkTargets(targets: { key: string; label: string }[], defaultKey = ""): void {
@@ -251,6 +280,7 @@ export class ActionBoardEditor {
   }
 
   destroy(): void {
+    this.resizeObserver?.disconnect();
     this.snapshots.cancel();
     this.ganttTeardown?.();
     this.ganttTeardown = null;
@@ -342,10 +372,15 @@ export class ActionBoardEditor {
     // the person's own switch between the three views; the card's
     // configured view is where it starts
     const view = this.currentView();
+    if (this.narrow) {
+      // no switch: the kanban and the Gantt need a desktop's width, and
+      // the card says so rather than offering views that cannot fit
+      body.appendChild(el("div", "ltk-ab-narrownote", "Board and Gantt views open on a desktop"));
+    }
     const views = el("div", "ltk-ab-views");
     views.setAttribute("role", "group");
     views.setAttribute("aria-label", "View");
-    for (const [v, label] of [["list", "List"], ["kanban", "Kanban"], ["gantt", "Gantt"]] as [BoardView, string][]) {
+    for (const [v, label] of this.narrow ? [] : ([["list", "List"], ["kanban", "Kanban"], ["gantt", "Gantt"]] as [BoardView, string][])) {
       const b = el("button", "ltk-ab-viewbtn" + (v === view ? " ltk-ab-viewbtn-on" : ""), label) as HTMLButtonElement;
       b.type = "button";
       b.setAttribute("aria-pressed", v === view ? "true" : "false");
@@ -359,7 +394,7 @@ export class ActionBoardEditor {
       });
       views.appendChild(b);
     }
-    body.appendChild(views);
+    if (!this.narrow) body.appendChild(views);
 
     if (view === "kanban") {
       body.appendChild(this.renderKanban(visible));
