@@ -39,6 +39,14 @@ export function groupSections(body: HTMLElement): void {
 }
 
 function groupWithin(host: HTMLElement): void {
+  // a leading card made before a container inside it had its sections
+  // (Site cadence's pane fills after its picker is on the page): take
+  // it apart so the pass below can card what is there NOW
+  for (const lead of Array.from(host.querySelectorAll<HTMLElement>(`:scope > .${CARD}-lead`))) {
+    if (lead.querySelector(".app-pr-section") === null) continue;
+    for (const c of Array.from(lead.children)) host.insertBefore(c, lead);
+    lead.remove();
+  }
   let card: HTMLElement | null = null;
   for (const child of Array.from(host.children) as HTMLElement[]) {
     if (child.classList.contains(CARD)) {
@@ -68,6 +76,9 @@ function groupWithin(host: HTMLElement): void {
 export interface SectionStrip {
   /** Re-read the body's headings (a tab rendered, or repainted). */
   refresh: () => void;
+  /** The tab is leaving: drop its lifted tools and pills before the
+   *  body is cleared (a tool lives in the strip, not the body). */
+  reset: () => void;
   destroy: () => void;
 }
 
@@ -117,7 +128,8 @@ export function mountSectionStrip(host: HTMLElement, body: HTMLElement): Section
     const lifted = Array.from(body.querySelectorAll<HTMLElement>(`.${STRIP_TOOL}`));
     const nextHeads = Array.from(body.querySelectorAll<HTMLElement>("h3.app-pr-h3"));
     const sig = nextHeads.map((h) => h.textContent ?? "").join("\u0001");
-    if (sig !== signature) clear(tools);
+    // never cleared here: a tab's rows can land before its headings do
+    // (Site cadence's picker, then the pane) — the shell resets on leave
     for (const t of lifted) tools.appendChild(t);
     groupSections(body);
     heads = nextHeads;
@@ -165,8 +177,19 @@ export function mountSectionStrip(host: HTMLElement, body: HTMLElement): Section
   window.addEventListener("scroll", onScroll, { passive: true });
   window.addEventListener("resize", onScroll, { passive: true });
 
+  const reset = () => {
+    clear(tools);
+    clear(pillsBox);
+    pills = [];
+    heads = [];
+    current = -1;
+    signature = "";
+    host.classList.remove("app-settings-strip-on");
+  };
+
   return {
     refresh,
+    reset,
     destroy: () => {
       mo?.disconnect();
       if (debounce !== null) clearTimeout(debounce);

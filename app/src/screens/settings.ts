@@ -352,6 +352,7 @@ export function mountSettings(parent: HTMLElement, initialTab = ""): () => void 
       resetDirty();
       current = key;
       renderTabs();
+      sectionStrip.reset(); // the old tab's lifted tools go with its body
       clear(body);
       await tabByKey(key).render();
       sectionStrip.refresh();

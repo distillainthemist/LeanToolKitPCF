@@ -200,6 +200,14 @@ Version lives in the tag alone — nothing is stamped into files.
   `position: sticky` child sticks to the card and scrolls away with
   the window (the settings section strip, 2026-10-07). `clip` clips the
   corners without creating a scroll container.
+- **A derived layout pass must survive content that arrives in
+  stages.** Site cadence puts its site picker on the page, then fills
+  its pane after an await; the settings strip's first pass lifted the
+  picker and carded the empty pane, and its second pass cleared the
+  lifted picker because the headings had changed — the picker was
+  destroyed (2026-10-08). Lifted elements are only dropped when the
+  tab leaves (`reset()` before `clear(body)`), and a leading card that
+  turns out to hold sections is taken apart and re-grouped.
 - **A form never closes on a click outside it.** Edit details, Create
   initiative, the priority dialogs, prompts, escalation, the column
   chooser — buttons or Escape only (Ben, 2026-10-07: an edit lost to
