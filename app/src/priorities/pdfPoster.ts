@@ -49,8 +49,9 @@ export interface PosterDoc {
 export const A3_W = 1190.55;
 export const A3_H = 841.89;
 const MARGIN = 36;
-/** More columns than this go to a further page (each ~140pt at 8). */
-export const MAX_COLUMNS_PER_PAGE = 8;
+/** A column narrower than this wraps badly; past it the whole matrix
+ *  scales down to fit the page instead (Ben, 2026-10-08). */
+export const MIN_COLUMN_W = 150;
 
 const n2 = (n: number) => (Math.round(n * 100) / 100).toString();
 
@@ -76,14 +77,6 @@ export function pillarSpansOf(columns: PosterColumn[]): { name: string; color: s
     if (last && last.name === c.pillarName && last.color === c.pillarColor && last.from + last.count === i) last.count++;
     else out.push({ name: c.pillarName, color: c.pillarColor, from: i, count: 1 });
   });
-  return out;
-}
-
-/** Columns in page-sized groups. */
-export function columnPages(columns: PosterColumn[], perPage = MAX_COLUMNS_PER_PAGE): PosterColumn[][] {
-  if (columns.length === 0) return [[]];
-  const out: PosterColumn[][] = [];
-  for (let i = 0; i < columns.length; i += perPage) out.push(columns.slice(i, i + perPage));
   return out;
 }
 
@@ -217,98 +210,106 @@ function drawCard(s: Sheet, p: PosterPriority, x: number, top: number, colW: num
   return h;
 }
 
+/** Wrapped lines of a head at a width; the row takes the tallest. */
+function headLines(text: string, size: number, w: number): number[][] {
+  const lines = wrapText(text, "F2", size, w);
+  return lines.length > 0 ? lines : [[]];
+}
+
 /**
- * Lay the poster out: every column group on its own page sequence; a
- * column whose cards overrun the page continues on the next page under
- * repeated heads. Returns the pages' operator lists.
+ * Lay the poster out on ONE page: the matrix is drawn at a natural size
+ * (columns at least MIN_COLUMN_W wide, heads wrapping and their rows
+ * growing to the tallest) and then scaled, proportionally, to fit under
+ * the title and above the footer — never cut, never paginated (Ben,
+ * 2026-10-08). The title and footer stay at full size.
  */
 export function layoutPoster(doc: PosterDoc): Page[] {
-  const pages: Page[] = [];
-  // the label rail on the left (Ben, 2026-10-08), the matrix beside it
-  const contentX = MARGIN + RAIL_W + GAP;
-  const contentW = A3_W - MARGIN - contentX;
-  for (const group of columnPages(doc.columns)) {
-    const colW = group.length > 0 ? (contentW - GAP * (group.length - 1)) / group.length : contentW;
-    const remaining = group.map((c) => [...c.priorities]);
-    let first = true;
-    do {
-      const s = new Sheet();
-      // header: the title carries the org chain (Ben, 2026-10-08); a
-      // subtitle is optional and the header shrinks without one
-      let y = A3_H - MARGIN;
-      s.text(MARGIN, y - 18, winAnsiBytes(doc.title), "F2", 22, INK);
-      if (!first) {
-        const cont = winAnsiBytes("continued");
-        s.text(A3_W - MARGIN - textWidth(cont, "F1", 11), y - 18, cont, "F1", 11, MUTED);
-      }
-      if (doc.subtitle !== "") {
-        s.text(MARGIN, y - 34, winAnsiBytes(doc.subtitle), "F1", 11, MUTED);
-        y -= 46;
-      } else {
-        y -= 32;
-      }
-      // vision band
-      if (doc.vision !== "") {
-        const lines = wrapText(doc.vision, "F2", 12, contentW - 24);
-        const bandH = lines.length * 15.6 + 16;
-        s.railLabel(MARGIN, y - 4, RAIL_W, "Vision");
-        s.roundRect(contentX, y - bandH, contentW, bandH, CARD_R, INK);
-        lines.forEach((b, i) => s.text(contentX + 12, y - 8 - (i + 1) * 15.6 + 12 * 0.3, b, "F2", 12, WHITE));
-        y -= bandH + 10;
-      }
-      // pillar spans
-      if (group.length > 0) {
-        s.railLabel(MARGIN, y - 4, RAIL_W, "Strategic pillars");
-        for (const sp of pillarSpansOf(group)) {
-          const x = contentX + sp.from * (colW + GAP);
-          const w = sp.count * colW + (sp.count - 1) * GAP;
-          const fill = sp.color !== "" ? rgb(sp.color) : rgb("#9a948a");
-          s.roundRect(x, y - 22, w, 22, 5, fill);
-          const bytes = winAnsiBytes(sp.name !== "" ? sp.name : "—");
-          const tw = textWidth(bytes, "F2", 10);
-          s.text(x + Math.max(6, (w - tw) / 2), y - 15, bytes, "F2", 10, WHITE);
-        }
-        y -= 22 + 4;
-        // column heads
-        group.forEach((c, i) => {
-          const x = contentX + i * (colW + GAP);
-          const fill = c.color !== "" ? rgb(c.color) : c.pillarColor !== "" ? rgb(c.pillarColor) : rgb("#9a948a");
-          s.roundRect(x, y - 26, colW, 26, 5, fill);
-          const lines = wrapText(c.name, "F2", 9.5, colW - 12);
-          const b = lines[0] ?? [];
-          s.text(x + 6, y - 16.5, b, "F2", 9.5, WHITE);
-        });
-        y -= 26 + GAP;
-        s.railLabel(MARGIN, y - 2, RAIL_W, "Priorities");
-      } else {
-        s.text(contentX, y - 12, winAnsiBytes("No sub-pillars are visible with the current filters."), "F1", 11, MUTED);
-      }
-      // cards, column by column, as many as fit on this page
-      const bottom = MARGIN + 14;
-      let anyLeft = false;
-      group.forEach((_, i) => {
-        const x = contentX + i * (colW + GAP);
-        let cy = y;
-        const queue = remaining[i];
-        while (queue.length > 0) {
-          const h = cardHeight(queue[0], colW);
-          if (cy - h < bottom && cy < y) break; // next page; a card taller than a page still draws
-          drawCard(s, queue.shift()!, x, cy, colW);
-          cy -= h + 6;
-        }
-        if (queue.length > 0) anyLeft = true;
-      });
-      // footer
-      s.text(MARGIN, MARGIN / 2, winAnsiBytes(doc.footer), "F1", 8, MUTED);
-      pages.push({ ops: s.ops, images: new Map() });
-      first = false;
-      if (!anyLeft) break;
-    } while (true);
+  const s = new Sheet();
+  // header
+  let y = A3_H - MARGIN;
+  s.text(MARGIN, y - 18, winAnsiBytes(doc.title), "F2", 22, INK);
+  const headerBottom = y - 32;
+  const footerTop = MARGIN + 14;
+  const availW = A3_W - 2 * MARGIN;
+  const availH = headerBottom - footerTop;
+
+  // ---- the matrix at natural size, in a coordinate frame whose top is
+  // y = 0 and which runs downward (negative); scaled into place below
+  const n = doc.columns.length;
+  const matrixW = availW - RAIL_W - GAP;
+  const colW = n > 0 ? Math.max(MIN_COLUMN_W, (matrixW - GAP * (n - 1)) / n) : matrixW;
+  const naturalW = RAIL_W + GAP + (n > 0 ? n * colW + (n - 1) * GAP : matrixW);
+  const contentX = RAIL_W + GAP;
+  const contentW = naturalW - contentX;
+  const m = new Sheet();
+  let my = 0;
+  if (doc.vision !== "") {
+    const lines = wrapText(doc.vision, "F2", 12, contentW - 24);
+    const bandH = lines.length * 15.6 + 16;
+    m.railLabel(0, my - 4, RAIL_W, "Vision");
+    m.roundRect(contentX, my - bandH, contentW, bandH, CARD_R, INK);
+    lines.forEach((b, i) => m.text(contentX + 12, my - 8 - (i + 1) * 15.6 + 12 * 0.3, b, "F2", 12, WHITE));
+    my -= bandH + 10;
   }
-  // page numbers
-  pages.forEach((p, i) => {
-    const bytes = winAnsiBytes(`page ${i + 1} of ${pages.length}`);
-    p.ops.push(`BT /F1 8 Tf 0.5 g 1 0 0 1 ${n2(A3_W - MARGIN - textWidth(bytes, "F1", 8))} ${n2(MARGIN / 2)} Tm ${pdfString(bytes)} Tj ET`);
-  });
-  return pages;
+  if (n > 0) {
+    m.railLabel(0, my - 4, RAIL_W, "Strategic pillars");
+    // pillar spans: wrapped names, the row as tall as the tallest
+    const spans = pillarSpansOf(doc.columns).map((sp) => ({
+      ...sp,
+      x: contentX + sp.from * (colW + GAP),
+      w: sp.count * colW + (sp.count - 1) * GAP,
+      lines: headLines(sp.name !== "" ? sp.name : "—", 10, sp.count * colW + (sp.count - 1) * GAP - 12),
+    }));
+    const spanH = Math.max(...spans.map((sp) => sp.lines.length)) * 12.5 + 9;
+    for (const sp of spans) {
+      m.roundRect(sp.x, my - spanH, sp.w, spanH, 5, sp.color !== "" ? rgb(sp.color) : rgb("#9a948a"));
+      const top = my - (spanH - sp.lines.length * 12.5) / 2;
+      sp.lines.forEach((b, i) => {
+        const tw = textWidth(b, "F2", 10);
+        m.text(sp.x + Math.max(6, (sp.w - tw) / 2), top - (i + 1) * 12.5 + 3, b, "F2", 10, WHITE);
+      });
+    }
+    my -= spanH + 4;
+    // column heads: wrapped, one row height
+    const heads = doc.columns.map((c, i) => ({
+      x: contentX + i * (colW + GAP),
+      fill: c.color !== "" ? rgb(c.color) : c.pillarColor !== "" ? rgb(c.pillarColor) : rgb("#9a948a"),
+      lines: headLines(c.name, 9.5, colW - 12),
+    }));
+    const headH = Math.max(...heads.map((h) => h.lines.length)) * 12 + 11;
+    for (const h of heads) {
+      m.roundRect(h.x, my - headH, colW, headH, 5, h.fill);
+      const top = my - (headH - h.lines.length * 12) / 2;
+      h.lines.forEach((b, i) => m.text(h.x + 6, top - (i + 1) * 12 + 3, b, "F2", 9.5, WHITE));
+    }
+    my -= headH + GAP;
+    m.railLabel(0, my - 2, RAIL_W, "Priorities");
+    // cards, every column from the same top; the matrix is as tall as the
+    // tallest column
+    let lowest = my;
+    doc.columns.forEach((c, i) => {
+      const x = contentX + i * (colW + GAP);
+      let cy = my;
+      for (const p of c.priorities) {
+        const h = drawCard(m, p, x, cy, colW);
+        cy -= h + 6;
+      }
+      if (cy < lowest) lowest = cy;
+    });
+    my = lowest;
+  } else {
+    m.text(contentX, my - 12, winAnsiBytes("No sub-pillars are visible with the current filters."), "F1", 11, MUTED);
+    my -= 20;
+  }
+  const naturalH = -my;
+
+  // ---- fit: proportional, never enlarged
+  const scale = Math.min(1, availW / naturalW, availH / Math.max(1, naturalH));
+  s.ops.push(`q ${n2(scale)} 0 0 ${n2(scale)} ${n2(MARGIN)} ${n2(headerBottom)} cm`);
+  s.ops.push(...m.ops);
+  s.ops.push("Q");
+
+  // footer: the export date alone
+  s.text(MARGIN, MARGIN / 2, winAnsiBytes(doc.footer), "F1", 8, MUTED);
+  return [{ ops: s.ops, images: new Map() }];
 }

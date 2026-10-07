@@ -7,11 +7,10 @@ import { buildPagesPdf } from "../issues/pdf";
 import {
   A3_H,
   A3_W,
-  MAX_COLUMNS_PER_PAGE,
+  MIN_COLUMN_W,
   PosterColumn,
   PosterPriority,
   cardHeight,
-  columnPages,
   exportDateLabel,
   layoutPoster,
   pillarSpansOf,
@@ -53,17 +52,9 @@ describe("pillarSpansOf", () => {
   });
 });
 
-describe("columnPages", () => {
-  it("pages columns in groups and gives an empty view one page", () => {
-    const cols = Array.from({ length: MAX_COLUMNS_PER_PAGE + 2 }, (_, i) => col(`C${i}`, "P"));
-    expect(columnPages(cols).map((g) => g.length)).toEqual([MAX_COLUMNS_PER_PAGE, 2]);
-    expect(columnPages([])).toEqual([[]]);
-  });
-});
-
 describe("layoutPoster", () => {
   const doc = (columns: PosterColumn[]) => ({ title: "FY27 Cascaded Priorities", subtitle: "Alcoa › Bell Bay", vision: "Safe, reliable, low-cost metal.", columns, footer: "LeanBoard" });
-  it("draws one page for a small view with the title, vision, heads and cards", () => {
+  it("draws one page for a small view with the title, vision, heads and cards at full scale", () => {
     const pages = layoutPoster(doc([col("Casting", "Operations", [prio(1)]), col("Rodding", "Operations", [prio(2), prio(3)])]));
     expect(pages).toHaveLength(1);
     const ops = pages[0].ops.join("\n");
@@ -72,19 +63,31 @@ describe("layoutPoster", () => {
     expect(ops).toContain("(Casting)");
     expect(ops).toContain("(Priority 3)");
     expect(ops).toContain("(Lost-time injuries: None for twelve months)");
+    expect(ops).toContain("q 1 0 0 1 ");
   });
-  it("continues a long column on a further page under repeated heads", () => {
+  it("keeps a long column on the one page by scaling the matrix down", () => {
     const many = Array.from({ length: 40 }, (_, i) => prio(i, `A long statement number ${i} with enough words to wrap onto a second line in a narrow column`));
     const pages = layoutPoster(doc([col("Casting", "Operations", many)]));
-    expect(pages.length).toBeGreaterThan(1);
-    expect(pages[1].ops.join("\n")).toContain("(continued)");
-    expect(pages[1].ops.join("\n")).toContain("(Casting)");
-    const drawn = pages.flatMap((p) => p.ops).filter((o) => /\(A long statement number \d+/.test(o)).length;
+    expect(pages).toHaveLength(1);
+    const ops = pages[0].ops.join("\n");
+    const cm = /q (0\.\d+) 0 0 \1 /.exec(ops);
+    expect(cm).not.toBeNull();
+    expect(Number(cm![1])).toBeLessThan(1);
+    const drawn = pages[0].ops.filter((o) => /\(A long statement number \d+/.test(o)).length;
     expect(drawn).toBeGreaterThanOrEqual(40);
   });
-  it("splits more than a page's worth of columns across pages", () => {
-    const cols = Array.from({ length: MAX_COLUMNS_PER_PAGE + 1 }, (_, i) => col(`Column ${i}`, "P", [prio(i)]));
-    expect(layoutPoster(doc(cols))).toHaveLength(2);
+  it("keeps many columns on the one page at the minimum column width, scaled", () => {
+    const cols = Array.from({ length: 14 }, (_, i) => col(`Column ${i}`, "P", [prio(i)]));
+    const pages = layoutPoster(doc(cols));
+    expect(pages).toHaveLength(1);
+    expect(MIN_COLUMN_W).toBe(150);
+    expect(/q (0\.\d+) 0 0 \1 /.test(pages[0].ops.join("\n"))).toBe(true);
+  });
+  it("wraps a long head and never writes a page count", () => {
+    const pages = layoutPoster(doc([col("Continuous improvement - licence to operate and social value", "Strong sustainability & social licence", [prio(1)])]));
+    const ops = pages[0].ops.join("\n");
+    expect(ops).toContain("(Continuous improvement - licence to");
+    expect(ops).not.toContain("page 1 of");
   });
   it("says so when no columns are visible", () => {
     expect(layoutPoster(doc([]))[0].ops.join("\n")).toContain("No sub-pillars are visible");
