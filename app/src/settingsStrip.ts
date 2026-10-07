@@ -35,16 +35,28 @@ const CARD = "app-settings-sectioncard";
  * a child appended later lands in the last card.
  */
 export function groupSections(body: HTMLElement): void {
+  groupWithin(body);
+}
+
+function groupWithin(host: HTMLElement): void {
   let card: HTMLElement | null = null;
-  for (const child of Array.from(body.children) as HTMLElement[]) {
+  for (const child of Array.from(host.children) as HTMLElement[]) {
     if (child.classList.contains(CARD)) {
       card = child;
       continue;
     }
     const isHead = child.classList.contains("app-pr-section");
+    // a container with sections of its OWN (Site cadence's pane under
+    // its site picker): the cards go inside it and the container stays
+    // on the ground — never a card around a column of cards
+    if (!isHead && child.querySelector(":scope > .app-pr-section") !== null) {
+      groupWithin(child);
+      card = null;
+      continue;
+    }
     if (isHead || card === null) {
       const next = el("div", CARD + (isHead ? "" : ` ${CARD}-lead`));
-      body.insertBefore(next, child);
+      host.insertBefore(next, child);
       next.appendChild(child);
       card = next;
       continue;

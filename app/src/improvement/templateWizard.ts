@@ -800,6 +800,14 @@ export async function renderImprovementSettings(body: HTMLElement, isSuper: bool
     el("div", "app-settings-note", "Initiative templates are the gate on everything in Improvement — method, stages and gates, roles, fields, mandatory metrics and the board an initiative starts from. Super admins author them; everyone picks from them when creating an initiative.")
   );
 
+  // the templates lead (Ben, 2026-10-08): the list everyone uses comes
+  // first; the app-level lists (methods, standard fields, health-check
+  // questions) follow it, gathered here and appended at the end
+  const templatesHead = settingsSection("Initiative templates");
+  templatesHead.classList.add("app-tw-templates-h");
+  body.appendChild(templatesHead);
+  const listsHost = document.createDocumentFragment();
+
   // ---- app-level lists: methods + standard roles (Ben, 2026-08-19) ----
   const imp = parseImprovementSettings(await improvementSettingsJson());
   const persist = () => void saveImprovementSettingsJson(serializeImprovementSettings(imp));
@@ -807,7 +815,7 @@ export async function renderImprovementSettings(body: HTMLElement, isSuper: bool
     const box = el("div", "app-pr-section");
     box.appendChild(el("h3", "app-pr-h3", title));
     box.appendChild(el("div", "app-settings-note", note));
-    body.appendChild(box);
+    listsHost.appendChild(box);
     return box;
   };
   if (isSuper) {
@@ -1109,9 +1117,6 @@ export async function renderImprovementSettings(body: HTMLElement, isSuper: bool
     };
     paintHealth();
     hBox.appendChild(hList);
-    const templatesHead = settingsSection("Initiative templates");
-    templatesHead.classList.add("app-tw-templates-h");
-    body.appendChild(templatesHead);
   }
   const all = await listTemplates();
   // retired last (design 1.1)
@@ -1206,6 +1211,7 @@ export async function renderImprovementSettings(body: HTMLElement, isSuper: bool
     const add = el("a", "app-btn app-btn-primary", "＋ New template") as HTMLAnchorElement;
     add.href = "#/template/new";
     body.appendChild(add);
+    body.appendChild(listsHost); // methods · standard fields · health-check questions
   }
 }
 
