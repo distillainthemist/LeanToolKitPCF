@@ -58,44 +58,61 @@ the app's menu (`.app-cp-menu`) with the sections. No layout cost,
 works at every width, the weakest wayfinding (no standing position).
 Right as the NARROW fallback, not the desktop answer.
 
+**E. A sticky section strip under the tabs (horizontal).** A second,
+visibly smaller row of section pills — the register's filter-pill
+language (`.app-docs-fpill`, 12px, 36px tall; `-on` = the accent TINT,
+never the filled "you are here", which the tab above owns) — that
+sticks to the top of the window scroll while the page moves. Scroll-spy
+tints the section in view; click scrolls to its head. Wraps on a
+desktop so every section is visible (eleven Documents pills take two
+lines at 1280px); scrolls sideways under 600px exactly as the hub's tab
+strip does since M1, so it needs no separate phone fallback. Costs no
+width: Users keeps its register, Organisation its rail. It is the one
+option that uses only grammar the app already has at the top of a page.
+
 **D. Collapsible sections.** Shortens the page by hiding it; changes
 muscle memory on every tab and hides the state the pages exist to
 show. Rejected.
 
-## Recommendation
+## Recommendation (revised 2026-10-07 — "it doesn't have to be a left column")
 
-**A, scoped, with C as its narrow form, built on one heading helper.**
+**E — a sticky section strip under the tabs — built on one heading
+helper, with the rail (A) kept as the fallback if the strip proves too
+quiet on Documents.**
+
+Why E over A: the app navigates horizontally at the top of every page
+(tabs, crumbs, chip rows, segmented controls); its two vertical panels
+(the Organisation rail, the register's folders) are data trees, not
+page navigation. A strip is subordinate to the tabs by size and tint
+alone, costs no width on Users or Organisation, works on a phone as the
+hub strip already does, and needs no second component for narrow
+screens. A rail would have been the first vertical page-navigation in
+the app and needed its own narrow form.
 
 - **One section head everywhere.** A shared `settingsSection(title,
   note?)` returns `.app-pr-section > h3.app-pr-h3 (+ .app-settings-note)`
   with an `id` from the title; the four modules' `.app-section` /
   `sectionTitle` calls move to it. ui-standard §6 already names this
   idiom; the pass closes the drift.
-- **The rail is derived.** After a tab renders, the settings shell reads
-  its `h3.app-pr-h3` heads and builds the rail from them; a section
-  added tomorrow is in the rail tomorrow. Nothing hand-maintained.
-- **Only where it earns its width.** The rail shows when a tab has
-  three or more sections (Documents, Priorities, Site cadence, My
-  profile). Users keeps its full-width register; Organisation keeps its
-  own rail; two-heading tabs stay as they are.
-- **Look.** The Organisation rail's language: a `#faf9f7` panel with
-  hairline border, 36px rows, the current section in the accent tint
-  (the register's "ticked" look, not the filled "you are here" — the
-  tab above is the location). Sticky at the top of the window scroll
-  so it stays while the page moves. Optional small-caps group labels
-  for Documents (Connection & columns · Libraries & lifecycle · Access &
-  defaults) using the rail's company-label idiom.
-- **Behaviour.** Click = smooth scroll to the head with a 12px offset
-  under the sticky tabs; scroll-spy by IntersectionObserver marks the
+- **The strip is derived.** After a tab renders, the settings shell
+  reads its `h3.app-pr-h3` heads and builds the strip from them; a
+  section added tomorrow is in the strip tomorrow. Nothing
+  hand-maintained.
+- **Only where it earns its row.** Three or more sections (Documents,
+  Priorities, Site cadence, My profile). Users, Organisation and the
+  two-heading tabs show no strip.
+- **Place and look.** Between the unsaved-changes bar and the body:
+  tabs (15.5px, the location) → save bar when dirty → section strip
+  (12px pills, tinted current) → body. Sticky at the top of the window
+  scroll with the card's white behind it and a hairline below, so it
+  never floats over text. Desktop wraps; under 600px it scrolls with
+  the current pill scrolled into view.
+- **Behaviour.** Click = smooth scroll to the head with the strip's
+  height as the offset; scroll-spy by IntersectionObserver marks the
   head nearest the top; the hash is NOT written (the unsaved guard and
   the hash router stay out of it).
-- **Under 900px** the rail folds into "On this page ▾" at the top of
-  the body (option C); on a phone only My profile and Users matter and
-  neither needs it.
 - **The save bar** is untouched: same tab, same guard, same place.
 
-Effort: about a day — the helper and the four-module pass, the rail with
-spy and the menu fallback, CSS, ui-standard §6, and a demo-mode check of
-the rail on My profile (the one settings tab that renders without the
-host… it does not; Settings needs the host — a harness page with a
-stubbed three-section tab is the screenshot road).
+Effort: under a day — the helper and the four-module heading pass, the
+strip with spy, CSS, ui-standard §6, and a harness page with a stubbed
+three-section tab for the screenshot (Settings itself needs the host).
