@@ -273,7 +273,9 @@ Version lives in the tag alone — nothing is stamped into files.
   app-only; v0.62 (2026-10-02) carries the priority / pillar /
   initiative span columns; v0.63, v0.64 (2026-10-06), v0.65,
   v0.65.1 and v0.66.0 (2026-10-07: the phone register, mobile M1–M5,
-  the settings strip) are app-only. Prod imports the managed solution FIRST.
+  the settings strip) and v0.67.0 (2026-10-08: settings section cards
+  and strip tools, the Users add flow, Cascade customisation under
+  Organisation, the priorities A3 poster) are app-only. Prod imports the managed solution FIRST.
 - **One rule, applied everywhere it matters.** A rule that must hold
   for every action or every card lives in ONE pure function and is
   applied at the screen for an honest picture AND at the store's

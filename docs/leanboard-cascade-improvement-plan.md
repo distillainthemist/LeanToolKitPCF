@@ -1455,6 +1455,16 @@ reschedule/cancel history with a reason picklist.
   the view before the launch re-route mounted the hub again, so the
   second mount saw nothing. The pending view now lives for a 20 s
   grace window instead of one read.
+- **2026-10-08 — released as v0.67.0** (app-only): the settings
+  rework — one section head for every module, the derived sticky
+  section strip (from two sections) with lifted strip tools, section
+  cards on a tinted body, Users' one-search-box add flow with inline
+  placement, Rituals' one-row head, Request admin listing the super
+  admins, Ritual categories under Branding, Cascade customisation on
+  the Organisation site card, Vision statements removed from Priorities
+  settings, templates first on Improvement — and the Priorities
+  poster: ⋮ "Download PDF version", an A3 landscape PDF of the current
+  view scaled onto one page (priorities design §18).
 - **2026-10-07 — released as v0.66.0** (app-only): the phone work of
   the day — the limited Documents register (feedback Tranche D), the
   five mobile tranches (frame, ritual boards as a list with a details
