@@ -872,6 +872,12 @@ input[type="color"].app-color:disabled { opacity: 0.4; cursor: default; }
 .app-file { font-size: 12.5px; }
 
 .app-users-filters { gap: 8px; }
+/* Request admin: the super admins to contact — plain rows, not pickers */
+.app-admin-list { max-height: none; margin-top: 0; }
+.app-admin-row { cursor: default; }
+.app-admin-row:hover { background: #fff; }
+.app-admin-row .app-user-email { text-decoration: none; }
+.app-admin-row a.app-user-email:hover { text-decoration: underline; color: var(--app-accent, #2563eb); }
 .app-users-filters input[type="search"] { flex: 1; min-width: 180px; }
 
 /* users tab: richer roster rows */

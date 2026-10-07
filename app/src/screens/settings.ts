@@ -1743,9 +1743,32 @@ async function renderRequest(body: HTMLElement, me: RosterPerson): Promise<void>
       el(
         "div",
         "app-settings-note",
-        "Ask an existing super admin to grant you a role (Settings → Users)."
+        "Ask a super admin to grant you a role (they do it under Settings → Users)."
       )
     );
+    // who to ask (Ben, 2026-10-08): the active super admins, with a
+    // mail link each — the roster is readable by everyone, so a plain
+    // user can see whom to contact
+    const admins = (await listPeople().catch(() => [] as RosterPerson[])).filter((p) => p.role === "superadmin");
+    body.appendChild(settingsSection("Super admins"));
+    if (admins.length === 0) {
+      body.appendChild(el("div", "app-settings-note", "No super admin is listed on the roster yet."));
+      return;
+    }
+    const list = el("div", "app-group-list app-admin-list");
+    for (const p of admins) {
+      const r = el("div", "app-group-row app-admin-row");
+      r.appendChild(el("span", "app-people-name", p.who));
+      if (p.email !== "") {
+        const a = el("a", "app-user-email", p.email) as HTMLAnchorElement;
+        a.href = `mailto:${encodeURIComponent(p.email)}`;
+        r.appendChild(a);
+      } else {
+        r.appendChild(el("span", "app-user-email", "no email on file"));
+      }
+      list.appendChild(r);
+    }
+    body.appendChild(list);
     return;
   }
   body.appendChild(
@@ -3225,12 +3248,18 @@ async function renderBoardsAdmin(body: HTMLElement, me: RosterPerson): Promise<v
   const cats = await meetingCategories();
 
   // ---- rituals, scoped by role ----
-  body.appendChild(sectionTitle("Rituals"));
-  if (isAdmin) {
-    const newBtn = el("a", "app-btn", "\uFF0B New ritual") as HTMLAnchorElement;
-    newBtn.href = "#/wizard";
-    body.appendChild(newBtn);
-  }
+  // the scope line is the heading's note (Ben, 2026-10-08): ONE row —
+  // search · filters · ＋ New ritual — sits between the title and the grid
+  body.appendChild(
+    settingsSection(
+      "Rituals",
+      isSuper
+        ? "All rituals across every site."
+        : isAdmin
+          ? `Rituals at ${me.site || "your site"}.`
+          : "Rituals you own \u2014 you can adjust them; ask an admin to create a new one."
+    )
+  );
 
   const roster = await listPeople(true);
   const personBy = new Map(roster.map((p) => [p.whoId, p]));
@@ -3252,18 +3281,6 @@ async function renderBoardsAdmin(body: HTMLElement, me: RosterPerson): Promise<v
     : isAdmin
       ? withInfo.filter((x) => x.board.site === me.site)
       : withInfo.filter((x) => x.owner?.whoId === me.whoId);
-  body.appendChild(
-    el(
-      "div",
-      "app-settings-note",
-      isSuper
-        ? "All rituals across every site."
-        : isAdmin
-          ? `Rituals at ${me.site || "your site"}.`
-          : "Rituals you own \u2014 you can adjust them; ask an admin to create a new one."
-    )
-  );
-
   // ---- filters: title, category, site (super only) ----
   let query = "";
   let catFilter = "";
@@ -3306,6 +3323,14 @@ async function renderBoardsAdmin(body: HTMLElement, me: RosterPerson): Promise<v
     });
     archToggle.append(box, document.createTextNode("Show archived"));
     filterBar.appendChild(archToggle);
+  }
+  if (isAdmin) {
+    // the one solid primary on the row, far right (Ben, 2026-10-08 — it
+    // was a full-width outline block above the search)
+    const newBtn = el("a", "app-btn app-btn-primary", "\uFF0B New ritual") as HTMLAnchorElement;
+    newBtn.href = "#/wizard";
+    newBtn.title = "Create a ritual with the wizard";
+    filterBar.appendChild(newBtn);
   }
   body.appendChild(filterBar);
 
