@@ -29,6 +29,8 @@
       body.appendChild(settingsSection(t, note || undefined));
       body.appendChild(filler(t === "Document columns" ? 40 : 18));
     }
+    // a lifted tool row (Site cadence's picker)
+    const tool = document.createElement("div"); tool.className = "app-settings-row app-settings-striptool"; tool.innerHTML = '<span class="app-settings-label">Site</span><select class="app-input"><option>Mine</option><option>Refinery</option></select>'; body.prepend(tool);
     const strip = mountSectionStrip(document.getElementById("strip"), body);
     strip.refresh();
     // a late append (a tab repainting) must land in the last card

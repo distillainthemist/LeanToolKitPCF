@@ -465,7 +465,12 @@ dividers. No priority statement here — the card above names it.
   window so the head lands under the strip's live height; the hash is
   never written. Desktop wraps; under 600px it scrolls sideways with
   the current pill kept in view. Users, Organisation and two-heading
-  tabs show no strip.
+  tabs show no strip. **Strip tools** (2026-10-08): a tab marks a
+  control row `.app-settings-striptool` (Site cadence's site picker)
+  and the strip lifts it into its right end (`margin-left: auto`,
+  36px controls) before the cards are grouped — the row the eye reads
+  for "which section" also says "which site"; a strip with a tool
+  shows even under three sections.
 - **Users has ONE search box** (2026-10-08). The roster filters as
   you type; "Search directory & add" (the row's one solid primary)
   sends the same text to the directory and opens a "Directory matches"

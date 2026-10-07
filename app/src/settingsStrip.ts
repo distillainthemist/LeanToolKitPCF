@@ -71,8 +71,16 @@ export interface SectionStrip {
   destroy: () => void;
 }
 
+/** A tab marks a control row with this class (Site cadence's site
+ *  picker) and the strip lifts it into its right end — the row the
+ *  eye already reads for "which section", now also "which site". */
+export const STRIP_TOOL = "app-settings-striptool";
+
 export function mountSectionStrip(host: HTMLElement, body: HTMLElement): SectionStrip {
   host.classList.add("app-settings-strip");
+  const pillsBox = el("div", "app-settings-strip-pills");
+  const tools = el("div", "app-settings-strip-tools");
+  host.append(pillsBox, tools);
   let heads: HTMLElement[] = [];
   let pills: HTMLButtonElement[] = [];
   let current = -1;
@@ -95,7 +103,7 @@ export function mountSectionStrip(host: HTMLElement, body: HTMLElement): Section
     });
     // a phone's strip scrolls sideways: keep the current pill in view
     const on = pills[current];
-    if (on && typeof on.scrollIntoView === "function" && host.scrollWidth > host.clientWidth) {
+    if (on && typeof on.scrollIntoView === "function" && pillsBox.scrollWidth > pillsBox.clientWidth) {
       on.scrollIntoView({ inline: "nearest", block: "nearest" });
     }
   };
@@ -104,16 +112,27 @@ export function mountSectionStrip(host: HTMLElement, body: HTMLElement): Section
   };
 
   const refresh = () => {
+    // tools first, before grouping would card them: a tab's marked rows
+    // move into the strip; a new tab (new heads) starts with none
+    const lifted = Array.from(body.querySelectorAll<HTMLElement>(`.${STRIP_TOOL}`));
+    const nextHeads = Array.from(body.querySelectorAll<HTMLElement>("h3.app-pr-h3"));
+    const sig = nextHeads.map((h) => h.textContent ?? "").join("\u0001");
+    if (sig !== signature) clear(tools);
+    for (const t of lifted) tools.appendChild(t);
     groupSections(body);
-    heads = Array.from(body.querySelectorAll<HTMLElement>("h3.app-pr-h3"));
-    const sig = heads.map((h) => h.textContent ?? "").join("\u0001");
-    if (sig === signature && host.childElementCount === pills.length) return;
+    heads = nextHeads;
+    const hasTools = tools.childElementCount > 0;
+    if (sig === signature && pillsBox.childElementCount === pills.length) {
+      host.classList.toggle("app-settings-strip-on", heads.length >= STRIP_MIN_SECTIONS || hasTools);
+      return;
+    }
     signature = sig;
-    clear(host);
+    clear(pillsBox);
     pills = [];
     current = -1;
-    const show = heads.length >= STRIP_MIN_SECTIONS;
+    const show = heads.length >= STRIP_MIN_SECTIONS || hasTools;
     host.classList.toggle("app-settings-strip-on", show);
+    pillsBox.style.display = heads.length >= STRIP_MIN_SECTIONS ? "" : "none";
     if (!show) return;
     for (const h of heads) {
       const pill = el("button", "app-settings-pill", h.textContent ?? "") as HTMLButtonElement;
@@ -126,7 +145,7 @@ export function mountSectionStrip(host: HTMLElement, body: HTMLElement): Section
         const top = h.getBoundingClientRect().top + window.scrollY - offset;
         window.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
       });
-      host.appendChild(pill);
+      pillsBox.appendChild(pill);
       pills.push(pill);
     }
     onScroll();

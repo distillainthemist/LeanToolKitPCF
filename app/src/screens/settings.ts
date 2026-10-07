@@ -2697,7 +2697,8 @@ async function renderSiteCadence(
     return true;
   };
 
-  const bar = el("div", "app-settings-row");
+  // the site picker rides the section strip's right end (Ben, 2026-10-08)
+  const bar = el("div", "app-settings-row app-settings-striptool");
   body.appendChild(bar);
   const pane = el("div", "app-cadence-pane");
   body.appendChild(pane);

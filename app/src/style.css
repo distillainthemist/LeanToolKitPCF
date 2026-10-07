@@ -766,8 +766,15 @@ input[type="color"].app-cat-swatch {
    Derived from the tab's h3.app-pr-h3 heads; shown from three sections.
    Subordinate to the tabs by size and tint: 12px pills, the current one
    in the accent TINT (the tab above owns the filled "you are here"). */
-.app-settings-strip { display: none; position: sticky; top: 0; z-index: 5; gap: 6px; flex-wrap: wrap; align-items: center; padding: 8px 12px; background: #fff; border-bottom: 1px solid #eceae5; }
+.app-settings-strip { display: none; position: sticky; top: 0; z-index: 5; gap: 8px 12px; flex-wrap: wrap; align-items: center; padding: 8px 12px; background: #fff; border-bottom: 1px solid #eceae5; }
 .app-settings-strip-on { display: flex; }
+.app-settings-strip-pills { display: flex; flex: 1 1 auto; min-width: 0; gap: 6px; flex-wrap: wrap; align-items: center; }
+/* a tab's lifted control row (Site cadence's site picker): far right */
+.app-settings-strip-tools { display: flex; align-items: center; gap: 8px; margin-left: auto; flex: none; }
+.app-settings-strip-tools:empty { display: none; }
+.app-settings-strip-tools .app-settings-row { gap: 8px; flex-wrap: nowrap; }
+.app-settings-strip-tools .app-settings-label { width: auto; }
+.app-settings-strip-tools .app-input { min-height: 36px; padding: 4px 8px; font-size: 12.5px; }
 .app-settings-pill {
   border: 1px solid #d5d1c8; background: #fff; color: #444; border-radius: 999px;
   font: inherit; font-size: 12px; padding: 0 12px; min-height: 36px; cursor: pointer; white-space: nowrap;
@@ -780,9 +787,11 @@ input[type="color"].app-cat-swatch {
   font-weight: 600;
 }
 @media (max-width: 599px) {
-  .app-settings-strip-on { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding: 8px 10px; }
-  .app-settings-strip::-webkit-scrollbar { display: none; }
+  .app-settings-strip-on { padding: 8px 10px; }
+  .app-settings-strip-pills { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+  .app-settings-strip-pills::-webkit-scrollbar { display: none; }
   .app-settings-pill { flex: none; }
+  .app-settings-strip-tools { flex: 1 1 100%; margin-left: 0; }
 }
 .app-settings-card .app-settings-body { box-shadow: none; border-radius: 0; }
 /* ---- section cards (Ben, 2026-10-08) ------------------------------
