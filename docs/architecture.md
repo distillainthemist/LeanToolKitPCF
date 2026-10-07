@@ -287,6 +287,15 @@ model section) — the canvas/PCF sections there are historical.
   the Priorities screen's Objectives row (every starred metric:
   "Name: objective" over Plan / Actual with a traffic light). The
   primary leads the overlay's Initiatives tab in its own section.
+- **A Priorities view travels as a link** (2026-10-07,
+  `priorities/viewLink.ts`): the kebab's "Copy link to this view"
+  puts org, period, status, view mode, pillar filter / focus, rule and
+  the Show toggles on the player URL as `prview=`; `links.ts` reads
+  it at launch, routes to `#/priorities`, the hub fronts the tab and
+  the mount reads the pending view — which lives for a 20 s GRACE
+  window, because the landing-route hub can front Priorities from the
+  last-tab preference and read it before the re-routed mount does
+  (v0.65.1).
 - **Priorities span years** (2026-10-02, `priorities/model.ts`
   "spans"). A priority runs from a START period (`period`) until it
   closes; the END (`toPeriod`) is stamped from the closing date and
@@ -590,18 +599,69 @@ Key concepts (details: [leanboard-standard-documents-plan.md](leanboard-standard
   its stamped copy is linked.
 - **Tags**: a closed term set; anyone proposes (guarded against
   phone-hostile characters, §7), controllers mint or decline
-  (`ben_ltktagproposal` ledger).
+  (`ben_ltktagproposal` ledger). Since feedback round 1 (2026-10-06):
+  Settings → Documents → Tags lists the tags in use with rename in
+  place and ＋ Add tag; a controller's tag editor on a document mints
+  on the spot (`mintTag`, the one road approval rides too); the editor
+  is a MULTI-value one — chips plus an adder, every term written
+  (`PrefillValue.terms` / `AddFieldValue.terms`, `taxonomyTermsOf`);
+  the single select it had replaced every tag and prefilled only the
+  first, which read as "couldn't add a tag".
 - **Access model** (5G): four groups — document controllers (Entra),
   owners & approvers pool (Entra), a SharePoint **site group** for
   temporary edit grants (instant; the Entra editors group is retired),
   wall-TV/kiosk accounts. Requests → grant → revision-end release.
   In-app gates hide affordances; SharePoint stays the hard gate.
+  Reviewers may be anyone (C2, 2026-10-06: `reviewerPeopleSource`,
+  the pool first, the directory behind); owners and approvers stay
+  pool-bound. Readers need **View Versions** in their permission level
+  for the version history pane, which otherwise says so in one line.
 - **Health**: Document Control Health scans the corpus (capped,
   stated) for control gaps — unmapped roles are reported as skipped,
-  never silently passed.
+  never silently passed. Roles are resolved per LIBRARY (a review
+  column under another internal name is found). Since 2026-10-06 the
+  scan keeps each document's named people (names + the `#email`
+  twins), and two directory-backed findings are APPENDED after the
+  pure report paints — a named owner / approver outside the owners &
+  approvers group, and a named person the directory no longer has —
+  with "Not checked" lines when a lookup fails. Document controllers
+  get **Replace a person…** (`docs/roleReassign.ts`): one person out,
+  one in from the pool, roles ticked, a preview count, then per
+  document check-out → claims write → minor check-in, published on a
+  moderated library when the document is approved; refusals listed.
 - **Issues**: the ⚐ Report button files bugs/ideas with pasted
   screenshots (Dataverse file columns); superadmins triage, merge,
   and message reporters via Teams ([leanboard-issues-plan.md](leanboard-issues-plan.md)).
+  Tick reports → **Export to PDF**: one document, a section per issue
+  (`issues/pdf.ts` writer, `issues/exportPdf.ts`). Round 1 of the
+  pilot's feedback (50 reports, 2026-10-05) was triaged from that
+  export: [user-feedback-plan-2026-10.md](user-feedback-plan-2026-10.md)
+  (the plan and status per item) and
+  [user-feedback-test-script-2026-10.md](user-feedback-test-script-2026-10.md)
+  (the walkthrough and its outcome table).
+- **The register after feedback round 1** (v0.65.0, 2026-10-07). It
+  OPENS with a visible "Approval status: Approved" filter
+  (`seedApprovedFilter` after the status vocabulary is read; a view's
+  `nonCurrent` now means "no status filter"; the kebab's hidden "Show
+  only Approved" is gone). Filters take several terms per column,
+  OR'd (`filterFromPicks` / `toggleFilter`; views carry every pick);
+  tags and any set past 14 terms are SEARCHED in the popover; People
+  filters are a directory search (the pool first) answered by CAML
+  `Contains` on the person column; "Has" filters (linked documents,
+  tags) by `IsNotNull`; the CSV export follows every filter (it never
+  had). Every column header sorts — name and Modified on the server,
+  the rest within the loaded rows with a status note. A saved view's
+  name is the register TITLE (scope in the crumb; Update and Close in
+  the Views menu); the chooser's dragged column order is honoured
+  (`keepOrder` — the dictionary orders only the defaults). "Match
+  contents & every field" is a toggle beside the search box and the
+  scope dropdown is gone (the left pane picks libraries); the panel
+  hides to a rail (`navHidden` pref); ☆ on every row; scroll restored
+  after the preview closes; the preview's ⋯ downloads the PDF under
+  the document's name; "Details ›" in the viewer head; type and
+  status read inside their pane sections; a date-only column prefills
+  as the SITE's day, not the UTC day. Default filters pick the site
+  from the organisation's defined sites.
 
 ## 5. SharePoint interfacing (the connector roads)
 
@@ -823,6 +883,7 @@ no ad-hoc credential handling.
 | SharePoint write mechanics | [sharepoint-writes.md](sharepoint-writes.md) |
 | Links, audit view, tags | [leanboard-relationships-plan.md](leanboard-relationships-plan.md) |
 | Issues/reporting | [leanboard-issues-plan.md](leanboard-issues-plan.md) |
+| Pilot feedback round 1 — plan, status, test script | [user-feedback-plan-2026-10.md](user-feedback-plan-2026-10.md), [user-feedback-test-script-2026-10.md](user-feedback-test-script-2026-10.md) |
 | Capture rollup (Flag column, cross-board capture rows) | [leanboard-capture-rollup-plan.md](leanboard-capture-rollup-plan.md) |
 | Canvas card, design mode, Canvas rollup | [leanboard-canvas-card-plan.md](leanboard-canvas-card-plan.md) |
 | Power BI embed prerequisites (browser policy) | [deployment-cookbook.md](deployment-cookbook.md) |

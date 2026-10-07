@@ -243,6 +243,32 @@ when written):
   picture is drawn on a delay and the flushed save carries whatever
   picture it has. Live boards, the default, are unaffected.
 
+## Feedback round 1 — open items (2026-10-07)
+
+Plan and status: user-feedback-plan-2026-10.md; walkthrough outcome:
+user-feedback-test-script-2026-10.md. Released v0.65.0 / v0.65.1.
+
+- **Parked for the pilot users to confirm on prod**: A1 the version
+  history line for a reader without View Versions; A3 the date fix for
+  an Australian-zone user; A8 the health report's review dates on the
+  library that failed; A9 Ellen's tags; B7 default columns (the ★ per
+  type); C3 a controller minting a tag against a non-controller
+  account; C5 the review-request confirmation.
+- **Guidance (C4, reports 23 / 24)**: built, then removed before
+  release — Ben to clarify with Holly what governance she wants
+  before anything is shown on the forms.
+- **Tranche D — the limited phone register**: not started. Search,
+  basic filters, a single-column list, open in the viewer; folders and
+  the full column set stay desktop.
+- **Hierarchy in filters** (report 36): a parent term such as SMELTER
+  including every term beneath it when ticked — logged, not built
+  (B1 kept "a pick includes its subtree" as before).
+- **Waiting on people**: report 2 (what Marie clicked — the message
+  is Power Apps' own package validation); reports 38 / 40 (Ben checks
+  a failing preview file for a sensitivity label); report 12 (Ellen
+  confirms named views hold on v0.63+).
+- **Translation** (report 48): a strategy question, parked.
+
 ## Issues — open items (2026-10-06)
 
 - **Non-image attachments** in the PDF export are noted by name and

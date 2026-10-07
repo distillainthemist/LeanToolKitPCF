@@ -5,6 +5,16 @@ Rio Tinto pilot users). Reviewed with Ben's answers to eight
 clarifications. Numbers are the export's section numbers; the Issue ids
 are in the export. Everything below is app-only unless marked.
 
+## Status (2026-10-07)
+
+Tranches A–C built 2026-10-06, walked through with Ben the same day
+(outcome table in user-feedback-test-script-2026-10.md), released as
+v0.65.0 on 2026-10-07 with the walkthrough changes; v0.65.1 fixed the
+Priorities view link's double-mount race. C4 (Guidance) was removed
+before release. Tranche D (the limited phone register) is not started.
+Items parked for the pilot users are listed in backlog.md →
+"Feedback round 1 — open items".
+
 ## Ben's decisions (2026-10-06)
 
 - Versions 403 → BOTH: a prod site step (View Versions in the reader

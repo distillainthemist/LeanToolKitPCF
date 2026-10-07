@@ -183,6 +183,16 @@ Version lives in the tag alone — nothing is stamped into files.
   `whenSettled`). Debounced saves are flushed when their screen is
   left. Never `whenSettled` inside a function a tracked write calls —
   it would wait for itself (2026-10-01).
+- **A launched view must survive a second mount.** The landing-route
+  hub can front a tab from the last-tab preference and read a launch
+  payload before the launch re-routes and mounts the hub again; a
+  one-shot read left the second mount with nothing (Priorities view
+  link, 2026-10-07). `takePendingPrioritiesView` reads inside a 20 s
+  grace window instead.
+- **A form never closes on a click outside it.** Edit details, Create
+  initiative, the priority dialogs, prompts, escalation, the column
+  chooser — buttons or Escape only (Ben, 2026-10-07: an edit lost to
+  a click off the box). Pickers and viewers may still dismiss.
 - **A finding that needs the directory is appended, never awaited.**
   The health report paints the pure `controlHealth` result at once
   and the pool / directory checks (`peopleIssues`) arrive after it,
