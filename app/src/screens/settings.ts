@@ -23,7 +23,7 @@ import { statusChip } from "../../../shared/ui/format";
 import { boardHash, boardUrl } from "../links";
 import { bootFail } from "../loading";
 import { setLeaveGuard } from "../navGuard";
-import { promptConfirm, promptText, promptUnsaved } from "../prompts";
+import { confirmRemoval, promptConfirm, promptText, promptUnsaved } from "../prompts";
 import { currentViewer, detectHost } from "../runtime";
 import { EmulatedRole, effectivePerson, setViewAsRole, viewAsRole } from "../viewAs";
 import {
@@ -3333,8 +3333,11 @@ async function renderCategoriesSection(body: HTMLElement, isSuper: boolean): Pro
       chip.append(swatch, document.createTextNode(c.name));
       if (isSuper) {
         const x = removeBtn(() => {
-          cats = cats.filter((v) => v !== c);
-          void saveMeetingCategories(cats).then(drawCats);
+          void confirmRemoval(`the category “${c.name}”`, "Rituals in it keep the name but lose its colour. This saves straight away.").then((ok) => {
+            if (!ok) return;
+            cats = cats.filter((v) => v !== c);
+            void saveMeetingCategories(cats).then(drawCats);
+          });
         });
         chip.appendChild(x);
       }

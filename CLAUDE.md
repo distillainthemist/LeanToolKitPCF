@@ -214,6 +214,12 @@ Version lives in the tag alone — nothing is stamped into files.
   into all body text, 2026-10-08) — wrap a styled run in `q … Q`.
   And nothing here renders a PDF: `sips -s format png` on macOS is
   the eye for a generated page.
+- **A settings delete that writes at once asks first.** Methods,
+  standard roles, standard fields, health-check questions and ritual
+  categories persist on the click; each × now runs `confirmRemoval`
+  (`app/src/prompts.ts`) naming the item and what losing it means
+  (Ben, 2026-10-08: a standard role went with one click). Draft lists
+  that save from the bar keep a plain × — Discard is their undo.
 - **A form never closes on a click outside it.** Edit details, Create
   initiative, the priority dialogs, prompts, escalation, the column
   chooser — buttons or Escape only (Ben, 2026-10-07: an edit lost to

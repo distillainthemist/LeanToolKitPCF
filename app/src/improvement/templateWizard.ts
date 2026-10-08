@@ -15,7 +15,7 @@ import { newId } from "../../../shared/schema/id";
 import { appTheme, editorHost } from "../cardHost";
 import { showLoading } from "../loading";
 import { currentViewer, detectHost } from "../runtime";
-import { promptConfirm, promptText } from "../prompts";
+import { confirmRemoval, promptConfirm, promptText } from "../prompts";
 import { listPeople, viewerPerson } from "../store/people";
 import { companies, improvementSettingsJson, orgJson, saveImprovementSettingsJson } from "../store/config";
 import { getBoard, saveManifest } from "../store/boards";
@@ -839,9 +839,12 @@ export async function renderImprovementSettings(body: HTMLElement, isSuper: bool
         x.type = "button";
         x.title = "Remove (existing templates keep their method)";
         x.addEventListener("click", () => {
-          imp.methods.splice(i, 1);
-          persist();
-          paintMethods();
+          void confirmRemoval(`the method “${m}”`, "Templates that use it keep the name; the picker loses it. This saves straight away.").then((ok) => {
+            if (!ok) return;
+            imp.methods.splice(i, 1);
+            persist();
+            paintMethods();
+          });
         });
         rowEl.appendChild(x);
         chips.appendChild(rowEl);
@@ -914,9 +917,12 @@ export async function renderImprovementSettings(body: HTMLElement, isSuper: bool
         x.type = "button";
         x.title = "Remove (templates that already added it keep it)";
         x.addEventListener("click", () => {
-          imp.standardRoles.splice(i, 1);
-          persist();
-          paintRoles();
+          void confirmRemoval(`the standard role “${r.label}”`, "Every initiative carries this role; its holders stay on their initiatives but the role leaves the list. This saves straight away.").then((ok) => {
+            if (!ok) return;
+            imp.standardRoles.splice(i, 1);
+            persist();
+            paintRoles();
+          });
         });
         head.appendChild(x);
         card.appendChild(head);
@@ -1026,9 +1032,12 @@ export async function renderImprovementSettings(body: HTMLElement, isSuper: bool
         x.type = "button";
         x.title = "Remove (existing initiatives keep their values)";
         x.addEventListener("click", () => {
-          imp.standardFields.splice(i, 1);
-          persist();
-          paintFields();
+          void confirmRemoval(`the standard field “${f.label}”`, "Every initiative's header loses this field. This saves straight away.").then((ok) => {
+            if (!ok) return;
+            imp.standardFields.splice(i, 1);
+            persist();
+            paintFields();
+          });
         });
         rowEl.appendChild(x);
         fieldList.appendChild(rowEl);
@@ -1090,9 +1099,12 @@ export async function renderImprovementSettings(body: HTMLElement, isSuper: bool
         const x = el("button", "app-org-x", "\u00d7") as HTMLButtonElement;
         x.type = "button";
         x.addEventListener("click", () => {
-          imp.healthQuestions.splice(i, 1);
-          persist();
-          paintHealth();
+          void confirmRemoval(`the health-check question “${q.label}”`, "Past health checks keep their answers; new ones stop asking it. This saves straight away.").then((ok) => {
+            if (!ok) return;
+            imp.healthQuestions.splice(i, 1);
+            persist();
+            paintHealth();
+          });
         });
         rowEl.appendChild(x);
         hList.appendChild(rowEl);

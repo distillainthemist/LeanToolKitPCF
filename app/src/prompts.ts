@@ -125,6 +125,13 @@ export function promptText(opts: {
 }
 
 /** A yes/no confirmation — centred modal, Esc/click-out = no. */
+/** The confirmation every settings delete that WRITES AT ONCE asks
+ *  (Ben, 2026-10-08: a standard role went with one click). Draft lists
+ *  that save from the bar keep their plain × — Discard is their undo. */
+export function confirmRemoval(what: string, note = "This removes it straight away."): Promise<boolean> {
+  return promptConfirm({ title: `Remove ${what}?`, note, confirmLabel: "Remove", danger: true });
+}
+
 export function promptConfirm(opts: {
   title: string;
   note?: string;
