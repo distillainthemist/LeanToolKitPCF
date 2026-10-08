@@ -367,9 +367,20 @@ the same commit.
   one solid primary, `⋮ More` as a centred text link. Esc + scrim close;
   scroll/context restored on close.
 - **Centred modals**: `.app-modal-overlay`/`.app-modal` (440px;
-  `.app-modal-wide` = min(92vw, 1080px)), title 17px bold, muted note,
+  `.app-modal-wide` = min(92vw, 1080px); `.app-modal-form` =
+  min(92vw, 820px) for a long form), title 17px bold, muted note,
   footer Cancel text-link + primary. Reason picklists = chip rows
   (`.app-cp-reason`, selected dark).
+- **A long form is grouped, never tabbed or folded** (the initiative
+  header form, 2026-10-08, edit-details-proposal-2026-10.md): named
+  groups as section cards on the settings ground, each with a
+  `settingsSection` head and one note instead of per-field hints;
+  short field kinds two to a row, prose and links full width; one
+  honest fold at most (a rarely touched block with a true one-line
+  summary, open whenever it holds entries); validation names the
+  group and focuses the first failing control — which only works
+  because nothing sits behind a tab. One module renders the form for
+  create and edit.
 - **Wizards** (meeting + template): accent title bar with ✕, numbered
   step strip (✓ on done, filled current), 620px centred column, step
   title 18px bold + one-line purpose, footer `‹ Back · Step n of N ·

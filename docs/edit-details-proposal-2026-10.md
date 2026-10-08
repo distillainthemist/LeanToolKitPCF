@@ -130,7 +130,23 @@ ground, one shared form module for create and edit.**
   Save details footer; every save path (board rename, metric cards,
   endorsement closing, the History event).
 
-Effort: about a day — the shared module with the two modes, the
+## 5. Status — BUILT 2026-10-08
+
+`app/src/improvement/initiativeForm.ts` renders the six groups for
+both flows (`mode: "create" | "edit"`); `initiativeFormModel.ts` holds
+the pure parts (`pairFields`, `isShortKind`, `alsoSummary`, `groupFor`,
+tested); `editDetails.ts` and the create flow's second step mount it
+and keep only their own save paths. The modal is `.app-modal-form`
+(min(92vw, 820px)); the body wears the settings ground and each group
+is a `.app-settings-sectioncard` with a `settingsSection` head. Period
+is off the form (the record keeps it). Validation names the group,
+scrolls the first failing control into view and focuses it. The fold
+opens by default when it holds entries. Harness
+`app/harness/initform.html` (edit filled · create empty). On dev,
+unreleased; Ben's check: Edit details on any initiative, and New
+initiative from the Improvement tab.
+
+Effort was as estimated — the shared module with the two modes, the
 grouping CSS (modal body as ground, 760px column, paired short kinds),
 the one fold, validation focus, a harness page for the screenshot, and
 tests for the pure parts (field pairing by kind, the fold's summary).

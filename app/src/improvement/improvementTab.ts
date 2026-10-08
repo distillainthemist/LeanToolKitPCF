@@ -44,7 +44,7 @@ import {
 import { fieldInput } from "./fieldInput";
 import { isFieldEmpty } from "./fieldCodec";
 import { assigneePeople } from "../../../shared/schema/people";
-import { renderAlsoOrgs } from "./alsoOrgs";
+import { renderInitiativeForm } from "./initiativeForm";
 import { initiativeRag } from "../priorities/model";
 import {
   primaryMetric,
@@ -859,268 +859,81 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
       const paintHeaderForm = () => {
         const t = chosen!;
         clear(box);
+        // the picker needs the wide grid; the form takes the form width
+        box.classList.remove("app-modal-wide");
+        box.classList.add("app-modal-form");
         box.appendChild(el("div", "app-modal-title", `New ${t.name}`));
         const body = el("div", "app-cp-modal-body");
         box.appendChild(body);
-        const field = (label: string, control: HTMLElement, hint?: string) => {
-          const fEl = el("div", "app-field");
-          fEl.append(el("span", "app-field-label", label), control);
-          if (hint) fEl.appendChild(el("span", "app-field-hint", hint));
-          body.appendChild(fEl);
-        };
-        const title = el("input", "app-input") as HTMLInputElement;
-        title.placeholder = "What this initiative delivers, in a line";
-        field("Title", title);
-        const desc = el("textarea", "app-input") as HTMLTextAreaElement;
-        desc.rows = 2;
-        desc.placeholder = "The problem or opportunity, in a sentence or two";
-        field("Description", desc);
-        // org: site → department → area from the tree
-        const siteSel = el("select", "app-input") as HTMLSelectElement;
-        for (const s of sites) {
-          const o = el("option", "", s.site) as HTMLOptionElement;
-          o.value = s.site;
-          if (s.site === (scope.site || (me?.site ?? ""))) o.selected = true;
-          siteSel.appendChild(o);
-        }
-        const deptSel = el("select", "app-input") as HTMLSelectElement;
-        const areaSel = el("select", "app-input") as HTMLSelectElement;
-        const rebuildOrg = () => {
-          clear(deptSel);
-          const site = sites.find((s) => s.site === siteSel.value);
-          const dOpt = el("option", "", "Whole site") as HTMLOptionElement;
-          dOpt.value = "";
-          deptSel.appendChild(dOpt);
-          for (const d of site?.departments ?? []) {
-            const o = el("option", "", d.department) as HTMLOptionElement;
-            o.value = d.department;
-            deptSel.appendChild(o);
-          }
-          rebuildArea();
-        };
-        const rebuildArea = () => {
-          clear(areaSel);
-          const site = sites.find((s) => s.site === siteSel.value);
-          const d = site?.departments.find((x) => x.department === deptSel.value);
-          const aOpt = el("option", "", "Whole department") as HTMLOptionElement;
-          aOpt.value = "";
-          areaSel.appendChild(aOpt);
-          for (const a of d?.areas ?? []) {
-            const o = el("option", "", a) as HTMLOptionElement;
-            o.value = a;
-            areaSel.appendChild(o);
-          }
-        };
-        siteSel.addEventListener("change", rebuildOrg);
-        deptSel.addEventListener("change", rebuildArea);
-        rebuildOrg();
-        const orgRow = el("div", "app-im-orgrow");
-        orgRow.append(siteSel, deptSel, areaSel);
-        field("Organisation", orgRow);
-        // also shown in: further departments the work spans
-        const alsoOrgs: Initiative["org"][] = [];
-        const alsoHost = el("div");
-        renderAlsoOrgs({ host: alsoHost, sites, siteCo, list: alsoOrgs, primary: () => ({ company: siteCo[siteSel.value] ?? "", site: siteSel.value, department: deptSel.value, area: areaSel.value }) });
-        field("Also shown in", alsoHost, "Other departments this initiative belongs to — it lists under them too. The organisation above stays its owner.");
-        // linked priorities (multi, one primary); a handoff from a priority
-        // arrives pre-linked and locked
-        const links: { priorityId: string; primary: boolean; label: string; locked?: boolean }[] = lockedPriority
-          ? [{ priorityId: lockedPriority.priorityId, primary: true, label: lockedPriority.label, locked: true }]
-          : [];
-        const priBox = el("div", "app-im-links");
-        const priAdd = btn("＋ Link a priority");
-        const paintLinks = async () => {
-          clear(priBox);
-          links.forEach((l, li) => {
-            const chip = el("span", "app-im-link" + (l.primary ? " app-im-link-primary" : ""));
-            chip.appendChild(el("span", undefined, (l.primary ? "★ " : "") + l.label));
-            chip.title = l.primary ? "Primary" : "Click ★ to make primary";
-            if (!l.primary) {
-              const star = btn("★", "app-im-link-x");
-              star.title = "Make primary";
-              star.addEventListener("click", () => {
-                links.forEach((x) => (x.primary = false));
-                l.primary = true;
-                void paintLinks();
-              });
-              chip.appendChild(star);
-            }
-            if (!l.locked) {
-              const x = btn("×", "app-im-link-x");
-              x.addEventListener("click", () => {
-                links.splice(li, 1);
-                if (l.primary && links.length > 0) links[0].primary = true;
-                void paintLinks();
-              });
-              chip.appendChild(x);
-            }
-            priBox.appendChild(chip);
-          });
-          priBox.appendChild(priAdd);
-        };
-        priAdd.addEventListener("click", () => {
-          void (async () => {
-            const company = siteCo[siteSel.value] ?? "";
-            const data = await loadCascade(company);
-            // only priorities at the initiative's org or ABOVE it link
-            // (Ben, 2026-08-29): a dept initiative sees its dept, site
-            // and company priorities — never a sibling org's
-            const at = orgRef(company, siteSel.value, deptSel.value, areaSel.value);
-            const open = data.priorities.filter(
-              (p) => p.status === "active" && !links.some((l) => l.priorityId === p.id) && (sameOrg(p.org, at) || isDescendant(at, p.org))
-            );
-            if (open.length === 0) return;
-            const menu = el("div", "app-cp-menu app-im-primenu");
-            for (const g of groupPrioritiesForPicker(open, at)) {
-              menu.appendChild(el("div", "app-cp-menu-h", g.label));
-              for (const p of g.items) {
-                const item = btn(p.statement.slice(0, 70), "app-cp-menu-item");
-                item.addEventListener("click", () => {
-                  menu.remove();
-                  links.push({ priorityId: p.id, primary: links.length === 0, label: p.statement.slice(0, 40) });
-                  void paintLinks();
-                });
-                menu.appendChild(item);
-              }
-            }
-            const r = priAdd.getBoundingClientRect();
-            menu.style.top = `${r.bottom + 4}px`;
-            menu.style.left = `${Math.min(r.left, window.innerWidth - 340)}px`;
-            document.body.appendChild(menu);
-            const off = (e: PointerEvent) => {
-              if (!menu.contains(e.target as Node)) {
-                menu.remove();
-                document.removeEventListener("pointerdown", off, true);
-              }
-            };
-            setTimeout(() => document.addEventListener("pointerdown", off, true), 0);
-          })();
+        const defaultSite = scope.site || (me?.site ?? "") || sites[0]?.site || "";
+        // the shared header form (initiativeForm.ts): the same six groups
+        // as Edit details, so the two never drift
+        const form = renderInitiativeForm({
+          host: body,
+          dialogHost: wrap,
+          mode: "create",
+          sites,
+          siteCo,
+          roster,
+          imp,
+          roleDefs: activeRoles(t),
+          fields: [...imp.standardFields, ...t.fields],
+          singleAction: t.singleAction,
+          metricRule: t.metricRule,
+          initial: {
+            title: "",
+            description: "",
+            org: { company: siteCo[defaultSite] ?? "", site: defaultSite, department: "", area: "" },
+            alsoOrgs: [],
+            // a handoff from a priority arrives pre-linked and locked
+            priorities: lockedPriority ? [{ priorityId: lockedPriority.priorityId, primary: true, label: lockedPriority.label, locked: true }] : [],
+            roles: {},
+            fieldValues: {},
+            metrics: [],
+            confidential: false,
+            endorsement: false,
+          },
+          fiCtx: { people: assigneePeople([], roster, "search"), palette: stateColors },
+          canPromote: canPromoteDrivers(),
+          loadPriorities: (company) => loadCascade(company).then((data) => data.priorities),
         });
-        void paintLinks();
-        field("Linked priorities", priBox, "One is the primary — its charter and metric headline the priority.");
-        // roles: template roles with people pickers; standard roles pre-fill
-        const rolePeople: Record<string, { whoId: string; who: string }[]> = {};
-        const rolesBox = el("div", "app-im-roles");
-        const paintRoles = () => {
-          clear(rolesBox);
-          for (const role of activeRoles(t)) {
-            const line = el("div", "app-im-rolerow");
-            line.appendChild(el("span", "app-im-rolename", role.label));
-            const std = imp.standardRoles.find((sr) => sr.key === role.key);
-            if (std && !(role.key in rolePeople)) {
-              const fillers = roleFillersAt(std, siteSel.value);
-              if (fillers.length > 0) rolePeople[role.key] = fillers.map((p) => ({ ...p }));
-            }
-            const people = rolePeople[role.key] ?? [];
-            people.forEach((p, pi) => {
-              const chip = el("span", "app-owner", p.who);
-              chip.title = "Click to remove";
-              chip.addEventListener("click", () => {
-                people.splice(pi, 1);
-                paintRoles();
-              });
-              line.appendChild(chip);
-            });
-            if (role.multi || people.length === 0) {
-              const add = btn("＋", "app-owner app-owner-none");
-              add.addEventListener("click", () => {
-                void pickOwner(wrap, roster, null).then((res) => {
-                  if (res === null || res === "clear") return;
-                  const cur = rolePeople[role.key] ?? [];
-                  if (cur.some((p) => p.whoId === res.whoId)) return;
-                  rolePeople[role.key] = [...cur, { whoId: res.whoId, who: res.who }];
-                  paintRoles();
-                });
-              });
-              line.appendChild(add);
-            }
-            rolesBox.appendChild(line);
-          }
-        };
-        paintRoles();
-        siteSel.addEventListener("change", paintRoles);
-        field("Roles", rolesBox, "Standard roles pre-fill from the site's people (Settings → Improvement); adjust per initiative.");
-        // custom fields: standard + template
-        const fieldValues: Record<string, string> = {};
-        const allFields = [...imp.standardFields, ...t.fields];
-        // every kind enters as it does on the charter card (fieldInput.ts)
-        const fiCtx = { people: assigneePeople([], roster, "search"), palette: stateColors };
-        for (const cf of allFields) {
-          field(cf.label + (cf.required ? " *" : ""), fieldInput(cf, "", (raw) => (fieldValues[cf.key] = raw), fiCtx));
-        }
-        // metrics belong to the INITIATIVE (rework 2026-09-03): from the value
-        // driver tree, or proposed here; the template only sets the rule
-        const metrics: TemplateMetric[] = [];
-        if (!t.singleAction) {
-          const mBox = el("div");
-          renderMetricsList({
-            host: mBox,
-            metrics,
-            site: () => siteSel.value,
-            canPromote: canPromoteDrivers(),
-          });
-          field(
-            "Metrics",
-            mBox,
-            t.metricRule === "fromTree"
-              ? "This template requires metrics from the value driver tree."
-              : t.metricRule === "atLeastOne"
-                ? "This template asks for at least one metric."
-                : "Optional — pick a driver the initiative moves, or propose an initiative-specific measure."
-          );
-        }
-        // confidential + period
-        const conf = el("label", "app-cp-cascade-row") as HTMLLabelElement;
-        const confCb = el("input") as HTMLInputElement;
-        confCb.type = "checkbox";
-        conf.append(confCb, el("span", undefined, "Confidential — visible to its roles and org owners only"));
-        body.appendChild(conf);
-        const endorse = el("label", "app-cp-cascade-row") as HTMLLabelElement;
-        const endorseCb = el("input") as HTMLInputElement;
-        endorseCb.type = "checkbox";
-        endorse.append(endorseCb, el("span", undefined, "Endorsement — completed actions wait for the owner or sponsor"));
-        body.appendChild(endorse);
-        body.appendChild(el("span", "app-field-hint", "An action closed by anyone else waits until the owner, the sponsor or an admin endorses it. Switching this off closes whatever is waiting."));
-        const err = el("div", "app-cp-err", "");
-        body.appendChild(err);
         const foot = el("div", "app-modal-footer");
         const back = btn("‹ Back", "app-link");
-        back.addEventListener("click", paintPicker);
+        back.addEventListener("click", () => {
+          box.classList.remove("app-modal-form");
+          box.classList.add("app-modal-wide");
+          paintPicker();
+        });
         const cancel = btn("Cancel", "app-link");
         cancel.addEventListener("click", close);
         const create = btn("Create initiative", "app-btn app-btn-primary");
         create.addEventListener("click", () => {
           void (async () => {
+            if (form.validate().length > 0) return;
+            const v = form.read();
             const draft = {
-              title: title.value.trim(),
-              description: desc.value.trim(),
-              org: { company: siteCo[siteSel.value] ?? "", site: siteSel.value, department: deptSel.value, area: areaSel.value },
-              alsoOrgs,
-              confidential: confCb.checked,
+              title: v.title,
+              description: v.description,
+              org: v.org,
+              alsoOrgs: v.alsoOrgs,
+              confidential: v.confidential,
               flag: "" as const,
               flagNote: "",
-              endorsement: endorseCb.checked,
+              endorsement: v.endorsement,
               period: f.period !== "" ? f.period : currentPeriod,
               toPeriod: "",
-              roles: rolePeople,
-              priorities: links.map((l) => ({ priorityId: l.priorityId, primary: l.primary })),
-              fieldValues,
-              metrics: normalizeMetrics(metrics),
+              roles: v.roles,
+              priorities: v.priorities.map((l) => ({ priorityId: l.priorityId, primary: l.primary })),
+              fieldValues: v.fieldValues,
+              metrics: v.metrics,
             };
-            const errs = validateNewInitiative({ title: draft.title, org: draft.org, metrics: normalizeMetrics(metrics), singleAction: t.singleAction, roles: rolePeople }, t.metricRule);
-            const missingReq = allFields.filter((cf) => cf.required && isFieldEmpty(cf.kind, fieldValues[cf.key])).map((cf) => `"${cf.label}" is needed.`);
-            const allErrs = [...errs, ...missingReq];
-            if (allErrs.length > 0) {
-              err.textContent = allErrs.join(" ");
-              return;
-            }
             create.disabled = true;
             const made = await createInitiative(t, draft, actor());
             if (t.singleAction) {
               // the lightweight variant writes ONE action linked to the header
               const a = newAction({ source: "initiative", sourceId: made.id });
               a.description = draft.title;
-              const owner = (rolePeople.owner ?? [])[0];
+              const owner = (v.roles.owner ?? [])[0];
               if (owner) a.assignees = [{ whoId: owner.whoId, who: owner.who, done: false }];
               a.initiativeId = made.id;
               a.instanceId = `improvement:${made.id}`;
@@ -1138,13 +951,13 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
             }
             else render();
           })().catch((e) => {
-            err.textContent = e instanceof Error ? e.message : String(e);
+            form.showError(e instanceof Error ? e.message : String(e));
             create.disabled = false;
           });
         });
         foot.append(back, cancel, create);
         box.appendChild(foot);
-        title.focus();
+        form.focus();
       };
 
       paintPicker();

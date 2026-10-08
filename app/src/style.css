@@ -533,6 +533,27 @@ input[type="color"].app-cat-swatch {
 }
 .app-modal-title { font-size: 17px; font-weight: 700; }
 .app-modal-wide { width: min(92vw, 1080px); max-width: none; }
+/* the initiative header form (initiativeForm.ts, 2026-10-08): a form
+   width between the wizard column and the wide modal; the body is the
+   settings ground and each group a section card; short field kinds
+   pair two to a row; the "Also shown in" fold is a text toggle */
+.app-modal-form { width: min(92vw, 820px); max-width: none; }
+.app-if-body { background: #faf9f7; margin: 0 -22px; padding: 12px 22px 14px; border-top: 1px solid #eceae5; border-bottom: 1px solid #eceae5; gap: 10px; }
+.app-if-group { gap: 10px; }
+.app-if-group > .app-pr-section { margin-bottom: 2px; }
+.app-if-group .app-field { max-width: none; }
+.app-if-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px 14px; }
+.app-if-row-1 { grid-template-columns: minmax(0, 1fr); }
+.app-if-fold { display: flex; flex-direction: column; gap: 8px; }
+.app-if-foldbtn { align-self: flex-start; font-size: 12.5px; padding: 2px 0; }
+.app-if-foldbody[hidden] { display: none; }
+.app-if-rule { display: flex; flex-direction: column; gap: 0; }
+.app-if-rule .app-field-hint { padding-left: 24px; }
+.app-if-body .app-cp-err { padding: 0 2px; }
+@media (max-width: 599px) {
+  .app-if-row { grid-template-columns: minmax(0, 1fr); }
+  .app-if-body { margin: 0 -12px; padding: 10px 12px 12px; }
+}
 .app-vg-modal { width: min(96vw, 1320px); }
 /* roster preview matrix: crews × next 28 days */
 .app-roster-preview { overflow-x: auto; }

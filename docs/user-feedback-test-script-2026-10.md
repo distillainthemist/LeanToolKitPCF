@@ -232,7 +232,13 @@ On a desktop.
    board's control row (left of Current stage / All stages) shows
    "📁 Working folder", which opens the folder in a new tab; no button
    without a folder.
-8. **Folder contents** — on the links card, a working folder given as
+8. **Edit details** — six groups (About · Organisation · Priorities &
+   people · Details · Metrics · Rules) in a narrower modal, no Period;
+   "Also shown in" folded under Organisation (open when it has
+   entries); short fields two to a row; Save with an empty required
+   field names the group and lands the cursor on it. New initiative's
+   second step is the same form.
+9. **Folder contents** — on the links card, a working folder given as
    a SharePoint folder address (…/Shared Documents/… or …?id=…) shows
    "Show contents ▾" and lists its folders and files; a OneDrive
    "/:f:/g/" share shows ⓘ and no list; the Improvement list and tiles
@@ -240,4 +246,4 @@ On a desktop.
 
 | Item | Outcome |
 |---|---|
-| 1–8 | _Ben's pass pending_ |
+| 1–9 | _Ben's pass pending_ |

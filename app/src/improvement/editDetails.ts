@@ -1,31 +1,26 @@
-// Improvement — "Edit details…" for an existing initiative (the create
-// flow's header form, pre-filled): title · org · linked priorities with
-// one ★ primary · roles (template + standard, people pickers) · standard
-// and template custom fields · metric targets · confidentiality · period.
-// Saves back to the header row (and renames the initiative's board when
-// the title changes); History gets an "edited" event. Reached from the
-// Improvement row kebab and the board header's ⋮.
+// Improvement — "Edit details…" for an existing initiative: the shared
+// header form (initiativeForm.ts, six groups) pre-filled, in a 820px
+// modal. Saves back to the header row (and renames the initiative's
+// board when the title changes); History gets an "edited" event.
+// Reached from the Improvement row kebab and the board header's ⋮.
+// Period is not on the form (edit-details-proposal-2026-10.md §2.2):
+// the spread keeps the record's start period as it is.
 
-import { renderAlsoOrgs } from "./alsoOrgs";
 import { el, clear } from "../../../shared/ui/dom";
 import { parseOrgTree } from "../../../shared/schema/meeting";
 import { appPalettes, improvementSettingsJson, orgJson, siteCompanies } from "../store/config";
 import { paletteMap } from "../../../shared/palette";
 import { assigneePeople } from "../../../shared/schema/people";
-import { fieldInput } from "./fieldInput";
-import { isFieldEmpty } from "./fieldCodec";
 import { listPeople } from "../store/people";
 import { loadCascade } from "../store/priorities";
-import { groupPrioritiesForPicker, isDescendant, orgRef, sameOrg } from "../priorities/model";
 import { getTemplate } from "../store/templates";
 import { appendInitiativeEvent, ensureMetricCards, saveInitiative } from "../store/initiatives";
 import { Ben_ltkboardsService } from "../generated/services/Ben_ltkboardsService";
 import { eq, upsertWhere } from "../store/dv";
-import { pickOwner } from "../priorities/dialogs";
 import { promptConfirm } from "../prompts";
-import { Initiative, validateNewInitiative } from "./initiativeModel";
-import { normalizeMetrics, parseImprovementSettings, roleFillersAt, TemplateField, TemplateRole, activeRoles } from "./templateModel";
-import { renderMetricsList } from "./metricsList";
+import { Initiative } from "./initiativeModel";
+import { parseImprovementSettings, roleFillersAt, TemplateRole, activeRoles } from "./templateModel";
+import { renderInitiativeForm } from "./initiativeForm";
 
 const btn = (label: string, cls = "app-btn"): HTMLButtonElement => {
   const b = el("button", cls, label) as HTMLButtonElement;
@@ -42,7 +37,7 @@ export interface EditDetailsOpts {
 
 export function openEditDetails(o: EditDetailsOpts): void {
   const overlay = el("div", "app-modal-overlay");
-  const box = el("div", "app-modal app-modal-wide app-im-create");
+  const box = el("div", "app-modal app-modal-form app-im-create");
   overlay.appendChild(box);
   o.host.appendChild(overlay);
   const close = () => overlay.remove();
@@ -68,155 +63,6 @@ export function openEditDetails(o: EditDetailsOpts): void {
     const sites = parseOrgTree(treeRaw);
     const imp = parseImprovementSettings(impRaw);
 
-    const field = (label: string, control: HTMLElement, hint?: string) => {
-      const fEl = el("div", "app-field");
-      fEl.append(el("span", "app-field-label", label), control);
-      if (hint) fEl.appendChild(el("span", "app-field-hint", hint));
-      body.appendChild(fEl);
-    };
-
-    // title + description + period
-    const title = el("input", "app-input") as HTMLInputElement;
-    title.value = i.title;
-    field("Title", title);
-    const desc = el("textarea", "app-input") as HTMLTextAreaElement;
-    desc.rows = 2;
-    desc.value = i.description;
-    field("Description", desc);
-    const period = el("input", "app-input app-pr-short") as HTMLInputElement;
-    period.value = i.period;
-    field("Period", period);
-
-    // org selects, pre-filled
-    const siteSel = el("select", "app-input") as HTMLSelectElement;
-    for (const s of sites) {
-      const opt = el("option", "", s.site) as HTMLOptionElement;
-      opt.value = s.site;
-      if (s.site === i.org.site) opt.selected = true;
-      siteSel.appendChild(opt);
-    }
-    const deptSel = el("select", "app-input") as HTMLSelectElement;
-    const areaSel = el("select", "app-input") as HTMLSelectElement;
-    const rebuildOrg = (keep: boolean) => {
-      clear(deptSel);
-      const site = sites.find((s) => s.site === siteSel.value);
-      const dOpt = el("option", "", "Whole site") as HTMLOptionElement;
-      dOpt.value = "";
-      deptSel.appendChild(dOpt);
-      for (const d of site?.departments ?? []) {
-        const opt = el("option", "", d.department) as HTMLOptionElement;
-        opt.value = d.department;
-        if (keep && d.department === i.org.department) opt.selected = true;
-        deptSel.appendChild(opt);
-      }
-      rebuildArea(keep);
-    };
-    const rebuildArea = (keep: boolean) => {
-      clear(areaSel);
-      const site = sites.find((s) => s.site === siteSel.value);
-      const d = site?.departments.find((x) => x.department === deptSel.value);
-      const aOpt = el("option", "", "Whole department") as HTMLOptionElement;
-      aOpt.value = "";
-      areaSel.appendChild(aOpt);
-      for (const a of d?.areas ?? []) {
-        const opt = el("option", "", a) as HTMLOptionElement;
-        opt.value = a;
-        if (keep && a === i.org.area) opt.selected = true;
-        areaSel.appendChild(opt);
-      }
-    };
-    siteSel.addEventListener("change", () => rebuildOrg(false));
-    deptSel.addEventListener("change", () => rebuildArea(false));
-    rebuildOrg(true);
-    const orgRow = el("div", "app-im-orgrow");
-    orgRow.append(siteSel, deptSel, areaSel);
-    field("Organisation", orgRow);
-    // also shown in: further departments the work spans
-    const alsoOrgs: Initiative["org"][] = (i.alsoOrgs ?? []).map((x) => ({ ...x }));
-    const alsoHost = el("div");
-    renderAlsoOrgs({ host: alsoHost, sites, siteCo, list: alsoOrgs, primary: () => ({ company: siteCo[siteSel.value] ?? "", site: siteSel.value, department: deptSel.value, area: areaSel.value }) });
-    field("Also shown in", alsoHost, "Other departments this initiative belongs to — it lists under them too. The organisation above stays its owner.");
-
-    // linked priorities: pre-filled with real statements
-    const links: { priorityId: string; primary: boolean; label: string }[] = i.priorities.map((l) => ({ ...l, label: l.priorityId }));
-    const priBox = el("div", "app-im-links");
-    const priAdd = btn("＋ Link a priority");
-    const paintLinks = () => {
-      clear(priBox);
-      links.forEach((l, li) => {
-        const chip = el("span", "app-im-link" + (l.primary ? " app-im-link-primary" : ""));
-        chip.appendChild(el("span", undefined, (l.primary ? "★ " : "") + l.label));
-        if (!l.primary) {
-          const star = btn("★", "app-im-link-x");
-          star.title = "Make primary";
-          star.addEventListener("click", () => {
-            links.forEach((x) => (x.primary = false));
-            l.primary = true;
-            paintLinks();
-          });
-          chip.appendChild(star);
-        }
-        const x = btn("×", "app-im-link-x");
-        x.addEventListener("click", () => {
-          links.splice(li, 1);
-          if (l.primary && links.length > 0) links[0].primary = true;
-          paintLinks();
-        });
-        chip.appendChild(x);
-        priBox.appendChild(chip);
-      });
-      priBox.appendChild(priAdd);
-    };
-    priAdd.addEventListener("click", () => {
-      void (async () => {
-        const company = siteCo[siteSel.value] ?? "";
-        const data = await loadCascade(company);
-        // the initiative's org or above only (Ben, 2026-08-29)
-        const at = orgRef(company, siteSel.value, deptSel.value, areaSel.value);
-        const open = data.priorities.filter(
-          (p) => p.status === "active" && !links.some((l) => l.priorityId === p.id) && (sameOrg(p.org, at) || isDescendant(at, p.org))
-        );
-        if (open.length === 0) return;
-        const menu = el("div", "app-cp-menu app-im-primenu");
-        for (const g of groupPrioritiesForPicker(open, at)) {
-          menu.appendChild(el("div", "app-cp-menu-h", g.label));
-          for (const p of g.items) {
-            const item = btn(p.statement.slice(0, 70), "app-cp-menu-item");
-            item.addEventListener("click", () => {
-              menu.remove();
-              links.push({ priorityId: p.id, primary: links.length === 0, label: p.statement.slice(0, 40) });
-              paintLinks();
-            });
-            menu.appendChild(item);
-          }
-        }
-        const r = priAdd.getBoundingClientRect();
-        menu.style.top = `${r.bottom + 4}px`;
-        menu.style.left = `${Math.min(r.left, window.innerWidth - 340)}px`;
-        document.body.appendChild(menu);
-        const off = (e: PointerEvent) => {
-          if (!menu.contains(e.target as Node)) {
-            menu.remove();
-            document.removeEventListener("pointerdown", off, true);
-          }
-        };
-        setTimeout(() => document.addEventListener("pointerdown", off, true), 0);
-      })();
-    });
-    paintLinks();
-    void (async () => {
-      // resolve statements for the chips (best effort)
-      try {
-        const company = siteCo[i.org.site] ?? "";
-        const data = await loadCascade(company);
-        for (const l of links) l.label = data.priorities.find((p) => p.id === l.priorityId)?.statement.slice(0, 40) ?? l.label;
-        paintLinks();
-      } catch {
-        /* ids stay as labels */
-      }
-    })();
-    field("Linked priorities", priBox, "One is the primary — its charter and metric headline the priority.");
-
     // roles: template roles when the template survives, else the roles the
     // initiative carries (snapshot labels)
     const roleDefs: TemplateRole[] =
@@ -228,80 +74,43 @@ export function openEditDetails(o: EditDetailsOpts): void {
         multi: true,
         timeCommitment: false,
       }));
-    const rolePeople: Record<string, { whoId: string; who: string }[]> = Object.fromEntries(
-      Object.entries(i.roles).map(([k, v]) => [k, v.map((p) => ({ ...p }))])
-    );
-    const rolesBox = el("div", "app-im-roles");
-    const paintRoles = () => {
-      clear(rolesBox);
-      for (const role of roleDefs) {
-        const line = el("div", "app-im-rolerow");
-        line.appendChild(el("span", "app-im-rolename", role.label));
-        const std = imp.standardRoles.find((sr) => sr.key === role.key);
-        if (std) {
-          const fillers = roleFillersAt(std, siteSel.value);
-          if (fillers.length > 0 && (rolePeople[role.key] ?? []).length === 0) {
-            const hint = el("span", "app-field-hint", `site standard: ${fillers.map((p) => p.who).join(", ")}`);
-            line.appendChild(hint);
-          }
-        }
-        const people = rolePeople[role.key] ?? [];
-        people.forEach((p, pi) => {
-          const chip = el("span", "app-owner", p.who);
-          chip.title = "Click to remove";
-          chip.addEventListener("click", () => {
-            people.splice(pi, 1);
-            paintRoles();
-          });
-          line.appendChild(chip);
-        });
-        if (role.multi || people.length === 0) {
-          const add = btn("＋", "app-owner app-owner-none");
-          add.addEventListener("click", () => {
-            void pickOwner(o.host, roster, null).then((res) => {
-              if (res === null || res === "clear") return;
-              const cur = rolePeople[role.key] ?? [];
-              if (cur.some((p) => p.whoId === res.whoId)) return;
-              rolePeople[role.key] = [...cur, { whoId: res.whoId, who: res.who }];
-              paintRoles();
-            });
-          });
-          line.appendChild(add);
-        }
-        rolesBox.appendChild(line);
-      }
-    };
-    paintRoles();
-    field("Roles", rolesBox);
-
-    // custom fields (standard + template), pre-filled
-    const fieldValues: Record<string, string> = { ...i.fieldValues };
-    const allFields: TemplateField[] = [...imp.standardFields, ...(template?.fields ?? [])];
-    // every kind enters as it does on the charter card (fieldInput.ts)
-    const fiCtx = { people: assigneePeople([], roster, "search"), palette: paletteMap(palettes.states) };
-    for (const cf of allFields) {
-      field(cf.label + (cf.required ? " *" : ""), fieldInput(cf, fieldValues[cf.key] ?? "", (raw) => (fieldValues[cf.key] = raw), fiCtx));
-    }
-
-    // metrics belong to the initiative (rework 2026-09-03): the shared list —
-    // from the tree, or proposed; Link… / Promote… migrate an own metric's
-    // card series into the driver's
-    const metrics = i.metrics.map((m) => ({ ...m }));
     const meRow = roster.find((p) => p.whoId === o.actor.whoId) ?? null;
     const canPromote = (() => {
       if (meRow?.role === "superadmin") return true;
       const role = imp.standardRoles.find((r) => r.key === imp.vdtEditorRole);
-      return role !== undefined && roleFillersAt(role, siteSel.value || i.org.site).some((p) => p.whoId === o.actor.whoId);
+      return role !== undefined && roleFillersAt(role, i.org.site).some((p) => p.whoId === o.actor.whoId);
     })();
-    const mBox = el("div");
-    renderMetricsList({
-      host: mBox,
-      metrics,
-      site: () => siteSel.value,
+
+    const form = renderInitiativeForm({
+      host: body,
+      dialogHost: o.host,
+      mode: "edit",
+      sites,
+      siteCo,
+      roster,
+      imp,
+      roleDefs,
+      fields: [...imp.standardFields, ...(template?.fields ?? [])],
+      singleAction: i.singleAction,
+      metricRule: template?.metricRule ?? "none",
+      initial: {
+        title: i.title,
+        description: i.description,
+        org: { ...i.org },
+        alsoOrgs: (i.alsoOrgs ?? []).map((x) => ({ ...x })),
+        priorities: i.priorities.map((l) => ({ ...l, label: l.priorityId })),
+        roles: i.roles,
+        fieldValues: i.fieldValues,
+        metrics: i.metrics,
+        confidential: i.confidential,
+        endorsement: i.endorsement,
+      },
+      fiCtx: { people: assigneePeople([], roster, "search"), palette: paletteMap(palettes.states) },
       canPromote,
-      onLinked: async (m) => {
+      loadPriorities: (company) => loadCascade(company).then((data) => data.priorities),
+      // linking an own metric migrates its card's private points into the driver
+      onMetricLinked: async (m) => {
         if (i.boardId === "" || !m.driverId) return;
-        // the metric's card: its private points join the driver's series
         const [{ getBoard }, { parseManifest }, { mergeCardSeriesIntoDriver }] = await Promise.all([
           import("../store/boards"),
           import("../store/mappers"),
@@ -323,54 +132,28 @@ export function openEditDetails(o: EditDetailsOpts): void {
         }
       },
     });
-    if (!i.singleAction) field("Metrics", mBox, "★ = the primary — headlines the register and the roll-up. Own metrics can be linked or promoted into the value driver tree.");
 
-    // confidential
-    const conf = el("label", "app-cp-cascade-row") as HTMLLabelElement;
-    const confCb = el("input") as HTMLInputElement;
-    confCb.type = "checkbox";
-    confCb.checked = i.confidential;
-    conf.append(confCb, el("span", undefined, "Confidential — visible to its roles and org owners only"));
-    body.appendChild(conf);
-    // owner endorsement: a detail of the initiative (it left the board's
-    // ⋮ menu, 2026-09-29)
-    const endorse = el("label", "app-cp-cascade-row") as HTMLLabelElement;
-    const endorseCb = el("input") as HTMLInputElement;
-    endorseCb.type = "checkbox";
-    endorseCb.checked = i.endorsement;
-    endorse.append(endorseCb, el("span", undefined, "Endorsement — completed actions wait for the owner or sponsor"));
-    body.appendChild(endorse);
-    body.appendChild(el("span", "app-field-hint", "An action closed by anyone else waits until the owner, the sponsor or an admin endorses it. Switching this off closes whatever is waiting."));
-
-    const err = el("div", "app-cp-err", "");
-    body.appendChild(err);
     const footer = el("div", "app-modal-footer");
     const cancel = btn("Cancel", "app-link");
     cancel.addEventListener("click", close);
     const save = btn("Save details", "app-btn app-btn-primary");
     save.addEventListener("click", () => {
       void (async () => {
+        if (form.validate().length > 0) return;
+        const v = form.read();
         const next: Initiative = {
           ...i,
-          title: title.value.trim(),
-          description: desc.value.trim(),
-          period: period.value.trim(),
-          org: { company: siteCo[siteSel.value] ?? "", site: siteSel.value, department: deptSel.value, area: areaSel.value },
-          alsoOrgs,
-          confidential: confCb.checked,
-          endorsement: endorseCb.checked,
-          roles: rolePeople,
-          priorities: links.map((l) => ({ priorityId: l.priorityId, primary: l.primary })),
-          fieldValues,
-          metrics: normalizeMetrics(metrics),
+          title: v.title,
+          description: v.description,
+          org: v.org,
+          alsoOrgs: v.alsoOrgs,
+          confidential: v.confidential,
+          endorsement: v.endorsement,
+          roles: v.roles,
+          priorities: v.priorities.map((l) => ({ priorityId: l.priorityId, primary: l.primary })),
+          fieldValues: v.fieldValues,
+          metrics: v.metrics,
         };
-        const errs = validateNewInitiative({ title: next.title, org: next.org, metrics: next.metrics, singleAction: i.singleAction, roles: rolePeople }, template?.metricRule ?? "none");
-        const missingReq = allFields.filter((cf) => cf.required && isFieldEmpty(cf.kind, fieldValues[cf.key])).map((cf) => `"${cf.label}" is needed.`);
-        const allErrs = [...errs, ...missingReq];
-        if (allErrs.length > 0) {
-          err.textContent = allErrs.join(" ");
-          return;
-        }
         save.disabled = true;
         const endorsementWentOff = i.endorsement && !next.endorsement;
         Object.assign(i, next);
@@ -411,13 +194,13 @@ export function openEditDetails(o: EditDetailsOpts): void {
         close();
         o.onSaved();
       })().catch((e) => {
-        err.textContent = e instanceof Error ? e.message : String(e);
+        form.showError(e instanceof Error ? e.message : String(e));
         save.disabled = false;
       });
     });
     footer.append(cancel, save);
     box.appendChild(footer);
-    title.focus();
+    form.focus();
   })().catch((e) => {
     clear(body);
     body.appendChild(el("div", "app-board-note", `Could not load: ${e instanceof Error ? e.message : String(e)}`));

@@ -398,6 +398,13 @@ Graph `/shares` only, which no app connector reaches).
 The card walk engages on initiative boards (a template row is live on
 a MEETING board only).
 
+**The initiative header form** (2026-10-08). `improvement/
+initiativeForm.ts` renders the six groups (About · Organisation ·
+Priorities & people · Details · Metrics · Rules) for both the create
+flow's second step and Edit details; `initiativeFormModel.ts` holds
+the pure parts. Period is not on the form: it is the start period,
+stamped at creation from the register's filter and read by `liveIn`.
+
 **The values grid and folded weeks** (2026-10-08). A bucket with two
 readings used to fold and lock its cell ("edit them on the card").
 The cell model (`vdt/gridModel.ts`) now names the bucket's LAST point
