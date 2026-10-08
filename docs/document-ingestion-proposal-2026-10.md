@@ -267,3 +267,79 @@ every file. Findings go into sharepoint-writes.md once Ben has run it.
    "Ingestion (bulk drop, hidden from the register)".
 3. Documents tab → ⋮ → "New ingestion task…": name,
    destination, assignees, defaults. Open the task from Document tasks.
+
+## 9. The editable grid (Ben, 2026-10-09 — critical review)
+
+Ben: "show every column that needs to be set for the document, in the
+same order as defined in settings, with the ability to directly enter /
+change; a horizontally scrollable grid is fine as long as the Document
+column on the left is a frozen pane."
+
+### What this changes
+
+The task sheet's list becomes a GRID: one row per file, one column per
+field the destination type offers (the site dictionary's order — the
+same set and order the Edit-properties form shows), each cell editable
+in place; the Document column (select box, type chip, name) frozen at
+the left while the rest scrolls sideways; the Ready pill frozen at the
+right or first after the name. The Edit-properties dialog on the row
+becomes redundant for this screen.
+
+### What the platform gives, and what it costs
+
+- **Editors exist per kind** (`fieldEditors.ts`): text, note, number,
+  choice, yes/no, date, taxonomy single / multi (term pickers over
+  `cachedTermPaths`), person (pool or directory search), url. They are
+  FORM editors — stacked, labelled, 100% wide. A cell needs the same
+  value logic in a cell-sized skin: a select or input in the cell for
+  choice / yes-no / date / text / number; a popover anchored to the
+  cell for taxonomy (search when the set is large, indented select
+  when small), people, note and url.
+- **Every write is a bracket** (check-out → forms-engine / typed write
+  → major check-in): ~4 round trips, 2–3 s. A cell-at-a-time save is
+  what SharePoint's grid does, but 10 cells × 50 files is 500 brackets.
+  A DRAFT model — cells change locally, one "Save changes" writes each
+  touched file ONCE with all its changed cells — is cheaper by an order
+  of magnitude and gives an honest unsaved state (row dot, a guard on
+  close). It is also what the register's lifecycle commands do: one
+  bracket per act.
+- **Prefill is display-only.** The feed (RLDAS) gives display strings;
+  taxonomy loses its term ids, people keep an `#email` twin, dates an
+  ISO twin. Showing a cell needs nothing more; EDITING a taxonomy cell
+  resolves the current label through the set's walk (label → id) so a
+  single-pick select can show the current term selected.
+- **Frozen column**: CSS alone — the row stays a grid, the scroller
+  scrolls on x, the first cell is `position: sticky; left: 0` with its
+  own background; the header row the same. No library.
+- **Keyboard**: Tab / Shift+Tab between cells, Enter commits and moves
+  down, Esc reverts a cell — the values grid's grammar (vdt grid).
+- **The date model**: effective date editable (decision 3); next
+  review and cadence derived at run time — shown read-only, greyed.
+- **Required**: marked ✱ in the header; the Ready pill reads the DRAFT
+  (what it would be after save), the run button the SAVED state.
+
+### Options
+
+A. **Autosave per cell** (SharePoint's grid): one bracket per commit;
+   simplest mental model; slow at volume, and a half-typed row can
+   never be abandoned. B. **Draft + Save changes**: local edits, row
+   dot, one bracket per touched file; a guard on close; Refresh asks
+   before discarding drafts. Recommended. C. **Both**: autosave with a
+   debounce per row — the worst of each (surprise writes, still slow).
+
+Columns: **(i)** every column the type offers (the form's set), or
+**(ii)** only the type's default-view and required columns, with the
+rest behind "More columns ▾". (i) is what was asked; (ii) keeps a
+narrow task narrow. Recommended (i), with the required ones first after
+the name? No — settings order, as asked; required marked.
+
+Effort: about two days — `docs/ingestionGrid.ts` (pure draft model,
+tested: dirty tracking, writes per file, Ready from draft; the cell
+renderers and popover editors by kind; sticky CSS; keyboard), the
+sheet rewired (Save changes, the guard, Refresh with a drafts check),
+Set for selected and Fill blanks writing into the DRAFT rather than
+SharePoint, the dialog on the row removed.
+
+### Decisions — taken with Ben
+
+(filled in as they are taken)
