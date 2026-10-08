@@ -1035,6 +1035,7 @@ no ad-hoc credential handling.
 | Pilot feedback round 1 — plan, status, test script | [user-feedback-plan-2026-10.md](user-feedback-plan-2026-10.md), [user-feedback-test-script-2026-10.md](user-feedback-test-script-2026-10.md) |
 | Phone layouts — the review, tranches M1–M5, card follow-ups | [mobile-review-2026-10.md](mobile-review-2026-10.md) |
 | Settings in-page navigation — options and the built strip | [settings-nav-proposal-2026-10.md](settings-nav-proposal-2026-10.md) |
+| Initiative documentation links and the walk on initiative boards — proposal | [initiative-links-proposal-2026-10.md](initiative-links-proposal-2026-10.md) |
 | Capture rollup (Flag column, cross-board capture rows) | [leanboard-capture-rollup-plan.md](leanboard-capture-rollup-plan.md) |
 | Canvas card, design mode, Canvas rollup | [leanboard-canvas-card-plan.md](leanboard-canvas-card-plan.md) |
 | Power BI embed prerequisites (browser policy) | [deployment-cookbook.md](deployment-cookbook.md) |
