@@ -451,8 +451,12 @@ dividers. No priority statement here — the card above names it.
   card after a render and on repaints, idempotently, so the tabs never
   change and a late append lands in the last card. A card that lived
   inside a section (`.app-access-card`) drops its box for a top
-  divider — never a box in a box. The strip's pills map one to one
-  onto cards.
+  divider, and an editable-list card (`.app-dept-card`) takes the
+  tinted-row look — never a box in a box. A container holding its own
+  heads (or, once grouped, its own cards — Site cadence's pane) is
+  grouped inside and stays on the ground; a repeat pass makes no DOM
+  mutation (one that did blurred every focused field). The strip's
+  pills map one to one onto cards.
 - **The section strip** (`settingsStrip.ts`, 2026-10-07): a second,
   smaller row of section pills between the unsaved-changes bar and the
   body, DERIVED from the tab's `h3.app-pr-h3` heads after each render

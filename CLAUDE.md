@@ -208,6 +208,12 @@ Version lives in the tag alone — nothing is stamped into files.
   destroyed (2026-10-08). Lifted elements are only dropped when the
   tab leaves (`reset()` before `clear(body)`), and a leading card that
   turns out to hold sections is taken apart and re-grouped.
+- **PDF text state persists across text objects.** `Tc` character
+  spacing set for one `BT … ET` run stays in the graphics state for
+  every later run on the page (the poster's rail label leaked spacing
+  into all body text, 2026-10-08) — wrap a styled run in `q … Q`.
+  And nothing here renders a PDF: `sips -s format png` on macOS is
+  the eye for a generated page.
 - **A form never closes on a click outside it.** Edit details, Create
   initiative, the priority dialogs, prompts, escalation, the column
   chooser — buttons or Escape only (Ben, 2026-10-07: an edit lost to

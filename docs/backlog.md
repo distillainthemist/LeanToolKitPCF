@@ -268,6 +268,13 @@ user-feedback-test-script-2026-10.md. Released v0.65.0 / v0.65.1.
   M1–M5 ALL BUILT and RELEASED in v0.66.0 (2026-10-07; M2 leaves four
   card tile layouts to narrow per card: SQDPC, RiskMatrix, RACI,
   Fishbone) — Ben's phone pass on the hosted app follows.
+- **Settings after v0.67.0 (2026-10-08)**: site admins no longer see a
+  Ritual categories list (it moved to the super-admin Branding tab) —
+  a read-only view on Rituals if anyone asks; the Priorities settings
+  tab is super-admin only now that only pillars and the period rule
+  remain. The priorities poster scales a crowded view down rather than
+  paginating — a floor on the scale (and a second page) only if a site
+  ever has too many columns to read.
 - **Hierarchy in filters** (report 36): a parent term such as SMELTER
   including every term beneath it when ticked — logged, not built
   (B1 kept "a pick includes its subtree" as before).

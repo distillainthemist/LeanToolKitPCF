@@ -174,3 +174,37 @@ and reopen the player first. Each line is one screen.
 | Item | Outcome |
 |---|---|
 | 1–9 | _Ben's pass pending_ |
+
+## Settings and poster pass — v0.67.0 (2026-10-08)
+
+On a desktop.
+
+1. **Documents settings** — the section strip under the tabs (ten
+   pills over two rows), sticky while scrolling, the pill following
+   the section; a click lands its heading under the strip; each
+   section is a white card on the tinted ground.
+2. **Site cadence** — the three pills and "Site: Mine ▾" on one row;
+   three cards below; clicking into Time zone holds focus; switching
+   the site repaints the cards.
+3. **Priorities settings** (super admin) — two pills, two cards; as a
+   site admin the tab is absent.
+4. **Improvement settings** — Initiative templates first with its note
+   under the heading; Methods, Standard fields and Health-check
+   questions follow.
+5. **Organisation** — a site card shows Hub tabs and Cascade
+   customisation; changing the level saves without a bar.
+6. **Branding** — Ritual categories under the palettes; a swatch
+   change saves; a ritual still shows its colour.
+7. **Users** — type a name not on the roster, use "Search directory &
+   add" (or the empty-result link), add someone with a site and
+   department, and see them in the list already placed.
+8. **Rituals** — one row of search, filters and the blue ＋ New ritual.
+9. **Request admin** (as a user) — the super admins listed with mail
+   links.
+10. **Priorities tab** — ⋮ → Download PDF version on the Mine view:
+    one A3 page, the org chain in the title, the rail labels, wrapped
+    heads, rounded cards, the export date, no page count.
+
+| Item | Outcome |
+|---|---|
+| 1–10 | _Ben's pass pending_ |
