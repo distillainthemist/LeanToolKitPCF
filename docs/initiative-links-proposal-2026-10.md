@@ -173,7 +173,13 @@ initiative card, see the tabs and rails, hop with NEXT, Back to board.
   offers Edit and ⠿, and the form (url first — a pasted URL titles
   itself — title, note, group; Add / Save, Cancel, Remove; Enter and
   Esc) replaces the row inline and lands only on Add / Save; the tile =
-  titles only, six then "+n more". On an initiative board the mounter pins the working folder
+  titles only, six then "+n more". The board tile (same day, Ben: "the
+  links card in the overview is showing as not updated, when it is")
+  now pins the working folder like the open card, wears the card's label
+  when the slot has no title (not "LinksCard"), and drops "Nothing
+  recorded yet" once a working folder is set — that value lives on the
+  initiative header, so the card's own document stays empty until a
+  link is added. On an initiative board the mounter pins the working folder
   from the charter binding (`field:workingFolder`) with "Set folder…"
   for those who may edit it — one place to set it. Harness
   `app/harness/links.html`. The 📁 shortcut on the Improvement list

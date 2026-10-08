@@ -312,7 +312,7 @@ async function renderBoard(
     }
     const teardown = mountTile(tile.cardType, {
       host,
-      title: slot.title,
+      title: slot.title || cardLabel(tile.cardType),
       boardId: board.boardId,
       cardId: tile.cardId,
       outputJson: row?.outputJson ?? "",
@@ -322,7 +322,8 @@ async function renderBoard(
       instanceKey,
       instanceWhen: current?.when ?? "",
       instanceTopic: current ? topicForDate(board.occurrenceSettingsRaw, current.when) : "",
-      binding: tile.cardType === "CanvasCard" ? charterBinding : undefined,
+      // the links card's tile pins the working folder too (Ben, 2026-10-08)
+      binding: tile.cardType === "CanvasCard" || tile.cardType === "LinksCard" ? charterBinding : undefined,
       // a card shows its own actions; an action surface shows the board's
       // (its job, and what it shows when opened) — tileActions.ts
       actions: actionsForTile(
@@ -605,6 +606,12 @@ async function renderBoard(
       titleColors
     ).map((t) => {
       let out = t.barColor === "" ? { ...t, barColor: fallbackBar } : t;
+      // a slot without a title wears the card's label, never its type
+      // name ("LinksCard" — Ben, 2026-10-08), as the open card does
+      if (out.title === "") out = { ...out, title: cardLabel(t.cardType) };
+      // the links card reads as recorded once the initiative's working
+      // folder is set: that lives on the header, not in the card's document
+      if (t.cardType === "LinksCard" && out.noData && (charterBinding?.get("field:workingFolder") ?? "").trim() !== "") out = { ...out, noData: false };
       // initiative boards: the tile wears its stage chip in the stage's
       // PDCA colour; current-stage cards get the 2px ring (design 2.3)
       if (stageInfo) {
