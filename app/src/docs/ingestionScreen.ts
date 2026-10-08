@@ -193,7 +193,9 @@ export function openIngestionTask(o: IngestionScreenOpts): () => void {
   const task = o.task;
   const head = el("div", "app-docs-viewhead");
   const titleBlock = el("div", "app-docs-viewtitle");
-  titleBlock.append(el("div", "app-docs-viewdocname", task.name), el("div", "app-ing-meta", "Loading…"));
+  const titleRow = el("div", "app-ing-titlerow");
+  titleRow.appendChild(el("div", "app-docs-viewdocname", task.name));
+  titleBlock.append(titleRow, el("div", "app-ing-meta", "Loading…"));
   head.appendChild(titleBlock);
   const closeBtn = btn("✕", "app-btn app-docs-viewclose");
   closeBtn.title = "Close";
@@ -212,7 +214,8 @@ export function openIngestionTask(o: IngestionScreenOpts): () => void {
     if (dead) return;
     const meta = titleBlock.querySelector(".app-ing-meta")!;
     meta.textContent = `→ ${libName(dest ?? undefined)} · ${task.assignees.length} assignee${task.assignees.length === 1 ? "" : "s"} · created by ${task.createdByName || task.createdByEmail} ${task.createdAt !== "" ? formatWhen(task.createdAt) : ""}`;
-    titleBlock.appendChild(statusChip(task.status === "closed" ? "✓ Closed" : task.status === "running" ? "◐ Running" : "● Open", task.status === "closed" ? "green" : "amber"));
+    // a small chip beside the name, never a stretched band (Ben, 2026-10-09)
+    titleRow.appendChild(statusChip(task.status === "closed" ? "✓ Closed" : task.status === "running" ? "◐ Running" : "● Open", task.status === "closed" ? "green" : "amber"));
     clear(body);
     if (src === null || dest === null || ctx.site === "") {
       body.appendChild(el("div", "app-cp-err", src === null ? "No ingestion library is exposed for this site (Settings → Documents → Libraries)." : "This task's destination library is no longer exposed."));
