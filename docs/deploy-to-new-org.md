@@ -190,6 +190,6 @@ someone does the portal Add-existing step there.
 | v0.54.0 | `ben_alsoorgsjson` on `ben_ltkinitiative` | initiatives listed under several departments |
 | v0.62.0 | `ben_toperiod`, `ben_plannedend` on `ben_ltkpriority`; `ben_fromperiod`, `ben_toperiod` on `ben_ltkpillar`; `ben_toperiod` on `ben_ltkinitiative` | priorities span years (no migration — a row closed before ends were stamped reads as ending in its start period); re-parenting |
 
-v0.52.0, v0.55.0 through v0.61.0, and v0.63.0 through v0.67.0 were app-only. After a solution import, existing
+v0.52.0, v0.55.0 through v0.61.0, and v0.63.0 through v0.68.0 were app-only. After a solution import, existing
 action rows are healed (initiative ids) automatically on the first
 open of the Improvement or Priorities tab — nothing to run.

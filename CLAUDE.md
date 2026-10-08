@@ -303,7 +303,9 @@ Version lives in the tag alone — nothing is stamped into files.
   v0.65.1 and v0.66.0 (2026-10-07: the phone register, mobile M1–M5,
   the settings strip) and v0.67.0 (2026-10-08: settings section cards
   and strip tools, the Users add flow, Cascade customisation under
-  Organisation, the priorities A3 poster) are app-only. Prod imports the managed solution FIRST.
+  Organisation, the priorities A3 poster) and v0.68.0 (2026-10-08:
+  working folder, links card, the initiative walk, the grouped header
+  form) are app-only. Prod imports the managed solution FIRST.
 - **One rule, applied everywhere it matters.** A rule that must hold
   for every action or every card lives in ONE pure function and is
   applied at the screen for an honest picture AND at the store's

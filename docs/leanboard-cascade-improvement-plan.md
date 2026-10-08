@@ -1455,6 +1455,17 @@ reschedule/cancel history with a reason picklist.
   the view before the launch re-route mounted the hub again, so the
   second mount saw nothing. The pending view now lives for a 20 s
   grace window instead of one read.
+- **2026-10-08 — released as v0.68.0** (app-only): the initiative
+  documentation work — the working folder as a built-in standard
+  field (pane row, board-header "📁 Working folder" button, charter),
+  the Documentation & links card (inline Add link and per-row Edit,
+  folder contents for path-carrying SharePoint links, the working
+  folder pinned on card and tile), the card walk on initiative boards;
+  the Improvement rows' and tiles' "Template · Method" chip; the
+  initiative header form rebuilt as six section-card groups in one
+  module for create and edit, Period off the form
+  (edit-details-proposal-2026-10.md); confirmed settings deletes; the
+  values grid's folded-week fix; no orphan sub-pillars.
 - **2026-10-08 — released as v0.67.0** (app-only): the settings
   rework — one section head for every module, the derived sticky
   section strip (from two sections) with lifted strip tools, section
