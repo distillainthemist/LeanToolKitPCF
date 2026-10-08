@@ -36,6 +36,8 @@ import {
   SpField,
   addMonthsYmd,
   cadenceForImportance,
+  columnsForTypes,
+  defaultColumnsFor,
   deriveTypeStates,
   dialogSections,
   emptySiteDictionary,
@@ -233,8 +235,9 @@ export function openIngestionTask(o: IngestionScreenOpts): () => void {
     // the source library's columns are the destination's (site columns);
     // the edit form reads the destination's configuration
     const formLib: DocLibrary = { ...src, config: dest.config };
-    // every destination column the register would show, plus the required
-    const wanted = Array.from(new Set([...dest.config.columns.filter((c) => c.available && c.inDefault).map((c) => c.internal), ...required.map((r) => r.internal)]));
+    // the columns the REGISTER shows for the destination's type (the site
+    // dictionary's default cells, in its order), plus the required ones
+    const wanted = Array.from(new Set([...defaultColumnsFor(ctx.cellCtx.dict, [dest.libType]), ...required.map((r) => r.internal)])).filter((c) => carried.has(c));
     const feedFields = Array.from(new Set([...wanted, docIdInternal, effInternal, importanceInternal, statusInternal].filter((f) => f !== "")));
 
     // ---- actions row ---------------------------------------------------------
@@ -330,7 +333,7 @@ export function openIngestionTask(o: IngestionScreenOpts): () => void {
     const columns = [
       selectCol,
       { key: "name", label: "File", width: "minmax(180px, 1.4fr)", render: nameCell },
-      ...buildRegisterColumns(ctx.cellCtx, { wanted, bucket: "full", keepOrder: true }).filter((c) => c.key !== "name" && c.key !== "Modified"),
+      ...buildRegisterColumns(ctx.cellCtx, { wanted, bucket: "full" }).filter((c) => c.key !== "name" && c.key !== "Modified"),
       readyCol,
     ];
     const list = mountDocList<DocRow>(listHost, {
@@ -386,7 +389,9 @@ export function openIngestionTask(o: IngestionScreenOpts): () => void {
         ],
       });
       const pick = el("select", "app-input") as HTMLSelectElement;
-      const settable = destFields.filter((f) => carried.has(f.internal) && f.internal !== statusInternal);
+      // the destination type's offered columns, in the dictionary's order
+      const offered = columnsForTypes(ctx.cellCtx.dict, [dest.libType]);
+      const settable = offered.map((i) => destFields.find((f) => f.internal === i)).filter((f): f is SpField => f !== undefined && carried.has(f.internal) && f.internal !== statusInternal);
       for (const f of settable) {
         const opt = el("option", "", ctx.dictBy.get(f.internal)?.label || f.title) as HTMLOptionElement;
         opt.value = f.internal;
@@ -758,6 +763,9 @@ export function openIngestionTaskEditor(o: IngestionEditorOpts): void {
         dictBy: ctx!.dictBy,
         onChange: () => undefined,
         initial,
+        // the destination type's sections and order — the same form the
+        // edit-properties dialog shows for that library
+        sections: dialogSections(ctx!.cellCtx.dict, dest.libType),
         includeSystemDates: true,
       });
     };
