@@ -228,7 +228,11 @@ On a desktop.
 6. **Template chip** — every Improvement row and tile shows a tinted
    "Template · Method" chip beside the title (the method alone when the
    template was deleted); hover gives both in full.
-7. **Folder contents** — on the links card, a working folder given as
+7. **Working folder button** — with a folder set, the initiative
+   board's control row (left of Current stage / All stages) shows
+   "📁 Working folder", which opens the folder in a new tab; no button
+   without a folder.
+8. **Folder contents** — on the links card, a working folder given as
    a SharePoint folder address (…/Shared Documents/… or …?id=…) shows
    "Show contents ▾" and lists its folders and files; a OneDrive
    "/:f:/g/" share shows ⓘ and no list; the Improvement list and tiles
@@ -236,4 +240,4 @@ On a desktop.
 
 | Item | Outcome |
 |---|---|
-| 1–7 | _Ben's pass pending_ |
+| 1–8 | _Ben's pass pending_ |

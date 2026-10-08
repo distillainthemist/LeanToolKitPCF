@@ -203,7 +203,18 @@ export function mountInitiativePane(o: InitiativePaneOpts): InitiativePaneHandle
       if (i.confidential) o.titleHost.appendChild(el("span", "app-im-chip app-im-chip-conf", "◈ Confidential"));
       if (i.status !== "active" && i.status !== "completed") o.titleHost.appendChild(el("span", "app-status-badge", i.status));
 
-      // ---- controls: Current | All (accent seg, ui-standard) + ⋮ ------------
+      // ---- controls: [Working folder] Current | All (accent seg) + ⋮ ---------
+      // the working folder, one click from the board (Ben, 2026-10-08) —
+      // an anchor in button clothes, so a new tab is the browser's own
+      const folderUrl = workingFolderUrl(i.fieldValues);
+      if (folderUrl !== "") {
+        const openFolder = el("a", "app-btn app-ib-folderbtn", "📁 Working folder") as HTMLAnchorElement;
+        openFolder.href = folderUrl;
+        openFolder.target = "_blank";
+        openFolder.rel = "noopener noreferrer";
+        openFolder.title = `Open the working folder in a new tab\n${folderUrl}`;
+        o.controlsHost.appendChild(openFolder);
+      }
       const seg = el("div", "app-docs-seg");
       for (const [v, l] of [["current", "Current stage"], ["all", "All stages"]] as const) {
         const b = btn(l, "app-docs-segbtn" + (stageMode === v ? " app-docs-segbtn-on" : ""));
