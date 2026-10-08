@@ -242,6 +242,8 @@ export function openIngestionTask(o: IngestionScreenOpts): () => void {
 
     // ---- actions row ---------------------------------------------------------
     const actions = el("div", "app-ing-actions");
+    // greyed until EVERY file has its required details (Ben, 2026-10-09)
+    let runBtn: HTMLButtonElement | null = null;
     const openFolder = linkBtn("Open folder ↗", `${ctx.origin}${task.folder}`, "app-btn app-btn-primary");
     openFolder.title = "The task's folder in SharePoint — add files there";
     actions.appendChild(openFolder);
@@ -258,18 +260,23 @@ export function openIngestionTask(o: IngestionScreenOpts): () => void {
     if (o.isController && task.status !== "closed") {
       const edit = btn("Edit task…");
       edit.addEventListener("click", () => {
+        let cancelled = false;
         openIngestionTaskEditor({
           task,
+          onCancelled: () => {
+            cancelled = true;
+          },
           onSaved: () => {
             o.onChanged();
             close();
-            openIngestionTask(o);
+            if (!cancelled) openIngestionTask(o);
           },
         });
       });
-      const run = btn("Run ingestion…", "app-btn app-btn-primary");
-      right.append(edit, run);
-      run.addEventListener("click", () => void startRun());
+      runBtn = btn("Run ingestion…", "app-btn app-btn-primary");
+      runBtn.disabled = true;
+      right.append(edit, runBtn);
+      runBtn.addEventListener("click", () => void startRun());
     }
     actions.appendChild(right);
     body.appendChild(actions);
@@ -372,6 +379,11 @@ export function openIngestionTask(o: IngestionScreenOpts): () => void {
       paintSel();
       const ready = rows.filter((r) => missingFor(r.values, required).length === 0).length;
       status.textContent = rows.length === 0 ? "" : `${rows.length} file${rows.length === 1 ? "" : "s"} · ${ready} ready${task.log.length > 0 ? ` · log: ${logSummary(task.log)}` : ""}`;
+      if (runBtn) {
+        const allReady = rows.length > 0 && ready === rows.length;
+        runBtn.disabled = !allReady || running;
+        runBtn.title = rows.length === 0 ? "No files in the folder yet" : allReady ? "Copy every file into the destination as approved version 1" : `${rows.length - ready} file${rows.length - ready === 1 ? " is" : "s are"} missing required details — set them first`;
+      }
     };
     await reload();
 
@@ -624,6 +636,8 @@ export interface IngestionEditorOpts {
   /** Absent = a new task. */
   task?: IngestionTask;
   onSaved: (task: IngestionTask) => void;
+  /** The task was cancelled (removed) — the sheet behind closes. */
+  onCancelled?: () => void;
 }
 
 export function openIngestionTaskEditor(o: IngestionEditorOpts): void {
@@ -653,10 +667,34 @@ export function openIngestionTaskEditor(o: IngestionEditorOpts): void {
     title: isNew ? "New ingestion task" : "Edit ingestion task",
     maxWidth: 640,
     buttons: [
-      { label: "Cancel", kind: "secondary", onClick: () => dlg.close() },
-      { label: isNew ? "Create task" : "Save task", kind: "primary", onClick: () => void save() },
+      // a controller may cancel a task (Ben, 2026-10-09): the row goes;
+      // files already in the folder stay in the ingestion library
+      ...(isNew ? [] : [{ label: "Cancel task…", kind: "danger" as const, onClick: () => void cancelTask() }]),
+      { label: "Cancel", kind: "secondary" as const, onClick: () => dlg.close() },
+      { label: isNew ? "Create task" : "Save task", kind: "primary" as const, onClick: () => void save() },
     ],
   });
+  const cancelTask = async () => {
+    const left = await folderItemCount(t);
+    const ok = await promptConfirm({
+      title: `Cancel the task "${t.name}"?`,
+      note:
+        left > 0
+          ? `The task is removed from LeanBoard. Its folder still holds ${left} file${left === 1 ? "" : "s"}; they stay in the ingestion library until someone removes them in SharePoint. Nothing is ingested.`
+          : "The task and its empty folder are removed. Nothing is ingested.",
+      confirmLabel: "Cancel task",
+      danger: true,
+    });
+    if (!ok) return;
+    try {
+      await removeIngestionTask(t, left);
+      dlg.close();
+      o.onSaved(t);
+      o.onCancelled?.();
+    } catch (e) {
+      err.textContent = e instanceof Error ? e.message : String(e);
+    }
+  };
   const body = dlg.body;
   body.appendChild(el("div", "app-settings-note", "Loading…"));
   const err = el("div", "app-cp-err", "");
@@ -831,15 +869,23 @@ export function openIngestionTaskEditor(o: IngestionEditorOpts): void {
   };
 }
 
-/** Delete a task that has no files (controllers): the folder goes with it. */
-export async function removeIngestionTask(task: IngestionTask): Promise<string> {
+/** How many items the task's folder holds (0 when unreadable). */
+async function folderItemCount(task: IngestionTask): Promise<number> {
+  if (task.folder === "") return 0;
   const ctx = await loadSiteCtx();
   const counts = await fetchFolderCounts(ctx.site, task.folder);
   const left = Number(((counts.data ?? {}) as { ItemCount?: unknown }).ItemCount ?? NaN);
-  if (counts.ok && left > 0) return `The folder still holds ${left} item${left === 1 ? "" : "s"} — move or remove them first.`;
-  if (counts.ok) await recycleFolder(ctx.site, task.folder);
-  await deleteIngestionTask(task.rowId);
-  return "";
+  return counts.ok && Number.isFinite(left) ? left : 0;
+}
+
+/** Cancel a task (controllers): the row goes; an EMPTY folder goes with
+ *  it, a folder with files stays in the ingestion library untouched. */
+export async function removeIngestionTask(task: IngestionTask, itemsLeft: number): Promise<void> {
+  if (itemsLeft === 0 && task.folder !== "") {
+    const ctx = await loadSiteCtx();
+    await recycleFolder(ctx.site, task.folder);
+  }
+  if (task.rowId !== "") await deleteIngestionTask(task.rowId);
 }
 
 export type { IngestionAssignee };

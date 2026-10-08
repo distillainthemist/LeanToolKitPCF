@@ -235,7 +235,10 @@ every file. Findings go into sharepoint-writes.md once Ben has run it.
   (destination default columns + required, a Ready pill naming what is
   missing, the last refusal beneath), a row opening the edit-properties
   dialog with the system dates editable (`ingestion: true`), and for
-  controllers "Edit task…" and "Run ingestion…" (confirm → per file:
+  controllers "Edit task…" (with "Cancel task…": the row goes, an empty
+  folder with it, files stay — Ben 2026-10-09) and "Run ingestion…",
+  greyed until EVERY file has its required details (Ben, 2026-10-09;
+  the per-file refusal still covers collisions) (confirm → per file:
   document-ID collision check → `CopyFileByPath` → check-out → Approved
   term + effective/review/cadence → MAJOR check-in naming the task →
   publish → recycle the source; refusals logged with the reason; the

@@ -226,15 +226,20 @@ Needs the ingestion library set up (document-ingestion-proposal §8).
 5. **Details** — a row opens Edit properties with the effective date
    editable; select two rows → Set for selected… writes one column;
    Fill blanks from defaults fills the rest.
-6. **Run** — Run ingestion… names the counts; files move into the
+6. **Run** — Run ingestion… is greyed while any file lacks a required
+   detail (hover says how many); once every file is ready it names the
+   counts; files move into the
    destination as approved 1.0 with the check-in comment naming the
    task; a file with a missing detail stays with its reason; a name
    already in the destination is refused; when the folder empties the
    task closes and the folder is gone; the log reads on the closed task.
+7. **Cancel** — Edit task… → Cancel task… (controllers): with files in
+   the folder the confirm says they stay in SharePoint; the task leaves
+   Document tasks and the sheet closes; an empty folder is removed.
 
 | Item | Outcome |
 |---|---|
-| 1–6 | _Ben's pass pending_ |
+| 1–7 | _Ben's pass pending_ |
 
 ## Initiative links pass — after v0.67.0 (2026-10-08)
 
