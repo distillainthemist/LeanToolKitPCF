@@ -680,7 +680,7 @@ export function openIngestionTaskEditor(o: IngestionEditorOpts): void {
       title: `Cancel the task "${t.name}"?`,
       note:
         left > 0
-          ? `The task is removed from LeanBoard. Its folder still holds ${left} file${left === 1 ? "" : "s"}; they stay in the ingestion library until someone removes them in SharePoint. Nothing is ingested.`
+          ? `The task and its folder are removed, with the ${left} file${left === 1 ? "" : "s"} in it — they go to the site's recycle bin, where a document controller can restore them. Nothing is ingested.`
           : "The task and its empty folder are removed. Nothing is ingested.",
       confirmLabel: "Cancel task",
       danger: true,
@@ -878,12 +878,13 @@ async function folderItemCount(task: IngestionTask): Promise<number> {
   return counts.ok && Number.isFinite(left) ? left : 0;
 }
 
-/** Cancel a task (controllers): the row goes; an EMPTY folder goes with
- *  it, a folder with files stays in the ingestion library untouched. */
+/** Cancel a task (controllers): the folder goes to the recycle bin WITH
+ *  whatever it holds (Ben, 2026-10-09 — restorable there), then the row. */
 export async function removeIngestionTask(task: IngestionTask, itemsLeft: number): Promise<void> {
-  if (itemsLeft === 0 && task.folder !== "") {
+  if (task.folder !== "") {
     const ctx = await loadSiteCtx();
-    await recycleFolder(ctx.site, task.folder);
+    const r = await recycleFolder(ctx.site, task.folder);
+    if (!r.ok && !/not exist|not found|404/i.test(r.status)) throw new Error(`The folder (${itemsLeft} item${itemsLeft === 1 ? "" : "s"}) could not be recycled: ${spErrorText(r.status)}`);
   }
   if (task.rowId !== "") await deleteIngestionTask(task.rowId);
 }

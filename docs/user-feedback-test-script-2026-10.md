@@ -235,9 +235,9 @@ Needs the ingestion library set up (document-ingestion-proposal §8).
    task; a file with a missing detail stays with its reason; a name
    already in the destination is refused; when the folder empties the
    task closes and the folder is gone; the log reads on the closed task.
-7. **Cancel** — Edit task… → Cancel task… (controllers): with files in
-   the folder the confirm says they stay in SharePoint; the task leaves
-   Document tasks and the sheet closes; an empty folder is removed.
+7. **Cancel** — Edit task… → Cancel task… (controllers): the confirm
+   names the files; the folder and its files go to the site recycle
+   bin; the task leaves the Ingestion tasks button and the sheet closes.
 
 | Item | Outcome |
 |---|---|
