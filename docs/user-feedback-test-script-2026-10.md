@@ -218,7 +218,8 @@ On a desktop.
    a new tab; the Improvement list row and tile show 📁.
 3. **An initiative board** — add the "Documentation & links" card
    (Reference); it opens with the working folder pinned and "Change…";
-   ⋮ Edit links, add two links, Done editing; the tile shows titles.
+   "＋ Add link" (always under the list), paste a URL, Add; Edit on a
+   row, change the title, Save; the tile shows titles only.
 4. **A meeting board** — the same card as standing content; its links
    hold across occurrences.
 5. **The walk** — open any card on an initiative board: tabs, PREV /

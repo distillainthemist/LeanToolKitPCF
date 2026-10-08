@@ -165,11 +165,15 @@ initiative card, see the tabs and rails, hop with NEXT, Back to board.
   `{ links: [{ id, title, url, note, group }] }` (https only, tolerant
   parse, tested); read mode = grouped list with a service glyph
   (SharePoint / OneDrive / Teams / web), the title as a new-tab link,
-  the note and a host › path line; ⋮ "Edit links" = rows of title ·
-  url · note · group with ⠿ order and ×, "＋ Add link", a pasted URL
-  titling itself from its last segment, rows without an https url
-  dropped on "Done editing"; the tile = titles only, six then "+n
-  more". On an initiative board the mounter pins the working folder
+  the note and a host › path line; no edit mode (Ben, 2026-10-08: the
+  first edit row rendered squashed — the × was row-locked without a
+  column, so the grid placed it before the inputs — and "just have the
+  add link button permanently available"): "＋ Add link" sits under
+  the list whenever the card is open and the viewer may edit, each row
+  offers Edit and ⠿, and the form (url first — a pasted URL titles
+  itself — title, note, group; Add / Save, Cancel, Remove; Enter and
+  Esc) replaces the row inline and lands only on Add / Save; the tile =
+  titles only, six then "+n more". On an initiative board the mounter pins the working folder
   from the charter binding (`field:workingFolder`) with "Set folder…"
   for those who may edit it — one place to set it. Harness
   `app/harness/links.html`. The 📁 shortcut on the Improvement list

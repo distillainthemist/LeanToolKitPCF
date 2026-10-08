@@ -385,11 +385,13 @@ model section) — the canvas/PCF sections there are historical.
 [initiative-links-proposal-2026-10.md](initiative-links-proposal-2026-10.md)).
 The working folder is a BUILT-IN standard header field (kind url,
 seeded on read by `withBuiltinFields`, removable per site via
-`hiddenBuiltins` — no column), surfaced in the initiative pane, the
-Improvement list and tiles, and the charter. `controls/LinksCard` is
-the "Documentation & links" card: a curated list in the card's own
-document, the initiative's working folder pinned first through the
-charter binding, and "Show contents" on any path-carrying SharePoint
+`hiddenBuiltins` — no column), surfaced in the initiative pane and
+the charter (the Improvement list's shortcut was removed the same day).
+`controls/LinksCard` is the "Documentation & links" card: a curated
+list in the card's own document edited INLINE (a standing "＋ Add
+link", Edit on each row — no edit mode), the initiative's working
+folder pinned first through the charter binding, and "Show contents"
+on any path-carrying SharePoint
 folder link (`improvement/folderContents.ts`: SharePoint REST on the
 connector by dynamic import; a "/:f:/g/" token share cannot be listed —
 Graph `/shares` only, which no app connector reaches).

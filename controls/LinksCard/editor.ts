@@ -1,8 +1,11 @@
 // The LinksCard editor: the pinned working folder (host-supplied) and
 // the board's own list of links. Read mode is a list of links opening
-// in a new tab; edit mode (not readOnly, and only when the card is open,
-// not a tile) is rows of title · url · note · group with ⠿ order and ×.
-// Every change emits the envelope; the host saves it like any card.
+// in a new tab. There is no edit mode (Ben, 2026-10-08: "have the add
+// link button permanently available"): when the card is open and not
+// readOnly, "＋ Add link" sits under the list and each row offers Edit,
+// which turns that row into an inline form (url · title · note · group,
+// Save / Remove / Cancel); ⠿ reorders. Every change emits the envelope;
+// the host saves it like any card. A draft is not emitted until Add.
 
 import { applyThemeVars, defaultTheme, Theme } from "../../shared/tokens";
 import { LTK_BASE_CSS } from "../../shared/ui/baseCss";
@@ -40,7 +43,9 @@ export class LinksEditor {
   private prompts: Prompts = { general: [], fields: {} };
   private lastPromptsRaw: string | null = null;
   private readOnly = false;
-  private editing = false;
+  /** The row being edited inline (by id), or "new" for the draft. */
+  private editingId: string | null = null;
+  private draft: LinkItem | null = null;
   private pinned: PinnedLink | null = null;
   private lister: FolderLister | null = null;
   /** Links whose contents are open (by url); the pinned folder is "pinned". */
@@ -99,7 +104,10 @@ export class LinksEditor {
   setReadOnly(ro: boolean): void {
     if (this.readOnly !== ro) {
       this.readOnly = ro;
-      if (ro) this.editing = false;
+      if (ro) {
+        this.editingId = null;
+        this.draft = null;
+      }
       this.render();
     }
   }
@@ -117,7 +125,6 @@ export class LinksEditor {
     renderTitleBar(this.root, this.cardTitle, this.prompts);
     if (!this.readOnly) {
       renderKebab(this.root, [
-        { label: this.editing ? "Done editing" : "Edit links", onClick: () => this.toggleEditing() },
         { label: "Download PNG", onClick: () => this.downloadPng() },
         { label: "Download SVG", onClick: () => this.downloadSvg() },
       ]);
@@ -153,30 +160,53 @@ export class LinksEditor {
       if (this.pinned.url !== "") this.appendContents(body, this.pinned.url, "pinned");
     }
 
-    if (this.editing && !this.readOnly) {
-      this.renderEditor(body);
-      return;
-    }
     const links = this.env.data.links;
-    if (links.length === 0) {
-      body.appendChild(el("div", "ltk-lk-empty", this.readOnly ? "No links yet." : "No links yet — ⋮ Edit links to add the places this work's documents live."));
-      return;
-    }
-    const list = el("div", "ltk-lk-list");
-    for (const g of groupLinks(links)) {
-      if (g.group !== "") list.appendChild(el("div", "ltk-lk-group", g.group));
-      for (const l of g.links) {
-        list.appendChild(this.renderRow(l));
-        this.appendContents(list, l.url, l.id);
+    const editable = !this.readOnly;
+    if (links.length === 0 && this.draft === null) {
+      body.appendChild(el("div", "ltk-lk-empty", editable ? "No links yet — add the places this work's documents live." : "No links yet."));
+    } else {
+      const list = el("div", "ltk-lk-list");
+      for (const g of groupLinks(links)) {
+        if (g.group !== "") list.appendChild(el("div", "ltk-lk-group", g.group));
+        for (const l of g.links) {
+          if (editable && this.editingId === l.id) {
+            list.appendChild(this.renderForm(l, false));
+            continue;
+          }
+          list.appendChild(this.renderRow(l, editable));
+          this.appendContents(list, l.url, l.id);
+        }
       }
+      if (editable && this.draft !== null) list.appendChild(this.renderForm(this.draft, true));
+      body.appendChild(list);
+      if (links.length > 6) body.appendChild(el("div", "ltk-lk-more", `+${links.length - 6} more`));
     }
-    body.appendChild(list);
-    if (links.length > 6) body.appendChild(el("div", "ltk-lk-more", `+${links.length - 6} more`));
+    if (editable && this.draft === null) {
+      const add = el("button", "ltk-lk-add", "＋ Add link") as HTMLButtonElement;
+      add.type = "button";
+      add.addEventListener("click", () => {
+        this.draft = { id: newLinkId(), title: "", url: "", note: "", group: "" };
+        this.editingId = null;
+        this.render();
+        this.root.querySelector<HTMLInputElement>(".ltk-lk-form input")?.focus();
+      });
+      body.appendChild(add);
+    }
   }
 
-  private renderRow(l: LinkItem): HTMLElement {
+  private renderRow(l: LinkItem, editable: boolean): HTMLElement {
     const row = el("div", "ltk-lk-row");
     const kind = hostKind(l.url);
+    if (editable) {
+      const links = this.env.data.links;
+      const handle = el("span", "ltk-lk-handle", "⠿");
+      handle.title = "Drag to reorder";
+      row.appendChild(handle);
+      draggableRow(row, handle, "ltk-links", links.indexOf(l), links, () => {
+        this.emit();
+        this.render();
+      });
+    }
     row.appendChild(el("span", `ltk-lk-glyph ltk-lk-glyph-${kind}`, GLYPH[kind]));
     const main = el("div", "ltk-lk-main");
     const title = el("div", "ltk-lk-title");
@@ -191,6 +221,17 @@ export class LinksEditor {
     main.appendChild(el("div", "ltk-lk-where", linkText(l.url)));
     row.appendChild(main);
     this.appendContentsToggle(row, l.url, l.id);
+    if (editable) {
+      const edit = el("button", "ltk-lk-set ltk-lk-editbtn", "Edit") as HTMLButtonElement;
+      edit.type = "button";
+      edit.addEventListener("click", () => {
+        this.editingId = l.id;
+        this.draft = null;
+        this.render();
+        this.root.querySelector<HTMLInputElement>(".ltk-lk-form input")?.focus();
+      });
+      row.appendChild(edit);
+    }
     return row;
   }
 
@@ -257,55 +298,83 @@ export class LinksEditor {
     if (this.root.isConnected) this.render();
   }
 
-  private renderEditor(body: HTMLElement): void {
-    const list = el("div", "ltk-lk-list");
-    const links = this.env.data.links;
-    links.forEach((l, i) => {
-      const row = el("div", "ltk-lk-edit");
-      const handle = el("span", "ltk-lk-handle", "⠿");
-      handle.title = "Drag to reorder";
-      row.appendChild(handle);
-      const title = this.input(l.title, "Title", (v) => (l.title = v));
-      row.appendChild(title);
-      const x = el("button", "ltk-lk-x", "×") as HTMLButtonElement;
-      x.type = "button";
-      x.title = "Remove this link";
-      x.addEventListener("click", () => {
-        links.splice(i, 1);
-        this.emit();
-        this.render();
-      });
-      row.appendChild(x);
-      const url = this.input(l.url, "https://…", (v) => {
-        l.url = v.trim();
-        url.classList.toggle("ltk-lk-in-bad", l.url !== "" && !isHttps(l.url));
-        if (l.title.trim() === "" && isHttps(l.url)) {
-          l.title = titleFromUrl(l.url);
-          title.value = l.title;
-        }
-      });
+  /** The inline form for one link: url first (a pasted url titles
+   *  itself), then title, note and group; Add / Save, Remove, Cancel.
+   *  Edits work on a copy and land only on Save. */
+  private renderForm(src: LinkItem, isNew: boolean): HTMLElement {
+    const l: LinkItem = { ...src };
+    const form = el("div", "ltk-lk-form");
+    const title = this.input(l.title, "Title", (v) => (l.title = v));
+    const url = this.input(l.url, "https://… (paste the link)", (v) => {
+      l.url = v.trim();
       url.classList.toggle("ltk-lk-in-bad", l.url !== "" && !isHttps(l.url));
-      row.appendChild(url);
-      const noteRow = el("div", "ltk-lk-edit-noterow");
-      noteRow.style.display = "contents";
-      row.appendChild(this.input(l.note, "Note (optional)", (v) => (l.note = v)));
-      row.appendChild(this.input(l.group, "Group (optional)", (v) => (l.group = v)));
-      draggableRow(row, handle, "ltk-links", i, links, () => {
+      if (l.title.trim() === "" && isHttps(l.url)) {
+        l.title = titleFromUrl(l.url);
+        title.value = l.title;
+      }
+      ok.disabled = !isHttps(l.url);
+    });
+    url.classList.toggle("ltk-lk-in-bad", l.url !== "" && !isHttps(l.url));
+    url.classList.add("ltk-lk-form-wide");
+    title.classList.add("ltk-lk-form-wide");
+    form.appendChild(url);
+    form.appendChild(title);
+    form.appendChild(this.input(l.note, "Note (optional)", (v) => (l.note = v)));
+    form.appendChild(this.input(l.group, "Group (optional)", (v) => (l.group = v)));
+    const bar = el("div", "ltk-lk-form-bar");
+    const ok = el("button", "ltk-lk-btn ltk-lk-btn-primary", isNew ? "Add" : "Save") as HTMLButtonElement;
+    ok.type = "button";
+    ok.disabled = !isHttps(l.url);
+    ok.addEventListener("click", () => this.commit(l, isNew));
+    bar.appendChild(ok);
+    const cancel = el("button", "ltk-lk-btn", "Cancel") as HTMLButtonElement;
+    cancel.type = "button";
+    cancel.addEventListener("click", () => {
+      this.draft = null;
+      this.editingId = null;
+      this.render();
+    });
+    bar.appendChild(cancel);
+    if (!isNew) {
+      const rm = el("button", "ltk-lk-btn ltk-lk-btn-danger", "Remove") as HTMLButtonElement;
+      rm.type = "button";
+      rm.addEventListener("click", () => {
+        const links = this.env.data.links;
+        const i = links.findIndex((x) => x.id === src.id);
+        if (i >= 0) links.splice(i, 1);
+        this.editingId = null;
         this.emit();
         this.render();
       });
-      list.appendChild(row);
+      bar.appendChild(rm);
+    }
+    form.appendChild(bar);
+    form.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && e.target instanceof HTMLInputElement && isHttps(l.url)) {
+        e.preventDefault();
+        this.commit(l, isNew);
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        cancel.click();
+      }
     });
-    body.appendChild(list);
-    const add = el("button", "ltk-lk-add", "＋ Add link") as HTMLButtonElement;
-    add.type = "button";
-    add.addEventListener("click", () => {
-      links.push({ id: newLinkId(), title: "", url: "", note: "", group: "" });
-      this.render();
-      const inputs = this.root.querySelectorAll<HTMLInputElement>(".ltk-lk-edit input");
-      inputs[inputs.length - 4]?.focus();
-    });
-    body.appendChild(add);
+    return form;
+  }
+
+  private commit(l: LinkItem, isNew: boolean): void {
+    if (!isHttps(l.url)) return;
+    const links = this.env.data.links;
+    if (l.title.trim() === "") l.title = titleFromUrl(l.url);
+    if (isNew) links.push(l);
+    else {
+      const i = links.findIndex((x) => x.id === l.id);
+      if (i >= 0) links[i] = l;
+      else links.push(l);
+    }
+    this.draft = null;
+    this.editingId = null;
+    this.emit();
+    this.render();
   }
 
   private input(value: string, placeholder: string, onChange: (v: string) => void): HTMLInputElement {
@@ -314,18 +383,7 @@ export class LinksEditor {
     inp.value = value;
     inp.placeholder = placeholder;
     inp.addEventListener("input", () => onChange(inp.value));
-    inp.addEventListener("change", () => this.emit());
     return inp;
-  }
-
-  private toggleEditing(): void {
-    this.editing = !this.editing;
-    if (!this.editing) {
-      // leaving edit mode drops rows that never got a usable url
-      this.env.data.links = this.env.data.links.filter((l) => isHttps(l.url));
-      this.emit();
-    }
-    this.render();
   }
 
   private emit(): void {

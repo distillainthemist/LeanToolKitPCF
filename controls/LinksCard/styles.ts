@@ -28,11 +28,21 @@ export const LINKS_CSS = `
 .ltk-lk-title { font-size: 13px; }
 .ltk-lk-note { font-size: 12px; color: var(--ltk-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ltk-lk-where { font-size: 11px; color: var(--ltk-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* edit rows */
-.ltk-lk-edit { display: grid; grid-template-columns: 18px minmax(0, 1fr) 36px; gap: 6px 8px; align-items: center; padding: 8px; border: 1px solid var(--ltk-hairline); border-radius: 8px; background: var(--ltk-bg); }
-.ltk-lk-edit .ltk-lk-handle { color: var(--ltk-muted); cursor: grab; font-size: 14px; grid-row: 1 / span 3; align-self: center; }
-.ltk-lk-edit .ltk-lk-x { grid-row: 1 / span 3; align-self: center; border: none; background: none; color: #d13438; font-size: 16px; cursor: pointer; min-height: 36px; min-width: 36px; }
-.ltk-lk-in { font: inherit; font-size: 12.5px; color: var(--ltk-fg); background: var(--ltk-bg); border: 1px solid var(--ltk-hairline); border-radius: 6px; padding: 5px 8px; min-width: 0; width: 100%; box-sizing: border-box; }
+/* inline editing: ⠿ and Edit on a row; the form replaces the row */
+.ltk-lk-row .ltk-lk-handle { flex: none; color: var(--ltk-muted); cursor: grab; font-size: 14px; margin-top: 3px; }
+.ltk-lk-editbtn { align-self: flex-start; }
+.ltk-lk-form { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 6px 8px; padding: 8px; border: 1px solid var(--ltk-accent); border-radius: 8px; background: var(--ltk-bg); }
+.ltk-lk-form-wide { grid-column: 1 / -1; }
+.ltk-lk-form-bar { grid-column: 1 / -1; display: flex; gap: 6px; align-items: center; padding-top: 2px; }
+.ltk-lk-form-bar .ltk-lk-btn-danger { margin-left: auto; }
+.ltk-lk-btn { font: inherit; font-size: 12.5px; color: var(--ltk-fg); background: var(--ltk-bg); border: 1px solid var(--ltk-hairline); border-radius: 8px; padding: 5px 12px; min-height: 32px; cursor: pointer; }
+.ltk-lk-btn:hover { border-color: var(--ltk-accent); color: var(--ltk-accent); }
+.ltk-lk-btn-primary { background: var(--ltk-accent); border-color: var(--ltk-accent); color: #fff; }
+.ltk-lk-btn-primary:hover { color: #fff; filter: brightness(0.92); }
+.ltk-lk-btn:disabled { opacity: 0.45; cursor: default; filter: none; }
+.ltk-lk-btn-danger { color: #d13438; }
+.ltk-lk-btn-danger:hover { border-color: #d13438; color: #d13438; }
+.ltk-lk-in { font: inherit; font-size: 12.5px; color: var(--ltk-fg); background: var(--ltk-bg); border: 1px solid var(--ltk-hairline); border-radius: 6px; padding: 5px 8px; min-width: 0; width: 100%; box-sizing: border-box; min-height: 32px; }
 .ltk-lk-in-bad { border-color: #d13438; }
 .ltk-lk-add { align-self: flex-start; font: inherit; font-size: 12.5px; color: var(--ltk-fg); background: var(--ltk-bg); border: 1px dashed var(--ltk-hairline); border-radius: 8px; padding: 6px 12px; min-height: 36px; cursor: pointer; }
 .ltk-lk-add:hover { border-color: var(--ltk-accent); color: var(--ltk-accent); }
@@ -52,5 +62,5 @@ export const LINKS_CSS = `
 .ltk-tile .ltk-lk-note, .ltk-tile .ltk-lk-where { display: none; }
 .ltk-tile .ltk-lk-row:nth-child(n + 7) { display: none; }
 .ltk-tile .ltk-lk-more { display: block; }
-.ltk-tile .ltk-lk-set, .ltk-tile .ltk-lk-add { display: none; }
+.ltk-tile .ltk-lk-set, .ltk-tile .ltk-lk-add, .ltk-tile .ltk-lk-handle, .ltk-tile .ltk-lk-form { display: none; }
 `;
