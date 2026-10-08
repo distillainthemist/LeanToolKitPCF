@@ -623,20 +623,55 @@ CSS and layout, no model change:
   the unsaved-changes bar wraps; Rituals and the admin tabs stay
   desktop by Ben's call.
 
-**The settings section strip** (same release; proposal and status in
-[settings-nav-proposal-2026-10.md](settings-nav-proposal-2026-10.md)).
-Every settings module builds its page sections through ONE helper,
-`settingsSection(title, note?)` (`src/settingsSection.ts`: `h3.app-pr-h3`
-with an id, a hairline above — the small-caps `.app-section` divider is
-now only for card titles inside a section). `src/settingsStrip.ts`
-derives a row of section pills from those heads after each render and
-on repaints (MutationObserver), shown from three sections, sticky at
-the top of the window scroll (the settings card is `overflow: clip`,
-because `hidden` makes it the scroll container), scroll-spy by
-`currentSectionIndex` (pure, tested), a click scrolling by the strip's
-live height, the hash never written. A rail was considered and
-rejected: the app's page navigation is horizontal. Ritual categories
-moved from the Rituals tab to Branding the same day (brand colours).
+### 3.7 Settings surfaces (2026-10-07/08, v0.66.0–v0.67.0)
+
+Settings is one row of tabs over one body per tab; the unsaved-changes
+bar between them guards tab switches. What the two releases added
+(the options weighed are in
+[settings-nav-proposal-2026-10.md](settings-nav-proposal-2026-10.md)):
+
+- **One section head.** `settingsSection(title, note?)`
+  (`src/settingsSection.ts`) returns `.app-pr-section > h3.app-pr-h3`
+  with an id and the intro note; every settings module builds its page
+  sections through it, so the shell can DERIVE navigation from the
+  headings. The small-caps `.app-section` divider is now only a card
+  title inside a section.
+- **The section strip** (`src/settingsStrip.ts`): after each tab
+  render, and on repaints through a MutationObserver, the shell reads
+  the body's heads and shows one pill per section — from two sections
+  — sticky at the top of the window scroll (the settings card is
+  `overflow: clip`; `hidden` would make it the scroll container),
+  scroll-spy by `currentSectionIndex`, a click scrolling by the strip's
+  live height, the hash never written. A tab may mark a control row
+  `.app-settings-striptool` and the strip lifts it into its right end
+  (Site cadence's site picker). Lifted rows are dropped only on
+  `reset()`, which the shell calls before clearing the body on a tab
+  switch — never on a heading change, because a tab's rows can land
+  before its headings do.
+- **Section cards.** The same pass (`groupSections`) folds each head
+  and the siblings that follow it into `.app-settings-sectioncard` on
+  the body's tinted ground, with a leading card for content before the
+  first head. It is idempotent: a container that holds its own heads
+  (or, once grouped, its own cards) is grouped INSIDE and left on the
+  ground; a leading card that turns out to hold sections is taken
+  apart and re-grouped; a repeat pass makes zero DOM mutations (a
+  non-idempotent pass once moved the DOM under every focused field).
+  A card that lived inside a section (`.app-access-card`, a
+  `.app-dept-card`) takes a divider or the tinted-row look, never a
+  second box.
+- **Users** has one search box: the roster filters as you type;
+  "Search directory & add" sends the same text to the directory
+  (`directoryAddCard`), a hit's "＋ Add…" opens an inline placement row
+  (site · department · area · crew · role) and "Add to roster" writes
+  the person once, placed. An empty roster result offers the directory
+  search.
+- **Moves.** Ritual categories under Branding (colours are brand);
+  Cascade customisation on each site's Organisation card beside its
+  hub tabs, saved on change; the Vision statements section removed
+  from Priorities settings (the band's ⋮ on the Priorities tab is the
+  one road), leaving that tab super-admin only; Initiative templates
+  first on Improvement; Rituals' head one row with a primary New
+  ritual; Request admin lists the super admins with mail links.
 
 ## 4. The document management system
 

@@ -15,14 +15,15 @@ switches. Sub-headings per tab, counted from the code:
 | Tab | Sections | Heading idiom |
 |---|---|---|
 | Documents | 11 — SharePoint connection · Document columns · Term sets & colours · Libraries · Term store · Lifecycle · Review cadence · Health · Tags · Default filters · Write access | `.app-section` |
-| Priorities | 4 (pillars, period & RAG, owners, vision — each with a note) | `h3.app-pr-h3` + note |
+| Priorities | 2 — Strategic pillars · Period & roll-up rule (vision statements removed 2026-10-08; cascade customisation moved to Organisation; super-admin only) | `h3.app-pr-h3` + note |
 | Site cadence | 3 — Site settings · Shift roster patterns · Protected times | `.app-section` |
 | My profile | 3 — the profile fields · Access diagnostics · Notification probe | `.app-section` |
 | Rituals | 1 — Rituals (Ritual categories moved to Branding, 2026-10-07) | `.app-section` |
 | Branding | 3 — State palette · Title strip palette · Ritual categories (+ the name / logo / accent block above) | `.app-section` |
 | Access control | 2 — app access group · Document control groups | `.app-section` |
-| Improvement, Value drivers, Issues | 1 each | `h3.app-pr-h3` / `.app-section` |
-| Organisation | none — its own company → site rail and an editor pane | `.app-org-split` |
+| Improvement | 4 — Initiative templates (first since 2026-10-08) · Methods · Standard fields · Health-check questions | `h3.app-pr-h3` + note |
+| Value drivers, Issues | 1 each | `h3.app-pr-h3` / `.app-section` |
+| Organisation | none — its own company → site rail and an editor pane (each site card: hub tabs and, since 2026-10-08, Cascade customisation) | `.app-org-split` |
 | Users | none — the register (2026-10-08: one search box; "Search directory & add" opens directory matches with inline placement) | grid |
 
 Two findings before any navigation is added:
@@ -74,19 +75,21 @@ option that uses only grammar the app already has at the top of a page.
 muscle memory on every tab and hides the state the pages exist to
 show. Rejected.
 
-## Status — BUILT 2026-10-07, RELEASED in v0.66.0
+## Status — BUILT 2026-10-07 (v0.66.0), extended 2026-10-08 (v0.67.0)
 
-`app/src/settingsSection.ts` (the one head; `sectionId` tested),
-`app/src/settingsStrip.ts` (derived strip, scroll-spy
+v0.66.0: `app/src/settingsSection.ts` (the one head; `sectionId`
+tested), `app/src/settingsStrip.ts` (derived strip, scroll-spy
 `currentSectionIndex` tested, MutationObserver repaint, live-height
-click offset), the heading pass over settings.ts, docs/settingsTab.ts,
-priorities/settingsTab.ts, vdt/settingsTab.ts, templateWizard.ts and
-issues/adminTab.ts, CSS (`.app-settings-strip`, `.app-settings-pill`,
-`.app-pr-section` as the one rhythm, the card `overflow: clip`), and
-`app/settings-strip.html` as the screenshot road. Verified there: ten
-pills over two rows, sticky at the top, the spy moving with the scroll,
-a click landing the head under the strip. The hosted tabs are Ben's
-check — Documents especially.
+click offset), the heading pass over six settings modules, CSS, the
+card `overflow: clip`, and `app/settings-strip.html` as the screenshot
+road. v0.67.0, after Ben used it: the strip from TWO sections (the
+Priorities tab); section CARDS on a tinted body (option A of three —
+tinted bands and more rhythm were offered and declined) by an
+idempotent `groupSections` pass that survives content arriving in
+stages and containers with their own sections; strip TOOLS (a tab's
+marked control row lifted into the strip's right end — Site cadence's
+site picker), dropped only on tab leave. architecture.md §3.7 and
+ui-standard §6 carry the rules.
 
 ## Recommendation (revised 2026-10-07 — "it doesn't have to be a left column")
 
