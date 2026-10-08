@@ -411,3 +411,16 @@ lessons: character spacing (`Tc`) is graphics state and persists
 across text objects, so the rail label is drawn inside `q … Q`; the
 browser pane and the host render no PDFs, so a sample is rendered
 with macOS `sips` for the eye.
+
+## 19. Amendment — no orphan sub-pillars (2026-10-08)
+
+A sub-pillar reached Dataverse with a parent that never existed: the
+editor let a nameless pillar carry named sub-pillars, and the save
+skipped the nameless pillar but wrote its children. Now a sub-pillar
+is saved only when its pillar was saved in the same pass (`savedL1`),
+a nameless pillar with children shows "Name this pillar — its
+sub-pillars are not saved until it has a name", and any sub-pillar
+whose pillar is gone from the list is listed under "Sub-pillars
+without a pillar" with a "Move under…" select and a ×, so an existing
+orphan is repaired in the editor rather than in Dataverse. The matrix
+keeps showing an unrepaired orphan under the dashed "—" span.

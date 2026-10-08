@@ -236,9 +236,24 @@ export function renderValueGrid(o: GridOpts): GridHandle {
       if (!cell.actual.editable) return;
       if (v === null) {
         if (cell.actual.existing) queue({ ...cell.actual.existing, value: "" }, true);
+        for (const o of cell.actual.others) queue({ ...o, value: "" }, true);
+        cell.actual.existing = null;
+        cell.actual.others = [];
+        cell.actual.count = 0;
       } else {
         const at = cell.actual.existing ?? src.newActual(cell.column);
         queue({ ...at, value: String(v) }, false);
+        // a folded bucket keeps ONE reading: the extras go with the value
+        // (Ben, 2026-10-08 — a double entry locked the week)
+        const extra = cell.actual.others.length;
+        for (const o of cell.actual.others) queue({ ...o, value: "" }, true);
+        if (extra > 0) note.textContent = `Kept one reading for the ${CADENCE_LABELS[src.cadence].toLowerCase().replace(/ly$/, "")}; ${extra} other${extra === 1 ? "" : "s"} removed.`;
+        // the cell now KNOWS its point: a second edit before the reload
+        // overwrites it instead of minting a second reading (the double
+        // entry's cause)
+        cell.actual.existing = at;
+        cell.actual.others = [];
+        cell.actual.count = 1;
       }
       return;
     }
@@ -398,6 +413,10 @@ export function renderValueGrid(o: GridOpts): GridHandle {
           inp.autocomplete = "off";
           const value = kind === "actual" ? c.actual.value : (spec?.value ?? null);
           inp.value = fmt(value);
+          if (kind === "actual" && c.actual.count > 1) {
+            inp.classList.add("app-vg-folded");
+            inp.title = `${c.actual.count} readings in this ${CADENCE_LABELS[src.cadence].toLowerCase().replace(/ly$/, "")} — folded by ${src.aggregate}. Typing a value keeps one.`;
+          }
           if (spec?.inherited && spec.value !== null) {
             inp.classList.add("app-vg-inherited");
             inp.title = "Carried forward — type here to set a new value from this period on";

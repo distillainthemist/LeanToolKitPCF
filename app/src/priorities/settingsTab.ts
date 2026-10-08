@@ -137,6 +137,11 @@ async function renderPillars(body: HTMLElement, ctx: DirtyCtx, saves: (() => Pro
     for (const l1 of l1s) {
       list.appendChild(pillarRow(l1, null, l1s));
       const children = childrenOf(l1);
+      if (l1.name.trim() === "" && children.length > 0) {
+        // a nameless pillar is never saved — and neither are its sub-pillars
+        // (an orphan reached Dataverse this way once, 2026-10-08)
+        list.appendChild(el("div", "app-settings-note app-pr-warn", "Name this pillar — its sub-pillars are not saved until it has a name."));
+      }
       for (const c of children) list.appendChild(pillarRow(c, l1, children));
       const addSub = el("button", "app-pr-addlink", "＋ Add sub-pillar") as HTMLButtonElement;
       addSub.type = "button";
@@ -159,6 +164,48 @@ async function renderPillars(body: HTMLElement, ctx: DirtyCtx, saves: (() => Pro
         rows[rows.length - 1]?.focus();
       });
       list.appendChild(addSub);
+    }
+    // orphans (2026-10-08): sub-pillars whose pillar is gone from the list
+    // — shown here so they can be moved under a pillar or removed, rather
+    // than sitting under the matrix's "—" span
+    const orphans = pillars.filter((p) => p.level === 2 && !l1s.some((l) => l.id === p.parentId));
+    if (orphans.length > 0) {
+      list.appendChild(el("div", "app-pr-orgname", "Sub-pillars without a pillar"));
+      list.appendChild(el("div", "app-settings-note", "Their pillar no longer exists. Move each under a pillar, or remove it."));
+      for (const o of orphans) {
+        const row = el("div", "app-pr-row app-pr-orphan");
+        row.appendChild(el("span", "app-pr-floor-site", o.name.trim() !== "" ? o.name : "(unnamed)"));
+        const sel = el("select", "app-input app-pr-short") as HTMLSelectElement;
+        const none = el("option", "", "Move under…") as HTMLOptionElement;
+        none.value = "";
+        sel.appendChild(none);
+        for (const l1 of l1s) {
+          const opt = el("option", "", l1.name.trim() !== "" ? l1.name : "(unnamed pillar)") as HTMLOptionElement;
+          opt.value = l1.id;
+          sel.appendChild(opt);
+        }
+        sel.addEventListener("change", () => {
+          const target = l1s.find((l) => l.id === sel.value);
+          if (!target) return;
+          o.parentId = target.id;
+          o.company = target.company;
+          o.order = childrenOf(target).length;
+          touch();
+          paint();
+        });
+        const x = el("button", "app-btn app-palette-x", "×") as HTMLButtonElement;
+        x.type = "button";
+        x.title = "Remove this sub-pillar";
+        x.addEventListener("click", () => {
+          const i = pillars.indexOf(o);
+          if (i >= 0) pillars.splice(i, 1);
+          if (o.rowId) removed.push(o);
+          touch();
+          paint();
+        });
+        row.append(sel, x);
+        list.appendChild(row);
+      }
     }
     const addL1 = el("button", "app-btn", "＋ Add pillar") as HTMLButtonElement;
     addL1.type = "button";
@@ -280,12 +327,15 @@ async function renderPillars(body: HTMLElement, ctx: DirtyCtx, saves: (() => Pro
   saves.push(async () => {
     if (!dirtyPillars) return;
     // parents first so children can bind to their row GUIDs
+    const savedL1 = new Set<string>();
     for (const p of pillars.filter((p) => p.level === 1)) {
       if (p.name.trim() === "") continue;
       p.rowId = await savePillar(p, pillars);
+      savedL1.add(p.id);
     }
     for (const p of pillars.filter((p) => p.level === 2)) {
-      if (p.name.trim() === "") continue;
+      // never a sub-pillar whose pillar was not saved (the orphan road)
+      if (p.name.trim() === "" || !savedL1.has(p.parentId)) continue;
       p.rowId = await savePillar(p, pillars);
     }
     for (const d of removed) if (d.rowId) await deletePillar(d.rowId);

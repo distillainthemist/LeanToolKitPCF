@@ -214,6 +214,14 @@ Version lives in the tag alone — nothing is stamped into files.
   into all body text, 2026-10-08) — wrap a styled run in `q … Q`.
   And nothing here renders a PDF: `sips -s format png` on macOS is
   the eye for a generated page.
+- **A cell that writes a new point must remember it.** The values
+  grid minted a fresh reading key on every entry into an empty cell
+  and learned of the first write only after the flush and reload, so a
+  quick second edit made a second reading in the same week — which
+  folded the week and locked the cell (2026-10-08). `enter` now sets
+  `cell.actual.existing` on the first write, and a folded cell is
+  editable: the typed value keeps the bucket's last point and the
+  others are deleted with it. The grid stays the one entry road.
 - **A settings delete that writes at once asks first.** Methods,
   standard roles, standard fields, health-check questions and ritual
   categories persist on the click; each × now runs `confirmRemoval`

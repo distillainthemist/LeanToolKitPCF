@@ -154,11 +154,16 @@ export interface GridActualCell {
   raw?: string;
   /** Points folded into this column. */
   count: number;
-  /** Editable when the bucket holds at most one point (that point is
-   *  overwritten in place; a new one lands on the anchor). */
+  /** Always true for a live grid since 2026-10-08: a folded bucket is
+   *  edited too — the typed value keeps ONE reading (the last) and the
+   *  others go, so the grid stays the one entry road. */
   editable: boolean;
-  /** The one existing point's cell (key/date/shift) when count === 1. */
+  /** The point a typed value overwrites: the bucket's LAST point (by
+   *  date, then order), or null when the bucket is empty (a new point
+   *  lands on the anchor). */
   existing: { key: string; date: string; shift: string } | null;
+  /** The bucket's other points — removed when a value is typed. */
+  others: { key: string; date: string; shift: string }[];
 }
 
 export interface GridCell {
@@ -224,12 +229,15 @@ export function resolveGrid(
   return cols.map((col) => {
     const pts = byBucket.get(col.key) ?? [];
     const value = folded.has(col.key) ? (folded.get(col.key) as number) : null;
-    const one = pts.length === 1 ? pts[0] : null;
+    // the last point by date (then order) is the one a typed value keeps
+    const ordered = pts.map((p, i) => ({ p, i })).sort((a, b) => a.p.date.localeCompare(b.p.date) || a.i - b.i).map((x) => x.p);
+    const last = ordered.length > 0 ? ordered[ordered.length - 1] : null;
     const actual: GridActualCell = {
       value,
       count: pts.length,
-      editable: pts.length <= 1,
-      existing: one ? { key: one.key, date: one.date, shift: one.shift } : null,
+      editable: true,
+      existing: last ? { key: last.key, date: last.date, shift: last.shift } : null,
+      others: ordered.slice(0, -1).map((p) => ({ key: p.key, date: p.date, shift: p.shift })),
     };
     const plan = specCell("plan", col);
     const forecast = specCell("forecast", col);
@@ -262,7 +270,7 @@ export function stateCellsFor(
       forecast: none,
       lsl: none,
       usl: none,
-      actual: { value: null, raw: st.label, count: c ? 1 : 0, editable: true, existing: c ? { key: c.key, date: c.date.slice(0, 10), shift: c.shift || "-" } : null },
+      actual: { value: null, raw: st.label, count: c ? 1 : 0, editable: true, others: [], existing: c ? { key: c.key, date: c.date.slice(0, 10), shift: c.shift || "-" } : null },
       rag: st.rag,
     };
   });

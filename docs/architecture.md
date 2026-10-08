@@ -381,6 +381,14 @@ model section) — the canvas/PCF sections there are historical.
   the next move forward (`standingRevert`, derived from the events).
   No schema change.
 
+**The values grid and folded weeks** (2026-10-08). A bucket with two
+readings used to fold and lock its cell ("edit them on the card").
+The cell model (`vdt/gridModel.ts`) now names the bucket's LAST point
+as `existing` and the rest as `others`; every cell is editable, a
+typed value overwrites the last point and deletes the others, and the
+cell remembers a point it just wrote so a second edit before the
+reload never mints a second reading (the double entry's cause).
+
 **The priorities poster** (2026-10-08). The Priorities tab's ⋮ offers
 "Download PDF version": the current view as an A3 landscape PDF with
 no controls (`src/priorities/pdfPoster.ts`, pure and tested, on the

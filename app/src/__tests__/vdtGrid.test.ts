@@ -95,7 +95,12 @@ describe("resolveGrid", () => {
     expect(cells[0].usl).toEqual({ value: 20, inherited: true });
     expect(cells[0].rag).toBe("amber"); // upper only → lower is better; 10 > 8
     // wk 38: two points folded (sum 10), read-only; spec set on this column
-    expect(cells[1].actual).toMatchObject({ value: 10, count: 2, editable: false, existing: null });
+    // two points in the week: still editable — the LAST point is the one
+    // a typed value keeps, the other is listed to go (2026-10-08)
+    expect(cells[1].actual).toMatchObject({ value: 10, count: 2, editable: true });
+    expect(cells[1].actual.existing).not.toBeNull();
+    expect(cells[1].actual.others).toHaveLength(1);
+    expect(cells[1].actual.existing!.date >= cells[1].actual.others[0].date).toBe(true);
     expect(cells[1].plan).toEqual({ value: 9, inherited: false });
     expect(cells[1].usl).toEqual({ value: 12, inherited: false });
     // wk 39: nothing → editable empty, spec carried forward

@@ -4170,6 +4170,11 @@ textarea.app-cp-statement { font-size: 14px; font-weight: 500; }
 .app-cp-walk-inline .app-cp-walk-metric .app-cp-objective-name { font-size: 14px; }
 .app-cp-walk-inline .app-cp-walk-foot { padding: 8px 10px; }
 .app-cp-walk-inline .app-cp-walk-nav { font-size: 14px; padding: 0 10px; max-width: 48%; }
+/* the pillar editor's warnings and orphan rows (2026-10-08) */
+.app-pr-warn { color: #b45309; padding: 2px 0 6px 28px; }
+.app-pr-orphan { gap: 10px; }
+/* a folded grid cell is typed into — the typed value keeps one reading */
+input.app-vg-in.app-vg-folded { background: #fff7e0; }
 /* ---- the initiative screen and the Improvement tab on a phone (M4) --
    The board itself is M2's list and sheet; what is left: the Gantt's
    label column narrows so the timeline keeps some room; the Improvement
