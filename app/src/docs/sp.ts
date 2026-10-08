@@ -415,6 +415,64 @@ export function fetchFileItemId(site: string, url: string): Promise<SpResult> {
   return spRequest(site, "GET", `${filePath(url)}/ListItemAllFields?$select=Id`);
 }
 
+/**
+ * The modern move / copy roads (`SP.MoveCopyUtil`), the ones SharePoint's
+ * own "Move to" uses — probed 2026-10-08 for document ingestion
+ * (document-ingestion-proposal-2026-10.md): a file moved between two
+ * libraries of one site, what it carries (metadata, version history)
+ * and the state it lands in. Both take ABSOLUTE urls. overwrite=false
+ * makes a name collision a clean refusal, the ingestion rule.
+ */
+export function moveFileByPath(
+  site: string,
+  srcAbsoluteUrl: string,
+  destAbsoluteUrl: string
+): Promise<SpResult> {
+  return spRequest(site, "POST", "_api/SP.MoveCopyUtil.MoveFileByPath(overwrite=@a1)?@a1=false", {
+    headers: { "Content-Type": "application/json;odata=nometadata" },
+    body: JSON.stringify({
+      srcPath: { DecodedUrl: srcAbsoluteUrl },
+      destPath: { DecodedUrl: destAbsoluteUrl },
+      options: { KeepBoth: false, ResetAuthorAndCreatedOnCopy: false, ShouldBypassSharedLocks: true, RetainEditorAndModifiedOnMove: true },
+    }),
+  });
+}
+
+export function copyFileByPath(
+  site: string,
+  srcAbsoluteUrl: string,
+  destAbsoluteUrl: string
+): Promise<SpResult> {
+  return spRequest(site, "POST", "_api/SP.MoveCopyUtil.CopyFileByPath(overwrite=@a1)?@a1=false", {
+    headers: { "Content-Type": "application/json;odata=nometadata" },
+    body: JSON.stringify({
+      srcPath: { DecodedUrl: srcAbsoluteUrl },
+      destPath: { DecodedUrl: destAbsoluteUrl },
+      options: { KeepBoth: false, ResetAuthorAndCreatedOnCopy: false, ShouldBypassSharedLocks: true },
+    }),
+  });
+}
+
+/** The list item behind a file with the probe's fields of interest:
+ *  Title, moderation status, the UI version label. Under
+ *  odata=nometadata the underscore fields arrive as OData__… */
+export function fetchFileItemState(site: string, url: string): Promise<SpResult> {
+  return spRequest(
+    site,
+    "GET",
+    `${filePath(url)}/ListItemAllFields?$select=Id,Title,OData__ModerationStatus,OData__UIVersionString`
+  );
+}
+
+/** A library's rules the ingestion run must respect. */
+export function fetchListRules(site: string, listId: string): Promise<SpResult> {
+  return spRequest(
+    site,
+    "GET",
+    `_api/web/lists(guid'${listId}')?$select=Title,EnableModeration,ForceCheckout,EnableVersioning,EnableMinorVersions`
+  );
+}
+
 export function recycleFile(site: string, url: string): Promise<SpResult> {
   return spRequest(site, "POST", `${filePath(url)}/recycle()`);
 }

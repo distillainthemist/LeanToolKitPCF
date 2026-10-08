@@ -184,6 +184,17 @@ preview, batches, log, resume (one and a half); docs, tests, harness
 
 ## 7. Settled by the probe, and assumptions
 
+**The probe is built (2026-10-08, on dev):** Settings → Documents →
+"Move road (ingestion)" — pick a source and a destination library
+(working / revision only), "Test move road". `docs/moveProbe.ts`
+creates a text file with a Title and two major versions in the source,
+`SP.MoveCopyUtil.MoveFileByPath` moves it, the probe reads back the
+check-out state, Title (carried / lost), version label, moderation
+status and prior versions, runs the approve bracket (check-out → major
+check-in → publish where moderated), repeats with `CopyFileByPath`,
+tries a second copy onto the same name (must refuse), and recycles
+every file. Findings go into sharepoint-writes.md once Ben has run it.
+
 - **"Version 1."** If `MoveFileByPath` carries the ingestion
   library's version history, a file edited twice there would land as
   3.0. The probe decides the road: a move that carries history is

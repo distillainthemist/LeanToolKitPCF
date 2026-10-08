@@ -219,10 +219,12 @@ export async function renderDocsSettings(body: HTMLElement, ctx: Ctx): Promise<v
   /** Set by the Write access section far below, which only exists once
    *  the whole tab is built — the dictionary paints before then. */
   let fillWriteSel: () => void = () => {};
+  let fillMoveSels: () => void = () => {};
 
   const paintDictionary = async () => {
     clear(dictBox);
     fillWriteSel();
+    fillMoveSels();
     if (app.siteUrl === "" || exposed.length === 0) {
       dictBox.appendChild(
         note("Expose a library below first — its columns are what there is to map.")
@@ -1999,6 +2001,68 @@ export async function renderDocsSettings(body: HTMLElement, ctx: Ctx): Promise<v
       );
       writeBtn.disabled = false;
       writeBtn.textContent = "Test write access";
+    })();
+  });
+
+  // ---- the move-road probe (document ingestion, 2026-10-08) -----------
+  // What a file carries when it MOVES between two libraries of this
+  // site, the state it lands in, and whether the approve bracket then
+  // takes it to an approved major — document-ingestion-proposal §5 step 1.
+  body.appendChild(section("Move road (ingestion)"));
+  body.appendChild(
+    note(
+      "Creates a text file with a Title and two versions in the SOURCE library, moves it to " +
+        "the DESTINATION, reads back what survived (Title, versions, check-out and moderation " +
+        "state), runs the approve bracket on it, repeats with a copy, and recycles every file " +
+        "it made. Pick a working library as the source and a working or revision library as the " +
+        "destination — nothing controlled is touched."
+    )
+  );
+  const moveSrc = el("select", "app-input") as HTMLSelectElement;
+  const moveDst = el("select", "app-input") as HTMLSelectElement;
+  const moveBtn = el("button", "app-btn", "Test move road") as HTMLButtonElement;
+  const moveRow = el("div", "app-docs-siterow");
+  moveRow.append(moveSrc, moveDst, moveBtn);
+  body.appendChild(moveRow);
+  const moveBox = el("div", "");
+  body.appendChild(moveBox);
+  fillMoveSels = () => {
+    const writable = exposed.filter((l) => l.libType === "working" || l.libType === "revision");
+    for (const sel of [moveSrc, moveDst]) {
+      clear(sel);
+      for (const l of writable) {
+        const o = el("option", "", l.config.title !== "" ? l.config.title : l.name) as HTMLOptionElement;
+        o.value = l.listId;
+        sel.appendChild(o);
+      }
+      if (writable.length === 0) sel.appendChild(el("option", "", "No working or revision library exposed"));
+      sel.disabled = writable.length === 0;
+    }
+    if (writable.length > 1) moveDst.selectedIndex = 1;
+    moveBtn.disabled = writable.length === 0;
+  };
+  fillMoveSels();
+  moveBtn.addEventListener("click", () => {
+    void (async () => {
+      if (moveSrc.value === "" || moveDst.value === "" || app.siteUrl === "") return;
+      if (moveSrc.value === moveDst.value) {
+        clear(moveBox);
+        moveBox.appendChild(el("div", "app-cp-err", "Pick two different libraries."));
+        return;
+      }
+      moveBtn.disabled = true;
+      moveBtn.textContent = "Testing…";
+      clear(moveBox);
+      const list = el("div", "app-dept-list");
+      moveBox.appendChild(list);
+      const { runMoveProbe } = await import("./moveProbe");
+      await runMoveProbe({ site: app.siteUrl, sourceListId: moveSrc.value, destListId: moveDst.value }, (s) => {
+        const row = el("div", `app-docs-health app-docs-health-${s.ok ? "info" : "warn"}`);
+        row.append(el("span", "app-docs-healthmark", s.ok ? "✓" : "⚠"), el("span", "app-docs-healthtitle", s.name), el("span", "app-field-hint", s.detail));
+        list.appendChild(row);
+      });
+      moveBtn.disabled = false;
+      moveBtn.textContent = "Test move road";
     })();
   });
 
