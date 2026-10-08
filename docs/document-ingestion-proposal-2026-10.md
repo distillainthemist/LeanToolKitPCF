@@ -228,7 +228,8 @@ every file. Findings go into sharepoint-writes.md once Ben has run it.
 - **Store** `docs/ingestionStore.ts` (list / save / delete).
 - **Screen** `docs/ingestionScreen.ts`: the task sheet (the viewer's
   overlay idiom) — head (destination, assignees, creator, status chip),
-  "Open folder ↗" primary, "Edit in grid view ↗", "Set for selected…"
+  "Open folder ↗" primary (the grid-view link was cut the next day: it
+  landed on the same page), "Set for selected…"
   (one column, the field editor, a bracket per file), "Fill blanks from
   defaults", the folder's files as a compact register list
   (destination default columns + required, a Ready pill naming what is

@@ -242,13 +242,8 @@ export function openIngestionTask(o: IngestionScreenOpts): () => void {
     const openFolder = linkBtn("Open folder ↗", `${ctx.origin}${task.folder}`, "app-btn app-btn-primary");
     openFolder.title = "The task's folder in SharePoint — add files there";
     actions.appendChild(openFolder);
-    const srcRootRes = await fetchListRoot(ctx.site, src.listId);
-    const srcRoot = String(((srcRootRes.data ?? {}) as { ServerRelativeUrl?: unknown }).ServerRelativeUrl ?? "");
-    if (srcRoot !== "") {
-      const grid = linkBtn("Edit in grid view ↗", `${ctx.origin}${srcRoot}/Forms/AllItems.aspx?id=${encodeURIComponent(task.folder)}`);
-      grid.title = "The folder in SharePoint's list view — \"Edit in grid view\" sets many files' details at once";
-      actions.appendChild(grid);
-    }
+    // (an "Edit in grid view" link landed on the same folder page as
+    // Open folder — removed, Ben 2026-10-09; the note names the grid view)
     const selectedCount = el("span", "app-cp-muted app-ing-selcount", "");
     const setSel = btn("Set for selected…");
     setSel.disabled = true;
@@ -276,7 +271,7 @@ export function openIngestionTask(o: IngestionScreenOpts): () => void {
     actions.appendChild(right);
     body.appendChild(actions);
     body.appendChild(
-      el("div", "app-field-hint", task.status === "closed" ? "This task is closed — its log is below." : "Add files to the folder, set each file's details (open a row, or select rows and set one column for all), then a document controller runs the ingestion. A file moves only when every required detail is set; files that are refused stay here with the reason.")
+      el("div", "app-field-hint", task.status === "closed" ? "This task is closed — its log is below." : "Add files to the folder, then set each file's details — open a row here, select rows and set one column for all, or use \"Edit in grid view\" in the folder itself. A document controller then runs the ingestion. A file moves only when every required detail is set; files that are refused stay here with the reason.")
     );
 
     // ---- the files ---------------------------------------------------------

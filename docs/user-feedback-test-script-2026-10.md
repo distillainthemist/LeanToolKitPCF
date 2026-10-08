@@ -222,7 +222,7 @@ Needs the ingestion library set up (document-ingestion-proposal §8).
    the badge counts it; the row opens the task sheet.
 4. **Files** — Open folder ↗, drop three files; the sheet lists them
    with the destination's columns and a Ready pill naming what is
-   missing; Edit in grid view ↗ lands on the folder.
+   missing.
 5. **Details** — a row opens Edit properties with the effective date
    editable; select two rows → Set for selected… writes one column;
    Fill blanks from defaults fills the rest.
