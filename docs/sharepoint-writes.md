@@ -46,6 +46,32 @@ is a place a plausible alternative failed.
   Sanitize names first (`sanitizeFileName`); read the itemId back via
   RLDAS (list door), matching the exact name on a newest-first page.
 
+## Moving and copying between libraries (measured 2026-10-08)
+
+The modern roads `SP.MoveCopyUtil.MoveFileByPath` / `CopyFileByPath`
+(`sp.ts`, absolute urls, `overwrite=false`), measured by the move probe
+(`docs/moveProbe.ts`, Settings → Documents → Move road) from a
+require-check-out working library into the controlled standards
+library (content approval ON, require check-out ON, major + minor):
+
+- **A move carries EVERYTHING**: the Title (so shared site columns),
+  the whole version history (1.0, 2.0 → lands as 3.0) — and the
+  moderation state: the file landed **checked in and APPROVED**, i.e.
+  reader-visible the instant it arrived, before any metadata was set.
+  The bracket then made it 4.0. A move is the wrong road for ingestion
+  on two counts: the version number lies, and the document is public
+  before it is ready.
+- **A copy carries the columns and starts over**: Title CARRIED, **no
+  prior versions, lands as 0.1 DRAFT, checked in** — invisible to
+  readers under content approval until published. Check-out → writes →
+  major check-in → publish takes it to 1.0 approved: the "approved
+  version 1" story exactly. The source stays and is recycled after.
+- **`overwrite=false` refuses a name collision cleanly** ("The
+  destination file already exists", -2130575257) — the ingestion
+  collision rule for free; a document-ID collision is the app's own
+  check.
+- Both roads answer promptly through the connector; nothing hangs.
+
 ## The check-out rules
 
 - On a require-check-out library, **every** metadata write — forms

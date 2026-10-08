@@ -195,12 +195,15 @@ check-in → publish where moderated), repeats with `CopyFileByPath`,
 tries a second copy onto the same name (must refuse), and recycles
 every file. Findings go into sharepoint-writes.md once Ben has run it.
 
-- **"Version 1."** If `MoveFileByPath` carries the ingestion
-  library's version history, a file edited twice there would land as
-  3.0. The probe decides the road: a move that carries history is
-  replaced by COPY (fresh history, lands at 1.0 after the major
-  check-in) followed by recycling the source — the register already
-  has both halves.
+- **"Version 1" — SETTLED by the probe (Ben ran it 2026-10-08,
+  working → controlled standards):** a MOVE carries the whole version
+  history AND the moderation state — the file landed checked in and
+  approved (reader-visible at once) as 3.0. A COPY carries the Title
+  (so the shared columns), starts a fresh history, and lands as 0.1
+  draft, invisible under content approval until published; the bracket
+  takes it to 1.0 approved. **The run copies, brackets, then recycles
+  the source.** `overwrite=false` refuses a name collision in
+  SharePoint's own words. Recorded in sharepoint-writes.md.
 - **Destinations**: any exposed library of type standard, record or
   working; never template, revision or ingestion.
 - **Who runs**: document controllers only; assignees prepare metadata.
