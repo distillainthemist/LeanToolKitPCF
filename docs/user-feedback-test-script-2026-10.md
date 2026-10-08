@@ -225,9 +225,15 @@ Needs the ingestion library set up (document-ingestion-proposal §8).
 4. **Files** — Open folder ↗, drop three files; the sheet lists them
    with the destination's columns and a Ready pill naming what is
    missing.
-5. **Details** — a row opens Edit properties with the effective date
-   editable; select two rows → Set for selected… writes one column;
-   Fill blanks from defaults fills the rest.
+5. **Details** — the grid shows every column the destination type
+   offers in the settings order (✱ required), the Document column
+   frozen while the rest scrolls; type in a text cell, pick a choice,
+   a date, open a term or person cell's popover and Set; the row dot
+   and tinted cells mark unsaved; Save changes writes them (one bracket
+   per file); Discard reverts; close or Refresh with drafts asks first;
+   select two rows → Set for selected… lands in the grid; Fill blanks
+   from defaults fills the rest; Run is greyed while anything is
+   unsaved.
 6. **Run** — Run ingestion… is greyed while any file lacks a required
    detail (hover says how many); once every file is ready it names the
    counts; files move into the

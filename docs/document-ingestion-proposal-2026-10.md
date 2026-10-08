@@ -340,6 +340,27 @@ sheet rewired (Save changes, the guard, Refresh with a drafts check),
 Set for selected and Fill blanks writing into the DRAFT rather than
 SharePoint, the dialog on the row removed.
 
-### Decisions — taken with Ben
+### Decisions — taken with Ben (2026-10-09)
 
-(filled in as they are taken)
+1. **Draft + Save changes** (B): cells change locally; a row dot and a
+   tinted cell mark unsaved; "Save changes (n files)" writes each
+   touched file once; Discard; closing or refreshing with drafts asks.
+2. **Every column the type offers** (i): the site dictionary's order,
+   required ones ✱ in the header, minus the status (the run sets it)
+   and the two derived dates (next review, cadence).
+
+### Status — BUILT 2026-10-09 (dev)
+
+`docs/ingestionDraft.ts` (pure, tested: `setCell` drops blanks and
+no-op values, `effectiveValues`, `applyToRows` for Set-for-selected
+and Fill-blanks, `writesFor`). The sheet's list is now the grid: the
+Document cell (select box, dirty dot, type chip, name) frozen left,
+Ready frozen right, the header frozen top, the rest scrolling on x;
+choice / date / single-line text edit in the cell (Tab across, Enter
+down, Esc reverts); taxonomy, people and notes open a popover carrying
+the form editor for that one field, with the current value resolved
+(term labels → ids through the set's walk, people from the feed's
+email twin). Set for selected and Fill blanks land in the draft. The
+Ready pill reads the draft; Run ingestion needs a clean, saved, fully
+ready grid. The Edit-properties dialog is no longer opened from the
+sheet.

@@ -28,8 +28,8 @@ import { appLinkUrl } from "../links";
 import { DocLibrary, docsConfig } from "./docsStore";
 import { DocRow, buildRenderViewXml, formatWhen } from "./rows";
 import { renderListPage } from "./data";
-import { mountDocList } from "./listView";
-import { RegisterCellCtx, buildRegisterColumns, makeNameCell } from "./registerCells";
+import { RegisterCellCtx, makeNameCell } from "./registerCells";
+import { Draft, applyToRows, dirtyRows, effectiveValues, savedDisplay, setCell, writesFor } from "./ingestionDraft";
 import {
   AddFieldValue,
   DEFAULT_CADENCE_MONTHS,
@@ -37,7 +37,6 @@ import {
   addMonthsYmd,
   cadenceForImportance,
   columnsForTypes,
-  defaultColumnsFor,
   deriveTypeStates,
   dialogSections,
   emptySiteDictionary,
@@ -68,7 +67,7 @@ import {
   recycleFolder,
   validateUpdateListItem,
 } from "./sp";
-import { buildFieldEditors } from "./fieldEditors";
+import { buildFieldEditors, editorKind } from "./fieldEditors";
 import { IngestionAssignee, IngestionTask, RunLogEntry, blanksToFill, ingestComment, latestByFile, logSummary, missingFor, taskFolderName } from "./ingestionModel";
 import { saveIngestionTask, deleteIngestionTask } from "./ingestionStore";
 import { promptConfirm } from "../prompts";
@@ -178,15 +177,28 @@ export function openIngestionTask(o: IngestionScreenOpts): () => void {
   const untrap = trapFocus(sheet);
   let dead = false;
   let running = false;
-  const close = () => {
-    if (running) return; // a run in flight is never abandoned by a stray Esc
+  /** Unsaved cells: the close asks before dropping them. */
+  let unsavedCount = (): number => 0;
+  const closeNow = () => {
     dead = true;
     untrap();
     scrim.remove();
     document.removeEventListener("keydown", onKey);
   };
+  const close = () => {
+    if (running) return; // a run in flight is never abandoned by a stray Esc
+    const n = unsavedCount();
+    if (n === 0) {
+      closeNow();
+      return;
+    }
+    void promptConfirm({ title: "Discard unsaved changes?", note: `${n} file${n === 1 ? " has" : "s have"} details you have not saved.`, confirmLabel: "Discard", danger: true }).then((ok) => {
+      if (ok) closeNow();
+    });
+  };
   const onKey = (e: KeyboardEvent) => {
-    if (e.key === "Escape") close();
+    // a popover editor or a dialog on the sheet takes Esc for itself
+    if (e.key === "Escape" && !sheet.querySelector(".ltk-dialog-overlay, .app-ing-pop")) close();
   };
   document.addEventListener("keydown", onKey);
 
@@ -235,13 +247,17 @@ export function openIngestionTask(o: IngestionScreenOpts): () => void {
     const docIdInternal = ctx.internalForRole("documentId");
     const effInternal = ctx.internalForRole("effectiveDate");
     const importanceInternal = ctx.internalForRole("importance");
-    // the source library's columns are the destination's (site columns);
-    // the edit form reads the destination's configuration
-    const formLib: DocLibrary = { ...src, config: dest.config };
-    // the columns the REGISTER shows for the destination's type (the site
-    // dictionary's default cells, in its order), plus the required ones
-    const wanted = Array.from(new Set([...defaultColumnsFor(ctx.cellCtx.dict, [dest.libType]), ...required.map((r) => r.internal)])).filter((c) => carried.has(c));
-    const feedFields = Array.from(new Set([...wanted, docIdInternal, effInternal, importanceInternal, statusInternal].filter((f) => f !== "")));
+    const reviewInternal = ctx.internalForRole("nextReviewDate");
+    const cadenceInternal = ctx.internalForRole("reviewCadence");
+    // the grid's columns (proposal §9): EVERY column the destination type
+    // offers, in the site dictionary's order — the Edit-properties form's
+    // set — minus the status (the run sets it) and the two derived dates
+    const derived = new Set([statusInternal, reviewInternal, cadenceInternal].filter((x) => x !== ""));
+    const gridFields = columnsForTypes(ctx.cellCtx.dict, [dest.libType])
+      .map((i) => destFields.find((f) => f.internal === i))
+      .filter((f): f is SpField => f !== undefined && carried.has(f.internal) && !derived.has(f.internal) && editorKind(f) !== null);
+    const requiredSet = new Set(required.map((r) => r.internal));
+    const feedFields = Array.from(new Set([...gridFields.map((f) => f.internal), ...required.map((r) => r.internal), docIdInternal, effInternal, importanceInternal, statusInternal].filter((f) => f !== "")));
 
     // ---- actions row ---------------------------------------------------------
     const actions = el("div", "app-ing-actions");
@@ -257,12 +273,18 @@ export function openIngestionTask(o: IngestionScreenOpts): () => void {
     setSel.disabled = true;
     const fillBtn = btn("Fill blanks from defaults");
     fillBtn.disabled = task.defaults.length === 0;
-    fillBtn.title = task.defaults.length === 0 ? "No task defaults set (Edit task…)" : "Write each default into the files that lack it";
+    fillBtn.title = task.defaults.length === 0 ? "No task defaults set (Edit task…)" : "Put each default into the files that lack it (saved with Save changes)";
     // the folder is edited in SharePoint: a refresh re-reads it (Ben, 2026-10-09)
     const refresh = btn("↻ Refresh");
     refresh.title = "Re-read the folder's files and details";
-    refresh.addEventListener("click", () => void reload());
-    actions.append(setSel, fillBtn, refresh, selectedCount);
+    refresh.addEventListener("click", () => void reloadGuarded());
+    // the draft model (proposal §9): cells change here; Save writes each
+    // touched file once
+    const saveBtn = btn("Save changes", "app-btn app-btn-primary app-ing-save");
+    saveBtn.disabled = true;
+    const discardBtn = btn("Discard", "app-link");
+    discardBtn.style.display = "none";
+    actions.append(setSel, fillBtn, refresh, saveBtn, discardBtn, selectedCount);
     const right = el("span", "app-ing-actions-right");
     if (o.isController && task.status !== "closed") {
       const edit = btn("Edit task…");
@@ -275,7 +297,7 @@ export function openIngestionTask(o: IngestionScreenOpts): () => void {
           },
           onSaved: () => {
             o.onChanged();
-            close();
+            closeNow();
             if (!cancelled) openIngestionTask(o);
           },
         });
@@ -288,113 +310,331 @@ export function openIngestionTask(o: IngestionScreenOpts): () => void {
     actions.appendChild(right);
     body.appendChild(actions);
     body.appendChild(
-      el("div", "app-field-hint", task.status === "closed" ? "This task is closed — its log is below." : "Add files to the folder, then set each file's details — open a row here, select rows and set one column for all, or use \"Edit in grid view\" in the folder itself. A document controller then runs the ingestion. A file moves only when every required detail is set; files that are refused stay here with the reason.")
+      el("div", "app-field-hint", task.status === "closed" ? "This task is closed — its log is below." : "Add files to the folder, then set each file's details in the grid (✱ = required; Tab moves across, Enter down) — or select rows and set one column for all. Save changes writes them. A document controller then runs the ingestion; files that are refused stay here with the reason.")
     );
 
-    // ---- the files ---------------------------------------------------------
-    const listHost = el("div", "app-ing-list");
-    body.appendChild(listHost);
+    // ---- the files: the editable grid (proposal §9) ------------------------
+    const gridHost = el("div", "app-ing-grid");
+    body.appendChild(gridHost);
     const status = el("div", "app-ing-status");
     body.appendChild(status);
     const selected = new Set<string>();
     let rows: DocRow[] = [];
     let lastLog = latestByFile(task.log);
+    const draft: Draft = new Map();
+    unsavedCount = () => dirtyRows(draft).length;
+    const nameCell = makeNameCell(ctx.cellCtx);
+    const labelOf = (f: SpField) => ctx.dictBy.get(f.internal)?.label || f.title;
+    // term label → id per set, resolved lazily so a taxonomy cell can open
+    // with its current term selected (the feed gives labels only)
+    const termIds = new Map<string, Promise<Map<string, string>>>();
+    const termIdsFor = (setId: string): Promise<Map<string, string>> => {
+      let p = termIds.get(setId);
+      if (!p) {
+        p = cachedTermPaths(ctx.site, setId)
+          .then((w) => new Map(w.nodes.map((n) => [n.labels[n.labels.length - 1].toLowerCase(), n.id])))
+          .catch(() => new Map<string, string>());
+        termIds.set(setId, p);
+      }
+      return p;
+    };
     const paintSel = () => {
       selectedCount.textContent = selected.size > 0 ? `${selected.size} selected` : "";
       setSel.disabled = selected.size === 0;
     };
-    const nameCell = makeNameCell(ctx.cellCtx);
-    const selectCol = {
-      key: "__sel",
-      label: "",
-      width: "28px",
-      render: (row: DocRow) => {
+    const paintDirty = () => {
+      const n = dirtyRows(draft).length;
+      saveBtn.disabled = n === 0;
+      saveBtn.textContent = n > 0 ? `Save changes (${n} file${n === 1 ? "" : "s"})` : "Save changes";
+      discardBtn.style.display = n > 0 ? "" : "none";
+      for (const r of rows) {
+        const rowEl = gridHost.querySelector<HTMLElement>(`[data-row="${r.uniqueId}"]`);
+        if (rowEl) rowEl.classList.toggle("app-ing-row-dirty", draft.has(r.uniqueId));
+      }
+      if (runBtn) {
+        runBtn.disabled = n > 0 || !allReadySaved() || running;
+        if (n > 0) runBtn.title = "Save changes first";
+      }
+    };
+    const allReadySaved = () => rows.length > 0 && rows.every((r) => missingFor(r.values, required).length === 0);
+    const readyPill = (row: DocRow): HTMLElement => {
+      const missing = missingFor(effectiveValues(row.values, draft.get(row.uniqueId)), required);
+      const last = lastLog.get(row.name);
+      const cell = el("span", "app-ing-readycell");
+      if (missing.length === 0) cell.appendChild(statusChip("✓ Ready", "green"));
+      else {
+        const pill = statusChip(`⚠ ${missing.length} missing`, "amber");
+        pill.title = `Missing: ${missing.join(", ")}`;
+        cell.appendChild(pill);
+      }
+      if (last && last.outcome === "refused") {
+        const why = el("span", "app-field-hint app-ing-why", last.detail);
+        why.title = last.detail;
+        cell.appendChild(why);
+      }
+      return cell;
+    };
+    const repaintReady = (row: DocRow) => {
+      const cell = gridHost.querySelector<HTMLElement>(`[data-row="${row.uniqueId}"] .app-ing-cell-ready`);
+      if (cell) cell.replaceChildren(readyPill(row));
+    };
+    const commit = (row: DocRow, v: AddFieldValue) => {
+      setCell(draft, row.uniqueId, row.values, v);
+      const cellEl = gridHost.querySelector<HTMLElement>(`[data-row="${row.uniqueId}"] [data-col="${v.internal}"]`);
+      if (cellEl) cellEl.classList.toggle("app-ing-cell-dirty", draft.get(row.uniqueId)?.has(v.internal) === true);
+      repaintReady(row);
+      paintDirty();
+    };
+    /** Enter moves to the same column one row down (the values grid's
+     *  grammar); Esc puts the cell back as it reads now. */
+    const keyNav = (ctl: HTMLElement, row: DocRow, f: SpField, revert: () => void) => {
+      ctl.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" && !(ctl instanceof HTMLTextAreaElement)) {
+          e.preventDefault();
+          (ctl as HTMLInputElement).blur();
+          const i = rows.findIndex((r) => r.uniqueId === row.uniqueId);
+          const next = rows[i + 1];
+          if (next) gridHost.querySelector<HTMLElement>(`[data-row="${next.uniqueId}"] [data-col="${f.internal}"] input, [data-row="${next.uniqueId}"] [data-col="${f.internal}"] select, [data-row="${next.uniqueId}"] [data-col="${f.internal}"] button`)?.focus();
+        } else if (e.key === "Escape") {
+          e.preventDefault();
+          e.stopPropagation();
+          revert();
+          (ctl as HTMLInputElement).blur();
+        }
+      });
+    };
+    /** The cell's current reading: the draft's, else the saved value. */
+    const current = (row: DocRow, f: SpField): string => {
+      const d = draft.get(row.uniqueId)?.get(f.internal);
+      const kind = editorKind(f) ?? "text";
+      return d ? (kind === "date" ? (d.text ?? "") : effectiveValues(row.values, draft.get(row.uniqueId))[f.internal] ?? "") : savedDisplay(row.values, f.internal, kind);
+    };
+    /** A popover with the FORM editor for one field, anchored to the cell —
+     *  taxonomy, people, notes: the pickers already know these kinds. */
+    const openCellPopover = async (anchor: HTMLElement, row: DocRow, f: SpField) => {
+      document.querySelectorAll(".app-ing-pop").forEach((p) => p.remove());
+      const pop = el("div", "app-cp-menu app-ing-pop");
+      const box = el("div", "app-ing-popbody");
+      const bar = el("div", "app-ing-popbar");
+      const set = btn("Set", "app-btn app-btn-primary");
+      const cancel = btn("Cancel", "app-link");
+      bar.append(cancel, set);
+      pop.append(box, bar);
+      // the current value as the editor's starting point
+      const initial = new Map<string, { text?: string; people?: { email: string; name: string }[]; term?: { label: string; termId: string }; terms?: { label: string; termId: string }[] }>();
+      const d = draft.get(row.uniqueId)?.get(f.internal);
+      const kind = editorKind(f);
+      if (d) {
+        if (kind === "taxonomy") initial.set(f.internal, d.multi === true && d.terms ? { terms: d.terms } : d.label && d.termId ? { term: { label: d.label, termId: d.termId } } : {});
+        else if (kind === "person") initial.set(f.internal, { people: d.people ?? [] });
+        else initial.set(f.internal, { text: d.text ?? "" });
+      } else if (kind === "taxonomy" && f.termSetId !== "") {
+        const ids = await termIdsFor(f.termSetId);
+        const labels = (row.values[f.internal] ?? "").split(";").map((x) => x.trim()).filter((x) => x !== "");
+        const terms = labels.map((l) => ({ label: l, termId: ids.get(l.toLowerCase()) ?? "" })).filter((t) => t.termId !== "");
+        if (terms.length > 0) initial.set(f.internal, f.type === "TaxonomyFieldTypeMulti" ? { terms } : { term: terms[0] });
+      } else if (kind === "person") {
+        const names = (row.values[f.internal] ?? "").split(";").map((x) => x.trim());
+        const emails = (row.values[`${f.internal}#email`] ?? "").split(";").map((x) => x.trim().toLowerCase());
+        const people = emails.map((email, i) => ({ email, name: names[i] ?? email })).filter((p) => p.email !== "");
+        if (people.length > 0) initial.set(f.internal, { people });
+      } else initial.set(f.internal, { text: savedDisplay(row.values, f.internal, kind ?? "text") });
+      const editors = buildFieldEditors({ site: ctx.site, box, fields: [f], columns: [{ internal: f.internal, available: true }], dictBy: ctx.dictBy, onChange: () => undefined, initial, includeSystemDates: true });
+      const closePop = () => {
+        pop.remove();
+        document.removeEventListener("pointerdown", off, true);
+        document.removeEventListener("keydown", onPopKey, true);
+      };
+      const off = (e: PointerEvent) => {
+        if (!pop.contains(e.target as Node)) closePop();
+      };
+      const onPopKey = (e: KeyboardEvent) => {
+        if (e.key === "Escape") {
+          e.stopPropagation();
+          closePop();
+        }
+      };
+      cancel.addEventListener("click", closePop);
+      set.addEventListener("click", () => {
+        const v = editors[0]?.read();
+        closePop();
+        if (v) {
+          commit(row, v);
+          const cellEl = gridHost.querySelector<HTMLElement>(`[data-row="${row.uniqueId}"] [data-col="${f.internal}"]`);
+          if (cellEl) paintCell(cellEl, row, f);
+        }
+      });
+      const r = anchor.getBoundingClientRect();
+      pop.style.top = `${Math.min(r.bottom + 4, window.innerHeight - 380)}px`;
+      pop.style.left = `${Math.min(r.left, window.innerWidth - 400)}px`;
+      document.body.appendChild(pop);
+      setTimeout(() => {
+        document.addEventListener("pointerdown", off, true);
+        document.addEventListener("keydown", onPopKey, true);
+        box.querySelector<HTMLElement>("input, select, textarea")?.focus();
+      }, 0);
+    };
+    /** One cell: a control in place for the simple kinds, a button
+     *  opening the popover for the rest. */
+    const paintCell = (cellEl: HTMLElement, row: DocRow, f: SpField) => {
+      clear(cellEl);
+      const kind = editorKind(f) ?? "text";
+      const value = current(row, f);
+      if (kind === "choice") {
+        const sel = el("select", "app-input app-ing-ctl") as HTMLSelectElement;
+        const ph = el("option", "", "—") as HTMLOptionElement;
+        ph.value = "";
+        sel.appendChild(ph);
+        for (const c of f.choices) {
+          const o = el("option", "", c) as HTMLOptionElement;
+          o.value = c;
+          sel.appendChild(o);
+        }
+        if (f.choices.includes(value)) sel.value = value;
+        sel.addEventListener("change", () => commit(row, { internal: f.internal, kind: "choice", text: sel.value }));
+        keyNav(sel, row, f, () => (sel.value = current(row, f)));
+        cellEl.appendChild(sel);
+      } else if (kind === "date") {
+        const inp = el("input", "app-input app-ing-ctl") as HTMLInputElement;
+        inp.type = "date";
+        inp.value = /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : "";
+        inp.addEventListener("change", () => commit(row, { internal: f.internal, kind: "date", text: inp.value }));
+        keyNav(inp, row, f, () => (inp.value = current(row, f)));
+        cellEl.appendChild(inp);
+      } else if (kind === "text" && f.type !== "Note") {
+        const inp = el("input", "app-input app-ing-ctl") as HTMLInputElement;
+        inp.value = value;
+        inp.addEventListener("change", () => commit(row, { internal: f.internal, kind: "text", text: inp.value }));
+        keyNav(inp, row, f, () => (inp.value = current(row, f)));
+        cellEl.appendChild(inp);
+      } else {
+        const b = btn(value !== "" ? value : "—", "app-ing-cellbtn" + (value === "" ? " app-ing-cellbtn-empty" : ""));
+        b.title = value !== "" ? `${value} — click to change` : `Set ${labelOf(f)}`;
+        b.addEventListener("click", () => void openCellPopover(b, row, f));
+        cellEl.appendChild(b);
+      }
+    };
+    const template = `300px ${gridFields.map(() => "minmax(170px, 1fr)").join(" ")} 170px`;
+    const paintGrid = () => {
+      clear(gridHost);
+      const head = el("div", "app-ing-gridrow app-ing-gridhead");
+      head.style.gridTemplateColumns = template;
+      const docHead = el("div", "app-ing-cell app-ing-cell-doc", "");
+      const all = el("input", "app-docs-libcheck") as HTMLInputElement;
+      all.type = "checkbox";
+      all.title = "Select all";
+      all.checked = rows.length > 0 && rows.every((r) => selected.has(r.uniqueId));
+      all.addEventListener("change", () => {
+        selected.clear();
+        if (all.checked) for (const r of rows) selected.add(r.uniqueId);
+        paintGrid();
+      });
+      docHead.append(all, el("span", undefined, "Document"));
+      head.appendChild(docHead);
+      for (const f of gridFields) {
+        const h = el("div", "app-ing-cell", labelOf(f) + (requiredSet.has(f.internal) ? " ✱" : ""));
+        h.title = requiredSet.has(f.internal) ? "Required before the file can move" : "";
+        head.appendChild(h);
+      }
+      head.appendChild(el("div", "app-ing-cell app-ing-cell-ready", "Ready"));
+      gridHost.appendChild(head);
+      if (rows.length === 0) {
+        gridHost.appendChild(el("div", "app-ing-empty", task.status === "closed" ? "Every file has moved." : "No files yet — open the folder and add them, then Refresh."));
+        return;
+      }
+      for (const row of rows) {
+        const rowEl = el("div", "app-ing-gridrow" + (draft.has(row.uniqueId) ? " app-ing-row-dirty" : ""));
+        rowEl.dataset.row = row.uniqueId;
+        rowEl.style.gridTemplateColumns = template;
+        const doc = el("div", "app-ing-cell app-ing-cell-doc");
         const box = el("input", "app-docs-libcheck") as HTMLInputElement;
         box.type = "checkbox";
         box.checked = selected.has(row.uniqueId);
-        box.title = "Select";
-        box.addEventListener("click", (e) => e.stopPropagation());
         box.addEventListener("change", () => {
           if (box.checked) selected.add(row.uniqueId);
           else selected.delete(row.uniqueId);
           paintSel();
         });
-        return box;
-      },
-    };
-    const readyCol = {
-      key: "__ready",
-      label: "Ready",
-      width: "170px",
-      render: (row: DocRow) => {
-        const missing = missingFor(row.values, required);
-        const last = lastLog.get(row.name);
-        const cell = el("span", "app-ing-readycell");
-        if (missing.length === 0) cell.appendChild(statusChip("✓ Ready", "green"));
-        else {
-          const pill = statusChip(`⚠ ${missing.length} missing`, "amber");
-          pill.title = `Missing: ${missing.join(", ")}`;
-          cell.appendChild(pill);
+        doc.append(box, el("span", "app-ing-dirtydot", "●"), nameCell(row));
+        rowEl.appendChild(doc);
+        for (const f of gridFields) {
+          const c = el("div", "app-ing-cell app-ing-cell-edit" + (draft.get(row.uniqueId)?.has(f.internal) ? " app-ing-cell-dirty" : ""));
+          c.dataset.col = f.internal;
+          paintCell(c, row, f);
+          rowEl.appendChild(c);
         }
-        if (last && last.outcome === "refused") {
-          const why = el("span", "app-field-hint app-ing-why", last.detail);
-          why.title = last.detail;
-          cell.appendChild(why);
-        }
-        return cell;
-      },
+        const ready = el("div", "app-ing-cell app-ing-cell-ready");
+        ready.appendChild(readyPill(row));
+        rowEl.appendChild(ready);
+        gridHost.appendChild(rowEl);
+      }
     };
-    const columns = [
-      selectCol,
-      { key: "name", label: "File", width: "minmax(180px, 1.4fr)", render: nameCell },
-      ...buildRegisterColumns(ctx.cellCtx, { wanted, bucket: "full" }).filter((c) => c.key !== "name" && c.key !== "Modified"),
-      readyCol,
-    ];
-    const list = mountDocList<DocRow>(listHost, {
-      columns,
-      onRow: (row) => {
-        void import("./editProperties").then(({ openEditProperties }) =>
-          openEditProperties({
-            site: ctx.site,
-            row,
-            lib: formLib,
-            dictBy: ctx.dictBy,
-            host: sheet,
-            heldByMe: false,
-            sections: dialogSections(ctx.cellCtx.dict, dest.libType),
-            ingestion: true,
-            onDone: () => void reload(),
-          })
-        );
-      },
-      onNearEnd: () => undefined,
-      emptyText: task.status === "closed" ? "Every file has moved." : "No files yet — open the folder and add them.",
-      density: "compact",
-    });
     const reload = async (): Promise<void> => {
-      list.setLoading(true);
+      status.textContent = "Reading the folder…";
       const page = await renderListPage(ctx.site, src.listId, buildRenderViewXml({ fields: feedFields, rowLimit: 500, sortName: true, asc: true }), "", task.folder);
       if (dead) return;
-      list.setLoading(false);
       if (page.error !== "") {
         status.textContent = `Could not read the folder: ${page.error}`;
         return;
       }
       rows = page.rows;
       for (const id of [...selected]) if (!rows.some((r) => r.uniqueId === id)) selected.delete(id);
-      list.setRows(rows);
+      for (const id of [...draft.keys()]) if (!rows.some((r) => r.uniqueId === id)) draft.delete(id);
+      paintGrid();
       paintSel();
       const ready = rows.filter((r) => missingFor(r.values, required).length === 0).length;
       status.textContent = rows.length === 0 ? "" : `${rows.length} file${rows.length === 1 ? "" : "s"} · ${ready} ready${task.log.length > 0 ? ` · log: ${logSummary(task.log)}` : ""}`;
       if (runBtn) {
         const allReady = rows.length > 0 && ready === rows.length;
-        runBtn.disabled = !allReady || running;
+        runBtn.disabled = !allReady || running || dirtyRows(draft).length > 0;
         runBtn.title = rows.length === 0 ? "No files in the folder yet" : allReady ? "Copy every file into the destination as approved version 1" : `${rows.length - ready} file${rows.length - ready === 1 ? " is" : "s are"} missing required details — set them first`;
       }
+      paintDirty();
+    };
+    /** A refresh with drafts asks first — SharePoint's reading would
+     *  replace what is typed here. */
+    const reloadGuarded = async (): Promise<void> => {
+      const n = dirtyRows(draft).length;
+      if (n > 0) {
+        const ok = await promptConfirm({ title: "Discard unsaved changes?", note: `Refreshing re-reads the folder; ${n} file${n === 1 ? " has" : "s have"} details you have not saved.`, confirmLabel: "Discard and refresh", danger: true });
+        if (!ok) return;
+        draft.clear();
+      }
+      await reload();
     };
     await reload();
 
-    // ---- bulk set --------------------------------------------------------------
+    // ---- save / discard ------------------------------------------------------
+    saveBtn.addEventListener("click", () => {
+      void (async () => {
+        const ids = dirtyRows(draft);
+        if (ids.length === 0) return;
+        saveBtn.disabled = true;
+        let n = 0;
+        const refused: string[] = [];
+        for (const id of ids) {
+          const row = rows.find((r) => r.uniqueId === id);
+          if (!row) continue;
+          n++;
+          status.textContent = `Saving ${n} of ${ids.length}: ${row.name}…`;
+          const err = await writeValues(ctx.site, src.listId, row, writesFor(draft, id), "Details set");
+          if (err === "") draft.delete(id);
+          else refused.push(`${row.name}: ${err}`);
+        }
+        await reload();
+        if (refused.length > 0) status.textContent = `${ids.length - refused.length} saved; refused — ${refused.join("; ")}`.slice(0, 600);
+      })();
+    });
+    discardBtn.addEventListener("click", () => {
+      void promptConfirm({ title: "Discard unsaved changes?", note: `${dirtyRows(draft).length} file${dirtyRows(draft).length === 1 ? " has" : "s have"} details you have not saved.`, confirmLabel: "Discard", danger: true }).then((ok) => {
+        if (!ok) return;
+        draft.clear();
+        paintGrid();
+        paintDirty();
+      });
+    });
+
+    // ---- bulk set (into the draft) ------------------------------------------
     setSel.addEventListener("click", () => {
       const targets = rows.filter((r) => selected.has(r.uniqueId));
       if (targets.length === 0) return;
@@ -404,80 +644,51 @@ export function openIngestionTask(o: IngestionScreenOpts): () => void {
         maxWidth: 520,
         buttons: [
           { label: "Cancel", kind: "secondary", onClick: () => dlg.close() },
-          { label: "Set for selected", kind: "primary", onClick: () => void apply() },
+          { label: "Set for selected", kind: "primary", onClick: () => apply() },
         ],
       });
       const pick = el("select", "app-input") as HTMLSelectElement;
-      // the destination type's offered columns, in the dictionary's order
-      const offered = columnsForTypes(ctx.cellCtx.dict, [dest.libType]);
-      const settable = offered.map((i) => destFields.find((f) => f.internal === i)).filter((f): f is SpField => f !== undefined && carried.has(f.internal) && f.internal !== statusInternal);
-      for (const f of settable) {
-        const opt = el("option", "", ctx.dictBy.get(f.internal)?.label || f.title) as HTMLOptionElement;
+      for (const f of gridFields) {
+        const opt = el("option", "", labelOf(f)) as HTMLOptionElement;
         opt.value = f.internal;
         pick.appendChild(opt);
       }
       const box = el("div", "app-ing-onefield");
-      const note = el("div", "app-field-hint", "");
+      const note = el("div", "app-field-hint", "The value lands in the grid; Save changes writes it.");
       dlg.body.append(el("div", "app-field-label", "Column"), pick, box, note);
       let editors: ReturnType<typeof buildFieldEditors> = [];
       const paint = () => {
-        editors = buildFieldEditors({
-          site: ctx.site,
-          box,
-          fields: destFields.filter((f) => f.internal === pick.value),
-          columns: [{ internal: pick.value, available: true }],
-          dictBy: ctx.dictBy,
-          onChange: () => undefined,
-          includeSystemDates: true,
-        });
+        editors = buildFieldEditors({ site: ctx.site, box, fields: gridFields.filter((f) => f.internal === pick.value), columns: [{ internal: pick.value, available: true }], dictBy: ctx.dictBy, onChange: () => undefined, includeSystemDates: true });
       };
       pick.addEventListener("change", paint);
       paint();
-      const apply = async () => {
+      const apply = () => {
         const values = editors.filter((e) => !e.isEmpty()).map((e) => e.read());
         if (values.length === 0) {
           note.textContent = "Pick a value first.";
           return;
         }
-        let done = 0;
-        const refused: string[] = [];
-        for (const row of targets) {
-          note.textContent = `Writing ${done + 1} of ${targets.length}…`;
-          const err = await writeValues(ctx.site, src.listId, row, values, `Set ${ctx.dictBy.get(pick.value)?.label ?? pick.value}`);
-          if (err === "") done++;
-          else refused.push(`${row.name}: ${err}`);
-        }
+        const touched = applyToRows(draft, targets, values, false);
         dlg.close();
         selected.clear();
-        await reload();
-        if (refused.length > 0) status.textContent = `${done} written; refused — ${refused.join("; ")}`.slice(0, 600);
+        paintGrid();
+        paintSel();
+        paintDirty();
+        status.textContent = `${touched} file${touched === 1 ? "" : "s"} changed in the grid — Save changes writes them.`;
       };
     });
 
-    // ---- fill blanks from defaults ------------------------------------------
+    // ---- fill blanks from defaults (into the draft) ---------------------------
     fillBtn.addEventListener("click", () => {
-      void (async () => {
-        fillBtn.disabled = true;
-        let written = 0;
-        const refused: string[] = [];
-        for (const row of rows) {
-          const values = blanksToFill(row.values, task.defaults);
-          if (values.length === 0) continue;
-          status.textContent = `Filling ${row.name}…`;
-          const err = await writeValues(ctx.site, src.listId, row, values, "Task defaults applied");
-          if (err === "") written++;
-          else refused.push(`${row.name}: ${err}`);
-        }
-        fillBtn.disabled = false;
-        await reload();
-        if (refused.length > 0) status.textContent = `${written} file${written === 1 ? "" : "s"} filled; refused — ${refused.join("; ")}`.slice(0, 600);
-        else if (written === 0) status.textContent = "Nothing to fill — no file lacks a default's column.";
-      })();
+      const touched = applyToRows(draft, rows, task.defaults, true);
+      paintGrid();
+      paintDirty();
+      status.textContent = touched === 0 ? "Nothing to fill — no file lacks a default's column." : `${touched} file${touched === 1 ? "" : "s"} filled in the grid — Save changes writes them.`;
     });
 
     // ---- the run ----------------------------------------------------------------
     const startRun = async (): Promise<void> => {
-      if (running) return;
+      if (running || dirtyRows(draft).length > 0) return;
       const approved = statusInternal !== "" ? termForStage(ctx.cellCtx.dict, "approved", statusTerms) : null;
       if (statusInternal !== "" && approved === null) {
         status.textContent = "No status term is mapped to the Approved stage (Settings → Documents → Lifecycle) — the run cannot publish.";
@@ -612,7 +823,7 @@ export function openIngestionTask(o: IngestionScreenOpts): () => void {
       lastLog = latestByFile(task.log);
       o.onChanged();
       if (task.status === "closed") {
-        close();
+        closeNow();
         openIngestionTask(o);
         return;
       }

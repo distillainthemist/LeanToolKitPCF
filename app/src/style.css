@@ -4451,7 +4451,30 @@ input.app-vg-in.app-vg-folded { background: #fff7e0; }
 .app-ing-actions a.app-btn { text-decoration: none; }
 .app-ing-actions-right { margin-left: auto; display: inline-flex; gap: 8px; }
 .app-ing-selcount { font-size: 12px; }
-.app-ing-list { flex: 1; min-height: 240px; display: flex; flex-direction: column; border: 1px solid #eceae5; border-radius: 8px; overflow: hidden; }
+/* the editable grid (proposal §9): the Document column frozen left,
+   Ready frozen right, the header frozen top; the rest scrolls on x */
+.app-ing-grid { flex: 1; min-height: 240px; overflow: auto; border: 1px solid #eceae5; border-radius: 8px; background: #fff; position: relative; }
+.app-ing-gridrow { display: grid; align-items: center; min-width: max-content; border-bottom: 1px solid #f1efec; }
+.app-ing-gridhead { position: sticky; top: 0; z-index: 3; background: #faf9f7; font-size: 11.5px; color: #6b6b6b; border-bottom: 2px solid #e5e5e5; }
+.app-ing-gridhead .app-ing-cell { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.app-ing-cell { padding: 4px 8px; min-width: 0; min-height: 40px; display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.app-ing-cell-doc { position: sticky; left: 0; z-index: 2; background: #fff; border-right: 1px solid #eceae5; }
+.app-ing-gridhead .app-ing-cell-doc { background: #faf9f7; z-index: 4; }
+.app-ing-cell-ready { position: sticky; right: 0; z-index: 2; background: #fff; border-left: 1px solid #eceae5; }
+.app-ing-gridhead .app-ing-cell-ready { background: #faf9f7; z-index: 4; }
+.app-ing-row-dirty .app-ing-cell-doc { background: #fffaf0; }
+.app-ing-dirtydot { display: none; color: #b26a00; font-size: 9px; flex: none; }
+.app-ing-row-dirty .app-ing-dirtydot { display: inline; }
+.app-ing-cell-dirty { background: #fff7e0; }
+.app-ing-ctl { width: 100%; min-width: 0; box-sizing: border-box; font-size: 13px; padding: 5px 8px; min-height: 32px; }
+.app-ing-cellbtn { width: 100%; min-height: 32px; text-align: left; font: inherit; font-size: 13px; color: #26241f; background: none; border: 1px solid transparent; border-radius: 6px; padding: 5px 8px; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.app-ing-cellbtn:hover, .app-ing-cellbtn:focus-visible { border-color: #d9d5cd; background: #faf9f7; }
+.app-ing-cellbtn-empty { color: #a39c90; }
+.app-ing-empty { padding: 24px 12px; color: #6d675c; font-size: 14px; }
+.app-ing-pop { width: min(380px, calc(100vw - 24px)); max-height: 380px; overflow: auto; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
+.app-ing-popbody { display: flex; flex-direction: column; gap: 6px; }
+.app-ing-popbar { display: flex; justify-content: flex-end; gap: 8px; align-items: center; }
+.app-ing-save { margin-left: 4px; }
 .app-ing-status { font-size: 12.5px; color: #6d675c; min-height: 18px; }
 .app-ing-readycell { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .app-ing-why { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 160px; }
