@@ -147,6 +147,33 @@ template row; the title line carries the initiative's stage pill
 actions in the walk. On dev, unreleased; Ben's check: open an
 initiative card, see the tabs and rails, hop with NEXT, Back to board.
 
+### 2.1 / 3.2 Status — the working folder and the card BUILT 2026-10-08
+
+- **Working folder** (`app/src/improvement/workingFolder.ts`, pure +
+  tested): `BUILTIN_STANDARD_FIELDS` in `templateModel.ts` seeds the
+  field (key `workingFolder`, kind url) on every read of the
+  Improvement settings; it is never written back, and a site's removal
+  is remembered in `hiddenBuiltins` with a "Restore the built-in…" link
+  in Settings → Improvement → Standard fields. Surfaces: the initiative
+  pane's key details ("Folder" row — the link as host › path, "Set
+  folder…" / "Change…" through `promptText` for the initiative's people
+  while it is active); a 📁 glyph on the Improvement list row and tile
+  that opens the folder without opening the initiative; the charter as
+  before; Edit details as any standard field.
+- **Documentation & links** (`controls/LinksCard/`, registered as
+  `LinksCard`, group Reference, default policy shared): document
+  `{ links: [{ id, title, url, note, group }] }` (https only, tolerant
+  parse, tested); read mode = grouped list with a service glyph
+  (SharePoint / OneDrive / Teams / web), the title as a new-tab link,
+  the note and a host › path line; ⋮ "Edit links" = rows of title ·
+  url · note · group with ⠿ order and ×, "＋ Add link", a pasted URL
+  titling itself from its last segment, rows without an https url
+  dropped on "Done editing"; the tile = titles only, six then "+n
+  more". On an initiative board the mounter pins the working folder
+  from the charter binding (`field:workingFolder`) with "Set folder…"
+  for those who may edit it — one place to set it. Harness
+  `app/harness/links.html`. Folder contents (§3.1) not built.
+
 ## 5. Order
 
 The walk first (half a day, no new concepts); then the working folder

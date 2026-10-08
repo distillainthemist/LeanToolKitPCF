@@ -208,3 +208,23 @@ On a desktop.
 | Item | Outcome |
 |---|---|
 | 1–10 | _Ben's pass pending_ |
+
+## Initiative links pass — after v0.67.0 (2026-10-08)
+
+1. **Settings → Improvement → Standard fields** — "Working folder"
+   (url) leads the list; remove it, see "Restore the built-in…", restore.
+2. **An initiative's pane** — a "Folder" row with "Set folder…"; paste
+   a SharePoint folder link; the row shows host › path and opens it in
+   a new tab; the Improvement list row and tile show 📁.
+3. **An initiative board** — add the "Documentation & links" card
+   (Reference); it opens with the working folder pinned and "Change…";
+   ⋮ Edit links, add two links, Done editing; the tile shows titles.
+4. **A meeting board** — the same card as standing content; its links
+   hold across occurrences.
+5. **The walk** — open any card on an initiative board: tabs, PREV /
+   NEXT, "Card n of m", the stage pill, "＋ Action" in the title bar,
+   Back to board.
+
+| Item | Outcome |
+|---|---|
+| 1–5 | _Ben's pass pending_ |

@@ -24,6 +24,8 @@ import { boardHash } from "./links";
 import { dayLabel, linkTitle, whenLabel } from "./linkTitle";
 import { loadLinkTarget } from "./store/linkCard";
 import { saver } from "./saver";
+import { LinksEditor } from "../../controls/LinksCard/editor";
+import { parseLinks, serializeLinks } from "../../controls/LinksCard/types";
 
 import { KpiTrendEditor } from "../../controls/KpiTrendCard/editor";
 import { parseKpiTrend, serializeKpiTrend } from "../../controls/KpiTrendCard/types";
@@ -927,6 +929,55 @@ const REGISTRY: Record<string, CardMounter> = {
       }
     })();
     return () => opts.host.replaceChildren();
+  },
+  // Documentation & links (2026-10-08): the board's curated links; on an
+  // initiative board the working folder is pinned from the charter
+  // binding (one place to set it), never stored in the card twice
+  LinksCard: (opts) => {
+    const s = saver(opts);
+    const editor = new LinksEditor(opts.host, {
+      onChange: (env) => s.save(serializeLinks(env)),
+      onSnapshot: s.onSnapshot,
+    });
+    editor.setTheme(opts.theme);
+    editor.setChrome(opts.title, promptsRaw(opts));
+    editor.setReadOnly(opts.readOnly);
+    editor.setEnvelope(parseLinks(opts.outputJson));
+    const b = opts.binding;
+    if (b) {
+      const BOUND = "field:workingFolder";
+      const paintPinned = () => {
+        const url = b.get(BOUND).trim();
+        const mayEdit = !opts.readOnly && b.canEdit(BOUND) && typeof b.set === "function";
+        editor.setPinned({
+          url: /^https:\/\/\S+$/i.test(url) ? url : "",
+          onSet: mayEdit
+            ? () => {
+                void import("./prompts").then(({ promptText }) =>
+                  promptText({
+                    title: "Working folder",
+                    note: "The SharePoint or Teams folder where this initiative's documents live — an https link.",
+                    initial: url,
+                    placeholder: "https://…sharepoint.com/sites/…/Shared Documents/…",
+                    confirmLabel: "Save",
+                  }).then(async (v) => {
+                    if (v === null) return;
+                    const next = v.trim();
+                    if (next !== "" && !/^https:\/\/\S+$/i.test(next)) return;
+                    await b.set!(BOUND, next);
+                    paintPinned();
+                  })
+                );
+              }
+            : undefined,
+        });
+      };
+      paintPinned();
+    }
+    return () => {
+      editor.destroy();
+      opts.host.replaceChildren();
+    };
   },
   StatusTile: (opts) => {
     const s = saver(opts);

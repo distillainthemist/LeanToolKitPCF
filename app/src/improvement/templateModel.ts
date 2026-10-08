@@ -238,6 +238,9 @@ export interface ImprovementSettings {
   /** Value driver tree (P9): the standard role whose site fillers may
    *  Edit values / Adopt as forecast alongside superadmins ("" = superadmins only). */
   vdtEditorRole: string;
+  /** Built-in standard fields a site has removed (keys) — the built-ins
+   *  are seeded on read, so a removal must be remembered (2026-10-08). */
+  hiddenBuiltins: string[];
 }
 
 export interface HealthQuestion {
@@ -298,17 +301,39 @@ export function parseImprovementSettings(raw: string): ImprovementSettings {
           .filter((q) => q.key !== "" && q.label !== "")
       : [];
     const vdtEditorRole = typeof (o as { vdtEditorRole?: unknown }).vdtEditorRole === "string" ? ((o as { vdtEditorRole: string }).vdtEditorRole) : "";
-    return { methods: methods.length > 0 ? methods : [...METHODS], standardRoles: roles, standardFields: fields, healthQuestions: health, vdtEditorRole };
+    const hiddenBuiltins = Array.isArray((o as { hiddenBuiltins?: unknown }).hiddenBuiltins)
+      ? ((o as { hiddenBuiltins: unknown[] }).hiddenBuiltins).filter((k): k is string => typeof k === "string")
+      : [];
+    return { methods: methods.length > 0 ? methods : [...METHODS], standardRoles: roles, standardFields: withBuiltinFields(fields, hiddenBuiltins), healthQuestions: health, vdtEditorRole, hiddenBuiltins };
   } catch {
-    return { methods: [...METHODS], standardRoles: [], standardFields: [], healthQuestions: [], vdtEditorRole: "" };
+    return { methods: [...METHODS], standardRoles: [], standardFields: withBuiltinFields([], []), healthQuestions: [], vdtEditorRole: "", hiddenBuiltins: [] };
   }
 }
+
+/** The built-in standard fields every site gets unless it removed them:
+ *  the Working folder (a url) first. A site's own field with the same
+ *  key wins (its label and kind are kept). */
+export const BUILTIN_STANDARD_FIELDS: TemplateField[] = [
+  { key: "workingFolder", label: "Working folder", kind: "url", options: [], required: false },
+];
+export function withBuiltinFields(fields: TemplateField[], hidden: string[]): TemplateField[] {
+  const out = [...fields];
+  for (const b of [...BUILTIN_STANDARD_FIELDS].reverse()) {
+    if (hidden.includes(b.key) || out.some((f) => f.key === b.key)) continue;
+    out.unshift({ ...b, options: [...b.options] });
+  }
+  return out;
+}
+export const isBuiltinField = (key: string): boolean => BUILTIN_STANDARD_FIELDS.some((b) => b.key === key);
 
 export function serializeImprovementSettings(s: ImprovementSettings): string {
   return JSON.stringify({
     methods: s.methods,
     standardRoles: s.standardRoles.map((r) => ({ key: r.key, label: r.label, multi: r.multi, timeCommitment: r.timeCommitment, people: r.people })),
-    standardFields: s.standardFields,
+    // the built-ins are seeded on read, so they are not written back —
+    // a site keeps only its own fields and the keys it removed
+    standardFields: s.standardFields.filter((f) => !isBuiltinField(f.key) || JSON.stringify(f) !== JSON.stringify(BUILTIN_STANDARD_FIELDS.find((b) => b.key === f.key))),
+    hiddenBuiltins: s.hiddenBuiltins,
     healthQuestions: s.healthQuestions,
     vdtEditorRole: s.vdtEditorRole,
   });

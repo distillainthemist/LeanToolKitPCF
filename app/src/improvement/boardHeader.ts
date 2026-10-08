@@ -27,6 +27,7 @@ import { appendInitiativeEvent, listInitiativeEvents, listInitiatives, saveIniti
 import { InitiativeEvent } from "../store/initiatives";
 import { dayLabel } from "../linkTitle";
 import { boardUrl } from "../links";
+import { WORKING_FOLDER_KEY, linkDisplayText, workingFolderUrl } from "./workingFolder";
 import { copyText } from "../../../shared/ui/clipboard";
 import { Initiative, myRoles, nextGateFor, PendingGate } from "./initiativeModel";
 import { mergeUserPrefs, userPrefsJson } from "../store/config";
@@ -252,6 +253,41 @@ export function mountInitiativePane(o: InitiativePaneOpts): InitiativePaneHandle
       }
       if (seen.size === 0) rolesBox.textContent = "—";
       line("Roles", rolesBox);
+      // the working folder (2026-10-08): the one link to where the work's
+      // documents live — a new tab, or "Set folder…" for the initiative's people
+      const folderBox = el("span", "app-ib-keyv app-ib-folder");
+      const folder = workingFolderUrl(i.fieldValues);
+      if (folder !== "") {
+        const a = el("a", "app-ib-folderlink", `📁 ${linkDisplayText(folder)} ↗`) as HTMLAnchorElement;
+        a.href = folder;
+        a.target = "_blank";
+        a.rel = "noopener noreferrer";
+        a.title = folder;
+        folderBox.appendChild(a);
+      } else {
+        folderBox.appendChild(el("span", "app-cp-muted", "No working folder set"));
+      }
+      if (mine() && i.status === "active") {
+        const set = btn(folder !== "" ? "Change…" : "Set folder…", "app-link app-ib-folderset");
+        set.addEventListener("click", () => {
+          void promptText({
+            title: "Working folder",
+            note: "The SharePoint or Teams folder where this initiative's documents live — an https link.",
+            initial: folder,
+            placeholder: "https://…sharepoint.com/sites/…/Shared Documents/…",
+            confirmLabel: "Save",
+          }).then(async (v) => {
+            if (v === null) return;
+            const next = v.trim();
+            if (next !== "" && !/^https:\/\/\S+$/i.test(next)) return;
+            i.fieldValues[WORKING_FOLDER_KEY] = next;
+            await persist();
+            render();
+          });
+        });
+        folderBox.appendChild(set);
+      }
+      line("Folder", folderBox);
       // health
       const health = parseHealth(i.fieldValues.__health ?? "");
       const healthBtn = btn(health ? `Health ${health.score} / ${health.of} · ${health.at.slice(5, 7)}/${health.at.slice(2, 4)}` : "Health check", "app-btn app-ib-health");

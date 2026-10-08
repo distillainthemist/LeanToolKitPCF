@@ -108,9 +108,19 @@ describe("standard fields", () => {
   it("parse/serialize alongside methods and roles", async () => {
     const m = await import("../improvement/templateModel");
     const s = m.parseImprovementSettings('{"standardFields":[{"key":"cost_centre","label":"Cost centre","kind":"picklist","options":["A"],"required":true}]}');
-    expect(s.standardFields).toEqual([{ key: "cost_centre", label: "Cost centre", kind: "picklist", options: ["A"], required: true }]);
+    // the built-in Working folder leads every site's list (2026-10-08)
+    expect(s.standardFields).toEqual([
+      { key: "workingFolder", label: "Working folder", kind: "url", options: [], required: false },
+      { key: "cost_centre", label: "Cost centre", kind: "picklist", options: ["A"], required: true },
+    ]);
     expect(m.parseImprovementSettings(m.serializeImprovementSettings(s)).standardFields).toEqual(s.standardFields);
-    expect(m.parseImprovementSettings("").standardFields).toEqual([]);
+    // the built-in Working folder is seeded on read (2026-10-08) and is
+    // not written back; a removal is remembered in hiddenBuiltins
+    expect(m.parseImprovementSettings("").standardFields.map((f) => f.key)).toEqual(["workingFolder"]);
+    expect(m.parseImprovementSettings('{"hiddenBuiltins":["workingFolder"]}').standardFields).toEqual([]);
+    const round = m.parseImprovementSettings(m.serializeImprovementSettings(m.parseImprovementSettings("")));
+    expect(round.standardFields.map((f) => f.key)).toEqual(["workingFolder"]);
+    expect(JSON.parse(m.serializeImprovementSettings(m.parseImprovementSettings(""))).standardFields).toEqual([]);
   });
 });
 

@@ -316,6 +316,18 @@ export const CARDS: CardSpec[] = [
     appBound: ["instanceId", "peopleJSON"],
   },
   {
+    type: "LinksCard",
+    label: "Documentation & links",
+    group: "Reference",
+    description: "The places this work's documents live — working folders and reference links; an initiative's working folder is pinned first.",
+    config: [],
+    appBound: [],
+    // standing content by default: a documentation list means the same
+    // thing at every occurrence; a one-off list can carry or clear
+    policies: ["clear", "carry", "shared"],
+    defaultPolicy: "shared",
+  },
+  {
     type: "StatusTile",
     label: "Status tile",
     group: "Performance",

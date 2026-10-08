@@ -25,7 +25,9 @@ import { cardLabel } from "../../../controls/CardSettings/registry";
 import { createWizardShell } from "./wizardShell";
 import { pickOwner } from "../priorities/dialogs";
 import { parseOrgTree } from "../../../shared/schema/meeting";
-import { METRIC_RULE_LABELS, MetricRule,
+import {
+  METRIC_RULE_LABELS,
+  MetricRule,
   FieldKind,
   FIELD_KINDS,
   fieldKindLabel,
@@ -49,7 +51,12 @@ import { METRIC_RULE_LABELS, MetricRule,
   TemplateStage,
   Tracking,
   validateTemplate,
-  withSlotFlags, activeRoles } from "./templateModel";
+  withSlotFlags,
+  activeRoles,
+  BUILTIN_STANDARD_FIELDS,
+  isBuiltinField,
+  withBuiltinFields,
+} from "./templateModel";
 
 const btn = (label: string, cls = "ltk-mw-btn"): HTMLButtonElement => {
   const b = el("button", cls, label) as HTMLButtonElement;
@@ -1035,6 +1042,8 @@ export async function renderImprovementSettings(body: HTMLElement, isSuper: bool
           void confirmRemoval(`the standard field “${f.label}”`, "Every initiative's header loses this field. This saves straight away.").then((ok) => {
             if (!ok) return;
             imp.standardFields.splice(i, 1);
+            // a built-in is seeded on read: remember the removal
+            if (isBuiltinField(f.key) && !imp.hiddenBuiltins.includes(f.key)) imp.hiddenBuiltins.push(f.key);
             persist();
             paintFields();
           });
@@ -1042,6 +1051,19 @@ export async function renderImprovementSettings(body: HTMLElement, isSuper: bool
         rowEl.appendChild(x);
         fieldList.appendChild(rowEl);
       });
+      // the built-ins a site removed — one link brings each back
+      for (const b of BUILTIN_STANDARD_FIELDS) {
+        if (!imp.hiddenBuiltins.includes(b.key)) continue;
+        const restore = el("button", "app-link", `Restore the built-in “${b.label}” field`) as HTMLButtonElement;
+        restore.type = "button";
+        restore.addEventListener("click", () => {
+          imp.hiddenBuiltins = imp.hiddenBuiltins.filter((k) => k !== b.key);
+          imp.standardFields = withBuiltinFields(imp.standardFields, imp.hiddenBuiltins);
+          persist();
+          paintFields();
+        });
+        fieldList.appendChild(restore);
+      }
       const addRow = el("div", "app-org-row");
       const input = el("input", "app-input") as HTMLInputElement;
       input.placeholder = "Add standard field (e.g. Cost centre)";

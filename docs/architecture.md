@@ -381,6 +381,18 @@ model section) — the canvas/PCF sections there are historical.
   the next move forward (`standingRevert`, derived from the events).
   No schema change.
 
+**Initiative documentation links** (2026-10-08; proposal and status in
+[initiative-links-proposal-2026-10.md](initiative-links-proposal-2026-10.md)).
+The working folder is a BUILT-IN standard header field (kind url,
+seeded on read by `withBuiltinFields`, removable per site via
+`hiddenBuiltins` — no column), surfaced in the initiative pane, the
+Improvement list and tiles, and the charter. `controls/LinksCard` is
+the "Documentation & links" card: a curated list in the card's own
+document, the initiative's working folder pinned first through the
+charter binding; folder contents are a later, SharePoint-only step.
+The card walk engages on initiative boards (a template row is live on
+a MEETING board only).
+
 **The values grid and folded weeks** (2026-10-08). A bucket with two
 readings used to fold and lock its cell ("edit them on the card").
 The cell model (`vdt/gridModel.ts`) now names the bucket's LAST point
