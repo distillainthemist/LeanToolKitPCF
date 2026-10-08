@@ -4433,7 +4433,10 @@ input.app-vg-in.app-vg-folded { background: #fff7e0; }
 .ltk-tile .app-gx-bar { display: none; }
 
 /* ---- document ingestion (2026-10-08): the task sheet and editor ---- */
-.app-ing-sheet { position: relative; }
+/* the task sheet takes (almost) the whole window: the file list is
+   the point of it (Ben, 2026-10-09) */
+.app-ing-sheet { position: relative; width: calc(100vw - 32px); height: calc(100vh - 32px); max-height: none; }
+.app-docs-scrim-right:has(> .app-ing-sheet) { padding: 16px; }
 .app-docs-ingestbtn { margin-right: 6px; }
 /* the task editor: a 640px dialog whose fields fill it (the stacked
    .app-field caps at 440px for page forms) */

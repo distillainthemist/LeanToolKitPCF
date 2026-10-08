@@ -255,7 +255,11 @@ export function openIngestionTask(o: IngestionScreenOpts): () => void {
     const fillBtn = btn("Fill blanks from defaults");
     fillBtn.disabled = task.defaults.length === 0;
     fillBtn.title = task.defaults.length === 0 ? "No task defaults set (Edit task…)" : "Write each default into the files that lack it";
-    actions.append(setSel, fillBtn, selectedCount);
+    // the folder is edited in SharePoint: a refresh re-reads it (Ben, 2026-10-09)
+    const refresh = btn("↻ Refresh");
+    refresh.title = "Re-read the folder's files and details";
+    refresh.addEventListener("click", () => void reload());
+    actions.append(setSel, fillBtn, refresh, selectedCount);
     const right = el("span", "app-ing-actions-right");
     if (o.isController && task.status !== "closed") {
       const edit = btn("Edit task…");
