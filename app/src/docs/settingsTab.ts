@@ -2014,8 +2014,10 @@ export async function renderDocsSettings(body: HTMLElement, ctx: Ctx): Promise<v
       "Creates a text file with a Title and two versions in the SOURCE library, moves it to " +
         "the DESTINATION, reads back what survived (Title, versions, check-out and moderation " +
         "state), runs the approve bracket on it, repeats with a copy, and recycles every file " +
-        "it made. Pick a working library as the source and a working or revision library as the " +
-        "destination — nothing controlled is touched."
+        "it made. The source is a working or revision library; the destination can be ANY " +
+        "library but templates — ingestion's real targets are the controlled ones, and a moved " +
+        "probe file there is a draft readers never see (content approval) before it is recycled. " +
+        "Run it on the dev site."
     )
   );
   const moveSrc = el("select", "app-input") as HTMLSelectElement;
@@ -2027,19 +2029,24 @@ export async function renderDocsSettings(body: HTMLElement, ctx: Ctx): Promise<v
   const moveBox = el("div", "");
   body.appendChild(moveBox);
   fillMoveSels = () => {
-    const writable = exposed.filter((l) => l.libType === "working" || l.libType === "revision");
-    for (const sel of [moveSrc, moveDst]) {
+    const sources = exposed.filter((l) => l.libType === "working" || l.libType === "revision");
+    const targets = exposed.filter((l) => l.libType !== "template");
+    const fill = (sel: HTMLSelectElement, libs: typeof exposed, empty: string) => {
       clear(sel);
-      for (const l of writable) {
-        const o = el("option", "", l.config.title !== "" ? l.config.title : l.name) as HTMLOptionElement;
+      for (const l of libs) {
+        const o = el("option", "", `${l.config.title !== "" ? l.config.title : l.name} (${l.libType})`) as HTMLOptionElement;
         o.value = l.listId;
         sel.appendChild(o);
       }
-      if (writable.length === 0) sel.appendChild(el("option", "", "No working or revision library exposed"));
-      sel.disabled = writable.length === 0;
-    }
-    if (writable.length > 1) moveDst.selectedIndex = 1;
-    moveBtn.disabled = writable.length === 0;
+      if (libs.length === 0) sel.appendChild(el("option", "", empty));
+      sel.disabled = libs.length === 0;
+    };
+    fill(moveSrc, sources, "No working or revision library exposed");
+    fill(moveDst, targets, "No library exposed");
+    // default the destination to the first library that is not the source
+    const other = targets.findIndex((l) => l.listId !== moveSrc.value);
+    if (other >= 0) moveDst.selectedIndex = other;
+    moveBtn.disabled = sources.length === 0 || targets.length === 0;
   };
   fillMoveSels();
   moveBtn.addEventListener("click", () => {
