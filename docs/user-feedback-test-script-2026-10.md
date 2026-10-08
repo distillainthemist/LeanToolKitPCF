@@ -225,7 +225,10 @@ On a desktop.
 5. **The walk** — open any card on an initiative board: tabs, PREV /
    NEXT, "Card n of m", the stage pill, "＋ Action" in the title bar,
    Back to board.
-6. **Folder contents** — on the links card, a working folder given as
+6. **Template chip** — every Improvement row and tile shows a tinted
+   "Template · Method" chip beside the title (the method alone when the
+   template was deleted); hover gives both in full.
+7. **Folder contents** — on the links card, a working folder given as
    a SharePoint folder address (…/Shared Documents/… or …?id=…) shows
    "Show contents ▾" and lists its folders and files; a OneDrive
    "/:f:/g/" share shows ⓘ and no list; the Improvement list and tiles
@@ -233,4 +236,4 @@ On a desktop.
 
 | Item | Outcome |
 |---|---|
-| 1–6 | _Ben's pass pending_ |
+| 1–7 | _Ben's pass pending_ |

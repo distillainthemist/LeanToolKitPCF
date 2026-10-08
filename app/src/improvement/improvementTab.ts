@@ -532,6 +532,20 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
     cleanups.push(() => document.removeEventListener("keydown", onFilterKey, true));
     cleanups.push(closeFilterPop);
 
+    // the template and method, clearly on every row and tile (Ben,
+    // 2026-10-08): "Template name · Method" as a quiet tinted chip; the
+    // method alone when the template is gone; nothing when neither reads
+    const templateName = new Map(templates.map((t) => [t.id, t.name] as [string, string]));
+    const templateChip = (i: Initiative): HTMLElement | null => {
+      const name = templateName.get(i.templateId) ?? "";
+      const method = i.method.trim();
+      const text = name !== "" && method !== "" && method.toLowerCase() !== name.toLowerCase() ? `${name} · ${method}` : name !== "" ? name : method;
+      if (text === "") return null;
+      const chip = el("span", "app-im-chip app-im-chip-tpl", text);
+      chip.title = [name !== "" ? `Template: ${name}` : "Template no longer exists", method !== "" ? `Method: ${method}` : ""].filter((x) => x !== "").join("\n");
+      return chip;
+    };
+
     const rowFor = (i: Initiative): HTMLElement => {
       const row = el("div", "app-im-row");
       // status edge = the initiative's RAG (flags + action position; metric
@@ -543,6 +557,8 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
       const main = el("div", "app-im-main");
       const titleLine = el("div", "app-im-title");
       titleLine.appendChild(el("span", "app-im-title-text", i.title));
+      const tplChip = templateChip(i);
+      if (tplChip) titleLine.appendChild(tplChip);
       if (i.flag === "escalated") titleLine.appendChild(flagChip("▲ Escalated", "escalated"));
       else if (i.flag === "flag") titleLine.appendChild(flagChip("⚐ Needs support", "flag"));
       if (i.confidential) titleLine.appendChild(el("span", "app-im-chip app-im-chip-conf", "◈ Confidential"));
@@ -664,6 +680,8 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
       tile.appendChild(el("div", "app-im-tile-title", i.title));
       const stage = i.snapshot.stages.find((s) => s.id === i.stageId) ?? null;
       const line = el("div", "app-im-tile-line");
+      const tileTpl = templateChip(i);
+      if (tileTpl) line.appendChild(tileTpl);
       if (i.singleAction) line.appendChild(el("span", "app-cp-muted", "single action"));
       else if (stage) {
         const chip = el("span", "app-im-stagechip", stage.name);
