@@ -4,6 +4,22 @@
 
 /* the app accent — branding settings will override this (v2 slice 3) */
 :root { --app-accent: #2563eb; }
+/* The toolkit's own variables, app-wide (2026-10-09). `.ltk-dialog`,
+   the field editors and every control paint with --ltk-*; a control's
+   .ltk-root sets them inline, but a dialog opened from an APP screen
+   (openDialog hosted on the body, a settings pane, a sheet) has no
+   .ltk-root above it and painted TRANSPARENT — the fourth time
+   (ProcessMap 2026-07-26, app dialogs 2026-08-03, field inputs,
+   ingestion 2026-10-08). Defaults on :root end the series: inline
+   values on a .ltk-root still win. */
+:root {
+  --ltk-bg: #ffffff;
+  --ltk-fg: #26241f;
+  --ltk-muted: #57534a;
+  --ltk-hairline: #ddd9d1;
+  --ltk-accent: var(--app-accent, #2563eb);
+  --ltk-font: "Segoe UI", system-ui, sans-serif;
+}
 
 /* WCAG 2.2: a visible ring on every keyboard stop, never on mouse click
    (design review Phase 0.1). Offset 2 keeps it outside the control; use
@@ -4432,6 +4448,7 @@ input.app-vg-in.app-vg-folded { background: #fff7e0; }
 .app-ing-logrow { padding: 2px 0; border-bottom: 1px solid #f1efec; }
 .app-ing-people { display: flex; flex-direction: column; gap: 6px; }
 .app-ing-hits { display: flex; flex-wrap: wrap; gap: 4px 10px; }
-.app-ing-defaults { display: flex; flex-direction: column; gap: 8px; max-height: 40vh; overflow: auto; padding-right: 4px; }
+/* one scroll: the dialog body scrolls, never a box inside it */
+.app-ing-defaults { display: flex; flex-direction: column; gap: 8px; }
 .app-ing-onefield { display: flex; flex-direction: column; gap: 8px; }
 .app-docs-navnote { padding: 4px 10px 8px; }

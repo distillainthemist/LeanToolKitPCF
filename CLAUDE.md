@@ -222,6 +222,20 @@ Version lives in the tag alone — nothing is stamped into files.
   `cell.actual.existing` on the first write, and a folded cell is
   editable: the typed value keeps the bucket's last point and the
   others are deleted with it. The grid stays the one entry road.
+- **A transparent dialog = the toolkit variables did not reach it.**
+  `.ltk-dialog`, the field editors and every control paint with
+  `--ltk-bg / --ltk-fg / --ltk-muted / --ltk-hairline / --ltk-accent`.
+  A control's `.ltk-root` sets them inline; a dialog opened from an APP
+  screen (`openDialog` on `document.body`, a settings pane, an overlay
+  sheet) has no root above it, so `background: var(--ltk-bg)` paints
+  NOTHING and the box is see-through. It happened four times
+  (ProcessMap 2026-07-26, app dialogs 2026-08-03 `.app-dlghost`, field
+  inputs `.app-fi`, ingestion 2026-10-08). Since 2026-10-09 `:root` in
+  `app/src/style.css` carries the defaults, so every dialog paints
+  wherever it is hosted — do not add per-host variable blocks again,
+  and do not host a dialog under a `transform`ed ancestor (it traps
+  position: fixed). **A dialog body scrolls once:** never give a box
+  inside it its own max-height + overflow (the "clunky sub-scroll").
 - **A SharePoint MOVE between libraries carries the moderation state.**
   `MoveFileByPath` into a content-approval library landed checked in
   and APPROVED, reader-visible before any metadata was set, with the
