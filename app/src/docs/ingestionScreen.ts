@@ -689,13 +689,16 @@ export function openIngestionTaskEditor(o: IngestionEditorOpts): void {
     try {
       await removeIngestionTask(t, left);
       dlg.close();
-      o.onSaved(t);
+      // cancelled BEFORE saved: the sheet behind closes and must not
+      // reopen a task that no longer exists
       o.onCancelled?.();
+      o.onSaved(t);
     } catch (e) {
       err.textContent = e instanceof Error ? e.message : String(e);
     }
   };
   const body = dlg.body;
+  body.classList.add("app-ing-editor"); // fields take the dialog's width
   body.appendChild(el("div", "app-settings-note", "Loading…"));
   const err = el("div", "app-cp-err", "");
   let editors: ReturnType<typeof buildFieldEditors> = [];
