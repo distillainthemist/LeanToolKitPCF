@@ -1894,27 +1894,6 @@ export function mountDocs(
     // 2026-08-02; favourite toggles remain in the kebab and overlay, and
     // the favMode machinery stays for a future entry point)
 
-    // Ingestion (2026-10-08): controllers create tasks here; everyone
-    // reaches their tasks through Document tasks. Shown once the
-    // controller answer lands, and only where the site has the library.
-    if (ingestionLib !== null) {
-      const ingCard = navCard("Ingestion");
-      ingCard.card.style.display = "none";
-      const newTask = el("button", "app-linklike app-docs-navheadaction", "＋ New task…") as HTMLButtonElement;
-      newTask.type = "button";
-      newTask.addEventListener("click", () => {
-        void import("./ingestionScreen").then(({ openIngestionTaskEditor }) =>
-          openIngestionTaskEditor({ onSaved: () => refreshTasksBadge() })
-        );
-      });
-      ingCard.head.appendChild(newTask);
-      ingCard.card.appendChild(
-        el("div", "app-field-hint app-docs-navnote", `Bulk drops land in ${ingestionLib.config.title || ingestionLib.name}; each task is a folder there. Open tasks are listed under Document tasks.`)
-      );
-      void adminReady.then(() => {
-        if (!dead && docAdmin()) ingCard.card.style.display = "";
-      });
-    }
 
     // saved views moved OUT of this pane (Ben, 2026-08-01) — they live
     // in the register kebab now; the nav is libraries + browse-by only
@@ -4936,6 +4915,20 @@ export function mountDocs(
           (app.stagingLibrary === "" ||
             l.name.trim().toLowerCase() !== app.stagingLibrary.trim().toLowerCase())
       );
+      // ingestion (2026-10-09, Ben: "put it in the main page kebab"):
+      // controllers start a bulk-drop task from here; everyone reaches
+      // open tasks through Document tasks
+      if (docAdmin() && ingestionLib !== null) {
+        item(
+          "New ingestion task…",
+          `A bulk drop: a folder in ${ingestionLib.config.title || ingestionLib.name}, a destination library and the people who prepare the files. Open tasks are under Document tasks.`,
+          () => {
+            void import("./ingestionScreen").then(({ openIngestionTaskEditor }) =>
+              openIngestionTaskEditor({ onSaved: () => refreshTasksBadge() })
+            );
+          }
+        );
+      }
       if (docAdmin() && healthLibs.length > 0) {
         item(
           "Document control health…",

@@ -260,5 +260,5 @@ every file. Findings go into sharepoint-writes.md once Ben has run it.
    libraries carry (the site content type).
 2. Settings → Documents → Libraries: expose it with the type
    "Ingestion (bulk drop, hidden from the register)".
-3. Documents tab → the Ingestion nav card → "＋ New task…": name,
+3. Documents tab → ⋮ → "New ingestion task…": name,
    destination, assignees, defaults. Open the task from Document tasks.

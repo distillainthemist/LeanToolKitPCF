@@ -4451,4 +4451,3 @@ input.app-vg-in.app-vg-folded { background: #fff7e0; }
 /* one scroll: the dialog body scrolls, never a box inside it */
 .app-ing-defaults { display: flex; flex-direction: column; gap: 8px; }
 .app-ing-onefield { display: flex; flex-direction: column; gap: 8px; }
-.app-docs-navnote { padding: 4px 10px 8px; }

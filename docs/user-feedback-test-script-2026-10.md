@@ -215,7 +215,7 @@ Needs the ingestion library set up (document-ingestion-proposal §8).
 
 1. **Hidden library** — the register, phone selects, filters, views
    and exports never list the ingestion library.
-2. **New task** — Ingestion nav card (controllers only) → ＋ New task…:
+2. **New task** — the register's ⋮ → New ingestion task… (controllers only):
    name, destination, two assignees, a default or two; the folder
    appears in the library; assignees get a Teams card.
 3. **Document tasks** — the task lists for assignees and controllers;
