@@ -137,6 +137,16 @@ the title line and the Back target.**
 Effort: about half a day, and a phone-friendly one since M2 already
 stacks the rails.
 
+### 4.1 Status — the walk BUILT 2026-10-08
+
+`cardEditor.ts`: `templateRow = isLive && board.kind !== "project"`;
+the walk engages on any board with more than one card that is not a
+template row; the title line carries the initiative's stage pill
+(loaded lazily from the initiative's snapshot, PDCA-toned); the
+"＋ Action" extra follows the same rule, so initiative cards raise
+actions in the walk. On dev, unreleased; Ben's check: open an
+initiative card, see the tabs and rails, hop with NEXT, Back to board.
+
 ## 5. Order
 
 The walk first (half a day, no new concepts); then the working folder

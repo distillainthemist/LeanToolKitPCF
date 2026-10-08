@@ -250,7 +250,13 @@ export function mountCardEditor(
       return ka - kb;
     });
     const seqIdx = sequence.findIndex((s) => s.cardId === cardId);
-    const walk = !isLive && sequence.length > 1;
+    // an initiative board's cards open on the live row (no occurrences);
+    // they walk like a meeting's (Ben, 2026-10-08 — "back to the board to
+    // reach the next card"). `isLive` alone means a TEMPLATE row only on
+    // a meeting board.
+    const projectBoard = board.kind === "project";
+    const templateRow = isLive && !projectBoard;
+    const walk = sequence.length > 1 && !templateRow;
     const slotBar = (s: (typeof sequence)[number]): string =>
       titleStripColor(s.settings, titleColors) || appTheme().titleBar;
     const editHref = (s: (typeof sequence)[number]) =>
@@ -542,9 +548,26 @@ export function mountCardEditor(
       // the left (closed = a chip with the word, review Phase 3.3),
       // walk position, then saved status and Back on the right
       const titleRow = el("div", "app-card-titlerow");
-      titleRow.appendChild(el("span", "app-card-meeting", board.name));
+      const nameEl = el("span", "app-card-meeting", board.name);
+      titleRow.appendChild(nameEl);
       const meta = occurrenceMeta(board, instance);
       if (meta !== "") titleRow.appendChild(el("span", "app-card-meta", meta));
+      if (projectBoard) {
+        // the initiative's stage pill where a meeting shows its occurrence
+        // — loaded lazily, the walk never waits on it
+        void Promise.all([import("../store/initiatives"), import("../improvement/templateModel")]).then(([inits, tm]) =>
+          inits.listInitiatives().then((all) => {
+            const i = all.find((x) => x.boardId === boardId);
+            const st = i ? i.snapshot.stages.find((s) => s.id === i.stageId) : undefined;
+            if (!st || !nameEl.isConnected) return;
+            const chip = el("span", "app-card-stagechip", st.name);
+            const tok = tm.PDCA_TOKENS[st.pdca];
+            chip.style.background = tok.bg;
+            chip.style.color = tok.fg;
+            nameEl.after(chip);
+          })
+        ).catch(() => undefined);
+      }
       if (instance && effectivelyClosed(instance)) {
         titleRow.appendChild(statusChip("🔒 Closed", "neutral"));
       }
@@ -597,7 +620,9 @@ export function mountCardEditor(
     const actionsDisabled =
       ((slot.settings.config ?? {}) as Record<string, unknown>).disableActions === true;
     const closedNow = instance ? effectivelyClosed(instance) : false;
-    if (!surface && !isLive && !actionsDisabled) {
+    // not on a template row (a template must not accumulate meeting
+    // actions) — an initiative's live row raises actions like any card
+    if (!surface && !templateRow && !actionsDisabled) {
       const dlgHost = el("div", "app-dlghost");
       host.appendChild(dlgHost);
       setTitleBarExtras(host, () => {
