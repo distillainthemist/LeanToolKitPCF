@@ -1012,6 +1012,61 @@ export function mountDocs(
     // because the list never existed anywhere else.
     const actionNeeded = el("button", "app-btn app-docs-actionneeded", "Document tasks") as HTMLButtonElement;
     actionNeeded.title = "Documents checked out to you, and your documents due for review";
+    // Ingestion tasks (Ben, 2026-10-09): their OWN button, shown only
+    // while the viewer has active tasks to see — assignees theirs,
+    // controllers all — never folded into Document tasks
+    const ingestBtn = el("button", "app-btn app-docs-actionneeded app-docs-ingestbtn", "Ingestion tasks") as HTMLButtonElement;
+    ingestBtn.title = "Bulk-drop tasks you prepare or oversee";
+    ingestBtn.style.display = "none";
+    let ingestionTasks: IngestionTask[] = [];
+    const paintIngestBtn = (tasks: IngestionTask[]) => {
+      ingestionTasks = tasks;
+      ingestBtn.textContent = `Ingestion tasks · ${tasks.length}`;
+      ingestBtn.style.display = tasks.length > 0 ? "" : "none";
+      ingestBtn.classList.toggle("app-docs-actionneeded-hot", tasks.length > 0);
+    };
+    ingestBtn.addEventListener("click", () => {
+      const scrim = el("div", "app-docs-tasksscrim");
+      const panel = el("div", "app-docs-taskspanel");
+      const closePanel = () => {
+        scrim.remove();
+        document.removeEventListener("keydown", onKey, true);
+      };
+      const onKey = (e: KeyboardEvent) => {
+        if (e.key === "Escape") {
+          e.stopPropagation();
+          closePanel();
+        }
+      };
+      document.addEventListener("keydown", onKey, true);
+      scrim.addEventListener("pointerdown", (e) => {
+        if (e.target === scrim) closePanel();
+      });
+      const r = ingestBtn.getBoundingClientRect();
+      panel.style.top = `${r.bottom + 6}px`;
+      panel.style.right = `${Math.max(8, window.innerWidth - r.right)}px`;
+      const bodyEl = el("div", "app-docs-tasksbody");
+      panel.append(el("div", "app-docs-taskshead", "Ingestion tasks"), bodyEl);
+      scrim.appendChild(panel);
+      document.body.appendChild(scrim);
+      bodyEl.appendChild(taskGroupHeader("Open tasks", ingestionTasks.length));
+      for (const task of ingestionTasks) {
+        const dest = cfg.libraries.find((l) => l.listId.toLowerCase() === task.destListId);
+        bodyEl.appendChild(
+          taskRowEl({
+            pill: tonePill(task.status === "running" ? "◐ Running" : "⇪ Ingest", "amber"),
+            name: task.name,
+            meta: `→ ${dest ? dest.config.title || dest.name : "(library)"} · ${task.assignees.length} assignee${task.assignees.length === 1 ? "" : "s"}`,
+            onOpen: () => {
+              closePanel();
+              void import("./ingestionScreen").then(({ openIngestionTask }) =>
+                openIngestionTask({ task, isController: docAdmin(), onChanged: refreshTasksBadge })
+              );
+            },
+          })
+        );
+      }
+    });
 
     interface TaskRow {
       row: DocRow;
@@ -1302,8 +1357,7 @@ export function mountDocs(
       t.review.length +
       t.requests.length +
       t.outgoing.length +
-      t.grantedByMe.length +
-      t.ingestion.length;
+      t.grantedByMe.length;
     const taskVisible = (t: MyTasks) => taskCount(t) > 0;
 
     let tasksBadgeGen = 0;
@@ -1322,6 +1376,7 @@ export function mountDocs(
       void fetchMyTasks().then((t) => {
         if (dead || gen !== tasksBadgeGen) return;
         paintTasksBadge(taskCount(t));
+        paintIngestBtn(t.ingestion);
       });
     };
     // (the first count is fired from the mount tail, once the status
@@ -1507,26 +1562,6 @@ export function mountDocs(
           group("Review due", t.review, (tr) =>
             tr.overdue ? tonePill("⚑ Overdue", "red") : tonePill("● Due soon", "amber")
           );
-          // ingestion tasks (2026-10-08): the row opens the task screen
-          if (t.ingestion.length > 0) {
-            bodyEl.appendChild(taskGroupHeader("Ingestion tasks", t.ingestion.length));
-            for (const task of t.ingestion) {
-              const dest = cfg.libraries.find((l) => l.listId.toLowerCase() === task.destListId);
-              bodyEl.appendChild(
-                taskRowEl({
-                  pill: tonePill(task.status === "running" ? "◐ Running" : "⇪ Ingest", "amber"),
-                  name: task.name,
-                  meta: `→ ${dest ? dest.config.title || dest.name : "(library)"} · ${task.assignees.length} assignee${task.assignees.length === 1 ? "" : "s"}`,
-                  onOpen: () => {
-                    closePanel();
-                    void import("./ingestionScreen").then(({ openIngestionTask }) =>
-                      openIngestionTask({ task, isController: docAdmin(), onChanged: refreshTasksBadge })
-                    );
-                  },
-                })
-              );
-            }
-          }
           // your OWN requests, every state — the outcome reaches you
           // here, not only buried in the document overlay
           if (t.outgoing.length > 0) {
@@ -1748,7 +1783,7 @@ export function mountDocs(
       searchContents = depthBox.checked;
       void load(true);
     });
-    top.append(searchWrap, depthToggle, actionNeeded);
+    top.append(searchWrap, depthToggle, ingestBtn, actionNeeded);
     if (favMode) {
       actionNeeded.style.display = "none";
     }

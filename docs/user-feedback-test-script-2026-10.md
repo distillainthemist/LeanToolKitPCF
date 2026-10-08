@@ -218,8 +218,10 @@ Needs the ingestion library set up (document-ingestion-proposal §8).
 2. **New task** — the register's ⋮ → New ingestion task… (controllers only):
    name, destination, two assignees, a default or two; the folder
    appears in the library; assignees get a Teams card.
-3. **Document tasks** — the task lists for assignees and controllers;
-   the badge counts it; the row opens the task sheet.
+3. **Ingestion tasks button** — its own "Ingestion tasks · n" button
+   beside Document tasks, present only while the viewer has active
+   tasks (assignees theirs, controllers all); its panel's row opens the
+   task sheet; Document tasks does not list them.
 4. **Files** — Open folder ↗, drop three files; the sheet lists them
    with the destination's columns and a Ready pill naming what is
    missing.

@@ -246,9 +246,11 @@ every file. Findings go into sharepoint-writes.md once Ben has run it.
   dialog: name (the folder), destination, assignees (directory search,
   chips), task defaults (the destination's columns as editors); a new
   assignee gets a Teams card.
-- **Register**: Document tasks lists "Ingestion tasks" (assignees, the
-  creator, every controller; counted on the badge); the nav gains an
-  "Ingestion" card for controllers with "＋ New task…" where the site
+- **Register**: an "Ingestion tasks · n" button of its own beside
+  Document tasks, shown only while the viewer has active tasks
+  (assignees and the creator theirs, controllers all — Ben,
+  2026-10-09: not folded into Document tasks); its panel's rows open
+  the task sheet; controllers with "＋ New task…" where the site
   exposes an ingestion library.
 - **Feed**: `renderListPage(…, folder)` lists one folder
   (`FolderServerRelativeUrl`); `RenderQueryOpts.textEquals` for the
