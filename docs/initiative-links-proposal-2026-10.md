@@ -89,6 +89,29 @@ Effort: about a day — the control (editor, display, tile mode), the
 settings registration, the binding hook for the working folder, CSS,
 tests for the pure parts (URL parsing, display text), a harness page.
 
+### 3.1 Clarification — the working folder on the card (Ben, 2026-10-08)
+
+- **Primary link.** With a working folder set, the card's first entry
+  is that folder, visually distinct (folder glyph, "Working folder",
+  host › path as the text, new tab). It comes from the initiative
+  header through the binding and is not edited in the card; changing
+  it on the initiative changes it everywhere. Without one, the card
+  shows "No working folder set" and "Set folder…" for editors.
+- **Folder contents — phase two, SharePoint-backed folders only.** The
+  card can list a folder's files (name, modified, a link each;
+  read-only, fetched after the tile paints and cached, as the
+  Documents cards do) through the SharePoint connector passthrough
+  reached by dynamic import, the Documents cards' road. A Teams
+  channel's files folder is a SharePoint library underneath and lists
+  the same way; a `teams.microsoft.com/l/…` deep link is not a path
+  and cannot; a folder the viewer cannot open shows "You don't have
+  access to this folder". Sharing-style `/:f:/r/` links must be
+  resolved to a path first — the fiddly part. An opt-in toggle on the
+  card ("Show folder contents") keeps a card on a busy wall short by
+  default. Nothing is ever written back.
+- **Manual links — always.** The curated list sits under the primary
+  link; the card is useful with a working folder, without, or both.
+
 ## 4. The walk on initiative boards — recommendation
 
 **Engage the same walk for project boards; the only differences are
@@ -117,4 +140,6 @@ stacks the rails.
 ## 5. Order
 
 The walk first (half a day, no new concepts); then the working folder
-field and its surfaces; then the card. Each its own release.
+field and its surfaces; then the card with the primary link and the
+manual list; then folder contents as its own step once the card has
+been used. Each its own release.
