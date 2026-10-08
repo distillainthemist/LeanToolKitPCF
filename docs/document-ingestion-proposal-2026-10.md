@@ -1,4 +1,4 @@
-# Document ingestion (proposal — critical review, 2026-10-08, DRAFT)
+# Document ingestion (proposal — critical review, 2026-10-08)
 
 Ben's draft (2026-10-08): a dedicated ingestion library, open to every
 user, hidden from the register; document controllers create named
@@ -11,7 +11,8 @@ and uploaded; a controller then runs the ingestion, which checks the
 required metadata and moves each file into the destination as an
 approved version 1.
 
-Status: DRAFT — the decisions in §6 are being taken one by one.
+Status: decisions 1–7 taken with Ben (§6); §7 lists what the move
+probe settles and the assumptions the build rests on. Not yet built.
 
 ## 1. What the platform allows (facts the design must respect)
 
@@ -143,4 +144,58 @@ preview, batches, log, resume (one and a half); docs, tests, harness
 
 ## 6. Decisions — taken one by one with Ben
 
-(filled in as they are taken)
+1. **Metadata entry — SharePoint grid view + the app's grid; no Excel
+   in phase one** (Ben, 2026-10-08). The ingestion library carries the
+   site columns; "Edit in SharePoint grid view ↗" is the spreadsheet;
+   the app's screen reviews, bulk-sets selected rows and fills blanks
+   from the task defaults. Excel stays a later phase, only if the grid
+   view fails users.
+2. **Task store — a new Dataverse table** `ben_ltkingestiontask`
+   (Ben, 2026-10-08): one row per task — name, site, source folder,
+   destination list id, assignees JSON, defaults JSON, status, created
+   by/at, the run log JSON (file → moved / refused: reason, when, by).
+   Schema through `data/schema.mjs` + deploy; the release is
+   solution-carrying (prod imports the managed solution first).
+3. **Dates — typed per document, else stamped** (Ben, 2026-10-08).
+   The effective-date column is editable on the ingestion library (an
+   ingested standard has its own approval history); a blank at run
+   time reads as the run day. Next review = effective + the cadence
+   the Importance term maps to, as everywhere. Approvers stay empty;
+   the check-in comment records the ingesting controller.
+4. **Collisions — refuse the file, keep the task open** (Ben,
+   2026-10-08). A name or document ID already in the destination
+   leaves the file in the folder with "already exists as …"; the
+   controller renames, removes or retires the existing document
+   through the normal lifecycle and re-runs. An ingestion never
+   overwrites or supersedes.
+5. **Document IDs — optional** (Ben, 2026-10-08). A blank Document ID
+   is not a refusal; the document lands without one and Document
+   Control Health reports it as it does today. A typed ID that
+   duplicates one in the destination is a collision (decision 4).
+6. **After the run — the task closes itself, the empty folder goes**
+   (Ben, 2026-10-08). A run that leaves the folder empty marks the
+   task closed (its log stays in Dataverse) and recycles the empty
+   sub-folder; closed tasks stay listed for controllers under a
+   "Closed" filter. A folder with refused files keeps the task open.
+7. **Notification — a Teams card on assignment** (Ben, 2026-10-08):
+   the DMS's notification road (`docs/notify.ts`, dynamic import), a
+   card from the controller naming the task, the folder link and the
+   instruction; e-mail where Teams is off.
+
+## 7. Settled by the probe, and assumptions
+
+- **"Version 1."** If `MoveFileByPath` carries the ingestion
+  library's version history, a file edited twice there would land as
+  3.0. The probe decides the road: a move that carries history is
+  replaced by COPY (fresh history, lands at 1.0 after the major
+  check-in) followed by recycling the source — the register already
+  has both halves.
+- **Destinations**: any exposed library of type standard, record or
+  working; never template, revision or ingestion.
+- **Who runs**: document controllers only; assignees prepare metadata.
+- **Required metadata**: the destination library type's required
+  cells in the site dictionary plus role completeness (owner,
+  document type, organisation; status is set by the run) — the
+  Health scan's rules, applied before the move rather than after.
+- **Phone**: not a phone task; the ingestion screen is desktop-only
+  (the Document-tasks panel is already hidden on the phone register).
