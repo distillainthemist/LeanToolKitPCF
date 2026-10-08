@@ -63,8 +63,7 @@ import {
   spErrorText,
   stageOfTerm,
   termForStage,
-  termsForStage,
-} from "./model";
+  termsForStage, isRegisterLibrary } from "./model";
 import { viewerInPool, viewerIsController } from "./accessGates";
 import {
   TermNode,
@@ -92,6 +91,7 @@ import {
 } from "../links";
 import { rememberTaskCount } from "../taskBadge";
 import { taskGroupHeader, taskRowEl } from "./taskRows";
+import { tasksForPanel, IngestionTask } from "./ingestionModel";
 import { accessRequestPlan, notifyPlanFor } from "./notifyModel";
 import {
   DocUiPrefs,
@@ -206,7 +206,12 @@ export function mountDocs(
     const { app } = cfg;
     // display order everywhere libraries are listed: standards, working,
     // revision, records, templates — then by name (Ben, 2026-08-04)
-    const libraries = sortLibrariesForDisplay(cfg.libraries);
+    // the ingestion library is never a register library (its folders are
+    // ingestion tasks): filtered here, the one choke point every list,
+    // feed, filter, view, export and phone select below reads from
+    const libraries = sortLibrariesForDisplay(cfg.libraries.filter(isRegisterLibrary));
+    /** The site's bulk-drop library — ingestion tasks live in its folders. */
+    const ingestionLib = cfg.libraries.find((l) => l.libType === "ingestion") ?? null;
     if (app.siteUrl === "" || libraries.length === 0) {
       if (!opts.embedded) wrap.appendChild(el("h2", "app-docs-title", "Documents"));
       wrap.appendChild(
@@ -1037,6 +1042,9 @@ export function mountDocs(
        *  2026-08-06): access nobody remembers granting is how an audit
        *  goes wrong. Info only, never counted on the badge. */
       grantedByMe: RequestTaskRow[];
+      /** Open ingestion tasks the viewer prepares (assignees, the
+       *  creator) or oversees (controllers see all) — 2026-10-08. */
+      ingestion: IngestionTask[];
     }
     /** "Near" for a review date: due within this many days counts. */
     const REVIEW_HORIZON_DAYS = 30;
@@ -1050,6 +1058,7 @@ export function mountDocs(
         requests: [],
         outgoing: [],
         grantedByMe: [],
+        ingestion: [],
       };
       const nameOf = (l: DocLibrary) => l.config.title || l.name;
       /** every column the opened overlay's gates and chips lean on — a
@@ -1081,6 +1090,20 @@ export function mountDocs(
           return cols.every((c) => set.has(c));
         });
       const jobs: Promise<void>[] = [];
+      if (ingestionLib !== null) {
+        jobs.push(
+          (async () => {
+            try {
+              const { listIngestionTasks } = await import("./ingestionStore");
+              const all = await listIngestionTasks();
+              await adminReady;
+              out.ingestion = tasksForPanel(all, myEmail, docAdmin());
+            } catch {
+              /* the table unreadable = no ingestion rows, never a broken panel */
+            }
+          })()
+        );
+      }
 
       // checked out to me — any exposed library
       for (const l of libraries) {
@@ -1279,7 +1302,8 @@ export function mountDocs(
       t.review.length +
       t.requests.length +
       t.outgoing.length +
-      t.grantedByMe.length;
+      t.grantedByMe.length +
+      t.ingestion.length;
     const taskVisible = (t: MyTasks) => taskCount(t) > 0;
 
     let tasksBadgeGen = 0;
@@ -1483,6 +1507,26 @@ export function mountDocs(
           group("Review due", t.review, (tr) =>
             tr.overdue ? tonePill("⚑ Overdue", "red") : tonePill("● Due soon", "amber")
           );
+          // ingestion tasks (2026-10-08): the row opens the task screen
+          if (t.ingestion.length > 0) {
+            bodyEl.appendChild(taskGroupHeader("Ingestion tasks", t.ingestion.length));
+            for (const task of t.ingestion) {
+              const dest = cfg.libraries.find((l) => l.listId.toLowerCase() === task.destListId);
+              bodyEl.appendChild(
+                taskRowEl({
+                  pill: tonePill(task.status === "running" ? "◐ Running" : "⇪ Ingest", "amber"),
+                  name: task.name,
+                  meta: `→ ${dest ? dest.config.title || dest.name : "(library)"} · ${task.assignees.length} assignee${task.assignees.length === 1 ? "" : "s"}`,
+                  onOpen: () => {
+                    closePanel();
+                    void import("./ingestionScreen").then(({ openIngestionTask }) =>
+                      openIngestionTask({ task, isController: docAdmin(), onChanged: refreshTasksBadge })
+                    );
+                  },
+                })
+              );
+            }
+          }
           // your OWN requests, every state — the outcome reaches you
           // here, not only buried in the document overlay
           if (t.outgoing.length > 0) {
@@ -1849,6 +1893,28 @@ export function mountDocs(
     // (the ★ Favourites row and the libType subtitles were cut — Ben,
     // 2026-08-02; favourite toggles remain in the kebab and overlay, and
     // the favMode machinery stays for a future entry point)
+
+    // Ingestion (2026-10-08): controllers create tasks here; everyone
+    // reaches their tasks through Document tasks. Shown once the
+    // controller answer lands, and only where the site has the library.
+    if (ingestionLib !== null) {
+      const ingCard = navCard("Ingestion");
+      ingCard.card.style.display = "none";
+      const newTask = el("button", "app-linklike app-docs-navheadaction", "＋ New task…") as HTMLButtonElement;
+      newTask.type = "button";
+      newTask.addEventListener("click", () => {
+        void import("./ingestionScreen").then(({ openIngestionTaskEditor }) =>
+          openIngestionTaskEditor({ onSaved: () => refreshTasksBadge() })
+        );
+      });
+      ingCard.head.appendChild(newTask);
+      ingCard.card.appendChild(
+        el("div", "app-field-hint app-docs-navnote", `Bulk drops land in ${ingestionLib.config.title || ingestionLib.name}; each task is a folder there. Open tasks are listed under Document tasks.`)
+      );
+      void adminReady.then(() => {
+        if (!dead && docAdmin()) ingCard.card.style.display = "";
+      });
+    }
 
     // saved views moved OUT of this pane (Ben, 2026-08-01) — they live
     // in the register kebab now; the nav is libraries + browse-by only

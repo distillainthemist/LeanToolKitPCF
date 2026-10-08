@@ -78,6 +78,9 @@ export interface FieldEditorOpts {
   onChange: () => void;
   /** internal → starting value (absent = empty form, the add mode). */
   initial?: Map<string, EditorInitial>;
+  /** Ingestion (2026-10-08, decision 3): the effective date is an INPUT
+   *  there, so the system-managed date roles render as editors. */
+  includeSystemDates?: boolean;
   /** The columns under their sub-headings (Part II S2). When provided
    *  it REPLACES the per-library `columns` selection: each group
    *  renders as a titled section, in the manager's order; a column
@@ -139,7 +142,7 @@ export function buildFieldEditors(opts: FieldEditorOpts): BuiltEditor[] {
     // the date model's columns are SYSTEM-MANAGED (Ben, 2026-08-10):
     // effective date stamps at approve/review, cadence follows
     // importance, review date is always derived — none is a form field
-    if (SYSTEM_DATE_ROLES.has(dictBy.get(internal)?.role ?? "")) continue;
+    if (!opts.includeSystemDates && SYSTEM_DATE_ROLES.has(dictBy.get(internal)?.role ?? "")) continue;
     // linked documents are managed by the links editor (relationships
     // L1) — a raw-JSON textarea would invite corruption
     if (dictBy.get(internal)?.role === "linkedDocuments") continue;

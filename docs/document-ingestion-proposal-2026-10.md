@@ -11,8 +11,8 @@ and uploaded; a controller then runs the ingestion, which checks the
 required metadata and moves each file into the destination as an
 approved version 1.
 
-Status: decisions 1–7 taken with Ben (§6); §7 lists what the move
-probe settles and the assumptions the build rests on. Not yet built.
+Status: BUILT 2026-10-08 (§8), on dev, unreleased; the release will be
+solution-carrying (the task table).
 
 ## 1. What the platform allows (facts the design must respect)
 
@@ -213,3 +213,51 @@ every file. Findings go into sharepoint-writes.md once Ben has run it.
   Health scan's rules, applied before the move rather than after.
 - **Phone**: not a phone task; the ingestion screen is desktop-only
   (the Document-tasks panel is already hidden on the phone register).
+
+## 8. Status — BUILT 2026-10-08 (dev, unreleased)
+
+- **Schema**: `ben_ltkingestiontask` deployed to dev (Ben's device-code
+  sign-in); service generated; the next release is solution-carrying.
+- **Library type** "Ingestion" (`model.ts` LIBRARY_TYPES,
+  `isRegisterLibrary`): filtered out at the register's one choke point
+  (`docsScreen` L209) and the cards' scope, the tag scan and the move
+  probe's targets; ranked last in display order.
+- **Pure parts** `docs/ingestionModel.ts` (row mapping, `taskFolderName`,
+  `canSeeTask` / `tasksForPanel`, `missingFor`, `blanksToFill`,
+  `logSummary`, `latestByFile`, `ingestComment`) — tested.
+- **Store** `docs/ingestionStore.ts` (list / save / delete).
+- **Screen** `docs/ingestionScreen.ts`: the task sheet (the viewer's
+  overlay idiom) — head (destination, assignees, creator, status chip),
+  "Open folder ↗" primary, "Edit in grid view ↗", "Set for selected…"
+  (one column, the field editor, a bracket per file), "Fill blanks from
+  defaults", the folder's files as a compact register list
+  (destination default columns + required, a Ready pill naming what is
+  missing, the last refusal beneath), a row opening the edit-properties
+  dialog with the system dates editable (`ingestion: true`), and for
+  controllers "Edit task…" and "Run ingestion…" (confirm → per file:
+  document-ID collision check → `CopyFileByPath` → check-out → Approved
+  term + effective/review/cadence → MAJOR check-in naming the task →
+  publish → recycle the source; refusals logged with the reason; the
+  task closes and its folder goes when the folder is empty). The editor
+  dialog: name (the folder), destination, assignees (directory search,
+  chips), task defaults (the destination's columns as editors); a new
+  assignee gets a Teams card.
+- **Register**: Document tasks lists "Ingestion tasks" (assignees, the
+  creator, every controller; counted on the badge); the nav gains an
+  "Ingestion" card for controllers with "＋ New task…" where the site
+  exposes an ingestion library.
+- **Feed**: `renderListPage(…, folder)` lists one folder
+  (`FolderServerRelativeUrl`); `RenderQueryOpts.textEquals` for the
+  document-ID check; `createFolder` / `recycleFolder` /
+  `fetchFolderCounts` / `moveFileByPath` / `copyFileByPath` in `sp.ts`.
+
+### Setting up (Ben, on dev)
+
+1. In SharePoint, create the bulk-drop library on the DMS site: no
+   check-out required, no content approval, major versions only,
+   Members may contribute; add the same site columns the controlled
+   libraries carry (the site content type).
+2. Settings → Documents → Libraries: expose it with the type
+   "Ingestion (bulk drop, hidden from the register)".
+3. Documents tab → the Ingestion nav card → "＋ New task…": name,
+   destination, assignees, defaults. Open the task from Document tasks.

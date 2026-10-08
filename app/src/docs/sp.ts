@@ -473,6 +473,21 @@ export function fetchListRules(site: string, listId: string): Promise<SpResult> 
   );
 }
 
+/** Create a folder by its server-relative path (an ingestion task's
+ *  folder, 2026-10-08). Creating one that exists is a clean success. */
+export function createFolder(site: string, serverRelativePath: string): Promise<SpResult> {
+  return spRequest(site, "POST", `_api/web/folders/add('${spQuote(serverRelativePath)}')`);
+}
+
+export function recycleFolder(site: string, serverRelativePath: string): Promise<SpResult> {
+  return spRequest(site, "POST", `${folderPath(serverRelativePath)}/recycle()`);
+}
+
+/** A folder's own item count (files + sub-folders) — "is it empty?". */
+export function fetchFolderCounts(site: string, serverRelativePath: string): Promise<SpResult> {
+  return spRequest(site, "GET", `${folderPath(serverRelativePath)}?$select=ItemCount,Exists`);
+}
+
 export function recycleFile(site: string, url: string): Promise<SpResult> {
   return spRequest(site, "POST", `${filePath(url)}/recycle()`);
 }

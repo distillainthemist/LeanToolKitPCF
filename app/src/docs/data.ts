@@ -100,7 +100,10 @@ export async function renderListPage(
   site: string,
   listId: string,
   viewXml: string,
-  next = ""
+  next = "",
+  /** A folder's server-relative url: the feed lists THAT folder's files
+   *  (ingestion tasks, 2026-10-08); "" = the library root as always. */
+  folder = ""
 ): Promise<import("./rows").RenderPage & { error: string }> {
   let xml =
     rowLimitOf(viewXml) > learnedRowCap ? clampRowLimit(viewXml, learnedRowCap) : viewXml;
@@ -115,7 +118,7 @@ export async function renderListPage(
           Accept: "application/json;odata=nometadata",
         },
         body: JSON.stringify({
-          parameters: { RenderOptions: 2, ViewXml: xml, DatesInUtc: true },
+          parameters: { RenderOptions: 2, ViewXml: xml, DatesInUtc: true, ...(folder !== "" ? { FolderServerRelativeUrl: folder } : {}) },
         }),
       }
     );

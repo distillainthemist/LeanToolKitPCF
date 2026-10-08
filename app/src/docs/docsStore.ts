@@ -33,7 +33,7 @@ export interface DocLibrary {
   config: LibraryConfig;
 }
 
-const TYPES: LibraryType[] = ["standard", "record", "working", "revision", "template"];
+const TYPES: LibraryType[] = ["standard", "record", "working", "revision", "template", "ingestion"];
 
 // Session cache — library config changes only through the settings tab
 // (which invalidates), so repeat #/docs navigation costs no Dataverse

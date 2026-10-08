@@ -77,6 +77,10 @@ export interface EditPropertiesOpts {
     cadence: Record<string, number>;
   };
   onDone: () => void;
+  /** Ingestion (2026-10-08): the effective date is typed here, and the
+   *  library has no check-out rule and major versions only — a minor
+   *  check-in it refuses is retried as a major. */
+  ingestion?: boolean;
 }
 
 type Sp = { ok: boolean; status: string; data: unknown };
@@ -213,6 +217,7 @@ export function openEditProperties(opts: EditPropertiesOpts): void {
       onChange: sync,
       initial,
       sections: opts.sections,
+      includeSystemDates: opts.ingestion === true,
     });
     // the links editor (L1): part of THIS form, saved with it
     if (opts.links !== undefined && opts.links.internal !== "") {
@@ -311,10 +316,15 @@ export function openEditProperties(opts: EditPropertiesOpts): void {
 
     if (!heldByMe && comment !== null) {
       status.textContent = "Checking in…";
-      const cin = await timed(
+      let cin = await timed(
         checkInFile(site, row.serverUrl, comment.value.trim(), false),
         "Check-in"
       );
+      // a major-only library (the ingestion library) may refuse a minor
+      // check-in; the same check-in as a major is what it means there
+      if (!cin.ok && opts.ingestion === true && /minor/i.test(spErrorText(cin.status))) {
+        cin = await timed(checkInFile(site, row.serverUrl, comment.value.trim(), true), "Check-in (major)");
+      }
       if (!cin.ok && !/not checked out/i.test(spErrorText(cin.status))) {
         return fail("Check-in was refused (the document stays checked out)", cin.status);
       }

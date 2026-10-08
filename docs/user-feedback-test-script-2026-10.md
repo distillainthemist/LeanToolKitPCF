@@ -209,6 +209,33 @@ On a desktop.
 |---|---|
 | 1–10 | _Ben's pass pending_ |
 
+## Document ingestion pass — after v0.68.0 (2026-10-08, dev)
+
+Needs the ingestion library set up (document-ingestion-proposal §8).
+
+1. **Hidden library** — the register, phone selects, filters, views
+   and exports never list the ingestion library.
+2. **New task** — Ingestion nav card (controllers only) → ＋ New task…:
+   name, destination, two assignees, a default or two; the folder
+   appears in the library; assignees get a Teams card.
+3. **Document tasks** — the task lists for assignees and controllers;
+   the badge counts it; the row opens the task sheet.
+4. **Files** — Open folder ↗, drop three files; the sheet lists them
+   with the destination's columns and a Ready pill naming what is
+   missing; Edit in grid view ↗ lands on the folder.
+5. **Details** — a row opens Edit properties with the effective date
+   editable; select two rows → Set for selected… writes one column;
+   Fill blanks from defaults fills the rest.
+6. **Run** — Run ingestion… names the counts; files move into the
+   destination as approved 1.0 with the check-in comment naming the
+   task; a file with a missing detail stays with its reason; a name
+   already in the destination is refused; when the folder empties the
+   task closes and the folder is gone; the log reads on the closed task.
+
+| Item | Outcome |
+|---|---|
+| 1–6 | _Ben's pass pending_ |
+
 ## Initiative links pass — after v0.67.0 (2026-10-08)
 
 1. **Settings → Improvement → Standard fields** — "Working folder"

@@ -836,6 +836,17 @@ Key concepts (details: [leanboard-standard-documents-plan.md](leanboard-standard
   width, and a pane already hidden by the B5 pref would never re-fire
   on its own. `app/docs-phone.html` renders the real cells at 375px.
 
+- **Document ingestion** (2026-10-08, [document-ingestion-proposal-2026-10.md](document-ingestion-proposal-2026-10.md)).
+  A site's bulk-drop library (type "ingestion", never in the register)
+  holds one folder per task (`ben_ltkingestiontask`: destination,
+  assignees, defaults, run log). Users drop files in SharePoint and set
+  details in the task sheet (`docs/ingestionScreen.ts`) or SharePoint's
+  grid view; a controller runs the task — per file COPY (a move carries
+  the version history AND the moderation state, so a moved file was
+  reader-visible on arrival; the probe settled it), the approve bracket,
+  recycle the source. Refusals stay with their reason; the task closes
+  when its folder is empty.
+
 ## 5. SharePoint interfacing (the connector roads)
 
 Cookbook of record: [sharepoint-writes.md](sharepoint-writes.md).

@@ -7,7 +7,7 @@
 // Nothing here is authoritative about a document — SharePoint columns
 // are the record; this model only says how LeanBoard presents them.
 
-export type LibraryType = "standard" | "record" | "working" | "revision" | "template";
+export type LibraryType = "standard" | "record" | "working" | "revision" | "template" | "ingestion";
 
 export const LIBRARY_TYPES: { key: LibraryType; label: string }[] = [
   { key: "standard", label: "Controlled standards" },
@@ -15,7 +15,17 @@ export const LIBRARY_TYPES: { key: LibraryType; label: string }[] = [
   { key: "working", label: "Working documents" },
   { key: "revision", label: "Standards revision (checked-out copies)" },
   { key: "template", label: "Templates" },
+  // document ingestion (2026-10-08): the bulk drop library — open to
+  // every user, no check-out, no content approval; never in the register
+  { key: "ingestion", label: "Ingestion (bulk drop, hidden from the register)" },
 ];
+
+/** Libraries the register, its filters, views, exports and the phone
+ *  selects may show. Templates are controllers-only (the caller adds
+ *  that); the ingestion library is never a register library — its
+ *  folders are ingestion tasks, reached through the Document-tasks
+ *  panel (document-ingestion-proposal-2026-10.md). */
+export const isRegisterLibrary = (l: { libType: string }): boolean => l.libType !== "ingestion";
 
 /** The document-management purposes a column can serve (from the DMS
  *  requirements' column table). "" = no special role. */
@@ -2570,6 +2580,7 @@ const LIBRARY_DISPLAY_RANK: Record<string, number> = {
   revision: 2,
   record: 3,
   template: 4,
+  ingestion: 5,
 };
 
 /** Libraries in display order: by type rank, then by display name —

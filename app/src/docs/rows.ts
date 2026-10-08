@@ -131,6 +131,9 @@ export interface RenderQueryOpts {
   personFilters?: { col: string; text: string }[];
   /** Columns that must hold a value (B6): linked documents, tags. */
   presentCols?: string[];
+  /** Text columns that must EQUAL a value (ingestion's document-ID
+   *  collision check, 2026-10-08). AND together. */
+  textEquals?: { col: string; value: string }[];
   /** DMS internals to return beyond the core file fields. */
   fields?: string[];
   rowLimit?: number;
@@ -193,6 +196,10 @@ export function buildRenderViewXml(opts: RenderQueryOpts = {}): string {
     const text = pf.text.trim();
     if (col === "" || text === "") continue;
     clauses.push(`<Contains><FieldRef Name="${xmlEsc(col)}"/><Value Type="User">${xmlEsc(text)}</Value></Contains>`);
+  }
+  for (const te of opts.textEquals ?? []) {
+    if (te.col.trim() === "" || te.value.trim() === "") continue;
+    clauses.push(`<Eq><FieldRef Name="${xmlEsc(te.col.trim())}"/><Value Type="Text">${xmlEsc(te.value.trim())}</Value></Eq>`);
   }
   for (const col of opts.presentCols ?? []) {
     if (col.trim() === "") continue;

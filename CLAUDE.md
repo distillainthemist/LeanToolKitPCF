@@ -222,6 +222,12 @@ Version lives in the tag alone — nothing is stamped into files.
   `cell.actual.existing` on the first write, and a folded cell is
   editable: the typed value keeps the bucket's last point and the
   others are deleted with it. The grid stays the one entry road.
+- **A SharePoint MOVE between libraries carries the moderation state.**
+  `MoveFileByPath` into a content-approval library landed checked in
+  and APPROVED, reader-visible before any metadata was set, with the
+  source's whole version history (3.0). `CopyFileByPath` lands as 0.1
+  draft with a fresh history; copy → bracket → recycle the source is
+  the ingestion road (move probe, 2026-10-08).
 - **A OneDrive / SharePoint "/:f:/g/" sharing link carries no path.**
   Only Microsoft Graph `/shares` resolves it; SharePoint REST has no
   supported road (Microsoft's own guidance), the Office 365 Groups

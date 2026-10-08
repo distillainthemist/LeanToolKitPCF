@@ -49,8 +49,7 @@ import {
   emptySiteDictionary,
   isDateColumn,
   siteKey,
-  sortByDictionary,
-} from "./model";
+  sortByDictionary, isRegisterLibrary } from "./model";
 import {
   RegisterCellCtx,
   buildRegisterColumns,
@@ -164,7 +163,8 @@ async function resolveCardScope(opts: CardMount): Promise<CardScope> {
     notes: [],
     fatal: "",
   };
-  const { app, libraries } = await docsConfig();
+  const { app, libraries: allLibraries } = await docsConfig();
+  const libraries = allLibraries.filter(isRegisterLibrary);
   if (app.siteUrl === "" || libraries.length === 0) {
     out.fatal = "Set up Settings → Documents first.";
     return out;

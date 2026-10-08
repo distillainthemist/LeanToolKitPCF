@@ -4415,3 +4415,23 @@ input.app-vg-in.app-vg-folded { background: #fff7e0; }
 /* the actions card's Gantt on the overview: a tile is for reading — the
    filters and window presets belong to the opened card */
 .ltk-tile .app-gx-bar { display: none; }
+
+/* ---- document ingestion (2026-10-08): the task sheet and editor ---- */
+.app-ing-sheet { position: relative; }
+.app-ing-meta { font-size: 12px; color: #6d675c; }
+.app-ing-body { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 10px; padding: 12px 14px 14px; }
+.app-ing-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.app-ing-actions a.app-btn { text-decoration: none; }
+.app-ing-actions-right { margin-left: auto; display: inline-flex; gap: 8px; }
+.app-ing-selcount { font-size: 12px; }
+.app-ing-list { flex: 1; min-height: 240px; display: flex; flex-direction: column; border: 1px solid #eceae5; border-radius: 8px; overflow: hidden; }
+.app-ing-status { font-size: 12.5px; color: #6d675c; min-height: 18px; }
+.app-ing-readycell { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.app-ing-why { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 160px; }
+.app-ing-log { display: flex; flex-direction: column; gap: 4px; max-height: 30vh; overflow: auto; font-size: 12.5px; }
+.app-ing-logrow { padding: 2px 0; border-bottom: 1px solid #f1efec; }
+.app-ing-people { display: flex; flex-direction: column; gap: 6px; }
+.app-ing-hits { display: flex; flex-wrap: wrap; gap: 4px 10px; }
+.app-ing-defaults { display: flex; flex-direction: column; gap: 8px; max-height: 40vh; overflow: auto; padding-right: 4px; }
+.app-ing-onefield { display: flex; flex-direction: column; gap: 8px; }
+.app-docs-navnote { padding: 4px 10px 8px; }

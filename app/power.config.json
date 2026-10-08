@@ -173,6 +173,10 @@
         "ltkvdtscenarios": {
           "entitySetName": "ben_ltkvdtscenarios",
           "logicalName": "ben_ltkvdtscenario"
+        },
+        "leanboardingestiontasks": {
+          "entitySetName": "ben_ltkingestiontasks",
+          "logicalName": "ben_ltkingestiontask"
         }
       },
       "environmentVariableName": ""

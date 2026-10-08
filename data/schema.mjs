@@ -382,6 +382,32 @@ export const TABLES = [
     role: { delete: false },
   },
   {
+    // Document ingestion (document-ingestion-proposal-2026-10.md, decision
+    // 2): one row per ingestion task — a named sub-folder of the site's
+    // ingestion library, its destination library, who prepares it, the
+    // task defaults and the per-file run log. The name IS the task name.
+    schema: "ben_LTKIngestionTask",
+    logical: "ben_ltkingestiontask",
+    display: "LeanBoard Ingestion Task",
+    plural: "LeanBoard Ingestion Tasks",
+    primaryNameMax: 200,
+    columns: {
+      ben_siteurl: { ...text(500), display: "Site url" },
+      ben_sourcelistid: { ...text(40), display: "Ingestion library list id" },
+      ben_folder: { ...text(600), display: "Task folder (server-relative url)" },
+      ben_destlistid: { ...text(40), display: "Destination library list id" },
+      ben_status: { ...text(10), display: "Status (open|running|closed)" },
+      ben_assigneesjson: { ...memo(20000), display: "Assignees (JSON [{email,name}])" },
+      ben_defaultsjson: { ...memo(20000), display: "Task defaults (JSON {internal: value})" },
+      ben_logjson: { ...memo(1048576), display: "Run log (JSON)" },
+      ben_createdbyemail: { ...text(200), display: "Created by (email)" },
+      ben_createdbyname: { ...text(200), display: "Created by (name)" },
+      ben_createdat: { ...text(40), display: "Created at (ISO)" },
+      ben_closedat: { ...text(40), display: "Closed at (ISO)" },
+    },
+    role: { delete: true },
+  },
+  {
     // +1/subscribe — the update fan-out audience beyond the reporter
     schema: "ben_LTKIssueWatch",
     logical: "ben_ltkissuewatch",

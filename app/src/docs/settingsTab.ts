@@ -1712,7 +1712,7 @@ export async function renderDocsSettings(body: HTMLElement, ctx: Ctx): Promise<v
           const counts = new Map<string, number>();
           let scanned = 0;
           let capped = false;
-          for (const lib of exposed.filter((l) => l.libType !== "template")) {
+          for (const lib of exposed.filter((l) => l.libType !== "template" && l.libType !== "ingestion")) {
             const xml = buildRenderViewXml({ fields: [tagCol.internal], rowLimit: 200 });
             let next = "";
             for (;;) {
@@ -2030,7 +2030,7 @@ export async function renderDocsSettings(body: HTMLElement, ctx: Ctx): Promise<v
   body.appendChild(moveBox);
   fillMoveSels = () => {
     const sources = exposed.filter((l) => l.libType === "working" || l.libType === "revision");
-    const targets = exposed.filter((l) => l.libType !== "template");
+    const targets = exposed.filter((l) => l.libType !== "template" && l.libType !== "ingestion");
     const fill = (sel: HTMLSelectElement, libs: typeof exposed, empty: string) => {
       clear(sel);
       for (const l of libs) {
