@@ -389,7 +389,10 @@ seeded on read by `withBuiltinFields`, removable per site via
 Improvement list and tiles, and the charter. `controls/LinksCard` is
 the "Documentation & links" card: a curated list in the card's own
 document, the initiative's working folder pinned first through the
-charter binding; folder contents are a later, SharePoint-only step.
+charter binding, and "Show contents" on any path-carrying SharePoint
+folder link (`improvement/folderContents.ts`: SharePoint REST on the
+connector by dynamic import; a "/:f:/g/" token share cannot be listed —
+Graph `/shares` only, which no app connector reaches).
 The card walk engages on initiative boards (a template row is live on
 a MEETING board only).
 

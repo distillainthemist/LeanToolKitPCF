@@ -36,6 +36,16 @@ export const LINKS_CSS = `
 .ltk-lk-in-bad { border-color: #d13438; }
 .ltk-lk-add { align-self: flex-start; font: inherit; font-size: 12.5px; color: var(--ltk-fg); background: var(--ltk-bg); border: 1px dashed var(--ltk-hairline); border-radius: 8px; padding: 6px 12px; min-height: 36px; cursor: pointer; }
 .ltk-lk-add:hover { border-color: var(--ltk-accent); color: var(--ltk-accent); }
+.ltk-lk-toggle { align-self: flex-start; white-space: nowrap; }
+.ltk-lk-hint { flex: none; color: var(--ltk-muted); cursor: help; font-size: 13px; padding: 4px; }
+.ltk-lk-contents { display: flex; flex-direction: column; gap: 2px; margin: -2px 0 4px 30px; padding: 4px 0 4px 10px; border-left: 2px solid var(--ltk-hairline); }
+.ltk-lk-contents-note { font-size: 12px; color: var(--ltk-muted); padding: 2px 0; }
+.ltk-lk-item { display: flex; align-items: center; gap: 8px; font-size: 12.5px; min-height: 28px; }
+.ltk-lk-item-glyph { flex: none; }
+.ltk-lk-item-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ltk-fg); text-decoration: none; }
+.ltk-lk-item-name:hover { color: var(--ltk-accent); text-decoration: underline; }
+.ltk-lk-item-when { flex: none; font-size: 11px; color: var(--ltk-muted); font-variant-numeric: tabular-nums; }
+.ltk-tile .ltk-lk-contents, .ltk-tile .ltk-lk-toggle, .ltk-tile .ltk-lk-hint { display: none; }
 .ltk-lk-more { display: none; font-size: 12px; color: var(--ltk-muted); padding: 2px 8px; }
 .ltk-lk-empty { color: var(--ltk-muted); font-size: 13px; padding: 10px 2px; }
 /* the tile: titles only, the first six, then "+n more"; no notes */

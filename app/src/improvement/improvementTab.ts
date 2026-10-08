@@ -9,7 +9,6 @@
 
 import { el, clear } from "../../../shared/ui/dom";
 import { isPhoneWindow } from "../phone";
-import { linkDisplayText, workingFolderUrl } from "./workingFolder";
 import { showLoading } from "../loading";
 import { currentViewer } from "../runtime";
 import { boardHash, boardUrl } from "../links";
@@ -547,8 +546,6 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
       if (i.flag === "escalated") titleLine.appendChild(flagChip("▲ Escalated", "escalated"));
       else if (i.flag === "flag") titleLine.appendChild(flagChip("⚐ Needs support", "flag"));
       if (i.confidential) titleLine.appendChild(el("span", "app-im-chip app-im-chip-conf", "◈ Confidential"));
-      const folderUrl = workingFolderUrl(i.fieldValues);
-      if (folderUrl !== "") titleLine.appendChild(folderGlyph(folderUrl));
       main.appendChild(titleLine);
       // meta = priority statement · owner (org and roles are columns now)
       const primary = i.priorities.find((p) => p.primary) ?? i.priorities[0] ?? null;
@@ -656,19 +653,8 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
       return row;
     };
 
-    /** The working folder as a small link glyph (2026-10-08): opens the
-     *  folder in a new tab without opening the initiative. */
-    const folderGlyph = (url: string): HTMLAnchorElement => {
-      const a = el("a", "app-im-folder", "📁") as HTMLAnchorElement;
-      a.href = url;
-      a.target = "_blank";
-      a.rel = "noopener noreferrer";
-      a.title = `Working folder — ${linkDisplayText(url)}`;
-      a.setAttribute("aria-label", "Open the working folder");
-      a.addEventListener("click", (e) => e.stopPropagation());
-      return a;
-    };
-
+    // (the working folder is NOT a shortcut on the list or tiles — Ben,
+    // 2026-10-08; it lives on the initiative's pane and the links card)
     const tileFor = (i: Initiative): HTMLElement => {
       const inputs = ragInputsFor(i, initActions, todayIso());
       inputs.metric = metricState.get(i.id)?.rag ?? null;
@@ -687,8 +673,6 @@ export function mountImprovement(parent: HTMLElement, _opts: ImprovementMountOpt
       }
       if (i.flag === "escalated") line.appendChild(flagChip("▲", "escalated"));
       else if (i.flag === "flag") line.appendChild(flagChip("⚐", "flag"));
-      const tileFolder = workingFolderUrl(i.fieldValues);
-      if (tileFolder !== "") line.appendChild(folderGlyph(tileFolder));
       tile.appendChild(line);
       const mv = (metricState.get(i.id)?.values ?? [])[0] ?? null;
       tile.appendChild(

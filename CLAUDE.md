@@ -222,6 +222,14 @@ Version lives in the tag alone — nothing is stamped into files.
   `cell.actual.existing` on the first write, and a folded cell is
   editable: the typed value keeps the bucket's last point and the
   others are deleted with it. The grid stays the one entry road.
+- **A OneDrive / SharePoint "/:f:/g/" sharing link carries no path.**
+  Only Microsoft Graph `/shares` resolves it; SharePoint REST has no
+  supported road (Microsoft's own guidance), the Office 365 Groups
+  connector's HTTP action reaches `/groups` only and the Office 365
+  Users connector's `/me` and `/users/…` only — so the app cannot list
+  such a folder (2026-10-08, web-verified). Path-carrying links
+  (`/sites/…/Shared Documents/…`, `?id=…`, `/:f:/r/…`) list fine through
+  the SharePoint connector. Say so; do not promise a listing.
 - **A settings delete that writes at once asks first.** Methods,
   standard roles, standard fields, health-check questions and ritual
   categories persist on the click; each × now runs `confirmRemoval`

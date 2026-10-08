@@ -26,6 +26,7 @@ import { loadLinkTarget } from "./store/linkCard";
 import { saver } from "./saver";
 import { LinksEditor } from "../../controls/LinksCard/editor";
 import { parseLinks, serializeLinks } from "../../controls/LinksCard/types";
+import { listSharePointFolder } from "./improvement/folderContents";
 
 import { KpiTrendEditor } from "../../controls/KpiTrendCard/editor";
 import { parseKpiTrend, serializeKpiTrend } from "../../controls/KpiTrendCard/types";
@@ -943,6 +944,8 @@ const REGISTRY: Record<string, CardMounter> = {
     editor.setChrome(opts.title, promptsRaw(opts));
     editor.setReadOnly(opts.readOnly);
     editor.setEnvelope(parseLinks(opts.outputJson));
+    // folder contents (2026-10-08): the open card only — a tile is a picture
+    if (!opts.readOnly) editor.setFolderLister(listSharePointFolder);
     const b = opts.binding;
     if (b) {
       const BOUND = "field:workingFolder";

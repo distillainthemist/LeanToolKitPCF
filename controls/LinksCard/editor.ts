@@ -11,7 +11,11 @@ import { parsePrompts, Prompts, renderTitleBar } from "../../shared/ui/chrome";
 import { renderKebab } from "../../shared/ui/menu";
 import { draggableRow } from "../../shared/ui/dragList";
 import { htmlToPng, htmlToSvg, saveSvg, SnapshotScheduler } from "../../shared/export/png";
-import { emptyLinks, groupLinks, hostKind, isHttps, LinkItem, LinksEnvelope, linkText, newLinkId, titleFromUrl } from "./types";
+import { emptyLinks, folderTarget, FolderItem, groupLinks, hostKind, isHttps, isTokenShare, LinkItem, LinksEnvelope, linkText, newLinkId, titleFromUrl } from "./types";
+
+/** The host's road to a folder's contents (SharePoint REST through the
+ *  connector, the viewer's own permissions). Rejects with a message. */
+export type FolderLister = (url: string) => Promise<FolderItem[]>;
 import { LINKS_CSS } from "./styles";
 
 export interface LinksEditorCallbacks {
@@ -38,6 +42,10 @@ export class LinksEditor {
   private readOnly = false;
   private editing = false;
   private pinned: PinnedLink | null = null;
+  private lister: FolderLister | null = null;
+  /** Links whose contents are open (by url); the pinned folder is "pinned". */
+  private readonly open = new Set<string>();
+  private readonly contents = new Map<string, { items: FolderItem[] | null; error: string }>();
   private readonly snapshots: SnapshotScheduler;
 
   constructor(
@@ -65,6 +73,13 @@ export class LinksEditor {
     this.pinned = p;
     this.render();
     this.snapshots.schedule();
+  }
+
+  /** Folder contents (2026-10-08): with a lister, a folder link offers
+   *  "Show contents". Tiles never list (readOnly hides the toggle). */
+  setFolderLister(fn: FolderLister | null): void {
+    this.lister = fn;
+    this.render();
   }
 
   setTheme(theme: Theme): void {
@@ -127,6 +142,7 @@ export class LinksEditor {
         main.appendChild(el("span", "ltk-lk-pinned-none", "No working folder set on the initiative"));
       }
       band.appendChild(main);
+      if (this.pinned.url !== "") this.appendContentsToggle(band, this.pinned.url, "pinned");
       if (this.pinned.onSet && !this.readOnly) {
         const set = el("button", "ltk-lk-set", this.pinned.url !== "" ? "Change…" : "Set folder…") as HTMLButtonElement;
         set.type = "button";
@@ -134,6 +150,7 @@ export class LinksEditor {
         band.appendChild(set);
       }
       body.appendChild(band);
+      if (this.pinned.url !== "") this.appendContents(body, this.pinned.url, "pinned");
     }
 
     if (this.editing && !this.readOnly) {
@@ -148,7 +165,10 @@ export class LinksEditor {
     const list = el("div", "ltk-lk-list");
     for (const g of groupLinks(links)) {
       if (g.group !== "") list.appendChild(el("div", "ltk-lk-group", g.group));
-      for (const l of g.links) list.appendChild(this.renderRow(l));
+      for (const l of g.links) {
+        list.appendChild(this.renderRow(l));
+        this.appendContents(list, l.url, l.id);
+      }
     }
     body.appendChild(list);
     if (links.length > 6) body.appendChild(el("div", "ltk-lk-more", `+${links.length - 6} more`));
@@ -170,7 +190,71 @@ export class LinksEditor {
     if (l.note.trim() !== "") main.appendChild(el("div", "ltk-lk-note", l.note));
     main.appendChild(el("div", "ltk-lk-where", linkText(l.url)));
     row.appendChild(main);
+    this.appendContentsToggle(row, l.url, l.id);
     return row;
+  }
+
+  /** "Show contents ▾" on a link that resolves to a folder path; a token
+   *  share gets a hint instead. Never on a tile (readOnly) or without a lister. */
+  private appendContentsToggle(row: HTMLElement, url: string, key: string): void {
+    if (!this.lister || this.readOnly) return;
+    const target = folderTarget(url);
+    if (target === null) {
+      if (isTokenShare(url)) {
+        const hint = el("span", "ltk-lk-hint", "ⓘ");
+        hint.title = "A sharing link opens the folder but cannot be listed here. To show its contents, open it and paste the folder's address from the address bar (…id=…) instead.";
+        row.appendChild(hint);
+      }
+      return;
+    }
+    // a file path (an extension on the last segment) is not a folder
+    if (/\.[a-z0-9]{2,5}$/i.test(target.path)) return;
+    const on = this.open.has(key);
+    const t = el("button", "ltk-lk-set ltk-lk-toggle", on ? "Hide contents ▴" : "Show contents ▾") as HTMLButtonElement;
+    t.type = "button";
+    t.addEventListener("click", () => {
+      if (on) this.open.delete(key);
+      else {
+        this.open.add(key);
+        if (!this.contents.has(key)) void this.loadContents(url, key);
+      }
+      this.render();
+    });
+    row.appendChild(t);
+  }
+
+  private appendContents(host: HTMLElement, url: string, key: string): void {
+    if (!this.open.has(key)) return;
+    const box = el("div", "ltk-lk-contents");
+    const c = this.contents.get(key);
+    if (!c) box.appendChild(el("div", "ltk-lk-contents-note", "Reading the folder…"));
+    else if (c.error !== "") box.appendChild(el("div", "ltk-lk-contents-note", c.error));
+    else if (c.items === null || c.items.length === 0) box.appendChild(el("div", "ltk-lk-contents-note", "Empty folder."));
+    else {
+      for (const it of c.items) {
+        const r = el("div", "ltk-lk-item");
+        r.appendChild(el("span", "ltk-lk-item-glyph", it.folder ? "📁" : "📄"));
+        const a = el("a", "ltk-lk-item-name", it.name) as HTMLAnchorElement;
+        a.href = it.url;
+        a.target = "_blank";
+        a.rel = "noopener noreferrer";
+        r.appendChild(a);
+        if (it.modified !== "") r.appendChild(el("span", "ltk-lk-item-when", it.modified.slice(0, 10)));
+        box.appendChild(r);
+      }
+    }
+    host.appendChild(box);
+  }
+
+  private async loadContents(url: string, key: string): Promise<void> {
+    if (!this.lister) return;
+    try {
+      const items = await this.lister(url);
+      this.contents.set(key, { items, error: "" });
+    } catch (err) {
+      this.contents.set(key, { items: null, error: err instanceof Error ? err.message : String(err) });
+    }
+    if (this.root.isConnected) this.render();
   }
 
   private renderEditor(body: HTMLElement): void {

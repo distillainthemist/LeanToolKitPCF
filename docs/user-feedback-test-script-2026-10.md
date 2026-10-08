@@ -224,7 +224,12 @@ On a desktop.
 5. **The walk** — open any card on an initiative board: tabs, PREV /
    NEXT, "Card n of m", the stage pill, "＋ Action" in the title bar,
    Back to board.
+6. **Folder contents** — on the links card, a working folder given as
+   a SharePoint folder address (…/Shared Documents/… or …?id=…) shows
+   "Show contents ▾" and lists its folders and files; a OneDrive
+   "/:f:/g/" share shows ⓘ and no list; the Improvement list and tiles
+   show no folder shortcut.
 
 | Item | Outcome |
 |---|---|
-| 1–5 | _Ben's pass pending_ |
+| 1–6 | _Ben's pass pending_ |

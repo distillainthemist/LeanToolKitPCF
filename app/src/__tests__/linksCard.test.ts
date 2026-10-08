@@ -2,7 +2,7 @@
 // pasted URL gets, grouping, and the host glyph — all pure.
 
 import { describe, expect, it } from "vitest";
-import { groupLinks, hostKind, linkText, parseLinks, serializeLinks, titleFromUrl } from "../../../controls/LinksCard/types";
+import { folderTarget, groupLinks, hostKind, isTokenShare, linkText, parseLinks, serializeLinks, titleFromUrl } from "../../../controls/LinksCard/types";
 
 describe("parseLinks / serializeLinks", () => {
   it("round-trips a list and drops links without an https url", () => {
@@ -41,5 +41,30 @@ describe("groupLinks / hostKind / linkText", () => {
     expect(hostKind("https://contoso.sharepoint.com/sites/ops")).toBe("sharepoint");
     expect(hostKind("https://teams.microsoft.com/l/channel/x")).toBe("teams");
     expect(linkText("https://contoso.sharepoint.com/sites/ops/Shared%20Documents/Line%202")).toBe("contoso.sharepoint.com › Shared Documents › Line 2");
+  });
+});
+
+describe("folderTarget", () => {
+  it("resolves a library path to its site and server-relative path", () => {
+    expect(folderTarget("https://contoso.sharepoint.com/sites/ops/Shared%20Documents/Line%202")).toEqual({ site: "https://contoso.sharepoint.com/sites/ops", path: "/sites/ops/Shared Documents/Line 2" });
+  });
+  it("reads the folder out of an AllItems / onedrive view link", () => {
+    expect(folderTarget("https://contoso.sharepoint.com/sites/ops/Shared%20Documents/Forms/AllItems.aspx?id=%2Fsites%2Fops%2FShared%20Documents%2FProjects&viewid=1")).toEqual({ site: "https://contoso.sharepoint.com/sites/ops", path: "/sites/ops/Shared Documents/Projects" });
+    expect(folderTarget("https://contoso-my.sharepoint.com/personal/ben_contoso_com/_layouts/15/onedrive.aspx?id=%2Fpersonal%2Fben_contoso_com%2FDocuments%2FLine%202")).toEqual({ site: "https://contoso-my.sharepoint.com/personal/ben_contoso_com", path: "/personal/ben_contoso_com/Documents/Line 2" });
+  });
+  it("reads a /:f:/r/ sharing link, which carries the path", () => {
+    expect(folderTarget("https://contoso.sharepoint.com/:f:/r/sites/ops/Shared%20Documents/Line%202?csf=1&web=1")).toEqual({ site: "https://contoso.sharepoint.com/sites/ops", path: "/sites/ops/Shared Documents/Line 2" });
+  });
+  it("cannot resolve a /:f:/g/ token share, a layouts page, a site root or a non-SharePoint link", () => {
+    expect(folderTarget("https://pecheydistillingcom-my.sharepoint.com/:f:/g/personal/partnership_pecheydistilling_com/IgAzE8mq?e=rPEaS8")).toBeNull();
+    expect(folderTarget("https://contoso.sharepoint.com/sites/ops/_layouts/15/viewlsts.aspx")).toBeNull();
+    expect(folderTarget("https://contoso.sharepoint.com/sites/ops")).toBeNull();
+    expect(folderTarget("https://example.com/folder")).toBeNull();
+    expect(folderTarget("not a url")).toBeNull();
+  });
+  it("knows a token share when it sees one", () => {
+    expect(isTokenShare("https://pecheydistillingcom-my.sharepoint.com/:f:/g/personal/x/Ig?e=1")).toBe(true);
+    expect(isTokenShare("https://contoso.sharepoint.com/:f:/r/sites/ops/Docs")).toBe(false);
+    expect(linkText("https://pecheydistillingcom-my.sharepoint.com/:f:/g/personal/x/Ig?e=1")).toBe("pecheydistillingcom-my.sharepoint.com › shared folder");
   });
 });

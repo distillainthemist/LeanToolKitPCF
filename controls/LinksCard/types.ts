@@ -137,8 +137,69 @@ export function linkText(url: string, segments = 2): string {
           return p;
         }
       });
+    // a token share names nothing a person can read: say what it is
+    if (/^\/:[a-z]:\/[gstu]\//i.test(u.pathname)) return `${u.host} › shared ${/^\/:f:/i.test(u.pathname) ? "folder" : "file"}`;
     return [u.host, ...parts.slice(-segments)].join(" › ");
   } catch {
     return url;
   }
+}
+
+/** A folder a SharePoint REST call can list: the site collection URL
+ *  and the folder's server-relative path. Resolves the forms a person
+ *  pastes — a library path, a Forms/AllItems.aspx?id= or onedrive.aspx?id=
+ *  view link, a "/:f:/r/<path>" sharing link (which carries the path), a
+ *  OneDrive personal-site path. A "/:f:/g/<token>" share carries no path
+ *  and resolves to null — only Microsoft Graph's /shares can open those,
+ *  and the app's connectors reach no such endpoint (2026-10-08). */
+export function folderTarget(url: string): { site: string; path: string } | null {
+  let u: URL;
+  try {
+    u = new URL(url);
+  } catch {
+    return null;
+  }
+  if (u.protocol !== "https:" || !u.host.toLowerCase().endsWith("sharepoint.com")) return null;
+  const dec = (s: string) => {
+    try {
+      return decodeURIComponent(s);
+    } catch {
+      return s;
+    }
+  };
+  let path = "";
+  const id = u.searchParams.get("id");
+  if (id) path = dec(id);
+  else {
+    const p = dec(u.pathname);
+    const m = /^\/:[a-z]:\/r(\/.*)$/i.exec(p);
+    if (m) path = m[1];
+    else if (/^\/:[a-z]:\/[gstu]\//i.test(p)) return null; // a token share
+    else if (/\/_layouts\//i.test(p) || /\.aspx$/i.test(p)) return null;
+    else path = p;
+  }
+  path = path.replace(/\/+$/, "");
+  if (path === "" || path === "/") return null;
+  // the site collection: /sites/<x>, /teams/<x>, /personal/<x>, else the root
+  const sm = /^(\/(?:sites|teams|personal)\/[^/]+)/i.exec(path);
+  const site = `${u.protocol}//${u.host}${sm ? sm[1] : ""}`;
+  if (sm && path.toLowerCase() === sm[1].toLowerCase()) return null; // the site itself, not a folder
+  return { site, path };
+}
+
+/** True for a token sharing link ("/:f:/g/…"): opens fine, cannot be listed. */
+export const isTokenShare = (url: string): boolean => {
+  try {
+    return /^\/:[a-z]:\/[gstu]\//i.test(new URL(url).pathname);
+  } catch {
+    return false;
+  }
+};
+
+export interface FolderItem {
+  name: string;
+  url: string;
+  folder: boolean;
+  /** ISO modified time ("" = unknown). */
+  modified: string;
 }

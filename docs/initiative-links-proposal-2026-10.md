@@ -172,7 +172,29 @@ initiative card, see the tabs and rails, hop with NEXT, Back to board.
   more". On an initiative board the mounter pins the working folder
   from the charter binding (`field:workingFolder`) with "Set folder…"
   for those who may edit it — one place to set it. Harness
-  `app/harness/links.html`. Folder contents (§3.1) not built.
+  `app/harness/links.html`. The 📁 shortcut on the Improvement list
+  and tiles was built and then removed the same day (Ben: the folder
+  belongs on the pane and the card, not the main tabs).
+- **Folder contents — BUILT 2026-10-08 for path-carrying links.** The
+  open card (never a tile) offers "Show contents ▾" on the pinned
+  folder and on any link that `folderTarget` resolves to a SharePoint
+  folder path: a library path, a Forms/AllItems.aspx?id= or
+  onedrive.aspx?id= view link, a "/:f:/r/<path>" sharing link, a
+  OneDrive personal-site path. `app/src/improvement/folderContents.ts`
+  lists folders then files (name, link, modified) through SharePoint
+  REST on the SharePoint connector as the viewer, reached by dynamic
+  import of `docs/sp` (the import gate's sanctioned door); no access
+  reads as "You don't have access to this folder". A "/:f:/g/<token>"
+  share (OneDrive's default "Copy link") carries no path: it opens, but
+  it cannot be listed — the card shows ⓘ with the way round: open the
+  link, paste the folder's address from the address bar (…id=…). The
+  limit was WEB-VERIFIED (2026-10-08): SharePoint REST has no supported
+  way to resolve a user-pasted sharing link (Microsoft points at Graph
+  `/shares`); the Office 365 Groups connector's HTTP action reaches
+  only `/groups` and the Office 365 Users connector's only `/me` and
+  `/users/…`, so none of the app's connectors reach `/shares`. Lifting
+  it would mean the "HTTP with Microsoft Entra ID" connector — a new
+  connector reference and a DLP conversation, not a code change.
 
 ## 5. Order
 
