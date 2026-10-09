@@ -4500,6 +4500,10 @@ input.app-vg-in.app-vg-folded { background: #fff7e0; }
 .app-ing-popbar { display: flex; justify-content: flex-end; gap: 8px; align-items: center; }
 .app-ing-save { margin-left: 4px; }
 .app-ing-status { font-size: 12.5px; color: #6d675c; min-height: 18px; }
+.app-ing-progress { display: flex; flex-direction: column; gap: 4px; }
+.app-ing-progressbar { height: 6px; background: #eceae5; border-radius: 999px; overflow: hidden; }
+.app-ing-progressfill { height: 100%; width: 0; background: var(--app-accent); border-radius: 999px; transition: width 0.25s ease; }
+.app-ing-progresstext { font-size: 12.5px; color: #6d675c; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .app-ing-readycell { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .app-ing-why { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 160px; }
 .app-ing-log { display: flex; flex-direction: column; gap: 4px; max-height: 30vh; overflow: auto; font-size: 12.5px; }

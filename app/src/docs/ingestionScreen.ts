@@ -62,6 +62,7 @@ import {
   fetchFolderCounts,
   fetchListModeration,
   fetchListRoot,
+  fetchListRules,
   fetchRegionalSettings,
   fetchTermsInSet,
   moveFileByPath,
@@ -173,11 +174,26 @@ async function readStatusTerms(ctx: SiteCtx): Promise<{ id: string; label: strin
 
 /** check-out (tolerated if not needed) → the forms-engine and typed
  *  writes → a MAJOR check-in. Returns "" or the refusal. */
-async function writeValues(site: string, listId: string, row: DocRow, values: AddFieldValue[], comment: string): Promise<string> {
+async function writeValues(site: string, listId: string, row: DocRow, values: AddFieldValue[], comment: string, bracket = true): Promise<string> {
   const { formValues, patch } = splitAddWrites(values);
   if (formValues.length === 0 && Object.keys(patch).length === 0) return "";
+  // the ingestion library has no check-out rule, so the writes go
+  // straight in (two round trips, not four — Ben, 2026-10-09: "speed
+  // these up"); a "not checked out" refusal falls back to the bracket
+  if (!bracket) {
+    const direct = await writeDirect(site, listId, row, formValues, patch);
+    if (direct === "" || !/checked out/i.test(direct)) return direct;
+  }
   const out = await checkOutFile(site, row.serverUrl);
   if (!out.ok && !/already checked out|checked out to you/i.test(spErrorText(out.status))) return `check-out refused: ${spErrorText(out.status)}`;
+  const err = await writeDirect(site, listId, row, formValues, patch);
+  if (err !== "") return err;
+  const ci = await checkInFile(site, row.serverUrl, comment, true);
+  if (!ci.ok && !/not checked out/i.test(spErrorText(ci.status))) return `check-in refused: ${spErrorText(ci.status)}`;
+  return "";
+}
+
+async function writeDirect(site: string, listId: string, row: DocRow, formValues: { FieldName: string; FieldValue: string }[], patch: Record<string, unknown>): Promise<string> {
   if (formValues.length > 0) {
     const r = await validateUpdateListItem(site, listId, row.id, formValues, false);
     const errs = validateItemErrors(r.data);
@@ -187,9 +203,67 @@ async function writeValues(site: string, listId: string, row: DocRow, values: Ad
     const r = await connectorPatchItem(site, listId, row.id, patch);
     if (!r.ok) return spErrorText(r.status);
   }
-  const ci = await checkInFile(site, row.serverUrl, comment, true);
-  if (!ci.ok && !/not checked out/i.test(spErrorText(ci.status))) return `check-in refused: ${spErrorText(ci.status)}`;
   return "";
+}
+
+/** Run `work` over `items`, at most `limit` at a time — brackets on
+ *  different files are independent, and four in flight is well inside
+ *  what SharePoint throttles. Order of completion is not the order of
+ *  items. */
+async function pool<T>(items: T[], limit: number, work: (item: T) => Promise<void>): Promise<void> {
+  let next = 0;
+  const lane = async () => {
+    while (next < items.length) {
+      const item = items[next++];
+      await work(item);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, lane));
+}
+
+/** A progress bar with a time-remaining estimate from the files done so far. */
+function progressBar(host: HTMLElement) {
+  const wrap = el("div", "app-ing-progress");
+  const bar = el("div", "app-ing-progressbar");
+  const fill = el("div", "app-ing-progressfill");
+  bar.appendChild(fill);
+  const text = el("div", "app-ing-progresstext", "");
+  wrap.append(bar, text);
+  wrap.style.display = "none";
+  host.appendChild(wrap);
+  let total = 0;
+  let done = 0;
+  let started = 0;
+  let verb = "";
+  const paint = (current = "") => {
+    const pct = total === 0 ? 0 : Math.round((done / total) * 100);
+    fill.style.width = `${pct}%`;
+    let eta = "";
+    if (done >= 2 && done < total) {
+      const per = (performance.now() - started) / done;
+      const left = Math.round((per * (total - done)) / 1000);
+      eta = left < 60 ? ` · about ${Math.max(left, 1)} s left` : ` · about ${Math.round(left / 60)} min left`;
+    }
+    text.textContent = `${verb} ${done} of ${total}${eta}${current !== "" ? ` — ${current}` : ""}`;
+  };
+  return {
+    start: (n: number, what: string) => {
+      total = n;
+      done = 0;
+      verb = what;
+      started = performance.now();
+      wrap.style.display = "";
+      paint();
+    },
+    working: (current: string) => paint(current),
+    tick: () => {
+      done++;
+      paint();
+    },
+    finish: () => {
+      wrap.style.display = "none";
+    },
+  };
 }
 
 // ---- the task screen -----------------------------------------------------------
@@ -378,6 +452,10 @@ export function openIngestionTask(o: IngestionScreenOpts): () => void {
     body.appendChild(gridHost);
     const status = el("div", "app-ing-status");
     body.appendChild(status);
+    const progress = progressBar(body);
+    // writes on the ingestion library skip the bracket unless it asks
+    const srcRules = await fetchListRules(ctx.site, src.listId);
+    const srcForcesCheckout = ((srcRules.data ?? {}) as { ForceCheckout?: unknown }).ForceCheckout === true;
     const selected = new Set<string>();
     let rows: DocRow[] = [];
     let lastLog = latestByFile(task.log);
@@ -781,13 +859,13 @@ export function openIngestionTask(o: IngestionScreenOpts): () => void {
         const ids = dirtyRows(draft);
         if (ids.length === 0) return;
         saveBtn.disabled = true;
-        let n = 0;
         const refused: string[] = [];
-        for (const id of ids) {
+        progress.start(ids.length, "Saving");
+        status.textContent = "";
+        const saveOne = async (id: string): Promise<void> => {
           const row = rows.find((r) => r.uniqueId === id);
-          if (!row) continue;
-          n++;
-          status.textContent = `Saving ${n} of ${ids.length}: ${row.name}…`;
+          if (!row) return;
+          progress.working(row.name);
           const all = writesFor(draft, id);
           const nameV = all.find((v) => v.internal === NAME.internal);
           let target = row;
@@ -795,7 +873,7 @@ export function openIngestionTask(o: IngestionScreenOpts): () => void {
             const stem = sanitizeFileName(nameV.text ?? "");
             if (stem === "") {
               refused.push(`${row.name}: the new name leaves nothing usable`);
-              continue;
+              return;
             }
             const newName = `${stem}${extPart(row.name)}`;
             const newUrl = `${task.folder}/${newName}`;
@@ -803,15 +881,20 @@ export function openIngestionTask(o: IngestionScreenOpts): () => void {
             if (!mv.ok) {
               const text = spErrorText(mv.status);
               refused.push(`${row.name}: rename refused — ${/already exists/i.test(text) ? `"${newName}" is already in the folder` : text}`);
-              continue;
+              return;
             }
             target = { ...row, name: newName, serverUrl: newUrl };
             draft.get(id)?.delete(NAME.internal);
           }
-          const err = await writeValues(ctx.site, src.listId, target, all.filter((v) => v.internal !== NAME.internal), "Details set");
+          const err = await writeValues(ctx.site, src.listId, target, all.filter((v) => v.internal !== NAME.internal), "Details set", srcForcesCheckout);
           if (err === "") draft.delete(id);
           else refused.push(`${target.name}: ${err}`);
-        }
+        };
+        await pool(ids, 4, async (id) => {
+          await saveOne(id);
+          progress.tick();
+        });
+        progress.finish();
         await reload();
         if (refused.length > 0) status.textContent = `${ids.length - refused.length} saved; refused — ${refused.join("; ")}`.slice(0, 600);
       })();
@@ -909,11 +992,14 @@ export function openIngestionTask(o: IngestionScreenOpts): () => void {
       const log = (file: string, outcome: RunLogEntry["outcome"], detail: string) => {
         task.log.push({ file, outcome, detail, at: new Date().toISOString(), by });
       };
-      let n = 0;
-      for (const row of ready) {
-        if (dead) break;
-        n++;
-        status.textContent = `Ingesting ${n} of ${ready.length}: ${row.name}…`;
+      // files in flight four at a time (Ben, 2026-10-09: speed); the
+      // task row is saved through one chain so the writes never race
+      let saveChain: Promise<unknown> = Promise.resolve();
+      progress.start(ready.length, "Ingesting");
+      status.textContent = "";
+      const ingestOne = async (row: DocRow): Promise<void> => {
+        if (dead) return;
+        progress.working(row.name);
         const refuse = (why: string) => log(row.name, "refused", why);
         // document-ID collision: the app's own check (decision 4)
         const docId = docIdInternal !== "" ? (row.values[docIdInternal] ?? "").trim() : "";
@@ -921,31 +1007,31 @@ export function openIngestionTask(o: IngestionScreenOpts): () => void {
           const dup = await renderListPage(ctx.site, dest.listId, buildRenderViewXml({ textEquals: [{ col: docIdInternal, value: docId }], fields: [docIdInternal], rowLimit: 2 }));
           if (dup.rows.length > 0) {
             refuse(`Document ID "${docId}" is already used by "${dup.rows[0].name}"`);
-            continue;
+            return;
           }
         }
         if (destRoot === "") {
           refuse("The destination library's folder could not be read");
-          continue;
+          return;
         }
         const destUrl = `${destRoot}/${row.name}`;
         const copied = await copyFileByPath(ctx.site, `${ctx.origin}${row.serverUrl}`, `${ctx.origin}${destUrl}`);
         if (!copied.ok) {
           const text = spErrorText(copied.status);
           refuse(/already exists/i.test(text) ? `A file named "${row.name}" already exists in ${libName(dest)}` : `Copy refused: ${text}`);
-          continue;
+          return;
         }
         // the bracket on the copy: check-out → status + dates → major → publish
         const idRes = await fetchFileItemId(ctx.site, destUrl);
         const itemId = Number(((idRes.data ?? {}) as { Id?: unknown }).Id ?? 0);
         if (itemId === 0) {
           refuse("Copied, but the copy's item could not be read — check the destination by hand");
-          continue;
+          return;
         }
         const out = await checkOutFile(ctx.site, destUrl);
         if (!out.ok && !/already checked out/i.test(spErrorText(out.status))) {
           refuse(`Copied, but check-out was refused: ${spErrorText(out.status)}`);
-          continue;
+          return;
         }
         let bracketErr = "";
         if (approved !== null) {
@@ -981,25 +1067,31 @@ export function openIngestionTask(o: IngestionScreenOpts): () => void {
         if (bracketErr !== "") {
           // the copy stays checked out as a draft in the destination; say so
           refuse(`Copied, but ${bracketErr} — the draft is checked out in ${libName(dest)}; finish or discard it there`);
-          continue;
+          return;
         }
         const ci = await checkInFile(ctx.site, destUrl, ingestComment(task.name, by), true);
         if (!ci.ok) {
           refuse(`Copied, but the major check-in was refused: ${spErrorText(ci.status)}`);
-          continue;
+          return;
         }
         if (moderated) {
           const pub = await validateUpdateListItem(ctx.site, dest.listId, itemId, [{ FieldName: "_ModerationStatus", FieldValue: "0" }], false);
           if (!pub.ok || validateItemErrors(pub.data).length > 0) {
             refuse(`Moved, but the publish was refused — it is PENDING in ${libName(dest)}: approve it in SharePoint`);
             await recycleFile(ctx.site, row.serverUrl);
-            continue;
+            return;
           }
         }
         const gone = await recycleFile(ctx.site, row.serverUrl);
         log(row.name, "moved", gone.ok ? destUrl : `${destUrl} (the source copy could not be recycled: ${spErrorText(gone.status)})`);
-        await saveIngestionTask(task).catch(() => undefined);
-      }
+        saveChain = saveChain.then(() => saveIngestionTask(task)).catch(() => undefined);
+      };
+      await pool(ready, 4, async (row) => {
+        await ingestOne(row);
+        progress.tick();
+      });
+      await saveChain;
+      progress.finish();
       // the task stays open: a batch may follow (Ben, 2026-10-09 — an
       // explicit close-out replaces decision 6's self-close)
       task.status = "open";
