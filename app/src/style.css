@@ -4457,6 +4457,17 @@ input.app-vg-in.app-vg-folded { background: #fff7e0; }
 .app-ing-gridrow { display: grid; align-items: center; min-width: max-content; border-bottom: 1px solid #f1efec; }
 .app-ing-gridhead { position: sticky; top: 0; z-index: 3; background: #faf9f7; font-size: 11.5px; color: #6b6b6b; border-bottom: 2px solid #e5e5e5; }
 .app-ing-gridhead .app-ing-cell { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.app-ing-sorthead { padding: 0 2px; }
+.app-ing-sortbtn { font-size: 11.5px; font-weight: 600; color: #6b6b6b; text-decoration: none; padding: 4px 6px; min-height: 36px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.app-ing-sortbtn:hover { color: #26241f; text-decoration: none; }
+.app-ing-search { width: 180px; min-height: 36px; }
+/* fit to width: every column shares the pane, compact type, no x-scroll */
+.app-ing-grid-fit .app-ing-gridrow { min-width: 0; }
+.app-ing-grid-fit .app-ing-cell { font-size: 11.5px; padding-left: 4px; padding-right: 4px; min-height: 34px; }
+.app-ing-grid-fit .app-ing-cell-doc { position: static; border-right: 1px solid #eceae5; }
+.app-ing-grid-fit .app-ing-ctl, .app-ing-grid-fit .app-ing-cellbtn { font-size: 11.5px; padding: 4px 6px; min-height: 28px; }
+.app-ing-grid-fit .app-ing-sortbtn { font-size: 10.5px; padding: 4px; }
+.app-ing-grid-fit .app-docs-namestem { font-size: 11.5px; }
 .app-ing-cell { padding: 4px 8px; min-width: 0; min-height: 40px; display: flex; align-items: center; gap: 8px; font-size: 13px; border-right: 1px solid #f1efec; }
 /* an edit cell's control carries the 8px itself, so its text lines up
    under the header's label; the fill handle sits in the corner */

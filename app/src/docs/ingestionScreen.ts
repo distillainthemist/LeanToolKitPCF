@@ -324,13 +324,20 @@ export function openIngestionTask(o: IngestionScreenOpts): () => void {
     const refresh = btn("↻ Refresh");
     refresh.title = "Re-read the folder's files and details";
     refresh.addEventListener("click", () => void reloadGuarded());
+    // a quick filter over every cell, and a fit-to-width toggle (Ben, 2026-10-09)
+    const search = el("input", "app-input app-ing-search") as HTMLInputElement;
+    search.type = "search";
+    search.placeholder = "Filter files…";
+    search.title = "Show the files whose name or any detail contains this";
+    const fitBtn = btn("Fit to width");
+    fitBtn.title = "Shrink every column so the whole grid fits without sideways scrolling";
     // the draft model (proposal §9): cells change here; Save writes each
     // touched file once
     const saveBtn = btn("Save changes", "app-btn app-btn-primary app-ing-save");
     saveBtn.disabled = true;
     const discardBtn = btn("Discard", "app-link");
     discardBtn.style.display = "none";
-    actions.append(setSel, fillBtn, refresh, saveBtn, discardBtn, selectedCount);
+    actions.append(setSel, fillBtn, refresh, search, fitBtn, saveBtn, discardBtn, selectedCount);
     const right = el("span", "app-ing-actions-right");
     if (o.isController && task.status !== "closed") {
       const edit = btn("Edit task…");
@@ -437,8 +444,8 @@ export function openIngestionTask(o: IngestionScreenOpts): () => void {
         if (e.key === "Enter" && !(ctl instanceof HTMLTextAreaElement)) {
           e.preventDefault();
           (ctl as HTMLInputElement).blur();
-          const i = rows.findIndex((r) => r.uniqueId === row.uniqueId);
-          const next = rows[i + 1];
+          const i = shown.findIndex((r) => r.uniqueId === row.uniqueId);
+          const next = shown[i + 1];
           if (next) gridHost.querySelector<HTMLElement>(`[data-row="${next.uniqueId}"] [data-col="${f.internal}"] input, [data-row="${next.uniqueId}"] [data-col="${f.internal}"] select, [data-row="${next.uniqueId}"] [data-col="${f.internal}"] button`)?.focus();
         } else if (e.key === "Escape") {
           e.preventDefault();
@@ -476,18 +483,18 @@ export function openIngestionTask(o: IngestionScreenOpts): () => void {
     const startFill = (e: PointerEvent, row: DocRow, f: SpField) => {
       e.preventDefault();
       e.stopPropagation();
-      const from = rows.findIndex((r) => r.uniqueId === row.uniqueId);
+      const from = shown.findIndex((r) => r.uniqueId === row.uniqueId);
       let to = from;
       const mark = () => {
         gridHost.querySelectorAll<HTMLElement>(".app-ing-fillmark").forEach((c) => c.classList.remove("app-ing-fillmark"));
         for (let i = Math.min(from, to); i <= Math.max(from, to); i++) {
-          gridHost.querySelector<HTMLElement>(`[data-row="${rows[i].uniqueId}"] [data-col="${f.internal}"]`)?.classList.add("app-ing-fillmark");
+          gridHost.querySelector<HTMLElement>(`[data-row="${shown[i].uniqueId}"] [data-col="${f.internal}"]`)?.classList.add("app-ing-fillmark");
         }
       };
       const move = (ev: PointerEvent) => {
         const hit = document.elementFromPoint(ev.clientX, ev.clientY)?.closest<HTMLElement>("[data-row]");
         if (!hit) return;
-        const i = rows.findIndex((r) => r.uniqueId === hit.dataset.row);
+        const i = shown.findIndex((r) => r.uniqueId === hit.dataset.row);
         if (i >= 0 && i !== to) {
           to = i;
           mark();
@@ -501,7 +508,7 @@ export function openIngestionTask(o: IngestionScreenOpts): () => void {
         void valueOf(row, f).then((v) => {
           if (!v) return;
           for (let i = Math.min(from, to); i <= Math.max(from, to); i++) {
-            const target = rows[i];
+            const target = shown[i];
             if (target.uniqueId === row.uniqueId) continue;
             commit(target, { ...v, internal: f.internal });
             const cellEl = gridHost.querySelector<HTMLElement>(`[data-row="${target.uniqueId}"] [data-col="${f.internal}"]`);
@@ -619,26 +626,80 @@ export function openIngestionTask(o: IngestionScreenOpts): () => void {
         cellEl.appendChild(handle);
       }
     };
-    const template = `320px minmax(220px, 1.3fr) ${gridFields.map(() => "minmax(170px, 1fr)").join(" ")}`;
+    // the VIEW: the rows after the filter and the sort — what the grid
+    // paints and what Enter-down and the fill handle walk
+    let filterText = "";
+    let sortKey = "__name";
+    let sortAsc = true;
+    let fit = false;
+    let shown: DocRow[] = [];
+    const cellText = (row: DocRow, internal: string): string => effectiveValues(row.values, draft.get(row.uniqueId))[internal] ?? "";
+    const computeView = () => {
+      const q = filterText.trim().toLowerCase();
+      const keys = gridCols.map((f) => f.internal);
+      let v = q === "" ? [...rows] : rows.filter((r) => r.name.toLowerCase().includes(q) || keys.some((k) => cellText(r, k).toLowerCase().includes(q)));
+      const col = gridCols.find((f) => f.internal === sortKey);
+      const isDate = col ? editorKind(col) === "date" : false;
+      const num = (s: string) => (s !== "" && !Number.isNaN(Number(s)) ? Number(s) : null);
+      v = v.sort((a, b) => {
+        const x = sortKey === "__name" ? a.name : isDate ? savedDisplay(effectiveValues(a.values, draft.get(a.uniqueId)), sortKey, "date") : cellText(a, sortKey);
+        const y = sortKey === "__name" ? b.name : isDate ? savedDisplay(effectiveValues(b.values, draft.get(b.uniqueId)), sortKey, "date") : cellText(b, sortKey);
+        // blanks last either way; numbers as numbers; otherwise natural text
+        if (x === "" && y !== "") return 1;
+        if (y === "" && x !== "") return -1;
+        const nx = num(x);
+        const ny = num(y);
+        const c = nx !== null && ny !== null ? nx - ny : x.localeCompare(y, undefined, { numeric: true, sensitivity: "base" });
+        return sortAsc ? c : -c;
+      });
+      shown = v;
+    };
+    search.addEventListener("input", () => {
+      filterText = search.value;
+      paintGrid();
+    });
+    fitBtn.addEventListener("click", () => {
+      fit = !fit;
+      fitBtn.textContent = fit ? "Normal width" : "Fit to width";
+      fitBtn.title = fit ? "Back to full-width columns with sideways scrolling" : "Shrink every column so the whole grid fits without sideways scrolling";
+      gridHost.classList.toggle("app-ing-grid-fit", fit);
+      paintGrid();
+    });
+    const template = () => (fit ? `minmax(200px, 1.6fr) minmax(0, 1.2fr) ${gridFields.map(() => "minmax(0, 1fr)").join(" ")}` : `320px minmax(220px, 1.3fr) ${gridFields.map(() => "minmax(170px, 1fr)").join(" ")}`);
     const paintGrid = () => {
+      computeView();
       clear(gridHost);
       const head = el("div", "app-ing-gridrow app-ing-gridhead");
-      head.style.gridTemplateColumns = template;
+      head.style.gridTemplateColumns = template();
       const docHead = el("div", "app-ing-cell app-ing-cell-doc", "");
       const all = el("input", "app-docs-libcheck") as HTMLInputElement;
       all.type = "checkbox";
       all.title = "Select all";
-      all.checked = rows.length > 0 && rows.every((r) => selected.has(r.uniqueId));
+      all.checked = shown.length > 0 && shown.every((r) => selected.has(r.uniqueId));
+      all.title = filterText.trim() !== "" ? "Select the files shown" : "Select all";
       all.addEventListener("change", () => {
-        selected.clear();
-        if (all.checked) for (const r of rows) selected.add(r.uniqueId);
+        for (const r of shown) {
+          if (all.checked) selected.add(r.uniqueId);
+          else selected.delete(r.uniqueId);
+        }
+        paintSel();
         paintGrid();
       });
       docHead.append(all, el("span", undefined, "Document"));
       head.appendChild(docHead);
       for (const f of gridCols) {
-        const h = el("div", "app-ing-cell", labelOf(f) + (requiredSet.has(f.internal) ? " ✱" : ""));
-        h.title = f === NAME ? "The document's name once ingested — change it here; the extension stays" : requiredSet.has(f.internal) ? "Required before the file can move" : "";
+        const h = el("div", "app-ing-cell app-ing-sorthead");
+        const b = btn(labelOf(f) + (requiredSet.has(f.internal) ? " ✱" : "") + (sortKey === f.internal ? (sortAsc ? " ▲" : " ▼") : ""), "app-link app-ing-sortbtn");
+        b.title = (f === NAME ? "The document's name once ingested — change it here; the extension stays. " : requiredSet.has(f.internal) ? "Required before the file can move. " : "") + "Click to sort";
+        b.addEventListener("click", () => {
+          if (sortKey === f.internal) sortAsc = !sortAsc;
+          else {
+            sortKey = f.internal;
+            sortAsc = true;
+          }
+          paintGrid();
+        });
+        h.appendChild(b);
         head.appendChild(h);
       }
       gridHost.appendChild(head);
@@ -646,10 +707,14 @@ export function openIngestionTask(o: IngestionScreenOpts): () => void {
         gridHost.appendChild(el("div", "app-ing-empty", task.status === "closed" ? "Every file has moved." : "No files yet — open the folder and add them, then Refresh."));
         return;
       }
-      for (const row of rows) {
+      if (shown.length === 0) {
+        gridHost.appendChild(el("div", "app-ing-empty", `No file matches "${filterText.trim()}".`));
+        return;
+      }
+      for (const row of shown) {
         const rowEl = el("div", "app-ing-gridrow" + (draft.has(row.uniqueId) ? " app-ing-row-dirty" : ""));
         rowEl.dataset.row = row.uniqueId;
-        rowEl.style.gridTemplateColumns = template;
+        rowEl.style.gridTemplateColumns = template();
         const doc = el("div", "app-ing-cell app-ing-cell-doc");
         const box = el("input", "app-docs-libcheck") as HTMLInputElement;
         box.type = "checkbox";
