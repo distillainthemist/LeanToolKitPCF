@@ -172,11 +172,16 @@ preview, batches, log, resume (one and a half); docs, tests, harness
    is not a refusal; the document lands without one and Document
    Control Health reports it as it does today. A typed ID that
    duplicates one in the destination is a collision (decision 4).
-6. **After the run — the task closes itself, the empty folder goes**
-   (Ben, 2026-10-08). A run that leaves the folder empty marks the
-   task closed (its log stays in Dataverse) and recycles the empty
-   sub-folder; closed tasks stay listed for controllers under a
-   "Closed" filter. A folder with refused files keeps the task open.
+6. **After the run — an EXPLICIT close-out** (revised by Ben,
+   2026-10-09: a task may take several batches). A run leaves the task
+   open; "Close task…" (controllers) recycles the folder with anything
+   left in it (the confirm says how many files were not ingested) and
+   marks the task closed with its log kept. "Cancel task…" in the
+   editor removes the task outright.
+6b. **A new name on ingestion** (Ben, 2026-10-09): the grid's first
+   column, "Name on ingestion", is the file's stem; a change renames
+   the file in the folder on Save (the extension stays; a name already
+   in the folder is refused), so the copy carries the new name.
 7. **Notification — a Teams card on assignment** (Ben, 2026-10-08):
    the DMS's notification road (`docs/notify.ts`, dynamic import), a
    card from the controller naming the task, the folder link and the

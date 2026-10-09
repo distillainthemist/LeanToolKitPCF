@@ -239,8 +239,10 @@ Needs the ingestion library set up (document-ingestion-proposal §8).
    counts; files move into the
    destination as approved 1.0 with the check-in comment naming the
    task; a file with a missing detail stays with its reason; a name
-   already in the destination is refused; when the folder empties the
-   task closes and the folder is gone; the log reads on the closed task.
+   already in the destination is refused; a changed "Name on ingestion"
+   renames the file on Save and the copy lands under the new name; the
+   task stays open after a run; Close task… recycles the folder (the
+   confirm counts un-ingested files) and the log reads on the closed task.
 7. **Cancel** — Edit task… → Cancel task… (controllers): the confirm
    names the files; the folder and its files go to the site recycle
    bin; the task leaves the Ingestion tasks button and the sheet closes.

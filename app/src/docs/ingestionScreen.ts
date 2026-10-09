@@ -42,6 +42,7 @@ import {
   emptySiteDictionary,
   fieldsFromResponse,
   formatDateForLocale,
+  sanitizeFileName,
   siteKey,
   spErrorText,
   splitAddWrites,
@@ -63,6 +64,7 @@ import {
   fetchListRoot,
   fetchRegionalSettings,
   fetchTermsInSet,
+  moveFileByPath,
   recycleFile,
   recycleFolder,
   validateUpdateListItem,
@@ -288,6 +290,19 @@ export function openIngestionTask(o: IngestionScreenOpts): () => void {
       .map((i) => destFields.find((f) => f.internal === i))
       .filter((f): f is SpField => f !== undefined && carried.has(f.internal) && !derived.has(f.internal) && editorKind(f) !== null);
     const requiredSet = new Set(required.map((r) => r.internal));
+    // "Name on ingestion" (Ben, 2026-10-09): a synthetic first column — the
+    // file's stem; a change RENAMES the file in the folder on Save, so
+    // the copy carries the new name and the grid view shows it too
+    const NAME: SpField = { internal: "__name", title: "Name on ingestion", type: "Text", choices: [], isTaxonomy: false, termSetId: "", required: false };
+    const stemOf = (name: string) => {
+      const dot = name.lastIndexOf(".");
+      return dot > 0 ? name.slice(0, dot) : name;
+    };
+    const extPart = (name: string) => {
+      const dot = name.lastIndexOf(".");
+      return dot > 0 ? name.slice(dot) : "";
+    };
+    const gridCols: SpField[] = [NAME, ...gridFields];
     const feedFields = Array.from(new Set([...gridFields.map((f) => f.internal), ...required.map((r) => r.internal), docIdInternal, effInternal, importanceInternal, statusInternal].filter((f) => f !== "")));
 
     // ---- actions row ---------------------------------------------------------
@@ -335,7 +350,10 @@ export function openIngestionTask(o: IngestionScreenOpts): () => void {
       });
       runBtn = btn("Run ingestion…", "app-btn app-btn-primary");
       runBtn.disabled = true;
-      right.append(edit, runBtn);
+      const closeTask = btn("Close task…");
+      closeTask.title = "The batch is complete: the folder goes, the task keeps its log";
+      closeTask.addEventListener("click", () => void closeOut());
+      right.append(edit, closeTask, runBtn);
       runBtn.addEventListener("click", () => void startRun());
     }
     actions.appendChild(right);
@@ -594,12 +612,14 @@ export function openIngestionTask(o: IngestionScreenOpts): () => void {
         b.addEventListener("click", () => void openCellPopover(b, row, f));
         cellEl.appendChild(b);
       }
-      const handle = el("span", "app-ing-fillhandle");
-      handle.title = "Drag down to fill";
-      handle.addEventListener("pointerdown", (e) => startFill(e, row, f));
-      cellEl.appendChild(handle);
+      if (f !== NAME) {
+        const handle = el("span", "app-ing-fillhandle");
+        handle.title = "Drag down to fill";
+        handle.addEventListener("pointerdown", (e) => startFill(e, row, f));
+        cellEl.appendChild(handle);
+      }
     };
-    const template = `320px ${gridFields.map(() => "minmax(170px, 1fr)").join(" ")}`;
+    const template = `320px minmax(220px, 1.3fr) ${gridFields.map(() => "minmax(170px, 1fr)").join(" ")}`;
     const paintGrid = () => {
       clear(gridHost);
       const head = el("div", "app-ing-gridrow app-ing-gridhead");
@@ -616,9 +636,9 @@ export function openIngestionTask(o: IngestionScreenOpts): () => void {
       });
       docHead.append(all, el("span", undefined, "Document"));
       head.appendChild(docHead);
-      for (const f of gridFields) {
+      for (const f of gridCols) {
         const h = el("div", "app-ing-cell", labelOf(f) + (requiredSet.has(f.internal) ? " ✱" : ""));
-        h.title = requiredSet.has(f.internal) ? "Required before the file can move" : "";
+        h.title = f === NAME ? "The document's name once ingested — change it here; the extension stays" : requiredSet.has(f.internal) ? "Required before the file can move" : "";
         head.appendChild(h);
       }
       gridHost.appendChild(head);
@@ -641,7 +661,7 @@ export function openIngestionTask(o: IngestionScreenOpts): () => void {
         });
         doc.append(box, el("span", "app-ing-dirtydot", "●"), nameCell(row), readyMark(row));
         rowEl.appendChild(doc);
-        for (const f of gridFields) {
+        for (const f of gridCols) {
           const c = el("div", "app-ing-cell app-ing-cell-edit" + (draft.get(row.uniqueId)?.has(f.internal) ? " app-ing-cell-dirty" : ""));
           c.dataset.col = f.internal;
           paintCell(c, row, f);
@@ -659,6 +679,7 @@ export function openIngestionTask(o: IngestionScreenOpts): () => void {
         return;
       }
       rows = page.rows;
+      for (const r of rows) r.values.__name = stemOf(r.name);
       for (const id of [...selected]) if (!rows.some((r) => r.uniqueId === id)) selected.delete(id);
       for (const id of [...draft.keys()]) if (!rows.some((r) => r.uniqueId === id)) draft.delete(id);
       paintGrid();
@@ -698,9 +719,29 @@ export function openIngestionTask(o: IngestionScreenOpts): () => void {
           if (!row) continue;
           n++;
           status.textContent = `Saving ${n} of ${ids.length}: ${row.name}…`;
-          const err = await writeValues(ctx.site, src.listId, row, writesFor(draft, id), "Details set");
+          const all = writesFor(draft, id);
+          const nameV = all.find((v) => v.internal === NAME.internal);
+          let target = row;
+          if (nameV) {
+            const stem = sanitizeFileName(nameV.text ?? "");
+            if (stem === "") {
+              refused.push(`${row.name}: the new name leaves nothing usable`);
+              continue;
+            }
+            const newName = `${stem}${extPart(row.name)}`;
+            const newUrl = `${task.folder}/${newName}`;
+            const mv = await moveFileByPath(ctx.site, `${ctx.origin}${row.serverUrl}`, `${ctx.origin}${newUrl}`);
+            if (!mv.ok) {
+              const text = spErrorText(mv.status);
+              refused.push(`${row.name}: rename refused — ${/already exists/i.test(text) ? `"${newName}" is already in the folder` : text}`);
+              continue;
+            }
+            target = { ...row, name: newName, serverUrl: newUrl };
+            draft.get(id)?.delete(NAME.internal);
+          }
+          const err = await writeValues(ctx.site, src.listId, target, all.filter((v) => v.internal !== NAME.internal), "Details set");
           if (err === "") draft.delete(id);
-          else refused.push(`${row.name}: ${err}`);
+          else refused.push(`${target.name}: ${err}`);
         }
         await reload();
         if (refused.length > 0) status.textContent = `${ids.length - refused.length} saved; refused — ${refused.join("; ")}`.slice(0, 600);
@@ -890,27 +931,43 @@ export function openIngestionTask(o: IngestionScreenOpts): () => void {
         log(row.name, "moved", gone.ok ? destUrl : `${destUrl} (the source copy could not be recycled: ${spErrorText(gone.status)})`);
         await saveIngestionTask(task).catch(() => undefined);
       }
-      // closes itself when the folder is empty (decision 6)
-      const counts = await fetchFolderCounts(ctx.site, task.folder);
-      const left = Number(((counts.data ?? {}) as { ItemCount?: unknown }).ItemCount ?? NaN);
-      if (counts.ok && left === 0) {
-        task.status = "closed";
-        task.closedAt = new Date().toISOString();
-        await recycleFolder(ctx.site, task.folder);
-      } else task.status = "open";
+      // the task stays open: a batch may follow (Ben, 2026-10-09 — an
+      // explicit close-out replaces decision 6's self-close)
+      task.status = "open";
       await saveIngestionTask(task).catch(() => undefined);
       running = false;
       closeBtn.disabled = false;
       lastLog = latestByFile(task.log);
       o.onChanged();
-      if (task.status === "closed") {
-        closeNow();
-        openIngestionTask(o);
-        return;
-      }
       await reload();
       const thisRun = task.log.slice(-ready.length);
-      status.textContent = `Run finished — ${logSummary(thisRun)}. Refused files stay here with the reason in the Ready column.`;
+      status.textContent = `Run finished — ${logSummary(thisRun)}.${rows.length === 0 ? " Every file has moved — Close task when the batch is complete." : " Refused files stay here with the reason on the glyph."}`;
+    };
+    /** The explicit close-out: the folder (with anything left in it) goes
+     *  to the recycle bin, the task reads closed and keeps its log. */
+    const closeOut = async (): Promise<void> => {
+      if (running || dirtyRows(draft).length > 0) return;
+      const counts = await fetchFolderCounts(ctx.site, task.folder);
+      const left = Number(((counts.data ?? {}) as { ItemCount?: unknown }).ItemCount ?? NaN);
+      const n = counts.ok && Number.isFinite(left) ? left : rows.length;
+      const ok = await promptConfirm({
+        title: `Close the task "${task.name}"?`,
+        note: n > 0 ? `${n} file${n === 1 ? " has" : "s have"} NOT been ingested; the folder and those files go to the site's recycle bin. The task keeps its log and leaves Ingestion tasks.` : "The empty folder is removed; the task keeps its log and leaves Ingestion tasks.",
+        confirmLabel: "Close task",
+        danger: n > 0,
+      });
+      if (!ok || dead) return;
+      const r = await recycleFolder(ctx.site, task.folder);
+      if (!r.ok && !/not exist|not found|404/i.test(r.status)) {
+        status.textContent = `The folder could not be recycled: ${spErrorText(r.status)}`;
+        return;
+      }
+      task.status = "closed";
+      task.closedAt = new Date().toISOString();
+      await saveIngestionTask(task);
+      o.onChanged();
+      closeNow();
+      openIngestionTask(o);
     };
 
     // ---- the log, on a closed task ---------------------------------------
