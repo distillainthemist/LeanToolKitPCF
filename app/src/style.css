@@ -4449,6 +4449,7 @@ input.app-vg-in.app-vg-folded { background: #fff7e0; }
 .app-ing-body { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 10px; padding: 16px 16px 14px; }
 .app-ing-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .app-ing-actions a.app-btn { text-decoration: none; }
+.app-ing-actions-right { margin-left: auto; display: inline-flex; gap: 8px; align-items: center; }
 .app-ing-headactions { margin-left: auto; display: inline-flex; gap: 8px; align-items: center; flex: none; }
 .app-ing-headactions a.app-btn { text-decoration: none; }
 .app-ing-sheet > .app-docs-viewhead .app-docs-viewclose { margin-left: 4px; }

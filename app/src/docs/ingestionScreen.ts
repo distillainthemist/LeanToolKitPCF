@@ -336,7 +336,10 @@ export function openIngestionTask(o: IngestionScreenOpts): () => void {
     saveBtn.disabled = true;
     const discardBtn = btn("Discard", "app-link");
     discardBtn.style.display = "none";
-    actions.append(setSel, fillBtn, refresh, search, fitBtn, saveBtn, discardBtn, selectedCount);
+    // Refresh, Save and Discard at the far right (Ben, 2026-10-09)
+    const farRight = el("span", "app-ing-actions-right");
+    farRight.append(discardBtn, refresh, saveBtn);
+    actions.append(setSel, fillBtn, search, fitBtn, selectedCount, farRight);
     // the task-level buttons live in the title row, before ✕ (Ben, 2026-10-09)
     const right = el("span", "app-ing-headactions");
     right.appendChild(openFolder); // (Ben, 2026-10-09: with the task buttons)
