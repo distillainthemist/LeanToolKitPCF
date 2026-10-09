@@ -223,8 +223,10 @@ when written):
 - Per-document confidentiality (FR-AC-005): REJECTED as too risky —
   library-level confidentiality controls only.
 - Guest/auditor access (FR-AC-007): parked indefinitely.
-- Bulk curated ingestion (FR-IM-002/006): met by the existing
-  spreadsheet process outside the app.
+- Bulk curated ingestion (FR-IM-002/006): ~~met by the existing
+  spreadsheet process outside the app~~ — BUILT in the app 2026-10-08/09
+  (document-ingestion-proposal-2026-10.md); see "Document ingestion"
+  below for what stays open.
 - AI assistant (FR-AI-*): a future project iteration.
 
 ## Actions card — open items (2026-09-30)
@@ -283,6 +285,37 @@ user-feedback-test-script-2026-10.md. Released v0.65.0 / v0.65.1.
   a failing preview file for a sensitivity label); report 12 (Ellen
   confirms named views hold on v0.63+).
 - **Translation** (report 48): a strategy question, parked.
+
+## Document ingestion — open items (2026-10-09)
+
+Built on dev after v0.68.0, unreleased; the next release is
+SOLUTION-CARRYING (`ben_ltkingestiontask`). Ben's six-item pass is in
+the test script.
+
+- **Excel round-trip** (decision 1): phase two only if SharePoint's
+  grid view and the app's grid fail users in practice.
+- **Throttling guard**: eight files in flight sits under the
+  connector's ~600 calls a minute; a throttled call fails the file
+  (its glyph says so). If it shows up, drop `IN_FLIGHT` to six or add
+  a retry with back-off on 429s.
+- **A term renamed since a file was tagged** opens its cell's popover
+  unselected (the label no longer resolves to an id) — set it again.
+- **Closed tasks** are reachable only through the sheet that closes
+  them; a "Closed" filter on the Ingestion tasks panel if controllers
+  want to re-read old logs.
+- **Re-ingesting an existing document** is refused by design (name /
+  document-ID collision); the road is the document's own lifecycle.
+
+## Initiative links — open items (2026-10-08)
+
+- **Folder contents for "/:f:/g/" sharing links** need Graph
+  `/shares`, which no app connector reaches; lifting it means the
+  "HTTP with Microsoft Entra ID" connector — a DLP decision, not code.
+- **Card tile layouts to narrow** per card: SQDPC, RiskMatrix, RACI,
+  Fishbone (left from M2).
+- **Ben's passes pending**: the Phone pass (v0.66.0), the Settings and
+  poster pass (v0.67.0), the Initiative links pass (v0.68.0, nine
+  items), the Document ingestion pass.
 
 ## Issues — open items (2026-10-06)
 
