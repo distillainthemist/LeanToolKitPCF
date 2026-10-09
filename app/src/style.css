@@ -4450,6 +4450,7 @@ input.app-vg-in.app-vg-folded { background: #fff7e0; }
 .app-ing-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .app-ing-actions a.app-btn { text-decoration: none; }
 .app-ing-headactions { margin-left: auto; display: inline-flex; gap: 8px; align-items: center; flex: none; }
+.app-ing-headactions a.app-btn { text-decoration: none; }
 .app-ing-sheet > .app-docs-viewhead .app-docs-viewclose { margin-left: 4px; }
 .app-ing-selcount { font-size: 12px; }
 /* the editable grid (proposal §9): the Document column frozen left,

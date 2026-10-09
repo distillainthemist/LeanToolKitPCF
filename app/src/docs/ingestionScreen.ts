@@ -309,9 +309,8 @@ export function openIngestionTask(o: IngestionScreenOpts): () => void {
     const actions = el("div", "app-ing-actions");
     // greyed until EVERY file has its required details (Ben, 2026-10-09)
     let runBtn: HTMLButtonElement | null = null;
-    const openFolder = linkBtn("Open folder ↗", `${ctx.origin}${task.folder}`, "app-btn app-btn-primary");
+    const openFolder = linkBtn("Open folder ↗", `${ctx.origin}${task.folder}`, "app-btn");
     openFolder.title = "The task's folder in SharePoint — add files there";
-    actions.appendChild(openFolder);
     // (an "Edit in grid view" link landed on the same folder page as
     // Open folder — removed, Ben 2026-10-09; the note names the grid view)
     const selectedCount = el("span", "app-cp-muted app-ing-selcount", "");
@@ -340,6 +339,7 @@ export function openIngestionTask(o: IngestionScreenOpts): () => void {
     actions.append(setSel, fillBtn, refresh, search, fitBtn, saveBtn, discardBtn, selectedCount);
     // the task-level buttons live in the title row, before ✕ (Ben, 2026-10-09)
     const right = el("span", "app-ing-headactions");
+    right.appendChild(openFolder); // (Ben, 2026-10-09: with the task buttons)
     if (o.isController && task.status !== "closed") {
       const edit = btn("Edit task…");
       edit.addEventListener("click", () => {
