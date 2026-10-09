@@ -4460,8 +4460,10 @@ input.app-vg-in.app-vg-folded { background: #fff7e0; }
 .app-ing-cell { padding: 4px 8px; min-width: 0; min-height: 40px; display: flex; align-items: center; gap: 8px; font-size: 13px; }
 .app-ing-cell-doc { position: sticky; left: 0; z-index: 2; background: #fff; border-right: 1px solid #eceae5; }
 .app-ing-gridhead .app-ing-cell-doc { background: #faf9f7; z-index: 4; }
-.app-ing-cell-ready { position: sticky; right: 0; z-index: 2; background: #fff; border-left: 1px solid #eceae5; }
-.app-ing-gridhead .app-ing-cell-ready { background: #faf9f7; z-index: 4; }
+.app-ing-cell-doc .app-docs-namecell { flex: 1; min-width: 0; }
+.app-ing-readymark { flex: none; margin-left: auto; width: 22px; height: 22px; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; cursor: help; }
+.app-ing-readymark-ok { color: #1b7f3b; background: #e4f5ea; }
+.app-ing-readymark-warn { color: #8a5a00; background: #fff1d6; }
 .app-ing-row-dirty .app-ing-cell-doc { background: #fffaf0; }
 .app-ing-dirtydot { display: none; color: #b26a00; font-size: 9px; flex: none; }
 .app-ing-row-dirty .app-ing-dirtydot { display: inline; }

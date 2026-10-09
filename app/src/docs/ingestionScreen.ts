@@ -357,26 +357,21 @@ export function openIngestionTask(o: IngestionScreenOpts): () => void {
       }
     };
     const allReadySaved = () => rows.length > 0 && rows.every((r) => missingFor(r.values, required).length === 0);
-    const readyPill = (row: DocRow): HTMLElement => {
+    /** A glyph at the end of the frozen Document cell (Ben, 2026-10-09:
+     *  a right-frozen column was clunky): ✓ ready, ⚠ with what is missing
+     *  and the last refusal in the tooltip. */
+    const readyMark = (row: DocRow): HTMLElement => {
       const missing = missingFor(effectiveValues(row.values, draft.get(row.uniqueId)), required);
       const last = lastLog.get(row.name);
-      const cell = el("span", "app-ing-readycell");
-      if (missing.length === 0) cell.appendChild(statusChip("✓ Ready", "green"));
-      else {
-        const pill = statusChip(`⚠ ${missing.length} missing`, "amber");
-        pill.title = `Missing: ${missing.join(", ")}`;
-        cell.appendChild(pill);
-      }
-      if (last && last.outcome === "refused") {
-        const why = el("span", "app-field-hint app-ing-why", last.detail);
-        why.title = last.detail;
-        cell.appendChild(why);
-      }
-      return cell;
+      const refused = last && last.outcome === "refused" ? `\nLast run: ${last.detail}` : "";
+      const mark = el("span", "app-ing-readymark " + (missing.length === 0 ? "app-ing-readymark-ok" : "app-ing-readymark-warn"), missing.length === 0 ? "✓" : "⚠");
+      mark.title = (missing.length === 0 ? "Ready to ingest" : `Missing: ${missing.join(", ")}`) + refused;
+      mark.setAttribute("aria-label", mark.title);
+      return mark;
     };
     const repaintReady = (row: DocRow) => {
-      const cell = gridHost.querySelector<HTMLElement>(`[data-row="${row.uniqueId}"] .app-ing-cell-ready`);
-      if (cell) cell.replaceChildren(readyPill(row));
+      const old = gridHost.querySelector<HTMLElement>(`[data-row="${row.uniqueId}"] .app-ing-readymark`);
+      if (old) old.replaceWith(readyMark(row));
     };
     const commit = (row: DocRow, v: AddFieldValue) => {
       setCell(draft, row.uniqueId, row.values, v);
@@ -514,7 +509,7 @@ export function openIngestionTask(o: IngestionScreenOpts): () => void {
         cellEl.appendChild(b);
       }
     };
-    const template = `300px ${gridFields.map(() => "minmax(170px, 1fr)").join(" ")} 170px`;
+    const template = `320px ${gridFields.map(() => "minmax(170px, 1fr)").join(" ")}`;
     const paintGrid = () => {
       clear(gridHost);
       const head = el("div", "app-ing-gridrow app-ing-gridhead");
@@ -536,7 +531,6 @@ export function openIngestionTask(o: IngestionScreenOpts): () => void {
         h.title = requiredSet.has(f.internal) ? "Required before the file can move" : "";
         head.appendChild(h);
       }
-      head.appendChild(el("div", "app-ing-cell app-ing-cell-ready", "Ready"));
       gridHost.appendChild(head);
       if (rows.length === 0) {
         gridHost.appendChild(el("div", "app-ing-empty", task.status === "closed" ? "Every file has moved." : "No files yet — open the folder and add them, then Refresh."));
@@ -555,7 +549,7 @@ export function openIngestionTask(o: IngestionScreenOpts): () => void {
           else selected.delete(row.uniqueId);
           paintSel();
         });
-        doc.append(box, el("span", "app-ing-dirtydot", "●"), nameCell(row));
+        doc.append(box, el("span", "app-ing-dirtydot", "●"), nameCell(row), readyMark(row));
         rowEl.appendChild(doc);
         for (const f of gridFields) {
           const c = el("div", "app-ing-cell app-ing-cell-edit" + (draft.get(row.uniqueId)?.has(f.internal) ? " app-ing-cell-dirty" : ""));
@@ -563,9 +557,6 @@ export function openIngestionTask(o: IngestionScreenOpts): () => void {
           paintCell(c, row, f);
           rowEl.appendChild(c);
         }
-        const ready = el("div", "app-ing-cell app-ing-cell-ready");
-        ready.appendChild(readyPill(row));
-        rowEl.appendChild(ready);
         gridHost.appendChild(rowEl);
       }
     };
