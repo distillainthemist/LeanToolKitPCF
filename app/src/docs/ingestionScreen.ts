@@ -207,9 +207,11 @@ async function writeDirect(site: string, listId: string, row: DocRow, formValues
 }
 
 /** Run `work` over `items`, at most `limit` at a time — brackets on
- *  different files are independent, and four in flight is well inside
- *  what SharePoint throttles. Order of completion is not the order of
- *  items. */
+ *  different files are independent. Eight in flight (Ben, 2026-10-09)
+ *  keeps the SharePoint connector under its 600-calls-a-minute line
+ *  for a run's eight calls a file; more would start to be throttled
+ *  and lose the gain. Order of completion is not the order of items. */
+const IN_FLIGHT = 8;
 async function pool<T>(items: T[], limit: number, work: (item: T) => Promise<void>): Promise<void> {
   let next = 0;
   const lane = async () => {
@@ -890,7 +892,7 @@ export function openIngestionTask(o: IngestionScreenOpts): () => void {
           if (err === "") draft.delete(id);
           else refused.push(`${target.name}: ${err}`);
         };
-        await pool(ids, 4, async (id) => {
+        await pool(ids, IN_FLIGHT, async (id) => {
           await saveOne(id);
           progress.tick();
         });
@@ -992,7 +994,7 @@ export function openIngestionTask(o: IngestionScreenOpts): () => void {
       const log = (file: string, outcome: RunLogEntry["outcome"], detail: string) => {
         task.log.push({ file, outcome, detail, at: new Date().toISOString(), by });
       };
-      // files in flight four at a time (Ben, 2026-10-09: speed); the
+      // files in flight eight at a time (Ben, 2026-10-09: speed); the
       // task row is saved through one chain so the writes never race
       let saveChain: Promise<unknown> = Promise.resolve();
       progress.start(ready.length, "Ingesting");
@@ -1086,7 +1088,7 @@ export function openIngestionTask(o: IngestionScreenOpts): () => void {
         log(row.name, "moved", gone.ok ? destUrl : `${destUrl} (the source copy could not be recycled: ${spErrorText(gone.status)})`);
         saveChain = saveChain.then(() => saveIngestionTask(task)).catch(() => undefined);
       };
-      await pool(ready, 4, async (row) => {
+      await pool(ready, IN_FLIGHT, async (row) => {
         await ingestOne(row);
         progress.tick();
       });
