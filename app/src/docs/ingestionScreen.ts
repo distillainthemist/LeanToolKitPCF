@@ -86,6 +86,37 @@ const linkBtn = (label: string, href: string, cls = "app-btn"): HTMLAnchorElemen
 };
 const libName = (l: DocLibrary | undefined) => (l ? l.config.title || l.name : "(library not exposed)");
 
+/** The app's own tooltip (a title shows as a bare ? cursor in the
+ *  player, Ben 2026-10-09): on hover or focus, a small panel beside the
+ *  element; gone on leave, blur or Esc. */
+function attachTip(target: HTMLElement, text: string): void {
+  let tip: HTMLElement | null = null;
+  const hide = () => {
+    tip?.remove();
+    tip = null;
+  };
+  const show = () => {
+    hide();
+    tip = el("div", "app-ing-tip");
+    for (const line of text.split("\n")) tip.appendChild(el("div", undefined, line));
+    document.body.appendChild(tip);
+    const r = target.getBoundingClientRect();
+    const w = tip.offsetWidth;
+    tip.style.top = `${r.bottom + 6}px`;
+    tip.style.left = `${Math.max(8, Math.min(r.left + r.width / 2 - w / 2, window.innerWidth - w - 8))}px`;
+  };
+  target.tabIndex = 0;
+  target.addEventListener("mouseenter", show);
+  target.addEventListener("focus", show);
+  target.addEventListener("mouseleave", hide);
+  target.addEventListener("blur", hide);
+  target.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (tip) hide();
+    else show();
+  });
+}
+
 // ---- the site context a task needs -----------------------------------------
 
 interface SiteCtx {
@@ -365,8 +396,9 @@ export function openIngestionTask(o: IngestionScreenOpts): () => void {
       const last = lastLog.get(row.name);
       const refused = last && last.outcome === "refused" ? `\nLast run: ${last.detail}` : "";
       const mark = el("span", "app-ing-readymark " + (missing.length === 0 ? "app-ing-readymark-ok" : "app-ing-readymark-warn"), missing.length === 0 ? "✓" : "⚠");
-      mark.title = (missing.length === 0 ? "Ready to ingest" : `Missing: ${missing.join(", ")}`) + refused;
-      mark.setAttribute("aria-label", mark.title);
+      const text = (missing.length === 0 ? "Ready to ingest" : `Missing: ${missing.join(", ")}`) + refused;
+      mark.setAttribute("aria-label", text);
+      attachTip(mark, text);
       return mark;
     };
     const repaintReady = (row: DocRow) => {
@@ -398,6 +430,71 @@ export function openIngestionTask(o: IngestionScreenOpts): () => void {
         }
       });
     };
+    /** The cell's value as something the forms could WRITE: the draft's,
+     *  else the saved value lifted — terms through the set's walk, people
+     *  from the feed's email twin. Null when it reads blank. */
+    const valueOf = async (row: DocRow, f: SpField): Promise<AddFieldValue | null> => {
+      const d = draft.get(row.uniqueId)?.get(f.internal);
+      if (d) return d;
+      const kind = editorKind(f) ?? "text";
+      if (kind === "taxonomy") {
+        if (f.termSetId === "") return null;
+        const ids = await termIdsFor(f.termSetId);
+        const terms = (row.values[f.internal] ?? "").split(";").map((x) => x.trim()).filter((x) => x !== "").map((l) => ({ label: l, termId: ids.get(l.toLowerCase()) ?? "" })).filter((t) => t.termId !== "");
+        if (terms.length === 0) return null;
+        return f.type === "TaxonomyFieldTypeMulti" ? { internal: f.internal, kind, multi: true, terms, label: terms[0].label, termId: terms[0].termId } : { internal: f.internal, kind, label: terms[0].label, termId: terms[0].termId };
+      }
+      if (kind === "person") {
+        const names = (row.values[f.internal] ?? "").split(";").map((x) => x.trim());
+        const emails = (row.values[`${f.internal}#email`] ?? "").split(";").map((x) => x.trim().toLowerCase());
+        const people = emails.map((email, i) => ({ email, name: names[i] ?? email })).filter((p) => p.email !== "");
+        return people.length === 0 ? null : { internal: f.internal, kind, people };
+      }
+      const text = savedDisplay(row.values, f.internal, kind);
+      return text === "" ? null : { internal: f.internal, kind, text };
+    };
+    /** Excel's fill handle (Ben, 2026-10-09): drag the corner of a cell
+     *  down and the rows passed over take its value, in the draft. */
+    const startFill = (e: PointerEvent, row: DocRow, f: SpField) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const from = rows.findIndex((r) => r.uniqueId === row.uniqueId);
+      let to = from;
+      const mark = () => {
+        gridHost.querySelectorAll<HTMLElement>(".app-ing-fillmark").forEach((c) => c.classList.remove("app-ing-fillmark"));
+        for (let i = Math.min(from, to); i <= Math.max(from, to); i++) {
+          gridHost.querySelector<HTMLElement>(`[data-row="${rows[i].uniqueId}"] [data-col="${f.internal}"]`)?.classList.add("app-ing-fillmark");
+        }
+      };
+      const move = (ev: PointerEvent) => {
+        const hit = document.elementFromPoint(ev.clientX, ev.clientY)?.closest<HTMLElement>("[data-row]");
+        if (!hit) return;
+        const i = rows.findIndex((r) => r.uniqueId === hit.dataset.row);
+        if (i >= 0 && i !== to) {
+          to = i;
+          mark();
+        }
+      };
+      const up = () => {
+        document.removeEventListener("pointermove", move);
+        document.removeEventListener("pointerup", up);
+        gridHost.querySelectorAll<HTMLElement>(".app-ing-fillmark").forEach((c) => c.classList.remove("app-ing-fillmark"));
+        if (to === from) return;
+        void valueOf(row, f).then((v) => {
+          if (!v) return;
+          for (let i = Math.min(from, to); i <= Math.max(from, to); i++) {
+            const target = rows[i];
+            if (target.uniqueId === row.uniqueId) continue;
+            commit(target, { ...v, internal: f.internal });
+            const cellEl = gridHost.querySelector<HTMLElement>(`[data-row="${target.uniqueId}"] [data-col="${f.internal}"]`);
+            if (cellEl) paintCell(cellEl, target, f);
+          }
+        });
+      };
+      mark();
+      document.addEventListener("pointermove", move);
+      document.addEventListener("pointerup", up);
+    };
     /** The cell's current reading: the draft's, else the saved value. */
     const current = (row: DocRow, f: SpField): string => {
       const d = draft.get(row.uniqueId)?.get(f.internal);
@@ -417,23 +514,12 @@ export function openIngestionTask(o: IngestionScreenOpts): () => void {
       pop.append(box, bar);
       // the current value as the editor's starting point
       const initial = new Map<string, { text?: string; people?: { email: string; name: string }[]; term?: { label: string; termId: string }; terms?: { label: string; termId: string }[] }>();
-      const d = draft.get(row.uniqueId)?.get(f.internal);
-      const kind = editorKind(f);
-      if (d) {
-        if (kind === "taxonomy") initial.set(f.internal, d.multi === true && d.terms ? { terms: d.terms } : d.label && d.termId ? { term: { label: d.label, termId: d.termId } } : {});
-        else if (kind === "person") initial.set(f.internal, { people: d.people ?? [] });
-        else initial.set(f.internal, { text: d.text ?? "" });
-      } else if (kind === "taxonomy" && f.termSetId !== "") {
-        const ids = await termIdsFor(f.termSetId);
-        const labels = (row.values[f.internal] ?? "").split(";").map((x) => x.trim()).filter((x) => x !== "");
-        const terms = labels.map((l) => ({ label: l, termId: ids.get(l.toLowerCase()) ?? "" })).filter((t) => t.termId !== "");
-        if (terms.length > 0) initial.set(f.internal, f.type === "TaxonomyFieldTypeMulti" ? { terms } : { term: terms[0] });
-      } else if (kind === "person") {
-        const names = (row.values[f.internal] ?? "").split(";").map((x) => x.trim());
-        const emails = (row.values[`${f.internal}#email`] ?? "").split(";").map((x) => x.trim().toLowerCase());
-        const people = emails.map((email, i) => ({ email, name: names[i] ?? email })).filter((p) => p.email !== "");
-        if (people.length > 0) initial.set(f.internal, { people });
-      } else initial.set(f.internal, { text: savedDisplay(row.values, f.internal, kind ?? "text") });
+      const v = await valueOf(row, f);
+      if (v) {
+        if (v.kind === "taxonomy") initial.set(f.internal, v.multi === true && v.terms ? { terms: v.terms } : v.label && v.termId ? { term: { label: v.label, termId: v.termId } } : {});
+        else if (v.kind === "person") initial.set(f.internal, { people: v.people ?? [] });
+        else initial.set(f.internal, { text: v.text ?? "" });
+      }
       const editors = buildFieldEditors({ site: ctx.site, box, fields: [f], columns: [{ internal: f.internal, available: true }], dictBy: ctx.dictBy, onChange: () => undefined, initial, includeSystemDates: true });
       const closePop = () => {
         pop.remove();
@@ -508,6 +594,10 @@ export function openIngestionTask(o: IngestionScreenOpts): () => void {
         b.addEventListener("click", () => void openCellPopover(b, row, f));
         cellEl.appendChild(b);
       }
+      const handle = el("span", "app-ing-fillhandle");
+      handle.title = "Drag down to fill";
+      handle.addEventListener("pointerdown", (e) => startFill(e, row, f));
+      cellEl.appendChild(handle);
     };
     const template = `320px ${gridFields.map(() => "minmax(170px, 1fr)").join(" ")}`;
     const paintGrid = () => {
