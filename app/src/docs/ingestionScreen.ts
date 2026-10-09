@@ -338,7 +338,8 @@ export function openIngestionTask(o: IngestionScreenOpts): () => void {
     const discardBtn = btn("Discard", "app-link");
     discardBtn.style.display = "none";
     actions.append(setSel, fillBtn, refresh, search, fitBtn, saveBtn, discardBtn, selectedCount);
-    const right = el("span", "app-ing-actions-right");
+    // the task-level buttons live in the title row, before ✕ (Ben, 2026-10-09)
+    const right = el("span", "app-ing-headactions");
     if (o.isController && task.status !== "closed") {
       const edit = btn("Edit task…");
       edit.addEventListener("click", () => {
@@ -363,7 +364,7 @@ export function openIngestionTask(o: IngestionScreenOpts): () => void {
       right.append(edit, closeTask, runBtn);
       runBtn.addEventListener("click", () => void startRun());
     }
-    actions.appendChild(right);
+    head.insertBefore(right, closeBtn);
     body.appendChild(actions);
     body.appendChild(
       el("div", "app-field-hint", task.status === "closed" ? "This task is closed — its log is below." : "Add files to the folder, then set each file's details in the grid (✱ = required; Tab moves across, Enter down) — or select rows and set one column for all. Save changes writes them. A document controller then runs the ingestion; files that are refused stay here with the reason.")
