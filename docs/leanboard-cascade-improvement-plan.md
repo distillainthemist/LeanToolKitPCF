@@ -1455,6 +1455,18 @@ reschedule/cancel history with a reason picklist.
   the view before the launch re-route mounted the hub again, so the
   second mount saw nothing. The pending view now lives for a 20 s
   grace window instead of one read.
+- **2026-10-09 — released as v0.69.0** (SOLUTION-CARRYING:
+  `ben_ltkingestiontask`): document ingestion
+  (document-ingestion-proposal-2026-10.md) — the hidden bulk-drop
+  library type, tasks from the register's ⋮, their own "Ingestion
+  tasks" button, the full-screen task sheet with the editable grid
+  (every type column in settings order, frozen Document column,
+  draft + Save changes, fill-down, filter, sort, fit to width, Name on
+  ingestion, readiness glyph), the copy-bracket-recycle run eight
+  files at a time with progress and time remaining, the explicit
+  close-out, Cancel task, Teams cards for assignees, the move-road
+  probe; and the toolkit variables on `:root` so no popup paints
+  transparent again.
 - **2026-10-08 — released as v0.68.0** (app-only): the initiative
   documentation work — the working folder as a built-in standard
   field (pane row, board-header "📁 Working folder" button, charter),

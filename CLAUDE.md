@@ -325,7 +325,9 @@ Version lives in the tag alone — nothing is stamped into files.
   and strip tools, the Users add flow, Cascade customisation under
   Organisation, the priorities A3 poster) and v0.68.0 (2026-10-08:
   working folder, links card, the initiative walk, the grouped header
-  form) are app-only. Prod imports the managed solution FIRST.
+  form) are app-only; v0.69.0 (2026-10-09) CARRIES `ben_ltkingestiontask`
+  (document ingestion) — prod imports the managed solution first, then
+  creates and exposes the bulk-drop library. Prod imports the managed solution FIRST.
 - **One rule, applied everywhere it matters.** A rule that must hold
   for every action or every card lives in ONE pure function and is
   applied at the screen for an honest picture AND at the store's
